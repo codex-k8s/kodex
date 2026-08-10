@@ -4,8 +4,8 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-09
+version: 1.3.0
+updated: 2026-08-10
 ---
 
 # Direct-production single-node prototype
@@ -31,10 +31,11 @@ Legacy Mattermost, PostgreSQL, bot-service, Kaniko и registry в
 До merge допускаются только read-only preflight и локальный render. После merge
 нужен отдельный owner gate на каждый production bootstrap/build/deploy. Для
 private repository gate не полагается на недоступные в части тарифов required
-reviewers GitHub Environment. Owner code-first закрепляет оба runner group за
-точными workflow path на одном full 40-hex SHA, записывает этот SHA и числовые
-owner actor ID в repository Actions variables и ограничивает Environment веткой
-`main`. Workflow допускает только `workflow_dispatch`, у которого и исходный
+reviewers GitHub Environment. Оба scale set принадлежат только repository
+`codex-k8s/matter-codex`, имеют разные exact labels и не используют organization
+runner groups. Owner code-first записывает full 40-hex SHA и числовые owner actor
+ID в repository Actions variables и ограничивает Environment веткой `main`.
+Workflow допускает только `workflow_dispatch`, у которого и исходный
 `actor`, и `triggering_actor` совпадают с owner-controlled ID; строка input/env не
 является доказательством допуска. В Wave A исполняется только `dark`. Режим
 `cutover` закрыто отклоняется до закрытия #241, #237, #194, отдельного owner gate
@@ -42,21 +43,26 @@ owner actor ID в repository Actions variables и ограничивает Envir
 
 ## Code-first bootstrap
 
-Сначала owner с GitHub organization administration настраивает две Environment,
-repository variables и два non-default runner group. Каждый group разрешает
-единственный workflow на exact merged SHA. Файлы actor ID и SHA не печатаются и
-не включаются в Git:
+Сначала owner с repository administration материализует из exact актуального
+`main` и authenticated GitHub API actor три локальных файла с mode `0600`, затем
+настраивает две Environment и repository variables. Файлы actor ID и SHA не
+печатаются и не включаются в Git:
 
 ```bash
+infra/github/materialize-actions-policy-inputs.sh \
+  --output-directory /secure/path/actions-policy
 infra/github/bootstrap-actions-policy.sh --mode preflight \
-  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
-  --deploy-owner-actor-id-file PATH
+  --workflow-sha-file /secure/path/actions-policy/workflow-sha \
+  --build-owner-actor-id-file /secure/path/actions-policy/build-owner-actor-id \
+  --deploy-owner-actor-id-file /secure/path/actions-policy/deploy-owner-actor-id
 infra/github/bootstrap-actions-policy.sh --mode apply \
-  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
-  --deploy-owner-actor-id-file PATH
+  --workflow-sha-file /secure/path/actions-policy/workflow-sha \
+  --build-owner-actor-id-file /secure/path/actions-policy/build-owner-actor-id \
+  --deploy-owner-actor-id-file /secure/path/actions-policy/deploy-owner-actor-id
 infra/github/bootstrap-actions-policy.sh --mode readback \
-  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
-  --deploy-owner-actor-id-file PATH
+  --workflow-sha-file /secure/path/actions-policy/workflow-sha \
+  --build-owner-actor-id-file /secure/path/actions-policy/build-owner-actor-id \
+  --deploy-owner-actor-id-file /secure/path/actions-policy/deploy-owner-actor-id
 ```
 
 Затем одноразовый операторский ARC bootstrap требует cluster-admin и не
@@ -69,23 +75,38 @@ infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode preflight \
 infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode apply \
   --workflow-sha-file PATH --build-owner-actor-id-file PATH \
   --deploy-owner-actor-id-file PATH \
-  --github-app-id-file PATH --github-app-installation-id-file PATH \
-  --github-app-private-key-file PATH
+  --github-pat-file /secure/path/github-token
 infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode readback \
   --workflow-sha-file PATH --build-owner-actor-id-file PATH \
   --deploy-owner-actor-id-file PATH
 ```
 
-Значения GitHub App передаются только файлами. Скрипт не печатает их и не
-заменяет существующие Secrets. ARC preflight/apply/readback сначала повторяет
-GitHub policy readback; runners не создаются при отсутствующем exact-SHA group
-или owner actor variable. Bootstrap создаёт два namespace, два независимых
+GitHub App и PAT являются mutually exclusive file modes. PAT Secret имеет только
+ключ `github_token`; App Secret — только три канонических App key. Скрипт не
+печатает значения и не заменяет существующий Secret другого режима. ARC
+preflight/apply/readback сначала повторяет GitHub policy readback; runners не
+создаются при отсутствующем exact-SHA или owner actor variable. Bootstrap
+создаёт два namespace, два независимых
 controller и scale set, default-deny NetworkPolicy, allowlisted egress proxy,
 динамически привязанный exact Kubernetes API egress и admission allowlist.
+Repo-scoped routing дополнительно закрыт синхронным runner pre-job hook: до
+первого workflow step он сверяет exact repository, `workflow_dispatch`, `main`,
+workflow path/ref/SHA, source SHA, owner actor ID и job ID по read-only ConfigMap,
+материализованному bootstrap из тех же owner policy inputs.
 `mattercodex-build` не получает Kubernetes token; `mattercodex-deploy` получает
 только production namespaced RBAC. `readback` требует Ready controller/listener,
-ровно один idle EphemeralRunnerSet, repository URL, runner group, scale bounds,
+ровно один idle EphemeralRunnerSet, repository URL, отсутствие `runnerGroup`, scale bounds,
 ServiceAccount и отрицательную admission-проверку.
+
+После успешного ARC apply/readback непригодная одноразовая repository variable
+удаляется exact owner API вызовом того же code-first скрипта:
+
+```bash
+infra/github/bootstrap-actions-policy.sh \
+  --mode retire-invalid-registration-variable \
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
+```
 
 Build namespace имеет Pod Security audit/warn `restricted`, но enforce
 `privileged`, потому что зафиксированный upstream rootless BuildKit требует

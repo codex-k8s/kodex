@@ -1,7 +1,6 @@
 githubConfigUrl: https://github.com/codex-k8s/matter-codex
 githubConfigSecret: mattercodex-github-runner-auth
 runnerScaleSetName: mattercodex-build
-runnerGroup: mattercodex-production-build
 minRunners: 0
 maxRunners: 1
 listenerTemplate:
@@ -51,6 +50,7 @@ template:
         command: [/home/runner/run.sh]
         env:
           - {name: BUILDKIT_HOST, value: unix:///var/run/buildkit/buildkitd.sock}
+          - {name: ACTIONS_RUNNER_HOOK_JOB_STARTED, value: /var/run/mattercodex-owner-gate/job-started.sh}
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: NO_PROXY, value: "matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1"}
@@ -68,6 +68,7 @@ template:
           - {name: work, mountPath: /home/runner/_work}
           - {name: socket, mountPath: /var/run/buildkit}
           - {name: tools, mountPath: /var/run/mattercodex-tools, readOnly: true}
+          - {name: owner-gate, mountPath: /var/run/mattercodex-owner-gate, readOnly: true}
       - name: buildkitd
         image: docker.io/moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b
         imagePullPolicy: IfNotPresent
@@ -104,3 +105,4 @@ template:
       - {name: tools, emptyDir: {sizeLimit: 32Mi}}
       - {name: state, emptyDir: {sizeLimit: 30Gi}}
       - {name: buildkit-config, configMap: {name: mattercodex-buildkit-config}}
+      - {name: owner-gate, configMap: {name: mattercodex-runner-owner-gate, defaultMode: 365}}

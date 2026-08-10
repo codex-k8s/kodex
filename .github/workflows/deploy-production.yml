@@ -33,9 +33,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on:
-      group: mattercodex-production-deploy
-      labels: mattercodex-deploy
+    runs-on: mattercodex-deploy
     timeout-minutes: 30
     environment: production
     steps:
