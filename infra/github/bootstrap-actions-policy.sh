@@ -51,8 +51,7 @@ workflow_sha=$(<"$workflow_sha_file")
 configure_environment() {
   local environment=$1 body branch_body
   body="$temporary_directory/environment-$environment.json"
-  jq -n '{wait_timer:0,
-    deployment_branch_policy:{protected_branches:false,custom_branch_policies:true}}' >"$body"
+  jq -n '{deployment_branch_policy:{protected_branches:false,custom_branch_policies:true}}' >"$body"
   if [[ "$mode" == apply ]]; then
     gh api --method PUT "repos/$repository/environments/$environment" --input "$body" >/dev/null
   fi
