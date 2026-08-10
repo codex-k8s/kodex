@@ -38,8 +38,9 @@ for github_app_file in "$github_app_id_file" "$github_app_installation_id_file" 
 done
 ((github_app_argument_count == 0 || github_app_argument_count == 3)) ||
   fail "GitHub App credential mode requires exactly three files"
-[[ -z "$github_pat_file" || github_app_argument_count == 0 ]] ||
+if [[ -n "$github_pat_file" ]] && ((github_app_argument_count != 0)); then
   fail "GitHub App and PAT credential modes are mutually exclusive"
+fi
 credential_mode=none
 if [[ -n "$github_pat_file" ]]; then
   credential_mode=pat

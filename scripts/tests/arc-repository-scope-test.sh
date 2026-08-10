@@ -42,6 +42,15 @@ if "$bootstrap" "${common_arguments[@]}" \
   printf 'ARC bootstrap accepted an incomplete GitHub App mode\n' >&2
   exit 1
 fi
+if "$bootstrap" "${common_arguments[@]}" --github-pat-file "$temporary_directory/pat" \
+  >"$temporary_directory/pat-only.out" 2>"$temporary_directory/pat-only.err"; then
+  printf 'ARC bootstrap unexpectedly accepted an impossible Kubernetes context\n' >&2
+  exit 1
+fi
+grep -Fq 'Kubernetes context mismatch' "$temporary_directory/pat-only.err" || {
+  printf 'PAT-only mode did not reach the Kubernetes context gate\n' >&2
+  exit 1
+}
 
 yq -e '
   .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
