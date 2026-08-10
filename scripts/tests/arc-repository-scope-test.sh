@@ -99,5 +99,18 @@ if rg -q 'reviewers|wait_timer' "$policy_bootstrap"; then
   printf 'GitHub Environment payload still requests a plan-gated protection rule\n' >&2
   exit 1
 fi
+yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
+  .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
+  >"$temporary_directory/envoy.yaml"
+yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
+  .static_resources.listeners[0].filter_chains[0].filters[0].typed_config
+    .route_config.virtual_hosts[0].routes[0].route.upgrade_configs[0] as $upgrade |
+  ($upgrade.upgrade_type == "CONNECT") and
+  ($upgrade.connect_config == {}) and
+  ([.. | objects | select(has("connect_config"))] | length == 1)
+' >/dev/null || {
+  printf 'Envoy CONNECT termination is not configured on the exact route\n' >&2
+  exit 1
+}
 
 printf 'ARC repository-scope negative checks completed\n'

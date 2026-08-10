@@ -31,7 +31,11 @@ data:
                             - "production.cloudflare.docker.com:*"
                           routes:
                             - match: {connect_matcher: {}}
-                              route: {cluster: dynamic_forward_proxy}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
                     http_filters:
                       - name: envoy.filters.http.dynamic_forward_proxy
                         typed_config:
@@ -42,9 +46,6 @@ data:
                       - name: envoy.filters.http.router
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
-                    upgrade_configs:
-                      - upgrade_type: CONNECT
-                        connect_config: {}
       clusters:
         - name: dynamic_forward_proxy
           connect_timeout: 10s
