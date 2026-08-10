@@ -136,13 +136,18 @@ yq -o=json eval-all '.' "$temporary_directory/network-policies.yaml" | jq -sc -e
   printf 'Direct-production NetworkPolicy contains a namespace-wide data destination\n' >&2
   exit 1
 }
-yq eval-all -e '
-  select(.kind == "NetworkPolicy" and .metadata.name == "build-registry") |
-  .spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "matter-kodex-prod" and
-  .spec.egress[0].to[0].podSelector.matchLabels."app.kubernetes.io/name" == "matter-codex-registry" and
-  (.spec.egress[0].ports | length) == 1 and
-  .spec.egress[0].ports[0].protocol == "TCP" and .spec.egress[0].ports[0].port == 5000
-' "$repository_root/infra/arc/network-policy.yaml" >/dev/null || {
+yq -o=json eval-all '.' "$repository_root/infra/arc/network-policy.yaml" | jq -sc -e '
+  map(select(.kind == "NetworkPolicy" and .metadata.name == "build-registry")) |
+  length == 1 and
+  .[0].spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
+    "matter-kodex-prod" and
+  .[0].spec.egress[0].to[0].podSelector.matchLabels."app.kubernetes.io/name" ==
+    "matter-codex-registry" and
+  ([.[0].spec.egress[0].to[] | select(.ipBlock != null) | .ipBlock.cidr] | sort) ==
+    ["__REGISTRY_ENDPOINT_CIDR__","__REGISTRY_SERVICE_CIDR__"] and
+  ([.[0].spec.egress[0].ports[] | select(.protocol == "TCP") | .port] | sort) ==
+    [5000,5001]
+' >/dev/null || {
   printf 'Build runner registry NetworkPolicy destination is not exact\n' >&2
   exit 1
 }

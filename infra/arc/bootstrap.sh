@@ -78,8 +78,58 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 
 kubernetes_api_service_ip=$(kubectl --context "$expected_context" -n default get service kubernetes \
   -o json | jq -er '.spec.clusterIP | select(type == "string" and length > 0 and . != "None")')
+registry_service_json=$(kubectl --context "$expected_context" -n matter-kodex-prod \
+  get service matter-codex-registry -o json)
+registry_service_ip=$(jq -er '
+  select(.spec.selector == {
+    "app.kubernetes.io/component":"image-registry",
+    "app.kubernetes.io/name":"matter-codex-registry"
+  }) |
+  select((.spec.ports | length) == 1 and .spec.ports[0].name == "registry" and
+    .spec.ports[0].protocol == "TCP" and .spec.ports[0].port == 5000 and
+    .spec.ports[0].targetPort == "registry") |
+  .spec.clusterIP |
+  select(type == "string" and
+    (split(".") | length) == 4 and
+    all(split(".")[]; test("^[0-9]{1,3}$") and
+      ((tonumber >= 0) and (tonumber <= 255))))
+' <<<"$registry_service_json") || fail "registry Service binding is invalid"
+registry_endpoint_binding=$(kubectl --context "$expected_context" -n matter-kodex-prod \
+  get endpointslice -l kubernetes.io/service-name=matter-codex-registry -o json | jq -er '
+  [
+    .items[] as $slice |
+    ($slice.ports[]? | select(.name == "registry" and .protocol == "TCP" and .port == 5001)) as $port |
+    $slice.endpoints[]? |
+    select(.conditions.ready == true and .conditions.serving == true and
+      (.conditions.terminating // false) == false and
+      .targetRef.kind == "Pod" and (.targetRef.name | type == "string" and length > 0) and
+      (.addresses | length) == 1) |
+    {address:.addresses[0],pod:.targetRef.name,port:$port.port}
+  ] |
+  select(length == 1) | .[0] |
+  select(.address | type == "string" and
+    (split(".") | length) == 4 and
+    all(split(".")[]; test("^[0-9]{1,3}$") and
+      ((tonumber >= 0) and (tonumber <= 255)))) |
+  [.address,.pod,(.port|tostring)] | @tsv
+') || fail "registry EndpointSlice binding is absent or non-unique"
+IFS=$'\t' read -r registry_endpoint_ip registry_pod_name registry_endpoint_port \
+  <<<"$registry_endpoint_binding"
+[[ "$registry_endpoint_port" == 5001 ]] || fail "registry endpoint port is invalid"
+kubectl --context "$expected_context" -n matter-kodex-prod get pod "$registry_pod_name" -o json |
+  jq -e --arg endpoint_ip "$registry_endpoint_ip" '
+    .spec.hostNetwork == true and .status.podIP == $endpoint_ip and
+    .metadata.labels."app.kubernetes.io/name" == "matter-codex-registry" and
+    .metadata.labels."app.kubernetes.io/component" == "image-registry" and
+    any(.status.conditions[]?; .type == "Ready" and .status == "True") and
+    any(.spec.containers[]; .name == "registry" and
+      any(.ports[]?; .name == "registry" and .protocol == "TCP" and
+        .containerPort == 5001 and .hostPort == 5001) and
+      any(.env[]?; .name == "REGISTRY_HTTP_ADDR" and .value == "0.0.0.0:5001"))
+  ' >/dev/null || fail "registry hostNetwork Pod binding is invalid"
 rendered_network_policy="$temporary_directory/network-policy.yaml"
-"$script_directory/render-network-policy.sh" "$rendered_network_policy"
+"$script_directory/render-network-policy.sh" "$registry_service_ip/32" \
+  "$registry_endpoint_ip/32" "$rendered_network_policy"
 egress_proxy_config_sha256=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-ci" and
     .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
