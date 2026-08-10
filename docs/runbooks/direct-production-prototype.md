@@ -172,6 +172,43 @@ Prototype временно использует materialized Kubernetes Secrets.
 закрыто останавливает операцию. Secret/CA bootstrap отделён от routine deploy.
 Полный Vault lifecycle — #256.
 
+Перед owner gate закрытый набор application interfaces классифицируется без
+получения значений credentials:
+
+```bash
+umask 077
+tools/deploy/classify-direct-production-application-material.sh \
+  --output /secure/path/application-material-classification.json \
+  --context EXACT_CONTEXT
+```
+
+Классификатор заново получает interface render из текущего checkout и требует
+ровно 117 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
+введена policy, это 52 криптографически генерируемых, 60 детерминированно
+выводимых, 2 полностью безопасно переиспользуемых и 23 внешних ресурса. Внешний
+фрагмент принимается только как exact closed set из 23 ресурсов и 44 ключей:
+лишний, отсутствующий или пустой ключ, `stringData`, другой namespace либо
+неизвестный kind приводят к закрытому отказу. Значения не включаются в отчёт.
+Фрагмент с правами слабее `0600` проверяется отдельным запуском с
+`--external-material-file /secure/path/external.yaml` и также отклоняется.
+
+Проверка `--context` читает только наличие и точные имена ключей разрешённых
+legacy source Secret. Она не копирует данные и не изменяет
+`matter-kodex-prod`. Классификация сама по себе не является materialization и не
+разрешает bootstrap `apply`.
+
+Полный application materializer остаётся закрыт до устранения трёх исполняемых
+несовместимостей: broker объявляет basic NATS credentials, а workloads требуют
+NATS user credentials file; PostgreSQL authority создаёт поколенческие LOGIN
+principals без materialized passwords до запуска зависящих от них workloads;
+объявленные TLS endpoints Mattermost и bot-service не соответствуют доступным
+legacy Service endpoints. Подставлять синтаксически непустые значения вместо
+этих контрактов запрещено. После исправления producer/consumer contracts
+materializer обязан объединять generated, derived, reusable и external части в
+secure temporary directory с `umask 077`, проверять TLS hostname/CA и JWS
+semantics, выдавать exact полный файл для `bootstrap.sh` и выполнять readback без
+печати значений.
+
 ## Bounded smoke
 
 Признаки успеха dark deploy:
