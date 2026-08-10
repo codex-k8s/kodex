@@ -334,7 +334,8 @@ readback_scale_set() {
     jq -e '.items | length == 1' >/dev/null || fail "listener resource is absent or non-unique: $name"
   kubectl --context "$expected_context" -n "$namespace" get pod -l \
     "mattercodex.dev/arc-role=listener,actions.github.com/scale-set-name=$name" -o json |
-    jq -e --arg no_proxy "$kubernetes_api_no_proxy" '.items | length == 1 and all(.items[];
+    jq -e --arg no_proxy "$kubernetes_api_no_proxy" '.items as $items |
+      ($items | length) == 1 and all($items[];
       .status.phase == "Running" and
       any(.status.conditions[]?; .type == "Ready" and .status == "True") and
       any(.spec.containers[]; any(.env[]?; .name == "NO_PROXY" and .value == $no_proxy)))' \
@@ -342,7 +343,7 @@ readback_scale_set() {
     fail "listener Pod is not uniquely Ready: $name"
   kubectl --context "$expected_context" -n "$namespace" get ephemeralrunnerset -l \
     "actions.github.com/scale-set-name=$name" -o json |
-    jq -e '.items | length == 1 and all(.items[];
+    jq -e '.items as $items | ($items | length) == 1 and all($items[];
       .spec.replicas == 0 and .status.currentReplicas == 0 and (.status.failedEphemeralRunners // 0) == 0)' >/dev/null ||
     fail "ephemeral runner set idle readback mismatch: $name"
 }

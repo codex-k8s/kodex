@@ -102,6 +102,10 @@ if rg -q 'reviewers|wait_timer' "$policy_bootstrap"; then
   printf 'GitHub Environment payload still requests a plan-gated protection rule\n' >&2
   exit 1
 fi
+if rg -q '\.items \| length == 1 and all\(\.items\[\]' "$bootstrap"; then
+  printf 'ARC readback reuses an object path after switching jq context to its items array\n' >&2
+  exit 1
+fi
 yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
   .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
