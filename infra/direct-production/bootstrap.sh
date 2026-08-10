@@ -115,6 +115,12 @@ for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundat
   kubectl --context "$expected_context" apply --dry-run=client -f "$manifest" >/dev/null
 done
 
+admission_policies="$temporary_directory/validating-admission-policies.yaml"
+yq eval-all 'select(.kind == "ValidatingAdmissionPolicy")' \
+  "$script_directory/bootstrap.yaml" "$workload_policy" >"$admission_policies"
+kubectl --context "$expected_context" apply --dry-run=server -f "$admission_policies" >/dev/null ||
+  fail "production validating admission policies do not compile"
+
 materializer="$repository_root/tools/deploy/materialize-direct-production-application.sh"
 if [[ "$mode" != readback ]]; then
   "$materializer" --mode render --external-material-file "$external_material_file" \
