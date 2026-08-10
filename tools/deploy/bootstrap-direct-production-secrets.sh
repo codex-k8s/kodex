@@ -100,14 +100,7 @@ if [[ "$mode" != preflight ]]; then
 fi
 
 materialize_secret mattercodex-postgresql-bootstrap password
-materialize_secret mattercodex-postgresql-app-passwords \
-  CONTROL_PLANE_POSTGRES_PASSWORD \
-  INTERNAL_RPC_AUTHORITY_POSTGRES_PASSWORD \
-  RUNTIME_CONTROLLER_POSTGRES_PASSWORD \
-  INTERACTION_GATEWAY_POSTGRES_PASSWORD \
-  INTEGRATION_GATEWAY_POSTGRES_PASSWORD
 materialize_secret mattercodex-redis-credentials username password
-materialize_secret mattercodex-nats-credentials username password
 materialize_secret mattercodex-object-store-credentials username password
 
 printf 'direct-production secret bootstrap %s completed\n' "$mode"

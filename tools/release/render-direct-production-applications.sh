@@ -138,6 +138,34 @@ yq eval-all '
     "localhost:5001/mattercodex/roles"
   ) |
   (.. | select(tag == "!!str")) |= sub(
+    "^https://mattermost\\.mattermost\\.svc\\.cluster\\.local$";
+    "https://mattercodex-legacy-mattermost-bridge.mattercodex-system.svc.cluster.local:8443"
+  ) |
+  (.. | select(tag == "!!str")) |= sub(
+    "^mattermost\\.mattermost\\.svc\\.cluster\\.local$";
+    "mattercodex-legacy-mattermost-bridge.mattercodex-system.svc.cluster.local"
+  ) |
+  (.. | select(tag == "!!str")) |= sub(
+    "^https://matter-codex-bot-service\\.mattercodex-system\\.svc\\.cluster\\.local:8443$";
+    "https://mattercodex-legacy-bot-service-bridge.mattercodex-system.svc.cluster.local:8443"
+  ) |
+  (.. | select(tag == "!!str")) |= sub(
+    "^matter-codex-bot-service\\.mattercodex-system\\.svc\\.cluster\\.local$";
+    "mattercodex-legacy-bot-service-bridge.mattercodex-system.svc.cluster.local"
+  ) |
+  with(select(.kind == "NetworkPolicy");
+    .spec.egress[]? |= (
+      with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "matter-codex-bot-service");
+        .to = [{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"mattercodex-legacy-bot-service-bridge"}}}] |
+        .ports = [{"protocol":"TCP","port":8443}]
+      ) |
+      with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "mattermost");
+        .to = [{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"mattercodex-legacy-mattermost-bridge"}}}] |
+        .ports = [{"protocol":"TCP","port":8443}]
+      )
+    )
+  ) |
+  (.. | select(tag == "!!str")) |= sub(
     "^mattercodex-image-registry-push\\.mattercodex-system\\.svc\\.cluster\\.local:5001/staging/role-images$";
     "matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000/mattercodex/role-images-staging"
   )

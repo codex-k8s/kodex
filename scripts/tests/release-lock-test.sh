@@ -150,10 +150,14 @@ fi
 yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml" | jq -sc -e '
   (map(select(.kind == "Role" and .metadata.name == "mattercodex-production-deployer"))[0]) as $role |
   ([$role.rules[] | select(.resources | index("pods/log"))] | length) == 0 and
+  ([$role.rules[] | select(.resources == ["secrets"])] | length) == 1 and
+  ([$role.rules[] | select(.resources == ["secrets"])][0] |
+    .verbs == ["get"] and .resourceNames == ["internal-rpc-authority-snapshot"]) and
   ([$role.rules[] | select((.verbs | index("delete")) and (.resources == ["jobs"])) |
     .resourceNames] | add | sort) ==
   ["control-plane-migrate","integration-gateway-migrate","interaction-gateway-migrate",
-   "internal-rpc-authority-migrate","runtime-controller-migration"]
+   "internal-rpc-authority-migrate","mattercodex-postgresql-principal-bootstrap",
+   "runtime-controller-migration"]
 ' >/dev/null || {
   printf 'Routine production deployer RBAC is broader than the exact workload contract\n' >&2
   exit 1

@@ -236,11 +236,11 @@
     {
       "target_kind": "ConfigMap",
       "target_name": "mattermost-ca",
-      "source_namespace": "matter-kodex-prod",
+      "source_namespace": "mattercodex-system",
       "source_kind": "Secret",
-      "source_name": "mattermost-tls",
+      "source_name": "mattercodex-legacy-mattermost-bridge-tls",
       "key_map": {
-        "ca.pem": "tls.crt"
+        "ca.pem": "ca.crt"
       }
     }
   ],
@@ -257,687 +257,1207 @@
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "automation-scheduler-application-grant"
+      "name": "automation-scheduler-application-grant",
+      "keys": [
+        "application-grant.jws"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "control-api-gateway-application-grant"
+      "name": "control-api-gateway-application-grant",
+      "keys": [
+        "readiness.jwt"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-api-gateway-public-tls-material"
+      "name": "control-api-gateway-public-tls-material",
+      "keys": [
+        "ca.crt",
+        "material.json",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-api-gateway-session-keys"
+      "name": "control-api-gateway-session-keys",
+      "keys": [
+        "current.hex",
+        "previous.hex"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "control-plane-application-grants"
+      "name": "control-plane-application-grants",
+      "keys": [
+        "control-plane.agent-session.public.jwk",
+        "control-plane.artifact-scanner.public.jwk",
+        "control-plane.automation.public.jwk",
+        "control-plane.integration-continuation.public-keyset.json",
+        "control-plane.integration-gateway.public.jwk",
+        "control-plane.integration-git-reconciliation.public.jwk",
+        "control-plane.integration-provider-readback.public.jwk",
+        "control-plane.interaction-gateway.public-keyset.json",
+        "control-plane.interaction-provider-readback.public.jwk",
+        "control-plane.legacy-data-migration.public.jwk",
+        "control-plane.memory-indexer.public.jwk",
+        "control-plane.owner-gate-delivery.public.jwk",
+        "control-plane.runtime-archive.public.jwk",
+        "control-plane.runtime-cleanup-authorizer.public.jwk",
+        "control-plane.runtime-controller.public.jwk",
+        "control-plane.runtime-restore-effect.public.jwk",
+        "control-plane.runtime-restore-verifier.public.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-instruction-object-store"
+      "name": "control-plane-instruction-object-store",
+      "keys": [
+        "access-key",
+        "secret-key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-plane-integration-continuation-grant-signer"
+      "name": "control-plane-integration-continuation-grant-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-plane-interaction-readback-signer"
+      "name": "control-plane-interaction-readback-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-interaction-readback-trust"
+      "name": "control-plane-interaction-readback-trust",
+      "keys": [
+        "public-keyset.json"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-keyset-genesis"
+      "name": "control-plane-keyset-genesis",
+      "keys": [
+        "interaction-readback.public-keyset.json",
+        "mattermost-event.public-keyset.json"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-plane-lease-signing"
+      "name": "control-plane-lease-signing",
+      "keys": [
+        "key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-plane-nats"
+      "name": "control-plane-nats",
+      "keys": [
+        "user.creds"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-postgres-context"
+      "name": "control-plane-postgres-context",
+      "keys": [
+        "key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-postgres-context-migration"
+      "name": "control-plane-postgres-context-migration",
+      "keys": [
+        "key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-postgres-migration"
+      "name": "control-plane-postgres-migration",
+      "keys": [
+        "dsn",
+        "runtime-current-dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-postgres-relay"
+      "name": "control-plane-postgres-relay",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-postgres-runtime"
+      "name": "control-plane-postgres-runtime",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "control-plane-redis"
+      "name": "control-plane-redis",
+      "keys": [
+        "password"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "control-plane-runtime-workload-signing"
+      "name": "control-plane-runtime-workload-signing",
+      "keys": [
+        "admission-private-key.hex",
+        "archive-private-key.hex",
+        "restore-private-key.hex"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-egress-proxy-provider-client-tls"
+      "name": "integration-egress-proxy-provider-client-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-egress-proxy-server-tls"
+      "name": "integration-egress-proxy-server-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "integration-gateway-application-grant"
+      "name": "integration-gateway-application-grant",
+      "keys": [
+        "readiness.jwt"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-gateway-git-receipt-signer"
+      "name": "integration-gateway-git-receipt-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-gateway-payload-keyset"
+      "name": "integration-gateway-payload-keyset",
+      "keys": [
+        "keyset.json"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-postgres-context"
+      "name": "integration-gateway-postgres-context",
+      "keys": [
+        "key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-postgres-context-migration"
+      "name": "integration-gateway-postgres-context-migration",
+      "keys": [
+        "key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-postgres-migrator"
+      "name": "integration-gateway-postgres-migrator",
+      "keys": [
+        "dsn",
+        "runtime-current-dsn",
+        "runtime-next-dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-postgres-runtime"
+      "name": "integration-gateway-postgres-runtime",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-postgresql-ca"
+      "name": "integration-gateway-postgresql-ca",
+      "keys": [
+        "ca.crt"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "integration-gateway-provider-health-credential"
+      "name": "integration-gateway-provider-health-credential",
+      "keys": [
+        "provider-health.token",
+        "token"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-gateway-provider-receipt-signer"
+      "name": "integration-gateway-provider-receipt-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "integration-gateway-vault-ca"
+      "name": "integration-gateway-vault-ca",
+      "keys": [
+        "ca.crt"
+      ]
     },
     {
       "classification": "safely_reusable_from_existing_binding",
       "kind": "Secret",
-      "name": "interaction-gateway-bot-tokens"
+      "name": "interaction-gateway-bot-tokens",
+      "keys": [
+        "mattermost-admin-token",
+        "mattermost-bot-token",
+        "mattermost-slash-token"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "interaction-gateway-mapping"
+      "name": "interaction-gateway-mapping",
+      "keys": [
+        "manifest.sha256",
+        "manifest.yaml",
+        "revision"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "interaction-gateway-postgres-migrator"
+      "name": "interaction-gateway-postgres-migrator",
+      "keys": [
+        "delivery-readback.public-keyset.json",
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "interaction-gateway-postgresql-ca"
+      "name": "interaction-gateway-postgresql-ca",
+      "keys": [
+        "ca.crt"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "interaction-gateway-runtime"
+      "name": "interaction-gateway-runtime",
+      "keys": [
+        "bot-primary-token",
+        "callback-key",
+        "delivery-key",
+        "delivery-readback.public-keyset.json",
+        "mattermost-event.private.jwk",
+        "owner-gate-delivery.jwt",
+        "postgres-dsn",
+        "provider-readback.private.jwk",
+        "s3-access-key",
+        "s3-secret-key",
+        "slash-token"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "interaction-gateway-vault-ca"
+      "name": "interaction-gateway-vault-ca",
+      "keys": [
+        "ca.crt"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-issuer-key"
+      "name": "internal-rpc-authority-automation-scheduler-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-issuer-postgresql"
+      "name": "internal-rpc-authority-automation-scheduler-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-manifest-trust"
+      "name": "internal-rpc-authority-automation-scheduler-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-proof-trust"
+      "name": "internal-rpc-authority-automation-scheduler-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-workload-tls"
+      "name": "internal-rpc-authority-automation-scheduler-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-issuer-key"
+      "name": "internal-rpc-authority-control-api-gateway-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-issuer-postgresql"
+      "name": "internal-rpc-authority-control-api-gateway-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-manifest-trust"
+      "name": "internal-rpc-authority-control-api-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-proof-trust"
+      "name": "internal-rpc-authority-control-api-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-workload-tls"
+      "name": "internal-rpc-authority-control-api-gateway-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-manifest-trust"
+      "name": "internal-rpc-authority-control-plane-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-resolver-key"
+      "name": "internal-rpc-authority-control-plane-resolver-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-resolver-trust"
+      "name": "internal-rpc-authority-control-plane-resolver-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-verifier-postgresql"
+      "name": "internal-rpc-authority-control-plane-verifier-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-workload-tls"
+      "name": "internal-rpc-authority-control-plane-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-database-credential-reconciler-postgresql"
+      "name": "internal-rpc-authority-database-credential-reconciler-postgresql",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-database-credential-reconciler-tls"
+      "name": "internal-rpc-authority-database-credential-reconciler-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-issuer-key"
+      "name": "internal-rpc-authority-integration-gateway-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-issuer-postgresql"
+      "name": "internal-rpc-authority-integration-gateway-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-manifest-trust"
+      "name": "internal-rpc-authority-integration-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-proof-trust"
+      "name": "internal-rpc-authority-integration-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-verifier-postgresql"
+      "name": "internal-rpc-authority-integration-gateway-verifier-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-workload-tls"
+      "name": "internal-rpc-authority-integration-gateway-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-issuer-key"
+      "name": "internal-rpc-authority-interaction-gateway-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-issuer-postgresql"
+      "name": "internal-rpc-authority-interaction-gateway-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-manifest-trust"
+      "name": "internal-rpc-authority-interaction-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-proof-trust"
+      "name": "internal-rpc-authority-interaction-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-verifier-postgresql"
+      "name": "internal-rpc-authority-interaction-gateway-verifier-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-workload-tls"
+      "name": "internal-rpc-authority-interaction-gateway-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-migrator-postgresql"
+      "name": "internal-rpc-authority-migrator-postgresql",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-database-g3"
+      "name": "internal-rpc-authority-publisher-database-g3",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-database-g4"
+      "name": "internal-rpc-authority-publisher-database-g4",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-database-g5"
+      "name": "internal-rpc-authority-publisher-database-g5",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-manifest-signer"
+      "name": "internal-rpc-authority-publisher-manifest-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-manifest-trust"
+      "name": "internal-rpc-authority-publisher-manifest-trust",
+      "keys": [
+        "manifest-trust.jws"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-readback-signer"
+      "name": "internal-rpc-authority-publisher-readback-signer",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-signers"
+      "name": "internal-rpc-authority-publisher-signers",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-publisher-tls"
+      "name": "internal-rpc-authority-publisher-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-readback-attestor-tls"
+      "name": "internal-rpc-authority-readback-attestor-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-readback-database-g3"
+      "name": "internal-rpc-authority-readback-database-g3",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-readback-database-g4"
+      "name": "internal-rpc-authority-readback-database-g4",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-readback-database-g5"
+      "name": "internal-rpc-authority-readback-database-g5",
+      "keys": [
+        "password",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-readback-trust"
+      "name": "internal-rpc-authority-readback-trust",
+      "keys": [
+        "credential-trust.jws",
+        "manifest-root.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-controller-postgresql"
+      "name": "internal-rpc-authority-restore-controller-postgresql",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-controller-tls"
+      "name": "internal-rpc-authority-restore-controller-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-operator-tls"
+      "name": "internal-rpc-authority-restore-operator-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-pitr-evidence-signer"
+      "name": "internal-rpc-authority-restore-pitr-evidence-signer",
+      "keys": [
+        "evidence-private.jwk"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-role-trust"
+      "name": "internal-rpc-authority-restore-role-trust",
+      "keys": [
+        "evidence-public.jwk",
+        "manifest-trust.jws",
+        "restore-role-trust.jws"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-issuer-key"
+      "name": "internal-rpc-authority-runtime-controller-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-issuer-postgresql"
+      "name": "internal-rpc-authority-runtime-controller-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-manifest-trust"
+      "name": "internal-rpc-authority-runtime-controller-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-proof-trust"
+      "name": "internal-rpc-authority-runtime-controller-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-workload-tls"
+      "name": "internal-rpc-authority-runtime-controller-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-issuer-key"
+      "name": "internal-rpc-authority-runtime-restore-effect-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-issuer-postgresql"
+      "name": "internal-rpc-authority-runtime-restore-effect-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust"
+      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-proof-trust"
+      "name": "internal-rpc-authority-runtime-restore-effect-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-workload-tls"
+      "name": "internal-rpc-authority-runtime-restore-effect-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-snapshot"
+      "name": "internal-rpc-authority-snapshot",
+      "keys": [
+        "snapshot.jws"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "provider-health-adapter-server-tls"
+      "name": "provider-health-adapter-server-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "runtime-controller-application-grant"
+      "name": "runtime-controller-application-grant",
+      "keys": [
+        "application-grant.jws"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-controller-nats"
+      "name": "runtime-controller-nats",
+      "keys": [
+        "user.creds"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-controller-nats-tls"
+      "name": "runtime-controller-nats-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-controller-postgres"
+      "name": "runtime-controller-postgres",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-controller-postgres-migration"
+      "name": "runtime-controller-postgres-migration",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "runtime-restore-effect-application-grant"
+      "name": "runtime-restore-effect-application-grant",
+      "keys": [
+        "application-grant.jws"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-config"
+      "name": "runtime-s3-archive-exchanger-config",
+      "keys": [
+        "archive-role-arn",
+        "kms-key-arn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-ticket-trust"
+      "name": "runtime-s3-archive-exchanger-ticket-trust",
+      "keys": [
+        "public-key.hex"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-tls"
+      "name": "runtime-s3-archive-exchanger-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-config"
+      "name": "runtime-s3-restore-exchanger-config",
+      "keys": [
+        "kms-key-arn",
+        "restore-role-arn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-ticket-trust"
+      "name": "runtime-s3-restore-exchanger-ticket-trust",
+      "keys": [
+        "public-key.hex"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-tls"
+      "name": "runtime-s3-restore-exchanger-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-workload-admission-postgres"
+      "name": "runtime-workload-admission-postgres",
+      "keys": [
+        "dsn"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-workload-admission-ticket-trust"
+      "name": "runtime-workload-admission-ticket-trust",
+      "keys": [
+        "public-key.hex",
+        "s3-archive-public-key.hex",
+        "s3-restore-public-key.hex"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-workload-admission-tls"
+      "name": "runtime-workload-admission-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "runtime-workload-materializer-ticket-trust"
+      "name": "runtime-workload-materializer-ticket-trust",
+      "keys": [
+        "public-key.hex"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "runtime-workload-materializer-tls"
+      "name": "runtime-workload-materializer-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "staff-control-center-backend-tls"
+      "name": "staff-control-center-backend-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "staff-control-center-ingress-client-tls"
+      "name": "staff-control-center-ingress-client-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "control-plane-postgresql-ca"
+      "name": "control-plane-postgresql-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "control-plane-redis-ca"
+      "name": "control-plane-redis-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "integration-egress-proxy-ca"
+      "name": "integration-egress-proxy-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-database-credential-reconciler-client-ca"
+      "name": "internal-rpc-authority-database-credential-reconciler-client-ca",
+      "keys": [
+        "client-ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-postgresql-ca"
+      "name": "internal-rpc-authority-postgresql-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-publisher-ca"
+      "name": "internal-rpc-authority-publisher-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-publisher-client-ca"
+      "name": "internal-rpc-authority-publisher-client-ca",
+      "keys": [
+        "client-ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-readback-attestor-ca"
+      "name": "internal-rpc-authority-readback-attestor-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-readback-attestor-client-ca"
+      "name": "internal-rpc-authority-readback-attestor-client-ca",
+      "keys": [
+        "client-ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-restore-controller-ca"
+      "name": "internal-rpc-authority-restore-controller-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-restore-controller-client-ca"
+      "name": "internal-rpc-authority-restore-controller-client-ca",
+      "keys": [
+        "client-ca.pem"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-vault-ca"
+      "name": "internal-rpc-authority-vault-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "mattercodex-internal-ca"
+      "name": "mattercodex-internal-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "mattercodex-nats-ca"
+      "name": "mattercodex-nats-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "truly_external_credential",
       "kind": "ConfigMap",
-      "name": "mattercodex-oidc-ca"
+      "name": "mattercodex-oidc-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "mattercodex-s3-ca"
+      "name": "mattercodex-s3-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "safely_reusable_from_existing_binding",
       "kind": "ConfigMap",
-      "name": "mattermost-ca"
+      "name": "mattermost-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "object-store-ca"
+      "name": "object-store-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "provider-health-adapter-ca"
+      "name": "provider-health-adapter-ca",
+      "keys": [
+        "ca.pem"
+      ]
     },
     {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
-      "name": "runtime-controller-postgresql-ca"
+      "name": "runtime-controller-postgresql-ca",
+      "keys": [
+        "ca.pem"
+      ]
     }
   ]
 }

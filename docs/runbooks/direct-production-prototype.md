@@ -4,7 +4,7 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
+version: 1.4.0
 updated: 2026-08-10
 ---
 
@@ -119,21 +119,29 @@ pinned images. Deploy и application namespace используют enforce `res
 ServiceAccount/RBAC, Secret/CA interfaces и admission allowlist. Он генерирует
 из канонического render параметризованный contract точных ServiceAccount, token
 automount, volumes, container images, command/args, volumeMounts и Secret env для
-каждого workload. Routine deploy не читает и не создаёт Secrets/Certificates, не
-читает Pod logs и может удалять только пять точно названных migration Jobs:
+каждого workload. Routine deploy не создаёт Secrets/Certificates, не читает Pod
+logs и получает `get` только для exact Secret
+`internal-rpc-authority-snapshot`, чтобы проверить publisher-owned переход от
+пустого bootstrap sentinel к непустому JWS. Удалять он может только пять точно
+названных migration Jobs и owner-defined Job поколенческих PostgreSQL principals:
 
 ```bash
-infra/direct-production/bootstrap.sh --context EXACT_CONTEXT --mode preflight
+umask 077
+infra/direct-production/bootstrap.sh --context EXACT_CONTEXT --mode preflight \
+  --external-material-file /secure/path/external.yaml
 infra/direct-production/bootstrap.sh --context EXACT_CONTEXT --mode apply \
-  --application-material-file PATH
+  --external-material-file /secure/path/external.yaml
 infra/direct-production/bootstrap.sh --context EXACT_CONTEXT --mode readback
 ```
 
-Файл materialized Secrets/CA ConfigMaps передаётся только локальным путём, не
-журналируется и должен содержать точное закрытое множество application
-file/env/TLS interfaces. Bootstrap
-генерирует внутренние foundation credentials, проверяет готовность exact TLS
-Certificates, отсутствие пустых Secret data и пишет безопасный
+Внешний фрагмент передаётся только локальным файлом `0600`, не журналируется и
+содержит ровно доказанные внешние bindings. Единый materializer сохраняет
+существующие generated values, безопасно копирует exact legacy bindings,
+выводит derived values из owner-only root и создаёт полный закрытый набор
+application file/env/TLS interfaces. Bootstrap генерирует внутренние foundation
+credentials, проверяет готовность exact TLS Certificates, допускает пустым
+только `internal-rpc-authority-snapshot/snapshot.jws` до первого publisher
+readback и пишет безопасный
 `mattercodex-bootstrap-readiness` без значений credentials.
 
 ## Release и dark deploy
@@ -193,21 +201,39 @@ tools/deploy/classify-direct-production-application-material.sh \
 `--external-material-file /secure/path/external.yaml` и также отклоняется.
 
 Проверка `--context` читает только наличие и точные имена ключей разрешённых
-legacy source Secret. Она не копирует данные и не изменяет
-`matter-kodex-prod`. Классификация сама по себе не является materialization и не
-разрешает bootstrap `apply`.
+legacy source Secret. Она не выводит значения и не изменяет
+`matter-kodex-prod`. Классификация сама по себе не является materialization.
 
-Полный application materializer остаётся закрыт до устранения трёх исполняемых
-несовместимостей: broker объявляет basic NATS credentials, а workloads требуют
-NATS user credentials file; PostgreSQL authority создаёт поколенческие LOGIN
-principals без materialized passwords до запуска зависящих от них workloads;
-объявленные TLS endpoints Mattermost и bot-service не соответствуют доступным
-legacy Service endpoints. Подставлять синтаксически непустые значения вместо
-этих контрактов запрещено. После исправления producer/consumer contracts
-materializer обязан объединять generated, derived, reusable и external части в
-secure temporary directory с `umask 077`, проверять TLS hostname/CA и JWS
-semantics, выдавать exact полный файл для `bootstrap.sh` и выполнять readback без
-печати значений.
+`tools/deploy/materialize-direct-production-application.sh` объединяет все
+52 `cryptographically_generated`, 60 `deterministically_derived`, два полностью
+`safely_reusable_from_existing_binding` и частичные reusable bindings внутри
+двух external ресурсов. Он использует `umask 077`, secure temporary directory,
+pinned `nsc`, operator/account JWT и минимальные NATS user permissions; создаёт
+owner-only password store для 29 поколенческих PostgreSQL LOGIN principals и
+verify-full DSN с exact hostname/CA; подписывает TLS identities общей prototype
+CA; проверяет compact JWS/JWK/JWKS, ARN, CA и mapping digest semantics. Любой
+неизвестный resource/key или неполный internal set отклоняется.
+
+Foundation публикует NATS только через TLS и account resolver без basic-auth.
+PostgreSQL principal Job исполняется до migrations и повторно после них, затем
+закрывает прежние g1/g2 publisher/readback principals через `NOLOGIN` и
+termination. Mattermost и bot-service доступны application clients только через
+двухрепличные namespaced Envoy mTLS bridges. Их единственный plaintext hop имеет
+exact legacy namespace/Pod selector/port; legacy workloads и Services не
+изменяются. После migrations routine deploy сначала запускает publisher и
+readback-attestor, ждёт непустой `snapshot.jws`, и только затем запускает
+остальные consumers.
+
+Текущий application render всё ещё требует исполняемый Vault endpoint
+`vault.mattercodex-system.svc:8200`: publisher выполняет startup publication
+через `VaultStaticRoleManager`/`SecretDelivery`, а authority sidecars используют
+тот же delivery path. Одной внешней CA или Kubernetes Secret недостаточно.
+Bootstrap закрыто останавливается до первой мутации, если exact Service и Ready
+EndpointSlice отсутствуют. Для утверждённого Kubernetes-Secret prototype нужен
+узкий Go-проход: явный profile-selected file/Kubernetes adapter для
+`VaultStaticRoleManager` и `SecretDelivery` с закрытым path registry, digest
+readback и fail-closed rotation; после него Vault preflight удаляется. Разворачивать
+неутверждённый dev Vault или подменять ответы синтаксическими значениями запрещено.
 
 ## Bounded smoke
 

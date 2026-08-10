@@ -37,6 +37,7 @@ script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 policy="$repository_root/infra/direct-production/application-material-policy.json"
 jq -e '
+  . as $policy |
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
@@ -45,12 +46,20 @@ jq -e '
   all(.resources[];
     (.kind == "Secret" or .kind == "ConfigMap") and
     (.name | test("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")) and
+    (.keys | type == "array" and length > 0 and length == (unique | length) and
+      all(.[]; type == "string" and length > 0)) and
     (.classification == "cryptographically_generated" or
      .classification == "deterministically_derived" or
      .classification == "safely_reusable_from_existing_binding" or
      .classification == "truly_external_credential")) and
   ([.external_bindings[],.reusable_bindings[],.publisher_owned_empty_resources[]] |
-    all(.kind != null or .target_kind != null))
+    all(.kind != null or .target_kind != null)) and
+  all(.external_bindings[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      (($binding.keys - .keys) | length) == 0)) and
+  all(.publisher_owned_empty_resources[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      .keys == $binding.keys))
 ' "$policy" >/dev/null || fail "application material policy is invalid"
 
 temporary_directory=$(mktemp -d)
@@ -69,6 +78,12 @@ expected_secrets="$temporary_directory/expected-secrets"
   yq eval-all -r '.. | select(has("secret")) |
     select(.secret.secretName != null) | .secret.secretName' "$interfaces"
 } | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$expected_secrets"
+{
+  yq eval-all -r '.. | select(has("secretKeyRef")) |
+    [.secretKeyRef.name,.secretKeyRef.key] | @tsv' "$interfaces"
+  yq eval-all -r '.. | select(has("secret")) | select(.secret.secretName != null) |
+    .secret.secretName as $name | .secret.items[]? | [$name,.key] | @tsv' "$interfaces"
+} | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$temporary_directory/referenced-secret-keys"
 
 defined_configmaps="$temporary_directory/defined-configmaps"
 referenced_configmaps="$temporary_directory/referenced-configmaps"
@@ -80,6 +95,12 @@ yq eval-all -r 'select(.kind == "ConfigMap") | .metadata.name' "$interfaces" |
   yq eval-all -r '.. | select(has("configMap")) |
     select(.configMap.name != null) | .configMap.name' "$interfaces"
 } | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$referenced_configmaps"
+{
+  yq eval-all -r '.. | select(has("configMapKeyRef")) |
+    [.configMapKeyRef.name,.configMapKeyRef.key] | @tsv' "$interfaces"
+  yq eval-all -r '.. | select(has("configMap")) | select(.configMap.name != null) |
+    .configMap.name as $name | .configMap.items[]? | [$name,.key] | @tsv' "$interfaces"
+} | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$temporary_directory/referenced-configmap-keys"
 comm -13 "$defined_configmaps" "$referenced_configmaps" |
   sed '/^kube-root-ca\.crt$/d;/^mattercodex-image-admission-policy$/d' >"$temporary_directory/expected-configmaps"
 
@@ -102,6 +123,18 @@ rendered_resource_identities=$(jq -Sc '[.[] | [.kind,.name]] | sort' "$resources
 policy_resource_identities=$(jq -Sc '[.resources[] | [.kind,.name]] | sort' "$policy")
 [[ "$rendered_resource_identities" == "$policy_resource_identities" ]] ||
   fail "rendered application material identity set differs from the closed policy"
+while IFS=$'\t' read -r name key; do
+  jq -e --arg name "$name" --arg key "$key" '
+    any(.resources[]; .kind == "Secret" and .name == $name and (.keys | index($key) != null))
+  ' "$policy" >/dev/null || fail "rendered Secret key is absent from the closed policy"
+done <"$temporary_directory/referenced-secret-keys"
+while IFS=$'\t' read -r name key; do
+  jq -e --arg name "$name" --arg key "$key" '
+    if any(.resources[]; .kind == "ConfigMap" and .name == $name)
+    then any(.resources[]; .kind == "ConfigMap" and .name == $name and (.keys | index($key) != null))
+    else true end
+  ' "$policy" >/dev/null || fail "rendered ConfigMap key is absent from the closed policy"
+done <"$temporary_directory/referenced-configmap-keys"
 
 jq -e '
   length > 0 and

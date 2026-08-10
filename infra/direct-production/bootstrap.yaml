@@ -23,6 +23,10 @@ rules:
   - apiGroups: [""]
     resources: [pods, persistentvolumeclaims]
     verbs: [get, list]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [internal-rpc-authority-snapshot]
+    verbs: [get]
   - apiGroups: [apps]
     resources: [deployments, statefulsets]
     verbs: [get, list, watch, create, update, patch]
@@ -40,6 +44,7 @@ rules:
       - interaction-gateway-migrate
       - internal-rpc-authority-migrate
       - runtime-controller-migration
+      - mattercodex-postgresql-principal-bootstrap
     verbs: [delete]
   - apiGroups: [networking.k8s.io]
     resources: [ingresses]
@@ -130,7 +135,8 @@ spec:
           'internal-rpc-authority-publisher-target-registry','internal-rpc-authority-readback-attestor',
           'internal-rpc-authority-readback-attestor-postgresql-connection','internal-rpc-authority-restore-controller',
           'internal-rpc-authority-restore-coordination','mattercodex-image-admission-policy','mattercodex-nats-config',
-          'mattercodex-postgresql-init','mattercodex-redis-config','mattercodex-release-lock',
+          'mattercodex-legacy-transport-bridges','mattercodex-postgresql-init','mattercodex-postgresql-principal-bootstrap',
+          'mattercodex-redis-config','mattercodex-release-lock',
           'runtime-controller-runtime','runtime-controller-s3-security-policy'] ||
          object.metadata.name.matches('^staff-control-center-runtime-[a-z0-9]{10}$'))) ||
         (object.kind == 'Service' && object.metadata.name in [
@@ -139,7 +145,8 @@ spec:
           'interaction-gateway','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-postgresql-rw','internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor',
           'internal-rpc-authority-restore-controller','mattercodex-nats','mattercodex-object-store','mattercodex-postgresql',
-          'mattercodex-redis','nats','object-store','postgresql','provider-health-adapter','redis','runtime-controller','staff-control-center',
+          'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-redis','nats','object-store',
+          'postgresql','provider-health-adapter','redis','runtime-controller','staff-control-center',
           'runtime-controller-postgresql-rw','runtime-s3-archive-exchanger','runtime-s3-restore-exchanger',
           'runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'StatefulSet' && object.metadata.name in [
@@ -148,11 +155,12 @@ spec:
           'automation-scheduler','control-api-gateway','control-plane','egress-gateway','integration-egress-proxy',
           'integration-gateway','interaction-gateway','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor','internal-rpc-authority-restore-controller',
-          'mattercodex-object-store-bootstrap','provider-health-adapter','runtime-controller','staff-control-center','runtime-s3-archive-exchanger',
+          'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-object-store-bootstrap',
+          'provider-health-adapter','runtime-controller','staff-control-center','runtime-s3-archive-exchanger',
           'runtime-s3-restore-exchanger','runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'Job' && object.metadata.name in [
           'control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
-          'internal-rpc-authority-migrate','runtime-controller-migration']) ||
+          'internal-rpc-authority-migrate','mattercodex-postgresql-principal-bootstrap','runtime-controller-migration']) ||
         (object.kind == 'CronJob' && object.metadata.name in [
           'internal-rpc-authority-restore-operator','internal-rpc-authority-restore-pitr',
           'internal-rpc-authority-restore-recovery'])
