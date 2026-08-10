@@ -36,6 +36,11 @@ FROM docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be9894382
 ARG CODEX_PACKAGE=@openai/codex@0.144.1
 
 RUN set -eu; \
+    test -f /etc/apt/sources.list.d/debian.sources; \
+    sed -i 's#^URIs: http://deb.debian.org/#URIs: https://deb.debian.org/#' /etc/apt/sources.list.d/debian.sources; \
+    grep -Fqx 'URIs: https://deb.debian.org/debian' /etc/apt/sources.list.d/debian.sources; \
+    grep -Fqx 'URIs: https://deb.debian.org/debian-security' /etc/apt/sources.list.d/debian.sources; \
+    if grep -Eq '^URIs: http://' /etc/apt/sources.list.d/debian.sources; then exit 1; elif [ "$?" -gt 1 ]; then exit 1; fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates git; \
     npm install --global --omit=dev "${CODEX_PACKAGE}"; \
