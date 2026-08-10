@@ -106,26 +106,37 @@ yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-
   .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
 yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
+  def authority_allowed($routes; $authority):
+    any($routes[];
+      .match.headers[0] as $header |
+      ($header.name == ":authority") and
+      (($header.string_match.exact? == $authority) or
+        (($header.string_match.safe_regex.regex? // "") as $regex |
+          ($regex != "" and ($authority | test($regex))))));
   .static_resources.listeners[0].filter_chains[0].filters[0].typed_config as $hcm |
   $hcm.route_config.virtual_hosts[0] as $virtual_host |
-  $virtual_host.routes[0] as $connect_route |
-  $connect_route.route.upgrade_configs[0] as $route_upgrade |
+  $virtual_host.routes as $routes |
   $hcm.upgrade_configs[0] as $hcm_upgrade |
-  $connect_route.match.headers[0] as $authority_match |
-  $authority_match.string_match.safe_regex.regex as $authority_regex |
   ($virtual_host.domains == ["*"]) and
-  ($authority_match.name == ":authority") and
+  ($routes | length == 11) and
+  (all($routes[];
+    .match.connect_matcher == {} and
+    (.match.headers | length == 1) and .match.headers[0].name == ":authority" and
+    ((.match.headers[0].string_match.safe_regex.regex? // "") | length < 80) and
+    .route.cluster == "dynamic_forward_proxy" and
+    (.route.upgrade_configs | length == 1) and
+    .route.upgrade_configs[0].upgrade_type == "CONNECT" and
+    .route.upgrade_configs[0].connect_config == {})) and
   (all("github.com:443", "broker.actions.githubusercontent.com:443",
     "raw.githubusercontent.com:443", "avatars.githubassets.com:443",
-    "ghcr.io:443", "registry-1.docker.io:443"; test($authority_regex))) and
+    "ghcr.io:443", "registry-1.docker.io:443";
+      authority_allowed($routes; .))) and
   (all("example.com:443", "github.com:80", "github.com.attacker.invalid:443",
     "broker.actions.githubusercontent.com.attacker.invalid:443";
-      (test($authority_regex) | not))) and
+      (authority_allowed($routes; .) | not))) and
   ($hcm_upgrade.upgrade_type == "CONNECT") and
   ($hcm_upgrade | has("connect_config") | not) and
-  ($route_upgrade.upgrade_type == "CONNECT") and
-  ($route_upgrade.connect_config == {}) and
-  ([.. | objects | select(has("connect_config"))] | length == 1)
+  ([.. | objects | select(has("connect_config"))] | length == ($routes | length))
 ' >/dev/null || {
   printf 'Envoy CONNECT termination is not configured on the exact route\n' >&2
   exit 1
