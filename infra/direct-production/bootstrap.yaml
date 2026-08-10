@@ -211,7 +211,7 @@ spec:
              v.name == 'prototype-delivery-issuer' &&
              has(v.secret) &&
              v.secret.secretName == 'internal-rpc-authority-runtime-controller-issuer-delivery' &&
-             v.secret.defaultMode == 288)))
+             v.secret.defaultMode == 288))))
       message: Production authority sidecar does not match its exact file-only delivery profile.
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
@@ -380,7 +380,7 @@ spec:
              !v.matches('^/usr/local/bin/runtime-(archive|restore-verifier|rehydrate)$'))) &&
            (!has(c.args) || c.args.all(v, !(v in ['s3-archive','s3-restore']))) &&
            (!has(c.env) || c.env.all(e,
-             !e.name.matches('^RUNTIME_(S3|ARCHIVE|RESTORE)')))))
+             !e.name.matches('^RUNTIME_(S3|ARCHIVE|RESTORE)'))))))
       message: Dynamic runtime archive/restore Job is disabled in the direct-production dark profile.
 ---
 apiVersion: admissionregistration.k8s.io/v1
