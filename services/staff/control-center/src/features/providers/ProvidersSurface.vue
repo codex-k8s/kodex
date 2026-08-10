@@ -5,9 +5,9 @@ import { useI18n } from "vue-i18n";
 
 import { useProvidersStore } from "@/features/providers/store";
 import type {
-  ProviderConnection,
-  ProviderPoolView,
-} from "@/shared/api/generated/openapi/types.gen";
+  ProviderConnectionModel,
+  ProviderPoolModel,
+} from "@/features/providers/model";
 import { safeHttpsUrl } from "@/shared/lib/url";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -20,7 +20,7 @@ const { t } = useI18n();
 const authorizationOpen = ref(false);
 const poolOpen = ref(false);
 const sourceOpen = ref(false);
-const selectedPool = ref<ProviderPoolView | null>(null);
+const selectedPool = ref<ProviderPoolModel | null>(null);
 const authorizationForm = reactive({
   providerRef: "",
   connectionStableKey: "",
@@ -42,7 +42,7 @@ const availableConnections = computed(() =>
   ),
 );
 
-async function beginPool(value?: ProviderPoolView): Promise<void> {
+async function beginPool(value?: ProviderPoolModel): Promise<void> {
   if (value) {
     await store.loadConfigurationSource(value.poolRef);
     if (
@@ -71,7 +71,7 @@ async function beginPool(value?: ProviderPoolView): Promise<void> {
   poolOpen.value = true;
 }
 
-async function showPoolSource(value: ProviderPoolView): Promise<void> {
+async function showPoolSource(value: ProviderPoolModel): Promise<void> {
   await store.loadConfigurationSource(value.poolRef);
   sourceOpen.value = store.configurationSource.phase === "ready";
 }
@@ -111,7 +111,7 @@ async function savePool(): Promise<void> {
   if (ok) poolOpen.value = false;
 }
 
-async function archivePool(value: ProviderPoolView): Promise<void> {
+async function archivePool(value: ProviderPoolModel): Promise<void> {
   if (!(await poolIsUiOwned(value))) return;
   if (
     !window.confirm(
@@ -122,7 +122,7 @@ async function archivePool(value: ProviderPoolView): Promise<void> {
   await store.executePoolAction(value, "ARCHIVE");
 }
 
-async function deletePool(value: ProviderPoolView): Promise<void> {
+async function deletePool(value: ProviderPoolModel): Promise<void> {
   if (!(await poolIsUiOwned(value))) return;
   if (
     !window.confirm(
@@ -133,7 +133,7 @@ async function deletePool(value: ProviderPoolView): Promise<void> {
   await store.executePoolAction(value, "DELETE");
 }
 
-async function poolIsUiOwned(value: ProviderPoolView): Promise<boolean> {
+async function poolIsUiOwned(value: ProviderPoolModel): Promise<boolean> {
   await store.loadConfigurationSource(value.poolRef);
   const allowed =
     store.configurationSource.phase === "ready" &&
@@ -142,7 +142,7 @@ async function poolIsUiOwned(value: ProviderPoolView): Promise<boolean> {
   return allowed;
 }
 
-async function revoke(value: ProviderConnection): Promise<void> {
+async function revoke(value: ProviderConnectionModel): Promise<void> {
   if (
     !window.confirm(t("providers.confirmRevoke", { name: value.displayName }))
   )
@@ -150,7 +150,7 @@ async function revoke(value: ProviderConnection): Promise<void> {
   await store.revokeProvider(value);
 }
 
-async function reauthorize(value: ProviderConnection): Promise<void> {
+async function reauthorize(value: ProviderConnectionModel): Promise<void> {
   if (
     !window.confirm(
       t("providers.confirmReauthorize", { name: value.displayName }),
@@ -364,13 +364,13 @@ onMounted(store.loadProviders);
                     }}
                   </dd>
                 </div>
-                <div v-if="store.poolOwnership.get(item.poolRef)">
+                <div v-if="item.ownership">
                   <dt>{{ $t("common.source") }}</dt>
                   <dd>
-                    {{ store.poolOwnership.get(item.poolRef)?.managedBy }} ·
-                    {{ store.poolOwnership.get(item.poolRef)?.source }} ·
-                    {{ store.poolOwnership.get(item.poolRef)?.revision }} ·
-                    {{ store.poolOwnership.get(item.poolRef)?.drift }}
+                    {{ item.ownership.managedBy }} ·
+                    {{ item.ownership.source }} ·
+                    {{ item.ownership.revision }} ·
+                    {{ item.ownership.drift }}
                   </dd>
                 </div>
               </dl>

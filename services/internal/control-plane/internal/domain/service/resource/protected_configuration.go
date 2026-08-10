@@ -493,6 +493,9 @@ func (service *Service) mutateProtectedConfiguration(
 		}
 	}
 	if current.Version != input.ExpectedVersion {
+		if input.Action == "reconcile_git" {
+			return service.persistGitReconciliationDrift(ctx, tx, protected, input, current, consumption)
+		}
 		return entity.Resource{}, errs.ErrVersionMismatch
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
@@ -501,20 +504,32 @@ func (service *Service) mutateProtectedConfiguration(
 	case "update", "refresh", "reconcile_git":
 		spec, resolveErr := service.resolveProtectedSpec(ctx, tx, protected, input, current)
 		if resolveErr != nil {
+			if input.Action == "reconcile_git" {
+				return service.persistGitReconciliationDrift(ctx, tx, protected, input, current, consumption)
+			}
 			return entity.Resource{}, resolveErr
 		}
 		if ensureErr := service.ensureInstructionArtifact(ctx, tx, input, spec); ensureErr != nil {
+			if input.Action == "reconcile_git" {
+				return service.persistGitReconciliationDrift(ctx, tx, protected, input, current, consumption)
+			}
 			return entity.Resource{}, ensureErr
 		}
 		currentStableKey, currentHasStableKey := protectedConfigurationStableKey(current.Spec)
 		nextStableKey, nextHasStableKey := protectedConfigurationStableKey(spec)
 		if currentHasStableKey != nextHasStableKey ||
 			(currentHasStableKey && currentStableKey != nextStableKey) {
+			if input.Action == "reconcile_git" {
+				return service.persistGitReconciliationDrift(ctx, tx, protected, input, current, consumption)
+			}
 			return entity.Resource{}, errs.ErrStateConflict
 		}
 		if input.Action == "update" || input.Action == "reconcile_git" {
 			spec, resolveErr = configurationUpdateSpec(ctx, tx, input.Principal, current.Spec, spec, false)
 			if resolveErr != nil {
+				if input.Action == "reconcile_git" {
+					return service.persistGitReconciliationDrift(ctx, tx, protected, input, current, consumption)
+				}
 				return entity.Resource{}, resolveErr
 			}
 		}
@@ -562,6 +577,56 @@ func (service *Service) mutateProtectedConfiguration(
 		}
 	}
 	return updated, nil
+}
+
+// persistGitReconciliationDrift фиксирует отрицательный результат сравнения в
+// той же owner transaction, которая locked exact protected resource. Gateway
+// получает только сохранённую проекцию и не вычисляет drift из transport error.
+func (service *Service) persistGitReconciliationDrift(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	protected domainrepo.ProtectedTransaction,
+	input ManageProtectedConfigurationInput,
+	current entity.Resource,
+	consumption domainrepo.ExternalCommandReceipt,
+) (entity.Resource, error) {
+	drifted, err := markGitConfigurationDrift(current, service.now().UTC().Truncate(time.Microsecond))
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if err := tx.Update(ctx, drifted, current.Version); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.appendProtectedRecords(ctx, tx, protected, input.Principal, "reconcile_git", drifted); err != nil {
+		return entity.Resource{}, err
+	}
+	if consumption.ReceiptID != "" {
+		if err := finalizeExternalCommandReceipt(ctx, protected, consumption, drifted); err != nil {
+			return entity.Resource{}, err
+		}
+	}
+	return drifted, nil
+}
+
+func markGitConfigurationDrift(current entity.Resource, now time.Time) (entity.Resource, error) {
+	configured, ok := current.Spec.(entity.ConfiguredSpec)
+	if !ok {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	ownership := configured.ConfigurationOwnership()
+	if ownership.ManagedBy != "GIT" || ownership.AuthoritativeDrift() != "IN_SYNC" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	ownership.Drift = "DRIFTED"
+	spec, err := entity.WithConfigurationOwnership(current.Spec, ownership)
+	if err != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	drifted, err := current.Update(current.Name, spec, now)
+	if err != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return drifted, nil
 }
 
 func protectedConfigurationStableKey(spec entity.Spec) (string, bool) {

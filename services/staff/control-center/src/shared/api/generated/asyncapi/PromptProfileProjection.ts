@@ -2,7 +2,7 @@ import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjecti
 interface PromptProfileProjection {
   revision: number;
   contentSha256: string;
-  sourceRef: string;
+  sourceStatus: string;
   locale: string;
   ownership: ConfigurationOwnershipProjection;
 }

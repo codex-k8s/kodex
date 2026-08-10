@@ -15,51 +15,46 @@ import {
   startAuthorization,
 } from "@/shared/api/adapters/owner-control";
 import { fetchResources } from "@/shared/api/adapters/resources";
-import type {
-  ConfigurationSourceDetail,
-  Provider,
-  ProviderAuthorization,
-  ProviderConnection,
-  ProviderPoolCommand,
-  ProviderPoolView,
-} from "@/shared/api/generated/openapi/types.gen";
+import type { ProviderPoolCommand } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
-import { resourceOwnership } from "@/shared/lib/resources";
 import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
+import {
+  type ProviderAuthorizationModel,
+  type ProviderCatalogModel,
+  type ProviderConfigurationSourceModel,
+  type ProviderConnectionModel,
+  type ProviderPoolModel,
+  toProviderAuthorizationModel,
+  toProviderCatalogModel,
+  toProviderConfigurationSourceModel,
+  toProviderConnectionModel,
+  toProviderPoolModel,
+} from "./model";
 
 export const useProvidersStore = defineStore("providers", () => {
-  const providers = reactive(remoteState<Provider[]>([]));
+  const providers = reactive(remoteState<ProviderCatalogModel[]>([]));
   const authorization = reactive(
-    remoteState<ProviderAuthorization | null>(null),
+    remoteState<ProviderAuthorizationModel | null>(null),
   );
-  const connections = reactive(remoteState<ProviderConnection[]>([]));
-  const pools = reactive(remoteState<ProviderPoolView[]>([]));
+  const connections = reactive(remoteState<ProviderConnectionModel[]>([]));
+  const pools = reactive(remoteState<ProviderPoolModel[]>([]));
   const configurationSource = reactive(
-    remoteState<ConfigurationSourceDetail | null>(null),
-  );
-  const poolOwnership = reactive(
-    new Map<
-      string,
-      {
-        managedBy: "ui" | "git";
-        source: string;
-        revision: number;
-        drift: "NOT_APPLICABLE" | "IN_SYNC" | "DRIFTED" | "UNKNOWN";
-      }
-    >(),
+    remoteState<ProviderConfigurationSourceModel | null>(null),
   );
   const runtime = createFeatureRuntime();
   const loadProviders = () =>
     Promise.all([
       runtime.loadInto(
         providers,
-        async () => (await fetchProviders()).providers,
+        async () =>
+          (await fetchProviders()).providers.map(toProviderCatalogModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         connections,
-        async () => (await fetchConnections()).connections,
+        async () =>
+          (await fetchConnections()).connections.map(toProviderConnectionModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
@@ -69,18 +64,12 @@ export const useProvidersStore = defineStore("providers", () => {
             fetchProviderPools(),
             fetchResources("PROVIDER_POOL"),
           ]);
-          poolOwnership.clear();
-          resources.resources.forEach((resource) => {
-            const ownership = resourceOwnership(resource);
-            if (ownership)
-              poolOwnership.set(resource.id, {
-                managedBy: ownership.managedBy,
-                source: ownership.source,
-                revision: ownership.revision,
-                drift: ownership.drift,
-              });
-          });
-          return views.pools;
+          const byID = new Map(
+            resources.resources.map((resource) => [resource.id, resource]),
+          );
+          return views.pools.map((item) =>
+            toProviderPoolModel(item, byID.get(item.poolRef)),
+          );
         },
         (items) => items.length === 0,
       ),
@@ -88,7 +77,9 @@ export const useProvidersStore = defineStore("providers", () => {
   const beginAuthorization = (body: Parameters<typeof startAuthorization>[0]) =>
     runtime.mutate(
       async () => {
-        authorization.data = await startAuthorization(body);
+        authorization.data = toProviderAuthorizationModel(
+          await startAuthorization(body),
+        );
         authorization.phase = "ready";
       },
       loadProviders,
@@ -97,47 +88,47 @@ export const useProvidersStore = defineStore("providers", () => {
   const refreshAuthorization = (ref: string) =>
     runtime.loadInto(
       authorization,
-      () => fetchAuthorization(ref),
+      async () => toProviderAuthorizationModel(await fetchAuthorization(ref)),
       (value) => value === null,
     );
-  const newAuthorizationCode = (value: ProviderAuthorization) =>
+  const newAuthorizationCode = (value: ProviderAuthorizationModel) =>
     runtime.mutate(
       async () => {
-        authorization.data = await restartAuthorization(
-          value.authorizationRef,
-          value.version,
+        authorization.data = toProviderAuthorizationModel(
+          await restartAuthorization(value.authorizationRef, value.version),
         );
         authorization.phase = "ready";
       },
       loadProviders,
       authorization,
     );
-  const stopAuthorization = (value: ProviderAuthorization) =>
+  const stopAuthorization = (value: ProviderAuthorizationModel) =>
     runtime.mutate(
       async () => {
-        authorization.data = await cancelAuthorization(
-          value.authorizationRef,
-          value.version,
+        authorization.data = toProviderAuthorizationModel(
+          await cancelAuthorization(value.authorizationRef, value.version),
         );
         authorization.phase = "ready";
       },
       loadProviders,
       authorization,
     );
-  const revokeProvider = (value: ProviderConnection) =>
+  const revokeProvider = (value: ProviderConnectionModel) =>
     runtime.mutate(
       () =>
         revokeConnection(value.connectionRef, value.version, value.generation),
       loadProviders,
       connections,
     );
-  const reauthorizeProvider = (value: ProviderConnection) =>
+  const reauthorizeProvider = (value: ProviderConnectionModel) =>
     runtime.mutate(
       async () => {
-        authorization.data = await reauthorizeConnection(
-          value.connectionRef,
-          value.version,
-          value.generation,
+        authorization.data = toProviderAuthorizationModel(
+          await reauthorizeConnection(
+            value.connectionRef,
+            value.version,
+            value.generation,
+          ),
         );
         authorization.phase = "ready";
       },
@@ -145,7 +136,7 @@ export const useProvidersStore = defineStore("providers", () => {
       connections,
     );
   const savePool = (
-    value: ProviderPoolView | null,
+    value: ProviderPoolModel | null,
     draft: {
       stableKey: string;
       displayName: string;
@@ -167,7 +158,7 @@ export const useProvidersStore = defineStore("providers", () => {
       pools,
     );
   const executePoolAction = (
-    value: ProviderPoolView,
+    value: ProviderPoolModel,
     action: "ARCHIVE" | "DELETE",
   ) =>
     runtime.mutate(
@@ -180,13 +171,18 @@ export const useProvidersStore = defineStore("providers", () => {
     configurationSource.data = null;
     return runtime.loadInto(
       configurationSource,
-      () => fetchConfigurationSource(resourceRef, "PROVIDER_POOL"),
+      async () =>
+        toProviderConfigurationSourceModel(
+          await fetchConfigurationSource(resourceRef, "PROVIDER_POOL"),
+        ),
       (value) => value === null,
     );
   };
-  function replaceConnections(items: ProviderConnection[]): void {
+  function replaceConnections(
+    items: Parameters<typeof toProviderConnectionModel>[0][],
+  ): void {
     invalidate(connections);
-    connections.data = items;
+    connections.data = items.map(toProviderConnectionModel);
     connections.phase = items.length ? "ready" : "empty";
   }
   subscribeRealtimeSnapshot("PROVIDERS", (snapshot) =>
@@ -199,7 +195,6 @@ export const useProvidersStore = defineStore("providers", () => {
     resetRemoteState(connections, []);
     resetRemoteState(pools, []);
     resetRemoteState(configurationSource, null);
-    poolOwnership.clear();
   }
   return {
     providers,
@@ -207,7 +202,6 @@ export const useProvidersStore = defineStore("providers", () => {
     connections,
     pools,
     configurationSource,
-    poolOwnership,
     mutationProblem: runtime.mutationProblem,
     mutating: runtime.mutating,
     loadProviders,

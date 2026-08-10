@@ -17,10 +17,9 @@ import {
   useRoleImagesStore,
 } from "@/features/role-images/store";
 import type {
-  ManageImageBuild,
-  Resource,
-  RoleImageRecipeInput,
-} from "@/shared/api/generated/openapi/types.gen";
+  RoleImageInputModel,
+  RoleImageResourceModel,
+} from "@/features/role-images/model";
 import { shortDigest } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -31,17 +30,17 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const { t } = useI18n();
 const store = useRoleImagesStore();
 const editorOpen = ref(false);
-const editing = ref<Resource | null>(null);
+const editing = ref<RoleImageResourceModel | null>(null);
 const detailOpen = ref(false);
 
-async function openEdit(resource: Resource): Promise<void> {
+async function openEdit(resource: RoleImageResourceModel): Promise<void> {
   editing.value = resource;
   editorOpen.value = true;
   await store.loadRecipeDetail(resource);
 }
 async function submit(value: {
   name: string;
-  input: RoleImageRecipeInput;
+  input: RoleImageInputModel;
 }): Promise<void> {
   const success = await store.saveRecipe(
     editing.value,
@@ -54,7 +53,7 @@ async function submit(value: {
   }
 }
 async function recipeCommand(
-  resource: Resource,
+  resource: RoleImageResourceModel,
   action: RoleImageAction,
 ): Promise<void> {
   if (
@@ -66,8 +65,8 @@ async function recipeCommand(
   await store.executeRecipeAction(resource, action);
 }
 async function buildCommand(
-  resource: Resource,
-  action: ManageImageBuild["action"],
+  resource: RoleImageResourceModel,
+  action: "CANCEL" | "RETRY",
 ): Promise<void> {
   if (
     !window.confirm(
@@ -77,7 +76,7 @@ async function buildCommand(
     return;
   await store.commandBuild(resource, action);
 }
-async function openBuild(resource: Resource): Promise<void> {
+async function openBuild(resource: RoleImageResourceModel): Promise<void> {
   detailOpen.value = true;
   await store.loadBuildDetail(resource);
 }
@@ -137,7 +136,7 @@ onMounted(store.load);
                   <td class="data-table__name">{{ item.name }}</td>
                   <td><StatusBadge :state="item.state" /></td>
                   <td class="truncate">
-                    {{ item.spec.roleImageRecipe?.input.baseImageReference }}
+                    {{ item.recipeBaseImageReference }}
                   </td>
                   <td>
                     <div class="data-table__actions">
@@ -202,18 +201,18 @@ onMounted(store.load);
           >
             <div class="resource-card__header">
               <h3>{{ item.name }}</h3>
-              <StatusBadge :state="item.spec.imageBuild?.stage ?? item.state" />
+              <StatusBadge :state="item.buildStage" />
             </div>
             <div class="progress">
               <span
                 :style="{
-                  width: `${item.spec.imageBuild?.progressPercent ?? 0}%`,
+                  width: `${item.buildProgressPercent}%`,
                 }"
               />
             </div>
             <div class="resource-card__meta">
-              <span>{{ item.spec.imageBuild?.progressPercent }}%</span
-              ><span>{{ shortDigest(item.spec.imageBuild?.specSha256) }}</span>
+              <span>{{ item.buildProgressPercent }}%</span
+              ><span>{{ shortDigest(item.buildSpecSha256) }}</span>
             </div>
             <div class="data-table__actions">
               <button
@@ -272,12 +271,7 @@ onMounted(store.load);
           </div>
           <div class="resource-card__header">
             <span>{{ $t("roleImages.stage") }}</span
-            ><StatusBadge
-              :state="
-                store.buildDetail.data.spec.imageBuild?.stage ??
-                store.buildDetail.data.state
-              "
-            />
+            ><StatusBadge :state="store.buildDetail.data.buildStage" />
           </div>
           <div class="resource-card__header">
             <span>{{ $t("common.revision") }}</span

@@ -1218,58 +1218,60 @@ export type UpdateSchedule = {
 export type ChatSpec = {
     stableKey: string;
     roomType: ChatRoomType;
-    defaultAgentId?: string;
-    externalChannelRef?: string;
+    defaultAgentSelector?: string;
+    channelSelector?: string;
     workPolicy: string;
 };
 
 /**
- * Содержит только URI/metadata Secret; secret value запрещён.
+ * Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
  */
 export type CredentialBindingSpec = {
     purpose: string;
-    immutableSecretRef: string;
-    principalRef: string;
+    sourceKind?: CredentialBindingSourceKind;
+    sourceSelector?: string;
     revision: number;
 };
 
+export type CredentialBindingSourceKind = 'PROVIDER_CONNECTION_REFERENCE' | 'CREDENTIAL_BINDING';
+
 export type RepositoryWorkspaceSpec = {
-    repositoryRef: string;
+    repositorySelector?: string;
     workspaceMode: string;
     defaultBranch: string;
-    credentialBindingId?: string;
+    credentialBindingSelector?: string;
 };
 
 export type IntegrationSpec = {
     definitionRef: string;
     definitionVersion: number;
     capabilities: Array<string>;
-    credentialBindingIds: Array<string>;
-    endpointRef: string;
+    credentialBindingSelectors: Array<string>;
+    sourceSelector?: string;
 };
 
 export type TeamSpec = {
     stableKey: string;
-    externalTeamRef?: string;
-    memberActorIds: Array<string>;
-    roleIds: Array<string>;
+    sourceSelector?: string;
+    memberActorSelectors: Array<string>;
+    roleSelectors: Array<string>;
 };
 
 export type RoleSpec = {
     stableKey: string;
     capabilities: Array<string>;
-    allowedTargetRoleIds: Array<string>;
-    promptProfileId?: string;
-    roleImageRecipeId: string;
-    providerCredentialBindingIds: Array<string>;
-    repositoryWorkspaceIds: Array<string>;
-    integrationIds: Array<string>;
+    allowedTargetRoleSelectors: Array<string>;
+    promptProfileSelector?: string;
+    roleImageRecipeSelector: string;
+    providerCredentialBindingSelectors: Array<string>;
+    repositoryWorkspaceSelectors: Array<string>;
+    integrationSelectors: Array<string>;
 };
 
 export type PromptProfileSpec = {
     revision: number;
     contentSha256: string;
-    sourceRef: string;
+    sourceSelector?: string;
     locale: string;
 };
 
@@ -1474,9 +1476,9 @@ export type ProjectProjection = {
  */
 export type TeamProjection = {
     stableKey: string;
-    externalTeamRef: string;
-    memberActorIds: Array<string>;
-    roleIds: Array<string>;
+    providerBindingStatus: string;
+    memberCount: number;
+    roleCount: number;
     ownership: ConfigurationOwnershipProjection;
 };
 
@@ -1486,18 +1488,10 @@ export type TeamProjection = {
 export type ChatProjection = {
     stableKey: string;
     roomType: ChatRoomType;
-    defaultAgentId?: string;
-    externalChannelRef: string;
+    defaultAgentStatus: string;
+    providerChannelStatus: string;
     workPolicy: string;
     ownership: ConfigurationOwnershipProjection;
-};
-
-/**
- * ProviderPoolBindingProjection
- */
-export type ProviderPoolBindingProjection = {
-    credentialBindingId: string;
-    weight: number;
 };
 
 /**
@@ -1507,7 +1501,7 @@ export type ProviderPoolProjection = {
     policy: ProviderPoolPolicy;
     policyRevision: number;
     observationMaxAgeSeconds: number;
-    bindings: Array<ProviderPoolBindingProjection>;
+    bindingCount: number;
 };
 
 /**
@@ -1516,12 +1510,12 @@ export type ProviderPoolProjection = {
 export type RoleProjection = {
     stableKey: string;
     capabilities: Array<string>;
-    allowedTargetRoleIds: Array<string>;
-    promptProfileId: string;
-    roleImageRecipeId: string;
-    providerCredentialBindingIds: Array<string>;
-    repositoryWorkspaceIds: Array<string>;
-    integrationIds: Array<string>;
+    allowedTargetRoleCount: number;
+    promptProfileStatus: string;
+    roleImageRecipeStatus: string;
+    providerCredentialBindingCount: number;
+    repositoryWorkspaceCount: number;
+    integrationCount: number;
     providerAccountPool: ProviderPoolProjection;
     ownership: ConfigurationOwnershipProjection;
 };
@@ -1532,7 +1526,7 @@ export type RoleProjection = {
 export type PromptProfileProjection = {
     revision: number;
     contentSha256: string;
-    sourceRef: string;
+    sourceStatus: string;
     locale: string;
     ownership: ConfigurationOwnershipProjection;
 };
@@ -1542,8 +1536,6 @@ export type PromptProfileProjection = {
  */
 export type CredentialBindingProjection = {
     purpose: string;
-    immutableSecretRef: string;
-    principalRef: string;
     revision: number;
     expiresAt?: string;
     providerEligible: boolean;
@@ -1552,16 +1544,17 @@ export type CredentialBindingProjection = {
     providerObservedAt?: string;
     contentSha256: string;
     ownership: ConfigurationOwnershipProjection;
+    bindingStatus: string;
 };
 
 /**
  * RepositoryWorkspaceProjection
  */
 export type RepositoryWorkspaceProjection = {
-    repositoryRef: string;
+    repositoryStatus: string;
     workspaceMode: string;
     defaultBranch: string;
-    credentialBindingId?: string;
+    credentialBindingStatus: string;
     ownership: ConfigurationOwnershipProjection;
 };
 
@@ -1572,8 +1565,8 @@ export type IntegrationProjection = {
     definitionRef: string;
     definitionVersion: number;
     capabilities: Array<string>;
-    credentialBindingIds: Array<string>;
-    endpointRef: string;
+    credentialBindingCount: number;
+    endpointStatus: string;
     ownership: ConfigurationOwnershipProjection;
 };
 

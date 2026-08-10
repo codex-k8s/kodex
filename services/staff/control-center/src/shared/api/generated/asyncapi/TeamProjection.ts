@@ -1,9 +1,9 @@
 import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjection';
 interface TeamProjection {
   stableKey: string;
-  externalTeamRef: string;
-  memberActorIds: string[];
-  roleIds: string[];
+  providerBindingStatus: string;
+  memberCount: number;
+  roleCount: number;
   ownership: ConfigurationOwnershipProjection;
 }
 export { TeamProjection };

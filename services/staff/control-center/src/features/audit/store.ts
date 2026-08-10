@@ -3,24 +3,25 @@ import { reactive } from "vue";
 
 import { fetchAudit } from "@/shared/api/adapters/operations";
 import { downloadAudit } from "@/shared/api/adapters/owner-control";
-import type {
-  AuditEvent,
-  ResourceKind,
-} from "@/shared/api/generated/openapi/types.gen";
+import {
+  toAuditEventModel,
+  type AuditEventModel,
+  type AuditResourceKindModel,
+} from "@/features/audit/model";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { remoteState, resetRemoteState } from "@/shared/lib/remote";
 
 export const useAuditStore = defineStore("audit", () => {
-  const audit = reactive(remoteState<AuditEvent[]>([]));
+  const audit = reactive(remoteState<AuditEventModel[]>([]));
   const runtime = createFeatureRuntime();
   const load = () =>
     runtime.loadInto(
       audit,
-      async () => (await fetchAudit()).events,
+      async () => (await fetchAudit()).events.map(toAuditEventModel),
       (items) => items.length === 0,
     );
   const exportFile = (filters?: {
-    resourceKind?: ResourceKind;
+    resourceKind?: AuditResourceKindModel;
     resourceRef?: string;
     action?: string;
   }) => downloadAudit(filters);

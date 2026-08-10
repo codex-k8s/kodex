@@ -10,11 +10,6 @@ import {
   relinkTeam,
   unlinkTeam,
 } from "@/shared/api/adapters/owner-control";
-import type {
-  MattermostMappingOperation,
-  MattermostTeam,
-  MattermostTeamBinding,
-} from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import {
   completeMutationIntent,
@@ -22,12 +17,22 @@ import {
 } from "@/shared/lib/identity";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
 import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
+import {
+  type WorkspaceTeamBindingModel,
+  type WorkspaceTeamModel,
+  type WorkspaceTeamOperationModel,
+  toWorkspaceTeamBindingModel,
+  toWorkspaceTeamModel,
+  toWorkspaceTeamOperationModel,
+} from "./model";
 
 export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
-  const teams = reactive(remoteState<MattermostTeam[]>([]));
-  const teamBinding = reactive(remoteState<MattermostTeamBinding | null>(null));
+  const teams = reactive(remoteState<WorkspaceTeamModel[]>([]));
+  const teamBinding = reactive(
+    remoteState<WorkspaceTeamBindingModel | null>(null),
+  );
   const teamOperation = reactive(
-    remoteState<MattermostMappingOperation | null>(null),
+    remoteState<WorkspaceTeamOperationModel | null>(null),
   );
   const runtime = createFeatureRuntime();
 
@@ -42,7 +47,7 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     if (!key) return false;
     try {
       const operation = await fetchTeamOperation(action, key);
-      teamOperation.data = operation;
+      teamOperation.data = toWorkspaceTeamOperationModel(operation);
       teamOperation.phase = "ready";
       if (
         operation.state === "BOUND" ||
@@ -61,12 +66,16 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     Promise.all([
       runtime.loadInto(
         teams,
-        async () => (await fetchMattermostTeams()).teams,
+        async () =>
+          (await fetchMattermostTeams()).teams.map(toWorkspaceTeamModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         teamBinding,
-        fetchMattermostBinding,
+        async () => {
+          const value = await fetchMattermostBinding();
+          return value ? toWorkspaceTeamBindingModel(value) : null;
+        },
         (value) => value === null,
       ),
     ]).then(() => undefined);
@@ -80,7 +89,9 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     const body = { selector };
     const ok = await runtime.mutate(
       async () => {
-        teamOperation.data = (await linkTeam(selector)).operation;
+        teamOperation.data = toWorkspaceTeamOperationModel(
+          (await linkTeam(selector)).operation,
+        );
         teamOperation.phase = "ready";
       },
       loadTeams,
@@ -90,7 +101,7 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
   };
   const rebindTeam = async (
     selector: string,
-    binding: MattermostTeamBinding,
+    binding: WorkspaceTeamBindingModel,
   ) => {
     const body = {
       selector,
@@ -99,7 +110,9 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     const version = binding.mappingVersion;
     const ok = await runtime.mutate(
       async () => {
-        teamOperation.data = (await relinkTeam(body, version)).operation;
+        teamOperation.data = toWorkspaceTeamOperationModel(
+          (await relinkTeam(body, version)).operation,
+        );
         teamOperation.phase = "ready";
       },
       loadTeams,
@@ -114,7 +127,9 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     const body = { generation };
     const ok = await runtime.mutate(
       async () => {
-        teamOperation.data = (await unlinkTeam(version, generation)).operation;
+        teamOperation.data = toWorkspaceTeamOperationModel(
+          (await unlinkTeam(version, generation)).operation,
+        );
         teamOperation.phase = "ready";
       },
       loadTeams,
@@ -126,9 +141,11 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     );
   };
 
-  function replaceTeams(items: MattermostTeam[]): void {
+  function replaceTeams(
+    items: Parameters<typeof toWorkspaceTeamModel>[0][],
+  ): void {
     invalidate(teams);
-    teams.data = items;
+    teams.data = items.map(toWorkspaceTeamModel);
     teams.phase = items.length ? "ready" : "empty";
   }
   subscribeRealtimeSnapshot("WORKSPACE_TEAMS", (snapshot) =>

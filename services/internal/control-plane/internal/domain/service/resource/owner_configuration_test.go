@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/google/uuid"
 )
 
 func TestProtectedConfigurationRegistriesAreSpecialized(t *testing.T) {
@@ -56,6 +57,29 @@ type providerMaterializationTestTransaction struct {
 	resources map[string]entity.Resource
 	history   []domainrepo.ProtectedResourceHistory
 	audits    []domainrepo.Audit
+	finalized domainrepo.ExternalCommandReceipt
+}
+
+func (tx *providerMaterializationTestTransaction) Update(_ context.Context, resource entity.Resource, expectedVersion uint64) error {
+	current, ok := tx.resources[resource.ID]
+	if !ok || current.Version != expectedVersion {
+		return errs.ErrVersionMismatch
+	}
+	tx.resources[resource.ID] = resource
+	return nil
+}
+
+func (tx *providerMaterializationTestTransaction) ReserveExternalCommandReceipt(
+	_ context.Context, receipt domainrepo.ExternalCommandReceipt,
+) (domainrepo.ExternalCommandReceipt, bool, error) {
+	return receipt, true, nil
+}
+
+func (tx *providerMaterializationTestTransaction) FinalizeExternalCommandReceipt(
+	_ context.Context, receipt domainrepo.ExternalCommandReceipt,
+) error {
+	tx.finalized = receipt
+	return nil
 }
 
 func (tx *providerMaterializationTestTransaction) GetForUpdate(_ context.Context, _, _, id string) (entity.Resource, error) {
@@ -734,6 +758,55 @@ func TestExternalSemanticReceiptReturnsImmutableResult(t *testing.T) {
 	incomplete.Result, incomplete.ResultResourceID = entity.Resource{}, ""
 	if _, err := externalCommandReceiptReplay(incomplete, expected); err == nil {
 		t.Fatal("incomplete reservation was replayed")
+	}
+}
+
+func TestGitReconciliationMismatchPersistsInSyncToDrifted(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 10, 1, 0, 0, 0, time.UTC)
+	resource, err := entity.New(uuid.NewString(), uuid.NewString(), uuid.NewString(), "", uuid.NewString(),
+		enum.KindRoleDefinition, "Git role", entity.RoleDefinitionSpec{
+			StableKey: "git-role", Description: "role", Capabilities: []string{"resource.read"},
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "GIT", SourceRef: "git://owner/configuration/role", SourceRevision: 7, SourceSHA256: strings.Repeat("a", 64), Drift: "IN_SYNC"},
+		}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousDigest, err := entity.ProjectionSHA256(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx := &providerMaterializationTestTransaction{resources: map[string]entity.Resource{resource.ID: resource}}
+	service := &Service{now: func() time.Time { return now.Add(time.Second) }}
+	principal := value.Principal{
+		ActorID: resource.OwnerActorID, OrganizationID: resource.OrganizationID, ProjectID: resource.ProjectID,
+		CorrelationID: uuid.NewString(), PolicyRevision: 3, AuthorityDigest: strings.Repeat("c", 64),
+	}
+	input := ManageProtectedConfigurationInput{
+		Principal: principal, Kind: resource.Kind, Action: "reconcile_git", ResourceID: resource.ID,
+		ExpectedVersion: resource.Version + 1,
+		GitReceipt: value.GitReconciliationReceipt{
+			Issuer: "git-reconciler", Purpose: "GIT_RECONCILIATION_RECEIPT", ReceiptID: uuid.NewString(),
+			TargetKind: strings.ToLower(string(resource.Kind)), TargetResourceID: resource.ID,
+			TargetStableKey: "git-role", SourceRevision: 8, SourceSHA256: strings.Repeat("b", 64),
+			CommandIntentSHA256: strings.Repeat("d", 64),
+		},
+	}
+	drifted, err := service.mutateProtectedConfiguration(context.Background(), tx, tx, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := tx.resources[resource.ID]
+	ownership := stored.Spec.(entity.RoleDefinitionSpec).Ownership
+	if resource.Spec.(entity.RoleDefinitionSpec).Ownership.Drift != "IN_SYNC" || ownership.Drift != "DRIFTED" ||
+		drifted.Version != resource.Version+1 || stored.Version != drifted.Version || !stored.UpdatedAt.After(resource.UpdatedAt) ||
+		len(tx.history) != 1 || len(tx.audits) != 1 || tx.finalized.ResultVersion != stored.Version {
+		t.Fatalf("IN_SYNC -> DRIFTED lifecycle was not persisted atomically: before=%#v after=%#v history=%d audits=%d receipt=%#v", resource, stored, len(tx.history), len(tx.audits), tx.finalized)
+	}
+	updatedDigest, err := entity.ProjectionSHA256(stored)
+	if err != nil || updatedDigest == previousDigest {
+		t.Fatalf("drift readback does not identify the stored version: %q %q %v", previousDigest, updatedDigest, err)
 	}
 }
 

@@ -21,9 +21,11 @@ import {
   remoteState,
   resetRemoteState,
 } from "@/shared/lib/remote";
+import { type ProjectModel, toProjectModel } from "./model";
 
 export const useProjectsStore = defineStore("projects", () => {
-  const projects = reactive(remoteState<Resource[]>([]));
+  const projects = reactive(remoteState<ProjectModel[]>([]));
+  const authoritative = new Map<string, Resource>();
   const nextPageToken = ref<string | null>(null);
   const mutationProblem = ref<AppProblem | null>(null);
   const mutating = ref(false);
@@ -33,10 +35,12 @@ export const useProjectsStore = defineStore("projects", () => {
     const request = beginRequest(projects);
     try {
       const page = await fetchProjects();
+      authoritative.clear();
+      page.resources.forEach((item) => authoritative.set(item.id, item));
       finishRequest(
         projects,
         request,
-        page.resources,
+        page.resources.map(toProjectModel),
         page.resources.length === 0,
       );
       if (acceptRequest(projects, request))
@@ -53,7 +57,13 @@ export const useProjectsStore = defineStore("projects", () => {
     const current = [...projects.data];
     try {
       const page = await fetchProjects(token);
-      finishRequest(projects, request, [...current, ...page.resources], false);
+      page.resources.forEach((item) => authoritative.set(item.id, item));
+      finishRequest(
+        projects,
+        request,
+        [...current, ...page.resources.map(toProjectModel)],
+        false,
+      );
       if (acceptRequest(projects, request))
         nextPageToken.value = page.nextPageToken ?? null;
     } catch (error) {
@@ -95,20 +105,28 @@ export const useProjectsStore = defineStore("projects", () => {
       createWorkspace({ name, spec: { slug, description, locale } }),
     );
   const update = (
-    resource: Resource,
+    resource: ProjectModel,
     name: string,
     slug: string,
     description: string,
     locale: ProjectLocale,
   ) =>
-    mutate(() =>
-      updateWorkspace(resource, {
+    mutate(() => {
+      const current = authoritative.get(resource.id);
+      if (!current)
+        return Promise.reject(new Error("Project readback is unavailable"));
+      return updateWorkspace(current, {
         name,
         spec: { slug, description, locale },
-      }),
-    );
-  const remove = (resource: Resource) =>
-    mutate(() => deleteWorkspace(resource));
+      });
+    });
+  const remove = (resource: ProjectModel) =>
+    mutate(() => {
+      const current = authoritative.get(resource.id);
+      if (!current)
+        return Promise.reject(new Error("Project readback is unavailable"));
+      return deleteWorkspace(current);
+    });
 
   function invalidatePending(): void {
     mutationVersion += 1;
@@ -120,6 +138,7 @@ export const useProjectsStore = defineStore("projects", () => {
   function reset(): void {
     mutationVersion += 1;
     resetRemoteState(projects, []);
+    authoritative.clear();
     nextPageToken.value = null;
     mutationProblem.value = null;
     mutating.value = false;

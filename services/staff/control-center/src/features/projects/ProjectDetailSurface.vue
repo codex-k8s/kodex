@@ -28,12 +28,12 @@ const form = reactive({
 watch(
   project,
   (value) => {
-    if (!value?.spec.project) return;
+    if (!value) return;
     Object.assign(form, {
       name: value.name,
-      slug: value.spec.project.slug,
-      description: value.spec.project.description,
-      locale: value.spec.project.locale,
+      slug: value.slug,
+      description: value.description,
+      locale: value.locale,
     });
   },
   { immediate: true },
@@ -79,7 +79,7 @@ async function deleteProject(): Promise<void> {
 <template>
   <PageHeader
     :title="project?.name ?? $t('workspaces.detailsTitle')"
-    :subtitle="project?.spec.project?.description ?? $t('workspaces.subtitle')"
+    :subtitle="project?.description ?? $t('workspaces.subtitle')"
   >
     <template #actions>
       <button

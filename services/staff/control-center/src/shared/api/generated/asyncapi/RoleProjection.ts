@@ -3,12 +3,12 @@ import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjecti
 interface RoleProjection {
   stableKey: string;
   capabilities: string[];
-  allowedTargetRoleIds: string[];
-  promptProfileId: string;
-  roleImageRecipeId: string;
-  providerCredentialBindingIds: string[];
-  repositoryWorkspaceIds: string[];
-  integrationIds: string[];
+  allowedTargetRoleCount: number;
+  promptProfileStatus: string;
+  roleImageRecipeStatus: string;
+  providerCredentialBindingCount: number;
+  repositoryWorkspaceCount: number;
+  integrationCount: number;
   providerAccountPool: ProviderPoolProjection;
   ownership: ConfigurationOwnershipProjection;
 }

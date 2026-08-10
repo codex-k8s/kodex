@@ -14,8 +14,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useInstructionsStore } from "@/features/instructions/store";
-import type { Resource } from "@/shared/api/generated/openapi/types.gen";
-import { resourceOwnership } from "@/shared/lib/resources";
+import type { InstructionSetModel } from "@/features/instructions/model";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
@@ -26,24 +25,22 @@ const store = useInstructionsStore();
 const { t } = useI18n();
 const editorOpen = ref(false);
 const historyOpen = ref(false);
-const selected = ref<Resource | null>(null);
+const selected = ref<InstructionSetModel | null>(null);
 const leftVersion = ref(0);
 const rightVersion = ref(0);
 const form = reactive({ name: "", stableKey: "", locale: "ru", content: "" });
-const projection = computed(() => selected.value?.spec.instructionSet);
+const projection = computed(() => selected.value);
 const isGitOwned = computed(
-  () =>
-    selected.value !== null &&
-    resourceOwnership(selected.value)?.managedBy === "git",
+  () => selected.value !== null && selected.value.ownership.managedBy === "git",
 );
 
-function edit(item?: Resource): void {
+function edit(item?: InstructionSetModel): void {
   selected.value = item ?? null;
   Object.assign(form, {
     name: item?.name ?? "",
-    stableKey: item?.spec.instructionSet?.stableKey ?? "",
-    locale: item?.spec.instructionSet?.locale ?? "ru",
-    content: item?.spec.instructionSet?.content ?? "",
+    stableKey: item?.stableKey ?? "",
+    locale: item?.locale ?? "ru",
+    content: item?.content ?? "",
   });
   editorOpen.value = true;
 }
@@ -60,7 +57,7 @@ async function save(): Promise<void> {
 }
 
 async function command(
-  item: Resource,
+  item: InstructionSetModel,
   action:
     | "VALIDATE"
     | "PUBLISH"
@@ -71,17 +68,17 @@ async function command(
     | "DELETE",
   targetVersion?: number,
 ): Promise<void> {
-  const ownership = resourceOwnership(item);
+  const ownership = item.ownership;
   if (
     (action === "DETACH" || action === "COPY") &&
-    (!ownership || ownership.managedBy !== "git")
+    ownership.managedBy !== "git"
   )
     return;
   let confirmation = t("instructions.confirmAction", {
     action,
     name: item.name,
   });
-  if ((action === "DETACH" || action === "COPY") && ownership) {
+  if (action === "DETACH" || action === "COPY") {
     confirmation = t("instructions.confirmGitAction", {
       action,
       name: item.name,
@@ -94,10 +91,10 @@ async function command(
   await store.executeInstruction(item, action, targetVersion);
 }
 
-async function showHistory(item: Resource): Promise<void> {
+async function showHistory(item: InstructionSetModel): Promise<void> {
   selected.value = item;
   await store.loadInstructionHistory(item.id);
-  const versions = store.history.data.map((entry) => entry.resource.version);
+  const versions = store.history.data.map((entry) => entry.resourceVersion);
   leftVersion.value = versions.at(-1) ?? item.version;
   rightVersion.value = versions[0] ?? item.version;
   historyOpen.value = true;
@@ -160,66 +157,46 @@ onMounted(store.loadInstructions);
             <tbody>
               <tr v-for="item in store.instructionSets.data" :key="item.id">
                 <td class="data-table__name">{{ item.name }}</td>
-                <td>{{ item.spec.instructionSet?.locale }}</td>
+                <td>{{ item.locale }}</td>
                 <td>
-                  <StatusBadge
-                    :state="
-                      item.spec.instructionSet?.versionState ?? item.state
-                    "
-                  />
+                  <StatusBadge :state="item.versionState" />
                 </td>
                 <td>
-                  <StatusBadge
-                    :state="resourceOwnership(item)?.managedBy ?? 'ui'"
-                  />
+                  <StatusBadge :state="item.ownership.managedBy" />
                 </td>
                 <td>
-                  {{ resourceOwnership(item)?.source ?? $t("common.noValue") }}
+                  {{ item.ownership.source || $t("common.noValue") }}
                   ·
-                  {{
-                    resourceOwnership(item)?.revision ?? $t("common.noValue")
-                  }}
-                  · {{ resourceOwnership(item)?.drift ?? $t("common.noValue") }}
+                  {{ item.ownership.revision || $t("common.noValue") }}
+                  · {{ item.ownership.drift || $t("common.noValue") }}
                 </td>
-                <td>{{ item.spec.instructionSet?.currentVersion }}</td>
+                <td>{{ item.currentVersion }}</td>
                 <td>
                   <div class="data-table__actions">
                     <button
-                      v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                      v-if="item.ownership.managedBy !== 'git'"
                       class="button button--text"
                       type="button"
                       @click="edit(item)"
                     >
                       {{ $t("common.edit") }}</button
                     ><button
-                      v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                      v-if="item.ownership.managedBy !== 'git'"
                       class="button button--text"
                       type="button"
-                      @click="
-                        command(
-                          item,
-                          'VALIDATE',
-                          item.spec.instructionSet?.currentVersion,
-                        )
-                      "
+                      @click="command(item, 'VALIDATE', item.currentVersion)"
                     >
                       <FileCheck2 :size="14" aria-hidden="true" />{{
                         $t("instructions.validate")
                       }}</button
                     ><button
                       v-if="
-                        resourceOwnership(item)?.managedBy !== 'git' &&
-                        item.spec.instructionSet?.validationSucceeded
+                        item.ownership.managedBy !== 'git' &&
+                        item.validationSucceeded
                       "
                       class="button button--text"
                       type="button"
-                      @click="
-                        command(
-                          item,
-                          'PUBLISH',
-                          item.spec.instructionSet?.currentVersion,
-                        )
-                      "
+                      @click="command(item, 'PUBLISH', item.currentVersion)"
                     >
                       <Send :size="14" aria-hidden="true" />{{
                         $t("instructions.publish")
@@ -233,7 +210,7 @@ onMounted(store.loadInstructions);
                         $t("instructions.history")
                       }}</button
                     ><button
-                      v-if="resourceOwnership(item)?.managedBy === 'git'"
+                      v-if="item.ownership.managedBy === 'git'"
                       class="button button--text"
                       type="button"
                       @click="command(item, 'DETACH')"
@@ -242,7 +219,7 @@ onMounted(store.loadInstructions);
                         $t("common.detach")
                       }}</button
                     ><button
-                      v-if="resourceOwnership(item)?.managedBy === 'git'"
+                      v-if="item.ownership.managedBy === 'git'"
                       class="button button--text"
                       type="button"
                       @click="command(item, 'COPY')"
@@ -253,7 +230,7 @@ onMounted(store.loadInstructions);
                     </button>
                     <button
                       v-if="
-                        resourceOwnership(item)?.managedBy !== 'git' &&
+                        item.ownership.managedBy !== 'git' &&
                         item.state !== 'ARCHIVED'
                       "
                       class="button button--text"
@@ -263,7 +240,7 @@ onMounted(store.loadInstructions);
                       {{ $t("common.archive") }}
                     </button>
                     <button
-                      v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                      v-if="item.ownership.managedBy !== 'git'"
                       class="button button--text"
                       type="button"
                       @click="command(item, 'DELETE')"
@@ -363,10 +340,10 @@ onMounted(store.loadInstructions);
             ><select v-model.number="leftVersion">
               <option
                 v-for="entry in store.history.data"
-                :key="`l-${entry.resource.version}`"
-                :value="entry.resource.version"
+                :key="`l-${entry.resourceVersion}`"
+                :value="entry.resourceVersion"
               >
-                {{ entry.resource.version }} · {{ entry.action }}
+                {{ entry.resourceVersion }} · {{ entry.action }}
               </option>
             </select></label
           ><label class="form-field"
@@ -374,10 +351,10 @@ onMounted(store.loadInstructions);
             ><select v-model.number="rightVersion">
               <option
                 v-for="entry in store.history.data"
-                :key="`r-${entry.resource.version}`"
-                :value="entry.resource.version"
+                :key="`r-${entry.resourceVersion}`"
+                :value="entry.resourceVersion"
               >
-                {{ entry.resource.version }} · {{ entry.action }}
+                {{ entry.resourceVersion }} · {{ entry.action }}
               </option>
             </select></label
           ><button
@@ -401,21 +378,20 @@ onMounted(store.loadInstructions);
         <div class="timeline">
           <article
             v-for="entry in store.history.data"
-            :key="`${entry.resource.id}-${entry.resource.version}`"
+            :key="`${entry.resourceId}-${entry.resourceVersion}`"
           >
             <div>
               <strong>{{
-                $t("common.version", { version: entry.resource.version })
+                $t("common.version", { version: entry.resourceVersion })
               }}</strong
               ><span>{{ entry.action }} · {{ entry.occurredAt }}</span>
             </div>
             <button
-              v-if="entry.resource.version !== selected?.version && !isGitOwned"
+              v-if="entry.resourceVersion !== selected?.version && !isGitOwned"
               class="button button--text"
               type="button"
               @click="
-                selected &&
-                command(selected, 'ROLLBACK', entry.resource.version)
+                selected && command(selected, 'ROLLBACK', entry.resourceVersion)
               "
             >
               <RotateCcw :size="14" aria-hidden="true" />{{

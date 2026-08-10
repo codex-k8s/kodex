@@ -1,6 +1,7 @@
 import type {
   AccessResourceKind,
   AccessSpecInput,
+  IntegrationDefinition,
   MutableResourceKind,
   Resource,
   ResourceSpecInput,
@@ -39,6 +40,7 @@ export interface WorkspaceOwnershipModel {
 
 export interface WorkspaceResourceModel {
   id: string;
+  selector: string;
   name: string;
   kind: WorkspaceResourceKind;
   state: WorkspaceResourceState;
@@ -57,41 +59,57 @@ export interface WorkspaceCredentialBindingModel {
 }
 
 export interface WorkspaceSelectorModel {
-  id: string;
+  selector: string;
   name: string;
-  kind: "AGENT" | "ROLE_IMAGE_RECIPE";
+  kind:
+    | "AGENT"
+    | "ROLE_IMAGE_RECIPE"
+    | "PROVIDER_CONNECTION_REFERENCE"
+    | "REPOSITORY_WORKSPACE"
+    | "INTEGRATION"
+    | "TEAM"
+    | "PROMPT_PROFILE";
   version: number;
+}
+
+export interface WorkspaceIntegrationDefinitionModel {
+  definitionRef: string;
+  version: number;
+  displayName: string;
+  state: string;
+  capabilities: Array<{
+    name: string;
+    risk: string;
+    requiresApproval: boolean;
+  }>;
 }
 
 export interface WorkspaceResourceDraft {
   stableKey: string;
   roomType: "USER" | "COORDINATION" | "WORK_CONTROL" | "RUNS";
   workPolicy: string;
-  defaultAgentId: string;
-  externalChannelRef: string;
+  defaultAgentSelector: string;
+  channelSelector: string;
   purpose: string;
-  immutableSecretRef: string;
-  principalRef: string;
+  sourceKind: "PROVIDER_CONNECTION_REFERENCE" | "CREDENTIAL_BINDING";
+  sourceSelector: string;
   revision: number;
-  repositoryRef: string;
+  repositorySelector: string;
   workspaceMode: string;
   defaultBranch: string;
-  credentialBindingId: string;
+  credentialBindingSelector: string;
   definitionRef: string;
   definitionVersion: number;
   capabilities: string[];
-  credentialBindingIds: string[];
-  endpointRef: string;
-  externalTeamRef: string;
-  memberActorIds: string[];
-  roleIds: string[];
-  allowedTargetRoleIds: string[];
-  promptProfileId: string;
-  roleImageRecipeId: string;
-  repositoryWorkspaceIds: string[];
-  integrationIds: string[];
+  credentialBindingSelectors: string[];
+  memberActorSelectors: string[];
+  roleSelectors: string[];
+  allowedTargetRoleSelectors: string[];
+  promptProfileSelector: string;
+  roleImageRecipeSelector: string;
+  repositoryWorkspaceSelectors: string[];
+  integrationSelectors: string[];
   contentSha256: string;
-  sourceRef: string;
   locale: string;
 }
 
@@ -100,39 +118,49 @@ export function emptyWorkspaceResourceDraft(): WorkspaceResourceDraft {
     stableKey: "",
     roomType: "USER",
     workPolicy: "default",
-    defaultAgentId: "",
-    externalChannelRef: "",
+    defaultAgentSelector: "",
+    channelSelector: "",
     purpose: "",
-    immutableSecretRef: "",
-    principalRef: "",
+    sourceKind: "PROVIDER_CONNECTION_REFERENCE",
+    sourceSelector: "",
     revision: 1,
-    repositoryRef: "",
-    workspaceMode: "ISOLATED_WORKTREE",
+    repositorySelector: "",
+    workspaceMode: "GIT",
     defaultBranch: "main",
-    credentialBindingId: "",
+    credentialBindingSelector: "",
     definitionRef: "",
     definitionVersion: 1,
     capabilities: [],
-    credentialBindingIds: [],
-    endpointRef: "",
-    externalTeamRef: "",
-    memberActorIds: [],
-    roleIds: [],
-    allowedTargetRoleIds: [],
-    promptProfileId: "",
-    roleImageRecipeId: "",
-    repositoryWorkspaceIds: [],
-    integrationIds: [],
+    credentialBindingSelectors: [],
+    memberActorSelectors: [],
+    roleSelectors: [],
+    allowedTargetRoleSelectors: [],
+    promptProfileSelector: "",
+    roleImageRecipeSelector: "",
+    repositoryWorkspaceSelectors: [],
+    integrationSelectors: [],
     contentSha256: "",
-    sourceRef: "",
     locale: "ru",
   };
 }
 
+export const toWorkspaceIntegrationDefinitionModel = (
+  value: IntegrationDefinition,
+): WorkspaceIntegrationDefinitionModel => ({
+  definitionRef: value.definitionRef,
+  version: value.version,
+  displayName: value.displayName,
+  state: value.state,
+  capabilities: value.capabilities.map((item) => ({
+    name: item.name,
+    risk: item.risk,
+    requiresApproval: item.requiresApproval,
+  })),
+});
+
 export function buildMutableSpec(
   kind: MutableResourceKind,
   draft: WorkspaceResourceDraft,
-  preserved: { credentialLocator: string; credentialPrincipal: string },
 ): ResourceSpecInput {
   if (kind === "CHAT") {
     return {
@@ -140,11 +168,11 @@ export function buildMutableSpec(
         stableKey: draft.stableKey.trim(),
         roomType: draft.roomType,
         workPolicy: draft.workPolicy.trim(),
-        ...(draft.defaultAgentId
-          ? { defaultAgentId: draft.defaultAgentId }
+        ...(draft.defaultAgentSelector
+          ? { defaultAgentSelector: draft.defaultAgentSelector }
           : {}),
-        ...(draft.externalChannelRef.trim()
-          ? { externalChannelRef: draft.externalChannelRef.trim() }
+        ...(draft.channelSelector.trim()
+          ? { channelSelector: draft.channelSelector.trim() }
           : {}),
       },
     };
@@ -153,10 +181,12 @@ export function buildMutableSpec(
     return {
       credentialBinding: {
         purpose: draft.purpose.trim(),
-        immutableSecretRef:
-          draft.immutableSecretRef.trim() || preserved.credentialLocator,
-        principalRef:
-          draft.principalRef.trim() || preserved.credentialPrincipal,
+        ...(draft.sourceSelector
+          ? {
+              sourceKind: draft.sourceKind,
+              sourceSelector: draft.sourceSelector,
+            }
+          : {}),
         revision: draft.revision,
       },
     };
@@ -164,11 +194,13 @@ export function buildMutableSpec(
   if (kind === "REPOSITORY_WORKSPACE") {
     return {
       repositoryWorkspace: {
-        repositoryRef: draft.repositoryRef.trim(),
+        ...(draft.repositorySelector
+          ? { repositorySelector: draft.repositorySelector }
+          : {}),
         workspaceMode: draft.workspaceMode.trim(),
         defaultBranch: draft.defaultBranch.trim(),
-        ...(draft.credentialBindingId
-          ? { credentialBindingId: draft.credentialBindingId }
+        ...(draft.credentialBindingSelector
+          ? { credentialBindingSelector: draft.credentialBindingSelector }
           : {}),
       },
     };
@@ -178,8 +210,8 @@ export function buildMutableSpec(
       definitionRef: draft.definitionRef,
       definitionVersion: draft.definitionVersion,
       capabilities: draft.capabilities,
-      credentialBindingIds: draft.credentialBindingIds,
-      endpointRef: draft.endpointRef.trim(),
+      credentialBindingSelectors: draft.credentialBindingSelectors,
+      ...(draft.sourceSelector ? { sourceSelector: draft.sourceSelector } : {}),
     },
   };
 }
@@ -192,11 +224,11 @@ export function buildAccessSpec(
     return {
       team: {
         stableKey: draft.stableKey.trim(),
-        ...(draft.externalTeamRef.trim()
-          ? { externalTeamRef: draft.externalTeamRef.trim() }
+        ...(draft.sourceSelector.trim()
+          ? { sourceSelector: draft.sourceSelector.trim() }
           : {}),
-        memberActorIds: draft.memberActorIds,
-        roleIds: draft.roleIds,
+        memberActorSelectors: draft.memberActorSelectors,
+        roleSelectors: draft.roleSelectors,
       },
     };
   }
@@ -205,14 +237,14 @@ export function buildAccessSpec(
       role: {
         stableKey: draft.stableKey.trim(),
         capabilities: draft.capabilities,
-        allowedTargetRoleIds: draft.allowedTargetRoleIds,
-        ...(draft.promptProfileId
-          ? { promptProfileId: draft.promptProfileId }
+        allowedTargetRoleSelectors: draft.allowedTargetRoleSelectors,
+        ...(draft.promptProfileSelector
+          ? { promptProfileSelector: draft.promptProfileSelector }
           : {}),
-        roleImageRecipeId: draft.roleImageRecipeId,
-        providerCredentialBindingIds: draft.credentialBindingIds,
-        repositoryWorkspaceIds: draft.repositoryWorkspaceIds,
-        integrationIds: draft.integrationIds,
+        roleImageRecipeSelector: draft.roleImageRecipeSelector,
+        providerCredentialBindingSelectors: draft.credentialBindingSelectors,
+        repositoryWorkspaceSelectors: draft.repositoryWorkspaceSelectors,
+        integrationSelectors: draft.integrationSelectors,
       },
     };
   }
@@ -220,7 +252,7 @@ export function buildAccessSpec(
     promptProfile: {
       revision: draft.revision,
       contentSha256: draft.contentSha256.trim(),
-      sourceRef: draft.sourceRef.trim(),
+      ...(draft.sourceSelector ? { sourceSelector: draft.sourceSelector } : {}),
       locale: draft.locale.trim(),
     },
   };
@@ -233,18 +265,21 @@ export function isWorkspaceDraftBounded(
   if (kind === "INTEGRATION")
     return (
       draft.capabilities.length <= 32 &&
-      draft.credentialBindingIds.length <= 32 &&
+      draft.credentialBindingSelectors.length <= 32 &&
       draft.capabilities.every((item) => item.length <= 120)
     );
   if (kind === "TEAM")
-    return draft.memberActorIds.length <= 200 && draft.roleIds.length <= 64;
+    return (
+      draft.memberActorSelectors.length <= 200 &&
+      draft.roleSelectors.length <= 64
+    );
   if (kind === "ROLE")
     return (
       draft.capabilities.length <= 64 &&
-      draft.allowedTargetRoleIds.length <= 64 &&
-      draft.credentialBindingIds.length <= 32 &&
-      draft.repositoryWorkspaceIds.length <= 32 &&
-      draft.integrationIds.length <= 32
+      draft.allowedTargetRoleSelectors.length <= 64 &&
+      draft.credentialBindingSelectors.length <= 32 &&
+      draft.repositoryWorkspaceSelectors.length <= 32 &&
+      draft.integrationSelectors.length <= 32
     );
   return true;
 }
@@ -254,26 +289,42 @@ export function toWorkspaceResourceModel(
   resource: Resource,
 ): WorkspaceResourceModel {
   const draft = emptyWorkspaceResourceDraft();
-  if (resource.spec.chat) Object.assign(draft, resource.spec.chat);
+  if (resource.spec.chat) {
+    draft.stableKey = resource.spec.chat.stableKey;
+    draft.roomType = resource.spec.chat.roomType;
+    draft.workPolicy = resource.spec.chat.workPolicy;
+  }
   if (resource.spec.repositoryWorkspace) {
-    Object.assign(draft, resource.spec.repositoryWorkspace);
-    draft.repositoryRef = "";
+    draft.workspaceMode = resource.spec.repositoryWorkspace.workspaceMode;
+    draft.defaultBranch = resource.spec.repositoryWorkspace.defaultBranch;
   }
   if (resource.spec.integration) {
-    Object.assign(draft, resource.spec.integration);
-    draft.endpointRef = "";
+    draft.definitionRef = resource.spec.integration.definitionRef;
+    draft.definitionVersion = resource.spec.integration.definitionVersion;
+    draft.capabilities = [...resource.spec.integration.capabilities];
   }
   if (resource.spec.credentialBinding) {
     draft.purpose = resource.spec.credentialBinding.purpose;
     draft.revision = resource.spec.credentialBinding.revision;
   }
-  if (resource.spec.team) Object.assign(draft, resource.spec.team);
-  if (resource.spec.role) Object.assign(draft, resource.spec.role);
-  if (resource.spec.promptProfile)
-    Object.assign(draft, resource.spec.promptProfile);
+  if (resource.spec.team) draft.stableKey = resource.spec.team.stableKey;
+  if (resource.spec.role) {
+    draft.stableKey = resource.spec.role.stableKey;
+    draft.capabilities = [...resource.spec.role.capabilities];
+  }
+  if (resource.spec.promptProfile) {
+    draft.revision = resource.spec.promptProfile.revision;
+    draft.contentSha256 = resource.spec.promptProfile.contentSha256;
+    draft.locale = resource.spec.promptProfile.locale;
+  }
   const ownership = resourceOwnership(resource);
   return {
     id: resource.id,
+    selector:
+      resource.spec.chat?.stableKey ??
+      resource.spec.team?.stableKey ??
+      resource.spec.role?.stableKey ??
+      resource.name,
     name: resource.name,
     kind: resource.kind as WorkspaceResourceKind,
     state: resource.state as WorkspaceResourceState,
@@ -305,7 +356,10 @@ export function toWorkspaceResourceModel(
 export const toWorkspaceSelectorModel = (
   resource: Resource,
 ): WorkspaceSelectorModel => ({
-  id: resource.id,
+  selector:
+    resource.spec.agent?.stableKey ??
+    resource.spec.providerConnectionReference?.stableKey ??
+    resource.name,
   name: resource.name,
   kind: resource.kind as WorkspaceSelectorModel["kind"],
   version: resource.version,

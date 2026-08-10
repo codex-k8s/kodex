@@ -1,6 +1,7 @@
 package httptransport
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -11,9 +12,42 @@ import (
 	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type workspaceBoundaryControl struct {
+	ControlPlane
+	resources []*controlplanev1.Resource
+}
+
+func (control *workspaceBoundaryControl) ListResources(
+	_ context.Context,
+	request *controlplanev1.ListResourcesRequest,
+	_ ...grpc.CallOption,
+) (*controlplanev1.ListResourcesResponse, error) {
+	result := make([]*controlplanev1.Resource, 0, len(control.resources))
+	for _, resource := range control.resources {
+		if resource.GetKind() == request.GetKind() {
+			result = append(result, resource)
+		}
+	}
+	return &controlplanev1.ListResourcesResponse{Resources: result}, nil
+}
+
+func (control *workspaceBoundaryControl) GetResource(
+	_ context.Context,
+	request *controlplanev1.GetResourceRequest,
+	_ ...grpc.CallOption,
+) (*controlplanev1.GetResourceResponse, error) {
+	for _, resource := range control.resources {
+		if resource.GetId() == request.GetResourceId() && resource.GetKind() == request.GetExpectedKind() {
+			return &controlplanev1.GetResourceResponse{Resource: resource}, nil
+		}
+	}
+	return &controlplanev1.GetResourceResponse{}, nil
+}
 
 func TestRunSessionProjectionIsAllowlisted(t *testing.T) {
 	now := timestamppb.Now()
@@ -57,6 +91,125 @@ func TestRunSessionProjectionIsAllowlisted(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("private generic session value escaped: %q in %s", forbidden, text)
 		}
+	}
+}
+
+func TestWorkspaceResourceProjectionRedactsPrivateLocatorsAndRelations(t *testing.T) {
+	t.Parallel()
+	private := []string{
+		"vault-versioned://private/credential/7",
+		"provider-account:private-principal",
+		"ssh://private-repository/repo.git",
+		"https://private-endpoint.internal/mcp",
+		uuid.NewString(),
+		uuid.NewString(),
+	}
+	ownership := &controlplanev1.ConfigurationOwnership{
+		ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI,
+		Drift:     controlplanev1.ConfigurationDrift_CONFIGURATION_DRIFT_NOT_APPLICABLE,
+	}
+	resources := []*controlplanev1.Resource{
+		{Version: 2, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_CredentialBinding{CredentialBinding: &controlplanev1.CredentialBindingSpec{
+			Purpose: "provider", ImmutableSecretRef: private[0], PrincipalRef: private[1], Revision: 2, Ownership: ownership,
+		}}}},
+		{Version: 2, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_RepositoryWorkspace{RepositoryWorkspace: &controlplanev1.RepositoryWorkspaceSpec{
+			RepositoryRef: private[2], WorkspaceMode: "GIT", DefaultBranch: "main", CredentialBindingId: private[4], Ownership: ownership,
+		}}}},
+		{Version: 2, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Integration{Integration: &controlplanev1.IntegrationSpec{
+			DefinitionRef: "definition-safe", DefinitionVersion: 1, CredentialBindingIds: []string{private[4]}, EndpointRef: private[3], Ownership: ownership,
+		}}}},
+		{Version: 2, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Team{Team: &controlplanev1.TeamSpec{
+			StableKey: "team-safe", ExternalTeamRef: "private-team-locator", MemberActorIds: []string{private[4]}, RoleIds: []string{private[5]}, Ownership: ownership,
+		}}}},
+		{Version: 2, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Role{Role: &controlplanev1.RoleSpec{
+			StableKey: "role-safe", AllowedTargetRoleIds: []string{private[5]}, PromptProfileId: private[4], RoleImageRecipeId: private[5],
+			ProviderCredentialBindingIds: []string{private[4]}, RepositoryWorkspaceIds: []string{private[5]}, IntegrationIds: []string{private[4]},
+			ProviderAccountPool: &controlplanev1.ProviderAccountPool{Policy: "least_used", PolicyRevision: 1, ObservationMaxAge: durationpb.New(time.Minute)}, Ownership: ownership,
+		}}}},
+	}
+	for _, resource := range resources {
+		projection, err := resourceProjection(resource)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(projection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(raw)
+		for _, forbidden := range append(private, "private-team-locator") {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("private workspace value escaped: %q in %s", forbidden, text)
+			}
+		}
+		for _, forbiddenField := range []string{"immutableSecretRef", "principalRef", "repositoryRef", "endpointRef", "memberActorIds", "roleIds", "credentialBindingIds"} {
+			if strings.Contains(text, forbiddenField) {
+				t.Fatalf("private workspace field escaped: %q in %s", forbiddenField, text)
+			}
+		}
+	}
+}
+
+func TestWorkspaceSelectorMaterializesPrivateSpecOnlyInsideGateway(t *testing.T) {
+	t.Parallel()
+	privateRepository := "ssh://private-repository/repo.git"
+	privateEndpoint := "https://private-endpoint.internal/mcp"
+	privateSecret := "vault-versioned://private/credential/7"
+	bindingID := uuid.NewString()
+	resources := []*controlplanev1.Resource{
+		{Id: uuid.NewString(), Kind: controlplanev1.ResourceKind_RESOURCE_KIND_REPOSITORY_WORKSPACE, Name: "owner-repository", State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_RepositoryWorkspace{RepositoryWorkspace: &controlplanev1.RepositoryWorkspaceSpec{RepositoryRef: privateRepository}}}},
+		{Id: uuid.NewString(), Kind: controlplanev1.ResourceKind_RESOURCE_KIND_INTEGRATION, Name: "owner-integration", State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Integration{Integration: &controlplanev1.IntegrationSpec{EndpointRef: privateEndpoint}}}},
+		{Id: bindingID, Kind: controlplanev1.ResourceKind_RESOURCE_KIND_CREDENTIAL_BINDING, Name: "owner-credential", State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_CredentialBinding{CredentialBinding: &controlplanev1.CredentialBindingSpec{ImmutableSecretRef: privateSecret, PrincipalRef: "private-principal"}}}},
+		{Id: uuid.NewString(), Kind: controlplanev1.ResourceKind_RESOURCE_KIND_PROVIDER_CONNECTION_REFERENCE, Name: "provider-account", State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Spec: &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_ProviderConnectionReference{ProviderConnectionReference: &controlplanev1.ProviderConnectionReferenceSpec{StableKey: "provider-selector", CredentialBindingId: bindingID}}}},
+	}
+	server := &Server{control: &workspaceBoundaryControl{resources: resources}}
+
+	repositorySelector := "owner-repository"
+	_, repositorySpec, err := server.mutableWorkspaceSpec(context.Background(), "", generated.MutableResourceKindREPOSITORYWORKSPACE, generated.ResourceSpecInput{RepositoryWorkspace: &generated.RepositoryWorkspaceSpec{RepositorySelector: &repositorySelector, WorkspaceMode: "GIT", DefaultBranch: "main"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repositorySpec.GetRepositoryWorkspace().GetRepositoryRef() != privateRepository {
+		t.Fatal("repository selector did not resolve server-owned locator")
+	}
+
+	integrationSelector := "owner-integration"
+	_, integrationSpec, err := server.mutableWorkspaceSpec(context.Background(), "", generated.MutableResourceKindINTEGRATION, generated.ResourceSpecInput{Integration: &generated.IntegrationSpec{DefinitionRef: "safe-definition", DefinitionVersion: 1, Capabilities: []string{}, CredentialBindingSelectors: []string{}, SourceSelector: &integrationSelector}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if integrationSpec.GetIntegration().GetEndpointRef() != privateEndpoint {
+		t.Fatal("integration selector did not resolve server-owned locator")
+	}
+
+	sourceKind := generated.CredentialBindingSourceKindPROVIDERCONNECTIONREFERENCE
+	providerSelector := "provider-selector"
+	_, credentialSpec, err := server.mutableWorkspaceSpec(context.Background(), "", generated.MutableResourceKindCREDENTIALBINDING, generated.ResourceSpecInput{CredentialBinding: &generated.CredentialBindingSpec{Purpose: "provider", Revision: 2, SourceKind: &sourceKind, SourceSelector: &providerSelector}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credentialSpec.GetCredentialBinding().GetImmutableSecretRef() != privateSecret {
+		t.Fatal("credential selector did not resolve server-owned secret reference")
+	}
+	if _, err := server.resolveWorkspaceSelector(context.Background(), controlplanev1.ResourceKind_RESOURCE_KIND_REPOSITORY_WORKSPACE, resources[0].GetId()); err == nil {
+		t.Fatal("raw relationship UUID was accepted as a browser selector")
+	}
+}
+
+func TestGatewayProjectsStoredConfigurationDriftWithoutInference(t *testing.T) {
+	t.Parallel()
+	projection, err := projectionOwnership(&controlplanev1.ConfigurationOwnership{
+		ManagedBy:      controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT,
+		SourceRef:      "git://owner/configuration/role",
+		SourceRevision: 8,
+		SourceSha256:   strings.Repeat("a", 64),
+		Drift:          controlplanev1.ConfigurationDrift_CONFIGURATION_DRIFT_DRIFTED,
+	}, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.Drift != generated.ConfigurationDriftDRIFTED || projection.Revision != 8 {
+		t.Fatalf("gateway changed stored drift readback: %#v", projection)
 	}
 }
 

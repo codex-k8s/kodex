@@ -1675,7 +1675,7 @@ func (service *Service) validateReferences(
 			add(identifier, enum.KindRole)
 		}
 	case entity.ChatSpec:
-		add(spec.DefaultAgentID, enum.KindRole)
+		add(spec.DefaultAgentID, enum.KindAgent, enum.KindRole)
 	case entity.RoleSpec:
 		add(spec.PromptProfileID, enum.KindPromptProfile)
 		add(spec.RoleImageRecipeID, enum.KindRoleImageRecipe)

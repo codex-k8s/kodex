@@ -6,33 +6,38 @@ import {
   fetchIncident,
   fetchIncidentTimeline,
 } from "@/shared/api/adapters/owner-control";
-import type {
-  IncidentHistoryEntry,
-  IncidentNextAction,
-  IncidentView,
-} from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { remoteState, resetRemoteState } from "@/shared/lib/remote";
+import {
+  type IncidentAction,
+  type IncidentDetailModel,
+  type IncidentHistoryModel,
+  toIncidentDetailModel,
+  toIncidentHistoryModel,
+} from "./model";
 
 export const useIncidentDetailsStore = defineStore("incident-details", () => {
-  const incident = reactive(remoteState<IncidentView | null>(null));
-  const incidentHistory = reactive(remoteState<IncidentHistoryEntry[]>([]));
+  const incident = reactive(remoteState<IncidentDetailModel | null>(null));
+  const incidentHistory = reactive(remoteState<IncidentHistoryModel[]>([]));
   const runtime = createFeatureRuntime();
   const loadIncident = (ref: string) =>
     Promise.all([
       runtime.loadInto(
         incident,
-        () => fetchIncident(ref),
+        async () => toIncidentDetailModel(await fetchIncident(ref)),
         (value) => value === null,
       ),
       runtime.loadInto(
         incidentHistory,
-        async () => (await fetchIncidentTimeline(ref)).entries,
+        async () =>
+          (await fetchIncidentTimeline(ref)).entries.map(
+            toIncidentHistoryModel,
+          ),
         (items) => items.length === 0,
       ),
     ]).then(() => undefined);
   const executeIncidentAction = (
-    action: IncidentNextAction,
+    action: IncidentAction,
     reasonCode: string,
   ) => {
     const value = incident.data;
@@ -64,4 +69,4 @@ export const useIncidentDetailsStore = defineStore("incident-details", () => {
   };
 });
 
-export type IncidentAction = IncidentNextAction;
+export type { IncidentAction } from "./model";

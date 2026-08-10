@@ -11,9 +11,6 @@ import { fetchResources } from "@/shared/api/adapters/resources";
 import type {
   ManageImageBuild,
   ManageRoleImageRecipe,
-  Resource,
-  RoleImageRecipeInput,
-  RoleImageRecipeReadback,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import {
@@ -24,16 +21,26 @@ import {
   remoteState,
   resetRemoteState,
 } from "@/shared/lib/remote";
+import {
+  type RoleImageInputModel,
+  type RoleImageRecipeDetailModel,
+  type RoleImageResourceModel,
+  toRoleImageInput,
+  toRoleImageRecipeDetailModel,
+  toRoleImageResourceModel,
+} from "./model";
 
 export const useRoleImagesStore = defineStore("role-images", () => {
-  const resources = reactive(remoteState<Resource[]>([]));
+  const resources = reactive(remoteState<RoleImageResourceModel[]>([]));
   const mutationProblem = ref<AppProblem | null>(null);
   const mutating = ref(false);
   let mutationVersion = 0;
   const recipeDetail = reactive(
-    remoteState<RoleImageRecipeReadback | null>(null),
+    remoteState<RoleImageRecipeDetailModel | null>(null),
   );
-  const buildDetail = reactive(remoteState<Resource | null>(null));
+  const buildDetail = reactive(
+    remoteState<RoleImageResourceModel | null>(null),
+  );
   const recipes = computed(() =>
     resources.data.filter((item) => item.kind === "ROLE_IMAGE_RECIPE"),
   );
@@ -49,7 +56,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         fetchResources("IMAGE_BUILD"),
       ]);
       const items = [...recipePage.resources, ...buildPage.resources];
-      finishRequest(resources, request, items, items.length === 0);
+      finishRequest(
+        resources,
+        request,
+        items.map(toRoleImageResourceModel),
+        items.length === 0,
+      );
     } catch (error) {
       failRequest(resources, request, asProblem(error));
     }
@@ -80,27 +92,32 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   const saveRecipe = (
-    resource: Resource | null,
+    resource: RoleImageResourceModel | null,
     name: string,
-    input: RoleImageRecipeInput,
+    input: RoleImageInputModel,
   ) =>
     mutate(() =>
       commandRoleImage(
         resource
-          ? { action: "UPDATE", recipeId: resource.id, name, input }
-          : { action: "CREATE", name, input },
+          ? {
+              action: "UPDATE",
+              recipeId: resource.id,
+              name,
+              input: toRoleImageInput(input),
+            }
+          : { action: "CREATE", name, input: toRoleImageInput(input) },
         resource?.version,
       ),
     );
   const executeRecipeAction = (
-    resource: Resource,
+    resource: RoleImageResourceModel,
     action: Exclude<ManageRoleImageRecipe["action"], "CREATE" | "UPDATE">,
   ) =>
     mutate(() =>
       commandRoleImage({ action, recipeId: resource.id }, resource.version),
     );
   const commandBuild = (
-    resource: Resource,
+    resource: RoleImageResourceModel,
     action: ManageImageBuild["action"],
   ) =>
     mutate(() =>
@@ -110,21 +127,35 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       ),
     );
 
-  async function loadRecipeDetail(resource: Resource): Promise<void> {
+  async function loadRecipeDetail(
+    resource: RoleImageResourceModel,
+  ): Promise<void> {
     const request = beginRequest(recipeDetail);
     try {
       const data = await fetchRoleImageRecipe(resource.id, resource.version);
-      finishRequest(recipeDetail, request, data, false);
+      finishRequest(
+        recipeDetail,
+        request,
+        toRoleImageRecipeDetailModel(data),
+        false,
+      );
     } catch (error) {
       failRequest(recipeDetail, request, asProblem(error));
     }
   }
 
-  async function loadBuildDetail(resource: Resource): Promise<void> {
+  async function loadBuildDetail(
+    resource: RoleImageResourceModel,
+  ): Promise<void> {
     const request = beginRequest(buildDetail);
     try {
       const data = await fetchRoleImageBuild(resource.id, resource.version);
-      finishRequest(buildDetail, request, data, false);
+      finishRequest(
+        buildDetail,
+        request,
+        toRoleImageResourceModel(data),
+        false,
+      );
     } catch (error) {
       failRequest(buildDetail, request, asProblem(error));
     }

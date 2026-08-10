@@ -25,39 +25,36 @@ const editing = ref<WorkspaceResourceModel | null>(null);
 const kind = ref<WorkspaceMutableKind | WorkspaceAccessKind>("CHAT");
 const copySource = ref<WorkspaceResourceModel | null>(null);
 const copyName = ref("");
-let preservedCredentialLocator = "";
-let preservedCredentialPrincipal = "";
 
 const form = reactive({
   name: "",
   stableKey: "",
   roomType: "USER" as "USER" | "COORDINATION" | "WORK_CONTROL" | "RUNS",
   workPolicy: "default",
-  defaultAgentId: "",
-  externalChannelRef: "",
+  defaultAgentSelector: "",
+  channelSelector: "",
   purpose: "",
-  immutableSecretRef: "",
-  principalRef: "",
+  sourceKind: "PROVIDER_CONNECTION_REFERENCE" as
+    | "PROVIDER_CONNECTION_REFERENCE"
+    | "CREDENTIAL_BINDING",
+  sourceSelector: "",
   revision: 1,
-  repositoryRef: "",
-  workspaceMode: "ISOLATED_WORKTREE",
+  repositorySelector: "",
+  workspaceMode: "GIT",
   defaultBranch: "main",
-  credentialBindingId: "",
+  credentialBindingSelector: "",
   definitionRef: "",
   definitionVersion: 1,
   capabilities: [] as string[],
-  credentialBindingIds: [] as string[],
-  endpointRef: "",
-  externalTeamRef: "",
-  memberActorIds: [] as string[],
-  roleIds: [] as string[],
-  allowedTargetRoleIds: [] as string[],
-  promptProfileId: "",
-  roleImageRecipeId: "",
-  repositoryWorkspaceIds: [] as string[],
-  integrationIds: [] as string[],
+  credentialBindingSelectors: [] as string[],
+  memberActorSelectors: [] as string[],
+  roleSelectors: [] as string[],
+  allowedTargetRoleSelectors: [] as string[],
+  promptProfileSelector: "",
+  roleImageRecipeSelector: "",
+  repositoryWorkspaceSelectors: [] as string[],
+  integrationSelectors: [] as string[],
   contentSha256: "",
-  sourceRef: "",
   locale: "ru",
 });
 
@@ -75,6 +72,25 @@ const recipes = computed(() =>
     (item) => item.kind === "ROLE_IMAGE_RECIPE",
   ),
 );
+const providerConnections = computed(() =>
+  store.selectorResources.data.filter(
+    (item) => item.kind === "PROVIDER_CONNECTION_REFERENCE",
+  ),
+);
+const repositorySources = computed(() =>
+  store.selectorResources.data.filter(
+    (item) => item.kind === "REPOSITORY_WORKSPACE",
+  ),
+);
+const integrationSources = computed(() =>
+  store.selectorResources.data.filter((item) => item.kind === "INTEGRATION"),
+);
+const teamSources = computed(() =>
+  store.selectorResources.data.filter((item) => item.kind === "TEAM"),
+);
+const promptSources = computed(() =>
+  store.selectorResources.data.filter((item) => item.kind === "PROMPT_PROFILE"),
+);
 const roles = computed(() =>
   store.access.filter((item) => item.kind === "ROLE"),
 );
@@ -84,8 +100,6 @@ const prompts = computed(() =>
 
 function resetForm(): void {
   Object.assign(form, { name: "", ...emptyWorkspaceResourceDraft() });
-  preservedCredentialLocator = "";
-  preservedCredentialPrincipal = "";
 }
 
 function beginCreate(value: WorkspaceMutableKind | WorkspaceAccessKind): void {
@@ -124,10 +138,7 @@ async function save(): Promise<void> {
         kind.value as WorkspaceMutableKind,
         resource,
         name,
-        buildMutableSpec(kind.value as WorkspaceMutableKind, form, {
-          credentialLocator: preservedCredentialLocator,
-          credentialPrincipal: preservedCredentialPrincipal,
-        }),
+        buildMutableSpec(kind.value as WorkspaceMutableKind, form),
       );
   if (result) editorOpen.value = false;
 }
@@ -425,17 +436,30 @@ watch(
         /></label>
         <label class="form-field"
           ><span>{{ $t("people.agent") }}</span
-          ><select v-model="form.defaultAgentId">
+          ><select v-model="form.defaultAgentSelector">
             <option value="">{{ $t("common.noValue") }}</option>
-            <option v-for="item in agents" :key="item.id" :value="item.id">
+            <option
+              v-for="item in agents"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
         >
         <label class="form-field form-field--full"
-          ><span>externalChannelRef</span
-          ><input v-model="form.externalChannelRef" maxlength="512"
-        /></label>
+          ><span>{{ $t("workspaces.chats") }}</span
+          ><select v-model="form.channelSelector">
+            <option value="">{{ $t("common.noValue") }}</option>
+            <option
+              v-for="item in store.chats"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
       </template>
 
       <template v-else-if="kind === 'CREDENTIAL_BINDING'">
@@ -447,41 +471,46 @@ watch(
           ><span>{{ $t("common.revision") }}</span
           ><input v-model.number="form.revision" required type="number" min="1"
         /></label>
-        <template v-if="!editing">
-          <label class="form-field"
-            ><span>immutableSecretRef</span
-            ><input
-              v-model="form.immutableSecretRef"
-              type="password"
-              required
-              maxlength="512"
-              autocomplete="off"
-          /></label>
-          <label class="form-field"
-            ><span>principalRef</span
-            ><input
-              v-model="form.principalRef"
-              type="password"
-              required
-              maxlength="512"
-              autocomplete="off"
-          /></label>
-        </template>
-        <div v-else class="state-panel state-panel--quiet form-field--full">
-          {{ $t("workspaces.privateLocatorPreserved") }}
-        </div>
+        <label class="form-field form-field--full"
+          ><span>{{ $t("search.kind") }}</span
+          ><select v-model="form.sourceKind" :required="!editing">
+            <option value="PROVIDER_CONNECTION_REFERENCE">
+              PROVIDER_CONNECTION_REFERENCE
+            </option>
+            <option value="CREDENTIAL_BINDING">CREDENTIAL_BINDING</option>
+          </select></label
+        >
+        <label class="form-field form-field--full"
+          ><span>{{ $t("providers.accounts") }}</span
+          ><select v-model="form.sourceSelector" :required="!editing">
+            <option value="">{{ $t("common.noValue") }}</option>
+            <option
+              v-for="item in form.sourceKind === 'PROVIDER_CONNECTION_REFERENCE'
+                ? providerConnections
+                : store.credentials"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
       </template>
 
       <template v-else-if="kind === 'REPOSITORY_WORKSPACE'">
         <label class="form-field form-field--full"
-          ><span>{{ $t("workspaces.repositoryRef") }}</span
-          ><input
-            v-model="form.repositoryRef"
-            type="password"
-            :required="!editing"
-            maxlength="512"
-            autocomplete="off"
-        /></label>
+          ><span>{{ $t("workspaces.repositories") }}</span
+          ><select v-model="form.repositorySelector" :required="!editing">
+            <option value="">{{ $t("common.select") }}</option>
+            <option
+              v-for="item in repositorySources"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
         <label class="form-field"
           ><span>{{ $t("workspaces.workspaceMode") }}</span
           ><input v-model="form.workspaceMode" required maxlength="80"
@@ -492,12 +521,12 @@ watch(
         /></label>
         <label class="form-field"
           ><span>{{ $t("workspaces.credential") }}</span
-          ><select v-model="form.credentialBindingId">
+          ><select v-model="form.credentialBindingSelector">
             <option value="">{{ $t("common.noValue") }}</option>
             <option
               v-for="item in store.credentials"
-              :key="item.id"
-              :value="item.id"
+              :key="item.selector"
+              :value="item.selector"
             >
               {{ item.name }}
             </option>
@@ -506,6 +535,19 @@ watch(
       </template>
 
       <template v-else-if="kind === 'INTEGRATION'">
+        <label class="form-field"
+          ><span>{{ $t("integrations.title") }}</span
+          ><select v-model="form.sourceSelector" :required="!editing">
+            <option value="">{{ $t("common.select") }}</option>
+            <option
+              v-for="item in integrationSources"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
         <label class="form-field"
           ><span>{{ $t("integrations.definition") }}</span
           ><select
@@ -528,15 +570,6 @@ watch(
             </option>
           </select></label
         >
-        <label class="form-field"
-          ><span>endpointRef</span
-          ><input
-            v-model="form.endpointRef"
-            type="password"
-            :required="!editing"
-            maxlength="512"
-            autocomplete="off"
-        /></label>
         <label class="form-field form-field--full"
           ><span>{{ $t("integrations.capabilities") }}</span
           ><select v-model="form.capabilities" multiple>
@@ -553,11 +586,11 @@ watch(
         >
         <label class="form-field form-field--full"
           ><span>{{ $t("workspaces.credential") }}</span
-          ><select v-model="form.credentialBindingIds" multiple>
+          ><select v-model="form.credentialBindingSelectors" multiple>
             <option
               v-for="item in store.credentials"
-              :key="item.id"
-              :value="item.id"
+              :key="item.selector"
+              :value="item.selector"
             >
               {{ item.name }}
             </option>
@@ -571,21 +604,38 @@ watch(
           ><input v-model="form.stableKey" required maxlength="160"
         /></label>
         <label class="form-field"
-          ><span>externalTeamRef</span
-          ><input v-model="form.externalTeamRef" maxlength="512"
-        /></label>
+          ><span>{{ $t("workspaceTeam.title") }}</span
+          ><select v-model="form.sourceSelector" :required="!editing">
+            <option value="">{{ $t("common.noValue") }}</option>
+            <option
+              v-for="item in teamSources"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
         <label class="form-field"
           ><span>{{ $t("people.agents") }}</span
-          ><select v-model="form.memberActorIds" multiple>
-            <option v-for="item in agents" :key="item.id" :value="item.id">
+          ><select v-model="form.memberActorSelectors" multiple>
+            <option
+              v-for="item in agents"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
         >
         <label class="form-field"
           ><span>{{ $t("people.roles") }}</span
-          ><select v-model="form.roleIds" multiple>
-            <option v-for="item in roles" :key="item.id" :value="item.id">
+          ><select v-model="form.roleSelectors" multiple>
+            <option
+              v-for="item in roles"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
@@ -611,37 +661,49 @@ watch(
         >
         <label class="form-field"
           ><span>{{ $t("people.roles") }}</span
-          ><select v-model="form.allowedTargetRoleIds" multiple>
-            <option v-for="item in roles" :key="item.id" :value="item.id">
+          ><select v-model="form.allowedTargetRoleSelectors" multiple>
+            <option
+              v-for="item in roles"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
         >
         <label class="form-field"
           ><span>{{ $t("instructions.title") }}</span
-          ><select v-model="form.promptProfileId">
+          ><select v-model="form.promptProfileSelector">
             <option value="">{{ $t("common.noValue") }}</option>
-            <option v-for="item in prompts" :key="item.id" :value="item.id">
+            <option
+              v-for="item in prompts"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
         >
         <label class="form-field"
           ><span>{{ $t("roleImages.title") }}</span
-          ><select v-model="form.roleImageRecipeId" required>
+          ><select v-model="form.roleImageRecipeSelector" required>
             <option value="">{{ $t("common.select") }}</option>
-            <option v-for="item in recipes" :key="item.id" :value="item.id">
+            <option
+              v-for="item in recipes"
+              :key="item.selector"
+              :value="item.selector"
+            >
               {{ item.name }}
             </option>
           </select></label
         >
         <label class="form-field"
           ><span>{{ $t("workspaces.credential") }}</span
-          ><select v-model="form.credentialBindingIds" multiple>
+          ><select v-model="form.credentialBindingSelectors" multiple>
             <option
               v-for="item in store.credentials"
-              :key="item.id"
-              :value="item.id"
+              :key="item.selector"
+              :value="item.selector"
             >
               {{ item.name }}
             </option>
@@ -649,11 +711,11 @@ watch(
         >
         <label class="form-field"
           ><span>{{ $t("workspaces.repositories") }}</span
-          ><select v-model="form.repositoryWorkspaceIds" multiple>
+          ><select v-model="form.repositoryWorkspaceSelectors" multiple>
             <option
               v-for="item in store.repositories"
-              :key="item.id"
-              :value="item.id"
+              :key="item.selector"
+              :value="item.selector"
             >
               {{ item.name }}
             </option>
@@ -661,11 +723,11 @@ watch(
         >
         <label class="form-field"
           ><span>{{ $t("integrations.title") }}</span
-          ><select v-model="form.integrationIds" multiple>
+          ><select v-model="form.integrationSelectors" multiple>
             <option
               v-for="item in store.integrations"
-              :key="item.id"
-              :value="item.id"
+              :key="item.selector"
+              :value="item.selector"
             >
               {{ item.name }}
             </option>
@@ -692,8 +754,17 @@ watch(
         /></label>
         <label class="form-field form-field--full"
           ><span>{{ $t("common.source") }}</span
-          ><input v-model="form.sourceRef" required maxlength="512"
-        /></label>
+          ><select v-model="form.sourceSelector" :required="!editing">
+            <option value="">{{ $t("common.select") }}</option>
+            <option
+              v-for="item in promptSources"
+              :key="item.selector"
+              :value="item.selector"
+            >
+              {{ item.name }}
+            </option>
+          </select></label
+        >
       </template>
 
       <div class="button-row form-field--full">

@@ -4,12 +4,12 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { usePeopleStore } from "@/features/people/store";
-import { parseCapabilities } from "@/features/people/model";
-import type {
-  AgentView,
-  Resource,
-} from "@/shared/api/generated/openapi/types.gen";
-import { resourceOwnership } from "@/shared/lib/resources";
+import {
+  type AgentModel,
+  type AssignmentModel,
+  parseCapabilities,
+  type RoleDefinitionModel,
+} from "@/features/people/model";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
@@ -24,9 +24,9 @@ const assignmentOpen = ref(false);
 const historyOpen = ref(false);
 const botOpen = ref(false);
 const sourceOpen = ref(false);
-const selectedAgent = ref<AgentView | null>(null);
-const selectedRole = ref<Resource | null>(null);
-const editingAgent = ref<AgentView | null>(null);
+const selectedAgent = ref<AgentModel | null>(null);
+const selectedRole = ref<RoleDefinitionModel | null>(null);
+const editingAgent = ref<AgentModel | null>(null);
 const selectedIdentity = ref("");
 const createBotIdentity = ref(false);
 const botUsernameIntent = ref("");
@@ -54,11 +54,11 @@ const assignmentForm = reactive({
   roomStableKey: "",
 });
 const instructionOptions = computed(() =>
-  store.instructionSets.data.filter((item) => item.spec.instructionSet),
+  store.instructionSets.data.filter((item) => item.stableKey),
 );
 const poolOptions = computed(() => store.pools.data);
 const roomOptions = computed(() =>
-  store.rooms.data.filter((item) => item.spec.chat?.stableKey),
+  store.rooms.data.filter((item) => item.stableKey),
 );
 
 async function load(): Promise<void> {
@@ -81,56 +81,54 @@ async function createRole(): Promise<void> {
     description: roleForm.description.trim(),
     capabilities,
     allowedTargetRoleDefinitionRefs: roleForm.allowedTargetRoleDefinitionRefs,
-    ...(recipe?.spec.roleImageRecipe
+    ...(recipe?.specSha256
       ? {
           roleImageRecipeRef: recipe.id,
           roleImageRecipeVersion: recipe.version,
-          roleImageRecipeSha256: recipe.spec.roleImageRecipe.specSha256,
+          roleImageRecipeSha256: recipe.specSha256,
         }
-      : value?.spec.roleDefinition?.roleImageRecipeRef &&
-          value.spec.roleDefinition.roleImageRecipeVersion &&
-          value.spec.roleDefinition.roleImageRecipeSha256
+      : value?.roleImageRecipeRef &&
+          value.roleImageRecipeVersion &&
+          value.roleImageRecipeSha256
         ? {
-            roleImageRecipeRef: value.spec.roleDefinition.roleImageRecipeRef,
-            roleImageRecipeVersion:
-              value.spec.roleDefinition.roleImageRecipeVersion,
-            roleImageRecipeSha256:
-              value.spec.roleDefinition.roleImageRecipeSha256,
+            roleImageRecipeRef: value.roleImageRecipeRef,
+            roleImageRecipeVersion: value.roleImageRecipeVersion,
+            roleImageRecipeSha256: value.roleImageRecipeSha256,
           }
         : {}),
   });
   if (ok) roleOpen.value = false;
 }
 
-function beginRole(value?: Resource): void {
+function beginRole(value?: RoleDefinitionModel): void {
   selectedRole.value = value ?? null;
   Object.assign(roleForm, {
     name: value?.name ?? "",
-    stableKey: value?.spec.roleDefinition?.stableKey ?? "",
-    description: value?.spec.roleDefinition?.description ?? "",
-    capabilities: value?.spec.roleDefinition?.capabilities.join(", ") ?? "",
+    stableKey: value?.stableKey ?? "",
+    description: value?.description ?? "",
+    capabilities: value?.capabilities.join(", ") ?? "",
     allowedTargetRoleDefinitionRefs:
-      value?.spec.roleDefinition?.allowedTargetRoleDefinitionRefs ?? [],
-    roleImageRecipeRef: value?.spec.roleDefinition?.roleImageRecipeRef ?? "",
+      value?.allowedTargetRoleDefinitionRefs ?? [],
+    roleImageRecipeRef: value?.roleImageRecipeRef ?? "",
   });
   roleOpen.value = true;
 }
 
-async function archiveRole(role: Resource): Promise<void> {
+async function archiveRole(role: RoleDefinitionModel): Promise<void> {
   if (!window.confirm(t("people.confirmArchive", { name: role.name }))) return;
   await store.executeRoleAction(role, "ARCHIVE");
 }
 
-async function deleteRole(role: Resource): Promise<void> {
+async function deleteRole(role: RoleDefinitionModel): Promise<void> {
   if (!window.confirm(t("people.confirmDelete", { name: role.name }))) return;
   await store.executeRoleAction(role, "DELETE");
 }
 
 async function roleAction(
-  role: Resource,
+  role: RoleDefinitionModel,
   action: "PAUSE" | "RESUME",
 ): Promise<void> {
-  if (resourceOwnership(role)?.managedBy === "git") {
+  if (role.ownership.managedBy === "git") {
     window.alert(t("people.gitOwned"));
     return;
   }
@@ -158,7 +156,7 @@ async function createAgent(): Promise<void> {
   if (ok) agentOpen.value = false;
 }
 
-async function beginAgent(value?: AgentView): Promise<void> {
+async function beginAgent(value?: AgentModel): Promise<void> {
   if (value) {
     await store.loadConfigurationSource(value.agentRef, "AGENT");
     if (
@@ -182,14 +180,14 @@ async function beginAgent(value?: AgentView): Promise<void> {
   agentOpen.value = true;
 }
 
-async function archiveAgent(agent: AgentView): Promise<void> {
+async function archiveAgent(agent: AgentModel): Promise<void> {
   if (!(await agentIsUiOwned(agent))) return;
   if (!window.confirm(t("people.confirmArchive", { name: agent.displayName })))
     return;
   await store.executeAgentAction(agent, "ARCHIVE");
 }
 
-async function deleteAgent(agent: AgentView): Promise<void> {
+async function deleteAgent(agent: AgentModel): Promise<void> {
   if (!(await agentIsUiOwned(agent))) return;
   if (!window.confirm(t("people.confirmDelete", { name: agent.displayName })))
     return;
@@ -197,7 +195,7 @@ async function deleteAgent(agent: AgentView): Promise<void> {
 }
 
 async function agentAction(
-  agent: AgentView,
+  agent: AgentModel,
   action: "PAUSE" | "RESUME" | "ENABLE" | "DISABLE",
 ): Promise<void> {
   if (!(await agentIsUiOwned(agent))) return;
@@ -210,7 +208,7 @@ async function agentAction(
   await store.executeAgentAction(agent, action);
 }
 
-async function agentIsUiOwned(agent: AgentView): Promise<boolean> {
+async function agentIsUiOwned(agent: AgentModel): Promise<boolean> {
   await store.loadConfigurationSource(agent.agentRef, "AGENT");
   const allowed =
     store.configurationSource.phase === "ready" &&
@@ -228,22 +226,22 @@ async function assign(): Promise<void> {
   if (ok) assignmentOpen.value = false;
 }
 
-async function unassign(item: Resource): Promise<void> {
+async function unassign(item: AssignmentModel): Promise<void> {
   if (!window.confirm(t("people.confirmUnassign", { name: item.name }))) return;
   await store.unassignAgent(item);
 }
 
-async function showRoleHistory(item: Resource): Promise<void> {
+async function showRoleHistory(item: RoleDefinitionModel): Promise<void> {
   await store.loadRoleHistory(item.id);
   historyOpen.value = true;
 }
 
-async function showAgentHistory(item: AgentView): Promise<void> {
+async function showAgentHistory(item: AgentModel): Promise<void> {
   await store.loadAgentHistory(item.agentRef);
   historyOpen.value = true;
 }
 
-async function showAssignmentHistory(item: Resource): Promise<void> {
+async function showAssignmentHistory(item: AssignmentModel): Promise<void> {
   await store.loadAssignmentHistory(item.id);
   historyOpen.value = true;
 }
@@ -256,7 +254,7 @@ async function showSource(
   sourceOpen.value = store.configurationSource.phase === "ready";
 }
 
-function showBot(agent: AgentView): void {
+function showBot(agent: AgentModel): void {
   selectedAgent.value = agent;
   selectedIdentity.value = "";
   createBotIdentity.value = false;
@@ -339,26 +337,21 @@ onMounted(load);
                 <tr v-for="item in store.roleDefinitions.data" :key="item.id">
                   <td class="data-table__name">{{ item.name }}</td>
                   <td>
-                    {{
-                      item.spec.roleDefinition?.capabilities.join(", ") ||
-                      $t("common.noValue")
-                    }}
+                    {{ item.capabilities.join(", ") || $t("common.noValue") }}
                   </td>
                   <td>
-                    <StatusBadge
-                      :state="resourceOwnership(item)?.managedBy ?? 'ui'"
-                    />
+                    <StatusBadge :state="item.ownership.managedBy" />
                     <small>
-                      {{ resourceOwnership(item)?.source }} ·
-                      {{ resourceOwnership(item)?.revision }} ·
-                      {{ resourceOwnership(item)?.drift }}
+                      {{ item.ownership.source }} ·
+                      {{ item.ownership.revision }} ·
+                      {{ item.ownership.drift }}
                     </small>
                   </td>
                   <td><StatusBadge :state="item.state" /></td>
                   <td>
                     <div class="data-table__actions">
                       <button
-                        v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                        v-if="item.ownership.managedBy !== 'git'"
                         class="button button--text"
                         type="button"
                         @click="beginRole(item)"
@@ -366,7 +359,7 @@ onMounted(load);
                         {{ $t("common.edit") }}
                       </button>
                       <button
-                        v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                        v-if="item.ownership.managedBy !== 'git'"
                         class="button button--text"
                         type="button"
                         @click="deleteRole(item)"
@@ -388,14 +381,14 @@ onMounted(load);
                       >
                         {{ $t("common.source") }}</button
                       ><button
-                        v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                        v-if="item.ownership.managedBy !== 'git'"
                         class="button button--text"
                         type="button"
                         @click="roleAction(item, 'PAUSE')"
                       >
                         PAUSE</button
                       ><button
-                        v-if="resourceOwnership(item)?.managedBy !== 'git'"
+                        v-if="item.ownership.managedBy !== 'git'"
                         class="button button--text"
                         type="button"
                         @click="roleAction(item, 'RESUME')"
@@ -403,7 +396,7 @@ onMounted(load);
                         RESUME</button
                       ><button
                         v-if="
-                          resourceOwnership(item)?.managedBy !== 'git' &&
+                          item.ownership.managedBy !== 'git' &&
                           item.state !== 'ARCHIVED'
                         "
                         class="button button--text"
@@ -567,18 +560,14 @@ onMounted(load);
                   <td>
                     {{
                       store.agents.data.find(
-                        (agent) =>
-                          agent.agentRef ===
-                          item.spec.agentAssignment?.agentRef,
+                        (agent) => agent.agentRef === item.agentRef,
                       )?.displayName ?? $t("common.noValue")
                     }}
                   </td>
                   <td>
                     {{
-                      store.rooms.data.find(
-                        (room) =>
-                          room.id === item.spec.agentAssignment?.roomRef,
-                      )?.name ?? $t("common.noValue")
+                      store.rooms.data.find((room) => room.id === item.roomRef)
+                        ?.name ?? $t("common.noValue")
                     }}
                   </td>
                   <td><StatusBadge :state="item.state" /></td>
@@ -699,7 +688,7 @@ onMounted(load);
             <option
               v-for="item in instructionOptions"
               :key="item.id"
-              :value="item.spec.instructionSet?.stableKey"
+              :value="item.stableKey"
             >
               {{ item.name }}
             </option>
@@ -769,7 +758,7 @@ onMounted(load);
             <option
               v-for="item in roomOptions"
               :key="item.id"
-              :value="item.spec.chat?.stableKey"
+              :value="item.stableKey"
             >
               {{ item.name }}
             </option>
@@ -896,14 +885,12 @@ onMounted(load);
       ><div class="timeline">
         <article
           v-for="entry in store.history.data"
-          :key="`${entry.resource.id}-${entry.resource.version}`"
+          :key="`${entry.resourceId}-${entry.resourceVersion}`"
         >
-          <strong>{{ entry.resource.name }}</strong
+          <strong>{{ entry.resourceName }}</strong
           ><span
             >{{ entry.action }} ·
-            {{
-              $t("common.version", { version: entry.resource.version })
-            }}</span
+            {{ $t("common.version", { version: entry.resourceVersion }) }}</span
           >
         </article>
         <article

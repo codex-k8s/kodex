@@ -4,16 +4,17 @@ import { computed, reactive, ref } from "vue";
 import { workspaceResourcesApi } from "@/features/workspace-resources/api";
 import {
   toWorkspaceResourceModel,
+  toWorkspaceIntegrationDefinitionModel,
   toWorkspaceSelectorModel,
   type WorkspaceResourceModel,
   type WorkspaceSelectorModel,
+  type WorkspaceIntegrationDefinitionModel,
 } from "@/features/workspace-resources/model";
 import type {
   AccessResourceKind,
   AccessSpecInput,
   CopyAccessResource,
   DetachAccessResource,
-  IntegrationDefinition,
   MutableResourceKind,
   Resource,
   ResourceKind,
@@ -52,7 +53,7 @@ export const useWorkspaceResourcesStore = defineStore(
       remoteState<WorkspaceSelectorModel[]>([]),
     );
     const integrationDefinitions = reactive(
-      remoteState<IntegrationDefinition[]>([]),
+      remoteState<WorkspaceIntegrationDefinitionModel[]>([]),
     );
     const capabilityOptions = reactive(remoteState<string[]>([]));
     const projectId = ref<string | null>(null);
@@ -102,6 +103,11 @@ export const useWorkspaceResourcesStore = defineStore(
             Promise.all([
               workspaceResourcesApi.list("AGENT"),
               workspaceResourcesApi.list("ROLE_IMAGE_RECIPE"),
+              workspaceResourcesApi.list("PROVIDER_CONNECTION_REFERENCE"),
+              workspaceResourcesApi.list("REPOSITORY_WORKSPACE"),
+              workspaceResourcesApi.list("INTEGRATION"),
+              workspaceResourcesApi.list("TEAM"),
+              workspaceResourcesApi.list("PROMPT_PROFILE"),
             ]),
             workspaceResourcesApi.listIntegrationDefinitions(),
             workspaceResourcesApi.listRoleDefinitions(),
@@ -119,7 +125,9 @@ export const useWorkspaceResourcesStore = defineStore(
             .map(toWorkspaceSelectorModel);
           selectorResources.data = selections;
           selectorResources.phase = selections.length ? "ready" : "empty";
-          integrationDefinitions.data = definitions.definitions;
+          integrationDefinitions.data = definitions.definitions.map(
+            toWorkspaceIntegrationDefinitionModel,
+          );
           integrationDefinitions.phase = definitions.definitions.length
             ? "ready"
             : "empty";
@@ -182,51 +190,7 @@ export const useWorkspaceResourcesStore = defineStore(
           workspaceResourcesApi.createMutable({ kind, name, parentId, spec }),
         );
       const authoritativeResource = authoritative(resource);
-      const body = { kind, name, spec };
-      const credential = body.spec.credentialBinding;
-      const repository = body.spec.repositoryWorkspace;
-      const integration = body.spec.integration;
-      const safeBody: UpdateResource = {
-        ...body,
-        spec: {
-          ...body.spec,
-          ...(credential && authoritativeResource.spec.credentialBinding
-            ? {
-                credentialBinding: {
-                  ...credential,
-                  immutableSecretRef:
-                    credential.immutableSecretRef ||
-                    authoritativeResource.spec.credentialBinding
-                      .immutableSecretRef,
-                  principalRef:
-                    credential.principalRef ||
-                    authoritativeResource.spec.credentialBinding.principalRef,
-                },
-              }
-            : {}),
-          ...(repository && authoritativeResource.spec.repositoryWorkspace
-            ? {
-                repositoryWorkspace: {
-                  ...repository,
-                  repositoryRef:
-                    repository.repositoryRef ||
-                    authoritativeResource.spec.repositoryWorkspace
-                      .repositoryRef,
-                },
-              }
-            : {}),
-          ...(integration && authoritativeResource.spec.integration
-            ? {
-                integration: {
-                  ...integration,
-                  endpointRef:
-                    integration.endpointRef ||
-                    authoritativeResource.spec.integration.endpointRef,
-                },
-              }
-            : {}),
-        },
-      };
+      const safeBody: UpdateResource = { kind, name, spec };
       return mutate(() =>
         workspaceResourcesApi.updateMutable(authoritativeResource, safeBody),
       );

@@ -9,38 +9,46 @@ import {
   fetchInstructionHistory,
   fetchInstructionSets,
 } from "@/shared/api/adapters/owner-control";
-import type {
-  ConfigurationDiff,
-  ConfigurationSourceDetail,
-  InstructionSetComparison,
-  Resource,
-  ResourceHistoryEntry,
-} from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { remoteState, resetRemoteState } from "@/shared/lib/remote";
+import {
+  type InstructionComparisonModel,
+  type InstructionConfigurationDiffModel,
+  type InstructionConfigurationSourceModel,
+  type InstructionHistoryModel,
+  type InstructionSetModel,
+  toInstructionComparisonModel,
+  toInstructionConfigurationDiffModel,
+  toInstructionConfigurationSourceModel,
+  toInstructionHistoryModel,
+  toInstructionSetModel,
+} from "./model";
 
 export const useInstructionsStore = defineStore("instructions", () => {
-  const instructionSets = reactive(remoteState<Resource[]>([]));
-  const history = reactive(remoteState<ResourceHistoryEntry[]>([]));
+  const instructionSets = reactive(remoteState<InstructionSetModel[]>([]));
+  const history = reactive(remoteState<InstructionHistoryModel[]>([]));
   const comparison = reactive(
-    remoteState<InstructionSetComparison | null>(null),
+    remoteState<InstructionComparisonModel | null>(null),
   );
   const configurationDiff = reactive(
-    remoteState<ConfigurationDiff | null>(null),
+    remoteState<InstructionConfigurationDiffModel | null>(null),
   );
   const configurationSource = reactive(
-    remoteState<ConfigurationSourceDetail | null>(null),
+    remoteState<InstructionConfigurationSourceModel | null>(null),
   );
   const runtime = createFeatureRuntime();
 
   const loadInstructions = () =>
     runtime.loadInto(
       instructionSets,
-      async () => (await fetchInstructionSets()).resources,
+      async () => {
+        const resources = (await fetchInstructionSets()).resources;
+        return resources.map(toInstructionSetModel);
+      },
       (items) => items.length === 0,
     );
   const saveDraft = (
-    value: Resource | null,
+    value: InstructionSetModel | null,
     draft: { name: string; stableKey: string; locale: string; content: string },
   ) =>
     runtime.mutate(
@@ -57,7 +65,7 @@ export const useInstructionsStore = defineStore("instructions", () => {
       instructionSets,
     );
   const executeInstruction = (
-    item: Resource,
+    item: InstructionSetModel,
     action:
       | "VALIDATE"
       | "PUBLISH"
@@ -87,7 +95,10 @@ export const useInstructionsStore = defineStore("instructions", () => {
   const loadInstructionHistory = (resourceRef: string) =>
     runtime.loadInto(
       history,
-      async () => (await fetchInstructionHistory(resourceRef)).entries,
+      async () =>
+        (await fetchInstructionHistory(resourceRef)).entries.map(
+          toInstructionHistoryModel,
+        ),
       (items) => items.length === 0,
     );
   const compareInstructions = (
@@ -97,7 +108,14 @@ export const useInstructionsStore = defineStore("instructions", () => {
   ) =>
     runtime.loadInto(
       comparison,
-      () => compareInstructionVersions(resourceRef, leftVersion, rightVersion),
+      async () =>
+        toInstructionComparisonModel(
+          await compareInstructionVersions(
+            resourceRef,
+            leftVersion,
+            rightVersion,
+          ),
+        ),
       (value) => value === null,
     );
   const loadConfigurationDiff = (
@@ -107,7 +125,10 @@ export const useInstructionsStore = defineStore("instructions", () => {
   ) =>
     runtime.loadInto(
       configurationDiff,
-      () => fetchConfigurationDiff(resourceRef, leftVersion, rightVersion),
+      async () =>
+        toInstructionConfigurationDiffModel(
+          await fetchConfigurationDiff(resourceRef, leftVersion, rightVersion),
+        ),
       (value) => value === null,
     );
   const loadConfigurationSource = (
@@ -121,7 +142,10 @@ export const useInstructionsStore = defineStore("instructions", () => {
     configurationSource.data = null;
     return runtime.loadInto(
       configurationSource,
-      () => fetchConfigurationSource(resourceRef, kind),
+      async () =>
+        toInstructionConfigurationSourceModel(
+          await fetchConfigurationSource(resourceRef, kind),
+        ),
       (value) => value === null,
     );
   };

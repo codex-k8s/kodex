@@ -5,9 +5,9 @@ import { useI18n } from "vue-i18n";
 
 import { useWorkspaceRecoveryStore } from "@/features/workspace-recovery/store";
 import type {
-  Resource,
-  WorkspaceRestoreView,
-} from "@/shared/api/generated/openapi/types.gen";
+  WorkspaceBackupModel,
+  WorkspaceRestoreModel,
+} from "@/features/workspace-recovery/model";
 import { formatDateTime, shortDigest } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -19,7 +19,7 @@ const store = useWorkspaceRecoveryStore();
 const { locale, t } = useI18n();
 const backupOpen = ref(false);
 const restoreOpen = ref(false);
-const selectedBackup = ref<Resource | null>(null);
+const selectedBackup = ref<WorkspaceBackupModel | null>(null);
 const backupForm = reactive({
   name: "",
   scope: "WORKSPACE" as "WORKSPACE" | "ALL_WORKSPACES",
@@ -39,7 +39,7 @@ async function createBackup(): Promise<void> {
   if (ok) backupOpen.value = false;
 }
 
-function beginRestore(backup: Resource): void {
+function beginRestore(backup: WorkspaceBackupModel): void {
   selectedBackup.value = backup;
   restoreName.value = `${backup.name}-restore`;
   restoreOpen.value = true;
@@ -53,7 +53,7 @@ async function createRestore(): Promise<void> {
 }
 
 async function backupAction(
-  backup: Resource,
+  backup: WorkspaceBackupModel,
   action: "CANCEL" | "RETRY",
 ): Promise<void> {
   if (
@@ -68,7 +68,7 @@ async function backupAction(
 }
 
 async function restoreAction(
-  value: WorkspaceRestoreView,
+  value: WorkspaceRestoreModel,
   action: "CANCEL" | "RETRY",
 ): Promise<void> {
   if (
@@ -139,25 +139,18 @@ onMounted(store.loadWorkspaceRecovery);
               <tbody>
                 <tr v-for="item in store.workspaceBackups.data" :key="item.id">
                   <td class="data-table__name">{{ item.name }}</td>
-                  <td>{{ item.spec.workspaceBackup?.scope }}</td>
-                  <td>{{ item.spec.workspaceBackup?.memberCount }}</td>
+                  <td>{{ item.scope }}</td>
+                  <td>{{ item.memberCount }}</td>
                   <td>
-                    <StatusBadge
-                      :state="item.spec.workspaceBackup?.state ?? item.state"
-                    />
+                    <StatusBadge :state="item.state" />
                   </td>
                   <td>
-                    {{
-                      formatDateTime(
-                        item.spec.workspaceBackup?.retainUntil,
-                        locale,
-                      )
-                    }}
+                    {{ formatDateTime(item.retainUntil, locale) }}
                   </td>
                   <td>
                     <div class="data-table__actions">
                       <button
-                        v-if="item.spec.workspaceBackup?.state === 'AVAILABLE'"
+                        v-if="item.state === 'AVAILABLE'"
                         class="button button--text"
                         type="button"
                         @click="beginRestore(item)"
@@ -166,14 +159,14 @@ onMounted(store.loadWorkspaceRecovery);
                           $t("backups.restore")
                         }}</button
                       ><button
-                        v-if="item.spec.workspaceBackup?.state === 'VERIFYING'"
+                        v-if="item.state === 'VERIFYING'"
                         class="button button--text"
                         type="button"
                         @click="backupAction(item, 'CANCEL')"
                       >
                         {{ $t("common.cancel") }}</button
                       ><button
-                        v-if="item.spec.workspaceBackup?.state === 'FAILED'"
+                        v-if="item.state === 'FAILED'"
                         class="button button--text"
                         type="button"
                         @click="backupAction(item, 'RETRY')"
@@ -285,11 +278,7 @@ onMounted(store.loadWorkspaceRecovery);
           <strong>{{ selectedBackup?.name }}</strong
           ><span
             >{{ $t("common.version", { version: selectedBackup?.version }) }} ·
-            {{
-              shortDigest(
-                selectedBackup?.spec.workspaceBackup?.membershipSha256,
-              )
-            }}</span
+            {{ shortDigest(selectedBackup?.membershipSha256) }}</span
           >
         </div>
         <label class="form-field form-field--full"

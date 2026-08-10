@@ -21,16 +21,8 @@ import {
 } from "@/shared/api/adapters/owner-control";
 import { fetchResources } from "@/shared/api/adapters/resources";
 import type {
-  AgentBotIdentity,
   AgentBotIdentityCommand,
-  AgentBotIdentityOperation,
   AgentCommand,
-  AgentView,
-  ConfigurationSourceDetail,
-  OwnerConfigurationCatalog,
-  ProviderPoolView,
-  Resource,
-  ResourceHistoryEntry,
   RoleDefinitionCommand,
 } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
@@ -39,26 +31,44 @@ import {
   pendingMutationKey,
 } from "@/shared/lib/identity";
 import { remoteState, resetRemoteState } from "@/shared/lib/remote";
+import {
+  type AgentModel,
+  type AssignmentModel,
+  type BotIdentityModel,
+  type BotOperationModel,
+  type PeopleCatalogModel,
+  type PeopleConfigurationSourceModel,
+  type PeopleHistoryModel,
+  type PeopleSelectionModel,
+  type ProviderPoolSelectionModel,
+  type RoleDefinitionModel,
+  toAgentModel,
+  toAssignmentModel,
+  toBotIdentityModel,
+  toBotOperationModel,
+  toPeopleCatalogModel,
+  toPeopleConfigurationSourceModel,
+  toPeopleHistoryModel,
+  toPeopleSelectionModel,
+  toProviderPoolSelectionModel,
+  toRoleDefinitionModel,
+} from "./model";
 
 export const usePeopleStore = defineStore("people", () => {
-  const roleDefinitions = reactive(remoteState<Resource[]>([]));
-  const agents = reactive(remoteState<AgentView[]>([]));
-  const botIdentities = reactive(remoteState<AgentBotIdentity[]>([]));
-  const botOperation = reactive(
-    remoteState<AgentBotIdentityOperation | null>(null),
-  );
-  const assignments = reactive(remoteState<Resource[]>([]));
-  const rooms = reactive(remoteState<Resource[]>([]));
-  const roleImageRecipes = reactive(remoteState<Resource[]>([]));
-  const instructionSets = reactive(remoteState<Resource[]>([]));
-  const pools = reactive(remoteState<ProviderPoolView[]>([]));
-  const history = reactive(remoteState<ResourceHistoryEntry[]>([]));
-  const agentHistory = reactive(remoteState<AgentView[]>([]));
-  const ownerCatalog = reactive(
-    remoteState<OwnerConfigurationCatalog | null>(null),
-  );
+  const roleDefinitions = reactive(remoteState<RoleDefinitionModel[]>([]));
+  const agents = reactive(remoteState<AgentModel[]>([]));
+  const botIdentities = reactive(remoteState<BotIdentityModel[]>([]));
+  const botOperation = reactive(remoteState<BotOperationModel | null>(null));
+  const assignments = reactive(remoteState<AssignmentModel[]>([]));
+  const rooms = reactive(remoteState<PeopleSelectionModel[]>([]));
+  const roleImageRecipes = reactive(remoteState<PeopleSelectionModel[]>([]));
+  const instructionSets = reactive(remoteState<PeopleSelectionModel[]>([]));
+  const pools = reactive(remoteState<ProviderPoolSelectionModel[]>([]));
+  const history = reactive(remoteState<PeopleHistoryModel[]>([]));
+  const agentHistory = reactive(remoteState<AgentModel[]>([]));
+  const ownerCatalog = reactive(remoteState<PeopleCatalogModel | null>(null));
   const configurationSource = reactive(
-    remoteState<ConfigurationSourceDetail | null>(null),
+    remoteState<PeopleConfigurationSourceModel | null>(null),
   );
   const runtime = createFeatureRuntime();
 
@@ -66,47 +76,55 @@ export const usePeopleStore = defineStore("people", () => {
     Promise.all([
       runtime.loadInto(
         roleDefinitions,
-        async () => (await fetchRoleDefinitions()).resources,
+        async () =>
+          (await fetchRoleDefinitions()).resources.map(toRoleDefinitionModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         agents,
-        async () => (await fetchAgents()).agents,
+        async () => (await fetchAgents()).agents.map(toAgentModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         botIdentities,
-        async () => (await fetchBotIdentities()).identities,
+        async () =>
+          (await fetchBotIdentities()).identities.map(toBotIdentityModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         assignments,
-        async () => (await fetchAssignments()).resources,
+        async () => (await fetchAssignments()).resources.map(toAssignmentModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         rooms,
-        async () => (await fetchResources("CHAT")).resources,
+        async () =>
+          (await fetchResources("CHAT")).resources.map(toPeopleSelectionModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         roleImageRecipes,
-        async () => (await fetchResources("ROLE_IMAGE_RECIPE")).resources,
+        async () =>
+          (await fetchResources("ROLE_IMAGE_RECIPE")).resources.map(
+            toPeopleSelectionModel,
+          ),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         instructionSets,
-        async () => (await fetchInstructionSets()).resources,
+        async () =>
+          (await fetchInstructionSets()).resources.map(toPeopleSelectionModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         pools,
-        async () => (await fetchProviderPools()).pools,
+        async () =>
+          (await fetchProviderPools()).pools.map(toProviderPoolSelectionModel),
         (items) => items.length === 0,
       ),
       runtime.loadInto(
         ownerCatalog,
-        fetchOwnerCatalog,
+        async () => toPeopleCatalogModel(await fetchOwnerCatalog()),
         (value) => value === null,
       ),
     ]).then(() => undefined);
@@ -118,7 +136,7 @@ export const usePeopleStore = defineStore("people", () => {
       roleDefinitions,
     );
   const saveRoleDraft = (
-    value: Resource | null,
+    value: RoleDefinitionModel | null,
     draft: Required<
       Pick<
         RoleDefinitionCommand,
@@ -145,13 +163,13 @@ export const usePeopleStore = defineStore("people", () => {
       value?.version,
     );
   const executeRoleAction = (
-    value: Resource,
+    value: RoleDefinitionModel,
     action: "ARCHIVE" | "DELETE" | "PAUSE" | "RESUME",
   ) => sendRole({ action, resourceRef: value.id }, value.version);
   const sendAgent = (body: AgentCommand, version?: number) =>
     runtime.mutate(() => commandAgent(body, version), loadPeople, agents);
   const saveAgentDraft = (
-    value: AgentView | null,
+    value: AgentModel | null,
     draft: Required<
       Pick<
         AgentCommand,
@@ -174,7 +192,7 @@ export const usePeopleStore = defineStore("people", () => {
       value?.version,
     );
   const executeAgentAction = (
-    value: AgentView,
+    value: AgentModel,
     action: "ARCHIVE" | "DELETE" | "PAUSE" | "RESUME" | "ENABLE" | "DISABLE",
   ) => sendAgent({ action, resourceRef: value.agentRef }, value.version);
   const saveBotIdentity = async (
@@ -193,7 +211,7 @@ export const usePeopleStore = defineStore("people", () => {
     if (!key) return false;
     try {
       const operation = await fetchBotOperation(agentRef, body.action, key);
-      botOperation.data = operation;
+      botOperation.data = toBotOperationModel(operation);
       botOperation.phase = "ready";
       if (
         operation.state === "BOUND" ||
@@ -208,7 +226,7 @@ export const usePeopleStore = defineStore("people", () => {
     }
   };
   const createAndBindBotIdentity = (
-    agent: AgentView,
+    agent: AgentModel,
     usernameIntent: string,
     displayName: string,
   ) =>
@@ -217,7 +235,7 @@ export const usePeopleStore = defineStore("people", () => {
       usernameIntent,
       displayName,
     });
-  const bindBotIdentity = (agent: AgentView, identitySelector: string) => {
+  const bindBotIdentity = (agent: AgentModel, identitySelector: string) => {
     const action = agent.botIdentity.status === "BOUND" ? "REBIND" : "BIND";
     return saveBotIdentity(agent.agentRef, agent.version, {
       action,
@@ -227,7 +245,7 @@ export const usePeopleStore = defineStore("people", () => {
         : {}),
     });
   };
-  const revokeBotIdentity = (agent: AgentView) =>
+  const revokeBotIdentity = (agent: AgentModel) =>
     saveBotIdentity(agent.agentRef, agent.version, {
       action: "REVOKE",
       expectedProviderGeneration: agent.botIdentity.providerGeneration,
@@ -248,7 +266,7 @@ export const usePeopleStore = defineStore("people", () => {
       loadPeople,
       assignments,
     );
-  const unassignAgent = (value: Resource) =>
+  const unassignAgent = (value: AssignmentModel) =>
     runtime.mutate(
       () =>
         commandAssignment(
@@ -261,22 +279,28 @@ export const usePeopleStore = defineStore("people", () => {
   const loadRoleHistory = (resourceRef: string) =>
     runtime.loadInto(
       history,
-      async () => (await fetchRoleDefinitionHistory(resourceRef)).entries,
+      async () =>
+        (await fetchRoleDefinitionHistory(resourceRef)).entries.map(
+          toPeopleHistoryModel,
+        ),
       (items) => items.length === 0,
     );
   const loadAgentHistory = (resourceRef: string) =>
     runtime.loadInto(
       agentHistory,
       async () =>
-        (await fetchAgentHistory(resourceRef)).entries.map(
-          (entry) => entry.agent,
+        (await fetchAgentHistory(resourceRef)).entries.map((entry) =>
+          toAgentModel(entry.agent),
         ),
       (items) => items.length === 0,
     );
   const loadAssignmentHistory = (resourceRef: string) =>
     runtime.loadInto(
       history,
-      async () => (await fetchAssignmentHistory(resourceRef)).entries,
+      async () =>
+        (await fetchAssignmentHistory(resourceRef)).entries.map(
+          toPeopleHistoryModel,
+        ),
       (items) => items.length === 0,
     );
   const loadConfigurationSource = (
@@ -286,7 +310,10 @@ export const usePeopleStore = defineStore("people", () => {
     configurationSource.data = null;
     return runtime.loadInto(
       configurationSource,
-      () => fetchConfigurationSource(resourceRef, kind),
+      async () =>
+        toPeopleConfigurationSourceModel(
+          await fetchConfigurationSource(resourceRef, kind),
+        ),
       (value) => value === null,
     );
   };

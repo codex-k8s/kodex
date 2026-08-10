@@ -1,9 +1,9 @@
 import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjection';
 interface RepositoryWorkspaceProjection {
-  repositoryRef: string;
+  repositoryStatus: string;
   workspaceMode: string;
   defaultBranch: string;
-  credentialBindingId?: string;
+  credentialBindingStatus: string;
   ownership: ConfigurationOwnershipProjection;
 }
 export { RepositoryWorkspaceProjection };

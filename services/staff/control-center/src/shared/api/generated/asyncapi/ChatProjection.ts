@@ -3,8 +3,8 @@ import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjecti
 interface ChatProjection {
   stableKey: string;
   roomType: ChatRoomType;
-  defaultAgentId?: string;
-  externalChannelRef: string;
+  defaultAgentStatus: string;
+  providerChannelStatus: string;
   workPolicy: string;
   ownership: ConfigurationOwnershipProjection;
 }

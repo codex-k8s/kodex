@@ -3,8 +3,8 @@ interface IntegrationProjection {
   definitionRef: string;
   definitionVersion: number;
   capabilities: string[];
-  credentialBindingIds: string[];
-  endpointRef: string;
+  credentialBindingCount: number;
+  endpointStatus: string;
   ownership: ConfigurationOwnershipProjection;
 }
 export { IntegrationProjection };

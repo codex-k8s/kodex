@@ -2,41 +2,27 @@
 import { Plus, Trash2 } from "@lucide/vue";
 import { reactive, watch } from "vue";
 
-import type {
-  RoleImagePackage,
-  RoleImageRecipeInput,
-  RoleImageRecipeReadback,
-  RoleImageTool,
-} from "@/shared/api/generated/openapi/types.gen";
+import {
+  emptyRoleImageInput,
+  type RoleImageInputModel,
+  type RoleImagePackageModel,
+  type RoleImageRecipeDetailModel,
+  type RoleImageToolModel,
+} from "@/features/role-images/model";
 
 const props = defineProps<{
-  initial?: RoleImageRecipeReadback | null;
+  initial?: RoleImageRecipeDetailModel | null;
   busy: boolean;
 }>();
 const emit = defineEmits<{
-  submit: [value: { name: string; input: RoleImageRecipeInput }];
+  submit: [value: { name: string; input: RoleImageInputModel }];
 }>();
 const shaPattern = "[0-9a-f]{64}";
 const digestPattern = "sha256:[0-9a-f]{64}";
 
-const form = reactive<{ name: string; input: RoleImageRecipeInput }>({
+const form = reactive<{ name: string; input: RoleImageInputModel }>({
   name: "",
-  input: {
-    baseImageReference: "",
-    baseImageDigest: "",
-    sourceRef: "",
-    sourceRevision: "",
-    sourceSha256: "",
-    contextRef: "",
-    contextSha256: "",
-    builderSha256: "",
-    frontendSha256: "",
-    platforms: [{ os: "linux", architecture: "amd64" }],
-    packages: [],
-    tools: [],
-    installationBlock: "",
-    toolchainSha256: "",
-  },
+  input: emptyRoleImageInput(),
 });
 
 watch(
@@ -45,33 +31,18 @@ watch(
     if (!value) {
       Object.assign(form, {
         name: "",
-        input: {
-          baseImageReference: "",
-          baseImageDigest: "",
-          sourceRef: "",
-          sourceRevision: "",
-          sourceSha256: "",
-          contextRef: "",
-          contextSha256: "",
-          builderSha256: "",
-          frontendSha256: "",
-          platforms: [{ os: "linux", architecture: "amd64" }],
-          packages: [],
-          tools: [],
-          installationBlock: "",
-          toolchainSha256: "",
-        },
+        input: emptyRoleImageInput(),
       });
       return;
     }
-    form.name = value.recipe.name;
+    form.name = value.recipeName;
     form.input = structuredClone(value.input);
   },
   { immediate: true },
 );
 
 function addPackage(): void {
-  const value: RoleImagePackage = {
+  const value: RoleImagePackageModel = {
     manager: "apt",
     name: "",
     version: "",
@@ -81,7 +52,7 @@ function addPackage(): void {
   form.input.packages.push(value);
 }
 function addTool(): void {
-  const value: RoleImageTool = {
+  const value: RoleImageToolModel = {
     name: "",
     version: "",
     sourceRef: "",

@@ -890,7 +890,7 @@ func (server *Server) CreateResource(writer http.ResponseWriter, request *http.R
 	if !decodeJSON(writer, request, &body) {
 		return
 	}
-	kind, spec, err := mutableSpec(body.Kind, body.Spec)
+	kind, spec, err := server.mutableWorkspaceSpec(request.Context(), "", body.Kind, body.Spec)
 	if err != nil {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
@@ -921,7 +921,7 @@ func (server *Server) UpdateResource(writer http.ResponseWriter, request *http.R
 	if !decodeJSON(writer, request, &body) {
 		return
 	}
-	_, spec, err := mutableSpec(body.Kind, body.Spec)
+	_, spec, err := server.mutableWorkspaceSpec(request.Context(), resourceID.String(), body.Kind, body.Spec)
 	if err != nil {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
@@ -1001,15 +1001,15 @@ func (server *Server) ManageAccessResource(writer http.ResponseWriter, request *
 	}
 	var name string
 	var spec *controlplanev1.ResourceSpec
+	var specErr error
 	if action == controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE || action == controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE {
 		if body.Name == nil || body.Spec == nil {
 			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 			return
 		}
 		var specKind controlplanev1.ResourceKind
-		var specOK bool
-		specKind, spec, specOK = accessSpec(body.Kind, *body.Spec)
-		if !specOK || specKind != kind {
+		specKind, spec, specErr = server.accessWorkspaceSpec(request.Context(), uuidValue(body.ResourceId), body.Kind, *body.Spec)
+		if specErr != nil || specKind != kind {
 			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 			return
 		}
@@ -1535,75 +1535,6 @@ func uint64Value(pointer *int64) uint64 {
 
 func uiOwnership() *controlplanev1.ConfigurationOwnership {
 	return &controlplanev1.ConfigurationOwnership{ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI}
-}
-
-func mutableSpec(kind generated.MutableResourceKind, input generated.ResourceSpecInput) (controlplanev1.ResourceKind, *controlplanev1.ResourceSpec, error) {
-	count := 0
-	for _, present := range []bool{input.Chat != nil, input.CredentialBinding != nil, input.RepositoryWorkspace != nil, input.Integration != nil} {
-		if present {
-			count++
-		}
-	}
-	if count != 1 {
-		return 0, nil, errors.New("resource spec cardinality is invalid")
-	}
-	switch kind {
-	case generated.CHAT:
-		if input.Chat == nil {
-			break
-		}
-		room := map[generated.ChatRoomType]controlplanev1.RoomType{generated.USER: controlplanev1.RoomType_ROOM_TYPE_USER, generated.COORDINATION: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, generated.WORKCONTROL: controlplanev1.RoomType_ROOM_TYPE_WORK_CONTROL, generated.RUNS: controlplanev1.RoomType_ROOM_TYPE_RUNS}[input.Chat.RoomType]
-		if room == 0 {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_CHAT, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Chat{Chat: &controlplanev1.ChatSpec{StableKey: input.Chat.StableKey, RoomType: room, DefaultAgentId: uuidValue(input.Chat.DefaultAgentId), ExternalChannelRef: value(input.Chat.ExternalChannelRef), WorkPolicy: input.Chat.WorkPolicy, Ownership: uiOwnership()}}}, nil
-	case generated.CREDENTIALBINDING:
-		if input.CredentialBinding == nil || input.CredentialBinding.Revision < 1 {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_CREDENTIAL_BINDING, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_CredentialBinding{CredentialBinding: &controlplanev1.CredentialBindingSpec{Purpose: input.CredentialBinding.Purpose, ImmutableSecretRef: input.CredentialBinding.ImmutableSecretRef, PrincipalRef: input.CredentialBinding.PrincipalRef, Revision: uint64(input.CredentialBinding.Revision), Ownership: uiOwnership()}}}, nil
-	case generated.REPOSITORYWORKSPACE:
-		if input.RepositoryWorkspace == nil {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_REPOSITORY_WORKSPACE, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_RepositoryWorkspace{RepositoryWorkspace: &controlplanev1.RepositoryWorkspaceSpec{RepositoryRef: input.RepositoryWorkspace.RepositoryRef, WorkspaceMode: input.RepositoryWorkspace.WorkspaceMode, DefaultBranch: input.RepositoryWorkspace.DefaultBranch, CredentialBindingId: uuidValue(input.RepositoryWorkspace.CredentialBindingId), Ownership: uiOwnership()}}}, nil
-	case generated.INTEGRATION:
-		if input.Integration == nil || input.Integration.DefinitionVersion < 1 {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_INTEGRATION, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Integration{Integration: &controlplanev1.IntegrationSpec{DefinitionRef: input.Integration.DefinitionRef, DefinitionVersion: uint64(input.Integration.DefinitionVersion), Capabilities: input.Integration.Capabilities, CredentialBindingIds: uuidStrings(input.Integration.CredentialBindingIds), EndpointRef: input.Integration.EndpointRef, Ownership: uiOwnership()}}}, nil
-	}
-	return 0, nil, errors.New("resource kind and spec mismatch")
-}
-
-func accessSpec(kind generated.AccessResourceKind, input generated.AccessSpecInput) (controlplanev1.ResourceKind, *controlplanev1.ResourceSpec, bool) {
-	count := 0
-	for _, present := range []bool{input.Team != nil, input.Role != nil, input.PromptProfile != nil} {
-		if present {
-			count++
-		}
-	}
-	if count != 1 {
-		return 0, nil, false
-	}
-	switch kind {
-	case generated.AccessResourceKindTEAM:
-		if input.Team == nil {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_TEAM, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Team{Team: &controlplanev1.TeamSpec{StableKey: input.Team.StableKey, ExternalTeamRef: value(input.Team.ExternalTeamRef), MemberActorIds: uuidStrings(input.Team.MemberActorIds), RoleIds: uuidStrings(input.Team.RoleIds), Ownership: uiOwnership()}}}, true
-	case generated.AccessResourceKindROLE:
-		if input.Role == nil {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_ROLE, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Role{Role: &controlplanev1.RoleSpec{StableKey: input.Role.StableKey, Capabilities: input.Role.Capabilities, AllowedTargetRoleIds: uuidStrings(input.Role.AllowedTargetRoleIds), PromptProfileId: uuidValue(input.Role.PromptProfileId), RoleImageRecipeId: input.Role.RoleImageRecipeId.String(), ProviderCredentialBindingIds: uuidStrings(input.Role.ProviderCredentialBindingIds), RepositoryWorkspaceIds: uuidStrings(input.Role.RepositoryWorkspaceIds), IntegrationIds: uuidStrings(input.Role.IntegrationIds), Ownership: uiOwnership()}}}, true
-	case generated.AccessResourceKindPROMPTPROFILE:
-		if input.PromptProfile == nil || input.PromptProfile.Revision < 1 {
-			break
-		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_PROMPT_PROFILE, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_PromptProfile{PromptProfile: &controlplanev1.PromptProfileSpec{Revision: uint64(input.PromptProfile.Revision), ContentSha256: input.PromptProfile.ContentSha256, SourceRef: input.PromptProfile.SourceRef, Locale: input.PromptProfile.Locale, Ownership: uiOwnership()}}}, true
-	}
-	return 0, nil, false
 }
 
 func accessKind(kind generated.AccessResourceKind) (controlplanev1.ResourceKind, bool) {

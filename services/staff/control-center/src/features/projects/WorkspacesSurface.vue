@@ -9,7 +9,6 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { projectDescription, projectSlug } from "@/shared/lib/resources";
 
 const router = useRouter();
 const store = useProjectsStore();
@@ -74,9 +73,9 @@ onMounted(store.load);
             <h3>{{ project.name }}</h3>
             <StatusBadge :state="project.state" />
           </div>
-          <p>{{ projectDescription(project) || $t("common.noValue") }}</p>
+          <p>{{ project.description || $t("common.noValue") }}</p>
           <div class="resource-card__meta">
-            <span>{{ projectSlug(project) }}</span
+            <span>{{ project.slug }}</span
             ><span>{{
               $t("common.version", { version: project.version })
             }}</span>

@@ -7,31 +7,41 @@ import {
   fetchWorkspaceBackups,
   fetchWorkspaceRestores,
 } from "@/shared/api/adapters/owner-control";
-import type {
-  Resource,
-  WorkspaceBackupScope,
-  WorkspaceRestoreView,
-} from "@/shared/api/generated/openapi/types.gen";
+import type { WorkspaceBackupScope } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
 import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
+import {
+  type WorkspaceBackupModel,
+  type WorkspaceRestoreModel,
+  toWorkspaceBackupModel,
+  toWorkspaceRestoreModel,
+} from "./model";
 
 export const useWorkspaceRecoveryStore = defineStore(
   "workspace-recovery",
   () => {
-    const workspaceBackups = reactive(remoteState<Resource[]>([]));
-    const workspaceRestores = reactive(remoteState<WorkspaceRestoreView[]>([]));
+    const workspaceBackups = reactive(remoteState<WorkspaceBackupModel[]>([]));
+    const workspaceRestores = reactive(
+      remoteState<WorkspaceRestoreModel[]>([]),
+    );
     const runtime = createFeatureRuntime();
     const loadWorkspaceRecovery = () =>
       Promise.all([
         runtime.loadInto(
           workspaceBackups,
-          async () => (await fetchWorkspaceBackups()).resources,
+          async () =>
+            (await fetchWorkspaceBackups()).resources.map(
+              toWorkspaceBackupModel,
+            ),
           (items) => items.length === 0,
         ),
         runtime.loadInto(
           workspaceRestores,
-          async () => (await fetchWorkspaceRestores()).restores,
+          async () =>
+            (await fetchWorkspaceRestores()).restores.map(
+              toWorkspaceRestoreModel,
+            ),
           (items) => items.length === 0,
         ),
       ]).then(() => undefined);
@@ -52,7 +62,7 @@ export const useWorkspaceRecoveryStore = defineStore(
         workspaceBackups,
       );
     const executeBackup = (
-      backup: Resource,
+      backup: WorkspaceBackupModel,
       action: "CANCEL" | "RETRY",
       terminalReasonCode?: string,
     ) => {
@@ -74,16 +84,15 @@ export const useWorkspaceRecoveryStore = defineStore(
         workspaceBackups,
       );
     };
-    const createRestore = (backup: Resource, name: string) => {
-      const projection = backup.spec.workspaceBackup;
-      if (!projection) return Promise.resolve(false);
+    const createRestore = (backup: WorkspaceBackupModel, name: string) => {
+      if (!backup.membershipSha256) return Promise.resolve(false);
       return runtime.mutate(
         () =>
           commandWorkspaceRestore({
             action: "CREATE",
             backupRef: backup.id,
             backupVersion: backup.version,
-            membershipSha256: projection.membershipSha256,
+            membershipSha256: backup.membershipSha256,
             name,
           }),
         loadWorkspaceRecovery,
@@ -91,7 +100,7 @@ export const useWorkspaceRecoveryStore = defineStore(
       );
     };
     const executeRestore = (
-      restore: WorkspaceRestoreView,
+      restore: WorkspaceRestoreModel,
       action: "CANCEL" | "RETRY",
       terminalReasonCode?: string,
     ) => {
@@ -113,11 +122,13 @@ export const useWorkspaceRecoveryStore = defineStore(
         workspaceRestores,
       );
     };
-    function replaceBackups(items: Resource[]): void {
+    function replaceBackups(
+      items: Parameters<typeof toWorkspaceBackupModel>[0][],
+    ): void {
       invalidate(workspaceBackups);
-      workspaceBackups.data = items.filter(
-        (item) => item.kind === "WORKSPACE_BACKUP",
-      );
+      workspaceBackups.data = items
+        .filter((item) => item.kind === "WORKSPACE_BACKUP")
+        .map(toWorkspaceBackupModel);
       workspaceBackups.phase = workspaceBackups.data.length ? "ready" : "empty";
     }
     subscribeRealtimeSnapshot("BACKUPS", (snapshot) =>
