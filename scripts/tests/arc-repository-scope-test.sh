@@ -86,5 +86,9 @@ if rg -q 'runnerGroup:|runner-groups|mattercodex-production-(build|deploy)([^a-z
   printf 'Repo-scoped ARC path still contains an organization runner group\n' >&2
   exit 1
 fi
+if rg -q 'reviewers' "$policy_bootstrap"; then
+  printf 'GitHub Environment payload still requests a plan-gated reviewers rule\n' >&2
+  exit 1
+fi
 
 printf 'ARC repository-scope negative checks completed\n'
