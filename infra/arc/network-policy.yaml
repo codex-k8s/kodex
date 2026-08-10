@@ -23,9 +23,107 @@ data:
                                 connect_matcher: {}
                                 headers:
                                   - name: ":authority"
-                                    string_match:
-                                      safe_regex:
-                                        regex: '^(github\.com|api\.github\.com|codeload\.github\.com|[A-Za-z0-9-]+\.githubusercontent\.com|[A-Za-z0-9-]+\.actions\.githubusercontent\.com|ghcr\.io|[A-Za-z0-9-]+\.githubassets\.com|dl\.k8s\.io|registry-1\.docker\.io|auth\.docker\.io|production\.cloudflare\.docker\.com):443$'
+                                    string_match: {exact: "github.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "api.github.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "codeload.github.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "ghcr.io:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "dl.k8s.io:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "registry-1.docker.io:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "auth.docker.io:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "production.cloudflare.docker.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {safe_regex: {regex: '[A-Za-z0-9-]+\.githubusercontent\.com:443$'}}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {safe_regex: {regex: '[A-Za-z0-9-]+\.actions\.githubusercontent\.com:443$'}}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {safe_regex: {regex: '[A-Za-z0-9-]+\.githubassets\.com:443$'}}
                               route:
                                 cluster: dynamic_forward_proxy
                                 upgrade_configs:
