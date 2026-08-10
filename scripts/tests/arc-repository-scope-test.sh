@@ -162,12 +162,17 @@ for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
 done
 
 mkdir -p -- "$temporary_directory/helm-values"
-"$helm_values_renderer" 10.43.0.1 "$temporary_directory/helm-values" >/dev/null
+fixture_proxy_sha=$(printf '%064d' 0)
+"$helm_values_renderer" 10.43.0.1 "$fixture_proxy_sha" \
+  "$temporary_directory/helm-values" >/dev/null
 expected_kubernetes_no_proxy='10.43.0.1,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1'
 for controller_values in controller-values controller-deploy-values; do
-  NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
-    [.env[] | select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] |
-      length == 1
+  NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy \
+    PROXY_SHA_EXPECTED=$fixture_proxy_sha yq -e '
+    (.podAnnotations."mattercodex.dev/egress-proxy-config-sha256" ==
+      strenv(PROXY_SHA_EXPECTED)) and
+    ([.env[] | select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] |
+      length == 1)
   ' "$temporary_directory/helm-values/$controller_values.yaml" >/dev/null
 done
 NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
@@ -180,13 +185,20 @@ NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
   ([.template.spec.containers[] | select(.name == "runner") | .env[] |
     select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1)
 ' "$temporary_directory/helm-values/deploy-runner-values.yaml" >/dev/null
-if rg -q '__KUBERNETES_API_SERVICE_IP__' "$temporary_directory/helm-values"; then
-  printf 'Rendered ARC Helm values contain an unresolved Kubernetes API IP\n' >&2
+if rg -q '__KUBERNETES_API_SERVICE_IP__|__EGRESS_PROXY_CONFIG_SHA256__' \
+  "$temporary_directory/helm-values"; then
+  printf 'Rendered ARC Helm values contain an unresolved placeholder\n' >&2
   exit 1
 fi
-if "$helm_values_renderer" 10.43.0.999 "$temporary_directory/helm-values" \
+if "$helm_values_renderer" 10.43.0.999 "$fixture_proxy_sha" \
+  "$temporary_directory/helm-values" \
   >/dev/null 2>&1; then
   printf 'ARC Helm values renderer accepted an invalid Kubernetes API IP\n' >&2
+  exit 1
+fi
+if "$helm_values_renderer" 10.43.0.1 invalid-sha \
+  "$temporary_directory/helm-values" >/dev/null 2>&1; then
+  printf 'ARC Helm values renderer accepted an invalid proxy config SHA-256\n' >&2
   exit 1
 fi
 

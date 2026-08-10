@@ -12,6 +12,8 @@ env:
   - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
   - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
   - {name: NO_PROXY, value: "__KUBERNETES_API_SERVICE_IP__,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1"}
+podAnnotations:
+  mattercodex.dev/egress-proxy-config-sha256: __EGRESS_PROXY_CONFIG_SHA256__
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile: {type: RuntimeDefault}
