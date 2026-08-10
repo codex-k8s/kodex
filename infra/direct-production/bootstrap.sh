@@ -2,6 +2,15 @@
 set -euo pipefail
 
 fail() { printf 'Direct production bootstrap failed: %s\n' "$*" >&2; exit 1; }
+require_denied() {
+  local failure_message=$1 output status
+  shift
+  set +e
+  output=$("$@")
+  status=$?
+  set -e
+  [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
+}
 usage() {
   printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--application-material-file <path>]\n' "$0" >&2
 }
@@ -180,9 +189,9 @@ if kubectl --context "$expected_context" --as=system:serviceaccount:mattercodex-
   apply --dry-run=server -f "$negative_manifest" >/dev/null 2>&1; then
   fail "negative deploy admission check unexpectedly succeeded"
 fi
-kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system \
-  --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer | grep -qx no ||
-  fail "routine deployer unexpectedly has Secret read access"
+require_denied "routine deployer unexpectedly has Secret read access" \
+  kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system \
+  --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
 
 bootstrap_digest=$(sha256sum "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
   "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy" |

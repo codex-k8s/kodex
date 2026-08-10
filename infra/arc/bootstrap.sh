@@ -3,6 +3,15 @@ set -euo pipefail
 umask 077
 
 fail() { printf 'ARC bootstrap failed: %s\n' "$*" >&2; exit 1; }
+require_denied() {
+  local failure_message=$1 output status
+  shift
+  set +e
+  output=$("$@")
+  status=$?
+  set -e
+  [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
+}
 usage() {
   printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
@@ -373,9 +382,9 @@ readback_scale_set "$deploy_namespace" mattercodex-deploy \
   --workflow-sha-file "$workflow_sha_file" \
   --build-owner-actor-id-file "$build_owner_actor_file" \
   --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
-kubectl --context "$expected_context" auth can-i get secrets -n "$deploy_namespace" \
-  --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer | grep -qx no ||
-  fail "deploy runner unexpectedly has Secret read access"
+require_denied "deploy runner unexpectedly has Secret read access" \
+  kubectl --context "$expected_context" auth can-i get secrets -n "$deploy_namespace" \
+  --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
 
 negative_manifest="$temporary_directory/forbidden-pod.yaml"
 printf '%s\n' \
