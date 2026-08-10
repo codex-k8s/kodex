@@ -1,5 +1,7 @@
 # syntax=docker.io/docker/dockerfile:1.19.0@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
 
+ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
 FROM docker.io/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 ENV GOTOOLCHAIN=local
 ARG VERSION=dev
@@ -48,7 +50,6 @@ COPY --from=build --chmod=0555 /out/role-image-builder /usr/local/bin/role-image
 USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/role-image-builder"]
 
-ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 FROM ${ADMISSION_TOOLS_IMAGE} AS admission-runtime
 COPY --from=build --chmod=0555 /out/image-admission-bridge /usr/local/bin/image-admission-bridge
 COPY --from=build --chmod=0555 /out/registry-write-authorizer /usr/local/bin/registry-write-authorizer
