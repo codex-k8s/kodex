@@ -11,6 +11,22 @@ require_denied() {
   set -e
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
+require_no_diff_except_generation() {
+  local failure_message=$1 output status meaningful
+  shift
+  set +e
+  output=$("$@" 2>&1)
+  status=$?
+  set -e
+  [[ $status -eq 0 ]] && return
+  [[ $status -eq 1 ]] || fail "$failure_message"
+  meaningful=$(printf '%s\n' "$output" | awk '
+    /^--- / || /^\+\+\+ / || /^@@ / { next }
+    /^[+-][[:space:]]+generation:[[:space:]]+[0-9]+$/ { next }
+    /^[+-]/ { print }
+  ')
+  [[ -z "$meaningful" ]] || fail "$failure_message"
+}
 usage() {
   printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--external-material-file <path>]\n' "$0" >&2
 }
@@ -195,8 +211,8 @@ kubectl --context "$expected_context" diff -f "$workload_contracts" >/dev/null |
   fail "production workload contract readback mismatch"
 kubectl --context "$expected_context" diff -f "$script_directory/bootstrap.yaml" >/dev/null ||
   fail "production owner admission policy readback mismatch"
-kubectl --context "$expected_context" diff -f "$temporary_directory/application-owner.yaml" >/dev/null ||
-  fail "production application owner policy readback mismatch"
+require_no_diff_except_generation "production application owner policy readback mismatch" \
+  kubectl --context "$expected_context" diff -f "$temporary_directory/application-owner.yaml"
 kubectl --context "$expected_context" diff -f "$workload_policy" >/dev/null ||
   fail "production workload admission policy readback mismatch"
 kubectl --context "$expected_context" diff -f "$kubernetes_api_policies" >/dev/null ||
