@@ -107,8 +107,20 @@ yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-
   >"$temporary_directory/envoy.yaml"
 yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   .static_resources.listeners[0].filter_chains[0].filters[0].typed_config as $hcm |
-  $hcm.route_config.virtual_hosts[0].routes[0].route.upgrade_configs[0] as $route_upgrade |
+  $hcm.route_config.virtual_hosts[0] as $virtual_host |
+  $virtual_host.routes[0] as $connect_route |
+  $connect_route.route.upgrade_configs[0] as $route_upgrade |
   $hcm.upgrade_configs[0] as $hcm_upgrade |
+  $connect_route.match.headers[0] as $authority_match |
+  $authority_match.string_match.safe_regex.regex as $authority_regex |
+  ($virtual_host.domains == ["*"]) and
+  ($authority_match.name == ":authority") and
+  (all("github.com:443", "broker.actions.githubusercontent.com:443",
+    "raw.githubusercontent.com:443", "avatars.githubassets.com:443",
+    "ghcr.io:443", "registry-1.docker.io:443"; test($authority_regex))) and
+  (all("example.com:443", "github.com:80", "github.com.attacker.invalid:443",
+    "broker.actions.githubusercontent.com.attacker.invalid:443";
+      (test($authority_regex) | not))) and
   ($hcm_upgrade.upgrade_type == "CONNECT") and
   ($hcm_upgrade | has("connect_config") | not) and
   ($route_upgrade.upgrade_type == "CONNECT") and
