@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 fail() { printf 'ARC bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -11,6 +12,7 @@ mode=""
 github_app_id_file=""
 github_app_installation_id_file=""
 github_app_private_key_file=""
+github_pat_file=""
 workflow_sha_file=""
 build_owner_actor_file=""
 deploy_owner_actor_file=""
@@ -21,6 +23,7 @@ while (($# > 0)); do
     --github-app-id-file) github_app_id_file="${2:-}"; shift 2 ;;
     --github-app-installation-id-file) github_app_installation_id_file="${2:-}"; shift 2 ;;
     --github-app-private-key-file) github_app_private_key_file="${2:-}"; shift 2 ;;
+    --github-pat-file) github_pat_file="${2:-}"; shift 2 ;;
     --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
     --build-owner-actor-id-file) build_owner_actor_file="${2:-}"; shift 2 ;;
     --deploy-owner-actor-id-file) deploy_owner_actor_file="${2:-}"; shift 2 ;;
@@ -29,11 +32,26 @@ while (($# > 0)); do
   esac
 done
 
+github_app_argument_count=0
+for github_app_file in "$github_app_id_file" "$github_app_installation_id_file" "$github_app_private_key_file"; do
+  [[ -z "$github_app_file" ]] || github_app_argument_count=$((github_app_argument_count + 1))
+done
+((github_app_argument_count == 0 || github_app_argument_count == 3)) ||
+  fail "GitHub App credential mode requires exactly three files"
+[[ -z "$github_pat_file" || github_app_argument_count == 0 ]] ||
+  fail "GitHub App and PAT credential modes are mutually exclusive"
+credential_mode=none
+if [[ -n "$github_pat_file" ]]; then
+  credential_mode=pat
+elif ((github_app_argument_count == 3)); then
+  credential_mode=app
+fi
+
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
-for command_name in kubectl helm sha256sum awk grep jq yq; do
+for command_name in kubectl helm sha256sum awk grep jq yq stat curl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
@@ -46,11 +64,11 @@ repository_root=$(cd -- "$script_directory/../.." && pwd -P)
   --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
 lock_file="$script_directory/chart.lock"
 credential_secret=mattercodex-github-runner-auth
+owner_gate_config=mattercodex-runner-owner-gate
 build_namespace=mattercodex-ci
 deploy_namespace=mattercodex-ci-deploy
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
-umask 077
 
 pull_chart() {
   local chart=$1 version expected_sha archive actual_sha
@@ -74,12 +92,41 @@ validate_github_app_files() {
   grep -q '^-----BEGIN .*PRIVATE KEY-----$' "$github_app_private_key_file" || fail "GitHub App private key file is invalid"
 }
 
+validate_github_pat_file() {
+  local file_mode pat curl_config
+  [[ -r "$github_pat_file" && -s "$github_pat_file" ]] ||
+    fail "GitHub PAT credential file is required to create runner auth Secrets"
+  file_mode=$(stat -c '%a' "$github_pat_file")
+  (( (8#$file_mode & 077) == 0 )) || fail "GitHub PAT credential file permissions are too broad"
+  awk 'NR != 1 || length($0) == 0 || $0 ~ /[[:space:]]/ {exit 1} END {if (NR != 1) exit 1}' \
+    "$github_pat_file" || fail "GitHub PAT credential file is invalid"
+  curl_config="$temporary_directory/github-pat-curl.conf"
+  pat=$(<"$github_pat_file")
+  printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\nheader = "X-GitHub-Api-Version: 2022-11-28"\n' \
+    "$pat" >"$curl_config"
+  unset pat
+  curl --config "$curl_config" --fail --silent --show-error \
+    https://api.github.com/repos/codex-k8s/matter-codex >"$temporary_directory/github-repository.json"
+  jq -e '.permissions.admin == true' "$temporary_directory/github-repository.json" >/dev/null ||
+    fail "GitHub PAT lacks repository administration"
+  curl --config "$curl_config" --fail --silent --show-error \
+    'https://api.github.com/repos/codex-k8s/matter-codex/actions/runners?per_page=1' \
+    >"$temporary_directory/github-runners.json"
+  jq -e '.total_count | type == "number"' "$temporary_directory/github-runners.json" >/dev/null ||
+    fail "GitHub PAT cannot read the repository runners API"
+}
+
 verify_credential_secret() {
   local namespace=$1 keys
   keys=$(kubectl --context "$expected_context" -n "$namespace" get secret "$credential_secret" -o json |
     jq -c '[.data | keys[]] | sort')
-  [[ "$keys" == '["github_app_id","github_app_installation_id","github_app_private_key"]' ]] ||
-    fail "runner auth Secret has an unexpected key set in $namespace"
+  case "$credential_mode:$keys" in
+    pat:'["github_token"]'|app:'["github_app_id","github_app_installation_id","github_app_private_key"]'|none:'["github_token"]'|none:'["github_app_id","github_app_installation_id","github_app_private_key"]') ;;
+    *) fail "runner auth Secret has an unexpected credential mode or key set in $namespace" ;;
+  esac
+  kubectl --context "$expected_context" -n "$namespace" get secret "$credential_secret" -o json |
+    jq -e '.data | length > 0 and all(.[]; type == "string" and length > 0)' >/dev/null ||
+    fail "runner auth Secret has empty credential data in $namespace"
 }
 
 materialize_credential_secret() {
@@ -88,13 +135,53 @@ materialize_credential_secret() {
     verify_credential_secret "$namespace"
     return
   fi
-  validate_github_app_files
-  kubectl --context "$expected_context" -n "$namespace" create secret generic "$credential_secret" \
-    --from-file=github_app_id="$github_app_id_file" \
-    --from-file=github_app_installation_id="$github_app_installation_id_file" \
-    --from-file=github_app_private_key="$github_app_private_key_file" >/dev/null
+  case "$credential_mode" in
+    pat)
+      validate_github_pat_file
+      kubectl --context "$expected_context" -n "$namespace" create secret generic "$credential_secret" \
+        --from-file=github_token="$github_pat_file" >/dev/null
+      ;;
+    app)
+      validate_github_app_files
+      kubectl --context "$expected_context" -n "$namespace" create secret generic "$credential_secret" \
+        --from-file=github_app_id="$github_app_id_file" \
+        --from-file=github_app_installation_id="$github_app_installation_id_file" \
+        --from-file=github_app_private_key="$github_app_private_key_file" >/dev/null
+      ;;
+    *) fail "GitHub App or PAT credential files are required when runner auth Secret is absent" ;;
+  esac
   verify_credential_secret "$namespace"
 }
+
+case "$credential_mode" in
+  pat) validate_github_pat_file ;;
+  app) validate_github_app_files ;;
+esac
+
+render_owner_gate_config() {
+  local namespace=$1 workflow_path=$2 job=$3 owner_actor_file=$4 output=$5 gate_directory
+  gate_directory="$temporary_directory/owner-gate-$namespace"
+  mkdir -p -- "$gate_directory"
+  printf 'codex-k8s/matter-codex/%s@refs/heads/main\n' "$workflow_path" \
+    >"$gate_directory/expected-workflow-ref"
+  cp -- "$workflow_sha_file" "$gate_directory/expected-workflow-sha"
+  cp -- "$owner_actor_file" "$gate_directory/expected-owner-actor-id"
+  printf '%s\n' "$job" >"$gate_directory/expected-job"
+  kubectl --context "$expected_context" -n "$namespace" create configmap "$owner_gate_config" \
+    --from-file=job-started.sh="$script_directory/job-started-owner-gate.sh" \
+    --from-file=expected-workflow-ref="$gate_directory/expected-workflow-ref" \
+    --from-file=expected-workflow-sha="$gate_directory/expected-workflow-sha" \
+    --from-file=expected-owner-actor-id="$gate_directory/expected-owner-actor-id" \
+    --from-file=expected-job="$gate_directory/expected-job" \
+    --dry-run=client -o yaml >"$output"
+}
+
+build_owner_gate="$temporary_directory/build-owner-gate.yaml"
+deploy_owner_gate="$temporary_directory/deploy-owner-gate.yaml"
+render_owner_gate_config "$build_namespace" .github/workflows/build-release.yml build \
+  "$build_owner_actor_file" "$build_owner_gate"
+render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production.yml deploy \
+  "$deploy_owner_actor_file" "$deploy_owner_gate"
 
 controller_chart=$(pull_chart gha-runner-scale-set-controller)
 runner_chart=$(pull_chart gha-runner-scale-set)
@@ -106,6 +193,8 @@ server_minor=$(kubectl --context "$expected_context" version -o json |
 
 kubectl --context "$expected_context" apply --dry-run=client -f "$script_directory/namespace-rbac.yaml" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_network_policy" >/dev/null
+kubectl --context "$expected_context" apply --dry-run=client -f "$build_owner_gate" >/dev/null
+kubectl --context "$expected_context" apply --dry-run=client -f "$deploy_owner_gate" >/dev/null
 helm template mattercodex-arc-build "$controller_chart" -n "$build_namespace" \
   -f "$script_directory/controller-values.yaml" >/dev/null
 helm template mattercodex-build "$runner_chart" -n "$build_namespace" \
@@ -123,6 +212,8 @@ fi
 if [[ "$mode" == apply ]]; then
   kubectl --context "$expected_context" apply -f "$script_directory/namespace-rbac.yaml" >/dev/null
   kubectl --context "$expected_context" apply -f "$rendered_network_policy" >/dev/null
+  kubectl --context "$expected_context" apply -f "$build_owner_gate" >/dev/null
+  kubectl --context "$expected_context" apply -f "$deploy_owner_gate" >/dev/null
   for policy_spec in \
     "$build_namespace controller-kubernetes-api app.kubernetes.io/name=gha-rs-controller" \
     "$build_namespace listener-kubernetes-api mattercodex.dev/arc-role=listener" \
@@ -178,16 +269,36 @@ for proxy_namespace in "$build_namespace" "$deploy_namespace"; do
     deployment/mattercodex-ci-egress-proxy --timeout=3m >/dev/null
 done
 
+verify_owner_gate_config() {
+  local namespace=$1 expected=$2 expected_data actual_data
+  expected_data=$(yq -o=json '.data' "$expected" | jq -Sc .)
+  actual_data=$(kubectl --context "$expected_context" -n "$namespace" get configmap \
+    "$owner_gate_config" -o json | jq -Sc '.data')
+  [[ "$actual_data" == "$expected_data" ]] ||
+    fail "runner owner gate ConfigMap readback mismatch in $namespace"
+}
+
+verify_owner_gate_config "$build_namespace" "$build_owner_gate"
+verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
+
 readback_scale_set() {
-  local namespace=$1 name=$2 group=$3 service_account=$4 automount=$5
+  local namespace=$1 name=$2 service_account=$3 automount=$4
   kubectl --context "$expected_context" -n "$namespace" get autoscalingrunnerset "$name" -o json |
-    jq -e --arg name "$name" --arg group "$group" --arg service_account "$service_account" \
+    jq -e --arg name "$name" --arg service_account "$service_account" \
       --argjson automount "$automount" '
       .spec.githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
-      .spec.runnerScaleSetName == $name and .spec.runnerGroup == $group and
+      .spec.runnerScaleSetName == $name and (.spec | has("runnerGroup") | not) and
       .spec.minRunners == 0 and .spec.maxRunners == 1 and
       .spec.template.spec.serviceAccountName == $service_account and
-      .spec.template.spec.automountServiceAccountToken == $automount
+      .spec.template.spec.automountServiceAccountToken == $automount and
+      any(.spec.template.spec.volumes[];
+        .name == "owner-gate" and .configMap.name == "mattercodex-runner-owner-gate" and
+        .configMap.defaultMode == 365) and
+      any(.spec.template.spec.containers[]; .name == "runner" and
+        any(.env[]; .name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
+          .value == "/var/run/mattercodex-owner-gate/job-started.sh") and
+        any(.volumeMounts[]; .name == "owner-gate" and
+          .mountPath == "/var/run/mattercodex-owner-gate" and .readOnly == true))
     ' >/dev/null || fail "runner scale set readback mismatch: $name"
   kubectl --context "$expected_context" -n "$namespace" get autoscalinglistener -l \
     "actions.github.com/scale-set-name=$name" -o json |
@@ -204,9 +315,9 @@ readback_scale_set() {
     fail "ephemeral runner set idle readback mismatch: $name"
 }
 
-readback_scale_set "$build_namespace" mattercodex-build mattercodex-production-build \
+readback_scale_set "$build_namespace" mattercodex-build \
   mattercodex-build-gha-rs-no-permission false
-readback_scale_set "$deploy_namespace" mattercodex-deploy mattercodex-production-deploy \
+readback_scale_set "$deploy_namespace" mattercodex-deploy \
   mattercodex-production-deployer true
 "$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
   --workflow-sha-file "$workflow_sha_file" \

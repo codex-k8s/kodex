@@ -150,8 +150,7 @@ yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/direct-production-foun
   exit 1
 }
 yq -e '
-  .jobs.build."runs-on".group == "mattercodex-production-build" and
-  .jobs.build."runs-on".labels == "mattercodex-build" and
+  .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
   (.jobs.build.steps[2].run | contains("verify-github-owner-gate.sh")) and
   (.jobs.build.steps[3].run | contains("build-release.sh"))
@@ -160,8 +159,7 @@ yq -e '
   exit 1
 }
 yq -e '
-  .jobs.deploy."runs-on".group == "mattercodex-production-deploy" and
-  .jobs.deploy."runs-on".labels == "mattercodex-deploy" and
+  .jobs.deploy."runs-on" == "mattercodex-deploy" and
   .jobs.deploy.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
   (.jobs.deploy.steps[2].run | contains("verify-github-owner-gate.sh")) and
   (.jobs.deploy.steps[-1].run | contains("direct-production.sh"))
@@ -169,9 +167,16 @@ yq -e '
   printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
   exit 1
 }
-grep -Fq '"$repository/$workflow_path@$workflow_sha"' \
+if rg -q 'runnerGroup|runner-groups|mattercodex-production-(build|deploy)([^a-z]|$)' \
+  "$repository_root/infra/arc/build-runner-values.yaml" \
+  "$repository_root/infra/arc/deploy-runner-values.yaml" \
+  "$repository_root/infra/github/bootstrap-actions-policy.sh"; then
+  printf 'Repo-scoped ARC configuration still depends on an organization runner group\n' >&2
+  exit 1
+fi
+grep -Fq 'repos/$repository/actions/runners?per_page=1' \
   "$repository_root/infra/github/bootstrap-actions-policy.sh" || {
-  printf 'Runner group workflow restriction is not pinned to the owner SHA\n' >&2
+  printf 'GitHub policy preflight does not verify repository runner API access\n' >&2
   exit 1
 }
 

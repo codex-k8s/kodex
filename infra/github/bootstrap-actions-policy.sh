@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 fail() { printf 'GitHub Actions policy bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path>\n' "$0" >&2
+  printf 'Usage: %s --mode preflight|apply|readback|retire-invalid-registration-variable --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path>\n' "$0" >&2
 }
 
 mode=""
@@ -20,7 +21,9 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
-case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
+case "$mode" in preflight|apply|readback|retire-invalid-registration-variable) ;;
+  *) fail "mode must be preflight, apply, readback or retire-invalid-registration-variable" ;;
+esac
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "workflow SHA and owner actor ID files are required"
 grep -Eq '^[a-f0-9]{40}$' "$workflow_sha_file" || fail "workflow SHA is invalid"
@@ -31,12 +34,18 @@ command -v jq >/dev/null 2>&1 || fail "jq is required"
 [[ -n "${GH_TOKEN:-}" ]] || fail "GH_TOKEN is required"
 
 repository=codex-k8s/matter-codex
-organization=codex-k8s
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
-umask 077
-repository_id=$(gh api "repos/$repository" --jq '.id')
-[[ "$repository_id" =~ ^[1-9][0-9]*$ ]] || fail "repository ID readback is invalid"
+gh api "repos/$repository" >"$temporary_directory/repository.json"
+jq -e '.id | type == "number" and . > 0' "$temporary_directory/repository.json" >/dev/null ||
+  fail "repository ID readback is invalid"
+jq -e '.permissions.admin == true' "$temporary_directory/repository.json" >/dev/null ||
+  fail "authenticated owner lacks repository administration"
+authenticated_owner_actor_id=$(gh api user --jq '.id')
+[[ "$authenticated_owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail "authenticated owner actor ID is invalid"
+[[ "$(<"$build_owner_actor_file")" == "$authenticated_owner_actor_id" &&
+   "$(<"$deploy_owner_actor_file")" == "$authenticated_owner_actor_id" ]] ||
+  fail "owner actor ID files differ from the authenticated GitHub API actor"
 workflow_sha=$(<"$workflow_sha_file")
 
 configure_environment() {
@@ -96,48 +105,9 @@ configure_repository_variable() {
     fail "repository variable readback mismatch: $variable_name"
 }
 
-runner_group_id() {
-  local group_name=$1 groups matches
-  groups=$(gh api "orgs/$organization/actions/runner-groups?per_page=100")
-  matches=$(jq --arg name "$group_name" '[.runner_groups[] | select(.name == $name)] | length' <<<"$groups")
-  ((matches <= 1)) || fail "runner group name is not unique: $group_name"
-  if ((matches == 1)); then
-    jq -er --arg name "$group_name" '.runner_groups[] | select(.name == $name) | .id' <<<"$groups"
-  fi
-}
-
-configure_runner_group() {
-  local group_name=$1 workflow_path=$2 group_id body
-  group_id=$(runner_group_id "$group_name")
-  body="$temporary_directory/runner-group-$group_name.json"
-  jq -n --arg name "$group_name" --arg workflow "$repository/$workflow_path@$workflow_sha" \
-    '{name:$name,visibility:"selected",allows_public_repositories:false,
-      restricted_to_workflows:true,selected_workflows:[$workflow]}' >"$body"
-  if [[ "$mode" == apply && -z "$group_id" ]]; then
-    group_id=$(gh api --method POST "orgs/$organization/actions/runner-groups" --input "$body" --jq '.id')
-  elif [[ "$mode" == apply ]]; then
-    gh api --method PATCH "orgs/$organization/actions/runner-groups/$group_id" --input "$body" >/dev/null
-  fi
-  [[ "$group_id" =~ ^[1-9][0-9]*$ ]] || fail "runner group is absent: $group_name"
-  if [[ "$mode" == apply ]]; then
-    gh api --method PUT "orgs/$organization/actions/runner-groups/$group_id/repositories/$repository_id" >/dev/null
-  fi
-  gh api "orgs/$organization/actions/runner-groups/$group_id" >"$temporary_directory/group-$group_name.json"
-  gh api "orgs/$organization/actions/runner-groups/$group_id/repositories?per_page=100" \
-    >"$temporary_directory/group-repositories-$group_name.json"
-  jq -e --arg name "$group_name" --arg workflow "$repository/$workflow_path@$workflow_sha" '
-    .name == $name and .visibility == "selected" and .allows_public_repositories == false and
-    .restricted_to_workflows == true and .selected_workflows == [$workflow]
-  ' "$temporary_directory/group-$group_name.json" >/dev/null || fail "runner group policy mismatch: $group_name"
-  jq -e --argjson repository_id "$repository_id" '
-    [.repositories[].id] == [$repository_id]
-  ' "$temporary_directory/group-repositories-$group_name.json" >/dev/null ||
-    fail "runner group repository scope mismatch: $group_name"
-}
-
 if [[ "$mode" == preflight ]]; then
   gh api "repos/$repository/environments" >/dev/null
-  gh api "orgs/$organization/actions/runner-groups" >/dev/null
+  gh api "repos/$repository/actions/runners?per_page=1" >/dev/null
   gh api "repos/$repository/actions/variables?per_page=1" >/dev/null
   printf 'GitHub Actions policy bootstrap preflight completed\n'
   exit 0
@@ -148,6 +118,17 @@ configure_environment production
 configure_repository_variable MATTERCODEX_PRODUCTION_WORKFLOW_SHA "$workflow_sha_file"
 configure_repository_variable MATTERCODEX_BUILD_OWNER_ACTOR_ID "$build_owner_actor_file"
 configure_repository_variable MATTERCODEX_DEPLOY_OWNER_ACTOR_ID "$deploy_owner_actor_file"
-configure_runner_group mattercodex-production-build .github/workflows/build-release.yml
-configure_runner_group mattercodex-production-deploy .github/workflows/deploy-production.yml
+if [[ "$mode" == retire-invalid-registration-variable ]]; then
+  if gh api "repos/$repository/actions/variables/GH_ARC_TOKEN" \
+    >"$temporary_directory/invalid-registration-variable.json" 2>/dev/null; then
+    jq -e '.name == "GH_ARC_TOKEN" and
+      (.value | type == "string" and length == 29)' \
+      "$temporary_directory/invalid-registration-variable.json" >/dev/null ||
+      fail "GH_ARC_TOKEN no longer matches the invalid registration-token contract"
+    gh api --method DELETE "repos/$repository/actions/variables/GH_ARC_TOKEN" >/dev/null
+  fi
+  if gh api "repos/$repository/actions/variables/GH_ARC_TOKEN" >/dev/null 2>&1; then
+    fail "GH_ARC_TOKEN still exists after retirement"
+  fi
+fi
 printf 'GitHub Actions policy bootstrap %s completed\n' "$mode"

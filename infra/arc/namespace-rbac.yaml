@@ -109,14 +109,14 @@ spec:
         object.apiVersion != 'actions.github.com/v1alpha1' ||
         (object.metadata.namespace == 'mattercodex-ci' && object.metadata.name == 'mattercodex-build' &&
           object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
-          object.spec.runnerGroup == 'mattercodex-production-build' &&
+          !has(object.spec.runnerGroup) &&
           object.spec.runnerScaleSetName == 'mattercodex-build' &&
           object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
           object.spec.template.spec.serviceAccountName == 'mattercodex-build-gha-rs-no-permission' &&
           object.spec.template.spec.automountServiceAccountToken == false) ||
         (object.metadata.namespace == 'mattercodex-ci-deploy' && object.metadata.name == 'mattercodex-deploy' &&
           object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
-          object.spec.runnerGroup == 'mattercodex-production-deploy' &&
+          !has(object.spec.runnerGroup) &&
           object.spec.runnerScaleSetName == 'mattercodex-deploy' &&
           object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
           object.spec.template.spec.serviceAccountName == 'mattercodex-production-deployer' &&

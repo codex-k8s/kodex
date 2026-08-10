@@ -1,7 +1,6 @@
 githubConfigUrl: https://github.com/codex-k8s/matter-codex
 githubConfigSecret: mattercodex-github-runner-auth
 runnerScaleSetName: mattercodex-deploy
-runnerGroup: mattercodex-production-deploy
 minRunners: 0
 maxRunners: 1
 listenerTemplate:
@@ -38,6 +37,7 @@ template:
         imagePullPolicy: IfNotPresent
         command: [/home/runner/run.sh]
         env:
+          - {name: ACTIONS_RUNNER_HOOK_JOB_STARTED, value: /var/run/mattercodex-owner-gate/job-started.sh}
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
           - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
@@ -51,6 +51,8 @@ template:
         volumeMounts:
           - {name: work, mountPath: /home/runner/_work}
           - {name: tools, mountPath: /var/run/mattercodex-tools}
+          - {name: owner-gate, mountPath: /var/run/mattercodex-owner-gate, readOnly: true}
     volumes:
       - {name: work, emptyDir: {sizeLimit: 2Gi}}
       - {name: tools, emptyDir: {sizeLimit: 64Mi}}
+      - {name: owner-gate, configMap: {name: mattercodex-runner-owner-gate, defaultMode: 365}}

@@ -15,9 +15,7 @@ permissions:
 
 jobs:
   build:
-    runs-on:
-      group: mattercodex-production-build
-      labels: mattercodex-build
+    runs-on: mattercodex-build
     timeout-minutes: 45
     environment: production-build
     steps:
