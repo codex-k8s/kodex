@@ -59,5 +59,5 @@ template:
           - {name: owner-gate, mountPath: /var/run/mattercodex-owner-gate, readOnly: true}
     volumes:
       - {name: work, emptyDir: {sizeLimit: 2Gi}}
-      - {name: tools, emptyDir: {sizeLimit: 64Mi}}
+      - {name: tools, emptyDir: {sizeLimit: 256Mi}}
       - {name: owner-gate, configMap: {name: mattercodex-runner-owner-gate, defaultMode: 365}}

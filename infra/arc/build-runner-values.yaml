@@ -107,7 +107,7 @@ template:
     volumes:
       - {name: work, emptyDir: {sizeLimit: 8Gi}}
       - {name: socket, emptyDir: {sizeLimit: 8Mi}}
-      - {name: tools, emptyDir: {sizeLimit: 32Mi}}
+      - {name: tools, emptyDir: {sizeLimit: 256Mi}}
       - {name: state, emptyDir: {sizeLimit: 30Gi}}
       - {name: buildkit-config, configMap: {name: mattercodex-buildkit-config}}
       - {name: owner-gate, configMap: {name: mattercodex-runner-owner-gate, defaultMode: 365}}
