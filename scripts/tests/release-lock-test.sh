@@ -51,6 +51,28 @@ while IFS= read -r image; do
       exit 1
     }
 done < <(yq eval-all -r '.. | .image?' "$temporary_directory/direct-production.yaml" | sed '/^---$/d;/^null$/d')
+
+while IFS=$'\t' read -r component dockerfile; do
+  module_directory=$(dirname -- "$repository_root/$dockerfile")
+  module_file="$module_directory/go.mod"
+  [[ -f "$module_file" ]] || continue
+  if grep -Eq '^COPY[[:space:]]+libs/go/?[[:space:]]+' "$repository_root/$dockerfile"; then
+    continue
+  fi
+  while IFS= read -r replacement; do
+    [[ "$replacement" == ./* || "$replacement" == ../* ]] || continue
+    replacement_path=$(realpath -m -- "$module_directory/$replacement")
+    replacement_path=${replacement_path#"$repository_root/"}
+    grep -Fq "COPY $replacement_path/ $replacement_path/" \
+      "$repository_root/$dockerfile" || {
+      printf 'Dockerfile %s omits local replacement %s before build\n' \
+        "$component" "$replacement_path" >&2
+      exit 1
+    }
+  done < <(go mod edit -json "$module_file" | jq -r '.Replace[]?.New.Path')
+done < <(jq -r '.images[] | [.component,.dockerfile] | @tsv' \
+  "$repository_root/tools/release/images.json")
+
 if yq eval-all -e 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
   "$temporary_directory/direct-production.yaml" >/dev/null 2>&1; then
   printf 'Deferred hardened supply-chain workload leaked into dark render\n' >&2
