@@ -47,7 +47,6 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 umask 077
 gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >"$temporary_directory/run.json"
-gh api "repos/$GITHUB_REPOSITORY/environments/$environment" >"$temporary_directory/environment.json"
 gh api "repos/$GITHUB_REPOSITORY" >"$temporary_directory/repository.json"
 
 jq -e --arg repository "$GITHUB_REPOSITORY" --arg workflow "$workflow" '
@@ -71,14 +70,29 @@ fi
 gh api "repos/$GITHUB_REPOSITORY/commits/$source_sha" --jq '.sha' | grep -qx "$source_sha" ||
   fail "source SHA is not reachable in the repository"
 
-jq -e '
-  .deployment_branch_policy.custom_branch_policies == true and
-  .deployment_branch_policy.protected_branches == false
-' "$temporary_directory/environment.json" >/dev/null || fail "environment protection policy mismatch"
-branch_policies_url="repos/$GITHUB_REPOSITORY/environments/$environment/deployment-branch-policies"
-gh api "$branch_policies_url" >"$temporary_directory/branches.json"
-jq -e '.branch_policies as $policies | ($policies | length) == 1 and $policies[0].name == "main" and $policies[0].type == "branch"' \
-  "$temporary_directory/branches.json" >/dev/null || fail "environment branch policy mismatch"
+deployments="$temporary_directory/deployments.json"
+gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$environment&per_page=100" >"$deployments"
+matching_deployments=0
+while IFS= read -r deployment_id; do
+  [[ "$deployment_id" =~ ^[1-9][0-9]*$ ]] || fail "environment deployment ID is invalid"
+  statuses="$temporary_directory/deployment-statuses-$deployment_id.json"
+  gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=100" >"$statuses"
+  if jq -e --arg environment "$environment" \
+    --arg run_path "/actions/runs/$GITHUB_RUN_ID/job/" '
+      any(.[];
+        .environment == $environment and
+        (.state == "waiting" or .state == "queued" or .state == "in_progress") and
+        (.log_url | type == "string" and contains($run_path)))
+    ' "$statuses" >/dev/null; then
+    matching_deployments=$((matching_deployments + 1))
+  fi
+done < <(jq -r --arg environment "$environment" --arg sha "$workflow_sha" \
+  --argjson owner_actor_id "$owner_actor_id" '
+    .[] | select(
+      .environment == $environment and .ref == "main" and .sha == $sha and
+      .task == "deploy" and .creator.id == $owner_actor_id) | .id
+  ' "$deployments")
+[[ $matching_deployments -eq 1 ]] || fail "exact environment deployment readback mismatch"
 
 jq -n \
   --arg repository "$GITHUB_REPOSITORY" \

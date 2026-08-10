@@ -167,6 +167,15 @@ yq -e '
   printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
   exit 1
 }
+grep -Fq 'deployments?environment=$environment&per_page=100' \
+  "$repository_root/tools/release/verify-github-owner-gate.sh"
+grep -Fq 'deployments/$deployment_id/statuses?per_page=100' \
+  "$repository_root/tools/release/verify-github-owner-gate.sh"
+if rg -q 'repos/\$GITHUB_REPOSITORY/environments/' \
+  "$repository_root/tools/release/verify-github-owner-gate.sh"; then
+  printf 'Workflow owner gate still requires unavailable environment administration permission\n' >&2
+  exit 1
+fi
 if rg -q 'runnerGroup|runner-groups|mattercodex-production-(build|deploy)([^a-z]|$)' \
   "$repository_root/infra/arc/build-runner-values.yaml" \
   "$repository_root/infra/arc/deploy-runner-values.yaml" \

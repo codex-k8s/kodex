@@ -129,6 +129,16 @@ data:
                                 upgrade_configs:
                                   - upgrade_type: CONNECT
                                     connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {safe_regex: {regex: '[a-z0-9]{3,24}\.blob\.core\.windows\.net:443$'}}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
                     http_filters:
                       - name: envoy.filters.http.dynamic_forward_proxy
                         typed_config:
