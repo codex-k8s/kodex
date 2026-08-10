@@ -25,7 +25,6 @@ template:
   metadata:
     labels: {mattercodex.dev/arc-role: build-runner}
   spec:
-    hostUsers: false
     automountServiceAccountToken: false
     enableServiceLinks: false
     restartPolicy: Never
@@ -80,6 +79,7 @@ template:
         args:
           - --addr=unix:///var/run/buildkit/buildkitd.sock
           - --config=/var/run/config/buildkitd.toml
+          - --oci-worker-no-process-sandbox
         env:
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
@@ -96,9 +96,8 @@ template:
           runAsUser: 1000
           runAsGroup: 1000
           # RootlessKit requires the image's setuid newuidmap/newgidmap helpers.
-          # hostUsers:false keeps that elevation inside the pod user namespace.
+          # The daemon remains UID/GID 1000 and creates its own user namespace.
           allowPrivilegeEscalation: true
-          procMount: Unmasked
           appArmorProfile: {type: Unconfined}
           seccompProfile: {type: Unconfined}
           capabilities: {drop: [ALL]}
