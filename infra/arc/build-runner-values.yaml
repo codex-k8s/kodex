@@ -12,7 +12,7 @@ listenerTemplate:
         env:
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
-          - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
+          - {name: NO_PROXY, value: "__KUBERNETES_API_SERVICE_IP__,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1"}
 controllerServiceAccount:
   namespace: mattercodex-ci
   name: mattercodex-arc-build-gha-rs-controller

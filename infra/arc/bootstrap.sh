@@ -52,7 +52,7 @@ fi
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
-for command_name in kubectl helm sha256sum awk grep jq yq stat curl; do
+for command_name in kubectl helm sha256sum awk grep jq yq rg stat curl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
@@ -70,6 +70,19 @@ build_namespace=mattercodex-ci
 deploy_namespace=mattercodex-ci-deploy
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
+
+kubernetes_api_service_ip=$(kubectl --context "$expected_context" -n default get service kubernetes \
+  -o json | jq -er '.spec.clusterIP | select(type == "string" and length > 0 and . != "None")')
+rendered_values_directory="$temporary_directory/helm-values"
+mkdir -p -- "$rendered_values_directory"
+"$script_directory/render-helm-values.sh" "$kubernetes_api_service_ip" \
+  "$rendered_values_directory" >/dev/null
+controller_values="$rendered_values_directory/controller-values.yaml"
+controller_deploy_values="$rendered_values_directory/controller-deploy-values.yaml"
+build_runner_values="$rendered_values_directory/build-runner-values.yaml"
+deploy_runner_values="$rendered_values_directory/deploy-runner-values.yaml"
+kubernetes_api_no_proxy=$(yq -er '.env[] | select(.name == "NO_PROXY") | .value' \
+  "$controller_values")
 
 pull_chart() {
   local chart=$1 version expected_sha archive actual_sha
@@ -197,13 +210,13 @@ kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_netwo
 kubectl --context "$expected_context" apply --dry-run=client -f "$build_owner_gate" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$deploy_owner_gate" >/dev/null
 helm template mattercodex-arc-build "$controller_chart" -n "$build_namespace" \
-  -f "$script_directory/controller-values.yaml" >/dev/null
+  -f "$controller_values" >/dev/null
 helm template mattercodex-build "$runner_chart" -n "$build_namespace" \
-  -f "$script_directory/build-runner-values.yaml" >/dev/null
+  -f "$build_runner_values" >/dev/null
 helm template mattercodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
-  -f "$script_directory/controller-deploy-values.yaml" >/dev/null
+  -f "$controller_deploy_values" >/dev/null
 helm template mattercodex-deploy "$runner_chart" -n "$deploy_namespace" \
-  -f "$script_directory/deploy-runner-values.yaml" >/dev/null
+  -f "$deploy_runner_values" >/dev/null
 
 if [[ "$mode" == preflight ]]; then
   printf 'ARC preflight completed\n'
@@ -234,13 +247,13 @@ if [[ "$mode" == apply ]]; then
   materialize_credential_secret "$deploy_namespace"
 
   helm upgrade --install mattercodex-arc-build "$controller_chart" -n "$build_namespace" \
-    -f "$script_directory/controller-values.yaml" --wait --timeout 5m >/dev/null
+    -f "$controller_values" --wait --timeout 5m >/dev/null
   helm upgrade --install mattercodex-build "$runner_chart" -n "$build_namespace" \
-    -f "$script_directory/build-runner-values.yaml" --wait --timeout 5m >/dev/null
+    -f "$build_runner_values" --wait --timeout 5m >/dev/null
   helm upgrade --install mattercodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
-    -f "$script_directory/controller-deploy-values.yaml" --wait --timeout 5m >/dev/null
+    -f "$controller_deploy_values" --wait --timeout 5m >/dev/null
   helm upgrade --install mattercodex-deploy "$runner_chart" -n "$deploy_namespace" \
-    -f "$script_directory/deploy-runner-values.yaml" --wait --timeout 5m >/dev/null
+    -f "$deploy_runner_values" --wait --timeout 5m >/dev/null
 fi
 
 kubectl --context "$expected_context" diff -f "$rendered_network_policy" >/dev/null ||
@@ -264,6 +277,11 @@ for controller_spec in \
   read -r namespace controller_name <<<"$controller_spec"
   kubectl --context "$expected_context" -n "$namespace" rollout status \
     "deployment/$controller_name" --timeout=5m >/dev/null
+  kubectl --context "$expected_context" -n "$namespace" get deployment "$controller_name" -o json |
+    jq -e --arg no_proxy "$kubernetes_api_no_proxy" '
+      [.spec.template.spec.containers[].env[]? |
+        select(.name == "NO_PROXY" and .value == $no_proxy)] | length == 1
+    ' >/dev/null || fail "controller Kubernetes API NO_PROXY readback mismatch: $controller_name"
 done
 for proxy_namespace in "$build_namespace" "$deploy_namespace"; do
   kubectl --context "$expected_context" -n "$proxy_namespace" rollout status \
@@ -283,10 +301,10 @@ verify_owner_gate_config "$build_namespace" "$build_owner_gate"
 verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
 
 readback_scale_set() {
-  local namespace=$1 name=$2 service_account=$3 automount=$4
+  local namespace=$1 name=$2 service_account=$3 automount=$4 runner_no_proxy=$5
   kubectl --context "$expected_context" -n "$namespace" get autoscalingrunnerset "$name" -o json |
     jq -e --arg name "$name" --arg service_account "$service_account" \
-      --argjson automount "$automount" '
+      --argjson automount "$automount" --arg runner_no_proxy "$runner_no_proxy" '
       .spec.githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
       .spec.runnerScaleSetName == $name and (.spec | has("runnerGroup") | not) and
       .spec.minRunners == 0 and .spec.maxRunners == 1 and
@@ -296,6 +314,7 @@ readback_scale_set() {
         .name == "owner-gate" and .configMap.name == "mattercodex-runner-owner-gate" and
         .configMap.defaultMode == 365) and
       any(.spec.template.spec.containers[]; .name == "runner" and
+        any(.env[]; .name == "NO_PROXY" and .value == $runner_no_proxy) and
         any(.env[]; .name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
           .value == "/var/run/mattercodex-owner-gate/job-started.sh") and
         any(.volumeMounts[]; .name == "owner-gate" and
@@ -306,8 +325,11 @@ readback_scale_set() {
     jq -e '.items | length == 1' >/dev/null || fail "listener resource is absent or non-unique: $name"
   kubectl --context "$expected_context" -n "$namespace" get pod -l \
     "mattercodex.dev/arc-role=listener,actions.github.com/scale-set-name=$name" -o json |
-    jq -e '.items | length == 1 and all(.items[];
-      .status.phase == "Running" and any(.status.conditions[]?; .type == "Ready" and .status == "True"))' >/dev/null ||
+    jq -e --arg no_proxy "$kubernetes_api_no_proxy" '.items | length == 1 and all(.items[];
+      .status.phase == "Running" and
+      any(.status.conditions[]?; .type == "Ready" and .status == "True") and
+      any(.spec.containers[]; any(.env[]?; .name == "NO_PROXY" and .value == $no_proxy)))' \
+      >/dev/null ||
     fail "listener Pod is not uniquely Ready: $name"
   kubectl --context "$expected_context" -n "$namespace" get ephemeralrunnerset -l \
     "actions.github.com/scale-set-name=$name" -o json |
@@ -317,9 +339,10 @@ readback_scale_set() {
 }
 
 readback_scale_set "$build_namespace" mattercodex-build \
-  mattercodex-build-gha-rs-no-permission false
+  mattercodex-build-gha-rs-no-permission false \
+  matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1
 readback_scale_set "$deploy_namespace" mattercodex-deploy \
-  mattercodex-production-deployer true
+  mattercodex-production-deployer true "$kubernetes_api_no_proxy"
 "$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
   --workflow-sha-file "$workflow_sha_file" \
   --build-owner-actor-id-file "$build_owner_actor_file" \
