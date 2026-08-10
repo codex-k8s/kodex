@@ -112,7 +112,7 @@ done
  require_denied "routine deployer must not have broad Secret read access" \
   kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system
  require_denied "routine deployer must not read Pod logs" \
-  kubectl --context "$expected_context" auth can-i get pods/log -n mattercodex-system
+  kubectl --context "$expected_context" auth can-i get pods --subresource=log -n mattercodex-system
  require_denied "routine deployer must not create Certificates" \
   kubectl --context "$expected_context" auth can-i create certificates.cert-manager.io \
   -n mattercodex-system
