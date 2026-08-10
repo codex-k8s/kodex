@@ -310,7 +310,8 @@ verify_owner_gate_config "$build_namespace" "$build_owner_gate"
 verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
 
 readback_scale_set() {
-  local namespace=$1 name=$2 service_account=$3 automount=$4 runner_no_proxy=$5
+  local namespace=$1 name=$2 service_account=$3 automount=$4 runner_no_proxy=$5 \
+    ephemeral_runner_set
   kubectl --context "$expected_context" -n "$namespace" get autoscalingrunnerset "$name" -o json |
     jq -e --arg name "$name" --arg service_account "$service_account" \
       --argjson automount "$automount" --arg runner_no_proxy "$runner_no_proxy" '
@@ -329,9 +330,16 @@ readback_scale_set() {
         any(.volumeMounts[]; .name == "owner-gate" and
           .mountPath == "/var/run/mattercodex-owner-gate" and .readOnly == true))
     ' >/dev/null || fail "runner scale set readback mismatch: $name"
-  kubectl --context "$expected_context" -n "$namespace" get autoscalinglistener -l \
-    "actions.github.com/scale-set-name=$name" -o json |
-    jq -e '.items | length == 1' >/dev/null || fail "listener resource is absent or non-unique: $name"
+  ephemeral_runner_set=$(kubectl --context "$expected_context" -n "$namespace" \
+    get autoscalinglistener -l "actions.github.com/scale-set-name=$name" -o json |
+    jq -er --arg name "$name" --arg namespace "$namespace" '
+      .items as $items |
+      select(($items | length) == 1 and
+        $items[0].spec.autoscalingRunnerSetName == $name and
+        $items[0].spec.autoscalingRunnerSetNamespace == $namespace) |
+      $items[0].spec.ephemeralRunnerSetName |
+      select(type == "string" and length > 0)
+    ') || fail "listener resource is absent, non-unique or detached: $name"
   kubectl --context "$expected_context" -n "$namespace" get pod -l \
     "mattercodex.dev/arc-role=listener,actions.github.com/scale-set-name=$name" -o json |
     jq -e --arg no_proxy "$kubernetes_api_no_proxy" '.items as $items |
@@ -341,10 +349,13 @@ readback_scale_set() {
       any(.spec.containers[]; any(.env[]?; .name == "NO_PROXY" and .value == $no_proxy)))' \
       >/dev/null ||
     fail "listener Pod is not uniquely Ready: $name"
-  kubectl --context "$expected_context" -n "$namespace" get ephemeralrunnerset -l \
-    "actions.github.com/scale-set-name=$name" -o json |
-    jq -e '.items as $items | ($items | length) == 1 and all($items[];
-      .spec.replicas == 0 and .status.currentReplicas == 0 and (.status.failedEphemeralRunners // 0) == 0)' >/dev/null ||
+  kubectl --context "$expected_context" -n "$namespace" get ephemeralrunnerset \
+    "$ephemeral_runner_set" -o json |
+    jq -e --arg name "$name" '
+      .metadata.labels."actions.github.com/scale-set-name" == $name and
+      (.spec.replicas // 0) == 0 and .status.currentReplicas == 0 and
+      (.status.failedEphemeralRunners // 0) == 0
+    ' >/dev/null ||
     fail "ephemeral runner set idle readback mismatch: $name"
 }
 
