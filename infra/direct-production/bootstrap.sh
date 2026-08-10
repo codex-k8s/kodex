@@ -117,7 +117,9 @@ done
 
 admission_policies="$temporary_directory/validating-admission-policies.yaml"
 yq eval-all 'select(.kind == "ValidatingAdmissionPolicy")' \
-  "$script_directory/bootstrap.yaml" "$workload_policy" >"$admission_policies"
+  "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
+  "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" \
+  "$workload_contracts" "$workload_policy" >"$admission_policies"
 kubectl --context "$expected_context" apply --dry-run=server -f "$admission_policies" >/dev/null ||
   fail "production validating admission policies do not compile"
 
