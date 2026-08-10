@@ -106,6 +106,8 @@ if rg -q '\.items \| length == 1 and all\(\.items\[\]' "$bootstrap"; then
   printf 'ARC readback reuses an object path after switching jq context to its items array\n' >&2
   exit 1
 fi
+grep -Fq '(.spec.replicas // 0) == 0' "$bootstrap"
+grep -Fq '$items[0].spec.ephemeralRunnerSetName' "$bootstrap"
 yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
   .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
