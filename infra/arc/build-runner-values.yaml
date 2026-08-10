@@ -100,7 +100,9 @@ template:
           allowPrivilegeEscalation: true
           appArmorProfile: {type: Unconfined}
           seccompProfile: {type: Unconfined}
-          capabilities: {drop: [ALL]}
+          # Keep only the two capabilities required by newuidmap/newgidmap;
+          # the Actions runner and listener retain drop: [ALL].
+          capabilities: {drop: [ALL], add: [SETUID, SETGID]}
         volumeMounts:
           - {name: socket, mountPath: /var/run/buildkit}
           - {name: state, mountPath: /home/user/.local/share/buildkit}
