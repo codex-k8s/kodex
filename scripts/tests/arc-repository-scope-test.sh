@@ -106,10 +106,13 @@ yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-
   .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
 yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
-  .static_resources.listeners[0].filter_chains[0].filters[0].typed_config
-    .route_config.virtual_hosts[0].routes[0].route.upgrade_configs[0] as $upgrade |
-  ($upgrade.upgrade_type == "CONNECT") and
-  ($upgrade.connect_config == {}) and
+  .static_resources.listeners[0].filter_chains[0].filters[0].typed_config as $hcm |
+  $hcm.route_config.virtual_hosts[0].routes[0].route.upgrade_configs[0] as $route_upgrade |
+  $hcm.upgrade_configs[0] as $hcm_upgrade |
+  ($hcm_upgrade.upgrade_type == "CONNECT") and
+  ($hcm_upgrade | has("connect_config") | not) and
+  ($route_upgrade.upgrade_type == "CONNECT") and
+  ($route_upgrade.connect_config == {}) and
   ([.. | objects | select(has("connect_config"))] | length == 1)
 ' >/dev/null || {
   printf 'Envoy CONNECT termination is not configured on the exact route\n' >&2
