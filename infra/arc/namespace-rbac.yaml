@@ -35,7 +35,7 @@ data:
     [worker.oci]
       enabled = true
       rootless = true
-      snapshotter = "native"
+      snapshotter = "overlayfs"
       gc = true
     [registry."matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000"]
       http = true
