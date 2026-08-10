@@ -9,6 +9,11 @@ listenerTemplate:
   spec:
     containers:
       - name: listener
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+          seccompProfile: {type: RuntimeDefault}
         env:
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
