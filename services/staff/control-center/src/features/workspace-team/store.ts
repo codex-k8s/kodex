@@ -21,6 +21,7 @@ import {
   pendingMutationKey,
 } from "@/shared/lib/identity";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
+import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
 
 export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
   const teams = reactive(remoteState<MattermostTeam[]>([]));
@@ -130,6 +131,9 @@ export const useWorkspaceTeamStore = defineStore("workspace-team", () => {
     teams.data = items;
     teams.phase = items.length ? "ready" : "empty";
   }
+  subscribeRealtimeSnapshot("WORKSPACE_TEAMS", (snapshot) =>
+    replaceTeams(snapshot.items.teams ?? []),
+  );
   function reset(): void {
     runtime.invalidate();
     resetRemoteState(teams, []);

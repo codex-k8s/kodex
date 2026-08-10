@@ -436,6 +436,30 @@ func (e ConfigurationChangeOutcome) Valid() bool {
 	}
 }
 
+// Defines values for ConfigurationDrift.
+const (
+	ConfigurationDriftDRIFTED       ConfigurationDrift = "DRIFTED"
+	ConfigurationDriftINSYNC        ConfigurationDrift = "IN_SYNC"
+	ConfigurationDriftNOTAPPLICABLE ConfigurationDrift = "NOT_APPLICABLE"
+	ConfigurationDriftUNKNOWN       ConfigurationDrift = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationDrift enum.
+func (e ConfigurationDrift) Valid() bool {
+	switch e {
+	case ConfigurationDriftDRIFTED:
+		return true
+	case ConfigurationDriftINSYNC:
+		return true
+	case ConfigurationDriftNOTAPPLICABLE:
+		return true
+	case ConfigurationDriftUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfigurationManagedBy.
 const (
 	Git ConfigurationManagedBy = "git"
@@ -1321,6 +1345,36 @@ func (e OwnerScheduleAdvancedOverridesDeliveryPolicy) Valid() bool {
 	}
 }
 
+// Defines values for OwnerScheduleNextAction.
+const (
+	OwnerScheduleNextActionDELETE          OwnerScheduleNextAction = "DELETE"
+	OwnerScheduleNextActionPAUSE           OwnerScheduleNextAction = "PAUSE"
+	OwnerScheduleNextActionRESUME          OwnerScheduleNextAction = "RESUME"
+	OwnerScheduleNextActionRUNNOW          OwnerScheduleNextAction = "RUN_NOW"
+	OwnerScheduleNextActionUPDATE          OwnerScheduleNextAction = "UPDATE"
+	OwnerScheduleNextActionVIEWOCCURRENCES OwnerScheduleNextAction = "VIEW_OCCURRENCES"
+)
+
+// Valid indicates whether the value is a known member of the OwnerScheduleNextAction enum.
+func (e OwnerScheduleNextAction) Valid() bool {
+	switch e {
+	case OwnerScheduleNextActionDELETE:
+		return true
+	case OwnerScheduleNextActionPAUSE:
+		return true
+	case OwnerScheduleNextActionRESUME:
+		return true
+	case OwnerScheduleNextActionRUNNOW:
+		return true
+	case OwnerScheduleNextActionUPDATE:
+		return true
+	case OwnerScheduleNextActionVIEWOCCURRENCES:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OwnerSchedulePromptViewKind.
 const (
 	INLINE   OwnerSchedulePromptViewKind = "INLINE"
@@ -1636,27 +1690,6 @@ func (e ResolveOwnerGateDecision) Valid() bool {
 	}
 }
 
-// Defines values for ResolveScheduleRecoveryAction.
-const (
-	ResolveScheduleRecoveryActionCANCEL ResolveScheduleRecoveryAction = "CANCEL"
-	ResolveScheduleRecoveryActionREPAIR ResolveScheduleRecoveryAction = "REPAIR"
-	ResolveScheduleRecoveryActionSKIP   ResolveScheduleRecoveryAction = "SKIP"
-)
-
-// Valid indicates whether the value is a known member of the ResolveScheduleRecoveryAction enum.
-func (e ResolveScheduleRecoveryAction) Valid() bool {
-	switch e {
-	case ResolveScheduleRecoveryActionCANCEL:
-		return true
-	case ResolveScheduleRecoveryActionREPAIR:
-		return true
-	case ResolveScheduleRecoveryActionSKIP:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ResourceKind.
 const (
 	ResourceKindAGENT                       ResourceKind = "AGENT"
@@ -1750,6 +1783,39 @@ func (e ResourceKind) Valid() bool {
 	case ResourceKindWORKSPACEMATTERMOSTMAPPING:
 		return true
 	case ResourceKindWORKSPACERESTORE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResourceNextAction.
+const (
+	ResourceNextActionACTIVATE ResourceNextAction = "ACTIVATE"
+	ResourceNextActionARCHIVE  ResourceNextAction = "ARCHIVE"
+	ResourceNextActionCOPY     ResourceNextAction = "COPY"
+	ResourceNextActionDELETE   ResourceNextAction = "DELETE"
+	ResourceNextActionDETACH   ResourceNextAction = "DETACH"
+	ResourceNextActionPAUSE    ResourceNextAction = "PAUSE"
+	ResourceNextActionUPDATE   ResourceNextAction = "UPDATE"
+)
+
+// Valid indicates whether the value is a known member of the ResourceNextAction enum.
+func (e ResourceNextAction) Valid() bool {
+	switch e {
+	case ResourceNextActionACTIVATE:
+		return true
+	case ResourceNextActionARCHIVE:
+		return true
+	case ResourceNextActionCOPY:
+		return true
+	case ResourceNextActionDELETE:
+		return true
+	case ResourceNextActionDETACH:
+		return true
+	case ResourceNextActionPAUSE:
+		return true
+	case ResourceNextActionUPDATE:
 		return true
 	default:
 		return false
@@ -2305,6 +2371,27 @@ func (e ScheduleOverlapPolicy) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleRecoveryAction.
+const (
+	ScheduleRecoveryActionCANCEL ScheduleRecoveryAction = "CANCEL"
+	ScheduleRecoveryActionREPAIR ScheduleRecoveryAction = "REPAIR"
+	ScheduleRecoveryActionSKIP   ScheduleRecoveryAction = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRecoveryAction enum.
+func (e ScheduleRecoveryAction) Valid() bool {
+	switch e {
+	case ScheduleRecoveryActionCANCEL:
+		return true
+	case ScheduleRecoveryActionREPAIR:
+		return true
+	case ScheduleRecoveryActionSKIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleSelectorKind.
 const (
 	ScheduleSelectorKindAGENT          ScheduleSelectorKind = "AGENT"
@@ -2523,28 +2610,28 @@ func (e WorkspaceRestoreNextAction) Valid() bool {
 
 // Defines values for WorkspaceRestoreState.
 const (
-	WorkspaceRestoreStateCANCELLED WorkspaceRestoreState = "CANCELLED"
-	WorkspaceRestoreStateEXPIRED   WorkspaceRestoreState = "EXPIRED"
-	WorkspaceRestoreStateFAILED    WorkspaceRestoreState = "FAILED"
-	WorkspaceRestoreStateQUEUED    WorkspaceRestoreState = "QUEUED"
-	WorkspaceRestoreStateRUNNING   WorkspaceRestoreState = "RUNNING"
-	WorkspaceRestoreStateSUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
+	CANCELLED WorkspaceRestoreState = "CANCELLED"
+	EXPIRED   WorkspaceRestoreState = "EXPIRED"
+	FAILED    WorkspaceRestoreState = "FAILED"
+	QUEUED    WorkspaceRestoreState = "QUEUED"
+	RUNNING   WorkspaceRestoreState = "RUNNING"
+	SUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceRestoreState enum.
 func (e WorkspaceRestoreState) Valid() bool {
 	switch e {
-	case WorkspaceRestoreStateCANCELLED:
+	case CANCELLED:
 		return true
-	case WorkspaceRestoreStateEXPIRED:
+	case EXPIRED:
 		return true
-	case WorkspaceRestoreStateFAILED:
+	case FAILED:
 		return true
-	case WorkspaceRestoreStateQUEUED:
+	case QUEUED:
 		return true
-	case WorkspaceRestoreStateRUNNING:
+	case RUNNING:
 		return true
-	case WorkspaceRestoreStateSUCCEEDED:
+	case SUCCEEDED:
 		return true
 	default:
 		return false
@@ -2932,19 +3019,25 @@ type ConfigurationDiffChange struct {
 	Path    string                     `json:"path"`
 }
 
+// ConfigurationDrift defines model for ConfigurationDrift.
+type ConfigurationDrift string
+
 // ConfigurationManagedBy defines model for ConfigurationManagedBy.
 type ConfigurationManagedBy string
 
 // ConfigurationOwnershipProjection defines model for ConfigurationOwnershipProjection.
 type ConfigurationOwnershipProjection struct {
-	ManagedBy ConfigurationManagedBy `json:"managedBy"`
-	Revision  int64                  `json:"revision"`
-	Source    string                 `json:"source"`
+	Drift        ConfigurationDrift     `json:"drift"`
+	ManagedBy    ConfigurationManagedBy `json:"managedBy"`
+	Revision     int64                  `json:"revision"`
+	Source       string                 `json:"source"`
+	SourceSha256 *Sha256                `json:"sourceSha256,omitempty"`
 }
 
 // ConfigurationSourceDetail defines model for ConfigurationSourceDetail.
 type ConfigurationSourceDetail struct {
 	DisplayName    string                 `json:"displayName"`
+	Drift          ConfigurationDrift     `json:"drift"`
 	ManagedBy      ConfigurationManagedBy `json:"managedBy"`
 	ResourceRef    string                 `json:"resourceRef"`
 	Source         string                 `json:"source"`
@@ -3594,6 +3687,9 @@ type OwnerScheduleIntent struct {
 	Timezone          string                          `json:"timezone"`
 }
 
+// OwnerScheduleNextAction defines model for OwnerScheduleNextAction.
+type OwnerScheduleNextAction string
+
 // OwnerSchedulePage defines model for OwnerSchedulePage.
 type OwnerSchedulePage struct {
 	Items         []OwnerScheduleView `json:"items"`
@@ -3640,6 +3736,7 @@ type OwnerScheduleView struct {
 	MaximumExecutionSeconds int64                           `json:"maximumExecutionSeconds"`
 	MisfireGraceSeconds     int64                           `json:"misfireGraceSeconds"`
 	MisfirePolicy           ScheduleMisfirePolicy           `json:"misfirePolicy"`
+	NextActions             []OwnerScheduleNextAction       `json:"nextActions"`
 	NextRunAt               *time.Time                      `json:"nextRunAt,omitempty"`
 	NotificationPolicy      ScheduleNotificationPolicy      `json:"notificationPolicy"`
 	OverlapPolicy           ScheduleOverlapPolicy           `json:"overlapPolicy"`
@@ -3960,14 +4057,11 @@ type ResolveOwnerGateResult struct {
 
 // ResolveScheduleRecovery defines model for ResolveScheduleRecovery.
 type ResolveScheduleRecovery struct {
-	Action                 ResolveScheduleRecoveryAction `json:"action"`
-	ExpectedAttempt        int                           `json:"expectedAttempt"`
-	ReasonCode             string                        `json:"reasonCode"`
-	RecoveryEvidenceSha256 string                        `json:"recoveryEvidenceSha256"`
+	Action                 ScheduleRecoveryAction `json:"action"`
+	ExpectedAttempt        int                    `json:"expectedAttempt"`
+	ReasonCode             string                 `json:"reasonCode"`
+	RecoveryEvidenceSha256 string                 `json:"recoveryEvidenceSha256"`
 }
-
-// ResolveScheduleRecoveryAction defines model for ResolveScheduleRecovery.Action.
-type ResolveScheduleRecoveryAction string
 
 // Resource defines model for Resource.
 type Resource struct {
@@ -3975,6 +4069,7 @@ type Resource struct {
 	Id               openapi_types.UUID     `json:"id"`
 	Kind             ResourceKind           `json:"kind"`
 	Name             string                 `json:"name"`
+	NextActions      []ResourceNextAction   `json:"nextActions"`
 	ParentId         *openapi_types.UUID    `json:"parentId,omitempty"`
 	ProjectId        *openapi_types.UUID    `json:"projectId,omitempty"`
 	ProjectionSha256 Sha256                 `json:"projectionSha256"`
@@ -4000,6 +4095,9 @@ type ResourceHistoryPage struct {
 
 // ResourceKind defines model for ResourceKind.
 type ResourceKind string
+
+// ResourceNextAction defines model for ResourceNextAction.
+type ResourceNextAction string
 
 // ResourcePage defines model for ResourcePage.
 type ResourcePage struct {
@@ -4525,20 +4623,21 @@ type ScheduleNotificationPolicy string
 
 // ScheduleOccurrence defines model for ScheduleOccurrence.
 type ScheduleOccurrence struct {
-	Attempt                int                     `json:"attempt"`
-	AuthorityGeneration    int64                   `json:"authorityGeneration"`
-	AvailableAt            time.Time               `json:"availableAt"`
-	EffectiveInputSha256   string                  `json:"effectiveInputSha256"`
-	OccurrenceId           openapi_types.UUID      `json:"occurrenceId"`
-	Outcome                *string                 `json:"outcome,omitempty"`
-	RecoveryEvidenceSha256 *string                 `json:"recoveryEvidenceSha256,omitempty"`
-	ScheduleId             openapi_types.UUID      `json:"scheduleId"`
-	ScheduledFor           time.Time               `json:"scheduledFor"`
-	State                  ScheduleOccurrenceState `json:"state"`
-	TargetKind             ResourceKind            `json:"targetKind"`
-	TargetResourceId       openapi_types.UUID      `json:"targetResourceId"`
-	TargetVersion          int64                   `json:"targetVersion"`
-	Version                int64                   `json:"version"`
+	Attempt                int                      `json:"attempt"`
+	AuthorityGeneration    int64                    `json:"authorityGeneration"`
+	AvailableAt            time.Time                `json:"availableAt"`
+	EffectiveInputSha256   string                   `json:"effectiveInputSha256"`
+	OccurrenceId           openapi_types.UUID       `json:"occurrenceId"`
+	Outcome                *string                  `json:"outcome,omitempty"`
+	RecoveryActions        []ScheduleRecoveryAction `json:"recoveryActions"`
+	RecoveryEvidenceSha256 *string                  `json:"recoveryEvidenceSha256,omitempty"`
+	ScheduleId             openapi_types.UUID       `json:"scheduleId"`
+	ScheduledFor           time.Time                `json:"scheduledFor"`
+	State                  ScheduleOccurrenceState  `json:"state"`
+	TargetKind             ResourceKind             `json:"targetKind"`
+	TargetResourceId       openapi_types.UUID       `json:"targetResourceId"`
+	TargetVersion          int64                    `json:"targetVersion"`
+	Version                int64                    `json:"version"`
 }
 
 // ScheduleOccurrencePage defines model for ScheduleOccurrencePage.
@@ -4596,6 +4695,9 @@ type ScheduleProjection struct {
 	TargetVersion           int64                            `json:"targetVersion"`
 	Timezone                string                           `json:"timezone"`
 }
+
+// ScheduleRecoveryAction defines model for ScheduleRecoveryAction.
+type ScheduleRecoveryAction string
 
 // ScheduleSelector defines model for ScheduleSelector.
 type ScheduleSelector struct {

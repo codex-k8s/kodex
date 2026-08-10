@@ -3,20 +3,20 @@ import { Download, RefreshCw, ScrollText } from "@lucide/vue";
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { useOperationsStore } from "@/features/operations/store";
+import { useAuditStore } from "@/features/audit/store";
 import { formatDateTime } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
-const store = useOperationsStore();
+const store = useAuditStore();
 const exporting = ref(false);
 
 async function exportAudit(): Promise<void> {
   exporting.value = true;
   try {
-    const content = await store.exportAuditFile();
+    const content = await store.exportFile();
     const url = URL.createObjectURL(
       new Blob([content], { type: "text/csv;charset=utf-8" }),
     );
@@ -29,7 +29,7 @@ async function exportAudit(): Promise<void> {
     exporting.value = false;
   }
 }
-onMounted(store.loadAudit);
+onMounted(store.load);
 </script>
 
 <template>
@@ -39,7 +39,7 @@ onMounted(store.loadAudit);
         ><button
           class="button button--secondary"
           type="button"
-          @click="store.loadAudit"
+          @click="store.load"
         >
           <RefreshCw :size="15" aria-hidden="true" />{{ $t("common.refresh") }}
         </button>
@@ -57,7 +57,7 @@ onMounted(store.loadAudit);
       <AsyncPanel
         :phase="store.audit.phase"
         :problem="store.audit.problem"
-        @retry="store.loadAudit"
+        @retry="store.load"
         ><div class="data-table-wrap">
           <table class="data-table">
             <thead>

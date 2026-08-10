@@ -1,100 +1,100 @@
 import { defineStore } from "pinia";
 import { reactive } from "vue";
 
-import {
-  createOwnerSchedule,
-  deleteOwnerSchedule,
-  fetchOwnerSchedules,
-  fetchScheduleOccurrences,
-  fetchScheduleSelectors,
-  recoverScheduleOccurrence,
-  runOwnerScheduleNow,
-  updateOwnerSchedule,
-} from "@/shared/api/adapters/owner-control";
-import {
-  fetchResource,
-  fetchResources,
-  transitionMutableResource,
-} from "@/shared/api/adapters/resources";
+import { schedulesApi } from "@/features/schedules/api";
 import {
   buildScheduleCommand,
   type ScheduleDraft,
+  type ScheduleCatalogModel,
+  type ScheduleOccurrenceModel,
+  type ScheduleResourceOption,
+  type ScheduleView,
+  toScheduleCatalogModel,
+  toScheduleOccurrenceModel,
+  toScheduleResourceOption,
+  toScheduleView,
 } from "@/features/schedules/model";
-import type {
-  OwnerScheduleView,
-  Resource,
-  ScheduleOccurrence,
-  ScheduleSelectorCatalog,
-} from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { remoteState, resetRemoteState } from "@/shared/lib/remote";
 
 export const useSchedulesStore = defineStore("schedules", () => {
   const scheduleSelectors = reactive(
-    remoteState<ScheduleSelectorCatalog | null>(null),
+    remoteState<ScheduleCatalogModel | null>(null),
   );
-  const schedules = reactive(remoteState<OwnerScheduleView[]>([]));
-  const scheduleOccurrences = reactive(remoteState<ScheduleOccurrence[]>([]));
-  const artifacts = reactive(remoteState<Resource[]>([]));
-  const rooms = reactive(remoteState<Resource[]>([]));
-  const runtime = createFeatureRuntime();
+  const schedules = reactive(remoteState<ScheduleView[]>([]));
+  const scheduleOccurrences = reactive(
+    remoteState<ScheduleOccurrenceModel[]>([]),
+  );
+  const artifacts = reactive(remoteState<ScheduleResourceOption[]>([]));
+  const rooms = reactive(remoteState<ScheduleResourceOption[]>([]));
+  const scheduleRuntime = createFeatureRuntime();
+  const occurrenceRuntime = createFeatureRuntime();
   const loadSchedules = () =>
     Promise.all([
-      runtime.loadInto(
+      scheduleRuntime.loadInto(
         scheduleSelectors,
-        fetchScheduleSelectors,
+        async () => toScheduleCatalogModel(await schedulesApi.selectors()),
         (value) => value === null,
       ),
-      runtime.loadInto(
+      scheduleRuntime.loadInto(
         schedules,
-        async () => (await fetchOwnerSchedules()).items,
+        async () => (await schedulesApi.list()).items.map(toScheduleView),
         (items) => items.length === 0,
       ),
-      runtime.loadInto(
+      scheduleRuntime.loadInto(
         artifacts,
-        async () => (await fetchResources("ARTIFACT")).resources,
+        async () =>
+          (await schedulesApi.listResources("ARTIFACT")).resources.map(
+            toScheduleResourceOption,
+          ),
         (items) => items.length === 0,
       ),
-      runtime.loadInto(
+      scheduleRuntime.loadInto(
         rooms,
-        async () => (await fetchResources("CHAT")).resources,
+        async () =>
+          (await schedulesApi.listResources("CHAT")).resources.map(
+            toScheduleResourceOption,
+          ),
         (items) => items.length === 0,
       ),
     ]).then(() => undefined);
   const saveScheduleDraft = (
-    value: OwnerScheduleView | null,
+    value: ScheduleView | null,
     draft: ScheduleDraft,
   ) => {
     const body = buildScheduleCommand(draft);
-    return runtime.mutate(
+    return scheduleRuntime.mutate(
       () =>
         value
-          ? updateOwnerSchedule(value.scheduleRef, value.version, body)
-          : createOwnerSchedule(body),
+          ? schedulesApi.update(value.scheduleRef, value.version, body)
+          : schedulesApi.create(body),
       loadSchedules,
       schedules,
     );
   };
-  const runSchedule = (value: OwnerScheduleView) =>
-    runtime.mutate(
-      () => runOwnerScheduleNow(value.scheduleRef, value.version),
+  const runSchedule = (value: ScheduleView) =>
+    scheduleRuntime.mutate(
+      () => schedulesApi.runNow(value.scheduleRef, value.version),
       loadSchedules,
       schedules,
     );
-  const removeSchedule = (value: OwnerScheduleView) =>
-    runtime.mutate(
-      () => deleteOwnerSchedule(value.scheduleRef, value.version),
+  const removeSchedule = (value: ScheduleView) =>
+    scheduleRuntime.mutate(
+      () => schedulesApi.remove(value.scheduleRef, value.version),
       loadSchedules,
       schedules,
     );
   const transitionSchedule = (
-    value: OwnerScheduleView,
+    value: ScheduleView,
     targetState: "ACTIVE" | "PAUSED",
   ) =>
-    runtime.mutate(
+    scheduleRuntime.mutate(
       async () => {
-        const resource = await fetchResource(value.scheduleRef, "SCHEDULE");
-        return transitionMutableResource(resource, {
+        const resource = await schedulesApi.getResource(
+          value.scheduleRef,
+          "SCHEDULE",
+        );
+        return schedulesApi.transition(resource, {
           targetState,
           reasonCode: "OWNER_REQUEST",
         });
@@ -103,22 +103,25 @@ export const useSchedulesStore = defineStore("schedules", () => {
       schedules,
     );
   const loadScheduleOccurrences = (ref: string) =>
-    runtime.loadInto(
+    occurrenceRuntime.loadInto(
       scheduleOccurrences,
-      async () => (await fetchScheduleOccurrences(ref)).occurrences,
+      async () =>
+        (await schedulesApi.occurrences(ref)).occurrences.map(
+          toScheduleOccurrenceModel,
+        ),
       (items) => items.length === 0,
     );
   const resolveScheduleOccurrence = (
-    schedule: OwnerScheduleView,
-    occurrence: ScheduleOccurrence,
+    schedule: ScheduleView,
+    occurrence: ScheduleOccurrenceModel,
     action: "REPAIR" | "CANCEL" | "SKIP",
     reasonCode: string,
   ) => {
     const recoveryEvidenceSha256 = occurrence.recoveryEvidenceSha256;
     if (!recoveryEvidenceSha256) return Promise.resolve(false);
-    return runtime.mutate(
+    return occurrenceRuntime.mutate(
       () =>
-        recoverScheduleOccurrence(
+        schedulesApi.recover(
           schedule.scheduleRef,
           occurrence.occurrenceId,
           occurrence.version,
@@ -134,7 +137,8 @@ export const useSchedulesStore = defineStore("schedules", () => {
     );
   };
   function reset(): void {
-    runtime.invalidate();
+    scheduleRuntime.invalidate();
+    occurrenceRuntime.invalidate();
     resetRemoteState(scheduleSelectors, null);
     resetRemoteState(schedules, []);
     resetRemoteState(scheduleOccurrences, []);
@@ -147,8 +151,10 @@ export const useSchedulesStore = defineStore("schedules", () => {
     scheduleOccurrences,
     artifacts,
     rooms,
-    mutationProblem: runtime.mutationProblem,
-    mutating: runtime.mutating,
+    mutationProblem: scheduleRuntime.mutationProblem,
+    occurrenceMutationProblem: occurrenceRuntime.mutationProblem,
+    mutating: scheduleRuntime.mutating,
+    occurrenceMutating: occurrenceRuntime.mutating,
     loadSchedules,
     saveScheduleDraft,
     runSchedule,

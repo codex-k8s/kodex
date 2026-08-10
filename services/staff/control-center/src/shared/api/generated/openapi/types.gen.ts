@@ -711,6 +711,7 @@ export type OwnerScheduleView = {
     providerPoolSelection: OwnerSafeSelection;
     roomSelection: OwnerSafeSelection;
     prompt: OwnerSchedulePromptView;
+    nextActions: Array<OwnerScheduleNextAction>;
 };
 
 export type OwnerSchedulePage = {
@@ -1040,6 +1041,7 @@ export type ConfigurationSourceDetail = {
     source: string;
     sourceRevision: number;
     sourceSha256?: Sha256;
+    drift: ConfigurationDrift;
     updatedAt: string;
 };
 
@@ -1072,6 +1074,26 @@ export type ChatRoomType = 'USER' | 'COORDINATION' | 'WORK_CONTROL' | 'RUNS';
  * ConfigurationManagedBy
  */
 export type ConfigurationManagedBy = 'ui' | 'git';
+
+/**
+ * ConfigurationDrift
+ */
+export type ConfigurationDrift = 'NOT_APPLICABLE' | 'IN_SYNC' | 'DRIFTED' | 'UNKNOWN';
+
+/**
+ * ResourceNextAction
+ */
+export type ResourceNextAction = 'UPDATE' | 'ACTIVATE' | 'PAUSE' | 'ARCHIVE' | 'DELETE' | 'DETACH' | 'COPY';
+
+/**
+ * OwnerScheduleNextAction
+ */
+export type OwnerScheduleNextAction = 'UPDATE' | 'RUN_NOW' | 'PAUSE' | 'RESUME' | 'DELETE' | 'VIEW_OCCURRENCES';
+
+/**
+ * ScheduleRecoveryAction
+ */
+export type ScheduleRecoveryAction = 'REPAIR' | 'CANCEL' | 'SKIP';
 
 /**
  * ProjectLocale
@@ -1433,6 +1455,8 @@ export type ConfigurationOwnershipProjection = {
     managedBy: ConfigurationManagedBy;
     source: string;
     revision: number;
+    sourceSha256?: Sha256;
+    drift: ConfigurationDrift;
 };
 
 /**
@@ -1684,6 +1708,7 @@ export type ScheduleOccurrence = {
     availableAt: string;
     outcome?: string;
     recoveryEvidenceSha256?: string;
+    recoveryActions: Array<ScheduleRecoveryAction>;
 };
 
 export type ScheduleOccurrencePage = {
@@ -1692,7 +1717,7 @@ export type ScheduleOccurrencePage = {
 };
 
 export type ResolveScheduleRecovery = {
-    action: 'REPAIR' | 'CANCEL' | 'SKIP';
+    action: ScheduleRecoveryAction;
     expectedAttempt: number;
     recoveryEvidenceSha256: string;
     reasonCode: string;
@@ -2138,6 +2163,7 @@ export type Resource = {
     spec: ResourceSpecProjection;
     createdAt: string;
     updatedAt: string;
+    nextActions: Array<ResourceNextAction>;
 };
 
 export type ResourcePage = {

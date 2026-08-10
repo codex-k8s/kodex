@@ -5,6 +5,63 @@ import type {
   Resource,
   ResourceSpecInput,
 } from "@/shared/api/generated/openapi/types.gen";
+import { resourceOwnership } from "@/shared/lib/resources";
+
+export type WorkspaceMutableKind =
+  | "CHAT"
+  | "CREDENTIAL_BINDING"
+  | "REPOSITORY_WORKSPACE"
+  | "INTEGRATION";
+export type WorkspaceAccessKind = "TEAM" | "ROLE" | "PROMPT_PROFILE";
+export type WorkspaceResourceKind = WorkspaceMutableKind | WorkspaceAccessKind;
+export type WorkspaceResourceState =
+  | "ACTIVE"
+  | "PAUSED"
+  | "ARCHIVED"
+  | "DELETION_PENDING"
+  | "DELETED";
+export type WorkspaceResourceAction =
+  | "UPDATE"
+  | "ACTIVATE"
+  | "PAUSE"
+  | "ARCHIVE"
+  | "DELETE"
+  | "DETACH"
+  | "COPY";
+
+export interface WorkspaceOwnershipModel {
+  managedBy: "ui" | "git";
+  source: string;
+  revision: number;
+  sourceSha256?: string;
+  drift: "NOT_APPLICABLE" | "IN_SYNC" | "DRIFTED" | "UNKNOWN";
+}
+
+export interface WorkspaceResourceModel {
+  id: string;
+  name: string;
+  kind: WorkspaceResourceKind;
+  state: WorkspaceResourceState;
+  version: number;
+  nextActions: WorkspaceResourceAction[];
+  ownership: WorkspaceOwnershipModel | null;
+  credential: WorkspaceCredentialBindingModel | null;
+  draft: WorkspaceResourceDraft;
+}
+
+export interface WorkspaceCredentialBindingModel {
+  purpose: string;
+  revision: number;
+  providerEligible: boolean;
+  expiresAt?: string;
+}
+
+export interface WorkspaceSelectorModel {
+  id: string;
+  name: string;
+  kind: "AGENT" | "ROLE_IMAGE_RECIPE";
+  version: number;
+}
 
 export interface WorkspaceResourceDraft {
   stableKey: string;
@@ -36,6 +93,40 @@ export interface WorkspaceResourceDraft {
   contentSha256: string;
   sourceRef: string;
   locale: string;
+}
+
+export function emptyWorkspaceResourceDraft(): WorkspaceResourceDraft {
+  return {
+    stableKey: "",
+    roomType: "USER",
+    workPolicy: "default",
+    defaultAgentId: "",
+    externalChannelRef: "",
+    purpose: "",
+    immutableSecretRef: "",
+    principalRef: "",
+    revision: 1,
+    repositoryRef: "",
+    workspaceMode: "ISOLATED_WORKTREE",
+    defaultBranch: "main",
+    credentialBindingId: "",
+    definitionRef: "",
+    definitionVersion: 1,
+    capabilities: [],
+    credentialBindingIds: [],
+    endpointRef: "",
+    externalTeamRef: "",
+    memberActorIds: [],
+    roleIds: [],
+    allowedTargetRoleIds: [],
+    promptProfileId: "",
+    roleImageRecipeId: "",
+    repositoryWorkspaceIds: [],
+    integrationIds: [],
+    contentSha256: "",
+    sourceRef: "",
+    locale: "ru",
+  };
 }
 
 export function buildMutableSpec(
@@ -158,37 +249,64 @@ export function isWorkspaceDraftBounded(
   return true;
 }
 
-/** UI-проекция исключает private locator из сериализуемого Pinia state. */
-export function toWorkspaceResourceModel(resource: Resource): Resource {
+/** UI-проекция исключает private locator и raw DTO из Pinia/component state. */
+export function toWorkspaceResourceModel(
+  resource: Resource,
+): WorkspaceResourceModel {
+  const draft = emptyWorkspaceResourceDraft();
+  if (resource.spec.chat) Object.assign(draft, resource.spec.chat);
+  if (resource.spec.repositoryWorkspace) {
+    Object.assign(draft, resource.spec.repositoryWorkspace);
+    draft.repositoryRef = "";
+  }
+  if (resource.spec.integration) {
+    Object.assign(draft, resource.spec.integration);
+    draft.endpointRef = "";
+  }
+  if (resource.spec.credentialBinding) {
+    draft.purpose = resource.spec.credentialBinding.purpose;
+    draft.revision = resource.spec.credentialBinding.revision;
+  }
+  if (resource.spec.team) Object.assign(draft, resource.spec.team);
+  if (resource.spec.role) Object.assign(draft, resource.spec.role);
+  if (resource.spec.promptProfile)
+    Object.assign(draft, resource.spec.promptProfile);
+  const ownership = resourceOwnership(resource);
   return {
-    ...resource,
-    spec: {
-      ...resource.spec,
-      ...(resource.spec.credentialBinding
-        ? {
-            credentialBinding: {
-              ...resource.spec.credentialBinding,
-              immutableSecretRef: "",
-              principalRef: "",
-            },
-          }
-        : {}),
-      ...(resource.spec.repositoryWorkspace
-        ? {
-            repositoryWorkspace: {
-              ...resource.spec.repositoryWorkspace,
-              repositoryRef: "",
-            },
-          }
-        : {}),
-      ...(resource.spec.integration
-        ? {
-            integration: {
-              ...resource.spec.integration,
-              endpointRef: "",
-            },
-          }
-        : {}),
-    },
+    id: resource.id,
+    name: resource.name,
+    kind: resource.kind as WorkspaceResourceKind,
+    state: resource.state as WorkspaceResourceState,
+    version: resource.version,
+    nextActions: resource.nextActions as WorkspaceResourceAction[],
+    ownership: ownership
+      ? {
+          managedBy: ownership.managedBy,
+          source: ownership.source,
+          revision: ownership.revision,
+          sourceSha256: ownership.sourceSha256,
+          drift: ownership.drift,
+        }
+      : null,
+    credential: resource.spec.credentialBinding
+      ? {
+          purpose: resource.spec.credentialBinding.purpose,
+          revision: resource.spec.credentialBinding.revision,
+          providerEligible: resource.spec.credentialBinding.providerEligible,
+          ...(resource.spec.credentialBinding.expiresAt
+            ? { expiresAt: resource.spec.credentialBinding.expiresAt }
+            : {}),
+        }
+      : null,
+    draft,
   };
 }
+
+export const toWorkspaceSelectorModel = (
+  resource: Resource,
+): WorkspaceSelectorModel => ({
+  id: resource.id,
+  name: resource.name,
+  kind: resource.kind as WorkspaceSelectorModel["kind"],
+  version: resource.version,
+});

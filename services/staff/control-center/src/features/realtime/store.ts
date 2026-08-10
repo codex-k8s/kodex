@@ -8,6 +8,10 @@ import {
 } from "@/shared/api/adapters/realtime";
 import type { ProjectionChannel } from "@/shared/api/generated/asyncapi/ProjectionChannel";
 import { notifyAuthoritativeUnauthorized } from "@/shared/api/problem";
+import {
+  publishRealtimeDisconnect,
+  publishRealtimeSnapshot,
+} from "@/shared/realtime/snapshot-bus";
 
 export const useRealtimeStore = defineStore("realtime", () => {
   const connected = ref(false);
@@ -42,7 +46,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       if (event.generation !== generation.value) return;
       connected.value = false;
       replacing.value = true;
-      window.dispatchEvent(new Event("mattercodex:realtime-disconnected"));
+      publishRealtimeDisconnect();
       return;
     }
     if (event.type === "problem") {
@@ -63,11 +67,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     replacing.value = !realtimeChannels.every((channel) =>
       freshChannels.has(channel),
     );
-    window.dispatchEvent(
-      new CustomEvent("mattercodex:realtime-snapshot", {
-        detail: event.snapshot,
-      }),
-    );
+    publishRealtimeSnapshot(event.snapshot);
   }
 
   function start(): void {

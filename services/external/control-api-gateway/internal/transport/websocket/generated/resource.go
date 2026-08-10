@@ -13,4 +13,5 @@ type Resource struct {
   Spec *ResourceSpecProjection
   CreatedAt string
   UpdatedAt string
+  NextActions []ResourceNextAction
 }

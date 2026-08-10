@@ -1,21 +1,13 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref } from "vue";
 
+import { workspaceResourcesApi } from "@/features/workspace-resources/api";
 import {
-  commandAccessResource,
-  copyGitResource,
-  createMutableResource,
-  deleteMutableResource,
-  detachGitResource,
-  fetchResources,
-  transitionMutableResource,
-  updateMutableResource,
-} from "@/shared/api/adapters/resources";
-import {
-  fetchIntegrationDefinitions,
-  fetchRoleDefinitions,
-} from "@/shared/api/adapters/owner-control";
-import { toWorkspaceResourceModel } from "@/features/workspace-resources/model";
+  toWorkspaceResourceModel,
+  toWorkspaceSelectorModel,
+  type WorkspaceResourceModel,
+  type WorkspaceSelectorModel,
+} from "@/features/workspace-resources/model";
 import type {
   AccessResourceKind,
   AccessSpecInput,
@@ -55,8 +47,10 @@ function isAccessKind(kind: ResourceKind): kind is AccessResourceKind {
 export const useWorkspaceResourcesStore = defineStore(
   "workspace-resources",
   () => {
-    const resources = reactive(remoteState<Resource[]>([]));
-    const selectorResources = reactive(remoteState<Resource[]>([]));
+    const resources = reactive(remoteState<WorkspaceResourceModel[]>([]));
+    const selectorResources = reactive(
+      remoteState<WorkspaceSelectorModel[]>([]),
+    );
     const integrationDefinitions = reactive(
       remoteState<IntegrationDefinition[]>([]),
     );
@@ -66,6 +60,12 @@ export const useWorkspaceResourcesStore = defineStore(
     const mutating = ref(false);
     let mutationVersion = 0;
     const authoritativeResources = new Map<string, Resource>();
+    const authoritative = (resource: WorkspaceResourceModel): Resource => {
+      const value = authoritativeResources.get(resource.id);
+      if (!value)
+        throw new Error("Authoritative workspace resource is unavailable");
+      return value;
+    };
     const repositories = computed(() =>
       resources.data.filter((item) => item.kind === "REPOSITORY_WORKSPACE"),
     );
@@ -96,15 +96,15 @@ export const useWorkspaceResourcesStore = defineStore(
           await Promise.all([
             Promise.all(
               workspaceKinds.map((kind) =>
-                fetchResources(kind, selectedProjectId),
+                workspaceResourcesApi.list(kind, selectedProjectId),
               ),
             ),
             Promise.all([
-              fetchResources("AGENT"),
-              fetchResources("ROLE_IMAGE_RECIPE"),
+              workspaceResourcesApi.list("AGENT"),
+              workspaceResourcesApi.list("ROLE_IMAGE_RECIPE"),
             ]),
-            fetchIntegrationDefinitions(),
-            fetchRoleDefinitions(),
+            workspaceResourcesApi.listIntegrationDefinitions(),
+            workspaceResourcesApi.listRoleDefinitions(),
           ]);
         const items = pages
           .flatMap((page) => page.resources)
@@ -114,7 +114,9 @@ export const useWorkspaceResourcesStore = defineStore(
           items.forEach((item) => authoritativeResources.set(item.id, item));
           const models = items.map(toWorkspaceResourceModel);
           finishRequest(resources, request, models, models.length === 0);
-          const selections = selectors.flatMap((page) => page.resources);
+          const selections = selectors
+            .flatMap((page) => page.resources)
+            .map(toWorkspaceSelectorModel);
           selectorResources.data = selections;
           selectorResources.phase = selections.length ? "ready" : "empty";
           integrationDefinitions.data = definitions.definitions;
@@ -171,15 +173,15 @@ export const useWorkspaceResourcesStore = defineStore(
     const saveMutable = (
       parentId: string,
       kind: MutableResourceKind,
-      resource: Resource | null,
+      resource: WorkspaceResourceModel | null,
       name: string,
       spec: ResourceSpecInput,
     ) => {
       if (!resource)
         return mutate(() =>
-          createMutableResource({ kind, name, parentId, spec }),
+          workspaceResourcesApi.createMutable({ kind, name, parentId, spec }),
         );
-      const authoritative = authoritativeResources.get(resource.id) ?? resource;
+      const authoritativeResource = authoritative(resource);
       const body = { kind, name, spec };
       const credential = body.spec.credentialBinding;
       const repository = body.spec.repositoryWorkspace;
@@ -188,67 +190,69 @@ export const useWorkspaceResourcesStore = defineStore(
         ...body,
         spec: {
           ...body.spec,
-          ...(credential && authoritative.spec.credentialBinding
+          ...(credential && authoritativeResource.spec.credentialBinding
             ? {
                 credentialBinding: {
                   ...credential,
                   immutableSecretRef:
                     credential.immutableSecretRef ||
-                    authoritative.spec.credentialBinding.immutableSecretRef,
+                    authoritativeResource.spec.credentialBinding
+                      .immutableSecretRef,
                   principalRef:
                     credential.principalRef ||
-                    authoritative.spec.credentialBinding.principalRef,
+                    authoritativeResource.spec.credentialBinding.principalRef,
                 },
               }
             : {}),
-          ...(repository && authoritative.spec.repositoryWorkspace
+          ...(repository && authoritativeResource.spec.repositoryWorkspace
             ? {
                 repositoryWorkspace: {
                   ...repository,
                   repositoryRef:
                     repository.repositoryRef ||
-                    authoritative.spec.repositoryWorkspace.repositoryRef,
+                    authoritativeResource.spec.repositoryWorkspace
+                      .repositoryRef,
                 },
               }
             : {}),
-          ...(integration && authoritative.spec.integration
+          ...(integration && authoritativeResource.spec.integration
             ? {
                 integration: {
                   ...integration,
                   endpointRef:
                     integration.endpointRef ||
-                    authoritative.spec.integration.endpointRef,
+                    authoritativeResource.spec.integration.endpointRef,
                 },
               }
             : {}),
         },
       };
-      return mutate(() => updateMutableResource(authoritative, safeBody));
+      return mutate(() =>
+        workspaceResourcesApi.updateMutable(authoritativeResource, safeBody),
+      );
     };
     const transitionMutable = (
-      resource: Resource,
+      resource: WorkspaceResourceModel,
       targetState: "ACTIVE" | "PAUSED" | "ARCHIVED",
     ) =>
       mutate(() =>
-        transitionMutableResource(
-          authoritativeResources.get(resource.id) ?? resource,
-          { targetState, reasonCode: "OWNER_REQUEST" },
-        ),
+        workspaceResourcesApi.transitionMutable(authoritative(resource), {
+          targetState,
+          reasonCode: "OWNER_REQUEST",
+        }),
       );
-    const deleteWorkspaceResource = (resource: Resource) =>
+    const deleteWorkspaceResource = (resource: WorkspaceResourceModel) =>
       mutate(() =>
-        deleteMutableResource(
-          authoritativeResources.get(resource.id) ?? resource,
-        ),
+        workspaceResourcesApi.deleteMutable(authoritative(resource)),
       );
     const saveAccess = (
       kind: AccessResourceKind,
-      resource: Resource | null,
+      resource: WorkspaceResourceModel | null,
       name: string,
       spec: AccessSpecInput,
     ) =>
       mutate(() =>
-        commandAccessResource(
+        workspaceResourcesApi.manageAccess(
           {
             kind,
             action: resource ? "UPDATE" : "CREATE",
@@ -256,31 +260,35 @@ export const useWorkspaceResourcesStore = defineStore(
             name,
             spec,
           },
-          resource?.version,
+          resource ? authoritative(resource).version : undefined,
         ),
       );
     const executeAccessAction = (
-      resource: Resource,
+      resource: WorkspaceResourceModel,
       action: "ACTIVATE" | "PAUSE" | "ARCHIVE" | "DELETE",
     ) => {
       if (!isAccessKind(resource.kind)) return Promise.resolve(null);
       const kind = resource.kind;
       return mutate(() =>
-        commandAccessResource(
+        workspaceResourcesApi.manageAccess(
           { kind, action, resourceId: resource.id },
-          resource.version,
+          authoritative(resource).version,
         ),
       );
     };
-    const detach = (resource: Resource) => {
+    const detach = (resource: WorkspaceResourceModel) => {
       if (!isAccessKind(resource.kind)) return Promise.resolve(null);
       const body: DetachAccessResource = { kind: resource.kind };
-      return mutate(() => detachGitResource(resource, body));
+      return mutate(() =>
+        workspaceResourcesApi.detachAccess(authoritative(resource), body),
+      );
     };
-    const copy = (resource: Resource, name: string) => {
+    const copy = (resource: WorkspaceResourceModel, name: string) => {
       if (!isAccessKind(resource.kind)) return Promise.resolve(null);
       const body: CopyAccessResource = { kind: resource.kind, name };
-      return mutate(() => copyGitResource(resource, body));
+      return mutate(() =>
+        workspaceResourcesApi.copyAccess(authoritative(resource), body),
+      );
     };
 
     function reset(): void {

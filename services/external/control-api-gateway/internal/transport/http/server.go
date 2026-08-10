@@ -154,10 +154,10 @@ func (server *Server) ResolveScheduleRecovery(writer http.ResponseWriter, reques
 	if !decodeJSON(writer, request, &body) {
 		return
 	}
-	action := map[generated.ResolveScheduleRecoveryAction]controlplanev1.ScheduleRecoveryAction{
-		generated.ResolveScheduleRecoveryActionREPAIR: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
-		generated.ResolveScheduleRecoveryActionCANCEL: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
-		generated.ResolveScheduleRecoveryActionSKIP:   controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
+	action := map[generated.ScheduleRecoveryAction]controlplanev1.ScheduleRecoveryAction{
+		generated.ScheduleRecoveryActionREPAIR: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
+		generated.ScheduleRecoveryActionCANCEL: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
+		generated.ScheduleRecoveryActionSKIP:   controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
 	}[body.Action]
 	if action == controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_UNSPECIFIED {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
@@ -238,13 +238,21 @@ func scheduleOccurrenceProjection(input *controlplanev1.ScheduleOccurrence) (gen
 		return generated.ScheduleOccurrence{}, errors.New("schedule target identity is invalid")
 	}
 	outcome := input.GetOutcome()
+	recoveryActions := make([]generated.ScheduleRecoveryAction, 0, len(input.GetRecoveryActions()))
+	for _, item := range input.GetRecoveryActions() {
+		action, actionErr := castClosedEnum(item.String(), "SCHEDULE_RECOVERY_ACTION_", generated.ScheduleRecoveryAction.Valid)
+		if actionErr != nil {
+			return generated.ScheduleOccurrence{}, errors.New("schedule recovery action is invalid")
+		}
+		recoveryActions = append(recoveryActions, action)
+	}
 	result := generated.ScheduleOccurrence{OccurrenceId: occurrenceID, ScheduleId: scheduleID,
 		ScheduledFor: input.GetScheduledFor().AsTime(), TargetResourceId: targetID,
 		TargetKind:    generated.ResourceKind(strings.TrimPrefix(input.GetTargetKind().String(), "RESOURCE_KIND_")),
 		TargetVersion: int64(input.GetTargetVersion()), EffectiveInputSha256: input.GetEffectiveInputSha256(),
 		State:   generated.ScheduleOccurrenceState(strings.TrimPrefix(input.GetState().String(), "SCHEDULE_OCCURRENCE_STATE_")),
 		Attempt: int(input.GetAttempt()), AuthorityGeneration: int64(input.GetAuthorityGeneration()),
-		Version: int64(input.GetVersion()), AvailableAt: input.GetAvailableAt().AsTime()}
+		Version: int64(input.GetVersion()), AvailableAt: input.GetAvailableAt().AsTime(), RecoveryActions: recoveryActions}
 	if outcome != "" {
 		result.Outcome = &outcome
 	}
@@ -1749,7 +1757,15 @@ func ConvertResource(input *controlplanev1.Resource) (generated.Resource, error)
 	if err != nil {
 		return generated.Resource{}, err
 	}
-	result := generated.Resource{Id: id, Kind: kind, Name: input.GetName(), State: state, Version: int64(input.GetVersion()), ProjectionSha256: generated.Sha256(strings.ToLower(input.GetProjectionSha256())), Spec: spec, CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime()}
+	nextActions := make([]generated.ResourceNextAction, 0, len(input.GetNextActions()))
+	for _, item := range input.GetNextActions() {
+		action, actionErr := castClosedEnum(item.String(), "RESOURCE_NEXT_ACTION_", generated.ResourceNextAction.Valid)
+		if actionErr != nil {
+			return generated.Resource{}, errors.New("resource next action is invalid")
+		}
+		nextActions = append(nextActions, action)
+	}
+	result := generated.Resource{Id: id, Kind: kind, Name: input.GetName(), State: state, Version: int64(input.GetVersion()), ProjectionSha256: generated.Sha256(strings.ToLower(input.GetProjectionSha256())), Spec: spec, CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(), NextActions: nextActions}
 	if input.GetProjectId() != "" {
 		parsed, parseErr := uuid.Parse(input.GetProjectId())
 		if parseErr != nil {

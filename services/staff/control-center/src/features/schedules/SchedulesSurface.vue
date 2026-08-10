@@ -4,8 +4,10 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useSchedulesStore } from "@/features/schedules/store";
-import type { ScheduleView } from "@/features/schedules/model";
-import type { ScheduleOccurrence } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  ScheduleOccurrenceModel,
+  ScheduleView,
+} from "@/features/schedules/model";
 import { formatDateTime } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -167,7 +169,7 @@ async function remove(value: ScheduleView): Promise<void> {
 }
 
 async function recover(
-  occurrence: ScheduleOccurrence,
+  occurrence: ScheduleOccurrenceModel,
   action: "REPAIR" | "CANCEL" | "SKIP",
 ): Promise<void> {
   if (!historySchedule.value || !occurrence.recoveryEvidenceSha256) return;
@@ -251,9 +253,33 @@ onMounted(store.loadSchedules);
                 <dd>
                   {{ item.cron || `${item.intervalSeconds}s` }} ·
                   {{ item.calendar }} · {{ item.overlapPolicy }} ·
-                  {{ item.misfirePolicy }} · {{ item.deliveryPolicy }} ·
-                  {{ item.maximumAttempts }} · {{ item.sessionPolicy }} ·
-                  {{ item.notificationPolicy }} · coalesce={{ item.coalesce }}
+                  {{ item.misfirePolicy }} ({{ item.misfireGraceSeconds }}s) ·
+                  {{ item.deliveryPolicy }} · {{ item.maximumAttempts }}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  {{ $t("schedules.initialBackoff") }} /
+                  {{ $t("schedules.deadLetter") }}
+                </dt>
+                <dd>
+                  {{ item.initialBackoffSeconds }}s →
+                  {{ item.maximumBackoffSeconds }}s ·
+                  {{ item.deadLetterAfterSeconds }}s
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  {{ $t("schedules.sessionPolicy") }} /
+                  {{ $t("schedules.notification") }} /
+                  {{ $t("schedules.room") }}
+                </dt>
+                <dd>
+                  {{ item.sessionPolicy }} · {{ item.notificationPolicy }} ·
+                  {{ item.roomSelection.displayName }} · coalesce={{
+                    item.coalesce
+                  }}
+                  · max={{ item.maximumExecutionSeconds }}s
                 </dd>
               </div>
               <div>
@@ -263,6 +289,7 @@ onMounted(store.loadSchedules);
             </dl>
             <div class="button-row">
               <button
+                v-if="item.nextActions.includes('UPDATE')"
                 class="button button--secondary"
                 type="button"
                 @click="edit(item)"
@@ -270,6 +297,7 @@ onMounted(store.loadSchedules);
                 {{ $t("common.edit") }}
               </button>
               <button
+                v-if="item.nextActions.includes('RUN_NOW')"
                 class="button button--text"
                 type="button"
                 @click="runNow(item)"
@@ -279,6 +307,7 @@ onMounted(store.loadSchedules);
                 }}
               </button>
               <button
+                v-if="item.nextActions.includes('PAUSE')"
                 class="button button--text"
                 type="button"
                 @click="changeState(item, 'PAUSED')"
@@ -288,6 +317,7 @@ onMounted(store.loadSchedules);
                 }}
               </button>
               <button
+                v-if="item.nextActions.includes('RESUME')"
                 class="button button--text"
                 type="button"
                 @click="changeState(item, 'ACTIVE')"
@@ -297,6 +327,7 @@ onMounted(store.loadSchedules);
                 }}
               </button>
               <button
+                v-if="item.nextActions.includes('VIEW_OCCURRENCES')"
                 class="button button--text"
                 type="button"
                 @click="openHistory(item)"
@@ -306,6 +337,7 @@ onMounted(store.loadSchedules);
                 }}
               </button>
               <button
+                v-if="item.nextActions.includes('DELETE')"
                 class="button button--text"
                 type="button"
                 @click="remove(item)"
@@ -386,7 +418,7 @@ onMounted(store.loadSchedules);
             <option
               v-for="item in store.rooms.data"
               :key="item.id"
-              :value="item.spec.chat?.stableKey"
+              :value="item.stableKey"
             >
               {{ item.name }}
             </option>
@@ -421,12 +453,12 @@ onMounted(store.loadSchedules);
             <option value="">{{ $t("common.select") }}</option>
             <option
               v-for="item in store.artifacts.data.filter(
-                (artifact) => artifact.spec.artifact?.scanStatus === 'CLEAN',
+                (artifact) => artifact.scanStatus === 'CLEAN',
               )"
               :key="item.id"
               :value="item.id"
             >
-              {{ item.name }} · {{ item.spec.artifact?.mediaType }}
+              {{ item.name }} · {{ item.mediaType }}
             </option>
           </select></label
         ><label class="check-field form-field--full"
@@ -586,8 +618,9 @@ onMounted(store.loadSchedules);
                   {{ occurrence.attempt }}</span
                 >
               </div>
-              <div v-if="occurrence.recoveryEvidenceSha256" class="button-row">
+              <div v-if="occurrence.recoveryActions.length" class="button-row">
                 <button
+                  v-if="occurrence.recoveryActions.includes('REPAIR')"
                   class="button button--text"
                   type="button"
                   @click="recover(occurrence, 'REPAIR')"
@@ -595,6 +628,7 @@ onMounted(store.loadSchedules);
                   REPAIR
                 </button>
                 <button
+                  v-if="occurrence.recoveryActions.includes('SKIP')"
                   class="button button--text"
                   type="button"
                   @click="recover(occurrence, 'SKIP')"
@@ -602,6 +636,7 @@ onMounted(store.loadSchedules);
                   SKIP
                 </button>
                 <button
+                  v-if="occurrence.recoveryActions.includes('CANCEL')"
                   class="button button--text"
                   type="button"
                   @click="recover(occurrence, 'CANCEL')"

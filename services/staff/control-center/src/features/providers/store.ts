@@ -14,6 +14,7 @@ import {
   revokeConnection,
   startAuthorization,
 } from "@/shared/api/adapters/owner-control";
+import { fetchResources } from "@/shared/api/adapters/resources";
 import type {
   ConfigurationSourceDetail,
   Provider,
@@ -24,6 +25,8 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
+import { resourceOwnership } from "@/shared/lib/resources";
+import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
 
 export const useProvidersStore = defineStore("providers", () => {
   const providers = reactive(remoteState<Provider[]>([]));
@@ -34,6 +37,17 @@ export const useProvidersStore = defineStore("providers", () => {
   const pools = reactive(remoteState<ProviderPoolView[]>([]));
   const configurationSource = reactive(
     remoteState<ConfigurationSourceDetail | null>(null),
+  );
+  const poolOwnership = reactive(
+    new Map<
+      string,
+      {
+        managedBy: "ui" | "git";
+        source: string;
+        revision: number;
+        drift: "NOT_APPLICABLE" | "IN_SYNC" | "DRIFTED" | "UNKNOWN";
+      }
+    >(),
   );
   const runtime = createFeatureRuntime();
   const loadProviders = () =>
@@ -50,7 +64,24 @@ export const useProvidersStore = defineStore("providers", () => {
       ),
       runtime.loadInto(
         pools,
-        async () => (await fetchProviderPools()).pools,
+        async () => {
+          const [views, resources] = await Promise.all([
+            fetchProviderPools(),
+            fetchResources("PROVIDER_POOL"),
+          ]);
+          poolOwnership.clear();
+          resources.resources.forEach((resource) => {
+            const ownership = resourceOwnership(resource);
+            if (ownership)
+              poolOwnership.set(resource.id, {
+                managedBy: ownership.managedBy,
+                source: ownership.source,
+                revision: ownership.revision,
+                drift: ownership.drift,
+              });
+          });
+          return views.pools;
+        },
         (items) => items.length === 0,
       ),
     ]).then(() => undefined);
@@ -158,6 +189,9 @@ export const useProvidersStore = defineStore("providers", () => {
     connections.data = items;
     connections.phase = items.length ? "ready" : "empty";
   }
+  subscribeRealtimeSnapshot("PROVIDERS", (snapshot) =>
+    replaceConnections(snapshot.items.providerConnections ?? []),
+  );
   function reset(): void {
     runtime.invalidate();
     resetRemoteState(providers, []);
@@ -165,6 +199,7 @@ export const useProvidersStore = defineStore("providers", () => {
     resetRemoteState(connections, []);
     resetRemoteState(pools, []);
     resetRemoteState(configurationSource, null);
+    poolOwnership.clear();
   }
   return {
     providers,
@@ -172,6 +207,7 @@ export const useProvidersStore = defineStore("providers", () => {
     connections,
     pools,
     configurationSource,
+    poolOwnership,
     mutationProblem: runtime.mutationProblem,
     mutating: runtime.mutating,
     loadProviders,

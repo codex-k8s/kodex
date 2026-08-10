@@ -14,6 +14,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
+import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
 
 export const useWorkspaceRecoveryStore = defineStore(
   "workspace-recovery",
@@ -119,6 +120,9 @@ export const useWorkspaceRecoveryStore = defineStore(
       );
       workspaceBackups.phase = workspaceBackups.data.length ? "ready" : "empty";
     }
+    subscribeRealtimeSnapshot("BACKUPS", (snapshot) =>
+      replaceBackups(snapshot.items.resources ?? []),
+    );
     function reset(): void {
       runtime.invalidate();
       resetRemoteState(workspaceBackups, []);

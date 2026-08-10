@@ -20,6 +20,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
 import { invalidate, remoteState, resetRemoteState } from "@/shared/lib/remote";
+import { subscribeRealtimeSnapshot } from "@/shared/realtime/snapshot-bus";
 
 export const useIntegrationsStore = defineStore("integrations", () => {
   const integrationDefinitions = reactive(
@@ -159,6 +160,12 @@ export const useIntegrationsStore = defineStore("integrations", () => {
     approvals.data = items;
     approvals.phase = items.length ? "ready" : "empty";
   }
+  subscribeRealtimeSnapshot("INTEGRATIONS", (snapshot) =>
+    replaceIntegrations(snapshot.items.integrationConfigurations ?? []),
+  );
+  subscribeRealtimeSnapshot("APPROVALS", (snapshot) =>
+    replaceApprovals(snapshot.items.approvals ?? []),
+  );
   function reset(): void {
     runtime.invalidate();
     resetRemoteState(integrationDefinitions, []);

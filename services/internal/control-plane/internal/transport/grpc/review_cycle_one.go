@@ -854,6 +854,13 @@ func toProtoOccurrence(
 		!occurrence.LeaseExpiresAt.Equal(time.Unix(0, 0)) {
 		result.LeaseExpiresAt = timestamppb.New(occurrence.LeaseExpiresAt)
 	}
+	if occurrence.State == "RECOVERY_BLOCKED" && occurrence.RecoveryEvidenceSHA256 != "" {
+		result.RecoveryActions = []controlplanev1.ScheduleRecoveryAction{
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
+		}
+	}
 	return result
 }
 

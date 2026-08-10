@@ -87,6 +87,7 @@ async function command(
       name: item.name,
       source: ownership.source,
       revision: ownership.revision,
+      drift: ownership.drift,
     });
   }
   if (!window.confirm(confirmation)) return;
@@ -178,6 +179,7 @@ onMounted(store.loadInstructions);
                   {{
                     resourceOwnership(item)?.revision ?? $t("common.noValue")
                   }}
+                  · {{ resourceOwnership(item)?.drift ?? $t("common.noValue") }}
                 </td>
                 <td>{{ item.spec.instructionSet?.currentVersion }}</td>
                 <td>

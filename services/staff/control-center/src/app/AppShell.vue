@@ -29,11 +29,11 @@ import { useRouter } from "vue-router";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { usePwaUpdateStore } from "@/features/pwa-update/store";
 import { useSessionStore } from "@/features/session/store";
-import { bindRealtimeSnapshots } from "@/app/realtime-bindings";
 import type { ResourceKind } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { setMutationGuard } from "@/shared/lib/identity";
 import { resourceKinds } from "@/shared/lib/resources";
+import { subscribeRealtimeDisconnect } from "@/shared/realtime/snapshot-bus";
 
 const router = useRouter();
 const { locale, t } = useI18n();
@@ -44,7 +44,7 @@ const menuOpen = ref(false);
 const searchQuery = ref("");
 const searchKind = ref<ResourceKind | "ALL">("ALL");
 const theme = ref(localStorage.getItem("mattercodex.theme") ?? "system");
-let unbindRealtime: (() => void) | null = null;
+let unsubscribeRealtimeDisconnect: (() => void) | null = null;
 
 const navigation = [
   { to: "/", label: "nav.overview", icon: LayoutDashboard },
@@ -109,21 +109,15 @@ async function submitSearch(): Promise<void> {
 
 onMounted(() => {
   applyTheme();
-  unbindRealtime = bindRealtimeSnapshots();
   setMutationGuard(() => realtime.ready);
   realtime.start();
-  window.addEventListener(
-    "mattercodex:realtime-disconnected",
+  unsubscribeRealtimeDisconnect = subscribeRealtimeDisconnect(
     verifySessionAfterRealtimeClose,
   );
 });
 onBeforeUnmount(() => {
-  window.removeEventListener(
-    "mattercodex:realtime-disconnected",
-    verifySessionAfterRealtimeClose,
-  );
-  unbindRealtime?.();
-  unbindRealtime = null;
+  unsubscribeRealtimeDisconnect?.();
+  unsubscribeRealtimeDisconnect = null;
   setMutationGuard(null);
   realtime.stop();
 });

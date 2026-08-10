@@ -364,6 +364,15 @@ onMounted(store.loadProviders);
                     }}
                   </dd>
                 </div>
+                <div v-if="store.poolOwnership.get(item.poolRef)">
+                  <dt>{{ $t("common.source") }}</dt>
+                  <dd>
+                    {{ store.poolOwnership.get(item.poolRef)?.managedBy }} ·
+                    {{ store.poolOwnership.get(item.poolRef)?.source }} ·
+                    {{ store.poolOwnership.get(item.poolRef)?.revision }} ·
+                    {{ store.poolOwnership.get(item.poolRef)?.drift }}
+                  </dd>
+                </div>
               </dl>
               <div class="button-row">
                 <button
@@ -418,6 +427,10 @@ onMounted(store.loadProviders);
         <div>
           <dt>{{ $t("common.revision") }}</dt>
           <dd>{{ store.configurationSource.data.sourceRevision }}</dd>
+        </div>
+        <div>
+          <dt>Drift</dt>
+          <dd>{{ store.configurationSource.data.drift }}</dd>
         </div>
         <div v-if="store.configurationSource.data.sourceSha256">
           <dt>{{ $t("common.sourceDigest") }}</dt>

@@ -2453,7 +2453,8 @@ components:
         providerPoolSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
         roomSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
         prompt: { $ref: '#/components/schemas/OwnerSchedulePromptView' }
-      required: [scheduleRef, displayName, version, state, presetKey, presetRevision, presetSha256, defaultsRevision, defaultsSha256, timezone, advancedOverrides, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, agentSelection, instructionSelection, providerPoolSelection, roomSelection, prompt]
+        nextActions: { type: array, maxItems: 6, uniqueItems: true, items: { $ref: '#/components/schemas/OwnerScheduleNextAction' } }
+      required: [scheduleRef, displayName, version, state, presetKey, presetRevision, presetSha256, defaultsRevision, defaultsSha256, timezone, advancedOverrides, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, agentSelection, instructionSelection, providerPoolSelection, roomSelection, prompt, nextActions]
     OwnerSchedulePage:
       type: object
       additionalProperties: false
@@ -2823,8 +2824,9 @@ components:
         source: { type: string, minLength: 1, maxLength: 512 }
         sourceRevision: { type: integer, format: int64, minimum: 1 }
         sourceSha256: { $ref: '#/components/schemas/Sha256' }
+        drift: { $ref: '#/components/schemas/ConfigurationDrift' }
         updatedAt: { type: string, format: date-time }
-      required: [resourceRef, displayName, version, managedBy, source, sourceRevision, updatedAt]
+      required: [resourceRef, displayName, version, managedBy, source, sourceRevision, drift, updatedAt]
     ResourceKind:
       title: ResourceKind
       type: string
@@ -2846,6 +2848,22 @@ components:
       title: ConfigurationManagedBy
       type: string
       enum: [ui, git]
+    ConfigurationDrift:
+      title: ConfigurationDrift
+      type: string
+      enum: [NOT_APPLICABLE, IN_SYNC, DRIFTED, UNKNOWN]
+    ResourceNextAction:
+      title: ResourceNextAction
+      type: string
+      enum: [UPDATE, ACTIVATE, PAUSE, ARCHIVE, DELETE, DETACH, COPY]
+    OwnerScheduleNextAction:
+      title: OwnerScheduleNextAction
+      type: string
+      enum: [UPDATE, RUN_NOW, PAUSE, RESUME, DELETE, VIEW_OCCURRENCES]
+    ScheduleRecoveryAction:
+      title: ScheduleRecoveryAction
+      type: string
+      enum: [REPAIR, CANCEL, SKIP]
     ProjectLocale:
       title: ProjectLocale
       type: string
@@ -3238,7 +3256,9 @@ components:
         managedBy: { $ref: '#/components/schemas/ConfigurationManagedBy' }
         source: { type: string, minLength: 1, maxLength: 512 }
         revision: { type: integer, format: int64, minimum: 1 }
-      required: [managedBy, source, revision]
+        sourceSha256: { $ref: '#/components/schemas/Sha256' }
+        drift: { $ref: '#/components/schemas/ConfigurationDrift' }
+      required: [managedBy, source, revision, drift]
     ProjectProjection:
       title: ProjectProjection
       type: object
@@ -3488,7 +3508,8 @@ components:
         availableAt: { type: string, format: date-time }
         outcome: { type: string, maxLength: 256 }
         recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-      required: [occurrenceId, scheduleId, scheduledFor, targetResourceId, targetKind, targetVersion, effectiveInputSha256, state, attempt, authorityGeneration, version, availableAt]
+        recoveryActions: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ScheduleRecoveryAction' } }
+      required: [occurrenceId, scheduleId, scheduledFor, targetResourceId, targetKind, targetVersion, effectiveInputSha256, state, attempt, authorityGeneration, version, availableAt, recoveryActions]
     ScheduleOccurrencePage:
       type: object
       additionalProperties: false
@@ -3500,7 +3521,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        action: { type: string, enum: [REPAIR, CANCEL, SKIP] }
+        action: { $ref: '#/components/schemas/ScheduleRecoveryAction' }
         expectedAttempt: { type: integer, minimum: 1, maximum: 100 }
         recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         reasonCode: { type: string, pattern: '^[a-z][a-z0-9_]{2,63}$' }
@@ -3958,7 +3979,8 @@ components:
         spec: { $ref: '#/components/schemas/ResourceSpecProjection' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, kind, name, state, version, projectionSha256, spec, createdAt, updatedAt]
+        nextActions: { type: array, maxItems: 7, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceNextAction' } }
+      required: [id, kind, name, state, version, projectionSha256, spec, createdAt, updatedAt, nextActions]
     ResourcePage:
       type: object
       additionalProperties: false

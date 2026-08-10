@@ -1294,17 +1294,21 @@ func normalizedProtectedOwnership(ownership entity.ConfigurationOwnership, actio
 		if ownership.ManagedBy != "GIT" || ownership.Validate() != nil || !validSHA256Text(ownership.SourceSHA256) {
 			return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
 		}
+		// Успешная owner transaction применяет exact signed Git revision;
+		// только этот authoritative path может объявить её синхронной.
+		ownership.Drift = "IN_SYNC"
 		return ownership, nil
 	}
 	if creating {
 		if ownership.ManagedBy != "UI" || ownership.SourceRef != "" || ownership.SourceRevision != 0 || ownership.SourceSHA256 != "" {
 			return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
 		}
-		return entity.ConfigurationOwnership{ManagedBy: "UI"}, nil
+		return entity.ConfigurationOwnership{ManagedBy: "UI", Drift: "NOT_APPLICABLE"}, nil
 	}
 	if ownership.ManagedBy != "UI" {
 		return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
 	}
+	ownership.Drift = "NOT_APPLICABLE"
 	return ownership, nil
 }
 

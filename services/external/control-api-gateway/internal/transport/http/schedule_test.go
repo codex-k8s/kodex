@@ -42,6 +42,12 @@ func TestRunScheduleNowReturnsTypedOwnerReadbackAndStableLocation(t *testing.T) 
 		EffectiveInputSha256: strings.Repeat("a", 64),
 		State:                controlplanev1.ScheduleOccurrenceState_SCHEDULE_OCCURRENCE_STATE_QUEUED,
 		Attempt:              1, Version: 1,
+		RecoveryEvidenceSha256: strings.Repeat("b", 64),
+		RecoveryActions: []controlplanev1.ScheduleRecoveryAction{
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
+			controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
+		},
 	}}
 	server := &Server{control: control, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/schedules/"+scheduleID.String()+"/run-now", nil)
@@ -55,6 +61,15 @@ func TestRunScheduleNowReturnsTypedOwnerReadbackAndStableLocation(t *testing.T) 
 		strings.Contains(writer.Header().Get("Location"), "pageToken") {
 		t.Fatalf("manual occurrence readback is incomplete: code=%d location=%q body=%s",
 			writer.Code, writer.Header().Get("Location"), writer.Body.String())
+	}
+	var readback generated.ScheduleOccurrence
+	if err := json.Unmarshal(writer.Body.Bytes(), &readback); err != nil {
+		t.Fatalf("manual occurrence readback cannot be decoded: %v", err)
+	}
+	if len(readback.RecoveryActions) != 3 || readback.RecoveryActions[0] != generated.ScheduleRecoveryActionREPAIR ||
+		readback.RecoveryActions[1] != generated.ScheduleRecoveryActionCANCEL ||
+		readback.RecoveryActions[2] != generated.ScheduleRecoveryActionSKIP {
+		t.Fatalf("authoritative recovery actions were lost: %v", readback.RecoveryActions)
 	}
 }
 
@@ -79,7 +94,8 @@ func TestScheduleFreshReadContainsCompleteEditableRoundTrip(t *testing.T) {
 		MaximumExecutionDuration: durationpb.New(30 * time.Minute), Coalesce: true,
 		RuntimeRevisionId: runtimeRevisionID.String(), TargetType: controlplanev1.ScheduleTargetType_SCHEDULE_TARGET_TYPE_AGENT,
 		PromptArtifactId: promptArtifactID.String(), ExecutionSessionId: executionSessionID.String(),
-		Ownership: &controlplanev1.ConfigurationOwnership{ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI},
+		Ownership: &controlplanev1.ConfigurationOwnership{ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI,
+			Drift: controlplanev1.ConfigurationDrift_CONFIGURATION_DRIFT_NOT_APPLICABLE},
 	}
 	converted, err := ConvertResource(&controlplanev1.Resource{
 		Id: uuid.NewString(), Kind: controlplanev1.ResourceKind_RESOURCE_KIND_SCHEDULE,
@@ -123,6 +139,9 @@ func TestScheduleFreshReadContainsCompleteEditableRoundTrip(t *testing.T) {
 	want := proto.Clone(source).(*controlplanev1.ScheduleSpec)
 	want.TargetKind = controlplanev1.ResourceKind_RESOURCE_KIND_UNSPECIFIED
 	want.TargetVersion, want.EffectiveInputSha256, want.NextRunAt = 0, "", nil
+	// drift остаётся только server-authored readback и не принимается обратно
+	// из browser payload.
+	want.Ownership.Drift = controlplanev1.ConfigurationDrift_CONFIGURATION_DRIFT_UNSPECIFIED
 	if !proto.Equal(roundTrip, want) {
 		t.Fatalf("editable Schedule state changed during browser round trip:\n got: %v\nwant: %v", roundTrip, want)
 	}

@@ -798,6 +798,7 @@ message ConfigurationOwnership {
   string source_ref = 2;
   uint64 source_revision = 3;
   string source_sha256 = 4;
+  ConfigurationDrift drift = 5;
 }
 
 // ProjectSpec описывает версионированное сообщение контракта control-plane.
@@ -1740,6 +1741,7 @@ message Resource {
   // projection_sha256 — canonical digest exact version, вычисленный
   // authoritative control-plane; consumer не воспроизводит его из wire form.
   string projection_sha256 = 11;
+  repeated ResourceNextAction next_actions = 12;
 }
 
 // CreateResourceRequest описывает версионированное сообщение контракта control-plane.
@@ -3167,6 +3169,7 @@ message OwnerScheduleProjection {
   OwnerSafeSelection provider_pool_selection = 34;
   OwnerSafeSelection room_selection = 35;
   OwnerSchedulePromptProjection prompt = 36;
+  repeated OwnerScheduleNextAction next_actions = 37;
 }
 
 message OwnerSchedulePromptProjection {
@@ -3301,6 +3304,7 @@ message ScheduleOccurrence {
   uint64 execution_runtime_revision_version = 30;
   uint64 version = 31;
   string recovery_evidence_sha256 = 32;
+  repeated ScheduleRecoveryAction recovery_actions = 33;
 }
 
 // ClaimDueSchedulesResponse описывает версионированное сообщение контракта control-plane.
@@ -6076,4 +6080,37 @@ message ErrorDetail {
   string code = 2;
   string correlation_id = 3;
   bool retryable = 4;
+}
+
+// ResourceNextAction перечисляет только опубликованные browser-команды,
+// допустимые для exact resource version в авторитетной проекции.
+enum ResourceNextAction {
+  RESOURCE_NEXT_ACTION_UNSPECIFIED = 0;
+  RESOURCE_NEXT_ACTION_UPDATE = 1;
+  RESOURCE_NEXT_ACTION_ACTIVATE = 2;
+  RESOURCE_NEXT_ACTION_PAUSE = 3;
+  RESOURCE_NEXT_ACTION_ARCHIVE = 4;
+  RESOURCE_NEXT_ACTION_DELETE = 5;
+  RESOURCE_NEXT_ACTION_DETACH = 6;
+  RESOURCE_NEXT_ACTION_COPY = 7;
+}
+
+// ConfigurationDrift — авторитетный результат сравнения фактической
+// конфигурации с закреплённой Git revision. UI не вычисляет это состояние.
+enum ConfigurationDrift {
+  CONFIGURATION_DRIFT_UNSPECIFIED = 0;
+  CONFIGURATION_DRIFT_NOT_APPLICABLE = 1;
+  CONFIGURATION_DRIFT_IN_SYNC = 2;
+  CONFIGURATION_DRIFT_DRIFTED = 3;
+  CONFIGURATION_DRIFT_UNKNOWN = 4;
+}
+
+enum OwnerScheduleNextAction {
+  OWNER_SCHEDULE_NEXT_ACTION_UNSPECIFIED = 0;
+  OWNER_SCHEDULE_NEXT_ACTION_UPDATE = 1;
+  OWNER_SCHEDULE_NEXT_ACTION_RUN_NOW = 2;
+  OWNER_SCHEDULE_NEXT_ACTION_PAUSE = 3;
+  OWNER_SCHEDULE_NEXT_ACTION_RESUME = 4;
+  OWNER_SCHEDULE_NEXT_ACTION_DELETE = 5;
+  OWNER_SCHEDULE_NEXT_ACTION_VIEW_OCCURRENCES = 6;
 }

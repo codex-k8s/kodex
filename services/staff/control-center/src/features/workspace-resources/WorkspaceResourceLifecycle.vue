@@ -7,14 +7,12 @@ import { useWorkspaceResourcesStore } from "@/features/workspace-resources/store
 import {
   buildAccessSpec,
   buildMutableSpec,
+  emptyWorkspaceResourceDraft,
   isWorkspaceDraftBounded,
+  type WorkspaceAccessKind,
+  type WorkspaceMutableKind,
+  type WorkspaceResourceModel,
 } from "@/features/workspace-resources/model";
-import type {
-  AccessResourceKind,
-  MutableResourceKind,
-  Resource,
-} from "@/shared/api/generated/openapi/types.gen";
-import { resourceOwnership } from "@/shared/lib/resources";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -23,9 +21,9 @@ const props = defineProps<{ projectId: string }>();
 const store = useWorkspaceResourcesStore();
 const { t } = useI18n();
 const editorOpen = ref(false);
-const editing = ref<Resource | null>(null);
-const kind = ref<MutableResourceKind | AccessResourceKind>("CHAT");
-const copySource = ref<Resource | null>(null);
+const editing = ref<WorkspaceResourceModel | null>(null);
+const kind = ref<WorkspaceMutableKind | WorkspaceAccessKind>("CHAT");
+const copySource = ref<WorkspaceResourceModel | null>(null);
 const copyName = ref("");
 let preservedCredentialLocator = "";
 let preservedCredentialPrincipal = "";
@@ -85,70 +83,25 @@ const prompts = computed(() =>
 );
 
 function resetForm(): void {
-  Object.assign(form, {
-    name: "",
-    stableKey: "",
-    roomType: "USER",
-    workPolicy: "default",
-    defaultAgentId: "",
-    externalChannelRef: "",
-    purpose: "",
-    immutableSecretRef: "",
-    principalRef: "",
-    revision: 1,
-    repositoryRef: "",
-    workspaceMode: "ISOLATED_WORKTREE",
-    defaultBranch: "main",
-    credentialBindingId: "",
-    definitionRef: "",
-    definitionVersion: 1,
-    capabilities: [],
-    credentialBindingIds: [],
-    endpointRef: "",
-    externalTeamRef: "",
-    memberActorIds: [],
-    roleIds: [],
-    allowedTargetRoleIds: [],
-    promptProfileId: "",
-    roleImageRecipeId: "",
-    repositoryWorkspaceIds: [],
-    integrationIds: [],
-    contentSha256: "",
-    sourceRef: "",
-    locale: "ru",
-  });
+  Object.assign(form, { name: "", ...emptyWorkspaceResourceDraft() });
   preservedCredentialLocator = "";
   preservedCredentialPrincipal = "";
 }
 
-function beginCreate(value: MutableResourceKind | AccessResourceKind): void {
+function beginCreate(value: WorkspaceMutableKind | WorkspaceAccessKind): void {
   editing.value = null;
   kind.value = value;
   resetForm();
   editorOpen.value = true;
 }
 
-function beginEdit(resource: Resource): void {
-  if (resourceOwnership(resource)?.managedBy === "git") return;
+function beginEdit(resource: WorkspaceResourceModel): void {
+  if (!resource.nextActions.includes("UPDATE")) return;
   editing.value = resource;
-  kind.value = resource.kind as MutableResourceKind | AccessResourceKind;
+  kind.value = resource.kind;
   resetForm();
   form.name = resource.name;
-  if (resource.spec.chat) Object.assign(form, resource.spec.chat);
-  if (resource.spec.repositoryWorkspace)
-    Object.assign(form, resource.spec.repositoryWorkspace);
-  if (resource.spec.integration) Object.assign(form, resource.spec.integration);
-  if (resource.spec.credentialBinding) {
-    form.purpose = resource.spec.credentialBinding.purpose;
-    form.revision = resource.spec.credentialBinding.revision;
-    preservedCredentialLocator =
-      resource.spec.credentialBinding.immutableSecretRef;
-    preservedCredentialPrincipal = resource.spec.credentialBinding.principalRef;
-  }
-  if (resource.spec.team) Object.assign(form, resource.spec.team);
-  if (resource.spec.role) Object.assign(form, resource.spec.role);
-  if (resource.spec.promptProfile)
-    Object.assign(form, resource.spec.promptProfile);
+  Object.assign(form, resource.draft);
   editorOpen.value = true;
 }
 
@@ -161,17 +114,17 @@ async function save(): Promise<void> {
   const name = form.name.trim();
   const result = isAccess.value
     ? await store.saveAccess(
-        kind.value as AccessResourceKind,
+        kind.value as WorkspaceAccessKind,
         resource,
         name,
-        buildAccessSpec(kind.value as AccessResourceKind, form),
+        buildAccessSpec(kind.value as WorkspaceAccessKind, form),
       )
     : await store.saveMutable(
         props.projectId,
-        kind.value as MutableResourceKind,
+        kind.value as WorkspaceMutableKind,
         resource,
         name,
-        buildMutableSpec(kind.value as MutableResourceKind, form, {
+        buildMutableSpec(kind.value as WorkspaceMutableKind, form, {
           credentialLocator: preservedCredentialLocator,
           credentialPrincipal: preservedCredentialPrincipal,
         }),
@@ -180,7 +133,7 @@ async function save(): Promise<void> {
 }
 
 async function changeState(
-  resource: Resource,
+  resource: WorkspaceResourceModel,
   targetState: "ACTIVE" | "PAUSED",
 ): Promise<void> {
   const action = targetState === "ACTIVE" ? "ACTIVATE" : "PAUSE";
@@ -201,7 +154,7 @@ async function changeState(
   }
 }
 
-async function archive(resource: Resource): Promise<void> {
+async function archive(resource: WorkspaceResourceModel): Promise<void> {
   if (
     !window.confirm(
       t("workspaces.confirmResourceAction", {
@@ -222,7 +175,7 @@ async function archive(resource: Resource): Promise<void> {
   }
 }
 
-async function remove(resource: Resource): Promise<void> {
+async function remove(resource: WorkspaceResourceModel): Promise<void> {
   if (
     !window.confirm(
       t("workspaces.confirmResourceAction", {
@@ -241,8 +194,8 @@ async function remove(resource: Resource): Promise<void> {
   } else await store.deleteWorkspaceResource(resource);
 }
 
-async function detach(resource: Resource): Promise<void> {
-  const ownership = resourceOwnership(resource);
+async function detach(resource: WorkspaceResourceModel): Promise<void> {
+  const ownership = resource.ownership;
   if (!ownership || ownership.managedBy !== "git") return;
   if (
     window.confirm(
@@ -250,20 +203,21 @@ async function detach(resource: Resource): Promise<void> {
         name: resource.name,
         source: ownership.source,
         revision: ownership.revision,
+        drift: ownership.drift,
       }),
     )
   )
     await store.detach(resource);
 }
 
-function beginCopy(resource: Resource): void {
+function beginCopy(resource: WorkspaceResourceModel): void {
   copySource.value = resource;
   copyName.value = `${resource.name}-copy`;
 }
 
 async function copy(): Promise<void> {
   if (!copySource.value) return;
-  const ownership = resourceOwnership(copySource.value);
+  const ownership = copySource.value.ownership;
   if (!ownership || ownership.managedBy !== "git") return;
   if (
     !window.confirm(
@@ -271,6 +225,7 @@ async function copy(): Promise<void> {
         name: copySource.value.name,
         source: ownership.source,
         revision: ownership.revision,
+        drift: ownership.drift,
       }),
     )
   )
@@ -281,12 +236,14 @@ async function copy(): Promise<void> {
 
 watch(
   () => props.projectId,
-  () => {
+  (projectId) => {
     editorOpen.value = false;
     editing.value = null;
     copySource.value = null;
     resetForm();
+    void store.load(projectId);
   },
+  { immediate: true },
 );
 </script>
 
@@ -321,8 +278,10 @@ watch(
             <th>{{ $t("common.name") }}</th>
             <th>{{ $t("search.kind") }}</th>
             <th>{{ $t("common.state") }}</th>
+            <th>{{ $t("workspaces.credential") }}</th>
             <th>{{ $t("common.managedBy") }}</th>
             <th>{{ $t("common.source") }}</th>
+            <th>Drift</th>
             <th>
               <span class="sr-only">{{ $t("common.actions") }}</span>
             </th>
@@ -334,23 +293,35 @@ watch(
             <td>{{ resource.kind }}</td>
             <td><StatusBadge :state="resource.state" /></td>
             <td>
-              <StatusBadge
-                :state="resourceOwnership(resource)?.managedBy ?? 'ui'"
-              />
+              <template v-if="resource.credential">
+                {{ resource.credential.purpose }} · v{{
+                  resource.credential.revision
+                }}
+                ·
+                <StatusBadge
+                  :state="
+                    resource.credential.providerEligible
+                      ? 'AVAILABLE'
+                      : 'UNAVAILABLE'
+                  "
+                />
+              </template>
+              <span v-else>{{ $t("common.noValue") }}</span>
             </td>
             <td>
-              {{ resourceOwnership(resource)?.source ?? $t("common.noValue") }}
-              ·
-              {{
-                resourceOwnership(resource)?.revision ?? $t("common.noValue")
-              }}
+              <StatusBadge :state="resource.ownership?.managedBy ?? 'ui'" />
             </td>
+            <td>
+              {{ resource.ownership?.source ?? $t("common.noValue") }}
+              ·
+              {{ resource.ownership?.revision ?? $t("common.noValue") }}
+            </td>
+            <td>{{ resource.ownership?.drift ?? $t("common.noValue") }}</td>
             <td>
               <div class="data-table__actions">
-                <template
-                  v-if="resourceOwnership(resource)?.managedBy === 'git'"
-                >
+                <template>
                   <button
+                    v-if="resource.nextActions.includes('DETACH')"
                     class="button button--text"
                     type="button"
                     @click="detach(resource)"
@@ -360,6 +331,7 @@ watch(
                     }}
                   </button>
                   <button
+                    v-if="resource.nextActions.includes('COPY')"
                     class="button button--text"
                     type="button"
                     @click="beginCopy(resource)"
@@ -368,9 +340,8 @@ watch(
                       $t("common.copy")
                     }}
                   </button>
-                </template>
-                <template v-else>
                   <button
+                    v-if="resource.nextActions.includes('UPDATE')"
                     class="button button--text"
                     type="button"
                     @click="beginEdit(resource)"
@@ -380,6 +351,7 @@ watch(
                     }}
                   </button>
                   <button
+                    v-if="resource.nextActions.includes('ACTIVATE')"
                     class="button button--text"
                     type="button"
                     @click="changeState(resource, 'ACTIVE')"
@@ -387,6 +359,7 @@ watch(
                     ACTIVATE
                   </button>
                   <button
+                    v-if="resource.nextActions.includes('PAUSE')"
                     class="button button--text"
                     type="button"
                     @click="changeState(resource, 'PAUSED')"
@@ -394,6 +367,7 @@ watch(
                     PAUSE
                   </button>
                   <button
+                    v-if="resource.nextActions.includes('ARCHIVE')"
                     class="button button--text"
                     type="button"
                     @click="archive(resource)"
@@ -401,6 +375,7 @@ watch(
                     {{ $t("common.archive") }}
                   </button>
                   <button
+                    v-if="resource.nextActions.includes('DELETE')"
                     class="button button--text"
                     type="button"
                     @click="remove(resource)"

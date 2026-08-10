@@ -1,6 +1,7 @@
 import {ResourceKind} from './ResourceKind';
 import {LifecycleState} from './LifecycleState';
 import {ResourceSpecProjection} from './ResourceSpecProjection';
+import {ResourceNextAction} from './ResourceNextAction';
 interface Resource {
   id: string;
   kind: ResourceKind;
@@ -13,5 +14,6 @@ interface Resource {
   spec: ResourceSpecProjection;
   createdAt: string;
   updatedAt: string;
+  nextActions: ResourceNextAction[];
 }
 export { Resource };

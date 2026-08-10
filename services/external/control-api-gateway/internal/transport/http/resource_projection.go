@@ -600,20 +600,32 @@ func projectionOwnership(value *controlplanev1.ConfigurationOwnership, resourceV
 	if value == nil || resourceVersion == 0 {
 		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration ownership is unavailable")
 	}
+	drift, driftErr := castClosedEnum(value.GetDrift().String(), "CONFIGURATION_DRIFT_", generated.ConfigurationDrift.Valid)
+	if driftErr != nil {
+		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration drift is unavailable")
+	}
+	var sourceSHA256 *generated.Sha256
+	if value.GetSourceSha256() != "" {
+		if !validSHA256(value.GetSourceSha256()) {
+			return generated.ConfigurationOwnershipProjection{}, errors.New("configuration source digest is invalid")
+		}
+		digest := generated.Sha256(strings.ToLower(value.GetSourceSha256()))
+		sourceSHA256 = &digest
+	}
 	switch value.GetManagedBy() {
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI:
 		if value.GetSourceRef() != "" && value.GetSourceRevision() != 0 {
-			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
+			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision()), SourceSha256: sourceSHA256, Drift: drift}, nil
 		}
 		if value.GetSourceRef() != "" || value.GetSourceRevision() != 0 {
 			return generated.ConfigurationOwnershipProjection{}, errors.New("ui ownership lineage is incomplete")
 		}
-		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion)}, nil
+		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion), SourceSha256: sourceSHA256, Drift: drift}, nil
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT:
 		if value.GetSourceRef() == "" || value.GetSourceRevision() == 0 {
 			return generated.ConfigurationOwnershipProjection{}, errors.New("git ownership is incomplete")
 		}
-		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
+		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision()), SourceSha256: sourceSHA256, Drift: drift}, nil
 	default:
 		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration ownership is invalid")
 	}

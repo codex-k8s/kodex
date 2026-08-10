@@ -144,9 +144,9 @@ const ru = {
       "Существующая закрытая ссылка сохранится без показа в интерфейсе.",
     confirmResourceAction: "Выполнить {action} для ресурса «{name}»?",
     confirmDetachRevision:
-      "Отсоединить «{name}» от Git source {source}, revision {revision}?",
+      "Отсоединить «{name}» от Git source {source}, revision {revision}, drift {drift}?",
     confirmCopyRevision:
-      "Создать UI-копию «{name}» из Git source {source}, revision {revision}?",
+      "Создать UI-копию «{name}» из Git source {source}, revision {revision}, drift {drift}?",
     contractLimit:
       "Выбранные значения превышают ограничение browser API для этого вида ресурса.",
   },
@@ -226,7 +226,7 @@ const ru = {
       "Объект управляется Git. Редактирование закрыто; используйте отдельную операцию detach или copy.",
     confirmAction: "Выполнить {action} для «{name}»?",
     confirmGitAction:
-      "Выполнить {action} для «{name}»? Git source {source}, revision {revision} перестанет быть или не станет авторитетным для результата.",
+      "Выполнить {action} для «{name}»? Git source {source}, revision {revision}, drift {drift} перестанет быть или не станет авторитетным для результата.",
   },
   providers: {
     title: "Провайдеры",
@@ -659,9 +659,9 @@ const en = {
       "The existing private reference will be preserved without being displayed.",
     confirmResourceAction: "Run {action} for resource “{name}”?",
     confirmDetachRevision:
-      "Detach “{name}” from Git source {source}, revision {revision}?",
+      "Detach “{name}” from Git source {source}, revision {revision}, drift {drift}?",
     confirmCopyRevision:
-      "Create a UI copy of “{name}” from Git source {source}, revision {revision}?",
+      "Create a UI copy of “{name}” from Git source {source}, revision {revision}, drift {drift}?",
     contractLimit:
       "The selected values exceed the browser API limit for this resource kind.",
   },
@@ -743,7 +743,7 @@ const en = {
       "This object is Git-managed. Editing is disabled; use the explicit detach or copy operation.",
     confirmAction: "Run {action} for “{name}”?",
     confirmGitAction:
-      "Run {action} for “{name}”? Git source {source}, revision {revision} will cease to be or will not become authoritative for the result.",
+      "Run {action} for “{name}”? Git source {source}, revision {revision}, drift {drift} will cease to be or will not become authoritative for the result.",
   },
   providers: {
     ...ru.providers,

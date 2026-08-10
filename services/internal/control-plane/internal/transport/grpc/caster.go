@@ -850,7 +850,59 @@ func toProtoResource(resource entity.Resource) (*controlplanev1.Resource, error)
 		CreatedAt:        timestamppb.New(resource.CreatedAt),
 		UpdatedAt:        timestamppb.New(resource.UpdatedAt),
 		ProjectionSha256: projectionSHA256,
+		NextActions:      resourceNextActionsToProto(resource),
 	}, nil
+}
+
+func resourceNextActionsToProto(resource entity.Resource) []controlplanev1.ResourceNextAction {
+	if resource.State == enum.StateDeleted {
+		return nil
+	}
+	if resource.Kind == enum.KindProject {
+		if resource.State == enum.StateDeletionPending {
+			return []controlplanev1.ResourceNextAction{controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_DELETE}
+		}
+		if !resource.State.Terminal() {
+			return []controlplanev1.ResourceNextAction{
+				controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_UPDATE,
+				controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_DELETE,
+			}
+		}
+		return nil
+	}
+	access := resource.Kind == enum.KindTeam || resource.Kind == enum.KindRole || resource.Kind == enum.KindPromptProfile
+	mutable := resource.Kind == enum.KindChat || resource.Kind == enum.KindCredentialBinding ||
+		resource.Kind == enum.KindRepositoryWorkspace || resource.Kind == enum.KindIntegration
+	if !access && !mutable {
+		return nil
+	}
+	if configured, ok := resource.Spec.(entity.ConfiguredSpec); ok &&
+		configured.ConfigurationOwnership().ManagedBy == "GIT" {
+		if access && resource.State != enum.StateDeletionPending && !resource.State.Terminal() {
+			return []controlplanev1.ResourceNextAction{
+				controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_DETACH,
+				controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_COPY,
+			}
+		}
+		return nil
+	}
+	result := make([]controlplanev1.ResourceNextAction, 0, 5)
+	if resource.State != enum.StateDeletionPending && !resource.State.Terminal() {
+		result = append(result, controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_UPDATE)
+	}
+	if enum.TransitionAllowed(resource.Kind, resource.State, enum.StateActive) {
+		result = append(result, controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_ACTIVATE)
+	}
+	if enum.TransitionAllowed(resource.Kind, resource.State, enum.StatePaused) {
+		result = append(result, controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_PAUSE)
+	}
+	if enum.TransitionAllowed(resource.Kind, resource.State, enum.StateArchived) {
+		result = append(result, controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_ARCHIVE)
+	}
+	if enum.TransitionAllowed(resource.Kind, resource.State, enum.StateDeletionPending) || resource.State == enum.StateDeletionPending {
+		result = append(result, controlplanev1.ResourceNextAction_RESOURCE_NEXT_ACTION_DELETE)
+	}
+	return result
 }
 
 func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
@@ -1601,6 +1653,10 @@ func configurationOwnershipFromProto(
 	if ownership == nil {
 		return entity.ConfigurationOwnership{}
 	}
+	drift := strings.TrimPrefix(ownership.GetDrift().String(), "CONFIGURATION_DRIFT_")
+	if drift == "UNSPECIFIED" {
+		drift = ""
+	}
 	return entity.ConfigurationOwnership{
 		ManagedBy: strings.TrimPrefix(
 			ownership.GetManagedBy().String(),
@@ -1609,6 +1665,7 @@ func configurationOwnershipFromProto(
 		SourceRef:      ownership.GetSourceRef(),
 		SourceRevision: ownership.GetSourceRevision(),
 		SourceSHA256:   ownership.GetSourceSha256(),
+		Drift:          drift,
 	}
 }
 
@@ -1622,6 +1679,9 @@ func configurationOwnershipToProto(
 		SourceRef:      ownership.SourceRef,
 		SourceRevision: ownership.SourceRevision,
 		SourceSha256:   ownership.SourceSHA256,
+		Drift: controlplanev1.ConfigurationDrift(
+			controlplanev1.ConfigurationDrift_value["CONFIGURATION_DRIFT_"+ownership.AuthoritativeDrift()],
+		),
 	}
 }
 

@@ -898,7 +898,7 @@ func (server *Server) GetConfigurationSourceDetail(writer http.ResponseWriter, r
 		server.writeInternal(writer, request.Context(), ownershipErr)
 		return
 	}
-	writeJSON(writer, http.StatusOK, generated.ConfigurationSourceDetail{ResourceRef: string(resourceRef), DisplayName: value.Name, Version: value.Version, ManagedBy: ownership.ManagedBy, Source: ownership.Source, SourceRevision: ownership.Revision, UpdatedAt: value.UpdatedAt})
+	writeJSON(writer, http.StatusOK, generated.ConfigurationSourceDetail{ResourceRef: string(resourceRef), DisplayName: value.Name, Version: value.Version, ManagedBy: ownership.ManagedBy, Source: ownership.Source, SourceRevision: ownership.Revision, SourceSha256: ownership.SourceSha256, Drift: ownership.Drift, UpdatedAt: value.UpdatedAt})
 }
 
 func configurationOwnership(resource generated.Resource) (generated.ConfigurationOwnershipProjection, error) {

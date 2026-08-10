@@ -100,6 +100,15 @@ const lifecycleStates: LifecycleState[] = [
   "EXPIRED",
   "BLOCKED",
 ];
+const resourceNextActions: Resource["nextActions"] = [
+  "UPDATE",
+  "ACTIVATE",
+  "PAUSE",
+  "ARCHIVE",
+  "DELETE",
+  "DETACH",
+  "COPY",
+];
 const configurationActions: ConfigurationChange["action"][] = [
   "create",
   "update",
@@ -156,6 +165,10 @@ function mapResource(value: unknown): Resource | null {
     !lifecycleStates.includes(value.state as LifecycleState) ||
     !isVersion(value.version) ||
     typeof value.projectionSha256 !== "string" ||
+    !Array.isArray(value.nextActions) ||
+    !value.nextActions.every((item) =>
+      resourceNextActions.includes(item as Resource["nextActions"][number]),
+    ) ||
     !isRecord(value.spec) ||
     typeof value.createdAt !== "string" ||
     typeof value.updatedAt !== "string"
@@ -168,6 +181,7 @@ function mapResource(value: unknown): Resource | null {
     state: value.state as AsyncResource["state"],
     version: value.version,
     projectionSha256: value.projectionSha256,
+    nextActions: value.nextActions as AsyncResource["nextActions"],
     ...(typeof value.projectId === "string"
       ? { projectId: value.projectId }
       : {}),

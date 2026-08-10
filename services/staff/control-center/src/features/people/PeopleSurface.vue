@@ -348,6 +348,11 @@ onMounted(load);
                     <StatusBadge
                       :state="resourceOwnership(item)?.managedBy ?? 'ui'"
                     />
+                    <small>
+                      {{ resourceOwnership(item)?.source }} ·
+                      {{ resourceOwnership(item)?.revision }} ·
+                      {{ resourceOwnership(item)?.drift }}
+                    </small>
                   </td>
                   <td><StatusBadge :state="item.state" /></td>
                   <td>
@@ -866,6 +871,10 @@ onMounted(load);
         <div>
           <dt>{{ $t("common.revision") }}</dt>
           <dd>{{ store.configurationSource.data.sourceRevision }}</dd>
+        </div>
+        <div>
+          <dt>Drift</dt>
+          <dd>{{ store.configurationSource.data.drift }}</dd>
         </div>
         <div v-if="store.configurationSource.data.sourceSha256">
           <dt>{{ $t("common.sourceDigest") }}</dt>
