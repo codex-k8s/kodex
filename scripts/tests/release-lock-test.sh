@@ -23,6 +23,15 @@ grep -Fq 'target_options=(--opt "target=$target")' \
     printf 'Release builder does not pass the exact Dockerfile target to BuildKit\n' >&2
     exit 1
   }
+admission_arg_line=$(rg -n '^ARG ADMISSION_TOOLS_IMAGE=' \
+  "$repository_root/services/jobs/role-image-builder/Dockerfile" | cut -d: -f1)
+first_role_builder_from_line=$(rg -n '^FROM ' \
+  "$repository_root/services/jobs/role-image-builder/Dockerfile" | head -n 1 | cut -d: -f1)
+[[ "$admission_arg_line" =~ ^[0-9]+$ && "$first_role_builder_from_line" =~ ^[0-9]+$ &&
+   "$admission_arg_line" -lt "$first_role_builder_from_line" ]] || {
+  printf 'Deferred admission image ARG is not globally parseable before named target selection\n' >&2
+  exit 1
+}
 lock_sha=$(sha256sum "$temporary_directory/valid.json" | awk '{print $1}')
 "$validator" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" --sha256 "$lock_sha" >/dev/null
 "$renderer" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" \
