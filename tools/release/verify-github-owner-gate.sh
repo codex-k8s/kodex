@@ -38,6 +38,9 @@ case "$mode" in build|dark|cutover|rollback) ;; *) fail "mode is invalid" ;; esa
 for variable_name in GH_TOKEN GITHUB_REPOSITORY GITHUB_RUN_ID GITHUB_WORKFLOW_REF GITHUB_API_URL; do
   [[ -n "${!variable_name:-}" ]] || fail "$variable_name is required"
 done
+for command_name in curl jq; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
+done
 [[ "$GITHUB_REPOSITORY" == codex-k8s/matter-codex ]] || fail "repository mismatch"
 expected_workflow_ref="$GITHUB_REPOSITORY/$workflow@refs/heads/main"
 [[ "$GITHUB_WORKFLOW_REF" == "$expected_workflow_ref" ]] || fail "workflow ref is not exact main"
@@ -46,8 +49,18 @@ expected_workflow_ref="$GITHUB_REPOSITORY/$workflow@refs/heads/main"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 umask 077
-gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >"$temporary_directory/run.json"
-gh api "repos/$GITHUB_REPOSITORY" >"$temporary_directory/repository.json"
+curl_config="$temporary_directory/curl.conf"
+printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' \
+  "$GH_TOKEN" >"$curl_config"
+unset GH_TOKEN
+github_api_get() {
+  local path=$1 output=$2
+  curl --config "$curl_config" --fail --silent --show-error \
+    "$GITHUB_API_URL/$path" >"$output"
+}
+github_api_get "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+  "$temporary_directory/run.json"
+github_api_get "repos/$GITHUB_REPOSITORY" "$temporary_directory/repository.json"
 
 jq -e --arg repository "$GITHUB_REPOSITORY" --arg workflow "$workflow" '
   .event == "workflow_dispatch" and .head_branch == "main" and
@@ -67,16 +80,19 @@ triggering_actor_id=$(jq -r '.triggering_actor.id' "$temporary_directory/run.jso
 if [[ "$mode" != rollback && "$workflow_head_sha" != "$source_sha" ]]; then
   fail "requested source SHA is not the exact workflow main SHA"
 fi
-gh api "repos/$GITHUB_REPOSITORY/commits/$source_sha" --jq '.sha' | grep -qx "$source_sha" ||
+github_api_get "repos/$GITHUB_REPOSITORY/commits/$source_sha" "$temporary_directory/commit.json"
+jq -e --arg sha "$source_sha" '.sha == $sha' "$temporary_directory/commit.json" >/dev/null ||
   fail "source SHA is not reachable in the repository"
 
 deployments="$temporary_directory/deployments.json"
-gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$environment&per_page=100" >"$deployments"
+github_api_get "repos/$GITHUB_REPOSITORY/deployments?environment=$environment&per_page=100" \
+  "$deployments"
 matching_deployments=0
 while IFS= read -r deployment_id; do
   [[ "$deployment_id" =~ ^[1-9][0-9]*$ ]] || fail "environment deployment ID is invalid"
   statuses="$temporary_directory/deployment-statuses-$deployment_id.json"
-  gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=100" >"$statuses"
+  github_api_get "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=100" \
+    "$statuses"
   if jq -e --arg environment "$environment" \
     --arg run_path "/actions/runs/$GITHUB_RUN_ID/job/" '
       any(.[];
