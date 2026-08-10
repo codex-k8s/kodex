@@ -43,6 +43,19 @@ buildkit_host=${BUILDKIT_HOST:-unix:///var/run/buildkit/buildkitd.sock}
 
 registry_push=matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000
 node_pull=localhost:5001
+build_proxy=http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
+build_no_proxy=$registry_push,localhost,127.0.0.1
+[[ "${HTTPS_PROXY:-}" == "$build_proxy" && "${HTTP_PROXY:-}" == "$build_proxy" &&
+   "${NO_PROXY:-}" == "$build_no_proxy" ]] ||
+  fail "exact non-secret build proxy environment is required"
+proxy_frontend_options=(
+  --opt "build-arg:HTTPS_PROXY=$build_proxy"
+  --opt "build-arg:HTTP_PROXY=$build_proxy"
+  --opt "build-arg:https_proxy=$build_proxy"
+  --opt "build-arg:http_proxy=$build_proxy"
+  --opt "build-arg:NO_PROXY=$build_no_proxy"
+  --opt "build-arg:no_proxy=$build_no_proxy"
+)
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 metadata_directory="$temporary_directory/metadata"
@@ -70,6 +83,7 @@ while IFS=$'\t' read -r component dockerfile; do
       --local dockerfile="$source_context/$(dirname -- "$dockerfile")" \
       --opt filename="$(basename -- "$dockerfile")" \
       --opt "build-arg:SOURCE_SHA=$source_sha" \
+      "${proxy_frontend_options[@]}" \
       --output "type=image,name=$destination,push=true" \
       --metadata-file "$metadata_directory/$component.json"
   fi

@@ -195,6 +195,19 @@ grep -Fq 'repos/$repository/actions/runners?per_page=1' \
   printf 'GitHub policy preflight does not verify repository runner API access\n' >&2
   exit 1
 }
+for proxy_contract in \
+  'build_proxy=http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080' \
+  'build-arg:HTTPS_PROXY=$build_proxy' \
+  'build-arg:NO_PROXY=$build_no_proxy'; do
+  grep -Fq "$proxy_contract" "$repository_root/tools/release/build-release.sh" || {
+    printf 'Release builder lost the exact BuildKit proxy contract\n' >&2
+    exit 1
+  }
+  grep -Fq "$proxy_contract" "$repository_root/tools/release/shims/docker" || {
+    printf 'Protected agent-runner shim lost the exact BuildKit proxy contract\n' >&2
+    exit 1
+  }
+done
 
 jq '.images[0].pull_ref = "localhost:5001/mattercodex/control-plane:latest"' "$temporary_directory/valid.json" >"$temporary_directory/mutable.json"
 mutable_sha=$(sha256sum "$temporary_directory/mutable.json" | awk '{print $1}')
