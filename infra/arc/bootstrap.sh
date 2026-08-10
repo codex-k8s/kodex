@@ -346,7 +346,12 @@ readback_scale_set() {
       ($items | length) == 1 and all($items[];
       .status.phase == "Running" and
       any(.status.conditions[]?; .type == "Ready" and .status == "True") and
-      any(.spec.containers[]; any(.env[]?; .name == "NO_PROXY" and .value == $no_proxy)))' \
+      any(.spec.containers[]; .name == "listener" and
+        .securityContext.runAsNonRoot == true and
+        .securityContext.allowPrivilegeEscalation == false and
+        .securityContext.capabilities.drop == ["ALL"] and
+        .securityContext.seccompProfile.type == "RuntimeDefault" and
+        any(.env[]?; .name == "NO_PROXY" and .value == $no_proxy)))' \
       >/dev/null ||
     fail "listener Pod is not uniquely Ready: $name"
   kubectl --context "$expected_context" -n "$namespace" get ephemeralrunnerset \

@@ -182,12 +182,24 @@ for controller_values in controller-values controller-deploy-values; do
   ' "$temporary_directory/helm-values/$controller_values.yaml" >/dev/null
 done
 NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
-  [.listenerTemplate.spec.containers[].env[] |
-    select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1
+  ([.listenerTemplate.spec.containers[].env[] |
+    select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1) and
+  ([.listenerTemplate.spec.containers[] | select(.name == "listener" and
+    .securityContext.runAsNonRoot == true and
+    .securityContext.allowPrivilegeEscalation == false and
+    (.securityContext.capabilities.drop | length) == 1 and
+    .securityContext.capabilities.drop[0] == "ALL" and
+    .securityContext.seccompProfile.type == "RuntimeDefault")] | length == 1)
 ' "$temporary_directory/helm-values/build-runner-values.yaml" >/dev/null
 NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
   ([.listenerTemplate.spec.containers[].env[] |
     select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1) and
+  ([.listenerTemplate.spec.containers[] | select(.name == "listener" and
+    .securityContext.runAsNonRoot == true and
+    .securityContext.allowPrivilegeEscalation == false and
+    (.securityContext.capabilities.drop | length) == 1 and
+    .securityContext.capabilities.drop[0] == "ALL" and
+    .securityContext.seccompProfile.type == "RuntimeDefault")] | length == 1) and
   ([.template.spec.containers[] | select(.name == "runner") | .env[] |
     select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1)
 ' "$temporary_directory/helm-values/deploy-runner-values.yaml" >/dev/null
