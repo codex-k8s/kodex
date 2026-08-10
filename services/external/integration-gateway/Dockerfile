@@ -35,6 +35,8 @@ FROM docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be9894382
 
 ARG CODEX_PACKAGE=@openai/codex@0.144.1
 
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 RUN set -eu; \
     test -f /etc/apt/sources.list.d/debian.sources; \
     sed -i 's#^URIs: http://deb.debian.org/#URIs: https://deb.debian.org/#' /etc/apt/sources.list.d/debian.sources; \
