@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -65,6 +66,7 @@ type Config struct {
 	InteractionReadbackSignerGeneration uint64        `env:"CONTROL_PLANE_INTERACTION_READBACK_SIGNER_GENERATION"`
 	LeaseSigningKeyFile                 string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
 	RuntimeAdmissionSigningKeyFile      string        `env:"CONTROL_PLANE_RUNTIME_ADMISSION_SIGNING_KEY_FILE"`
+	RuntimeArchiveRestoreCapability     string        `env:"CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY"`
 	RuntimeArchiveSigningKeyFile        string        `env:"CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE"`
 	RuntimeRestoreSigningKeyFile        string        `env:"CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE"`
 	ImagePolicyRevision                 uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
@@ -148,6 +150,7 @@ func loadConfig() (Config, error) {
 		InteractionReadbackSignerGeneration: 1,
 		LeaseSigningKeyFile:                 "/var/run/secrets/mattercodex/control-plane/lease-signing/key",
 		RuntimeAdmissionSigningKeyFile:      "/var/run/secrets/mattercodex/control-plane/runtime-workload-signing/admission-private-key.hex",
+		RuntimeArchiveRestoreCapability:     "enabled",
 		RuntimeArchiveSigningKeyFile:        "/var/run/secrets/mattercodex/control-plane/runtime-workload-signing/archive-private-key.hex",
 		RuntimeRestoreSigningKeyFile:        "/var/run/secrets/mattercodex/control-plane/runtime-workload-signing/restore-private-key.hex",
 		ImageBuildLeaseDuration:             5 * time.Minute,
@@ -181,6 +184,18 @@ func loadConfig() (Config, error) {
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
+	}
+	if config.RuntimeArchiveRestoreCapability == "disabled" {
+		for _, name := range []string{
+			"CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE",
+			"CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE",
+		} {
+			if _, exists := os.LookupEnv(name); exists {
+				return Config{}, errors.New("disabled runtime archive/restore environment is configured")
+			}
+		}
+		config.RuntimeArchiveSigningKeyFile = ""
+		config.RuntimeRestoreSigningKeyFile = ""
 	}
 	if err := config.validate(); err != nil {
 		return Config{}, err
@@ -261,8 +276,6 @@ func (config Config) validate() error {
 		config.InteractionReadbackPublicKeysetFile,
 		config.LeaseSigningKeyFile,
 		config.RuntimeAdmissionSigningKeyFile,
-		config.RuntimeArchiveSigningKeyFile,
-		config.RuntimeRestoreSigningKeyFile,
 		config.OIDCCAFile,
 		config.ApplicationGrantTrustDir,
 		config.InstructionS3CAFile,
@@ -273,6 +286,17 @@ func (config Config) validate() error {
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control-plane runtime path must be absolute")
+		}
+	}
+	if config.RuntimeArchiveRestoreCapability != "enabled" && config.RuntimeArchiveRestoreCapability != "disabled" {
+		return errors.New("control-plane runtime archive/restore capability is invalid")
+	}
+	for _, path := range []string{config.RuntimeArchiveSigningKeyFile, config.RuntimeRestoreSigningKeyFile} {
+		if config.RuntimeArchiveRestoreCapability == "enabled" && !filepath.IsAbs(path) {
+			return errors.New("control-plane runtime archive/restore signing key path is invalid")
+		}
+		if config.RuntimeArchiveRestoreCapability == "disabled" && path != "" {
+			return errors.New("control-plane disabled runtime archive/restore key path is configured")
 		}
 	}
 	if config.InstructionS3SessionTokenFile != "" && !filepath.IsAbs(config.InstructionS3SessionTokenFile) {

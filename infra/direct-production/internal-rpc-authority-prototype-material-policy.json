@@ -26,7 +26,6 @@
     {"owner":"publisher","classification":"deterministically_derived","kind":"Secret","name":"internal-rpc-authority-role-image-builder-manifest-trust","keys":["bundle.jws"]},
     {"owner":"publisher","classification":"deterministically_derived","kind":"Secret","name":"internal-rpc-authority-role-image-builder-proof-trust","keys":["jwks.json"]},
     {"owner":"publisher","classification":"cryptographically_generated","kind":"Secret","name":"internal-rpc-authority-runtime-controller-issuer-delivery","keys":["readback-credential.json","readback-possession.json","restore-ack.json","restore-credential.json"]},
-    {"owner":"publisher","classification":"cryptographically_generated","kind":"Secret","name":"internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery","keys":["readback-credential.json","readback-possession.json","restore-ack.json","restore-credential.json"]},
     {"owner":"reconciler","classification":"deterministically_derived","kind":"Secret","name":"internal-rpc-authority-prototype-static-role-state","keys":["state.json"]}
   ],
   "publisher_owned_runtime_keys": [
@@ -54,9 +53,6 @@
     {"kind":"Secret","name":"internal-rpc-authority-runtime-controller-issuer-key","keys":["current_generation","current_private_jwk","next_generation","next_private_jwk","previous_generation","previous_public_jwk","source_digest_sha256","source_revision"]},
     {"kind":"Secret","name":"internal-rpc-authority-runtime-controller-manifest-trust","keys":["source_digest_sha256","source_revision"]},
     {"kind":"Secret","name":"internal-rpc-authority-runtime-controller-proof-trust","keys":["source_digest_sha256","source_revision"]},
-    {"kind":"Secret","name":"internal-rpc-authority-runtime-s3-restore-exchanger-issuer-key","keys":["current_generation","current_private_jwk","next_generation","next_private_jwk","previous_generation","previous_public_jwk","source_digest_sha256","source_revision"]},
-    {"kind":"Secret","name":"internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust","keys":["source_digest_sha256","source_revision"]},
-    {"kind":"Secret","name":"internal-rpc-authority-runtime-s3-restore-exchanger-proof-trust","keys":["source_digest_sha256","source_revision"]},
     {"kind":"Secret","name":"internal-rpc-authority-role-image-builder-issuer-key","keys":["current_generation","current_private_jwk","next_generation","next_private_jwk","previous_generation","previous_public_jwk","source_digest_sha256","source_revision"]},
     {"kind":"Secret","name":"internal-rpc-authority-role-image-builder-manifest-trust","keys":["source_digest_sha256","source_revision"]},
     {"kind":"Secret","name":"internal-rpc-authority-role-image-builder-proof-trust","keys":["source_digest_sha256","source_revision"]}

@@ -327,7 +327,8 @@ fi
 principal_names="$temporary_directory/internal/principals.txt"
 yq -r '.data."principals.tsv"' deploy/k8s/base/direct-production-foundation/foundation.yaml 2>/dev/null |
   awk -F '\t' 'NF >= 4 && $1 ~ /^[a-z0-9_]+$/ {print $1}' | LC_ALL=C sort -u >"$principal_names"
-[[ "$(wc -l <"$principal_names" | tr -d ' ')" -eq 29 ]] || fail "PostgreSQL principal registry is incomplete"
+principal_count=$(wc -l <"$principal_names" | tr -d ' ')
+[[ "$principal_count" -eq 28 ]] || fail "PostgreSQL principal registry count is invalid: $principal_count"
 principal_directory="$temporary_directory/internal/principals"
 mkdir -p "$principal_directory"
 principal_secret_json="$temporary_directory/internal/principals.json"
@@ -381,8 +382,7 @@ for mapping in \
   control-api-gateway:ira_control_api_gateway_issuer_g1 \
   integration-gateway:ira_integration_gateway_issuer_g1 \
   interaction-gateway:ira_interaction_gateway_issuer_g1 \
-  runtime-controller:ira_runtime_controller_issuer_g1 \
-  runtime-s3-restore-exchanger:ira_runtime_s3_restore_exchanger_issuer_g1; do
+  runtime-controller:ira_runtime_controller_issuer_g1; do
   component=${mapping%%:*}; principal=${mapping#*:}
   resource="internal-rpc-authority-$component-issuer-postgresql"
   put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca" internal_rpc_authority_issuer
@@ -415,7 +415,7 @@ for item in \
   'ConfigMap internal-rpc-authority-publisher-client-ca client-ca.pem' 'ConfigMap internal-rpc-authority-readback-attestor-ca ca.pem' \
   'ConfigMap internal-rpc-authority-readback-attestor-client-ca client-ca.pem' 'ConfigMap internal-rpc-authority-restore-controller-ca ca.pem' \
   'ConfigMap internal-rpc-authority-restore-controller-client-ca client-ca.pem' 'ConfigMap mattercodex-internal-ca ca.pem' \
-  'ConfigMap mattercodex-nats-ca ca.pem' 'ConfigMap mattercodex-s3-ca ca.pem' 'ConfigMap object-store-ca ca.pem' \
+  'ConfigMap mattercodex-nats-ca ca.pem' 'ConfigMap object-store-ca ca.pem' \
   'ConfigMap provider-health-adapter-ca ca.pem' 'ConfigMap runtime-controller-postgresql-ca ca.pem' \
   'Secret integration-gateway-postgresql-ca ca.crt' 'Secret interaction-gateway-postgresql-ca ca.crt'; do
   read -r kind name key <<<"$item"; put_file "$kind" "$name" "$key" "$ca_cert"
@@ -443,7 +443,7 @@ public_jwks control-plane-keyset-genesis interaction-readback.public-keyset.json
 public_jwks control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
 public_jwks interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_jwks interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
-for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller runtime-s3-restore-exchanger; do
+for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
 done
 public_jwks internal-rpc-authority-control-plane-resolver-trust jwks.json internal-rpc-authority-control-plane-resolver-key private.jwk
@@ -453,7 +453,7 @@ put_file Secret internal-rpc-authority-restore-role-trust manifest-trust.jws \
 mkdir -p "$(dirname -- "$(value_path Secret integration-gateway-payload-keyset keyset.json)")"
 node "$helper" generate-payload-keyset "$root" "$(value_path Secret integration-gateway-payload-keyset keyset.json)"
 
-for key in admission-private-key.hex archive-private-key.hex restore-private-key.hex; do
+for key in admission-private-key.hex; do
   if ! has_value Secret control-plane-runtime-workload-signing "$key"; then
     path=$(value_path Secret control-plane-runtime-workload-signing "$key"); mkdir -p "$(dirname -- "$path")"
     node "$helper" derive-hex "$root" "control-plane-runtime-workload-signing/$key" "$path"
@@ -464,11 +464,7 @@ ticket_public() {
   destination=$(value_path Secret "$2" "$3"); mkdir -p "$(dirname -- "$destination")"
   node "$helper" ed25519-public-hex "$(value_path Secret control-plane-runtime-workload-signing "$1")" "$destination"
 }
-ticket_public archive-private-key.hex runtime-s3-archive-exchanger-ticket-trust public-key.hex
-ticket_public restore-private-key.hex runtime-s3-restore-exchanger-ticket-trust public-key.hex
 ticket_public admission-private-key.hex runtime-workload-admission-ticket-trust public-key.hex
-ticket_public archive-private-key.hex runtime-workload-admission-ticket-trust s3-archive-public-key.hex
-ticket_public restore-private-key.hex runtime-workload-admission-ticket-trust s3-restore-public-key.hex
 ticket_public admission-private-key.hex runtime-workload-materializer-ticket-trust public-key.hex
 
 # Generate exact client/server certificates from the owner-controlled prototype CA.
@@ -483,7 +479,6 @@ generate_tls() {
     integration-egress-proxy-provider-client-tls) service_account=integration-egress-proxy ;;
     provider-health-adapter-server-tls) service=provider-health-adapter; service_account=provider-health-adapter ;;
     runtime-controller-nats-tls) service_account=runtime-controller ;;
-    runtime-restore-effect-workload-tls) service_account=runtime-s3-restore-exchanger ;;
     internal-rpc-authority-*-workload-tls)
       service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls} ;;
     internal-rpc-authority-restore-operator-tls) service_account=internal-rpc-authority-restore-operator ;;

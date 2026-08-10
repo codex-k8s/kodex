@@ -71,10 +71,12 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 	}
 	var err error
 	execution.WorkloadTicket, err = issue("mattercodex-control-plane-workload-admission", "mattercodex-runtime-workload-admission", service.runtimeAdmissionSigningKey)
-	if err == nil {
+	execution.ArchiveWorkloadTicket = ""
+	execution.RestoreWorkloadTicket = ""
+	if err == nil && service.archiveRestoreEnabled {
 		execution.ArchiveWorkloadTicket, err = issue("mattercodex-control-plane-s3-archive", "mattercodex-runtime-s3-archive", service.runtimeArchiveSigningKey)
 	}
-	if err == nil {
+	if err == nil && service.archiveRestoreEnabled {
 		execution.RestoreWorkloadTicket, err = issue("mattercodex-control-plane-s3-restore", "mattercodex-runtime-s3-restore", service.runtimeRestoreSigningKey)
 	}
 	if err != nil {
@@ -213,6 +215,7 @@ const (
 type Config struct {
 	LeaseSigningKey             []byte
 	RuntimeAdmissionSigningKey  ed25519.PrivateKey
+	ArchiveRestoreEnabled       bool
 	RuntimeArchiveSigningKey    ed25519.PrivateKey
 	RuntimeRestoreSigningKey    ed25519.PrivateKey
 	TurnLeaseDuration           time.Duration
@@ -284,6 +287,7 @@ type Service struct {
 	repository                  domainrepo.Repository
 	leaseSigningKey             []byte
 	runtimeAdmissionSigningKey  ed25519.PrivateKey
+	archiveRestoreEnabled       bool
 	runtimeArchiveSigningKey    ed25519.PrivateKey
 	runtimeRestoreSigningKey    ed25519.PrivateKey
 	turnLeaseDuration           time.Duration
@@ -338,11 +342,14 @@ type Service struct {
 func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	if repository == nil || len(config.LeaseSigningKey) < 32 ||
 		len(config.RuntimeAdmissionSigningKey) != ed25519.PrivateKeySize ||
-		len(config.RuntimeArchiveSigningKey) != ed25519.PrivateKeySize ||
-		len(config.RuntimeRestoreSigningKey) != ed25519.PrivateKeySize ||
-		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeArchiveSigningKey) ||
-		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeRestoreSigningKey) ||
-		bytes.Equal(config.RuntimeArchiveSigningKey, config.RuntimeRestoreSigningKey) ||
+		(config.ArchiveRestoreEnabled &&
+			(len(config.RuntimeArchiveSigningKey) != ed25519.PrivateKeySize ||
+				len(config.RuntimeRestoreSigningKey) != ed25519.PrivateKeySize ||
+				bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeArchiveSigningKey) ||
+				bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeRestoreSigningKey) ||
+				bytes.Equal(config.RuntimeArchiveSigningKey, config.RuntimeRestoreSigningKey))) ||
+		(!config.ArchiveRestoreEnabled &&
+			(len(config.RuntimeArchiveSigningKey) != 0 || len(config.RuntimeRestoreSigningKey) != 0)) ||
 		config.TurnLeaseDuration < 30*time.Second ||
 		!validImageRepository(config.RoleImageInputRepository) ||
 		config.TurnLeaseDuration > 30*time.Minute ||
@@ -411,6 +418,7 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		repository:                  repository,
 		leaseSigningKey:             slices.Clone(config.LeaseSigningKey),
 		runtimeAdmissionSigningKey:  slices.Clone(config.RuntimeAdmissionSigningKey),
+		archiveRestoreEnabled:       config.ArchiveRestoreEnabled,
 		runtimeArchiveSigningKey:    slices.Clone(config.RuntimeArchiveSigningKey),
 		runtimeRestoreSigningKey:    slices.Clone(config.RuntimeRestoreSigningKey),
 		turnLeaseDuration:           config.TurnLeaseDuration,

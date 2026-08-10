@@ -129,32 +129,6 @@
       "requirement": "точный workload application grant, выпущенный владельцем"
     },
     {
-      "kind": "Secret",
-      "name": "runtime-restore-effect-application-grant",
-      "keys": [
-        "application-grant.jws"
-      ],
-      "requirement": "точный restore-effect application grant, выпущенный владельцем"
-    },
-    {
-      "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-config",
-      "keys": [
-        "archive-role-arn",
-        "kms-key-arn"
-      ],
-      "requirement": "внешние идентификаторы archive KMS и role"
-    },
-    {
-      "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-config",
-      "keys": [
-        "kms-key-arn",
-        "restore-role-arn"
-      ],
-      "requirement": "внешние идентификаторы restore KMS и role"
-    },
-    {
       "kind": "ConfigMap",
       "name": "mattercodex-oidc-ca",
       "keys": [
@@ -237,13 +211,6 @@
     {
       "kind": "Secret",
       "name": "internal-rpc-authority-runtime-controller-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ]
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust",
       "keys": [
         "bundle.jws"
       ]
@@ -429,9 +396,7 @@
       "kind": "Secret",
       "name": "control-plane-runtime-workload-signing",
       "keys": [
-        "admission-private-key.hex",
-        "archive-private-key.hex",
-        "restore-private-key.hex"
+        "admission-private-key.hex"
       ]
     },
     {
@@ -1080,49 +1045,6 @@
       ]
     },
     {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-key",
-      "keys": [
-        "private.jwk"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-postgresql",
-      "keys": [
-        "dsn",
-        "username"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-proof-trust",
-      "keys": [
-        "jwks.json"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-workload-tls",
-      "keys": [
-        "ca.crt",
-        "tls.crt",
-        "tls.key"
-      ]
-    },
-    {
       "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-snapshot",
@@ -1183,78 +1105,6 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
-      "kind": "Secret",
-      "name": "runtime-restore-effect-application-grant",
-      "keys": [
-        "application-grant.jws"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "runtime-restore-effect-workload-tls",
-      "keys": [
-        "ca.crt",
-        "tls.crt",
-        "tls.key"
-      ]
-    },
-    {
-      "classification": "truly_external_credential",
-      "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-config",
-      "keys": [
-        "archive-role-arn",
-        "kms-key-arn"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-ticket-trust",
-      "keys": [
-        "public-key.hex"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "runtime-s3-archive-exchanger-tls",
-      "keys": [
-        "ca.crt",
-        "tls.crt",
-        "tls.key"
-      ]
-    },
-    {
-      "classification": "truly_external_credential",
-      "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-config",
-      "keys": [
-        "kms-key-arn",
-        "restore-role-arn"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-ticket-trust",
-      "keys": [
-        "public-key.hex"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "runtime-s3-restore-exchanger-tls",
-      "keys": [
-        "ca.crt",
-        "tls.crt",
-        "tls.key"
-      ]
-    },
-    {
       "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "runtime-workload-admission-postgres",
@@ -1267,9 +1117,7 @@
       "kind": "Secret",
       "name": "runtime-workload-admission-ticket-trust",
       "keys": [
-        "public-key.hex",
-        "s3-archive-public-key.hex",
-        "s3-restore-public-key.hex"
+        "public-key.hex"
       ]
     },
     {
@@ -1438,14 +1286,6 @@
       "classification": "truly_external_credential",
       "kind": "ConfigMap",
       "name": "mattercodex-oidc-ca",
-      "keys": [
-        "ca.pem"
-      ]
-    },
-    {
-      "classification": "deterministically_derived",
-      "kind": "ConfigMap",
-      "name": "mattercodex-s3-ca",
       "keys": [
         "ca.pem"
       ]

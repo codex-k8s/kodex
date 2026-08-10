@@ -31,11 +31,12 @@ type Observer interface {
 }
 
 type Service struct {
-	controlPlane runtimerepo.ControlPlane
-	cluster      runtimerepo.Cluster
-	observer     Observer
-	warmTTL      time.Duration
-	watchdog     time.Duration
+	controlPlane          runtimerepo.ControlPlane
+	cluster               runtimerepo.Cluster
+	observer              Observer
+	warmTTL               time.Duration
+	watchdog              time.Duration
+	archiveRestoreEnabled bool
 }
 
 func New(
@@ -44,17 +45,19 @@ func New(
 	observer Observer,
 	warmTTL time.Duration,
 	watchdog time.Duration,
+	archiveRestoreEnabled bool,
 ) (*Service, error) {
 	if controlPlane == nil || cluster == nil || observer == nil ||
 		warmTTL != 4*time.Hour || watchdog < 30*time.Second || watchdog > 10*time.Minute {
 		return nil, errs.ErrInvalidInput
 	}
 	return &Service{
-		controlPlane: controlPlane,
-		cluster:      cluster,
-		observer:     observer,
-		warmTTL:      warmTTL,
-		watchdog:     watchdog,
+		controlPlane:          controlPlane,
+		cluster:               cluster,
+		observer:              observer,
+		warmTTL:               warmTTL,
+		watchdog:              watchdog,
+		archiveRestoreEnabled: archiveRestoreEnabled,
 	}, nil
 }
 
@@ -81,6 +84,10 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 	}
 	if err := execution.Validate(); err != nil || execution.State != enum.ExecutionPending {
 		service.observer.Observe("claim", "invalid")
+		return errs.ErrStateConflict
+	}
+	if !service.archiveRestoreEnabled && execution.RestoreSourceExecutionID != "" {
+		service.observer.Observe("restore", "disabled")
 		return errs.ErrStateConflict
 	}
 	journal, err := service.cluster.EnsureJournal(ctx, execution)
@@ -447,6 +454,9 @@ func (service *Service) authorizeRestoreMaterialization(ctx context.Context, exe
 	if execution.RestoreOperationID == "" {
 		return nil
 	}
+	if !service.archiveRestoreEnabled {
+		return errs.ErrStateConflict
+	}
 	if execution.State != enum.ExecutionAdmitted || execution.RestoreOperationGeneration == 0 ||
 		execution.RestoreSourceAuthoritySHA256 == "" {
 		return errs.ErrStateConflict
@@ -618,6 +628,10 @@ func (service *Service) reconcileRetention(
 		service.observer.Observe("terminal_eviction", "deleted")
 	}
 	if !status.RetentionOwner {
+		return nil
+	}
+	if !service.archiveRestoreEnabled {
+		service.observer.Observe("archive", "disabled")
 		return nil
 	}
 	switch {

@@ -136,8 +136,7 @@ spec:
           'internal-rpc-authority-readback-attestor-postgresql-connection','internal-rpc-authority-restore-controller',
           'internal-rpc-authority-restore-coordination','mattercodex-image-admission-policy','mattercodex-nats-config',
           'mattercodex-legacy-transport-bridges','mattercodex-postgresql-init','mattercodex-postgresql-principal-bootstrap',
-          'mattercodex-redis-config','mattercodex-release-lock',
-          'runtime-controller-runtime','runtime-controller-s3-security-policy'] ||
+          'mattercodex-redis-config','mattercodex-release-lock','runtime-controller-runtime'] ||
          object.metadata.name.matches('^staff-control-center-runtime-[a-z0-9]{10}$'))) ||
         (object.kind == 'Service' && object.metadata.name in [
           'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
@@ -147,7 +146,7 @@ spec:
           'internal-rpc-authority-restore-controller','mattercodex-nats','mattercodex-object-store','mattercodex-postgresql',
           'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-redis','nats','object-store',
           'postgresql','provider-health-adapter','redis','runtime-controller','staff-control-center',
-          'runtime-controller-postgresql-rw','runtime-s3-archive-exchanger','runtime-s3-restore-exchanger',
+          'runtime-controller-postgresql-rw',
           'runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'StatefulSet' && object.metadata.name in [
           'mattercodex-nats','mattercodex-object-store','mattercodex-postgresql','mattercodex-redis']) ||
@@ -156,8 +155,8 @@ spec:
           'integration-gateway','interaction-gateway','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor','internal-rpc-authority-restore-controller',
           'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-object-store-bootstrap',
-          'provider-health-adapter','runtime-controller','staff-control-center','runtime-s3-archive-exchanger',
-          'runtime-s3-restore-exchanger','runtime-workload-admission','runtime-workload-materializer']) ||
+          'provider-health-adapter','runtime-controller','staff-control-center',
+          'runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'Job' && object.metadata.name in [
           'control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
           'internal-rpc-authority-migrate','mattercodex-postgresql-principal-bootstrap','runtime-controller-migration']) ||
@@ -212,24 +211,7 @@ spec:
              v.name == 'prototype-delivery-issuer' &&
              has(v.secret) &&
              v.secret.secretName == 'internal-rpc-authority-runtime-controller-issuer-delivery' &&
-             v.secret.defaultMode == 288))) &&
-         (object.metadata.name != 'runtime-s3-restore-exchanger' ||
-          (object.spec.template.spec.automountServiceAccountToken == false &&
-           object.spec.template.spec.initContainers.exists(c,
-             c.name == 'internal-rpc-authority-issuer' &&
-             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' && e.value == 'runtime-s3-restore-exchanger') &&
-             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_SECRET_BACKEND' && e.value == 'direct-production-kubernetes-file') &&
-             c.volumeMounts.exists(m,
-               m.name == 'prototype-delivery-issuer' && m.readOnly == true &&
-               m.mountPath == '/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/primary') &&
-             !c.volumeMounts.exists(m,
-               m.name == 'kube-api-access' ||
-               m.mountPath.startsWith('/var/run/secrets/kubernetes.io/serviceaccount'))) &&
-           object.spec.template.spec.volumes.exists(v,
-             v.name == 'prototype-delivery-issuer' &&
-             has(v.secret) &&
-             v.secret.secretName == 'internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery' &&
-             v.secret.defaultMode == 288))))
+             v.secret.defaultMode == 288)))
       message: Production authority sidecar does not match its exact file-only delivery profile.
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
@@ -307,6 +289,106 @@ metadata:
   name: mattercodex-production-deployer-allowlist
 spec:
   policyName: mattercodex-production-deployer-allowlist
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-runtime-archive-restore-disabled
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods, secrets, services, serviceaccounts, configmaps]
+        scope: Namespaced
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments]
+        scope: Namespaced
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [jobs]
+        scope: Namespaced
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [roles, rolebindings]
+        scope: Namespaced
+      - apiGroups: [networking.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [networkpolicies]
+        scope: Namespaced
+  validations:
+    - expression: >-
+        request.resource.resource != 'configmaps' ||
+        !(object.metadata.name in ['control-plane-runtime','runtime-controller-runtime']) ||
+        (object.metadata.name == 'control-plane-runtime' && has(object.data) &&
+         object.data['CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY'] == 'disabled' &&
+         !('CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE' in object.data) &&
+         !('CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE' in object.data)) ||
+        (object.metadata.name == 'runtime-controller-runtime' && has(object.data) &&
+         object.data['RUNTIME_ARCHIVE_RESTORE_CAPABILITY'] == 'disabled' &&
+         object.data['RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE'] == 'https://github.com/codex-k8s/matter-codex/issues/310' &&
+         !('RUNTIME_ARCHIVE_SERVICE_ACCOUNT' in object.data) &&
+         !('RUNTIME_RESTORE_SERVICE_ACCOUNT' in object.data) &&
+         !('RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT' in object.data) &&
+         !('RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT' in object.data) &&
+         !('RUNTIME_S3_ENDPOINT' in object.data) &&
+         !('RUNTIME_S3_TLS_SERVER_NAME' in object.data) &&
+         !('RUNTIME_S3_BUCKET' in object.data) &&
+         !('RUNTIME_S3_REGION' in object.data))
+      message: Runtime archive/restore capability selector is not the exact disabled profile.
+    - expression: >-
+        !object.metadata.name.matches('^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$))') &&
+        object.metadata.name != 'runtime-controller-archive-workers-s3' &&
+        object.metadata.name != 'runtime-controller-s3-security-policy' &&
+        !object.metadata.name.startsWith('runtime-s3-exchanger-') &&
+        !object.metadata.name.startsWith('runtime-s3-readback-')
+      message: Runtime archive/restore capability is disabled in the direct-production dark profile.
+    - expression: >-
+        !has(object.metadata.labels) ||
+        !('app.kubernetes.io/component' in object.metadata.labels) ||
+        !(object.metadata.labels['app.kubernetes.io/component'] in
+          ['runtime-archive','runtime-restore-verifier','runtime-rehydrate',
+           'runtime-s3-credential','runtime-s3-credential-readback'])
+      message: Runtime archive/restore component is disabled in the direct-production dark profile.
+    - expression: >-
+        !has(object.metadata.annotations) ||
+        !('runtime.mattercodex.dev/action' in object.metadata.annotations) ||
+        !(object.metadata.annotations['runtime.mattercodex.dev/action'] in ['archive','restore'])
+      message: Runtime archive/restore action is disabled in the direct-production dark profile.
+    - expression: >-
+        request.resource.resource != 'jobs' ||
+        (object.spec.template.spec.containers.all(c,
+           (!has(c.command) || c.command.all(v,
+             !v.matches('^/usr/local/bin/runtime-(archive|restore-verifier|rehydrate)$'))) &&
+           (!has(c.args) || c.args.all(v, !(v in ['s3-archive','s3-restore']))) &&
+           (!has(c.env) || c.env.all(e,
+             !e.name.matches('^RUNTIME_(S3|ARCHIVE|RESTORE)')))) &&
+         (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
+           (!has(c.command) || c.command.all(v,
+             !v.matches('^/usr/local/bin/runtime-(archive|restore-verifier|rehydrate)$'))) &&
+           (!has(c.args) || c.args.all(v, !(v in ['s3-archive','s3-restore']))) &&
+           (!has(c.env) || c.env.all(e,
+             !e.name.matches('^RUNTIME_(S3|ARCHIVE|RESTORE)')))))
+      message: Dynamic runtime archive/restore Job is disabled in the direct-production dark profile.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-runtime-archive-restore-disabled
+spec:
+  policyName: mattercodex-runtime-archive-restore-disabled
   validationActions: [Deny]
   matchResources:
     namespaceSelector:

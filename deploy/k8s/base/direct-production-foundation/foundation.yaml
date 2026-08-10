@@ -497,7 +497,6 @@ data:
     ira_interaction_gateway_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
     ira_interaction_gateway_verifier_g1	internal_rpc_authority	internal_rpc_authority_verifier	false
     ira_runtime_controller_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
-    ira_runtime_s3_restore_exchanger_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
   capability-roles.txt: |
     control_plane_owner
     control_plane_runtime

@@ -74,6 +74,7 @@ type Config struct {
 	PVCSize                          string
 	ReadClusterRole                  string
 	AdminClusterRole                 string
+	ArchiveRestoreEnabled            bool
 	ArchiveServiceAccount            string
 	RestoreServiceAccount            string
 	CleanupServiceAccount            string
@@ -126,19 +127,25 @@ func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 		config.StorageClass == "" || config.PVCSize == "" || config.MaximumPods < 1 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.MaximumCPU < 1 || config.MaximumMemoryBytes < 1 ||
-		config.JobTTL < time.Minute || config.JobTTL > 24*time.Hour ||
-		config.S3Endpoint == "" || config.S3TLSServerName == "" || config.S3Bucket == "" || config.S3Region == "" {
+		config.JobTTL < time.Minute || config.JobTTL > 24*time.Hour {
 		return nil, errors.New("kubernetes adapter configuration is invalid")
 	}
 	for _, serviceAccount := range []string{
 		config.ReadClusterRole, config.AdminClusterRole,
-		config.ArchiveServiceAccount, config.RestoreServiceAccount, config.CleanupServiceAccount,
-		config.CredentialBrokerServiceAccount, config.S3ArchiveBrokerServiceAccount,
-		config.S3RestoreBrokerServiceAccount, config.ProjectReadBrokerServiceAccount,
+		config.CleanupServiceAccount, config.CredentialBrokerServiceAccount,
+		config.ProjectReadBrokerServiceAccount,
 		config.ClusterAdminBrokerServiceAccount,
 	} {
 		if serviceAccount == "" {
 			return nil, errors.New("runtime service account configuration is invalid")
+		}
+	}
+	archiveRestoreValues := []string{config.ArchiveServiceAccount, config.RestoreServiceAccount,
+		config.S3ArchiveBrokerServiceAccount, config.S3RestoreBrokerServiceAccount,
+		config.S3Endpoint, config.S3TLSServerName, config.S3Bucket, config.S3Region}
+	for _, value := range archiveRestoreValues {
+		if (config.ArchiveRestoreEnabled && value == "") || (!config.ArchiveRestoreEnabled && value != "") {
+			return nil, errors.New("kubernetes archive/restore configuration is invalid")
 		}
 	}
 	pvcQuantity, err := resource.ParseQuantity(config.PVCSize)
@@ -650,6 +657,9 @@ func (adapter *Adapter) Materialize(
 	leaseToken string,
 	journal runtimerepo.Journal,
 ) (entity.RuntimeStatus, error) {
+	if !adapter.config.ArchiveRestoreEnabled && execution.RestoreSourceExecutionID != "" {
+		return entity.RuntimeStatus{}, errs.ErrStateConflict
+	}
 	if err := revision.ValidateFor(execution); err != nil ||
 		(execution.State == enum.ExecutionPending && leaseToken != "") ||
 		(execution.State != enum.ExecutionPending && leaseToken == "") {
@@ -1999,6 +2009,9 @@ func (adapter *Adapter) EnsureArchiveJob(
 	execution entity.Execution,
 	status entity.RuntimeStatus,
 ) error {
+	if !adapter.config.ArchiveRestoreEnabled {
+		return errs.ErrStateConflict
+	}
 	ready, snapshotUID, err := adapter.ensureArchiveSnapshotPVC(ctx, execution, status)
 	if err != nil || !ready {
 		return err
@@ -2064,6 +2077,9 @@ func (adapter *Adapter) EnsureRestoreVerifierJob(
 	execution entity.Execution,
 	status entity.RuntimeStatus,
 ) error {
+	if !adapter.config.ArchiveRestoreEnabled {
+		return errs.ErrStateConflict
+	}
 	return adapter.ensureWorkerJob(ctx, execution, status, restoreComponent)
 }
 
@@ -2206,6 +2222,9 @@ func (adapter *Adapter) ensureS3CredentialBroker(
 	execution entity.Execution,
 	action string,
 ) (bool, error) {
+	if !adapter.config.ArchiveRestoreEnabled {
+		return false, errs.ErrStateConflict
+	}
 	if action != "archive" && action != "restore" {
 		return false, errs.ErrInvalidInput
 	}

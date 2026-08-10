@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type Config struct {
 	PVCSize                          string        `env:"RUNTIME_PVC_SIZE"`
 	ReadClusterRole                  string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
 	AdminClusterRole                 string        `env:"RUNTIME_ADMIN_CLUSTER_ROLE"`
+	ArchiveRestoreCapability         string        `env:"RUNTIME_ARCHIVE_RESTORE_CAPABILITY"`
 	ArchiveServiceAccount            string        `env:"RUNTIME_ARCHIVE_SERVICE_ACCOUNT"`
 	RestoreServiceAccount            string        `env:"RUNTIME_RESTORE_SERVICE_ACCOUNT"`
 	CleanupServiceAccount            string        `env:"RUNTIME_CLEANUP_SERVICE_ACCOUNT"`
@@ -92,7 +94,7 @@ func loadConfig() (Config, error) {
 		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
 		StorageClass:                    "runtime-session", PVCSize: "20Gi",
 		ReadClusterRole:  "runtime-role-project-read",
-		AdminClusterRole: "cluster-admin", ArchiveServiceAccount: "runtime-archive",
+		AdminClusterRole: "cluster-admin", ArchiveRestoreCapability: "enabled", ArchiveServiceAccount: "runtime-archive",
 		RestoreServiceAccount: "runtime-restore-verifier", CleanupServiceAccount: "runtime-cleanup-authorizer",
 		CredentialBrokerServiceAccount:   "runtime-credential-broker",
 		ProjectReadBrokerServiceAccount:  "runtime-project-read-broker",
@@ -123,6 +125,25 @@ func loadConfig() (Config, error) {
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
 	}
+	if config.ArchiveRestoreCapability == "disabled" {
+		for _, name := range []string{
+			"RUNTIME_ARCHIVE_SERVICE_ACCOUNT", "RUNTIME_RESTORE_SERVICE_ACCOUNT",
+			"RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT", "RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT",
+			"RUNTIME_S3_ENDPOINT", "RUNTIME_S3_TLS_SERVER_NAME", "RUNTIME_S3_BUCKET", "RUNTIME_S3_REGION",
+		} {
+			if _, exists := os.LookupEnv(name); exists {
+				return Config{}, errors.New("disabled runtime archive/restore environment is configured")
+			}
+		}
+		config.ArchiveServiceAccount = ""
+		config.RestoreServiceAccount = ""
+		config.S3ArchiveBrokerServiceAccount = ""
+		config.S3RestoreBrokerServiceAccount = ""
+		config.S3Endpoint = ""
+		config.S3TLSServerName = ""
+		config.S3Bucket = ""
+		config.S3Region = ""
+	}
 	if err := config.validate(); err != nil {
 		return Config{}, err
 	}
@@ -135,11 +156,36 @@ func (config Config) validate() error {
 			return errors.New("runtime-controller endpoint is invalid")
 		}
 	}
-	s3Endpoint, err := url.Parse(config.S3Endpoint)
-	if err != nil || s3Endpoint.Scheme != "https" || s3Endpoint.Host == "" || s3Endpoint.Path != "" ||
-		config.S3TLSServerName == "" || net.ParseIP(config.S3TLSServerName) != nil ||
-		config.ControlPlaneTLSServerName == "" || net.ParseIP(config.ControlPlaneTLSServerName) != nil {
+	if config.ControlPlaneTLSServerName == "" || net.ParseIP(config.ControlPlaneTLSServerName) != nil {
 		return errors.New("runtime-controller TLS endpoint is invalid")
+	}
+	archiveRestoreEnabled := config.ArchiveRestoreCapability == "enabled"
+	archiveRestoreDisabled := config.ArchiveRestoreCapability == "disabled"
+	if !archiveRestoreEnabled && !archiveRestoreDisabled {
+		return errors.New("runtime archive/restore capability is invalid")
+	}
+	archiveRestoreValues := []string{
+		config.ArchiveServiceAccount, config.RestoreServiceAccount,
+		config.S3ArchiveBrokerServiceAccount, config.S3RestoreBrokerServiceAccount,
+		config.S3Endpoint, config.S3TLSServerName, config.S3Bucket, config.S3Region,
+	}
+	if archiveRestoreEnabled {
+		s3Endpoint, err := url.Parse(config.S3Endpoint)
+		if err != nil || s3Endpoint.Scheme != "https" || s3Endpoint.Host == "" || s3Endpoint.Path != "" ||
+			config.S3TLSServerName == "" || net.ParseIP(config.S3TLSServerName) != nil {
+			return errors.New("runtime archive/restore TLS endpoint is invalid")
+		}
+		for _, value := range archiveRestoreValues {
+			if value == "" {
+				return errors.New("runtime archive/restore configuration is incomplete")
+			}
+		}
+	} else {
+		for _, value := range archiveRestoreValues {
+			if value != "" {
+				return errors.New("disabled runtime archive/restore configuration is not empty")
+			}
+		}
 	}
 	if _, _, err := net.SplitHostPort(config.RunnerControlPlaneTarget); err != nil ||
 		config.RunnerControlPlaneTLSServerName == "" || net.ParseIP(config.RunnerControlPlaneTLSServerName) != nil {
@@ -168,7 +214,7 @@ func (config Config) validate() error {
 	}
 	if (config.Environment != "staging" && config.Environment != "production") ||
 		config.Namespace == "" || config.PodUID == "" || config.StorageClass == "" || config.PVCSize == "" ||
-		config.S3Bucket == "" || config.S3Region == "" || config.MaximumPods < 1 || config.MaximumPods > 10_000 ||
+		config.MaximumPods < 1 || config.MaximumPods > 10_000 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||

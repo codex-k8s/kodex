@@ -49,12 +49,13 @@ type runtimeSnapshot struct {
 }
 
 type admissionHandler struct {
-	client             kubernetes.Interface
-	database           *pgxpool.Pool
-	publicKey          ed25519.PublicKey
-	s3ArchivePublicKey ed25519.PublicKey
-	s3RestorePublicKey ed25519.PublicKey
-	now                func() time.Time
+	client                kubernetes.Interface
+	database              *pgxpool.Pool
+	publicKey             ed25519.PublicKey
+	s3ArchivePublicKey    ed25519.PublicKey
+	s3RestorePublicKey    ed25519.PublicKey
+	archiveRestoreEnabled bool
+	now                   func() time.Time
 }
 
 func main() {
@@ -68,6 +69,10 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	archiveRestoreEnabled, err := archiveRestoreCapability()
+	if err != nil {
+		return err
+	}
 	keyRaw, err := os.ReadFile(requiredEnv("RUNTIME_ADMISSION_PUBLIC_KEY_FILE"))
 	if err != nil {
 		return errors.New("read runtime admission public key")
@@ -76,13 +81,16 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	archiveKey, err := readTicketPublicKey(requiredEnv("RUNTIME_ADMISSION_S3_ARCHIVE_PUBLIC_KEY_FILE"))
-	if err != nil {
-		return err
-	}
-	restoreKey, err := readTicketPublicKey(requiredEnv("RUNTIME_ADMISSION_S3_RESTORE_PUBLIC_KEY_FILE"))
-	if err != nil {
-		return err
+	var archiveKey, restoreKey ed25519.PublicKey
+	if archiveRestoreEnabled {
+		archiveKey, err = readTicketPublicKey(requiredEnv("RUNTIME_ADMISSION_S3_ARCHIVE_PUBLIC_KEY_FILE"))
+		if err != nil {
+			return err
+		}
+		restoreKey, err = readTicketPublicKey(requiredEnv("RUNTIME_ADMISSION_S3_RESTORE_PUBLIC_KEY_FILE"))
+		if err != nil {
+			return err
+		}
 	}
 	dsnRaw, err := os.ReadFile(requiredEnv("RUNTIME_ADMISSION_POSTGRES_DSN_FILE"))
 	if err != nil || len(dsnRaw) < 16 || len(dsnRaw) > 16<<10 {
@@ -107,7 +115,8 @@ func run(ctx context.Context) error {
 	}
 	handler := &admissionHandler{
 		client: client, database: database, publicKey: publicKey,
-		s3ArchivePublicKey: archiveKey, s3RestorePublicKey: restoreKey, now: time.Now,
+		s3ArchivePublicKey: archiveKey, s3RestorePublicKey: restoreKey,
+		archiveRestoreEnabled: archiveRestoreEnabled, now: time.Now,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/validate-runtime-pod", handler)
@@ -141,6 +150,17 @@ func run(ctx context.Context) error {
 			return nil
 		}
 		return err
+	}
+}
+
+func archiveRestoreCapability() (bool, error) {
+	switch os.Getenv("RUNTIME_ARCHIVE_RESTORE_CAPABILITY") {
+	case "", "enabled":
+		return true, nil
+	case "disabled":
+		return false, nil
+	default:
+		return false, errors.New("runtime archive/restore capability is invalid")
 	}
 }
 
@@ -192,6 +212,10 @@ func (handler *admissionHandler) admit(ctx context.Context, request *admissionv1
 	if json.Unmarshal(request.Object.Raw, &pod) != nil || pod.Namespace != admissionNamespace {
 		return false, "runtime Pod is invalid"
 	}
+	component := pod.Labels["app.kubernetes.io/component"]
+	if !handler.archiveRestoreEnabled && component == "runtime-s3-credential-readback" {
+		return false, "runtime archive/restore capability is disabled"
+	}
 	configName := pod.Annotations["runtime.mattercodex.dev/next-input-config"]
 	configMap, err := handler.client.CoreV1().ConfigMaps(admissionNamespace).Get(ctx, configName, metav1.GetOptions{})
 	if err != nil || configMap.Immutable == nil || !*configMap.Immutable || len(configMap.BinaryData["runtime.json"]) == 0 {
@@ -204,7 +228,6 @@ func (handler *admissionHandler) admit(ctx context.Context, request *admissionv1
 		snapshot.Execution.Validate() != nil || snapshot.Revision.ValidateFor(snapshot.Execution) != nil {
 		return false, "immutable runtime input is invalid"
 	}
-	component := pod.Labels["app.kubernetes.io/component"]
 	ticket, publicKey, audience := snapshot.WorkloadTicket, handler.publicKey, "mattercodex-runtime-workload-admission"
 	exact := component == "role-runtime" && exactRuntimePod(request.UserInfo.Username, &pod, snapshot)
 	if component == "runtime-credential-copy" {
@@ -328,6 +351,9 @@ func (handler *admissionHandler) admitCredentialSecret(
 		return false, "runtime credential snapshot is invalid"
 	}
 	if secret.Labels["app.kubernetes.io/component"] == "runtime-s3-credential" {
+		if !handler.archiveRestoreEnabled {
+			return false, "runtime archive/restore capability is disabled"
+		}
 		return handler.admitS3CredentialSecret(ctx, request, &secret)
 	}
 	if secret.Labels["app.kubernetes.io/component"] != "runtime-credential-snapshot" {

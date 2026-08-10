@@ -20,18 +20,18 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 162 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 142 and
-  ([.resources[] | select(.kind == "ConfigMap")] | length) == 20 and
+  (.resources | length) == 147 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 128 and
+  ([.resources[] | select(.kind == "ConfigMap")] | length) == 19 and
   .counts == {
-    cryptographically_generated:67,
-    deterministically_derived:76,
+    cryptographically_generated:61,
+    deterministically_derived:70,
     safely_reusable_from_existing_binding:2,
-    truly_external_credential:17
+    truly_external_credential:14
   } and
   all(.resources[];
     (.keys | type == "array" and length > 0 and length == (unique | length))) and
-  ([.external_bindings[].keys[]] | length) == 40 and
+  ([.external_bindings[].keys[]] | length) == 35 and
   (.resources | group_by([.kind,.name]) | all(length == 1))
 ' "$classification" >/dev/null || {
   printf 'Direct-production application material classification is incomplete\n' >&2
@@ -138,7 +138,7 @@ material="$temporary_directory/application-material.yaml"
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) |
-  length == 162 and
+  length == 147 and
   ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
   all(.[]; . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==
@@ -214,7 +214,7 @@ jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgre
   .data["reconcile.sh"]' "$foundation_json" >"$temporary_directory/postgresql-principal-reconcile.sh"
 sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
 [[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
-  .data["principals.tsv"]' "$foundation_json" | awk -F '\t' 'NF >= 4 {count++} END {print count+0}')" == 29 ]] || {
+  .data["principals.tsv"]' "$foundation_json" | awk -F '\t' 'NF >= 4 {count++} END {print count+0}')" == 28 ]] || {
   printf 'PostgreSQL principal registry is incomplete\n' >&2
   exit 1
 }
@@ -298,26 +298,32 @@ if rg -q 'https://mattermost\.mattermost\.svc\.cluster\.local|matter-codex-bot-s
   exit 1
 fi
 
-target_registry="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml"
+application_bootstrap="$temporary_directory/application-bootstrap.yaml"
+"$repository_root/tools/release/render-direct-production-applications.sh" \
+  --scope bootstrap --output "$application_bootstrap" >/dev/null
+target_registry="$temporary_directory/key-delivery-targets.yaml"
+yq -r 'select(.kind == "ConfigMap" and
+  .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data."key-delivery-targets.yaml"' "$interfaces" >"$target_registry"
 target_registry_json="$temporary_directory/target-registry.json"
 yq -o=json '.targets' "$target_registry" >"$target_registry_json"
 jq -e '
-  length == 13 and
-  ([.[] | [.workload_id,.role]] | unique | length) == 13 and
+  length == 12 and
+  ([.[] | [.workload_id,.role]] | unique | length) == 12 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | length) == 85 and
+  ][] | select(. != null)] | length) == 78 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | unique | length) == 85 and
+  ][] | select(. != null)] | unique | length) == 78 and
   any(.[]; .workload_id == "integration-gateway" and .role == "AUTHORIZATION_VERIFIER" and
     .service_account == "integration-gateway" and
     .database_identity.login_principal == "ira_integration_gateway_verifier_g1" and
@@ -326,16 +332,12 @@ jq -e '
     .service_account == "runtime-controller" and
     .database_identity.login_principal == "ira_runtime_controller_issuer_g1" and
     .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/auth-private") and
-  any(.[]; .workload_id == "runtime-s3-restore-exchanger" and .role == "AUTHORIZATION_ISSUER" and
-    .service_account == "runtime-s3-restore-exchanger" and
-    .database_identity.login_principal == "ira_runtime_s3_restore_exchanger_issuer_g1" and
-    .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/auth-private")
+  (any(.[]; .workload_id == "runtime-s3-restore-exchanger") | not)
 ' "$target_registry_json" >/dev/null || {
-  printf 'Publisher target registry does not close the three release profiles\n' >&2
+  printf 'Publisher target registry does not close the active release profiles\n' >&2
   exit 1
 }
 
-publisher_rbac="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/rbac.yaml"
 expected_publisher_resources="$temporary_directory/expected-publisher-resources"
 actual_publisher_resources="$temporary_directory/actual-publisher-resources"
 jq -r '.[] | . as $target |
@@ -352,15 +354,15 @@ jq -r '.[] | . as $target |
   "$target_registry_json" | { cat; printf '%s\n' internal-rpc-authority-snapshot; } |
   LC_ALL=C sort -u >"$expected_publisher_resources"
 yq -o=json 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher")' \
-  "$publisher_rbac" | jq -e '
+  "$application_bootstrap" | jq -e '
     .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:.rules[0].resourceNames,verbs:["get","update"]}] and
-    (.rules[0].resourceNames | length) == 44
+    (.rules[0].resourceNames | length) == 40
   ' >/dev/null || {
   printf 'Publisher RBAC contains a forbidden resource or verb\n' >&2
   exit 1
 }
 yq -r 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher") |
-  .rules[0].resourceNames[]' "$publisher_rbac" | LC_ALL=C sort -u >"$actual_publisher_resources"
+  .rules[0].resourceNames[]' "$application_bootstrap" | LC_ALL=C sort -u >"$actual_publisher_resources"
 cmp -s "$expected_publisher_resources" "$actual_publisher_resources" || {
   printf 'Publisher RBAC differs from the target registry\n' >&2
   exit 1
@@ -385,18 +387,9 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
     "internal-rpc-authority-integration-gateway-verifier-delivery"; false) and
   profile("runtime-controller"; "internal-rpc-authority-issuer";
     "internal-rpc-authority-runtime-controller-issuer-delivery"; false) and
-  profile("runtime-s3-restore-exchanger"; "internal-rpc-authority-issuer";
-    "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery"; true) and
-  (any(.[]; .kind == "Deployment" and .metadata.name == "runtime-s3-restore-exchanger" and
-    any(.spec.template.spec.volumes[]?;
-      .name == "restore-effect-workload-tls" and
-      .secret.secretName == "runtime-restore-effect-workload-tls")) and
-   any(.[]; .kind == "Deployment" and .metadata.name == "runtime-s3-restore-exchanger" and
-    any(.spec.template.spec.volumes[]?;
-      .name == "authority-workload-tls" and
-      .secret.secretName == "internal-rpc-authority-runtime-s3-restore-exchanger-workload-tls")))
+  (any(.[]; .metadata.name == "runtime-s3-restore-exchanger") | not)
 ' >/dev/null || {
-  printf 'Three release profiles do not have exact file-only delivery mounts\n' >&2
+  printf 'Active release profiles do not have exact file-only delivery mounts\n' >&2
   exit 1
 }
 if rg -q 'internal-rpc-authority-runtime-restore-effect|ira_runtime_restore_effect' \
@@ -430,7 +423,10 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
   first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime")) as $interaction_config |
   first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher")) as $publisher_config |
   first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-database-credential-reconciler")) as $reconciler_config |
-  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-s3-security-policy")) as $s3_policy |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "control-plane-runtime")) as $control_config |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime")) as $runtime_config |
+  first($resources[] | select(.kind == "Deployment" and .metadata.name == "control-plane")) as $control |
+  first($resources[] | select(.kind == "Deployment" and .metadata.name == "runtime-workload-admission")) as $admission |
   first($resources[] | select(.kind == "Deployment" and .metadata.name == "integration-gateway")) as $integration |
   first($resources[] | select(.kind == "Deployment" and .metadata.name == "interaction-gateway")) as $interaction |
   ($integration_config.data.INTEGRATION_GATEWAY_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype") and
@@ -442,8 +438,20 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
   ($interaction_config.data | keys | all(startswith("INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_") | not)) and
   ($publisher_config.data | keys | all(test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_") | not)) and
   ($reconciler_config.data | keys | all(test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_") | not)) and
-  ($s3_policy.data["requirements.yaml"] | contains("identity_source: signed_ticket_mtls_exchange_then_direct_production_s3_sts")) and
-  ($s3_policy.data["requirements.yaml"] | contains("vault_sts") | not) and
+  ($control_config.data.CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($control_config.data.CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE == null) and
+  ($control_config.data.CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE == null) and
+  ($runtime_config.data.RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($runtime_config.data.RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE == "https://github.com/codex-k8s/matter-codex/issues/310") and
+  (all($runtime_config.data | keys[];
+    . == "RUNTIME_ARCHIVE_RESTORE_CAPABILITY" or
+    . == "RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE" or
+    (test("^RUNTIME_(S3|ARCHIVE|RESTORE)") | not))) and
+  (($control.spec.template.spec.volumes[] | select(.name == "runtime-workload-signing")).secret.items == [{"key":"admission-private-key.hex","path":"admission-private-key.hex"}]) and
+  (any($admission.spec.template.spec.containers[] | select(.name == "admission");
+    any(.env[]?; .name == "RUNTIME_ARCHIVE_RESTORE_CAPABILITY" and .value == "disabled") and
+    (any(.env[]?; .name == "RUNTIME_ADMISSION_S3_ARCHIVE_PUBLIC_KEY_FILE" or .name == "RUNTIME_ADMISSION_S3_RESTORE_PUBLIC_KEY_FILE" or .name == "RUNTIME_S3_READBACK_IMAGE") | not))) and
+  (($admission.spec.template.spec.volumes[] | select(.name == "ticket-trust")).secret.items == [{"key":"public-key.hex","path":"public-key.hex"}]) and
   exact_adapter($integration; "integration-gateway") and
   exact_adapter($interaction; "interaction-gateway") and
   any($integration.spec.template.spec.volumes[]; .name == "direct-git-credentials" and
@@ -451,14 +459,7 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
   any($integration.spec.template.spec.volumes[]; .name == "direct-oidc-provider" and
     .configMap.name == "integration-gateway-oidc-provider" and
     .configMap.items == [{"key":"provider-snapshot.json","path":"provider-snapshot.json"}]) and
-  all([$resources[] | select(.kind == "Deployment" and
-    (.metadata.name == "runtime-s3-archive-exchanger" or .metadata.name == "runtime-s3-restore-exchanger"))][];
-    any(.spec.template.spec.containers[] | select(.name == "exchanger");
-      ((.env | map({key:.name,value:.value}) | from_entries) as $env |
-       $env.RUNTIME_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype" and
-       $env.RUNTIME_S3_CREDENTIAL_BACKEND == "direct-production-s3-sts" and
-       ($env | keys | all(startswith("RUNTIME_VAULT_") | not)) and
-       all(.volumeMounts[]; .name != "vault-token" and .name != "vault-ca"))))
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0
 ' >/dev/null || {
   printf 'Direct runtime adapter render is not exact or leaks its API token\n' >&2
   exit 1
@@ -497,20 +498,27 @@ grep -Fq 'integration-gateway-kubernetes-api-exact:integration-gateway' "$reposi
   exit 1
 }
 
-application_bootstrap="$temporary_directory/application-bootstrap.yaml"
-"$repository_root/tools/release/render-direct-production-applications.sh" \
-  --scope bootstrap --output "$application_bootstrap" >/dev/null
 yq -o=json eval-all '.' "$application_bootstrap" | jq -s -e '
-  def no_vault($name):
-    first(.[] | select(.kind == "NetworkPolicy" and .metadata.name == $name)) as $policy |
-    (any($policy.spec.egress[]?.to[]?;
-      .podSelector.matchLabels["app.kubernetes.io/name"] == "vault") | not);
-  no_vault("integration-gateway-exact-runtime-paths") and
-  no_vault("interaction-gateway-exact-runtime-paths") and
-  no_vault("runtime-s3-restore-exchanger-exact-paths") and
-  no_vault("runtime-s3-archive-exchanger-exact-paths")
+  map(select(.kind != null)) as $resources |
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0 and
+  (first($resources[] | select(.kind == "NetworkPolicy" and .metadata.name == "runtime-controller-workers-exact-paths")) |
+    .spec.podSelector.matchExpressions[0].values == ["runtime-cleanup-authorizer"])
 ' >/dev/null || {
-  printf 'Direct adapters retain a forbidden Vault network destination\n' >&2
+  printf 'Disabled archive/restore bootstrap resources remain reachable\n' >&2
+  exit 1
+}
+yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml" | jq -s -e '
+  any(.[]; .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "mattercodex-runtime-archive-restore-disabled" and
+    .spec.failurePolicy == "Fail" and
+    any(.spec.validations[]; .expression | contains("CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY")) and
+    any(.spec.validations[]; .expression | contains("RUNTIME_ARCHIVE_RESTORE_CAPABILITY")) and
+    any(.spec.validations[]; .expression | contains("runtime-controller-s3-security-policy"))) and
+  any(.[]; .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "mattercodex-runtime-archive-restore-disabled" and
+    .spec.validationActions == ["Deny"])
+' >/dev/null || {
+  printf 'Disabled archive/restore admission boundary is absent\n' >&2
   exit 1
 }
 

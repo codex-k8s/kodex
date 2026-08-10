@@ -38,6 +38,13 @@ role-image Pod. Он не запускает Codex, не меняет домен
 - `runtime-controller-cli migrate up|status|version` — forward-only схема
   durable inbox/projection.
 
+В exact Wave A профиле `direct-production-single-node-prototype` режимы archive,
+restore, rehydrate и S3 credential exchange отключены selector
+`RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled`. Controller и admission закрыто
+отклоняют их, а render не создаёт соответствующие workload, identity, RBAC,
+Secret, egress и readiness ожидания. Возврат capability вынесен в #310; наличие
+скомпилированного provider-кода не включает этот path.
+
 Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
 per-job `Role` только на exact journal. Controller, долговечный materializer и
 routine broker Jobs не читают Secret и не создают/bind-ят `cluster-admin`

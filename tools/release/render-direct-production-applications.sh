@@ -59,6 +59,7 @@ SCOPE="$scope" yq eval-all '
        .kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding" or
        .kind == "NetworkPolicy"))
   ) |
+  select((.metadata.name | test("^(runtime-(archive|restore-verifier)|runtime-controller-(archive-workers-s3|s3-security-policy)|runtime-s3-(archive|restore)(-.*)?|runtime-s3-(exchanger|readback)-.*)$")) | not) |
   select((.metadata.name | test("^(mattercodex-(buildkit|image-|registry-)|.*role-image-builder.*|.*-dashboard$)")) | not)
 ' "$combined" >"$temporary_directory/filtered.yaml"
 
@@ -182,12 +183,6 @@ yq eval-all '
       select((.key | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not)
     ))
   ) |
-  with(select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-s3-security-policy");
-    .data."requirements.yaml" |= sub(
-      "identity_source: signed_ticket_mtls_exchange_then_vault_sts";
-      "identity_source: signed_ticket_mtls_exchange_then_direct_production_s3_sts"
-    )
-  ) |
   (.. | select(tag == "!!str")) |= sub(
     "^https://object-store\\.storage\\.svc\\.cluster\\.local$";
     "https://mattercodex-object-store.mattercodex-system.svc.cluster.local"
@@ -256,6 +251,55 @@ yq -i '
     .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_DATA_KEY = "state.json" |
     .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_TIMEOUT = "5s"
   ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "control-plane-runtime");
+    del(.data.CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE) |
+    del(.data.CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE) |
+    .data.CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY = "disabled"
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime");
+    del(.data.RUNTIME_ARCHIVE_SERVICE_ACCOUNT) |
+    del(.data.RUNTIME_RESTORE_SERVICE_ACCOUNT) |
+    del(.data.RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT) |
+    del(.data.RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT) |
+    del(.data.RUNTIME_S3_ENDPOINT) |
+    del(.data.RUNTIME_S3_TLS_SERVER_NAME) |
+    del(.data.RUNTIME_S3_BUCKET) |
+    del(.data.RUNTIME_S3_REGION) |
+    .data.RUNTIME_ARCHIVE_RESTORE_CAPABILITY = "disabled" |
+    .data.RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE = "https://github.com/codex-k8s/matter-codex/issues/310"
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry");
+    .data."key-delivery-targets.yaml" = (
+      .data."key-delivery-targets.yaml" | from_yaml |
+      .source_revision = 7 |
+      .targets = (.targets | map(select(.workload_id != "runtime-s3-restore-exchanger"))) |
+      to_yaml
+    )
+  ) |
+  with(select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher");
+    .rules[0].resourceNames |= map(select(
+      test("^internal-rpc-authority-runtime-s3-restore-exchanger-") | not
+    ))
+  ) |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "runtime-controller-workers-exact-paths");
+    .spec.podSelector.matchExpressions[0].values |= map(select(. != "runtime-archive" and
+      . != "runtime-restore-verifier" and . != "runtime-rehydrate"))
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "runtime-workload-admission");
+    (.spec.template.spec.containers[] | select(.name == "admission")).env |=
+      (map(select(
+        .name != "RUNTIME_ADMISSION_S3_ARCHIVE_PUBLIC_KEY_FILE" and
+        .name != "RUNTIME_ADMISSION_S3_RESTORE_PUBLIC_KEY_FILE" and
+        .name != "RUNTIME_S3_READBACK_IMAGE" and
+        .name != "RUNTIME_ARCHIVE_RESTORE_CAPABILITY"
+      )) + [{"name":"RUNTIME_ARCHIVE_RESTORE_CAPABILITY","value":"disabled"}]) |
+    (.spec.template.spec.volumes[] | select(.name == "ticket-trust" and .secret != null)).secret.items =
+      [{"key":"public-key.hex","path":"public-key.hex"}]
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "control-plane");
+    (.spec.template.spec.volumes[] | select(.name == "runtime-workload-signing" and .secret != null)).secret.items =
+      [{"key":"admission-private-key.hex","path":"admission-private-key.hex"}]
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "integration-gateway");
     .spec.template.metadata.labels."mattercodex.dev/runtime-secret-api" = "integration-gateway" |
     .spec.template.spec.containers[] |= with(select(.name == "integration-gateway");
@@ -305,17 +349,6 @@ yq -i '
         map(select(.configMap.name != "internal-rpc-authority-vault-ca")))
     )
   ) |
-  with(select(.kind == "Deployment" and (.metadata.name == "runtime-s3-archive-exchanger" or .metadata.name == "runtime-s3-restore-exchanger"));
-    .spec.template.spec.containers[] |= with(select(.name == "exchanger");
-      .env = ((.env // []) | map(select((.name | test("^RUNTIME_VAULT_")) | not)) + [
-        {"name":"RUNTIME_DEPLOYMENT_PROFILE","value":"direct-production-single-node-prototype"},
-        {"name":"RUNTIME_S3_CREDENTIAL_BACKEND","value":"direct-production-s3-sts"}
-      ]) |
-      .volumeMounts = ((.volumeMounts // []) | map(select(.name != "vault-token" and .name != "vault-ca")))
-    ) |
-    .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
-      map(select(.name != "vault-token" and .name != "vault-ca")))
-  ) |
   with(select(.kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths");
     .spec.egress = ((.spec.egress // []) | map(select(
       .to[0].podSelector.matchLabels."app.kubernetes.io/name" != "vault" and
@@ -323,9 +356,7 @@ yq -i '
   ) |
   with(select(.kind == "NetworkPolicy" and
       (.metadata.name == "interaction-gateway-exact-runtime-paths" or
-       .metadata.name == "interaction-gateway-migration-exact-paths" or
-       .metadata.name == "runtime-s3-archive-exchanger-exact-paths" or
-       .metadata.name == "runtime-s3-restore-exchanger-exact-paths"));
+       .metadata.name == "interaction-gateway-migration-exact-paths"));
     .spec.egress = ((.spec.egress // []) | map(select(
       .to[0].podSelector.matchLabels."app.kubernetes.io/name" != "vault")))
   )
@@ -388,7 +419,6 @@ add_prototype_delivery_mount interaction-gateway internal-rpc-authority-verifier
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-resolver-delivery resolver prototype-delivery-resolver
 add_prototype_delivery_mount runtime-controller internal-rpc-authority-issuer internal-rpc-authority-runtime-controller-issuer-delivery primary prototype-delivery-issuer
-add_prototype_delivery_mount runtime-s3-restore-exchanger internal-rpc-authority-issuer internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery primary prototype-delivery-issuer
 
 conflicting_resources=$(yq -o=json '.' "$temporary_directory/normalized.yaml" | jq -rs '
   map(select(.kind != null)) |

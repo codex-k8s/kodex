@@ -92,6 +92,24 @@ workload_contracts="$temporary_directory/workload-contracts.yaml"
   --manifest "$contract_source" --output "$workload_contracts" >/dev/null
 workload_policy="$script_directory/workload-policy.yaml"
 
+yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "control-plane-runtime")) as $control |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime")) as $runtime |
+  ($control.data.CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($control.data.CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE == null) and
+  ($control.data.CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE == null) and
+  ($runtime.data.RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($runtime.data.RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE == "https://github.com/codex-k8s/matter-codex/issues/310") and
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0
+' >/dev/null || fail "runtime archive/restore capability is not disabled in the exact application render"
+yq -o=json eval-all '.' "$temporary_directory/application-owner.yaml" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0 and
+  (first($resources[] | select(.kind == "NetworkPolicy" and .metadata.name == "runtime-controller-workers-exact-paths")) |
+    .spec.podSelector.matchExpressions[0].values == ["runtime-cleanup-authorizer"])
+' >/dev/null || fail "runtime archive/restore owner resources remain in the exact bootstrap render"
+
 for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
   "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" "$workload_contracts" "$workload_policy"; do
   kubectl --context "$expected_context" apply --dry-run=client -f "$manifest" >/dev/null
@@ -167,6 +185,10 @@ fi
 
 kubectl --context "$expected_context" diff -f "$workload_contracts" >/dev/null ||
   fail "production workload contract readback mismatch"
+kubectl --context "$expected_context" diff -f "$script_directory/bootstrap.yaml" >/dev/null ||
+  fail "production owner admission policy readback mismatch"
+kubectl --context "$expected_context" diff -f "$temporary_directory/application-owner.yaml" >/dev/null ||
+  fail "production application owner policy readback mismatch"
 kubectl --context "$expected_context" diff -f "$workload_policy" >/dev/null ||
   fail "production workload admission policy readback mismatch"
 kubectl --context "$expected_context" diff -f "$kubernetes_api_policies" >/dev/null ||

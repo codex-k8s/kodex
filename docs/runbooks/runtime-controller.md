@@ -116,58 +116,25 @@ immutable one-time receipt. Vault action role выдаёт только bootstra
 `restore-role-arn`; передавать inline policy/session tags в Vault generate
 endpoint запрещено, потому что этот endpoint их не принимает.
 
-В `direct-production-single-node-prototype` вместо Vault/STS должен быть ровно
-`internal-minio-service-account`. Для каждого action проверить только имена и
-metadata, без значений:
+В owner-approved Wave A профиле `direct-production-single-node-prototype`
+archive/restore capability выключена машинно, а не scale-to-zero:
 
-- отдельный non-root MinIO parent user и management Secret archive/restore;
-- exact HTTPS admin endpoint/SNI/CA и KMS pair
-  `RUNTIME_S3_KMS_KEY_ARN`/`RUNTIME_S3_MINIO_KMS_KEY_ID`;
-- aggregate state Secret
-  `runtime-s3-<archive|restore>-minio-identity-records` с `state.json`, exact
-  annotations и RBAC только `get/update` на одно имя;
-- child expiration ровно 900 секунд, parent/action/input/policy digests и
-  монотонное generation в подписанном record;
-- `info-service-account` возвращает exact parent, `on`, expiration, name,
-  description и полный canonical policy; после revoke тот же `accessKey`
-  обязан вернуть `NotFound`.
+- `CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled` запрещает чтение
+  signing keys и выпуск archive/restore workload tickets;
+- `RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled` закрыто отклоняет restore
+  materialization и создание archive/restore/rehydrate/S3 broker Jobs;
+- admission и cluster VAP отклоняют соответствующие Pod, Secret, action,
+  ServiceAccount, RBAC и NetworkPolicy;
+- exact render не содержит exchanger, broker readiness, management identity,
+  HMAC, KMS/role material, storage/profile/KMS env или S3 egress этого path.
 
-Readiness в direct profile не проверяет отсутствующий Vault. Она выполняет
-bounded deny-all `add/info/delete-service-account` probe на 60 секунд и
-подтверждает удаление. Не исправлять отказ выдачей root/static/shared
-credential, `admin:*`, ручным Secret, пропуском Info/Delete readback или
-сохранением child secret в aggregate state. Terminal execution без следующей
-attempt пока не имеет controller revoke command: до его реализации terminal
-credential считается внешним blocker и ждёт server expiration; вручную
-удалять record либо помечать cleanup успешным нельзя.
-
-Первый fix service-account policy bypass —
-[`RELEASE.2025-10-15T17-29-55Z`](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z) / commit
-`9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, но последующие official
-advisories требуют не ниже
-[`RELEASE.2026-04-14T21-32-45Z`](https://github.com/minio/minio/security/advisories/GHSA-xh8f-g2qw-gcm7).
-Public community
-repository не содержит этот tag/image и архивирован. Поэтому foundation нельзя
-обновлять до получения owner-provided supported MinIO/AIStor distribution и
-exact image digest. Сторонний digest, вымышленный community tag и прежний
-`RELEASE.2025-09-07T16-13-09Z` не использовать.
-
-До успешного `Secret Create` durable credential effect отсутствует: crash
-безопасно получает новый short-lived STS grant, который ещё не доступен
-workload. Потерянный ответ и `AlreadyExists` запускают action-specific one-time
-`runtime-s3-readback-*` Pod. Его projected token живёт не более 600 секунд, Role
-даёт `get` только exact Secret, а admission сверяет issuer, audience,
-execution/source/action, full tuple и Pod spec. Controller проверяет только
-`runtime-authority-receipt-*` с exact UID/resourceVersion/policy/readback/data
-digest/expiry и не читает Secret. Mismatch является fail-closed инцидентом;
-broad `secrets/get` не добавлять.
-
-Перед Ready у `runtime-workload-materializer`, `runtime-s3-archive-exchanger` и
-`runtime-s3-restore-exchanger` проверить UID/GID/fsGroup `10001`, modes `0440`
-и успешный exec probe `check-snapshot|check-s3-*`. Probe обязан прочитать TLS
-cert/key/CA, projected Kubernetes/Vault tokens, ticket public key, S3 CA и
-action KMS/role config. TCP-only probe или world-readable secret является
-fail-closed конфигурационным инцидентом.
+Внутренние provider/adapters могут компилироваться, но selector их не включает.
+Не исправлять отказ выдачей root/static/shared credential, ручным Secret,
+license/entitlement или fake STS. Полный backend, TTL `900`, policy intersection,
+immediate terminal/cancel/delete/retry revoke/readback, KMS и dynamic Job env
+возвращаются только через [#310](https://github.com/codex-k8s/matter-codex/issues/310)
+с отдельным owner gate. До этого раздел ниже описывает лишь контракт будущего
+enabled-профиля и не является Wave A readiness checklist.
 
 Для archive нужны quiesced CSI snapshot/clone, exact S3 `VersionId`, checksum,
 size, KMS, COMPLIANCE Object Lock не менее 90 суток, exact retain-until

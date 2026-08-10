@@ -239,25 +239,21 @@ Direct-production render задаёт только сочетание
 
 В prototype publisher выполняет только `get` и `update` заранее созданных exact
 Secret из закрытого target registry и подтверждает `resourceVersion`, semantic
-version, canonical digest и полный readback. Registry revision 6 содержит 13
-точных target tuple и 85 уникальных logical path. Publisher Role выводится из
-registry и содержит ровно 44 `resourceNames`; иные verbs и
-`list|watch|create|delete|patch` отсутствуют. Три profile-selected target имеют
-отдельные identity и Secret:
+version, canonical digest и полный readback. Direct-production registry revision
+7 содержит 12 точных target tuple и 78 уникальных logical path. Publisher Role
+выводится из registry и содержит ровно 40 `resourceNames`; иные verbs и
+`list|watch|create|delete|patch` отсутствуют. Wave A активирует два
+profile-selected target с отдельными identity и Secret:
 
 - `verifier/integration-gateway` — четыре verifier-документа в
   `internal-rpc-authority-integration-gateway-verifier-delivery`;
 - `issuer/runtime-controller` — четыре issuer-документа в
-  `internal-rpc-authority-runtime-controller-issuer-delivery`;
-- `issuer/runtime-s3-restore-exchanger` — отдельный transport actor и четыре
-  issuer-документа в
-  `internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery`.
+  `internal-rpc-authority-runtime-controller-issuer-delivery`.
 
-Последний не является alias для business actor `runtime-restore-effect`:
-transport authority TLS и publisher material отделены от
-`runtime-restore-effect-workload-tls` и application grant. Routine sidecar и
-init container получают только read-only file mount, не получают Kubernetes API
-token и не могут адресовать произвольный Secret/path.
+`issuer/runtime-s3-restore-exchanger` исключён из exact dark registry вместе с
+delivery Secret и PostgreSQL principal. Routine sidecar и init container
+получают только read-only file mount, не получают Kubernetes API token и не
+могут адресовать произвольный Secret/path.
 
 Reconciler получает `get` только на
 exact g1–g5 publisher/readback credential Secrets и `get|update` только на
@@ -278,12 +274,12 @@ readback, что и рабочая публикация.
 В direct-production application runtime adapters A–D заменяют живой Vault
 на закрытые Kubernetes/file границы:
 
-| Consumer | Exact binding | Authority и readback |
-|---|---|---|
-| `integration-gateway` provider store | `Secret/integration-gateway-provider-credentials`, единственный key `state.json` | main container получает projected token с audience `https://kubernetes.default.svc`; Role даёт ровно `get|update` одного Secret; `resourceVersion` CAS, generation, canonical digest и readback проверяются adapter и materializer |
-| `integration-gateway` Git store | `Secret/integration-gateway-git-credentials/state.json` | owner-materialized read-only aggregate с exact `credential_secret_ref`/version из repository catalog; API token для чтения не используется |
-| `integration-gateway` OIDC verifier | `ConfigMap/integration-gateway-oidc-provider`: `provider-snapshot.json`, `provider-snapshot.sha256`, `provider-snapshot.generation` | owner-materialized public JWKS snapshot; только `RS256`, exact issuer/audience, unique public `kid`, pinned generation и canonical SHA-256; network discovery для этого consumer отключен |
-| `interaction-gateway` bot credential store | `Secret/interaction-gateway-bot-credentials`, единственный key `state.json` | отдельные ServiceAccount и Role с ровно `get|update`; UUID binding, immutable active value, monotonic revoke, CAS/digest/readback |
+| Consumer                                   | Exact binding                                                                                                                       | Authority и readback                                                                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `integration-gateway` provider store       | `Secret/integration-gateway-provider-credentials`, единственный key `state.json`                                                    | main container получает projected token с audience `https://kubernetes.default.svc`; Role даёт ровно `get                                                                                 | update`одного Secret;`resourceVersion` CAS, generation, canonical digest и readback проверяются adapter и materializer |
+| `integration-gateway` Git store            | `Secret/integration-gateway-git-credentials/state.json`                                                                             | owner-materialized read-only aggregate с exact `credential_secret_ref`/version из repository catalog; API token для чтения не используется                                                |
+| `integration-gateway` OIDC verifier        | `ConfigMap/integration-gateway-oidc-provider`: `provider-snapshot.json`, `provider-snapshot.sha256`, `provider-snapshot.generation` | owner-materialized public JWKS snapshot; только `RS256`, exact issuer/audience, unique public `kid`, pinned generation и canonical SHA-256; network discovery для этого consumer отключен |
+| `interaction-gateway` bot credential store | `Secret/interaction-gateway-bot-credentials`, единственный key `state.json`                                                         | отдельные ServiceAccount и Role с ровно `get                                                                                                                                              | update`; UUID binding, immutable active value, monotonic revoke, CAS/digest/readback                                   |
 
 Два writable aggregate Secret заранее создаются materializer с
 `schema_version=1`, `generation=1`, пустым `records` и верным digest.
@@ -296,51 +292,49 @@ Authority publisher/reconciler/verifier/issuer также используют d
 Kubernetes/file profiles; их игнорируемые Vault env/mounts удалены из
 итогового render.
 
-Единственная оставшаяся внутренняя startup/readiness граница — S3 STS
-для `runtime-s3-archive-exchanger` и `runtime-s3-restore-exchanger`. Render
-выбирает `direct-production-s3-sts` и удаляет Vault token/CA/egress, но
-фиксирует тот же identity source в `runtime-controller-s3-security-policy`;
-текущий adapter намеренно закрыто отказывается без доказанного binding.
-Проверено read-only:
+Owner-approved Wave A dark profile явно задаёт
+`CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled` и
+`RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled`. В этом профиле:
 
-- Kubernetes issuer — `https://kubernetes.default.svc.cluster.local`, JWKS использует
-  `RS256`, но anonymous discovery из кластера отвечает `401`;
-- projected ServiceAccount token сохраняется валидным до `exp`, а
-  индивидуального offline revoke в Kubernetes нет;
-- pinned MinIO
-  `RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
-  предшествует release с исправлением High-severity STS session-policy
-  bypass от 2025-10-15;
-- MinIO web-identity даёт minimum TTL `900` и policy intersection, но
-  exact per-execution issue/self-revoke/readback и patched server в текущем контуре
-  отсутствуют.
+- control-plane не читает archive/restore signing keys и не выпускает их
+  workload tickets;
+- runtime-controller отклоняет restore materialization и не создаёт archive,
+  restore, rehydrate либо S3 credential broker Jobs;
+- admission закрыто отклоняет соответствующие Pod, Secret и action, а
+  cluster VAP запрещает создать такие workload, identity, RBAC и egress;
+- exact render не содержит archive/restore Deployment, Service,
+  ServiceAccount, Role/RoleBinding, NetworkPolicy, authority sidecar, init,
+  provider profile, management identity, HMAC, KMS/role material или readiness
+  expectation;
+- dynamic Jobs не получают storage/profile/KMS env. Scale-to-zero не считается
+  выключением capability.
 
-Поэтому Kubernetes SA OIDC не маскируется как готовый runtime S3
-binding. Для снятия blocker владелец должен выбрать и безопасно
-материализовать exact TLS STS/identity-plugin endpoint и CA, issuer
-metadata/JWKS, audience, role/policy identifiers и issuer-owned private
-authentication credential. Binding обязан давать TTL `900`, intersection
-по exact action/object/version/KMS, lease, immediate revoke и functional readback.
-Значения не передаются через Mattermost. После выбора binding developer
-добавляет реальные `Issue`, `Revoke` и readback в
-`services/internal/runtime-controller/cmd/runtime-credential-broker/s3_provider.go`
-без static/root credential и shared identity.
+Foundation S3-compatible storage остаётся только для активных instruction и
+interaction consumers. Routine workloads не получают management/STS endpoint.
+Включать archive/restore, добавлять AIStor license/entitlement либо выдавать
+static/shared/root credential запрещено до обязательного follow-up
+[#310](https://github.com/codex-k8s/matter-codex/issues/310). Там выбирается
+лицензированный AIStor либо поддерживаемый OSS backend, фиксируются immutable
+image/digest, per-execution TTL `900`, policy intersection, immediate terminal/
+cancel/delete/retry revoke/readback, KMS и передача storage/profile/KMS env в
+dynamic Jobs. Cutover остаётся запрещён.
 
-Внешний closed set состоит из 17 resources / 40 keys. В нем
+Active classification содержит 147 resources: 61
+`cryptographically_generated`, 70 `deterministically_derived`, 2
+`safely_reusable_from_existing_binding` и 14 `truly_external_credential`.
+Canonical classification SHA-256 —
+`4121cbe03b74f62224f96b8edf761c465eb900d9addd9f383ec39929c388e630`.
+Внешний closed set состоит из 14 resources / 35 keys. В нем
 остаются application grants и public trust roots, Mattermost mapping,
 `integration-gateway-provider-health-credential`, Git aggregate, OIDC provider
-snapshot, `mattercodex-oidc-ca` для сетевых OIDC consumers control plane,
-а также runtime S3 KMS/role identifiers. Внутренние credential в этот
+snapshot и `mattercodex-oidc-ca` для сетевых OIDC consumers control plane.
+Runtime archive/restore KMS/role identifiers в external fragment отсутствуют.
+Внутренние credential в этот
 set не входят. Отсутствие любого key отклоняет materializer.
 
-Context7 при этой проверке вернул ошибку monthly quota, поэтому
-использованы официальные [Kubernetes projected volumes](https://kubernetes.io/docs/concepts/storage/projected-volumes/),
-[ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/),
-[ServiceAccount administration](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/),
-[MinIO AssumeRoleWithWebIdentity](https://docs.min.io/aistor/developers/security-token-service/assumerolewithwebidentity/),
-[MinIO STS](https://docs.min.io/aistor/developers/security-token-service/),
-[MinIO identity plugin](https://docs.min.io/aistor/administration/iam/identity/plugin-identity/)
-и [MinIO security release](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z).
+Context7 при первоначальной проверке runtime storage boundary был недоступен по
+квоте; решение Wave A не утверждает конкретный storage backend. Исследование и
+официальные источники фиксируются в #310 вместе с выбором backend.
 
 ## Bounded smoke
 
@@ -351,12 +345,14 @@ Context7 при этой проверке вернул ошибку monthly quot
 - все migration Jobs завершены, а application Deployment готовы и доступны;
 - фактический набор release-managed объектов совпадает с render без
   отсутствующих или лишних объектов;
+- readback подтверждает `disabled` у обоих capability selector и отсутствие
+  archive/restore workload, identity, Secret, egress и readiness ожиданий;
 - running imageID каждого внутреннего контейнера совпадает с digest lock;
 - release lock readback совпадает с requested SHA/digest;
 - в новом namespace нет Ingress;
 - legacy workloads и traffic path неизменны.
 
-Это не integration/E2E, HA, backup restore drill или подтверждение hardened
+Это не integration/E2E, HA, archive/restore readiness, backup restore drill или подтверждение hardened
 supply chain. `role-image-builder` и динамический `agent-runner` намеренно не
 запускаются в dark до materialization hardened supply chain #256; их образы
 остаются в release lock, но не выдаются за работающий контур. Для
@@ -377,8 +373,12 @@ Pods имеют egress только к самому proxy.
 
 ## Rollback
 
+Риск Wave A — terminal session PVC остаётся retained и не получает durable S3
+archive; storage lifecycle сознательно неполон до #310. Включение capability
+требует нового code-first профиля и отдельного owner gate.
+
 Dark rollback повторно применяет ранее сохранённый и валидированный exact release
 lock с `mode=rollback` и отдельным owner gate. Он не выполняет schema down,
-миграцию legacy data, удаление PVC или изменение legacy traffic. Если foundation
+миграцию legacy data, удаление retained PVC или изменение legacy traffic. Если foundation
 не стартует, прекращают rollout и исправляют вперёд; удаление новых ресурсов или
 данных возможно только отдельным явно подтверждённым действием.

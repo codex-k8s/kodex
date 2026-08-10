@@ -209,13 +209,16 @@ func Run(
 	if err != nil {
 		return errors.New("runtime admission signing key is unavailable")
 	}
-	archiveSigningKey, err := decodeRuntimeSigningKey(config.RuntimeArchiveSigningKeyFile)
-	if err != nil {
-		return errors.New("runtime archive signing key is unavailable")
-	}
-	restoreSigningKey, err := decodeRuntimeSigningKey(config.RuntimeRestoreSigningKeyFile)
-	if err != nil {
-		return errors.New("runtime restore signing key is unavailable")
+	var archiveSigningKey, restoreSigningKey ed25519.PrivateKey
+	if config.RuntimeArchiveRestoreCapability == "enabled" {
+		archiveSigningKey, err = decodeRuntimeSigningKey(config.RuntimeArchiveSigningKeyFile)
+		if err != nil {
+			return errors.New("runtime archive signing key is unavailable")
+		}
+		restoreSigningKey, err = decodeRuntimeSigningKey(config.RuntimeRestoreSigningKeyFile)
+		if err != nil {
+			return errors.New("runtime restore signing key is unavailable")
+		}
 	}
 	interactionReadbackSigner, err := readbackgrantauth.New(startup, readbackgrantauth.Config{
 		Issuer:     "https://control-plane.mattercodex-system.svc.cluster.local/authority/interaction-delivery-readback",
@@ -244,6 +247,7 @@ func Run(
 	resourceService, err := resource.New(cachedRepository, resource.Config{
 		LeaseSigningKey:             leaseKey,
 		RuntimeAdmissionSigningKey:  admissionSigningKey,
+		ArchiveRestoreEnabled:       config.RuntimeArchiveRestoreCapability == "enabled",
 		RuntimeArchiveSigningKey:    archiveSigningKey,
 		RuntimeRestoreSigningKey:    restoreSigningKey,
 		TurnLeaseDuration:           config.TurnLeaseDuration,
