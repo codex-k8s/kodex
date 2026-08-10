@@ -65,6 +65,51 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: staff-control-center-public
+  namespace: mattercodex-system
+spec:
+  secretName: staff-control-center-public-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [control.mattercodex.local]
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-backend
+  namespace: mattercodex-system
+spec:
+  secretName: staff-control-center-backend-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - staff-control-center
+    - staff-control-center.mattercodex-system.svc
+    - staff-control-center.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-ingress-client
+  namespace: mattercodex-system
+spec:
+  secretName: staff-control-center-ingress-client-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  commonName: ingress-nginx.mattercodex.local
+  usages: [client auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: mattercodex-postgresql
   namespace: mattercodex-system
 spec:

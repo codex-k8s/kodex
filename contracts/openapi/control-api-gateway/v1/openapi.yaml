@@ -2453,7 +2453,8 @@ components:
         providerPoolSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
         roomSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
         prompt: { $ref: '#/components/schemas/OwnerSchedulePromptView' }
-      required: [scheduleRef, displayName, version, state, presetKey, presetRevision, presetSha256, defaultsRevision, defaultsSha256, timezone, advancedOverrides, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, agentSelection, instructionSelection, providerPoolSelection, roomSelection, prompt]
+        nextActions: { type: array, maxItems: 6, uniqueItems: true, items: { $ref: '#/components/schemas/OwnerScheduleNextAction' } }
+      required: [scheduleRef, displayName, version, state, presetKey, presetRevision, presetSha256, defaultsRevision, defaultsSha256, timezone, advancedOverrides, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, agentSelection, instructionSelection, providerPoolSelection, roomSelection, prompt, nextActions]
     OwnerSchedulePage:
       type: object
       additionalProperties: false
@@ -2823,8 +2824,9 @@ components:
         source: { type: string, minLength: 1, maxLength: 512 }
         sourceRevision: { type: integer, format: int64, minimum: 1 }
         sourceSha256: { $ref: '#/components/schemas/Sha256' }
+        drift: { $ref: '#/components/schemas/ConfigurationDrift' }
         updatedAt: { type: string, format: date-time }
-      required: [resourceRef, displayName, version, managedBy, source, sourceRevision, updatedAt]
+      required: [resourceRef, displayName, version, managedBy, source, sourceRevision, drift, updatedAt]
     ResourceKind:
       title: ResourceKind
       type: string
@@ -2846,6 +2848,22 @@ components:
       title: ConfigurationManagedBy
       type: string
       enum: [ui, git]
+    ConfigurationDrift:
+      title: ConfigurationDrift
+      type: string
+      enum: [NOT_APPLICABLE, IN_SYNC, DRIFTED, UNKNOWN]
+    ResourceNextAction:
+      title: ResourceNextAction
+      type: string
+      enum: [UPDATE, ACTIVATE, PAUSE, ARCHIVE, DELETE, DETACH, COPY]
+    OwnerScheduleNextAction:
+      title: OwnerScheduleNextAction
+      type: string
+      enum: [UPDATE, RUN_NOW, PAUSE, RESUME, DELETE, VIEW_OCCURRENCES]
+    ScheduleRecoveryAction:
+      title: ScheduleRecoveryAction
+      type: string
+      enum: [REPAIR, CANCEL, SKIP]
     ProjectLocale:
       title: ProjectLocale
       type: string
@@ -2976,29 +2994,32 @@ components:
       properties:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         roomType: { $ref: '#/components/schemas/ChatRoomType' }
-        defaultAgentId: { type: string, format: uuid }
-        externalChannelRef: { type: string, maxLength: 512 }
+        defaultAgentSelector: { type: string, minLength: 1, maxLength: 160 }
+        channelSelector: { type: string, minLength: 1, maxLength: 160 }
         workPolicy: { type: string, maxLength: 80 }
       required: [stableKey, roomType, workPolicy]
     CredentialBindingSpec:
       type: object
       additionalProperties: false
-      description: Содержит только URI/metadata Secret; secret value запрещён.
+      description: Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
       properties:
         purpose: { type: string, minLength: 1, maxLength: 120 }
-        immutableSecretRef: { type: string, minLength: 1, maxLength: 512 }
-        principalRef: { type: string, minLength: 1, maxLength: 512 }
+        sourceKind: { $ref: '#/components/schemas/CredentialBindingSourceKind' }
+        sourceSelector: { type: string, minLength: 1, maxLength: 160 }
         revision: { type: integer, format: int64, minimum: 1 }
-      required: [purpose, immutableSecretRef, principalRef, revision]
+      required: [purpose, revision]
+    CredentialBindingSourceKind:
+      type: string
+      enum: [PROVIDER_CONNECTION_REFERENCE, CREDENTIAL_BINDING]
     RepositoryWorkspaceSpec:
       type: object
       additionalProperties: false
       properties:
-        repositoryRef: { type: string, minLength: 1, maxLength: 512 }
+        repositorySelector: { type: string, minLength: 1, maxLength: 160 }
         workspaceMode: { type: string, minLength: 1, maxLength: 80 }
         defaultBranch: { type: string, minLength: 1, maxLength: 255 }
-        credentialBindingId: { type: string, format: uuid }
-      required: [repositoryRef, workspaceMode, defaultBranch]
+        credentialBindingSelector: { type: string, minLength: 1, maxLength: 160 }
+      required: [workspaceMode, defaultBranch]
     IntegrationSpec:
       type: object
       additionalProperties: false
@@ -3006,40 +3027,40 @@ components:
         definitionRef: { type: string, minLength: 1, maxLength: 512 }
         definitionVersion: { type: integer, format: int64, minimum: 1 }
         capabilities: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, maxLength: 120 } }
-        credentialBindingIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
-        endpointRef: { type: string, minLength: 1, maxLength: 512 }
-      required: [definitionRef, definitionVersion, capabilities, credentialBindingIds, endpointRef]
+        credentialBindingSelectors: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        sourceSelector: { type: string, minLength: 1, maxLength: 160 }
+      required: [definitionRef, definitionVersion, capabilities, credentialBindingSelectors]
     TeamSpec:
       type: object
       additionalProperties: false
       properties:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
-        externalTeamRef: { type: string, maxLength: 512 }
-        memberActorIds: { type: array, maxItems: 200, uniqueItems: true, items: { type: string, format: uuid } }
-        roleIds: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
-      required: [stableKey, memberActorIds, roleIds]
+        sourceSelector: { type: string, minLength: 1, maxLength: 160 }
+        memberActorSelectors: { type: array, maxItems: 200, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        roleSelectors: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+      required: [stableKey, memberActorSelectors, roleSelectors]
     RoleSpec:
       type: object
       additionalProperties: false
       properties:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
         capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
-        allowedTargetRoleIds: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
-        promptProfileId: { type: string, format: uuid }
-        roleImageRecipeId: { type: string, format: uuid }
-        providerCredentialBindingIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
-        repositoryWorkspaceIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
-        integrationIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
-      required: [stableKey, capabilities, allowedTargetRoleIds, roleImageRecipeId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds]
+        allowedTargetRoleSelectors: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        promptProfileSelector: { type: string, minLength: 1, maxLength: 160 }
+        roleImageRecipeSelector: { type: string, minLength: 1, maxLength: 160 }
+        providerCredentialBindingSelectors: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        repositoryWorkspaceSelectors: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+        integrationSelectors: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 160 } }
+      required: [stableKey, capabilities, allowedTargetRoleSelectors, roleImageRecipeSelector, providerCredentialBindingSelectors, repositoryWorkspaceSelectors, integrationSelectors]
     PromptProfileSpec:
       type: object
       additionalProperties: false
       properties:
         revision: { type: integer, format: int64, minimum: 1 }
         contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        sourceRef: { type: string, minLength: 1, maxLength: 512 }
+        sourceSelector: { type: string, minLength: 1, maxLength: 160 }
         locale: { type: string, minLength: 2, maxLength: 16 }
-      required: [revision, contentSha256, sourceRef, locale]
+      required: [revision, contentSha256, locale]
     ResourceSpecInput:
       type: object
       additionalProperties: false
@@ -3238,7 +3259,9 @@ components:
         managedBy: { $ref: '#/components/schemas/ConfigurationManagedBy' }
         source: { type: string, minLength: 1, maxLength: 512 }
         revision: { type: integer, format: int64, minimum: 1 }
-      required: [managedBy, source, revision]
+        sourceSha256: { $ref: '#/components/schemas/Sha256' }
+        drift: { $ref: '#/components/schemas/ConfigurationDrift' }
+      required: [managedBy, source, revision, drift]
     ProjectProjection:
       title: ProjectProjection
       type: object
@@ -3255,11 +3278,11 @@ components:
       additionalProperties: false
       properties:
         stableKey: { type: string }
-        externalTeamRef: { type: string }
-        memberActorIds: { type: array, items: { type: string, format: uuid } }
-        roleIds: { type: array, items: { type: string, format: uuid } }
+        providerBindingStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
+        memberCount: { type: integer, minimum: 0, maximum: 200 }
+        roleCount: { type: integer, minimum: 0, maximum: 64 }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [stableKey, externalTeamRef, memberActorIds, roleIds, ownership]
+      required: [stableKey, providerBindingStatus, memberCount, roleCount, ownership]
     ChatProjection:
       title: ChatProjection
       type: object
@@ -3267,19 +3290,11 @@ components:
       properties:
         stableKey: { type: string }
         roomType: { $ref: '#/components/schemas/ChatRoomType' }
-        defaultAgentId: { type: string, format: uuid }
-        externalChannelRef: { type: string }
+        defaultAgentStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
+        providerChannelStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
         workPolicy: { type: string }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [stableKey, roomType, externalChannelRef, workPolicy, ownership]
-    ProviderPoolBindingProjection:
-      title: ProviderPoolBindingProjection
-      type: object
-      additionalProperties: false
-      properties:
-        credentialBindingId: { type: string, format: uuid }
-        weight: { type: integer, minimum: 1, maximum: 10000 }
-      required: [credentialBindingId, weight]
+      required: [stableKey, roomType, defaultAgentStatus, providerChannelStatus, workPolicy, ownership]
     ProviderPoolProjection:
       title: ProviderPoolProjection
       type: object
@@ -3288,8 +3303,8 @@ components:
         policy: { $ref: '#/components/schemas/ProviderPoolPolicy' }
         policyRevision: { type: integer, format: int64, minimum: 1 }
         observationMaxAgeSeconds: { type: integer, format: int64, minimum: 60 }
-        bindings: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ProviderPoolBindingProjection' } }
-      required: [policy, policyRevision, observationMaxAgeSeconds, bindings]
+        bindingCount: { type: integer, minimum: 0, maximum: 8 }
+      required: [policy, policyRevision, observationMaxAgeSeconds, bindingCount]
     RoleProjection:
       title: RoleProjection
       type: object
@@ -3297,15 +3312,15 @@ components:
       properties:
         stableKey: { type: string }
         capabilities: { type: array, items: { type: string } }
-        allowedTargetRoleIds: { type: array, items: { type: string, format: uuid } }
-        promptProfileId: { type: string, format: uuid }
-        roleImageRecipeId: { type: string, format: uuid }
-        providerCredentialBindingIds: { type: array, items: { type: string, format: uuid } }
-        repositoryWorkspaceIds: { type: array, items: { type: string, format: uuid } }
-        integrationIds: { type: array, items: { type: string, format: uuid } }
+        allowedTargetRoleCount: { type: integer, minimum: 0, maximum: 64 }
+        promptProfileStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
+        roleImageRecipeStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
+        providerCredentialBindingCount: { type: integer, minimum: 0, maximum: 32 }
+        repositoryWorkspaceCount: { type: integer, minimum: 0, maximum: 32 }
+        integrationCount: { type: integer, minimum: 0, maximum: 32 }
         providerAccountPool: { $ref: '#/components/schemas/ProviderPoolProjection' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [stableKey, capabilities, allowedTargetRoleIds, promptProfileId, roleImageRecipeId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds, providerAccountPool, ownership]
+      required: [stableKey, capabilities, allowedTargetRoleCount, promptProfileStatus, roleImageRecipeStatus, providerCredentialBindingCount, repositoryWorkspaceCount, integrationCount, providerAccountPool, ownership]
     PromptProfileProjection:
       title: PromptProfileProjection
       type: object
@@ -3313,18 +3328,16 @@ components:
       properties:
         revision: { type: integer, format: int64, minimum: 1 }
         contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        sourceRef: { type: string }
+        sourceStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
         locale: { type: string }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [revision, contentSha256, sourceRef, locale, ownership]
+      required: [revision, contentSha256, sourceStatus, locale, ownership]
     CredentialBindingProjection:
       title: CredentialBindingProjection
       type: object
       additionalProperties: false
       properties:
         purpose: { type: string }
-        immutableSecretRef: { type: string }
-        principalRef: { type: string }
         revision: { type: integer, format: int64, minimum: 1 }
         expiresAt: { type: string, format: date-time }
         providerEligible: { type: boolean }
@@ -3333,18 +3346,19 @@ components:
         providerObservedAt: { type: string, format: date-time }
         contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [purpose, immutableSecretRef, principalRef, revision, providerEligible, providerCapabilities, providerObservationRevision, contentSha256, ownership]
+        bindingStatus: { type: string, pattern: '^(CONFIGURED|UNAVAILABLE)$' }
+      required: [purpose, revision, providerEligible, providerCapabilities, providerObservationRevision, contentSha256, bindingStatus, ownership]
     RepositoryWorkspaceProjection:
       title: RepositoryWorkspaceProjection
       type: object
       additionalProperties: false
       properties:
-        repositoryRef: { type: string }
+        repositoryStatus: { type: string, pattern: '^(CONFIGURED|UNAVAILABLE)$' }
         workspaceMode: { type: string }
         defaultBranch: { type: string }
-        credentialBindingId: { type: string, format: uuid }
+        credentialBindingStatus: { type: string, pattern: '^(CONFIGURED|NOT_CONFIGURED)$' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [repositoryRef, workspaceMode, defaultBranch, ownership]
+      required: [repositoryStatus, workspaceMode, defaultBranch, credentialBindingStatus, ownership]
     IntegrationProjection:
       title: IntegrationProjection
       type: object
@@ -3353,10 +3367,10 @@ components:
         definitionRef: { type: string }
         definitionVersion: { type: integer, format: int64, minimum: 1 }
         capabilities: { type: array, items: { type: string } }
-        credentialBindingIds: { type: array, items: { type: string, format: uuid } }
-        endpointRef: { type: string }
+        credentialBindingCount: { type: integer, minimum: 0, maximum: 32 }
+        endpointStatus: { type: string, pattern: '^(CONFIGURED|UNAVAILABLE)$' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [definitionRef, definitionVersion, capabilities, credentialBindingIds, endpointRef, ownership]
+      required: [definitionRef, definitionVersion, capabilities, credentialBindingCount, endpointStatus, ownership]
     RuntimeRevisionProjection:
       title: RuntimeRevisionProjection
       type: object
@@ -3488,7 +3502,8 @@ components:
         availableAt: { type: string, format: date-time }
         outcome: { type: string, maxLength: 256 }
         recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-      required: [occurrenceId, scheduleId, scheduledFor, targetResourceId, targetKind, targetVersion, effectiveInputSha256, state, attempt, authorityGeneration, version, availableAt]
+        recoveryActions: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ScheduleRecoveryAction' } }
+      required: [occurrenceId, scheduleId, scheduledFor, targetResourceId, targetKind, targetVersion, effectiveInputSha256, state, attempt, authorityGeneration, version, availableAt, recoveryActions]
     ScheduleOccurrencePage:
       type: object
       additionalProperties: false
@@ -3500,7 +3515,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        action: { type: string, enum: [REPAIR, CANCEL, SKIP] }
+        action: { $ref: '#/components/schemas/ScheduleRecoveryAction' }
         expectedAttempt: { type: integer, minimum: 1, maximum: 100 }
         recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         reasonCode: { type: string, pattern: '^[a-z][a-z0-9_]{2,63}$' }
@@ -3958,7 +3973,8 @@ components:
         spec: { $ref: '#/components/schemas/ResourceSpecProjection' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, kind, name, state, version, projectionSha256, spec, createdAt, updatedAt]
+        nextActions: { type: array, maxItems: 7, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceNextAction' } }
+      required: [id, kind, name, state, version, projectionSha256, spec, createdAt, updatedAt, nextActions]
     ResourcePage:
       type: object
       additionalProperties: false

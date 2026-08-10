@@ -751,6 +751,19 @@ func TestOwnerSchedulePromptPreparationHasSingleConcurrentWinnerAndBoundedRecove
 
 func TestOwnerNextActionsMatrices(t *testing.T) {
 	now := time.Now().UTC()
+	schedule := entity.Resource{State: enum.StateActive}
+	scheduleSpec := entity.ScheduleSpec{Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"}}
+	if got := strings.Join(ownerScheduleNextActions(schedule, scheduleSpec), ","); got != "UPDATE,RUN_NOW,PAUSE,DELETE,VIEW_OCCURRENCES" {
+		t.Fatalf("active schedule actions: %s", got)
+	}
+	schedule.State = enum.StatePaused
+	if got := strings.Join(ownerScheduleNextActions(schedule, scheduleSpec), ","); got != "UPDATE,RESUME,DELETE,VIEW_OCCURRENCES" {
+		t.Fatalf("paused schedule actions: %s", got)
+	}
+	scheduleSpec.Ownership = entity.ConfigurationOwnership{ManagedBy: "GIT", SourceRef: "git://owner/schedule", SourceRevision: 3}
+	if got := strings.Join(ownerScheduleNextActions(schedule, scheduleSpec), ","); got != "VIEW_OCCURRENCES" {
+		t.Fatalf("git-owned schedule actions: %s", got)
+	}
 	if got := strings.Join((runActionDecision{Cancel: true}).actions(), ","); got != "CANCEL" {
 		t.Fatalf("running actions: %s", got)
 	}

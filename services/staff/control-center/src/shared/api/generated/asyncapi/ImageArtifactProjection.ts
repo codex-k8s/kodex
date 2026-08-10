@@ -1,0 +1,38 @@
+import {RoleImagePlatform} from './RoleImagePlatform';
+import {ImageAdmissionVerdict} from './ImageAdmissionVerdict';
+interface ImageArtifactProjection {
+  recipeId: string;
+  recipeVersion: number;
+  recipeGeneration: number;
+  specSha256: string;
+  buildId: string;
+  buildVersion: number;
+  buildAttempt: number;
+  stagingReference: string;
+  manifestDigest: string;
+  provenanceSha256: string;
+  immutableBuildSha256: string;
+  baseImageDigest: string;
+  sourceSha256: string;
+  contextSha256: string;
+  builderSha256: string;
+  frontendSha256: string;
+  toolchainSha256: string;
+  roleRuntimeContractRevision: number;
+  roleRuntimeContractSha256: string;
+  platforms: RoleImagePlatform[];
+  sbomSha256?: string;
+  vulnerabilityEvidenceSha256?: string;
+  policyRevision: number;
+  policySha256: string;
+  admissionVerdict?: ImageAdmissionVerdict;
+  signatureIdentity?: string;
+  signatureSha256?: string;
+  admissionRevision: number;
+  admissionReceiptSha256?: string;
+  admissionReceiptOciManifestDigest?: string;
+  promotedReference?: string;
+  promotionReadbackSha256?: string;
+  promotedAt?: string;
+}
+export { ImageArtifactProjection };

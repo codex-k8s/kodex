@@ -1,0 +1,3 @@
+
+type ProjectionChannel = "RUNS" | "INCIDENTS" | "RESOURCES" | "CONFIGURATION_CHANGES" | "WORKSPACE_TEAMS" | "PROVIDERS" | "INTEGRATIONS" | "APPROVALS" | "BACKUPS" | "HEALTH";
+export { ProjectionChannel };

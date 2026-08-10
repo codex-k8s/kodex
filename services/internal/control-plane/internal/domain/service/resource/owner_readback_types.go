@@ -142,6 +142,7 @@ type OwnerScheduleProjection struct {
 	AgentSelection, InstructionSelection        OwnerSafeSelection
 	ProviderPoolSelection, RoomSelection        OwnerSafeSelection
 	Prompt                                      OwnerSchedulePromptProjection
+	NextActions                                 []string
 }
 
 type OwnerSchedulePromptProjection struct {
@@ -246,7 +247,7 @@ func scheduleResourceProjection(resource entity.Resource) (OwnerScheduleProjecti
 	if !ok || spec.OwnerPresetKey == "" {
 		return OwnerScheduleProjection{}, false
 	}
-	return OwnerScheduleProjection{
+	projection := OwnerScheduleProjection{
 		ScheduleRef: resource.ID, DisplayName: resource.Name, Version: resource.Version, State: resource.State,
 		PresetKey: spec.OwnerPresetKey, PresetRevision: spec.OwnerPresetRevision, PresetSHA256: spec.OwnerPresetSHA256,
 		DefaultsRevision: spec.OwnerDefaultsRevision, DefaultsSHA256: spec.OwnerDefaultsSHA256,
@@ -259,7 +260,25 @@ func scheduleResourceProjection(resource entity.Resource) (OwnerScheduleProjecti
 		AdvancedOverrides: append([]string(nil), spec.AdvancedOverrides...), OverlapPolicy: spec.OverlapPolicy,
 		MisfirePolicy: spec.MisfirePolicy, SessionPolicy: spec.SessionPolicy,
 		NotificationPolicy: spec.NotificationPolicy, Coalesce: spec.Coalesce, NextRunAt: spec.NextRunAt,
-	}, true
+	}
+	projection.NextActions = ownerScheduleNextActions(resource, spec)
+	return projection, true
+}
+
+func ownerScheduleNextActions(resource entity.Resource, spec entity.ScheduleSpec) []string {
+	if spec.Ownership.ManagedBy == "GIT" {
+		return []string{"VIEW_OCCURRENCES"}
+	}
+	switch resource.State {
+	case enum.StateActive:
+		return []string{"UPDATE", "RUN_NOW", "PAUSE", "DELETE", "VIEW_OCCURRENCES"}
+	case enum.StatePaused:
+		return []string{"UPDATE", "RESUME", "DELETE", "VIEW_OCCURRENCES"}
+	case enum.StateArchived, enum.StateDeletionPending:
+		return []string{"DELETE", "VIEW_OCCURRENCES"}
+	default:
+		return []string{"VIEW_OCCURRENCES"}
+	}
 }
 
 // OwnerScheduleProjectionFromResource redacts server-owned pins from the basic owner readback.

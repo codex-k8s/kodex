@@ -170,6 +170,14 @@ func castOwnerScheduleView(input *controlplanev1.OwnerScheduleProjection) (gener
 	pool, err14 := castOwnerSafeSelection(input.GetProviderPoolSelection())
 	room, err15 := castOwnerSafeSelection(input.GetRoomSelection())
 	prompt, err16 := castOwnerSchedulePrompt(input.GetPrompt())
+	nextActions := make([]generated.OwnerScheduleNextAction, 0, len(input.GetNextActions()))
+	for _, item := range input.GetNextActions() {
+		action, actionErr := castClosedEnum(item.String(), "OWNER_SCHEDULE_NEXT_ACTION_", generated.OwnerScheduleNextAction.Valid)
+		if actionErr != nil {
+			return generated.OwnerScheduleView{}, errors.New("owner schedule next action is invalid")
+		}
+		nextActions = append(nextActions, action)
+	}
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil || err7 != nil || err8 != nil || err9 != nil || err10 != nil || err11 != nil || err12 != nil || err13 != nil || err14 != nil || err15 != nil || err16 != nil || !calendar.Valid() || !delivery.Valid() || input.GetMaximumAttempts() == 0 {
 		return generated.OwnerScheduleView{}, errors.New("owner schedule projection values are invalid")
 	}
@@ -177,7 +185,7 @@ func castOwnerScheduleView(input *controlplanev1.OwnerScheduleProjection) (gener
 		PresetKey: input.GetPresetKey(), PresetRevision: int64(input.GetPresetRevision()), PresetSha256: generated.Sha256(strings.ToLower(input.GetPresetSha256())), DefaultsRevision: int64(input.GetDefaultsRevision()), DefaultsSha256: generated.Sha256(strings.ToLower(input.GetDefaultsSha256())),
 		Timezone: input.GetTimezone(), Cron: optionalString(input.GetCron()), IntervalSeconds: interval, AdvancedOverrides: append([]string(nil), input.GetAdvancedOverrides()...), Calendar: calendar,
 		OverlapPolicy: overlap, MisfirePolicy: misfire, MisfireGraceSeconds: misfireGrace, DeliveryPolicy: delivery, MaximumAttempts: int(input.GetMaximumAttempts()), InitialBackoffSeconds: initial, MaximumBackoffSeconds: maximum,
-		DeadLetterAfterSeconds: deadLetter, SessionPolicy: session, NotificationPolicy: notification, MaximumExecutionSeconds: execution, Coalesce: input.GetCoalesce(), AgentSelection: agent, InstructionSelection: instruction, ProviderPoolSelection: pool, RoomSelection: room, Prompt: prompt}
+		DeadLetterAfterSeconds: deadLetter, SessionPolicy: session, NotificationPolicy: notification, MaximumExecutionSeconds: execution, Coalesce: input.GetCoalesce(), AgentSelection: agent, InstructionSelection: instruction, ProviderPoolSelection: pool, RoomSelection: room, Prompt: prompt, NextActions: nextActions}
 	if input.GetNextRunAt() != nil {
 		value, err := requiredTimestamp(input.GetNextRunAt())
 		if err != nil {

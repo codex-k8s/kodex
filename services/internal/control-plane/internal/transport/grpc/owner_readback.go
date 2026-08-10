@@ -186,6 +186,11 @@ func ownerScheduleProjectionToProto(value resource.OwnerScheduleProjection) *con
 		InstructionSelection:     ownerSafeSelectionToProto(value.InstructionSelection),
 		ProviderPoolSelection:    ownerSafeSelectionToProto(value.ProviderPoolSelection),
 		RoomSelection:            ownerSafeSelectionToProto(value.RoomSelection)}
+	for _, action := range value.NextActions {
+		if enumValue, ok := controlplanev1.OwnerScheduleNextAction_value["OWNER_SCHEDULE_NEXT_ACTION_"+action]; ok {
+			result.NextActions = append(result.NextActions, controlplanev1.OwnerScheduleNextAction(enumValue))
+		}
+	}
 	result.Prompt = &controlplanev1.OwnerSchedulePromptProjection{Kind: value.Prompt.Kind,
 		DisplayName: value.Prompt.DisplayName, Status: ownerProjectionStatusToProto(value.Prompt.Status),
 		Version: value.Prompt.Version, Sha256: value.Prompt.SHA256}

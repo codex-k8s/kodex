@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staff-control-center
+  labels:
+    app.kubernetes.io/name: staff-control-center
+    app.kubernetes.io/component: staff-frontend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: staff-control-center
+      app.kubernetes.io/component: staff-frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: staff-control-center
+        app.kubernetes.io/component: staff-frontend
+      annotations:
+        kubectl.kubernetes.io/default-container: staff-control-center
+        mattercodex.dev/runtime-config-revision: "42ea618dbf108d802d431b51b390efee775f311dc210d32ff8b37350629f8c85"
+    spec:
+      serviceAccountName: staff-control-center
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: staff-control-center
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/staff-control-center@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: https, containerPort: 8443, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /readyz, port: https, scheme: HTTPS}
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: https, scheme: HTTPS}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /readyz, port: https, scheme: HTTPS}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: runtime-config, mountPath: /var/run/config/mattercodex/staff-control-center/runtime, readOnly: true}
+            - {name: backend-tls, mountPath: /var/run/secrets/mattercodex/staff-control-center/backend-tls, readOnly: true}
+            - {name: ingress-client-tls, mountPath: /var/run/secrets/mattercodex/staff-control-center/ingress-client-tls, readOnly: true}
+            - {name: control-api-ca, mountPath: /var/run/config/mattercodex/staff-control-center/control-api-ca, readOnly: true}
+            - {name: nginx-cache, mountPath: /var/cache/nginx}
+            - {name: nginx-run, mountPath: /var/run/nginx}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: runtime-config
+          configMap: {name: staff-control-center-runtime, defaultMode: 0444}
+        - name: backend-tls
+          secret: {secretName: staff-control-center-backend-tls, defaultMode: 0440}
+        - name: ingress-client-tls
+          secret:
+            secretName: staff-control-center-ingress-client-tls
+            defaultMode: 0440
+            items: [{key: ca.crt, path: ca.crt}]
+        - name: control-api-ca
+          secret:
+            secretName: control-api-gateway-public-tls-material
+            defaultMode: 0444
+            items: [{key: ca.crt, path: ca.crt}]
+        - name: nginx-cache
+          emptyDir: {sizeLimit: 32Mi}
+        - name: nginx-run
+          emptyDir: {sizeLimit: 4Mi}
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}

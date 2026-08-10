@@ -10,6 +10,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	ownerConfigurationConfigured    = "CONFIGURED"
+	ownerConfigurationNotConfigured = "NOT_CONFIGURED"
+	ownerConfigurationUnavailable   = "UNAVAILABLE"
+)
+
 func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSpecProjection, error) {
 	version := resource.GetVersion()
 	switch value := resource.GetSpec().GetValue().(type) {
@@ -22,20 +28,29 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		return generated.ResourceSpecProjection{Project: &generated.ProjectProjection{Slug: value.Project.GetSlug(), Description: value.Project.GetDescription(), Locale: locale, Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_Team:
 		ownership, err := projectionOwnership(value.Team.GetOwnership(), version)
-		members, memberErr := parseUUIDs(value.Team.GetMemberActorIds())
-		roles, roleErr := parseUUIDs(value.Team.GetRoleIds())
-		if err != nil || memberErr != nil || roleErr != nil {
+		if err != nil || len(value.Team.GetMemberActorIds()) > 200 || len(value.Team.GetRoleIds()) > 64 {
 			return generated.ResourceSpecProjection{}, errors.New("team projection is invalid")
 		}
-		return generated.ResourceSpecProjection{Team: &generated.TeamProjection{StableKey: value.Team.GetStableKey(), ExternalTeamRef: value.Team.GetExternalTeamRef(), MemberActorIds: members, RoleIds: roles, Ownership: ownership}}, nil
+		providerStatus := ownerConfigurationNotConfigured
+		if value.Team.GetExternalTeamRef() != "" {
+			providerStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{Team: &generated.TeamProjection{StableKey: value.Team.GetStableKey(), ProviderBindingStatus: providerStatus, MemberCount: len(value.Team.GetMemberActorIds()), RoleCount: len(value.Team.GetRoleIds()), Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_Chat:
 		ownership, err := projectionOwnership(value.Chat.GetOwnership(), version)
 		room := generated.ChatRoomType(strings.TrimPrefix(value.Chat.GetRoomType().String(), "ROOM_TYPE_"))
-		agent, agentErr := optionalUUID(value.Chat.GetDefaultAgentId())
-		if err != nil || agentErr != nil || !room.Valid() {
+		if err != nil || !room.Valid() {
 			return generated.ResourceSpecProjection{}, errors.New("chat projection is invalid")
 		}
-		return generated.ResourceSpecProjection{Chat: &generated.ChatProjection{StableKey: value.Chat.GetStableKey(), RoomType: room, DefaultAgentId: agent, ExternalChannelRef: value.Chat.GetExternalChannelRef(), WorkPolicy: value.Chat.GetWorkPolicy(), Ownership: ownership}}, nil
+		agentStatus := ownerConfigurationNotConfigured
+		if value.Chat.GetDefaultAgentId() != "" {
+			agentStatus = ownerConfigurationConfigured
+		}
+		channelStatus := ownerConfigurationNotConfigured
+		if value.Chat.GetExternalChannelRef() != "" {
+			channelStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{Chat: &generated.ChatProjection{StableKey: value.Chat.GetStableKey(), RoomType: room, DefaultAgentStatus: agentStatus, ProviderChannelStatus: channelStatus, WorkPolicy: value.Chat.GetWorkPolicy(), Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_Role:
 		return roleProjection(value.Role, version)
 	case *controlplanev1.ResourceSpec_PromptProfile:
@@ -43,7 +58,11 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		if err != nil || value.PromptProfile.GetRevision() == 0 {
 			return generated.ResourceSpecProjection{}, errors.New("prompt profile projection is invalid")
 		}
-		return generated.ResourceSpecProjection{PromptProfile: &generated.PromptProfileProjection{Revision: int64(value.PromptProfile.GetRevision()), ContentSha256: value.PromptProfile.GetContentSha256(), SourceRef: value.PromptProfile.GetSourceRef(), Locale: value.PromptProfile.GetLocale(), Ownership: ownership}}, nil
+		sourceStatus := ownerConfigurationNotConfigured
+		if value.PromptProfile.GetSourceRef() != "" {
+			sourceStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{PromptProfile: &generated.PromptProfileProjection{Revision: int64(value.PromptProfile.GetRevision()), ContentSha256: value.PromptProfile.GetContentSha256(), SourceStatus: sourceStatus, Locale: value.PromptProfile.GetLocale(), Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_CredentialBinding:
 		ownership, err := projectionOwnership(value.CredentialBinding.GetOwnership(), version)
 		var expires, observed *time.Time
@@ -58,21 +77,35 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		if err != nil || value.CredentialBinding.GetRevision() == 0 {
 			return generated.ResourceSpecProjection{}, errors.New("credential binding projection is invalid")
 		}
-		return generated.ResourceSpecProjection{CredentialBinding: &generated.CredentialBindingProjection{Purpose: value.CredentialBinding.GetPurpose(), ImmutableSecretRef: value.CredentialBinding.GetImmutableSecretRef(), PrincipalRef: value.CredentialBinding.GetPrincipalRef(), Revision: int64(value.CredentialBinding.GetRevision()), ExpiresAt: expires, ProviderEligible: value.CredentialBinding.GetProviderEligible(), ProviderCapabilities: value.CredentialBinding.GetProviderCapabilities(), ProviderObservationRevision: int64(value.CredentialBinding.GetProviderObservationRevision()), ProviderObservedAt: observed, ContentSha256: value.CredentialBinding.GetContentSha256(), Ownership: ownership}}, nil
+		bindingStatus := ownerConfigurationUnavailable
+		if value.CredentialBinding.GetImmutableSecretRef() != "" && value.CredentialBinding.GetPrincipalRef() != "" {
+			bindingStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{CredentialBinding: &generated.CredentialBindingProjection{Purpose: value.CredentialBinding.GetPurpose(), Revision: int64(value.CredentialBinding.GetRevision()), ExpiresAt: expires, ProviderEligible: value.CredentialBinding.GetProviderEligible(), ProviderCapabilities: value.CredentialBinding.GetProviderCapabilities(), ProviderObservationRevision: int64(value.CredentialBinding.GetProviderObservationRevision()), ProviderObservedAt: observed, ContentSha256: value.CredentialBinding.GetContentSha256(), BindingStatus: bindingStatus, Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_RepositoryWorkspace:
 		ownership, err := projectionOwnership(value.RepositoryWorkspace.GetOwnership(), version)
-		credential, credentialErr := optionalUUID(value.RepositoryWorkspace.GetCredentialBindingId())
-		if err != nil || credentialErr != nil {
+		if err != nil {
 			return generated.ResourceSpecProjection{}, errors.New("repository workspace projection is invalid")
 		}
-		return generated.ResourceSpecProjection{RepositoryWorkspace: &generated.RepositoryWorkspaceProjection{RepositoryRef: value.RepositoryWorkspace.GetRepositoryRef(), WorkspaceMode: value.RepositoryWorkspace.GetWorkspaceMode(), DefaultBranch: value.RepositoryWorkspace.GetDefaultBranch(), CredentialBindingId: credential, Ownership: ownership}}, nil
+		repositoryStatus := ownerConfigurationUnavailable
+		if value.RepositoryWorkspace.GetRepositoryRef() != "" {
+			repositoryStatus = ownerConfigurationConfigured
+		}
+		credentialStatus := ownerConfigurationNotConfigured
+		if value.RepositoryWorkspace.GetCredentialBindingId() != "" {
+			credentialStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{RepositoryWorkspace: &generated.RepositoryWorkspaceProjection{RepositoryStatus: repositoryStatus, WorkspaceMode: value.RepositoryWorkspace.GetWorkspaceMode(), DefaultBranch: value.RepositoryWorkspace.GetDefaultBranch(), CredentialBindingStatus: credentialStatus, Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_Integration:
 		ownership, err := projectionOwnership(value.Integration.GetOwnership(), version)
-		bindings, bindingErr := parseUUIDs(value.Integration.GetCredentialBindingIds())
-		if err != nil || bindingErr != nil || value.Integration.GetDefinitionVersion() == 0 {
+		if err != nil || value.Integration.GetDefinitionVersion() == 0 || len(value.Integration.GetCredentialBindingIds()) > 32 {
 			return generated.ResourceSpecProjection{}, errors.New("integration projection is invalid")
 		}
-		return generated.ResourceSpecProjection{Integration: &generated.IntegrationProjection{DefinitionRef: value.Integration.GetDefinitionRef(), DefinitionVersion: int64(value.Integration.GetDefinitionVersion()), Capabilities: value.Integration.GetCapabilities(), CredentialBindingIds: bindings, EndpointRef: value.Integration.GetEndpointRef(), Ownership: ownership}}, nil
+		endpointStatus := ownerConfigurationUnavailable
+		if value.Integration.GetEndpointRef() != "" {
+			endpointStatus = ownerConfigurationConfigured
+		}
+		return generated.ResourceSpecProjection{Integration: &generated.IntegrationProjection{DefinitionRef: value.Integration.GetDefinitionRef(), DefinitionVersion: int64(value.Integration.GetDefinitionVersion()), Capabilities: value.Integration.GetCapabilities(), CredentialBindingCount: len(value.Integration.GetCredentialBindingIds()), EndpointStatus: endpointStatus, Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_RoleImageRecipe:
 		input, err := roleImageRecipeProjectionInput(value.RoleImageRecipe.GetInput())
 		if err != nil || value.RoleImageRecipe.GetGeneration() == 0 || value.RoleImageRecipe.GetPolicyRevision() == 0 {
@@ -400,30 +433,23 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 
 func roleProjection(value *controlplanev1.RoleSpec, version uint64) (generated.ResourceSpecProjection, error) {
 	ownership, err := projectionOwnership(value.GetOwnership(), version)
-	allowed, e1 := parseUUIDs(value.GetAllowedTargetRoleIds())
-	prompt, e2 := requiredUUID(value.GetPromptProfileId())
-	credentials, e3 := parseUUIDs(value.GetProviderCredentialBindingIds())
-	workspaces, e4 := parseUUIDs(value.GetRepositoryWorkspaceIds())
-	integrations, e5 := parseUUIDs(value.GetIntegrationIds())
-	recipeID, e6 := requiredUUID(value.GetRoleImageRecipeId())
 	pool := value.GetProviderAccountPool()
 	policy := generated.ProviderPoolPolicy("")
-	bindings := []generated.ProviderPoolBindingProjection{}
 	if pool != nil {
 		policy = generated.ProviderPoolPolicy(pool.GetPolicy())
-		for _, item := range pool.GetBindings() {
-			id, parseErr := requiredUUID(item.GetCredentialBindingId())
-			if parseErr != nil {
-				err = parseErr
-				break
-			}
-			bindings = append(bindings, generated.ProviderPoolBindingProjection{CredentialBindingId: id, Weight: int(item.GetWeight())})
-		}
 	}
-	if err != nil || e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil || pool == nil || !policy.Valid() {
+	if err != nil || pool == nil || !policy.Valid() || len(value.GetAllowedTargetRoleIds()) > 64 || len(value.GetProviderCredentialBindingIds()) > 32 || len(value.GetRepositoryWorkspaceIds()) > 32 || len(value.GetIntegrationIds()) > 32 || len(pool.GetBindings()) > 8 {
 		return generated.ResourceSpecProjection{}, errors.New("role projection is invalid")
 	}
-	return generated.ResourceSpecProjection{Role: &generated.RoleProjection{StableKey: value.GetStableKey(), Capabilities: value.GetCapabilities(), AllowedTargetRoleIds: allowed, PromptProfileId: prompt, RoleImageRecipeId: recipeID, ProviderCredentialBindingIds: credentials, RepositoryWorkspaceIds: workspaces, IntegrationIds: integrations, ProviderAccountPool: generated.ProviderPoolProjection{Policy: policy, PolicyRevision: int64(pool.GetPolicyRevision()), ObservationMaxAgeSeconds: int64(pool.GetObservationMaxAge().AsDuration().Seconds()), Bindings: bindings}, Ownership: ownership}}, nil
+	promptStatus := ownerConfigurationNotConfigured
+	if value.GetPromptProfileId() != "" {
+		promptStatus = ownerConfigurationConfigured
+	}
+	recipeStatus := ownerConfigurationNotConfigured
+	if value.GetRoleImageRecipeId() != "" {
+		recipeStatus = ownerConfigurationConfigured
+	}
+	return generated.ResourceSpecProjection{Role: &generated.RoleProjection{StableKey: value.GetStableKey(), Capabilities: value.GetCapabilities(), AllowedTargetRoleCount: len(value.GetAllowedTargetRoleIds()), PromptProfileStatus: promptStatus, RoleImageRecipeStatus: recipeStatus, ProviderCredentialBindingCount: len(value.GetProviderCredentialBindingIds()), RepositoryWorkspaceCount: len(value.GetRepositoryWorkspaceIds()), IntegrationCount: len(value.GetIntegrationIds()), ProviderAccountPool: generated.ProviderPoolProjection{Policy: policy, PolicyRevision: int64(pool.GetPolicyRevision()), ObservationMaxAgeSeconds: int64(pool.GetObservationMaxAge().AsDuration().Seconds()), BindingCount: len(pool.GetBindings())}, Ownership: ownership}}, nil
 }
 
 func roleImageRecipeProjectionInput(input *controlplanev1.RoleImageRecipeInput) (generated.RoleImageRecipeStatusInput, error) {
@@ -600,20 +626,32 @@ func projectionOwnership(value *controlplanev1.ConfigurationOwnership, resourceV
 	if value == nil || resourceVersion == 0 {
 		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration ownership is unavailable")
 	}
+	drift, driftErr := castClosedEnum(value.GetDrift().String(), "CONFIGURATION_DRIFT_", generated.ConfigurationDrift.Valid)
+	if driftErr != nil {
+		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration drift is unavailable")
+	}
+	var sourceSHA256 *generated.Sha256
+	if value.GetSourceSha256() != "" {
+		if !validSHA256(value.GetSourceSha256()) {
+			return generated.ConfigurationOwnershipProjection{}, errors.New("configuration source digest is invalid")
+		}
+		digest := generated.Sha256(strings.ToLower(value.GetSourceSha256()))
+		sourceSHA256 = &digest
+	}
 	switch value.GetManagedBy() {
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI:
 		if value.GetSourceRef() != "" && value.GetSourceRevision() != 0 {
-			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
+			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision()), SourceSha256: sourceSHA256, Drift: drift}, nil
 		}
 		if value.GetSourceRef() != "" || value.GetSourceRevision() != 0 {
 			return generated.ConfigurationOwnershipProjection{}, errors.New("ui ownership lineage is incomplete")
 		}
-		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion)}, nil
+		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion), SourceSha256: sourceSHA256, Drift: drift}, nil
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT:
 		if value.GetSourceRef() == "" || value.GetSourceRevision() == 0 {
 			return generated.ConfigurationOwnershipProjection{}, errors.New("git ownership is incomplete")
 		}
-		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
+		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision()), SourceSha256: sourceSHA256, Drift: drift}, nil
 	default:
 		return generated.ConfigurationOwnershipProjection{}, errors.New("configuration ownership is invalid")
 	}

@@ -33,6 +33,20 @@ type ConfigurationOwnership struct {
 	SourceRef      string `json:"sourceRef,omitempty"`
 	SourceRevision uint64 `json:"sourceRevision,omitempty"`
 	SourceSHA256   string `json:"sourceSha256,omitempty"`
+	Drift          string `json:"drift,omitempty"`
+}
+
+// AuthoritativeDrift нормализует только server-owned legacy readback. Новые
+// записи сохраняют drift явно; отсутствующее старое значение не превращается
+// в локально вычисленное сравнение.
+func (ownership ConfigurationOwnership) AuthoritativeDrift() string {
+	if ownership.Drift != "" {
+		return ownership.Drift
+	}
+	if ownership.ManagedBy == "UI" {
+		return "NOT_APPLICABLE"
+	}
+	return "UNKNOWN"
 }
 
 func (ownership ConfigurationOwnership) Validate() error {
@@ -40,12 +54,14 @@ func (ownership ConfigurationOwnership) Validate() error {
 	case "UI":
 		if (ownership.SourceRef == "") != (ownership.SourceRevision == 0) ||
 			(ownership.SourceRef != "" && !validExternalRef(ownership.SourceRef)) ||
-			(ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) {
+			(ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) ||
+			(ownership.Drift != "" && ownership.Drift != "NOT_APPLICABLE") {
 			return errors.New("UI configuration ownership is invalid")
 		}
 	case "GIT":
 		if !validExternalRef(ownership.SourceRef) ||
-			ownership.SourceRevision == 0 || (ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) {
+			ownership.SourceRevision == 0 || (ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) ||
+			(ownership.Drift != "" && ownership.Drift != "IN_SYNC" && ownership.Drift != "DRIFTED" && ownership.Drift != "UNKNOWN") {
 			return errors.New("git configuration ownership is invalid")
 		}
 	default:

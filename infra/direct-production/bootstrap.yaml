@@ -121,7 +121,7 @@ spec:
       message: Production deployer may manage only labeled direct-production release resources.
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
-        (object.kind == 'ConfigMap' && object.metadata.name in [
+        (object.kind == 'ConfigMap' && (object.metadata.name in [
           'automation-scheduler-runtime','control-plane-db-principals','control-plane-runtime',
           'egress-gateway-policy-7fgk8mb2t7','integration-egress-proxy-config','integration-gateway-db-principals',
           'integration-gateway-definitions','integration-gateway-git-sources','integration-gateway-provider-catalog',
@@ -131,14 +131,15 @@ spec:
           'internal-rpc-authority-readback-attestor-postgresql-connection','internal-rpc-authority-restore-controller',
           'internal-rpc-authority-restore-coordination','mattercodex-image-admission-policy','mattercodex-nats-config',
           'mattercodex-postgresql-init','mattercodex-redis-config','mattercodex-release-lock',
-          'runtime-controller-runtime','runtime-controller-s3-security-policy']) ||
+          'runtime-controller-runtime','runtime-controller-s3-security-policy'] ||
+         object.metadata.name.matches('^staff-control-center-runtime-[a-z0-9]{10}$'))) ||
         (object.kind == 'Service' && object.metadata.name in [
           'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
           'egress-gateway-technical','integration-egress-proxy','integration-gateway','integration-gateway-postgresql-rw',
           'interaction-gateway','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-postgresql-rw','internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor',
           'internal-rpc-authority-restore-controller','mattercodex-nats','mattercodex-object-store','mattercodex-postgresql',
-          'mattercodex-redis','nats','object-store','postgresql','provider-health-adapter','redis','runtime-controller',
+          'mattercodex-redis','nats','object-store','postgresql','provider-health-adapter','redis','runtime-controller','staff-control-center',
           'runtime-controller-postgresql-rw','runtime-s3-archive-exchanger','runtime-s3-restore-exchanger',
           'runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'StatefulSet' && object.metadata.name in [
@@ -147,7 +148,7 @@ spec:
           'automation-scheduler','control-api-gateway','control-plane','egress-gateway','integration-egress-proxy',
           'integration-gateway','interaction-gateway','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor','internal-rpc-authority-restore-controller',
-          'mattercodex-object-store-bootstrap','provider-health-adapter','runtime-controller','runtime-s3-archive-exchanger',
+          'mattercodex-object-store-bootstrap','provider-health-adapter','runtime-controller','staff-control-center','runtime-s3-archive-exchanger',
           'runtime-s3-restore-exchanger','runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'Job' && object.metadata.name in [
           'control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
@@ -160,10 +161,10 @@ spec:
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
         !(object.kind in ['Deployment','StatefulSet','Job']) ||
         (object.spec.template.spec.containers.all(c,
-           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
+           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000')) &&
          (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
-           c.image.matches('^localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller)@sha256:[a-f0-9]{64}$') &&
+           c.image.matches('^localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000'))) &&
          (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))))
       message: Production workload image or volume is outside the machine allowlist.

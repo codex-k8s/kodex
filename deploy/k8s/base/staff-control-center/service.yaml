@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staff-control-center
+  labels:
+    app.kubernetes.io/name: staff-control-center
+spec:
+  selector:
+    app.kubernetes.io/name: staff-control-center
+    app.kubernetes.io/component: staff-frontend
+  ports:
+    - {name: https, port: 8443, targetPort: https, protocol: TCP}

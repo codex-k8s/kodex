@@ -436,6 +436,30 @@ func (e ConfigurationChangeOutcome) Valid() bool {
 	}
 }
 
+// Defines values for ConfigurationDrift.
+const (
+	ConfigurationDriftDRIFTED       ConfigurationDrift = "DRIFTED"
+	ConfigurationDriftINSYNC        ConfigurationDrift = "IN_SYNC"
+	ConfigurationDriftNOTAPPLICABLE ConfigurationDrift = "NOT_APPLICABLE"
+	ConfigurationDriftUNKNOWN       ConfigurationDrift = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationDrift enum.
+func (e ConfigurationDrift) Valid() bool {
+	switch e {
+	case ConfigurationDriftDRIFTED:
+		return true
+	case ConfigurationDriftINSYNC:
+		return true
+	case ConfigurationDriftNOTAPPLICABLE:
+		return true
+	case ConfigurationDriftUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfigurationManagedBy.
 const (
 	Git ConfigurationManagedBy = "git"
@@ -448,6 +472,24 @@ func (e ConfigurationManagedBy) Valid() bool {
 	case Git:
 		return true
 	case Ui:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CredentialBindingSourceKind.
+const (
+	CredentialBindingSourceKindCREDENTIALBINDING           CredentialBindingSourceKind = "CREDENTIAL_BINDING"
+	CredentialBindingSourceKindPROVIDERCONNECTIONREFERENCE CredentialBindingSourceKind = "PROVIDER_CONNECTION_REFERENCE"
+)
+
+// Valid indicates whether the value is a known member of the CredentialBindingSourceKind enum.
+func (e CredentialBindingSourceKind) Valid() bool {
+	switch e {
+	case CredentialBindingSourceKindCREDENTIALBINDING:
+		return true
+	case CredentialBindingSourceKindPROVIDERCONNECTIONREFERENCE:
 		return true
 	default:
 		return false
@@ -1164,22 +1206,22 @@ func (e MattermostTeamStatus) Valid() bool {
 
 // Defines values for MutableResourceKind.
 const (
-	CHAT                MutableResourceKind = "CHAT"
-	CREDENTIALBINDING   MutableResourceKind = "CREDENTIAL_BINDING"
-	INTEGRATION         MutableResourceKind = "INTEGRATION"
-	REPOSITORYWORKSPACE MutableResourceKind = "REPOSITORY_WORKSPACE"
+	MutableResourceKindCHAT                MutableResourceKind = "CHAT"
+	MutableResourceKindCREDENTIALBINDING   MutableResourceKind = "CREDENTIAL_BINDING"
+	MutableResourceKindINTEGRATION         MutableResourceKind = "INTEGRATION"
+	MutableResourceKindREPOSITORYWORKSPACE MutableResourceKind = "REPOSITORY_WORKSPACE"
 )
 
 // Valid indicates whether the value is a known member of the MutableResourceKind enum.
 func (e MutableResourceKind) Valid() bool {
 	switch e {
-	case CHAT:
+	case MutableResourceKindCHAT:
 		return true
-	case CREDENTIALBINDING:
+	case MutableResourceKindCREDENTIALBINDING:
 		return true
-	case INTEGRATION:
+	case MutableResourceKindINTEGRATION:
 		return true
-	case REPOSITORYWORKSPACE:
+	case MutableResourceKindREPOSITORYWORKSPACE:
 		return true
 	default:
 		return false
@@ -1315,6 +1357,36 @@ func (e OwnerScheduleAdvancedOverridesDeliveryPolicy) Valid() bool {
 	case OwnerScheduleAdvancedOverridesDeliveryPolicyATLEASTONCE:
 		return true
 	case OwnerScheduleAdvancedOverridesDeliveryPolicyEXACTLYONCEEFFECT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerScheduleNextAction.
+const (
+	OwnerScheduleNextActionDELETE          OwnerScheduleNextAction = "DELETE"
+	OwnerScheduleNextActionPAUSE           OwnerScheduleNextAction = "PAUSE"
+	OwnerScheduleNextActionRESUME          OwnerScheduleNextAction = "RESUME"
+	OwnerScheduleNextActionRUNNOW          OwnerScheduleNextAction = "RUN_NOW"
+	OwnerScheduleNextActionUPDATE          OwnerScheduleNextAction = "UPDATE"
+	OwnerScheduleNextActionVIEWOCCURRENCES OwnerScheduleNextAction = "VIEW_OCCURRENCES"
+)
+
+// Valid indicates whether the value is a known member of the OwnerScheduleNextAction enum.
+func (e OwnerScheduleNextAction) Valid() bool {
+	switch e {
+	case OwnerScheduleNextActionDELETE:
+		return true
+	case OwnerScheduleNextActionPAUSE:
+		return true
+	case OwnerScheduleNextActionRESUME:
+		return true
+	case OwnerScheduleNextActionRUNNOW:
+		return true
+	case OwnerScheduleNextActionUPDATE:
+		return true
+	case OwnerScheduleNextActionVIEWOCCURRENCES:
 		return true
 	default:
 		return false
@@ -1636,27 +1708,6 @@ func (e ResolveOwnerGateDecision) Valid() bool {
 	}
 }
 
-// Defines values for ResolveScheduleRecoveryAction.
-const (
-	ResolveScheduleRecoveryActionCANCEL ResolveScheduleRecoveryAction = "CANCEL"
-	ResolveScheduleRecoveryActionREPAIR ResolveScheduleRecoveryAction = "REPAIR"
-	ResolveScheduleRecoveryActionSKIP   ResolveScheduleRecoveryAction = "SKIP"
-)
-
-// Valid indicates whether the value is a known member of the ResolveScheduleRecoveryAction enum.
-func (e ResolveScheduleRecoveryAction) Valid() bool {
-	switch e {
-	case ResolveScheduleRecoveryActionCANCEL:
-		return true
-	case ResolveScheduleRecoveryActionREPAIR:
-		return true
-	case ResolveScheduleRecoveryActionSKIP:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ResourceKind.
 const (
 	ResourceKindAGENT                       ResourceKind = "AGENT"
@@ -1750,6 +1801,39 @@ func (e ResourceKind) Valid() bool {
 	case ResourceKindWORKSPACEMATTERMOSTMAPPING:
 		return true
 	case ResourceKindWORKSPACERESTORE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResourceNextAction.
+const (
+	ResourceNextActionACTIVATE ResourceNextAction = "ACTIVATE"
+	ResourceNextActionARCHIVE  ResourceNextAction = "ARCHIVE"
+	ResourceNextActionCOPY     ResourceNextAction = "COPY"
+	ResourceNextActionDELETE   ResourceNextAction = "DELETE"
+	ResourceNextActionDETACH   ResourceNextAction = "DETACH"
+	ResourceNextActionPAUSE    ResourceNextAction = "PAUSE"
+	ResourceNextActionUPDATE   ResourceNextAction = "UPDATE"
+)
+
+// Valid indicates whether the value is a known member of the ResourceNextAction enum.
+func (e ResourceNextAction) Valid() bool {
+	switch e {
+	case ResourceNextActionACTIVATE:
+		return true
+	case ResourceNextActionARCHIVE:
+		return true
+	case ResourceNextActionCOPY:
+		return true
+	case ResourceNextActionDELETE:
+		return true
+	case ResourceNextActionDETACH:
+		return true
+	case ResourceNextActionPAUSE:
+		return true
+	case ResourceNextActionUPDATE:
 		return true
 	default:
 		return false
@@ -2305,6 +2389,27 @@ func (e ScheduleOverlapPolicy) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleRecoveryAction.
+const (
+	ScheduleRecoveryActionCANCEL ScheduleRecoveryAction = "CANCEL"
+	ScheduleRecoveryActionREPAIR ScheduleRecoveryAction = "REPAIR"
+	ScheduleRecoveryActionSKIP   ScheduleRecoveryAction = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRecoveryAction enum.
+func (e ScheduleRecoveryAction) Valid() bool {
+	switch e {
+	case ScheduleRecoveryActionCANCEL:
+		return true
+	case ScheduleRecoveryActionREPAIR:
+		return true
+	case ScheduleRecoveryActionSKIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleSelectorKind.
 const (
 	ScheduleSelectorKindAGENT          ScheduleSelectorKind = "AGENT"
@@ -2523,28 +2628,28 @@ func (e WorkspaceRestoreNextAction) Valid() bool {
 
 // Defines values for WorkspaceRestoreState.
 const (
-	WorkspaceRestoreStateCANCELLED WorkspaceRestoreState = "CANCELLED"
-	WorkspaceRestoreStateEXPIRED   WorkspaceRestoreState = "EXPIRED"
-	WorkspaceRestoreStateFAILED    WorkspaceRestoreState = "FAILED"
-	WorkspaceRestoreStateQUEUED    WorkspaceRestoreState = "QUEUED"
-	WorkspaceRestoreStateRUNNING   WorkspaceRestoreState = "RUNNING"
-	WorkspaceRestoreStateSUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
+	CANCELLED WorkspaceRestoreState = "CANCELLED"
+	EXPIRED   WorkspaceRestoreState = "EXPIRED"
+	FAILED    WorkspaceRestoreState = "FAILED"
+	QUEUED    WorkspaceRestoreState = "QUEUED"
+	RUNNING   WorkspaceRestoreState = "RUNNING"
+	SUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceRestoreState enum.
 func (e WorkspaceRestoreState) Valid() bool {
 	switch e {
-	case WorkspaceRestoreStateCANCELLED:
+	case CANCELLED:
 		return true
-	case WorkspaceRestoreStateEXPIRED:
+	case EXPIRED:
 		return true
-	case WorkspaceRestoreStateFAILED:
+	case FAILED:
 		return true
-	case WorkspaceRestoreStateQUEUED:
+	case QUEUED:
 		return true
-	case WorkspaceRestoreStateRUNNING:
+	case RUNNING:
 		return true
-	case WorkspaceRestoreStateSUCCEEDED:
+	case SUCCEEDED:
 		return true
 	default:
 		return false
@@ -2862,12 +2967,12 @@ type BindScheduleConfiguration struct {
 
 // ChatProjection defines model for ChatProjection.
 type ChatProjection struct {
-	DefaultAgentId     *openapi_types.UUID              `json:"defaultAgentId,omitempty"`
-	ExternalChannelRef string                           `json:"externalChannelRef"`
-	Ownership          ConfigurationOwnershipProjection `json:"ownership"`
-	RoomType           ChatRoomType                     `json:"roomType"`
-	StableKey          string                           `json:"stableKey"`
-	WorkPolicy         string                           `json:"workPolicy"`
+	DefaultAgentStatus    string                           `json:"defaultAgentStatus"`
+	Ownership             ConfigurationOwnershipProjection `json:"ownership"`
+	ProviderChannelStatus string                           `json:"providerChannelStatus"`
+	RoomType              ChatRoomType                     `json:"roomType"`
+	StableKey             string                           `json:"stableKey"`
+	WorkPolicy            string                           `json:"workPolicy"`
 }
 
 // ChatRoomType defines model for ChatRoomType.
@@ -2875,11 +2980,11 @@ type ChatRoomType string
 
 // ChatSpec defines model for ChatSpec.
 type ChatSpec struct {
-	DefaultAgentId     *openapi_types.UUID `json:"defaultAgentId,omitempty"`
-	ExternalChannelRef *string             `json:"externalChannelRef,omitempty"`
-	RoomType           ChatRoomType        `json:"roomType"`
-	StableKey          string              `json:"stableKey"`
-	WorkPolicy         string              `json:"workPolicy"`
+	ChannelSelector      *string      `json:"channelSelector,omitempty"`
+	DefaultAgentSelector *string      `json:"defaultAgentSelector,omitempty"`
+	RoomType             ChatRoomType `json:"roomType"`
+	StableKey            string       `json:"stableKey"`
+	WorkPolicy           string       `json:"workPolicy"`
 }
 
 // ConfigurationChange defines model for ConfigurationChange.
@@ -2932,19 +3037,25 @@ type ConfigurationDiffChange struct {
 	Path    string                     `json:"path"`
 }
 
+// ConfigurationDrift defines model for ConfigurationDrift.
+type ConfigurationDrift string
+
 // ConfigurationManagedBy defines model for ConfigurationManagedBy.
 type ConfigurationManagedBy string
 
 // ConfigurationOwnershipProjection defines model for ConfigurationOwnershipProjection.
 type ConfigurationOwnershipProjection struct {
-	ManagedBy ConfigurationManagedBy `json:"managedBy"`
-	Revision  int64                  `json:"revision"`
-	Source    string                 `json:"source"`
+	Drift        ConfigurationDrift     `json:"drift"`
+	ManagedBy    ConfigurationManagedBy `json:"managedBy"`
+	Revision     int64                  `json:"revision"`
+	Source       string                 `json:"source"`
+	SourceSha256 *Sha256                `json:"sourceSha256,omitempty"`
 }
 
 // ConfigurationSourceDetail defines model for ConfigurationSourceDetail.
 type ConfigurationSourceDetail struct {
 	DisplayName    string                 `json:"displayName"`
+	Drift          ConfigurationDrift     `json:"drift"`
 	ManagedBy      ConfigurationManagedBy `json:"managedBy"`
 	ResourceRef    string                 `json:"resourceRef"`
 	Source         string                 `json:"source"`
@@ -3018,11 +3129,10 @@ type CreateScheduleFromSelections struct {
 
 // CredentialBindingProjection defines model for CredentialBindingProjection.
 type CredentialBindingProjection struct {
+	BindingStatus               string                           `json:"bindingStatus"`
 	ContentSha256               string                           `json:"contentSha256"`
 	ExpiresAt                   *time.Time                       `json:"expiresAt,omitempty"`
-	ImmutableSecretRef          string                           `json:"immutableSecretRef"`
 	Ownership                   ConfigurationOwnershipProjection `json:"ownership"`
-	PrincipalRef                string                           `json:"principalRef"`
 	ProviderCapabilities        []string                         `json:"providerCapabilities"`
 	ProviderEligible            bool                             `json:"providerEligible"`
 	ProviderObservationRevision int64                            `json:"providerObservationRevision"`
@@ -3031,12 +3141,15 @@ type CredentialBindingProjection struct {
 	Revision                    int64                            `json:"revision"`
 }
 
-// CredentialBindingSpec Содержит только URI/metadata Secret; secret value запрещён.
+// CredentialBindingSourceKind defines model for CredentialBindingSourceKind.
+type CredentialBindingSourceKind string
+
+// CredentialBindingSpec Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
 type CredentialBindingSpec struct {
-	ImmutableSecretRef string `json:"immutableSecretRef"`
-	PrincipalRef       string `json:"principalRef"`
-	Purpose            string `json:"purpose"`
-	Revision           int64  `json:"revision"`
+	Purpose        string                       `json:"purpose"`
+	Revision       int64                        `json:"revision"`
+	SourceKind     *CredentialBindingSourceKind `json:"sourceKind,omitempty"`
+	SourceSelector *string                      `json:"sourceSelector,omitempty"`
 }
 
 // DecideIntegrationApproval defines model for DecideIntegrationApproval.
@@ -3351,21 +3464,21 @@ type IntegrationEffectKind string
 
 // IntegrationProjection defines model for IntegrationProjection.
 type IntegrationProjection struct {
-	Capabilities         []string                         `json:"capabilities"`
-	CredentialBindingIds []openapi_types.UUID             `json:"credentialBindingIds"`
-	DefinitionRef        string                           `json:"definitionRef"`
-	DefinitionVersion    int64                            `json:"definitionVersion"`
-	EndpointRef          string                           `json:"endpointRef"`
-	Ownership            ConfigurationOwnershipProjection `json:"ownership"`
+	Capabilities           []string                         `json:"capabilities"`
+	CredentialBindingCount int                              `json:"credentialBindingCount"`
+	DefinitionRef          string                           `json:"definitionRef"`
+	DefinitionVersion      int64                            `json:"definitionVersion"`
+	EndpointStatus         string                           `json:"endpointStatus"`
+	Ownership              ConfigurationOwnershipProjection `json:"ownership"`
 }
 
 // IntegrationSpec defines model for IntegrationSpec.
 type IntegrationSpec struct {
-	Capabilities         []string             `json:"capabilities"`
-	CredentialBindingIds []openapi_types.UUID `json:"credentialBindingIds"`
-	DefinitionRef        string               `json:"definitionRef"`
-	DefinitionVersion    int64                `json:"definitionVersion"`
-	EndpointRef          string               `json:"endpointRef"`
+	Capabilities               []string `json:"capabilities"`
+	CredentialBindingSelectors []string `json:"credentialBindingSelectors"`
+	DefinitionRef              string   `json:"definitionRef"`
+	DefinitionVersion          int64    `json:"definitionVersion"`
+	SourceSelector             *string  `json:"sourceSelector,omitempty"`
 }
 
 // IntegrationTestCategory defines model for IntegrationTestCategory.
@@ -3594,6 +3707,9 @@ type OwnerScheduleIntent struct {
 	Timezone          string                          `json:"timezone"`
 }
 
+// OwnerScheduleNextAction defines model for OwnerScheduleNextAction.
+type OwnerScheduleNextAction string
+
 // OwnerSchedulePage defines model for OwnerSchedulePage.
 type OwnerSchedulePage struct {
 	Items         []OwnerScheduleView `json:"items"`
@@ -3640,6 +3756,7 @@ type OwnerScheduleView struct {
 	MaximumExecutionSeconds int64                           `json:"maximumExecutionSeconds"`
 	MisfireGraceSeconds     int64                           `json:"misfireGraceSeconds"`
 	MisfirePolicy           ScheduleMisfirePolicy           `json:"misfirePolicy"`
+	NextActions             []OwnerScheduleNextAction       `json:"nextActions"`
 	NextRunAt               *time.Time                      `json:"nextRunAt,omitempty"`
 	NotificationPolicy      ScheduleNotificationPolicy      `json:"notificationPolicy"`
 	OverlapPolicy           ScheduleOverlapPolicy           `json:"overlapPolicy"`
@@ -3712,15 +3829,15 @@ type PromptProfileProjection struct {
 	Locale        string                           `json:"locale"`
 	Ownership     ConfigurationOwnershipProjection `json:"ownership"`
 	Revision      int64                            `json:"revision"`
-	SourceRef     string                           `json:"sourceRef"`
+	SourceStatus  string                           `json:"sourceStatus"`
 }
 
 // PromptProfileSpec defines model for PromptProfileSpec.
 type PromptProfileSpec struct {
-	ContentSha256 string `json:"contentSha256"`
-	Locale        string `json:"locale"`
-	Revision      int64  `json:"revision"`
-	SourceRef     string `json:"sourceRef"`
+	ContentSha256  string  `json:"contentSha256"`
+	Locale         string  `json:"locale"`
+	Revision       int64   `json:"revision"`
+	SourceSelector *string `json:"sourceSelector,omitempty"`
 }
 
 // ProtectedConfigurationAction defines model for ProtectedConfigurationAction.
@@ -3829,12 +3946,6 @@ type ProviderConnectionReferenceProjection struct {
 // ProviderConnectionState defines model for ProviderConnectionState.
 type ProviderConnectionState string
 
-// ProviderPoolBindingProjection defines model for ProviderPoolBindingProjection.
-type ProviderPoolBindingProjection struct {
-	CredentialBindingId openapi_types.UUID `json:"credentialBindingId"`
-	Weight              int                `json:"weight"`
-}
-
 // ProviderPoolCommand defines model for ProviderPoolCommand.
 type ProviderPoolCommand struct {
 	Action      ProviderPoolCommandAction  `json:"action"`
@@ -3880,10 +3991,10 @@ type ProviderPoolPolicy string
 
 // ProviderPoolProjection defines model for ProviderPoolProjection.
 type ProviderPoolProjection struct {
-	Bindings                 []ProviderPoolBindingProjection `json:"bindings"`
-	ObservationMaxAgeSeconds int64                           `json:"observationMaxAgeSeconds"`
-	Policy                   ProviderPoolPolicy              `json:"policy"`
-	PolicyRevision           int64                           `json:"policyRevision"`
+	BindingCount             int                `json:"bindingCount"`
+	ObservationMaxAgeSeconds int64              `json:"observationMaxAgeSeconds"`
+	Policy                   ProviderPoolPolicy `json:"policy"`
+	PolicyRevision           int64              `json:"policyRevision"`
 }
 
 // ProviderPoolResourceProjection defines model for ProviderPoolResourceProjection.
@@ -3928,19 +4039,19 @@ type RelinkMattermostTeam struct {
 
 // RepositoryWorkspaceProjection defines model for RepositoryWorkspaceProjection.
 type RepositoryWorkspaceProjection struct {
-	CredentialBindingId *openapi_types.UUID              `json:"credentialBindingId,omitempty"`
-	DefaultBranch       string                           `json:"defaultBranch"`
-	Ownership           ConfigurationOwnershipProjection `json:"ownership"`
-	RepositoryRef       string                           `json:"repositoryRef"`
-	WorkspaceMode       string                           `json:"workspaceMode"`
+	CredentialBindingStatus string                           `json:"credentialBindingStatus"`
+	DefaultBranch           string                           `json:"defaultBranch"`
+	Ownership               ConfigurationOwnershipProjection `json:"ownership"`
+	RepositoryStatus        string                           `json:"repositoryStatus"`
+	WorkspaceMode           string                           `json:"workspaceMode"`
 }
 
 // RepositoryWorkspaceSpec defines model for RepositoryWorkspaceSpec.
 type RepositoryWorkspaceSpec struct {
-	CredentialBindingId *openapi_types.UUID `json:"credentialBindingId,omitempty"`
-	DefaultBranch       string              `json:"defaultBranch"`
-	RepositoryRef       string              `json:"repositoryRef"`
-	WorkspaceMode       string              `json:"workspaceMode"`
+	CredentialBindingSelector *string `json:"credentialBindingSelector,omitempty"`
+	DefaultBranch             string  `json:"defaultBranch"`
+	RepositorySelector        *string `json:"repositorySelector,omitempty"`
+	WorkspaceMode             string  `json:"workspaceMode"`
 }
 
 // ResolveOwnerGate defines model for ResolveOwnerGate.
@@ -3960,14 +4071,11 @@ type ResolveOwnerGateResult struct {
 
 // ResolveScheduleRecovery defines model for ResolveScheduleRecovery.
 type ResolveScheduleRecovery struct {
-	Action                 ResolveScheduleRecoveryAction `json:"action"`
-	ExpectedAttempt        int                           `json:"expectedAttempt"`
-	ReasonCode             string                        `json:"reasonCode"`
-	RecoveryEvidenceSha256 string                        `json:"recoveryEvidenceSha256"`
+	Action                 ScheduleRecoveryAction `json:"action"`
+	ExpectedAttempt        int                    `json:"expectedAttempt"`
+	ReasonCode             string                 `json:"reasonCode"`
+	RecoveryEvidenceSha256 string                 `json:"recoveryEvidenceSha256"`
 }
-
-// ResolveScheduleRecoveryAction defines model for ResolveScheduleRecovery.Action.
-type ResolveScheduleRecoveryAction string
 
 // Resource defines model for Resource.
 type Resource struct {
@@ -3975,6 +4083,7 @@ type Resource struct {
 	Id               openapi_types.UUID     `json:"id"`
 	Kind             ResourceKind           `json:"kind"`
 	Name             string                 `json:"name"`
+	NextActions      []ResourceNextAction   `json:"nextActions"`
 	ParentId         *openapi_types.UUID    `json:"parentId,omitempty"`
 	ProjectId        *openapi_types.UUID    `json:"projectId,omitempty"`
 	ProjectionSha256 Sha256                 `json:"projectionSha256"`
@@ -4001,6 +4110,9 @@ type ResourceHistoryPage struct {
 // ResourceKind defines model for ResourceKind.
 type ResourceKind string
 
+// ResourceNextAction defines model for ResourceNextAction.
+type ResourceNextAction string
+
 // ResourcePage defines model for ResourcePage.
 type ResourcePage struct {
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
@@ -4011,7 +4123,7 @@ type ResourcePage struct {
 type ResourceSpecInput struct {
 	Chat *ChatSpec `json:"chat,omitempty"`
 
-	// CredentialBinding Содержит только URI/metadata Secret; secret value запрещён.
+	// CredentialBinding Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
 	CredentialBinding   *CredentialBindingSpec   `json:"credentialBinding,omitempty"`
 	Integration         *IntegrationSpec         `json:"integration,omitempty"`
 	RepositoryWorkspace *RepositoryWorkspaceSpec `json:"repositoryWorkspace,omitempty"`
@@ -4227,28 +4339,28 @@ type RoleImageTool struct {
 
 // RoleProjection defines model for RoleProjection.
 type RoleProjection struct {
-	AllowedTargetRoleIds         []openapi_types.UUID             `json:"allowedTargetRoleIds"`
-	Capabilities                 []string                         `json:"capabilities"`
-	IntegrationIds               []openapi_types.UUID             `json:"integrationIds"`
-	Ownership                    ConfigurationOwnershipProjection `json:"ownership"`
-	PromptProfileId              openapi_types.UUID               `json:"promptProfileId"`
-	ProviderAccountPool          ProviderPoolProjection           `json:"providerAccountPool"`
-	ProviderCredentialBindingIds []openapi_types.UUID             `json:"providerCredentialBindingIds"`
-	RepositoryWorkspaceIds       []openapi_types.UUID             `json:"repositoryWorkspaceIds"`
-	RoleImageRecipeId            openapi_types.UUID               `json:"roleImageRecipeId"`
-	StableKey                    string                           `json:"stableKey"`
+	AllowedTargetRoleCount         int                              `json:"allowedTargetRoleCount"`
+	Capabilities                   []string                         `json:"capabilities"`
+	IntegrationCount               int                              `json:"integrationCount"`
+	Ownership                      ConfigurationOwnershipProjection `json:"ownership"`
+	PromptProfileStatus            string                           `json:"promptProfileStatus"`
+	ProviderAccountPool            ProviderPoolProjection           `json:"providerAccountPool"`
+	ProviderCredentialBindingCount int                              `json:"providerCredentialBindingCount"`
+	RepositoryWorkspaceCount       int                              `json:"repositoryWorkspaceCount"`
+	RoleImageRecipeStatus          string                           `json:"roleImageRecipeStatus"`
+	StableKey                      string                           `json:"stableKey"`
 }
 
 // RoleSpec defines model for RoleSpec.
 type RoleSpec struct {
-	AllowedTargetRoleIds         []openapi_types.UUID `json:"allowedTargetRoleIds"`
-	Capabilities                 []string             `json:"capabilities"`
-	IntegrationIds               []openapi_types.UUID `json:"integrationIds"`
-	PromptProfileId              *openapi_types.UUID  `json:"promptProfileId,omitempty"`
-	ProviderCredentialBindingIds []openapi_types.UUID `json:"providerCredentialBindingIds"`
-	RepositoryWorkspaceIds       []openapi_types.UUID `json:"repositoryWorkspaceIds"`
-	RoleImageRecipeId            openapi_types.UUID   `json:"roleImageRecipeId"`
-	StableKey                    string               `json:"stableKey"`
+	AllowedTargetRoleSelectors         []string `json:"allowedTargetRoleSelectors"`
+	Capabilities                       []string `json:"capabilities"`
+	IntegrationSelectors               []string `json:"integrationSelectors"`
+	PromptProfileSelector              *string  `json:"promptProfileSelector,omitempty"`
+	ProviderCredentialBindingSelectors []string `json:"providerCredentialBindingSelectors"`
+	RepositoryWorkspaceSelectors       []string `json:"repositoryWorkspaceSelectors"`
+	RoleImageRecipeSelector            string   `json:"roleImageRecipeSelector"`
+	StableKey                          string   `json:"stableKey"`
 }
 
 // RunArtifactPage defines model for RunArtifactPage.
@@ -4525,20 +4637,21 @@ type ScheduleNotificationPolicy string
 
 // ScheduleOccurrence defines model for ScheduleOccurrence.
 type ScheduleOccurrence struct {
-	Attempt                int                     `json:"attempt"`
-	AuthorityGeneration    int64                   `json:"authorityGeneration"`
-	AvailableAt            time.Time               `json:"availableAt"`
-	EffectiveInputSha256   string                  `json:"effectiveInputSha256"`
-	OccurrenceId           openapi_types.UUID      `json:"occurrenceId"`
-	Outcome                *string                 `json:"outcome,omitempty"`
-	RecoveryEvidenceSha256 *string                 `json:"recoveryEvidenceSha256,omitempty"`
-	ScheduleId             openapi_types.UUID      `json:"scheduleId"`
-	ScheduledFor           time.Time               `json:"scheduledFor"`
-	State                  ScheduleOccurrenceState `json:"state"`
-	TargetKind             ResourceKind            `json:"targetKind"`
-	TargetResourceId       openapi_types.UUID      `json:"targetResourceId"`
-	TargetVersion          int64                   `json:"targetVersion"`
-	Version                int64                   `json:"version"`
+	Attempt                int                      `json:"attempt"`
+	AuthorityGeneration    int64                    `json:"authorityGeneration"`
+	AvailableAt            time.Time                `json:"availableAt"`
+	EffectiveInputSha256   string                   `json:"effectiveInputSha256"`
+	OccurrenceId           openapi_types.UUID       `json:"occurrenceId"`
+	Outcome                *string                  `json:"outcome,omitempty"`
+	RecoveryActions        []ScheduleRecoveryAction `json:"recoveryActions"`
+	RecoveryEvidenceSha256 *string                  `json:"recoveryEvidenceSha256,omitempty"`
+	ScheduleId             openapi_types.UUID       `json:"scheduleId"`
+	ScheduledFor           time.Time                `json:"scheduledFor"`
+	State                  ScheduleOccurrenceState  `json:"state"`
+	TargetKind             ResourceKind             `json:"targetKind"`
+	TargetResourceId       openapi_types.UUID       `json:"targetResourceId"`
+	TargetVersion          int64                    `json:"targetVersion"`
+	Version                int64                    `json:"version"`
 }
 
 // ScheduleOccurrencePage defines model for ScheduleOccurrencePage.
@@ -4597,6 +4710,9 @@ type ScheduleProjection struct {
 	Timezone                string                           `json:"timezone"`
 }
 
+// ScheduleRecoveryAction defines model for ScheduleRecoveryAction.
+type ScheduleRecoveryAction string
+
 // ScheduleSelector defines model for ScheduleSelector.
 type ScheduleSelector struct {
 	DigestSha256 Sha256               `json:"digestSha256"`
@@ -4646,19 +4762,19 @@ type StartProviderAuthorization struct {
 
 // TeamProjection defines model for TeamProjection.
 type TeamProjection struct {
-	ExternalTeamRef string                           `json:"externalTeamRef"`
-	MemberActorIds  []openapi_types.UUID             `json:"memberActorIds"`
-	Ownership       ConfigurationOwnershipProjection `json:"ownership"`
-	RoleIds         []openapi_types.UUID             `json:"roleIds"`
-	StableKey       string                           `json:"stableKey"`
+	MemberCount           int                              `json:"memberCount"`
+	Ownership             ConfigurationOwnershipProjection `json:"ownership"`
+	ProviderBindingStatus string                           `json:"providerBindingStatus"`
+	RoleCount             int                              `json:"roleCount"`
+	StableKey             string                           `json:"stableKey"`
 }
 
 // TeamSpec defines model for TeamSpec.
 type TeamSpec struct {
-	ExternalTeamRef *string              `json:"externalTeamRef,omitempty"`
-	MemberActorIds  []openapi_types.UUID `json:"memberActorIds"`
-	RoleIds         []openapi_types.UUID `json:"roleIds"`
-	StableKey       string               `json:"stableKey"`
+	MemberActorSelectors []string `json:"memberActorSelectors"`
+	RoleSelectors        []string `json:"roleSelectors"`
+	SourceSelector       *string  `json:"sourceSelector,omitempty"`
+	StableKey            string   `json:"stableKey"`
 }
 
 // TestIntegrationConnection defines model for TestIntegrationConnection.

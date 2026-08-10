@@ -1,0 +1,10 @@
+{
+  "name": "MatterCodex Control Center",
+  "short_name": "MatterCodex",
+  "description": "Служебный интерфейс владельца MatterCodex",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f6",
+  "theme_color": "#0f8577",
+  "lang": "ru"
+}
