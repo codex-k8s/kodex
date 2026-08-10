@@ -147,7 +147,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   $virtual_host.routes as $routes |
   $hcm.upgrade_configs[0] as $hcm_upgrade |
   ($virtual_host.domains == ["*"]) and
-  ($routes | length == 13) and
+  ($routes | length == 23) and
   (all($routes[];
     .match.connect_matcher == {} and
     (.match.headers | length == 1) and .match.headers[0].name == ":authority" and
@@ -160,12 +160,18 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
     "raw.githubusercontent.com:443", "avatars.githubassets.com:443",
     "ghcr.io:443", "gcr.io:443", "registry-1.docker.io:443",
     "production.cloudfront.docker.com:443",
+    "proxy.golang.org:443", "sum.golang.org:443", "storage.googleapis.com:443",
+    "registry.npmjs.org:443", "dl-cdn.alpinelinux.org:443",
+    "deb.debian.org:443", "security.debian.org:443", "get.helm.sh:443",
+    "cdn.playwright.dev:443", "playwright.download.prss.microsoft.com:443",
     "githubactionsresults.blob.core.windows.net:443";
       authority_allowed($routes; .))) and
   (all("example.com:443", "github.com:80", "gcr.io.attacker.invalid:443",
     "github.com.attacker.invalid:443",
     "broker.actions.githubusercontent.com.attacker.invalid:443",
     "production.cloudflare.docker.com:443",
+    "proxy.golang.org.attacker.invalid:443", "proxy.golang.org:80",
+    "registry.npmjs.org.attacker.invalid:443", "cdn.playwright.dev:80",
     "blob.core.windows.net:443",
     "githubactionsresults.blob.core.windows.net.attacker.invalid:443";
       (authority_allowed($routes; .) | not))) and

@@ -113,6 +113,106 @@ data:
                                 connect_matcher: {}
                                 headers:
                                   - name: ":authority"
+                                    string_match: {exact: "proxy.golang.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "sum.golang.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "storage.googleapis.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "registry.npmjs.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "dl-cdn.alpinelinux.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "deb.debian.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "security.debian.org:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "get.helm.sh:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "cdn.playwright.dev:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
+                                    string_match: {exact: "playwright.download.prss.microsoft.com:443"}
+                              route:
+                                cluster: dynamic_forward_proxy
+                                upgrade_configs:
+                                  - upgrade_type: CONNECT
+                                    connect_config: {}
+                            - match:
+                                connect_matcher: {}
+                                headers:
+                                  - name: ":authority"
                                     string_match: {safe_regex: {regex: '[A-Za-z0-9-]+\.githubusercontent\.com:443$'}}
                               route:
                                 cluster: dynamic_forward_proxy
