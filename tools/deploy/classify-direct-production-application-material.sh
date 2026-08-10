@@ -138,11 +138,11 @@ resources="$temporary_directory/resources.json"
 printf '[]' >"$resources"
 while IFS=$'\t' read -r kind name; do
   [[ -n "$kind" && -n "$name" ]] || continue
-  classification=$(jq -er --arg kind "$kind" --arg name "$name" '
+  resource=$(jq -cer --arg kind "$kind" --arg name "$name" '
     first(.resources[] | select(.kind == $kind and .name == $name)) |
-    .classification
+    {kind,name,classification,keys}
   ' "$policy") || fail "rendered application material is absent from the closed policy"
-  jq --arg kind "$kind" --arg name "$name" --arg classification "$classification" '. + [{kind:$kind,name:$name,classification:$classification}]' "$resources" >"$resources.next"
+  jq --argjson resource "$resource" '. + [$resource]' "$resources" >"$resources.next"
   mv "$resources.next" "$resources"
 done < <(
   sed 's/^/Secret\t/' "$expected_secrets"
@@ -151,17 +151,18 @@ done < <(
 
 # Publisher/reconciler управляют только этими заранее объявленными пустыми
 # ресурсами. RBAC не даёт create, поэтому их создаёт owner materializer.
-while IFS=$'\t' read -r kind name classification; do
+while IFS=$'\t' read -r kind name classification keys; do
   jq -e --arg kind "$kind" --arg name "$name" '
     any(.[]; .kind == $kind and .name == $name)
   ' "$resources" >/dev/null && continue
   jq --arg kind "$kind" --arg name "$name" --arg classification "$classification" \
-    '. + [{kind:$kind,name:$name,classification:$classification}]' \
+    --argjson keys "$keys" \
+    '. + [{kind:$kind,name:$name,classification:$classification,keys:$keys}]' \
     "$resources" >"$resources.next"
   mv "$resources.next" "$resources"
 done < <(jq -r '. as $policy | .runtime_owned_empty_resources[] | . as $binding |
   first($policy.resources[] | select(.kind == $binding.kind and .name == $binding.name)) |
-  [.kind,.name,.classification] | @tsv' "$policy")
+  [.kind,.name,.classification,(.keys | tojson)] | @tsv' "$policy")
 
 rendered_resource_identities=$(jq -Sc '[.[] | [.kind,.name]] | sort' "$resources")
 policy_resource_identities=$(jq -Sc '[.resources[] | [.kind,.name]] | sort' "$policy")
@@ -186,6 +187,8 @@ jq -e '
   all(.[];
     (.kind == "Secret" or .kind == "ConfigMap") and
     (.name | test("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")) and
+    (.keys | type == "array" and length > 0 and length == (unique | length) and
+      all(.[]; type == "string" and length > 0)) and
     (.classification == "cryptographically_generated" or
      .classification == "deterministically_derived" or
      .classification == "safely_reusable_from_existing_binding" or

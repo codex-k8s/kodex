@@ -20,16 +20,18 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 137 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 117 and
+  (.resources | length) == 157 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 137 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 20 and
   .counts == {
-    cryptographically_generated:52,
-    deterministically_derived:60,
+    cryptographically_generated:63,
+    deterministically_derived:76,
     safely_reusable_from_existing_binding:2,
-    truly_external_credential:23
+    truly_external_credential:16
   } and
-  ([.external_bindings[].keys[]] | length) == 44 and
+  all(.resources[];
+    (.keys | type == "array" and length > 0 and length == (unique | length))) and
+  ([.external_bindings[].keys[]] | length) == 37 and
   (.resources | group_by([.kind,.name]) | all(length == 1))
 ' "$classification" >/dev/null || {
   printf 'Direct-production application material classification is incomplete\n' >&2
@@ -108,16 +110,21 @@ material="$temporary_directory/application-material.yaml"
   printf 'Application material render permissions are not 0600\n' >&2
   exit 1
 }
-yq -o=json eval-all '.' "$material" | jq -s --slurpfile policy "$policy" -e '
+yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) |
-  length == 137 and
-  ([.[] | [.kind,.metadata.name]] | sort) == ([$policy[0].resources[] | [.kind,.name]] | sort) and
+  length == 157 and
+  ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
   all(.[]; . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==
-    ([$policy[0].resources[] | select(.kind == $resource.kind and .name == $resource.metadata.name) | .keys[]] | unique | sort)) and
-  all(.[]; . as $resource | all([((.data // {}) | to_entries[]),((.binaryData // {}) | to_entries[])][];
-    ($resource.kind == "Secret" and $resource.metadata.name == "internal-rpc-authority-snapshot" and
-     .key == "snapshot.jws" and .value == "") or .value != ""))
+    ([$classification[0].resources[] | select(.kind == $resource.kind and .name == $resource.metadata.name) | .keys[]] | unique | sort)) and
+  all(.[]; . as $resource |
+    all([((.data // {}) | to_entries[]),((.binaryData // {}) | to_entries[])][]; . as $entry |
+      (any(($classification[0].runtime_owned_empty_resources // [])[];
+        .kind == $resource.kind and
+        .name == $resource.metadata.name and
+        ((.keys // []) | index($entry.key) != null)) and
+       $entry.value == "") or
+      $entry.value != ""))
 ' >/dev/null || {
   printf 'Application material render differs from the exact interface set\n' >&2
   exit 1
@@ -125,6 +132,20 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile policy "$policy" -e '
 
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
+yq -er 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-vault-ca") |
+  .data."ca.pem"' "$external_fixture" >"$temporary_directory/vault-ca.pem"
+openssl x509 -in "$temporary_directory/vault-ca.pem" -outform DER \
+  >"$temporary_directory/vault-ca.der"
+for name in integration-gateway-vault-ca interaction-gateway-vault-ca; do
+  jq -er --arg name "$name" '.[] | select(.kind == "Secret" and .metadata.name == $name) |
+    .data."ca.crt"' "$material_json" | base64 -d >"$temporary_directory/$name.pem"
+  openssl x509 -in "$temporary_directory/$name.pem" -outform DER \
+    >"$temporary_directory/$name.der"
+  cmp -s "$temporary_directory/vault-ca.der" "$temporary_directory/$name.der" || {
+    printf 'Vault client CA does not match the exact external Vault authority: %s\n' "$name" >&2
+    exit 1
+  }
+done
 for name in control-plane-nats runtime-controller-nats; do
   jq -er --arg name "$name" '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data["user.creds"]' "$material_json" |
     base64 -d >"$temporary_directory/$name.creds"
@@ -240,6 +261,66 @@ if rg -q 'https://mattermost\.mattermost\.svc\.cluster\.local|matter-codex-bot-s
   printf 'Application render retained a legacy plaintext/TLS fallback endpoint\n' >&2
   exit 1
 fi
+
+while IFS=$'\t' read -r workload_name config_map_name address_env tls_server_name_env ca_file_env; do
+  yq -o=json eval-all '.' "$interfaces" | jq -s -e \
+    --arg workload_name "$workload_name" --arg config_map_name "$config_map_name" \
+    --arg address_env "$address_env" --arg tls_server_name_env "$tls_server_name_env" \
+    --arg ca_file_env "$ca_file_env" '
+    def exact_values($data):
+      ($data[$address_env] == "https://vault.mattercodex-system.svc:8200" or
+       $data[$address_env] == "https://vault.mattercodex-system.svc.cluster.local:8200") and
+      $data[$tls_server_name_env] == "vault.mattercodex-system.svc.cluster.local" and
+      ($data[$ca_file_env] | type == "string" and startswith("/var/run/config/mattercodex/"));
+    if $config_map_name != "-" then
+      any(.[]; .kind == "ConfigMap" and .metadata.name == $config_map_name and exact_values(.data)) and
+      any(.[]; .kind == "Deployment" and .metadata.name == $workload_name and
+        any(.spec.template.spec.containers[]?;
+          any(.envFrom[]?; .configMapRef.name == $config_map_name)))
+    else
+      any(.[]; .kind == "Deployment" and .metadata.name == $workload_name and
+        any(((.spec.template.spec.containers // []) +
+             (.spec.template.spec.initContainers // []))[]?;
+          (.env // [] | map({key:.name,value:.value}) | from_entries) as $data |
+          exact_values($data)))
+    end
+  ' >/dev/null || {
+    printf 'Expected live Vault application boundary is absent: %s\n' "$workload_name" >&2
+    exit 1
+  }
+  grep -Fq "\"$address_env\"" \
+    "$repository_root/infra/direct-production/bootstrap.sh" || {
+    printf 'Owner bootstrap does not preflight a live Vault boundary: %s\n' "$workload_name" >&2
+    exit 1
+  }
+done <<'EOF'
+integration-gateway	integration-gateway-runtime	INTEGRATION_GATEWAY_VAULT_ADDRESS	INTEGRATION_GATEWAY_VAULT_TLS_SERVER_NAME	INTEGRATION_GATEWAY_VAULT_CA_FILE
+interaction-gateway	interaction-gateway-runtime	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_TLS_SERVER_NAME	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_CA_FILE
+runtime-s3-restore-exchanger	-	RUNTIME_VAULT_ADDRESS	RUNTIME_VAULT_TLS_SERVER_NAME	RUNTIME_VAULT_CA_FILE
+EOF
+grep -Fq 'kubernetes.io/service-name=vault' "$repository_root/infra/direct-production/bootstrap.sh" &&
+  grep -Fq 'required exact Vault endpoint binding is absent' \
+    "$repository_root/infra/direct-production/bootstrap.sh" || {
+  printf 'Owner bootstrap Vault EndpointSlice readback is absent\n' >&2
+  exit 1
+}
+
+application_bootstrap="$temporary_directory/application-bootstrap.yaml"
+"$repository_root/tools/release/render-direct-production-applications.sh" \
+  --scope bootstrap --output "$application_bootstrap" >/dev/null
+yq -o=json eval-all '.' "$application_bootstrap" | jq -s -e '
+  def exact_vault($name):
+    first(.[] | select(.kind == "NetworkPolicy" and .metadata.name == $name)) as $policy |
+    any($policy.spec.egress[]?;
+      .to == [{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"vault"}}}] and
+      .ports == [{"protocol":"TCP","port":8200}]);
+  exact_vault("integration-gateway-exact-runtime-paths") and
+  exact_vault("interaction-gateway-exact-runtime-paths") and
+  exact_vault("runtime-s3-restore-exchanger-exact-paths")
+' >/dev/null || {
+  printf 'Live Vault NetworkPolicy destination is not exact\n' >&2
+  exit 1
+}
 
 cp "$external_fixture" "$temporary_directory/missing-key.yaml"
 yq -i '

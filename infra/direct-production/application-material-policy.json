@@ -79,46 +79,6 @@
     },
     {
       "kind": "Secret",
-      "name": "internal-rpc-authority-automation-scheduler-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-control-api-gateway-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-control-plane-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-integration-gateway-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-interaction-gateway-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
       "name": "internal-rpc-authority-publisher-manifest-trust",
       "keys": [
         "manifest-trust.jws"
@@ -141,22 +101,6 @@
         "restore-role-trust.jws"
       ],
       "requirement": "restore-role bundle, подписанный независимым manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-controller-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
-    },
-    {
-      "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
-      "keys": [
-        "bundle.jws"
-      ],
-      "requirement": "bundle, подписанный offline manifest root"
     },
     {
       "kind": "Secret",
@@ -245,6 +189,55 @@
     }
   ],
   "publisher_owned_empty_resources": [
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-automation-scheduler-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-control-api-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-control-plane-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-integration-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-interaction-gateway-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-runtime-controller-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
     {
       "kind": "Secret",
       "name": "internal-rpc-authority-snapshot",
@@ -535,7 +528,7 @@
       ]
     },
     {
-      "classification": "cryptographically_generated",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "integration-gateway-vault-ca",
       "keys": [
@@ -598,7 +591,7 @@
       ]
     },
     {
-      "classification": "cryptographically_generated",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "interaction-gateway-vault-ca",
       "keys": [
@@ -623,7 +616,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-automation-scheduler-manifest-trust",
       "keys": [
@@ -666,7 +659,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-control-api-gateway-manifest-trust",
       "keys": [
@@ -692,7 +685,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-control-plane-manifest-trust",
       "keys": [
@@ -770,7 +763,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-integration-gateway-manifest-trust",
       "keys": [
@@ -822,7 +815,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-interaction-gateway-manifest-trust",
       "keys": [
@@ -1043,7 +1036,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-runtime-controller-manifest-trust",
       "keys": [
@@ -1086,7 +1079,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "deterministically_derived",
       "kind": "Secret",
       "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
       "keys": [

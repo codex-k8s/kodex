@@ -192,9 +192,9 @@ tools/deploy/classify-direct-production-application-material.sh \
 
 Классификатор заново получает interface render из текущего checkout и требует
 ровно 137 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
-введена policy, это 65 криптографически генерируемых, 67 детерминированно
-выводимых, 2 полностью безопасно переиспользуемых и 23 внешних ресурса. Внешний
-фрагмент принимается только как exact closed set из 23 ресурсов и 44 ключей:
+введена policy, это 63 криптографически генерируемых, 76 детерминированно
+выводимых, 2 полностью безопасно переиспользуемых и 16 внешних ресурсов. Внешний
+фрагмент принимается только как exact closed set из 16 ресурсов и 37 ключей:
 лишний, отсутствующий или пустой ключ, `stringData`, другой namespace либо
 неизвестный kind приводят к закрытому отказу. Значения не включаются в отчёт.
 Фрагмент с правами слабее `0600` проверяется отдельным запуском с
@@ -205,7 +205,7 @@ legacy source Secret. Она не выводит значения и не изм
 `matter-kodex-prod`. Классификация сама по себе не является materialization.
 
 `tools/deploy/materialize-direct-production-application.sh` объединяет все
-65 `cryptographically_generated`, 67 `deterministically_derived`, два полностью
+63 `cryptographically_generated`, 76 `deterministically_derived`, два полностью
 `safely_reusable_from_existing_binding` и частичные reusable bindings внутри
 двух external ресурсов. Он использует `umask 077`, secure temporary directory,
 pinned `nsc`, operator/account JWT и минимальные NATS user permissions; создаёт
@@ -213,6 +213,13 @@ owner-only password store для 29 поколенческих PostgreSQL LOGIN 
 verify-full DSN с exact hostname/CA; подписывает TLS identities общей prototype
 CA; проверяет compact JWS/JWK/JWKS, ARN, CA и mapping digest semantics. Любой
 неизвестный resource/key или неполный internal set отклоняется.
+
+Client CA для `integration-gateway` и `interaction-gateway` детерминированно
+копируется из единственного external binding
+`ConfigMap/internal-rpc-authority-vault-ca`; отдельное значение у владельца не
+запрашивается. Семь target `*-manifest-trust/bundle.jws` создаются пустыми как
+publisher-owned resources и заполняются publisher из одного проверенного
+external manifest root bundle. Для них запрещён owner-supplied дубликат.
 
 Foundation публикует NATS только через TLS и account resolver без basic-auth.
 PostgreSQL principal Job исполняется до migrations и повторно после них, затем
@@ -245,10 +252,14 @@ Owner materializer заранее создаёт exact publisher/reconciler-owne
 допустимые пустые ключи, а затем сохраняет runtime-owned keys при повторном
 запуске. Неизвестный
 Secret, key, logical path, operation, digest, generation или CAS conflict
-приводит к закрытому отказу. Readiness использует тот же backend readback, что и
-рабочая публикация. Vault Service/EndpointSlice для этого exact prototype не
-требуется; разворачивать неутверждённый dev Vault или подменять его fake endpoint
-запрещено. Полный Vault lifecycle остаётся в #256.
+приводит к закрытому отказу. Readiness authority использует тот же backend
+readback, что и рабочая публикация. Однако exact application render пока
+сохраняет рабочие Vault-границы `integration-gateway` provider/Git credentials,
+`interaction-gateway` bot credentials и runtime S3 STS exchange. Пока эти
+границы не получили отдельные profile-selected adapters, owner bootstrap
+закрыто требует точный HTTPS Service `vault` и Ready EndpointSlice на порту
+`8200`. Отсутствие endpoint нельзя обходить неутверждённым dev Vault, fake
+endpoint или plaintext fallback. Полный Vault lifecycle остаётся в #256.
 
 ## Bounded smoke
 

@@ -108,16 +108,21 @@ yq eval-all '
       "name": .name,
       "secret": {"secretName": .csi.volumeAttributes.secretProviderClass, "defaultMode": 288}
     } |
-    (.spec.template.spec.volumes[]?.secret |
-      select(.secretName | test("^internal-rpc-authority-.*-(issuer|resolver)-key$"))) .items =
-        [{"key":"private.jwk","path":"private.jwk"}] |
-    (.spec.template.spec.volumes[]?.secret |
-      select(.secretName != "internal-rpc-authority-publisher-manifest-trust" and
-        (.secretName | test("^internal-rpc-authority-.*-manifest-trust$")))) .items =
-        [{"key":"bundle.jws","path":"bundle.jws"}] |
-    (.spec.template.spec.volumes[]?.secret |
-      select(.secretName | test("^internal-rpc-authority-.*-(proof-trust|resolver-trust)$"))) .items =
-        [{"key":"jwks.json","path":"jwks.json"}]
+    .spec.template.spec.volumes[]? |= (
+      with(select(.secret != null and
+          (.secret.secretName | test("^internal-rpc-authority-.*-(issuer|resolver)-key$")));
+        .secret.items = [{"key":"private.jwk","path":"private.jwk"}]
+      ) |
+      with(select(.secret != null and
+          .secret.secretName != "internal-rpc-authority-publisher-manifest-trust" and
+          (.secret.secretName | test("^internal-rpc-authority-.*-manifest-trust$")));
+        .secret.items = [{"key":"bundle.jws","path":"bundle.jws"}]
+      ) |
+      with(select(.secret != null and
+          (.secret.secretName | test("^internal-rpc-authority-.*-(proof-trust|resolver-trust)$")));
+        .secret.items = [{"key":"jwks.json","path":"jwks.json"}]
+      )
+    )
   ) |
   with(select(.kind == "Deployment");
     (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1"
@@ -146,16 +151,21 @@ yq eval-all '
       "name": .name,
       "secret": {"secretName": .csi.volumeAttributes.secretProviderClass, "defaultMode": 288}
     } |
-    (.spec.jobTemplate.spec.template.spec.volumes[]?.secret |
-      select(.secretName | test("^internal-rpc-authority-.*-(issuer|resolver)-key$"))) .items =
-        [{"key":"private.jwk","path":"private.jwk"}] |
-    (.spec.jobTemplate.spec.template.spec.volumes[]?.secret |
-      select(.secretName != "internal-rpc-authority-publisher-manifest-trust" and
-        (.secretName | test("^internal-rpc-authority-.*-manifest-trust$")))) .items =
-        [{"key":"bundle.jws","path":"bundle.jws"}] |
-    (.spec.jobTemplate.spec.template.spec.volumes[]?.secret |
-      select(.secretName | test("^internal-rpc-authority-.*-(proof-trust|resolver-trust)$"))) .items =
-        [{"key":"jwks.json","path":"jwks.json"}]
+    .spec.jobTemplate.spec.template.spec.volumes[]? |= (
+      with(select(.secret != null and
+          (.secret.secretName | test("^internal-rpc-authority-.*-(issuer|resolver)-key$")));
+        .secret.items = [{"key":"private.jwk","path":"private.jwk"}]
+      ) |
+      with(select(.secret != null and
+          .secret.secretName != "internal-rpc-authority-publisher-manifest-trust" and
+          (.secret.secretName | test("^internal-rpc-authority-.*-manifest-trust$")));
+        .secret.items = [{"key":"bundle.jws","path":"bundle.jws"}]
+      ) |
+      with(select(.secret != null and
+          (.secret.secretName | test("^internal-rpc-authority-.*-(proof-trust|resolver-trust)$")));
+        .secret.items = [{"key":"jwks.json","path":"jwks.json"}]
+      )
+    )
   ) |
   with(select(.kind == "ConfigMap" and .data != null);
     .data = (.data | with_entries(select((.key | test("^(OTEL_|SENTRY_)")) | not)))

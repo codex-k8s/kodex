@@ -163,6 +163,20 @@ yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml
   exit 1
 }
 
+yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/rbac.yaml" |
+  jq -sc -e '
+    (map(select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher"))[0]) as $role |
+    ($role.rules | length) == 1 and
+    $role.rules[0].apiGroups == [""] and
+    $role.rules[0].resources == ["secrets"] and
+    $role.rules[0].verbs == ["get","update"] and
+    ($role.rules[0].resourceNames | length) > 0 and
+    ($role.rules[0].resourceNames | length) == ($role.rules[0].resourceNames | unique | length)
+  ' >/dev/null || {
+  printf 'Publisher RBAC is broader than exact Secret GET/PUT authority\n' >&2
+  exit 1
+}
+
 kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" |
   yq eval-all 'select(.kind == "NetworkPolicy")' >"$temporary_directory/network-policies.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" \

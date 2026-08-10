@@ -381,9 +381,12 @@ for item in \
   'ConfigMap internal-rpc-authority-restore-controller-client-ca client-ca.pem' 'ConfigMap mattercodex-internal-ca ca.pem' \
   'ConfigMap mattercodex-nats-ca ca.pem' 'ConfigMap mattercodex-s3-ca ca.pem' 'ConfigMap object-store-ca ca.pem' \
   'ConfigMap provider-health-adapter-ca ca.pem' 'ConfigMap runtime-controller-postgresql-ca ca.pem' \
-  'Secret integration-gateway-postgresql-ca ca.crt' 'Secret integration-gateway-vault-ca ca.crt' \
-  'Secret interaction-gateway-postgresql-ca ca.crt' 'Secret interaction-gateway-vault-ca ca.crt'; do
+  'Secret integration-gateway-postgresql-ca ca.crt' 'Secret interaction-gateway-postgresql-ca ca.crt'; do
   read -r kind name key <<<"$item"; put_file "$kind" "$name" "$key" "$ca_cert"
+done
+for name in integration-gateway-vault-ca interaction-gateway-vault-ca; do
+  put_file Secret "$name" ca.crt \
+    "$(value_path ConfigMap internal-rpc-authority-vault-ca ca.pem)"
 done
 
 # Preserve private protocol keys, generating only absent ones.

@@ -106,6 +106,29 @@ if [[ "$mode" != readback ]]; then
         .value == null and
         .valueFrom.fieldRef.fieldPath == "metadata.labels['"'"'mattercodex.dev/profile'"'"']"))
   ' >/dev/null || fail "internal-rpc-authority prototype backend binding is invalid"
+  if yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+    any(.[];
+      ((.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job") and
+       any(((.spec.template.spec.containers // []) +
+            (.spec.template.spec.initContainers // []))[]?.env[]?;
+         .name == "INTEGRATION_GATEWAY_VAULT_ADDRESS" or
+         .name == "INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS" or
+         .name == "RUNTIME_VAULT_ADDRESS")) or
+      (.kind == "ConfigMap" and any((.data // {}) | keys[];
+        . == "INTEGRATION_GATEWAY_VAULT_ADDRESS" or
+        . == "INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS" or
+        . == "RUNTIME_VAULT_ADDRESS")))
+  ' >/dev/null; then
+    kubectl --context "$expected_context" -n mattercodex-system get service vault -o json |
+      jq -e '.spec.ports == [{"name":"https","port":8200,"protocol":"TCP","targetPort":8200}]' >/dev/null ||
+      fail "required exact Vault Service binding is absent"
+    kubectl --context "$expected_context" -n mattercodex-system get endpointslice \
+      -l kubernetes.io/service-name=vault -o json |
+      jq -e '(.items | length) > 0 and any(.items[];
+        any(.ports[]?; .name == "https" and .port == 8200 and .protocol == "TCP") and
+        any(.endpoints[]?; .conditions.ready == true))' >/dev/null ||
+      fail "required exact Vault endpoint binding is absent"
+  fi
 fi
 
 if [[ "$mode" == preflight ]]; then
