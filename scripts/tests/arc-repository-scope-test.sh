@@ -8,11 +8,12 @@ policy_bootstrap="$repository_root/infra/github/bootstrap-actions-policy.sh"
 materializer="$repository_root/infra/github/materialize-actions-policy-inputs.sh"
 owner_gate="$repository_root/infra/arc/job-started-owner-gate.sh"
 network_policy_renderer="$repository_root/infra/arc/render-network-policy.sh"
+helm_values_renderer="$repository_root/infra/arc/render-helm-values.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
 bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate" \
-  "$network_policy_renderer"
+  "$network_policy_renderer" "$helm_values_renderer"
 
 printf '%040d\n' 0 >"$temporary_directory/workflow-sha"
 printf '1\n' >"$temporary_directory/build-owner"
@@ -133,5 +134,34 @@ for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
     exit 1
   }
 done
+
+mkdir -p -- "$temporary_directory/helm-values"
+"$helm_values_renderer" 10.43.0.1 "$temporary_directory/helm-values" >/dev/null
+expected_kubernetes_no_proxy='10.43.0.1,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1'
+for controller_values in controller-values controller-deploy-values; do
+  NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
+    [.env[] | select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] |
+      length == 1
+  ' "$temporary_directory/helm-values/$controller_values.yaml" >/dev/null
+done
+NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
+  [.listenerTemplate.spec.containers[].env[] |
+    select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1
+' "$temporary_directory/helm-values/build-runner-values.yaml" >/dev/null
+NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
+  ([.listenerTemplate.spec.containers[].env[] |
+    select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1) and
+  ([.template.spec.containers[] | select(.name == "runner") | .env[] |
+    select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1)
+' "$temporary_directory/helm-values/deploy-runner-values.yaml" >/dev/null
+if rg -q '__KUBERNETES_API_SERVICE_IP__' "$temporary_directory/helm-values"; then
+  printf 'Rendered ARC Helm values contain an unresolved Kubernetes API IP\n' >&2
+  exit 1
+fi
+if "$helm_values_renderer" 10.43.0.999 "$temporary_directory/helm-values" \
+  >/dev/null 2>&1; then
+  printf 'ARC Helm values renderer accepted an invalid Kubernetes API IP\n' >&2
+  exit 1
+fi
 
 printf 'ARC repository-scope negative checks completed\n'
