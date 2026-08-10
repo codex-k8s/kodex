@@ -15,12 +15,12 @@ func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Respons
 func TestExactTransportRejectsChangedDestination(t *testing.T) {
 	t.Parallel()
 	called := false
-	transport := exactTransport{host: "sso.mattercodex.local", next: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+	transport := exactTransport{host: "sso.kodex.works", next: roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		called = true
 		return nil, errors.New("unexpected request")
 	})}
 	for _, endpoint := range []string{
-		"http://sso.mattercodex.local/.well-known/openid-configuration",
+		"http://sso.kodex.works/.well-known/openid-configuration",
 		"https://other.mattercodex.local/jwks",
 	} {
 		request, err := http.NewRequest(http.MethodGet, endpoint, nil)
@@ -39,10 +39,10 @@ func TestExactTransportRejectsChangedDestination(t *testing.T) {
 func TestExactTransportAllowsIssuerHost(t *testing.T) {
 	t.Parallel()
 	expected := errors.New("transport reached")
-	transport := exactTransport{host: "sso.mattercodex.local", next: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+	transport := exactTransport{host: "sso.kodex.works", next: roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return nil, expected
 	})}
-	request, err := http.NewRequest(http.MethodGet, "https://sso.mattercodex.local/jwks", nil)
+	request, err := http.NewRequest(http.MethodGet, "https://sso.kodex.works/jwks", nil)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

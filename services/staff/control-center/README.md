@@ -51,6 +51,12 @@ PWA и API имеют один origin. Nginx проксирует `/api/v1/` к
 `control-api-gateway` по TLS с exact SNI и публичной CA. Благодаря этому browser
 передаёт session cookie, а JavaScript читает только host-only CSRF cookie.
 
+Канонический production origin консоли — `https://control.kodex.works/`.
+Интерактивная аутентификация выполняется через Keycloak realm
+`https://sso.kodex.works/realms/mattercodex` по Authorization Code + PKCE.
+Имена `control-api.mattercodex.local` и другие `*.mattercodex.local` являются
+только внутренними TLS/SNI authority и не публикуются как пользовательские URL.
+
 ## Пользовательские маршруты
 
 | Маршрут                                 | Исполняемые сценарии                                                                                                                                              |

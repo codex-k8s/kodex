@@ -1,14 +1,14 @@
 {
-  "revision": "42ea618dbf108d802d431b51b390efee775f311dc210d32ff8b37350629f8c85",
+  "revision": "36b1b4229800ff080120efa6fd2203aa002ad13ebaa678c20cae531d6d6c9035",
   "environment": "base",
-  "apiBaseUrl": "https://control.mattercodex.local/api/v1",
-  "realtimeUrl": "wss://control.mattercodex.local/api/v1/realtime",
+  "apiBaseUrl": "https://control.kodex.works/api/v1",
+  "realtimeUrl": "wss://control.kodex.works/api/v1/realtime",
   "requestTimeoutMs": 15000,
   "oidc": {
-    "authority": "https://sso.mattercodex.local/realms/mattercodex",
+    "authority": "https://sso.kodex.works/realms/mattercodex",
     "clientId": "mattercodex-control-center",
-    "redirectUri": "https://control.mattercodex.local/auth/callback",
-    "postLogoutRedirectUri": "https://control.mattercodex.local/",
+    "redirectUri": "https://control.kodex.works/auth/callback",
+    "postLogoutRedirectUri": "https://control.kodex.works/",
     "scope": "openid profile mattercodex.owner"
   }
 }

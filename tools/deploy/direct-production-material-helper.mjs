@@ -117,7 +117,7 @@ switch (command) {
     const generation = readFileSync(args[2], "utf8").trim();
     if (JSON.stringify(Object.keys(snapshot).sort()) !== JSON.stringify(["algorithms", "audience", "digest_sha256", "generation", "issuer", "jwks", "schema_version"]) ||
         snapshot.schema_version !== 1 || !Number.isSafeInteger(snapshot.generation) || snapshot.generation < 1 ||
-        String(snapshot.generation) !== generation || snapshot.issuer !== "https://sso.mattercodex.local" ||
+        String(snapshot.generation) !== generation || snapshot.issuer !== "https://sso.kodex.works/realms/mattercodex" ||
         snapshot.audience !== "mattercodex-integration-gateway" || JSON.stringify(snapshot.algorithms) !== '["RS256"]' ||
         snapshot.jwks === null || !Array.isArray(snapshot.jwks.keys) || snapshot.jwks.keys.length < 1 || snapshot.jwks.keys.length > 16) {
       fail("OIDC provider snapshot binding is invalid");

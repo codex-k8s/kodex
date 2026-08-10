@@ -72,7 +72,7 @@ spec:
   duration: 2160h
   renewBefore: 360h
   privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
-  dnsNames: [control.mattercodex.local]
+  dnsNames: [control.kodex.works]
   usages: [server auth]
   issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
 ---

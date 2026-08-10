@@ -20,14 +20,14 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 		t.Fatal("caller-supplied authority header was accepted")
 	}
 
-	request.Header.Set("Origin", "https://control.mattercodex.local")
+	request.Header.Set("Origin", "https://control.kodex.works")
 	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token")
 	called := false
-	boundary := &Boundary{origins: map[string]struct{}{"https://control.mattercodex.local": {}}}
+	boundary := &Boundary{origins: map[string]struct{}{"https://control.kodex.works": {}}}
 	response := httptest.NewRecorder()
 	boundary.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
 	if called || response.Code != http.StatusNoContent ||
-		response.Header().Get("Access-Control-Allow-Origin") != "https://control.mattercodex.local" ||
+		response.Header().Get("Access-Control-Allow-Origin") != "https://control.kodex.works" ||
 		response.Header().Get("Access-Control-Allow-Credentials") != "true" ||
 		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token" {
 		t.Fatalf("credentialed preflight response is incomplete: status=%d headers=%v", response.Code, response.Header())

@@ -166,7 +166,7 @@ func loadConfig() (Config, error) {
 		RoleRuntimeContractSHA256:           "0000000000000000000000000000000000000000000000000000000000000000",
 		PendingRescheduleDelay:              30 * time.Second,
 		RecoveryPollInterval:                time.Second,
-		OIDCTLSServerName:                   "sso.mattercodex.local",
+		OIDCTLSServerName:                   "sso.kodex.works",
 		OIDCCAFile:                          "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		ApplicationGrantTrustDir:            "/var/run/config/mattercodex/control-plane/application-grants",
 		StartupTimeout:                      15 * time.Second,

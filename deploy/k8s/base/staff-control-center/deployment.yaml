@@ -22,7 +22,7 @@ spec:
         app.kubernetes.io/component: staff-frontend
       annotations:
         kubectl.kubernetes.io/default-container: staff-control-center
-        mattercodex.dev/runtime-config-revision: "42ea618dbf108d802d431b51b390efee775f311dc210d32ff8b37350629f8c85"
+        mattercodex.dev/runtime-config-revision: "36b1b4229800ff080120efa6fd2203aa002ad13ebaa678c20cae531d6d6c9035"
     spec:
       serviceAccountName: staff-control-center
       automountServiceAccountToken: false

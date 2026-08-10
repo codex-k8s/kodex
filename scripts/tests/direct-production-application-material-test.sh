@@ -92,7 +92,7 @@ writeFileSync(process.argv[2], JSON.stringify({...aggregateInput,digest_sha256:s
 const {publicKey} = generateKeyPairSync("rsa", {modulusLength:2048});
 const exported = publicKey.export({format:"jwk"});
 const key = {use:"sig",kty:"RSA",kid:"test-provider-key",alg:"RS256",n:exported.n,e:exported.e};
-const snapshotInput = {schema_version:1,generation:7,issuer:"https://sso.mattercodex.local",audience:"mattercodex-integration-gateway",algorithms:["RS256"],jwks:{keys:[key]}};
+const snapshotInput = {schema_version:1,generation:7,issuer:"https://sso.kodex.works/realms/mattercodex",audience:"mattercodex-integration-gateway",algorithms:["RS256"],jwks:{keys:[key]}};
 const digest = sha(JSON.stringify(snapshotInput));
 writeFileSync(process.argv[3], JSON.stringify({...snapshotInput,digest_sha256:digest})+"\n", {mode:0o600});
 writeFileSync(process.argv[4], digest+"\n", {mode:0o600});

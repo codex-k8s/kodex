@@ -140,7 +140,7 @@
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
-        "application_credential_issuer": "https://sso.mattercodex.local/realms/mattercodex",
+        "application_credential_issuer": "https://sso.kodex.works/realms/mattercodex",
         "application_credential_metadata": "authorization",
         "application_credential_trust_bundle_id": "mattercodex-oidc-signers-g1",
         "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway",
