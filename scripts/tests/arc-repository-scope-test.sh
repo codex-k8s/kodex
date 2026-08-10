@@ -64,7 +64,9 @@ yq -e '
     select(.name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
       .value == "/var/run/mattercodex-owner-gate/job-started.sh")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "owner-gate" and
-    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1
+    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
+  ([.template.spec.volumes[] | select(.name == "tools" and
+    .emptyDir.sizeLimit == "256Mi")] | length) == 1
 ' "$repository_root/infra/arc/build-runner-values.yaml" >/dev/null
 yq -e '
   .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
@@ -75,7 +77,9 @@ yq -e '
     select(.name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
       .value == "/var/run/mattercodex-owner-gate/job-started.sh")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "owner-gate" and
-    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1
+    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
+  ([.template.spec.volumes[] | select(.name == "tools" and
+    .emptyDir.sizeLimit == "256Mi")] | length) == 1
 ' "$repository_root/infra/arc/deploy-runner-values.yaml" >/dev/null
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build"
