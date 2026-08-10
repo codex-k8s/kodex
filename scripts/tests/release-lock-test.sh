@@ -153,7 +153,13 @@ yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
   (.jobs.build.steps[2].run | contains("verify-github-owner-gate.sh")) and
-  (.jobs.build.steps[3].run | contains("build-release.sh"))
+  (.jobs.build.steps[3].run | contains("build-release.sh")) and
+  .jobs.build.steps[3].env.HTTPS_PROXY ==
+    "http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080" and
+  .jobs.build.steps[3].env.HTTP_PROXY ==
+    "http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080" and
+  .jobs.build.steps[3].env.NO_PROXY ==
+    "matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000,localhost,127.0.0.1"
 ' "$repository_root/.github/workflows/build-release.yml" >/dev/null || {
   printf 'Build workflow may run mutable source before the owner gate\n' >&2
   exit 1

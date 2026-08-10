@@ -50,6 +50,9 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BUILDCTL_PATH: /var/run/mattercodex-tools/buildctl
           BUILDKIT_HOST: unix:///var/run/buildkit/buildkitd.sock
+          HTTPS_PROXY: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
+          HTTP_PROXY: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
+          NO_PROXY: matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000,localhost,127.0.0.1
         run: tools/release/build-release.sh --source-sha "$SOURCE_SHA" --build-run-id "$GITHUB_RUN_ID" --output release-lock.json
       - name: Record and validate release lock
         shell: bash
