@@ -394,8 +394,16 @@ func completeChangedDigestSet(
 	after map[string]string,
 	roles []repository.VaultStaticRoleExpectation,
 ) bool {
-	if len(before) == 0 || len(before) != len(after) || len(roles) == 0 {
+	if len(before) == 0 || len(before) != len(after) {
 		return false
+	}
+	if len(roles) == 0 {
+		for role, digest := range before {
+			if digest == "" || after[role] != digest {
+				return false
+			}
+		}
+		return true
 	}
 	for _, role := range roles {
 		if before[role.Role] == "" ||

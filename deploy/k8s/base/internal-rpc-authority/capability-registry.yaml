@@ -5,6 +5,42 @@ metadata:
   owner: internal-rpc-authority
   issue: "186"
 spec:
+  secretDeliveryProfiles:
+    default:
+      backend: vault
+      fallbackAllowed: false
+      semantics: VAULT_KV_V2_AND_DATABASE_STATIC_ROLES
+    direct-production-single-node-prototype:
+      backend: direct-production-kubernetes-file
+      fallbackAllowed: false
+      namespace: mattercodex-system
+      logicalPathRegistry: deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml
+      materialPolicy: infra/direct-production/internal-rpc-authority-prototype-material-policy.json
+      publisher:
+        operations:
+          - get
+          - update
+        resourceNamesFromClosedRegistry: true
+        createListWatchOrDeleteAllowed: false
+        requireResourceVersionCas: true
+        requireSemanticVersionDigestAndReadback: true
+      workload:
+        delivery: EXACT_READ_ONLY_SECRET_FILES
+        kubernetesSecretApiAllowed: false
+        primaryDocumentCount: 4
+        resolverAdditionalDocumentCount: 2
+      databaseCredentialReconciler:
+        credentialSecretGenerations:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+        stateSecretName: internal-rpc-authority-prototype-static-role-state
+        requireRegisteredSetSourceRevisionAndDigest: true
+        requireMonotonicGenerationReadback: true
+        retiredSecretMustBeAbsent: true
+        createListWatchOrDeleteAllowed: false
   artifact:
     repository: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority
     imageReferencePolicy: DIGEST_ONLY
@@ -67,6 +103,7 @@ spec:
       kind: initContainer
       owner: consuming-workload
       serviceAccount: consuming-workload
+      secretDeliveryProfile: CLOSED_ENUM_FROM_VERIFIED_ENVIRONMENT
       requiredBefore:
         - issuer
         - verifier
@@ -162,6 +199,7 @@ spec:
       kind: sidecar
       owner: consuming-workload
       serviceAccount: consuming-workload
+      secretDeliveryProfile: CLOSED_ENUM_FROM_VERIFIED_ENVIRONMENT
       authoritySnapshotSecretName: internal-rpc-authority-snapshot
       authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
       manifestTrustSecretName: internal-rpc-authority-manifest-trust
@@ -182,6 +220,7 @@ spec:
       owner: internal-rpc-authority
       artifactBinary: /usr/local/bin/internal-rpc-authority-publisher
       serviceAccount: internal-rpc-authority-publisher
+      secretDeliveryProfile: CLOSED_ENUM_FROM_VERIFIED_ENVIRONMENT
       replicas: 2
       leaderElection: NONE_MULTI_REPLICA_POSTGRESQL_VAULT_KUBERNETES_CAS
       databaseIdentity:
@@ -556,6 +595,7 @@ spec:
       owner: internal-rpc-authority
       artifactBinary: /usr/local/bin/internal-rpc-authority-database-credential-reconciler
       serviceAccount: internal-rpc-authority-database-credential-reconciler
+      secretDeliveryProfile: CLOSED_ENUM_FROM_VERIFIED_ENVIRONMENT
       replicas: 2
       leaderElection: POSTGRESQL_LEASE_WITH_FENCING_TOKEN
       interface:

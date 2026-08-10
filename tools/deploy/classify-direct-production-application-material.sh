@@ -35,10 +35,40 @@ fi
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
-policy="$repository_root/infra/direct-production/application-material-policy.json"
+temporary_directory=$(mktemp -d)
+output_temporary=""
+cleanup() {
+  rm -rf -- "$temporary_directory"
+  [[ -z "$output_temporary" ]] || rm -f -- "$output_temporary"
+}
+trap cleanup EXIT
+policy="$temporary_directory/effective-policy.json"
+jq -s '
+  .[0] as $base | .[1] as $prototype |
+  $base |
+  .resources += ($prototype.runtime_owned_empty_resources |
+    map({classification,kind,name,keys})) |
+  .runtime_owned_empty_resources =
+    (($base.publisher_owned_empty_resources | map(. + {owner:"publisher"})) +
+      $prototype.runtime_owned_empty_resources) |
+  .publisher_owned_empty_resources += ($prototype.runtime_owned_empty_resources |
+    map(select(.owner == "publisher") | {kind,name,keys})) |
+  .reconciler_owned_empty_resources = ($prototype.runtime_owned_empty_resources |
+    map(select(.owner == "reconciler") | {kind,name,keys})) |
+  .publisher_owned_runtime_keys = $prototype.publisher_owned_runtime_keys |
+  .prototype_secret_backend = {
+    deployment_profile:$prototype.deployment_profile,
+    secret_backend:$prototype.secret_backend
+  }
+' "$repository_root/infra/direct-production/application-material-policy.json" \
+  "$repository_root/infra/direct-production/internal-rpc-authority-prototype-material-policy.json" >"$policy"
 jq -e '
   . as $policy |
   .schema_version == 1 and
+  .prototype_secret_backend == {
+    deployment_profile:"direct-production-single-node-prototype",
+    secret_backend:"direct-production-kubernetes-file"
+  } and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
   (.resources | type == "array" and length > 0) and
@@ -52,23 +82,23 @@ jq -e '
      .classification == "deterministically_derived" or
      .classification == "safely_reusable_from_existing_binding" or
      .classification == "truly_external_credential")) and
-  ([.external_bindings[],.reusable_bindings[],.publisher_owned_empty_resources[]] |
+  ([.external_bindings[],.reusable_bindings[],.runtime_owned_empty_resources[]] |
     all(.kind != null or .target_kind != null)) and
   all(.external_bindings[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
       (($binding.keys - .keys) | length) == 0)) and
   all(.publisher_owned_empty_resources[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
-      .keys == $binding.keys))
+      .keys == $binding.keys)) and
+  all(.reconciler_owned_empty_resources[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      .keys == $binding.keys)) and
+  all(.runtime_owned_empty_resources[];
+    (.owner == "publisher" or .owner == "reconciler")) and
+  all(.publisher_owned_runtime_keys[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      (($binding.keys - .keys) | length) == ([$binding.keys[]] | length)))
 ' "$policy" >/dev/null || fail "application material policy is invalid"
-
-temporary_directory=$(mktemp -d)
-output_temporary=""
-cleanup() {
-  rm -rf -- "$temporary_directory"
-  [[ -z "$output_temporary" ]] || rm -f -- "$output_temporary"
-}
-trap cleanup EXIT
 interfaces="$temporary_directory/interfaces.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" --scope interfaces --output "$interfaces" >/dev/null
 
@@ -118,6 +148,20 @@ done < <(
   sed 's/^/Secret\t/' "$expected_secrets"
   sed 's/^/ConfigMap\t/' "$temporary_directory/expected-configmaps"
 )
+
+# Publisher/reconciler управляют только этими заранее объявленными пустыми
+# ресурсами. RBAC не даёт create, поэтому их создаёт owner materializer.
+while IFS=$'\t' read -r kind name classification; do
+  jq -e --arg kind "$kind" --arg name "$name" '
+    any(.[]; .kind == $kind and .name == $name)
+  ' "$resources" >/dev/null && continue
+  jq --arg kind "$kind" --arg name "$name" --arg classification "$classification" \
+    '. + [{kind:$kind,name:$name,classification:$classification}]' \
+    "$resources" >"$resources.next"
+  mv "$resources.next" "$resources"
+done < <(jq -r '. as $policy | .runtime_owned_empty_resources[] | . as $binding |
+  first($policy.resources[] | select(.kind == $binding.kind and .name == $binding.name)) |
+  [.kind,.name,.classification] | @tsv' "$policy")
 
 rendered_resource_identities=$(jq -Sc '[.[] | [.kind,.name]] | sort' "$resources")
 policy_resource_identities=$(jq -Sc '[.resources[] | [.kind,.name]] | sort' "$policy")
@@ -224,12 +268,16 @@ jq -S --slurpfile resources "$resources" '
     schema_version,
     profile,
     namespace,
+    prototype_secret_backend,
     resources:$resources[0],
     counts:($resources[0] | group_by(.classification) |
       map({key:.[0].classification,value:length}) | from_entries),
     external_bindings,
     reusable_bindings,
-    publisher_owned_empty_resources
+    runtime_owned_empty_resources,
+    publisher_owned_empty_resources,
+    reconciler_owned_empty_resources,
+    publisher_owned_runtime_keys
   }
 ' "$policy" >"$output_temporary"
 chmod 0600 "$output_temporary"

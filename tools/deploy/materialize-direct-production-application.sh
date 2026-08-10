@@ -37,11 +37,41 @@ fi
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
-policy="$repository_root/infra/direct-production/application-material-policy.json"
 helper="$script_directory/direct-production-material-helper.mjs"
 namespace=mattercodex-system
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT HUP INT TERM
+policy="$temporary_directory/effective-policy.json"
+jq -s '
+  .[0] as $base | .[1] as $prototype |
+  $base |
+  .resources += ($prototype.runtime_owned_empty_resources |
+    map({classification,kind,name,keys})) |
+  .runtime_owned_empty_resources =
+    (($base.publisher_owned_empty_resources | map(. + {owner:"publisher"})) +
+      $prototype.runtime_owned_empty_resources) |
+  .publisher_owned_empty_resources += ($prototype.runtime_owned_empty_resources |
+    map(select(.owner == "publisher") | {kind,name,keys})) |
+  .reconciler_owned_empty_resources = ($prototype.runtime_owned_empty_resources |
+    map(select(.owner == "reconciler") | {kind,name,keys})) |
+  .publisher_owned_runtime_keys = $prototype.publisher_owned_runtime_keys |
+  .prototype_secret_backend = {
+    deployment_profile:$prototype.deployment_profile,
+    secret_backend:$prototype.secret_backend
+  }
+' "$repository_root/infra/direct-production/application-material-policy.json" \
+  "$repository_root/infra/direct-production/internal-rpc-authority-prototype-material-policy.json" >"$policy"
+jq -e '
+  .schema_version == 1 and
+  .prototype_secret_backend == {
+    deployment_profile:"direct-production-single-node-prototype",
+    secret_backend:"direct-production-kubernetes-file"
+  } and
+  ([.resources[] | [.kind,.name]] | length) ==
+    ([.resources[] | [.kind,.name]] | unique | length) and
+  all(.runtime_owned_empty_resources[];
+    (.owner == "publisher" or .owner == "reconciler"))
+' "$policy" >/dev/null || fail "application material policy is invalid"
 values="$temporary_directory/values"
 mkdir -p "$values/Secret" "$values/ConfigMap" "$temporary_directory/internal"
 
@@ -66,11 +96,28 @@ random_hex_file() { openssl rand -hex 32 >"$1"; chmod 0600 "$1"; }
 expected_keys() {
   jq -c --arg kind "$1" --arg name "$2" 'first(.resources[] | select(.kind == $kind and .name == $name)).keys | sort' "$policy"
 }
+allowed_keys() {
+  jq -c --arg kind "$1" --arg name "$2" '
+    ((first(.resources[] | select(.kind == $kind and .name == $name)).keys) +
+      ([.publisher_owned_runtime_keys[]? |
+        select(.kind == $kind and .name == $name) | .keys[]])) |
+    unique | sort
+  ' "$policy"
+}
+runtime_owned_empty_key() {
+  jq -e --arg kind "$1" --arg name "$2" --arg key "$3" '
+    any(.runtime_owned_empty_resources[];
+      .kind == $kind and .name == $name and (.keys | index($key) != null))
+  ' "$policy" >/dev/null
+}
 verify_key_set_json() {
-  local kind=$1 name=$2 json=$3 actual expected
+  local kind=$1 name=$2 json=$3 actual expected allowed
   expected=$(expected_keys "$kind" "$name")
+  allowed=$(allowed_keys "$kind" "$name")
   actual=$(jq -c '[(.data // {} | keys[]),(.binaryData // {} | keys[])] | unique | sort' "$json")
-  [[ "$actual" == "$expected" ]] || fail "$kind/$name has an unexpected key set"
+  jq -e --argjson expected "$expected" --argjson allowed "$allowed" --argjson actual "$actual" '
+    (($expected - $actual) | length) == 0 and (($actual - $allowed) | length) == 0
+  ' <<<null >/dev/null || fail "$kind/$name has an unexpected key set"
 }
 load_resource_json() {
   local kind=$1 name=$2 json=$3 key path encoded
@@ -110,15 +157,17 @@ load_cluster_secret_key() {
 }
 
 if [[ "$mode" == readback ]]; then
-  while IFS=$'\t' read -r kind name expected; do
+  while IFS=$'\t' read -r kind name expected allowed; do
     json="$temporary_directory/readback-$kind-$name.json"
     kubectl --context "$expected_context" -n "$namespace" get "${kind,,}/$name" -o json >"$json" 2>/dev/null ||
       fail "$kind/$name is absent"
     actual=$(jq -c '[(.data // {} | keys[]),(.binaryData // {} | keys[])] | unique | sort' "$json")
-    [[ "$actual" == "$expected" ]] || fail "$kind/$name readback key set mismatch"
+    jq -e --argjson expected "$expected" --argjson allowed "$allowed" --argjson actual "$actual" '
+      (($expected - $actual) | length) == 0 and (($actual - $allowed) | length) == 0
+    ' <<<null >/dev/null || fail "$kind/$name readback key set mismatch"
     while IFS= read -r key; do
       [[ -n "$key" ]] || continue
-      if [[ "$kind/$name/$key" == Secret/internal-rpc-authority-snapshot/snapshot.jws ]]; then
+      if runtime_owned_empty_key "$kind" "$name" "$key"; then
         continue
       fi
       jq -e --arg key "$key" '
@@ -126,7 +175,10 @@ if [[ "$mode" == readback ]]; then
         $value != null and ($value | type == "string" and length > 0)
       ' "$json" >/dev/null || fail "$kind/$name contains an empty key"
     done < <(jq -r '(.data // {} | keys[]),(.binaryData // {} | keys[])' "$json")
-  done < <(jq -r '.resources[] | [.kind,.name,(.keys|sort|tojson)] | @tsv' "$policy")
+  done < <(jq -r '.resources[] | . as $resource |
+    ([.publisher_owned_runtime_keys[]? |
+      select(.kind == $resource.kind and .name == $resource.name) | .keys[]]) as $runtime |
+    [.kind,.name,(.keys|sort|tojson),((.keys+$runtime)|unique|sort|tojson)] | @tsv' "$policy")
   printf 'Direct production application material readback completed\n'
   exit 0
 fi
@@ -489,19 +541,22 @@ node "$helper" validate-nats-server "$temporary_directory/internal/operator.jwt"
 while IFS=$'\t' read -r kind name key; do
   has_value "$kind" "$name" "$key" && continue
   path=$(value_path "$kind" "$name" "$key"); mkdir -p "$(dirname -- "$path")"
+  if runtime_owned_empty_key "$kind" "$name" "$key"; then
+    : >"$path"
+    continue
+  fi
   case "$kind/$name/$key" in
-    Secret/internal-rpc-authority-snapshot/snapshot.jws) : >"$path" ;;
     Secret/*/*.hex|Secret/*/key|Secret/*/callback-key|Secret/*/delivery-key)
       node "$helper" derive-hex "$root" "$name/$key" "$path" ;;
     *) fail "no material source for $kind/$name/$key" ;;
   esac
 done < <(jq -r '.resources[] | .kind as $kind | .name as $name | .keys[] | [$kind,$name,.] | @tsv' "$policy")
 
-# Exact closure and the single publisher-owned empty sentinel.
+# Exact closure и закрытый набор пустых ключей publisher.
 while IFS=$'\t' read -r kind name key; do
   path=$(value_path "$kind" "$name" "$key")
   [[ -f "$path" ]] || fail "$kind/$name/$key was not materialized"
-  if [[ "$kind/$name/$key" != Secret/internal-rpc-authority-snapshot/snapshot.jws ]]; then
+  if ! runtime_owned_empty_key "$kind" "$name" "$key"; then
     [[ -s "$path" ]] || fail "$kind/$name/$key is empty"
   fi
 done < <(jq -r '.resources[] | .kind as $kind | .name as $name | .keys[] | [$kind,$name,.] | @tsv' "$policy")
@@ -510,7 +565,14 @@ render="$temporary_directory/application-material.yaml"
 : >"$render"
 while IFS=$'\t' read -r kind name; do
   args=()
-  while IFS= read -r key; do args+=("--from-file=$key=$(value_path "$kind" "$name" "$key")"); done < <(jq -r --arg kind "$kind" --arg name "$name" 'first(.resources[]|select(.kind==$kind and .name==$name)).keys[]' "$policy")
+  while IFS= read -r key; do
+    [[ -f "$(value_path "$kind" "$name" "$key")" ]] || continue
+    args+=("--from-file=$key=$(value_path "$kind" "$name" "$key")")
+  done < <(jq -r --arg kind "$kind" --arg name "$name" '
+    first(.resources[]|select(.kind==$kind and .name==$name)) as $resource |
+    (($resource.keys + [.publisher_owned_runtime_keys[]? |
+      select(.kind==$kind and .name==$name) | .keys[]]) | unique[])
+  ' "$policy")
   if [[ "$kind" == Secret ]]; then
     kubectl -n "$namespace" create secret generic "$name" "${args[@]}" --dry-run=client -o yaml >>"$render"
   else

@@ -90,17 +90,22 @@ if [[ "$mode" != readback ]]; then
     --output "$temporary_directory/application-material.yaml" >/dev/null
   kubectl --context "$expected_context" apply --dry-run=client \
     -f "$temporary_directory/application-material.yaml" >/dev/null
-  if rg -q 'https://vault\.mattercodex-system\.svc:8200' "$temporary_directory/application-interfaces.yaml"; then
-    kubectl --context "$expected_context" -n mattercodex-system get service vault -o json |
-      jq -e '.spec.ports == [{"name":"https","port":8200,"protocol":"TCP","targetPort":8200}]' >/dev/null ||
-      fail "required exact Vault Service binding is absent"
-    kubectl --context "$expected_context" -n mattercodex-system get endpointslice \
-      -l kubernetes.io/service-name=vault -o json |
-      jq -e '(.items | length) > 0 and any(.items[];
-        any(.ports[]?; .name == "https" and .port == 8200 and .protocol == "TCP") and
-        any(.endpoints[]?; .conditions.ready == true))' >/dev/null ||
-      fail "required exact Vault endpoint binding is absent"
-  fi
+  yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+    [ .[] | select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job") |
+      ((.spec.template.spec.containers // []) + (.spec.template.spec.initContainers // []))[] |
+      select(.name == "publisher" or .name == "reconciler" or
+        .name == "internal-rpc-authority-issuer" or
+        .name == "internal-rpc-authority-verifier")
+    ] as $authority |
+    ($authority | length) > 0 and all($authority[];
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_SECRET_BACKEND")] | length) == 1 and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_SECRET_BACKEND")][0] |
+        .value == "direct-production-kubernetes-file" and .valueFrom == null) and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE")] | length) == 1 and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE")][0] |
+        .value == null and
+        .valueFrom.fieldRef.fieldPath == "metadata.labels['"'"'mattercodex.dev/profile'"'"']"))
+  ' >/dev/null || fail "internal-rpc-authority prototype backend binding is invalid"
 fi
 
 if [[ "$mode" == preflight ]]; then

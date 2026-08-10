@@ -20,7 +20,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	readbackclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/readback"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/restoreagent"
-	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
@@ -95,16 +94,10 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct authority domain service: %w", err)
 	}
-	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
-		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultAuthFile,
-		Timeout:                 5 * time.Second,
-	})
+	delivery, err := newRuntimeSecretDelivery(config)
 	if err != nil {
 		store.Close()
-		return fmt.Errorf("construct Vault authority material client: %w", err)
+		return fmt.Errorf("construct authority material delivery: %w", err)
 	}
 	readbackTLS, err := loadRestoreClientTLS(
 		config.ReadbackAttestorCAFile,
@@ -113,7 +106,7 @@ func Run(
 		config.ReadbackAttestorTLSServerName,
 	)
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("load readback attestor mTLS client: %w", err)
 	}
@@ -121,7 +114,7 @@ func Run(
 		Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
 		CredentialPath:          config.ReadbackCredentialVaultPath,
 		PossessionPath:          config.ReadbackPossessionVaultPath,
-		Delivery:                vault,
+		Delivery:                delivery,
 		WorkloadID:              config.WorkloadID,
 		WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
 		Role:                    config.ReadbackRole,
@@ -134,18 +127,18 @@ func Run(
 		}),
 	})
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("construct readback attestor client: %w", err)
 	}
 	var activationAttestor repository.SnapshotAttestor = snapshotAttestor
-	if config.Mode == ModeVerifier {
+	if config.Mode == ModeVerifier && config.ResolverEnabled {
 		resolverAttestor, resolverErr := readbackclient.NewVaultAttestor(
 			readbackclient.VaultConfig{
 				Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
 				CredentialPath:          config.ResolverReadbackCredentialPath,
 				PossessionPath:          config.ResolverReadbackPossessionPath,
-				Delivery:                vault,
+				Delivery:                delivery,
 				WorkloadID:              config.WorkloadID,
 				WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
 				Role:                    "AUTHORITY_PROOF_RESOLVER",
@@ -159,7 +152,7 @@ func Run(
 			},
 		)
 		if resolverErr != nil {
-			vault.Close()
+			delivery.Close()
 			store.Close()
 			return fmt.Errorf(
 				"construct authority proof resolver readback client: %w",
@@ -181,7 +174,7 @@ func Run(
 		activationAttestor,
 	)
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("construct authority application: %w", err)
 	}
@@ -192,7 +185,7 @@ func Run(
 		config.RestoreControllerTLSServerName,
 	)
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("load restore controller mTLS client: %w", err)
 	}
@@ -200,7 +193,7 @@ func Run(
 		Address: config.RestoreControllerAddress, TLS: restoreTLS,
 		RoleCredentialVaultPath:    config.RestoreRoleCredentialVaultPath,
 		ACKPrivateJWKVaultPath:     config.RestoreACKVaultPath,
-		Delivery:                   vault,
+		Delivery:                   delivery,
 		ControllerCertificateFile:  config.RestoreControllerCertificateFile,
 		ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
 		ManifestRootMetadataFile:   config.ManifestRootMetadataFile,
@@ -216,7 +209,7 @@ func Run(
 		}),
 	})
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("construct restore workload agent: %w", err)
 	}
@@ -224,12 +217,12 @@ func Run(
 		startupCtx,
 		authorityApplication,
 	); err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("verify external restore startup barrier: %w", err)
 	}
 	if err := activateSnapshotUntilReady(startupCtx, authorityApplication); err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
 	}
@@ -237,7 +230,7 @@ func Run(
 		startupCtx,
 		authorityApplication,
 	); err != nil {
-		vault.Close()
+		delivery.Close()
 		store.Close()
 		return fmt.Errorf("open external restore startup barrier: %w", err)
 	}
@@ -285,14 +278,14 @@ func Run(
 	unixListener, err := listenUnix(config)
 	if err != nil {
 		store.Close()
-		vault.Close()
+		delivery.Close()
 		return err
 	}
 	technicalListener, err := net.Listen("tcp", config.TechnicalListen)
 	if err != nil {
 		_ = unixListener.Close()
 		store.Close()
-		vault.Close()
+		delivery.Close()
 		return fmt.Errorf("listen on technical HTTP endpoint: %w", err)
 	}
 	technicalServer := newTechnicalServer(
@@ -377,10 +370,10 @@ func Run(
 			Run:     technicalServer.Shutdown,
 		},
 		serviceruntime.ShutdownOperation{
-			Name:    "vault-http",
+			Name:    "secret-delivery",
 			Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
-				vault.Close()
+				delivery.Close()
 				return nil
 			},
 		},

@@ -4,7 +4,7 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.4.0
+version: 1.5.0
 updated: 2026-08-10
 ---
 
@@ -191,8 +191,8 @@ tools/deploy/classify-direct-production-application-material.sh \
 ```
 
 Классификатор заново получает interface render из текущего checkout и требует
-ровно 117 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
-введена policy, это 52 криптографически генерируемых, 60 детерминированно
+ровно 137 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
+введена policy, это 65 криптографически генерируемых, 67 детерминированно
 выводимых, 2 полностью безопасно переиспользуемых и 23 внешних ресурса. Внешний
 фрагмент принимается только как exact closed set из 23 ресурсов и 44 ключей:
 лишний, отсутствующий или пустой ключ, `stringData`, другой namespace либо
@@ -205,7 +205,7 @@ legacy source Secret. Она не выводит значения и не изм
 `matter-kodex-prod`. Классификация сама по себе не является materialization.
 
 `tools/deploy/materialize-direct-production-application.sh` объединяет все
-52 `cryptographically_generated`, 60 `deterministically_derived`, два полностью
+65 `cryptographically_generated`, 67 `deterministically_derived`, два полностью
 `safely_reusable_from_existing_binding` и частичные reusable bindings внутри
 двух external ресурсов. Он использует `umask 077`, secure temporary directory,
 pinned `nsc`, operator/account JWT и минимальные NATS user permissions; создаёт
@@ -224,16 +224,31 @@ exact legacy namespace/Pod selector/port; legacy workloads и Services не
 readback-attestor, ждёт непустой `snapshot.jws`, и только затем запускает
 остальные consumers.
 
-Текущий application render всё ещё требует исполняемый Vault endpoint
-`vault.mattercodex-system.svc:8200`: publisher выполняет startup publication
-через `VaultStaticRoleManager`/`SecretDelivery`, а authority sidecars используют
-тот же delivery path. Одной внешней CA или Kubernetes Secret недостаточно.
-Bootstrap закрыто останавливается до первой мутации, если exact Service и Ready
-EndpointSlice отсутствуют. Для утверждённого Kubernetes-Secret prototype нужен
-узкий Go-проход: явный profile-selected file/Kubernetes adapter для
-`VaultStaticRoleManager` и `SecretDelivery` с закрытым path registry, digest
-readback и fail-closed rotation; после него Vault preflight удаляется. Разворачивать
-неутверждённый dev Vault или подменять ответы синтаксическими значениями запрещено.
+Direct-production render задаёт только сочетание
+`INTERNAL_RPC_AUTHORITY_SECRET_BACKEND=direct-production-kubernetes-file` и
+`INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE=direct-production-single-node-prototype`.
+Любой другой backend, профиль или сочетание закрыто отклоняется; автоматического
+перехода с Vault на Kubernetes нет. Обычные профили сохраняют Vault semantics.
+
+В prototype publisher выполняет только `get` и `update` заранее созданных exact
+Secret из закрытого target registry и подтверждает `resourceVersion`, semantic
+version, canonical digest и полный readback. Reconciler получает `get` только на
+exact g1–g5 publisher/readback credential Secrets и `get|update` только на
+`internal-rpc-authority-prototype-static-role-state`; состояние связывает
+source revision/digest, principal, generation, status и monotonic high-watermark. g1/g2 обязаны быть
+одновременно `NOLOGIN`, отозваны в PostgreSQL и недоступны как Secret.
+Authority sidecar не получает Kubernetes API authority и читает четыре exact
+JSON-документа своего target из read-only Secret volume; resolver получает ещё
+два exact readback-документа. Routine deployer не получает этих прав.
+
+Owner materializer заранее создаёт exact publisher/reconciler-owned Secret и
+допустимые пустые ключи, а затем сохраняет runtime-owned keys при повторном
+запуске. Неизвестный
+Secret, key, logical path, operation, digest, generation или CAS conflict
+приводит к закрытому отказу. Readiness использует тот же backend readback, что и
+рабочая публикация. Vault Service/EndpointSlice для этого exact prototype не
+требуется; разворачивать неутверждённый dev Vault или подменять его fake endpoint
+запрещено. Полный Vault lifecycle остаётся в #256.
 
 ## Bounded smoke
 

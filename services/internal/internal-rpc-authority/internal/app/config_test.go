@@ -47,3 +47,20 @@ func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
 		t.Fatal("automation scheduler Vault paths are not pinned")
 	}
 }
+
+func TestApplyWorkloadProfileDisablesResolverForInteractionVerifier(t *testing.T) {
+	config := Config{
+		Mode:             ModeVerifier,
+		WorkloadID:       "interaction-gateway",
+		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
+	}
+	if err := applyWorkloadProfile(&config); err != nil {
+		t.Fatalf("apply interaction gateway verifier profile: %v", err)
+	}
+	if config.ResolverEnabled ||
+		config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/readback-credential" ||
+		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/restore-ack" {
+		t.Fatal("interaction gateway verifier profile is not pinned")
+	}
+}

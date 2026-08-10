@@ -370,11 +370,42 @@ func (graph *Graph) Ready(
 		served.SnapshotResourceVersion == "" {
 		return errors.New("served authority snapshot no longer matches publication")
 	}
-	return graph.config.Store.SnapshotPublicationReady(
+	if err := graph.config.Store.SnapshotPublicationReady(
 		ctx,
 		expected,
 		len(graph.config.Registry.Targets),
-	)
+	); err != nil {
+		return err
+	}
+	return graph.deliveryReady(ctx)
+}
+
+func (graph *Graph) deliveryReady(ctx context.Context) error {
+	for _, target := range graph.config.Registry.Targets {
+		for _, path := range []string{
+			target.AuthPrivateKeyVaultPath,
+			target.ManifestTrustVaultPath,
+			target.ProofTrustVaultPath,
+			target.ProofPrivateKeyVaultPath,
+			target.ReadbackCredentialPath,
+			target.ReadbackPossessionKeyPath,
+		} {
+			if path == "" {
+				continue
+			}
+			material, found, err := graph.config.Vault.ReadKV2(ctx, path)
+			if err != nil || !found || material.Version == 0 ||
+				len(material.Digest) != 64 || len(material.Data) == 0 {
+				return errors.New("authority graph delivery backend readback rejected")
+			}
+			if (path == target.ManifestTrustVaultPath || path == target.ProofTrustVaultPath) &&
+				(material.Data["source_revision"] != strconv.FormatUint(graph.config.Registry.SourceRevision, 10) ||
+					material.Data["source_digest_sha256"] != graph.config.Registry.SourceDigest) {
+				return errors.New("authority graph delivery source binding rejected")
+			}
+		}
+	}
+	return nil
 }
 
 func (graph *Graph) ensureKeySet(

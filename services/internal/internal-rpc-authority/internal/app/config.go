@@ -27,6 +27,8 @@ const socketRoot = "/run/mattercodex/internal-rpc-authority"
 type Config struct {
 	Mode                             Mode
 	ServiceName                      string
+	SecretBackend                    string `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
+	DeploymentProfile                string `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	WorkloadID                       string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_ID"`
 	SocketPath                       string
 	ExpectedProcessUID               uint32
@@ -71,12 +73,13 @@ type Config struct {
 	RestoreRoleTrustJWSFile          string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_JWS_FILE"`
 	WorkloadSPIFFEID                 string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID"`
 	ReadbackRole                     string
-	WorkloadGeneration               uint64        `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
-	CredentialGeneration             uint64        `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
-	PossessionKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
-	ResolverCredentialGeneration     uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_CREDENTIAL_GENERATION"`
-	ResolverPossessionKeyGeneration  uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_POSSESSION_KEY_GENERATION"`
-	ResolverProofSignerGeneration    uint64        `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION"`
+	WorkloadGeneration               uint64 `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_GENERATION"`
+	CredentialGeneration             uint64 `env:"INTERNAL_RPC_AUTHORITY_CREDENTIAL_GENERATION"`
+	PossessionKeyGeneration          uint64 `env:"INTERNAL_RPC_AUTHORITY_READBACK_POSSESSION_KEY_GENERATION"`
+	ResolverCredentialGeneration     uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_CREDENTIAL_GENERATION"`
+	ResolverPossessionKeyGeneration  uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_POSSESSION_KEY_GENERATION"`
+	ResolverProofSignerGeneration    uint64 `env:"INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION"`
+	ResolverEnabled                  bool
 	RestoreACKKeyGeneration          uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_ACK_KEY_GENERATION"`
 	StartupTimeout                   time.Duration `env:"INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT"`
 	ReadinessTimeout                 time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
@@ -90,6 +93,7 @@ type Config struct {
 func LoadConfig(mode Mode) (Config, error) {
 	config := Config{
 		Mode:                             mode,
+		SecretBackend:                    string(secretBackendVault),
 		WorkloadID:                       "",
 		ExpectedPeerUID:                  10001,
 		ExpectedPeerGID:                  10001,
@@ -159,6 +163,7 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.ResolverCredentialGeneration = 1
 		config.ResolverPossessionKeyGeneration = 1
 		config.ResolverProofSignerGeneration = 1
+		config.ResolverEnabled = true
 		config.RestoreRoleCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential"
 		config.RestoreACKVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack"
 	default:
@@ -189,6 +194,7 @@ func applyWorkloadProfile(config *Config) error {
 		readbackPossessionPath    string
 		restoreRoleCredentialPath string
 		restoreACKPath            string
+		resolverEnabled           bool
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
@@ -240,6 +246,14 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-ack",
 			},
+			"interaction-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+				vaultRole:                 "internal-rpc-authority-interaction-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
+			},
 		},
 		ModeVerifier: {
 			"control-plane": {
@@ -249,6 +263,15 @@ func applyWorkloadProfile(config *Config) error {
 				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession",
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
+				resolverEnabled:           true,
+			},
+			"interaction-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+				vaultRole:                 "internal-rpc-authority-interaction-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/restore-ack",
 			},
 		},
 	}
@@ -260,11 +283,16 @@ func applyWorkloadProfile(config *Config) error {
 	config.ReadbackPossessionVaultPath = profile.readbackPossessionPath
 	config.RestoreRoleCredentialVaultPath = profile.restoreRoleCredentialPath
 	config.RestoreACKVaultPath = profile.restoreACKPath
+	config.ResolverEnabled = profile.resolverEnabled
 	return nil
 }
 
 // Validate проверяет точные пути, идентичности и ограниченные интервалы.
 func (config Config) Validate() error {
+	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+	if err != nil {
+		return err
+	}
 	if config.WorkloadID == "" || len(config.WorkloadID) > 96 {
 		return errors.New("INTERNAL_RPC_AUTHORITY_WORKLOAD_ID is required and bounded")
 	}
@@ -284,14 +312,17 @@ func (config Config) Validate() error {
 		net.ParseIP(config.RestoreControllerTLSServerName) != nil {
 		return errors.New("restore controller mTLS endpoint is invalid")
 	}
-	if config.VaultAddress != "https://vault.mattercodex-system.svc:8200" ||
-		config.VaultTLSServerName != "vault.mattercodex-system.svc.cluster.local" ||
-		config.VaultAuthRole == "" ||
+	if config.VaultAuthRole == "" ||
 		config.ReadbackCredentialVaultPath == "" ||
 		config.ReadbackPossessionVaultPath == "" ||
 		config.RestoreRoleCredentialVaultPath == "" ||
 		config.RestoreACKVaultPath == "" {
 		return errors.New("exact Vault authority delivery boundary is required")
+	}
+	if backend == secretBackendVault &&
+		(config.VaultAddress != "https://vault.mattercodex-system.svc:8200" ||
+			config.VaultTLSServerName != "vault.mattercodex-system.svc.cluster.local") {
+		return errors.New("exact Vault authority delivery endpoint is required")
 	}
 	expectedSocket := map[Mode]string{
 		ModeIssuer:   socketRoot + "/issuer.sock",
@@ -320,7 +351,7 @@ func (config Config) Validate() error {
 		config.RestoreACKKeyGeneration > maximumSafeInteger {
 		return errors.New("authority generation or connection bound is invalid")
 	}
-	if config.Mode == ModeVerifier &&
+	if config.Mode == ModeVerifier && config.ResolverEnabled &&
 		(config.ResolverReadbackCredentialPath == "" ||
 			config.ResolverReadbackPossessionPath == "" ||
 			!filepath.IsAbs(config.ResolverProofPrivateJWKFile) ||
@@ -361,21 +392,24 @@ func (config Config) Validate() error {
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return fmt.Errorf("invalid technical listen address: %w", err)
 	}
-	for name, path := range map[string]string{
+	paths := map[string]string{
 		"PostgresDSNFile":                  config.PostgresDSNFile,
 		"SnapshotJWSFile":                  config.SnapshotJWSFile,
 		"ManifestRootPublicJWKFile":        config.ManifestRootPublicJWKFile,
 		"ManifestRootMetadataFile":         config.ManifestRootMetadataFile,
 		"ManifestTrustBundleJWSFile":       config.ManifestTrustBundleJWSFile,
-		"VaultCAFile":                      config.VaultCAFile,
-		"VaultAuthFile":                    config.VaultAuthFile,
 		"ReadbackAttestorCAFile":           config.ReadbackAttestorCAFile,
 		"WorkloadCertificateFile":          config.WorkloadCertificateFile,
 		"WorkloadPrivateKeyFile":           config.WorkloadPrivateKeyFile,
 		"RestoreControllerCAFile":          config.RestoreControllerCAFile,
 		"RestoreControllerCertificateFile": config.RestoreControllerCertificateFile,
 		"RestoreRoleTrustJWSFile":          config.RestoreRoleTrustJWSFile,
-	} {
+	}
+	if backend == secretBackendVault {
+		paths["VaultCAFile"] = config.VaultCAFile
+		paths["VaultAuthFile"] = config.VaultAuthFile
+	}
+	for name, path := range paths {
 		if !filepath.IsAbs(path) {
 			return fmt.Errorf("%s must be an absolute path", name)
 		}
