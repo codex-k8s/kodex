@@ -4,8 +4,8 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
-updated: 2026-08-04
+version: 1.7.0
+updated: 2026-08-10
 ---
 
 # Диагностика и восстановление runtime-controller
@@ -116,22 +116,25 @@ immutable one-time receipt. Vault action role выдаёт только bootstra
 `restore-role-arn`; передавать inline policy/session tags в Vault generate
 endpoint запрещено, потому что этот endpoint их не принимает.
 
-До успешного `Secret Create` durable credential effect отсутствует: crash
-безопасно получает новый short-lived STS grant, который ещё не доступен
-workload. Потерянный ответ и `AlreadyExists` запускают action-specific one-time
-`runtime-s3-readback-*` Pod. Его projected token живёт не более 600 секунд, Role
-даёт `get` только exact Secret, а admission сверяет issuer, audience,
-execution/source/action, full tuple и Pod spec. Controller проверяет только
-`runtime-authority-receipt-*` с exact UID/resourceVersion/policy/readback/data
-digest/expiry и не читает Secret. Mismatch является fail-closed инцидентом;
-broad `secrets/get` не добавлять.
+В owner-approved Wave A профиле `direct-production-single-node-prototype`
+archive/restore capability выключена машинно, а не scale-to-zero:
 
-Перед Ready у `runtime-workload-materializer`, `runtime-s3-archive-exchanger` и
-`runtime-s3-restore-exchanger` проверить UID/GID/fsGroup `10001`, modes `0440`
-и успешный exec probe `check-snapshot|check-s3-*`. Probe обязан прочитать TLS
-cert/key/CA, projected Kubernetes/Vault tokens, ticket public key, S3 CA и
-action KMS/role config. TCP-only probe или world-readable secret является
-fail-closed конфигурационным инцидентом.
+- `CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled` запрещает чтение
+  signing keys и выпуск archive/restore workload tickets;
+- `RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled` закрыто отклоняет restore
+  materialization и создание archive/restore/rehydrate/S3 broker Jobs;
+- admission и cluster VAP отклоняют соответствующие Pod, Secret, action,
+  ServiceAccount, RBAC и NetworkPolicy;
+- exact render не содержит exchanger, broker readiness, management identity,
+  HMAC, KMS/role material, storage/profile/KMS env или S3 egress этого path.
+
+Внутренние provider/adapters могут компилироваться, но selector их не включает.
+Не исправлять отказ выдачей root/static/shared credential, ручным Secret,
+license/entitlement или fake STS. Полный backend, TTL `900`, policy intersection,
+immediate terminal/cancel/delete/retry revoke/readback, KMS и dynamic Job env
+возвращаются только через [#310](https://github.com/codex-k8s/matter-codex/issues/310)
+с отдельным owner gate. До этого раздел ниже описывает лишь контракт будущего
+enabled-профиля и не является Wave A readiness checklist.
 
 Для archive нужны quiesced CSI snapshot/clone, exact S3 `VersionId`, checksum,
 size, KMS, COMPLIANCE Object Lock не менее 90 суток, exact retain-until

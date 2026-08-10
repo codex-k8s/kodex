@@ -18,7 +18,6 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	credentialrollout "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/credentialrollout"
@@ -53,6 +52,8 @@ type ReconcilerConfig struct {
 	PostgresDSNFile              string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedSessionUser  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
+	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
+	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -79,6 +80,7 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/tls/client-ca.pem",
 		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn",
 		PostgresTLSServerName:        "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		SecretBackend:                string(secretBackendVault),
 		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
 		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",
 		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem",
@@ -94,6 +96,20 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 	}
 	if err := parseEnvironment(&config); err != nil {
 		return ReconcilerConfig{}, err
+	}
+	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+	if err != nil {
+		return ReconcilerConfig{}, err
+	}
+	if backend == secretBackendDirectProductionPrototype {
+		if err := validatePrototypeKubernetesBoundary(
+			config.KubernetesAPIAddress,
+			config.KubernetesAPITLSServerName,
+			config.KubernetesAPICAFile,
+			config.KubernetesAPITokenFile,
+		); err != nil {
+			return ReconcilerConfig{}, err
+		}
 	}
 	if !runtimeUUIDPattern.MatchString(config.HolderID) ||
 		config.AllowedCallerSPIFFEID == "" ||
@@ -144,15 +160,7 @@ func RunDatabaseCredentialReconciler(
 		pool.Close()
 		return err
 	}
-	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address:                 config.VaultAddress,
-		TLSServerName:           config.VaultTLSServerName,
-		CAFile:                  config.VaultCAFile,
-		AuthMount:               "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
-		Timeout:                 5 * time.Second,
-	})
+	staticRoles, err := newStaticRoleManager(config)
 	if err != nil {
 		pool.Close()
 		return err
@@ -170,7 +178,7 @@ func RunDatabaseCredentialReconciler(
 		Timeout: 5 * time.Second,
 	})
 	if err != nil {
-		vault.Close()
+		staticRoles.Close()
 		pool.Close()
 		return err
 	}
@@ -178,23 +186,31 @@ func RunDatabaseCredentialReconciler(
 		config.SourceRevision,
 		config.SourceDigest,
 	)
+	backend, _ := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+	if backend == secretBackendDirectProductionPrototype {
+		// Owner materializer уже создал exact g3/g4/g5 credentials и PostgreSQL
+		// principals; runtime подтверждает и продвигает этот immutable набор.
+		baseline = registered
+	}
 	credentialService, err := service.NewDatabaseCredentialLifecycle(
 		config.HolderID,
 		config.LeaseDuration,
 		baseline,
 		registered,
 		store,
-		vault,
+		staticRoles,
 		rollout,
 	)
 	if err != nil {
 		rollout.Close()
-		vault.Close()
+		staticRoles.Close()
 		pool.Close()
 		return err
 	}
 	serverTLS, err := loadReconcilerServerTLS(config)
 	if err != nil {
+		rollout.Close()
+		staticRoles.Close()
 		pool.Close()
 		return err
 	}
@@ -237,12 +253,16 @@ func RunDatabaseCredentialReconciler(
 	)
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {
+		rollout.Close()
+		staticRoles.Close()
 		pool.Close()
 		return errors.New("listen on database credential reconciler endpoint")
 	}
 	technicalListener, err := net.Listen("tcp", config.TechnicalListen)
 	if err != nil {
 		_ = grpcListener.Close()
+		rollout.Close()
+		staticRoles.Close()
 		pool.Close()
 		return errors.New("listen on database credential technical endpoint")
 	}
@@ -305,10 +325,10 @@ func RunDatabaseCredentialReconciler(
 			},
 		},
 		serviceruntime.ShutdownOperation{
-			Name:    "vault-http",
+			Name:    "static-role-manager",
 			Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
-				vault.Close()
+				staticRoles.Close()
 				return nil
 			},
 		},

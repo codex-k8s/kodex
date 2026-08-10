@@ -12,17 +12,17 @@ require_denied() {
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--application-material-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--external-material-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
 mode=""
-application_material_file=""
+external_material_file=""
 while (($# > 0)); do
   case "$1" in
     --context) expected_context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
-    --application-material-file) application_material_file="${2:-}"; shift 2 ;;
+    --external-material-file) external_material_file="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -30,7 +30,8 @@ done
 
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
-for command_name in kubectl jq yq sha256sum; do
+[[ "$mode" == readback || -r "$external_material_file" ]] || fail "external material file is required"
+for command_name in kubectl jq rg yq sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
@@ -59,6 +60,19 @@ kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation
   --scope bootstrap --output "$temporary_directory/application-owner.yaml" >/dev/null
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --scope interfaces --output "$temporary_directory/application-interfaces.yaml" >/dev/null
+kubernetes_api_policies="$temporary_directory/runtime-adapter-kubernetes-api-egress.yaml"
+: >"$kubernetes_api_policies"
+for binding in \
+  integration-gateway-kubernetes-api-exact:integration-gateway \
+  interaction-gateway-kubernetes-api-exact:interaction-gateway; do
+  policy_name=${binding%%:*}
+  selector_value=${binding#*:}
+  "$repository_root/tools/deploy/kubernetes-api-egress.sh" render \
+    --context "$expected_context" --namespace mattercodex-system \
+    --policy "$policy_name" --pod-selector "mattercodex.dev/runtime-secret-api=$selector_value" \
+    >>"$kubernetes_api_policies"
+  printf '%s\n' '---' >>"$kubernetes_api_policies"
+done
 contract_source="$temporary_directory/workload-contract-source.yaml"
 contract_lock="$temporary_directory/workload-contract-release-lock.json"
 contract_source_sha=1111111111111111111111111111111111111111
@@ -78,54 +92,74 @@ workload_contracts="$temporary_directory/workload-contracts.yaml"
   --manifest "$contract_source" --output "$workload_contracts" >/dev/null
 workload_policy="$script_directory/workload-policy.yaml"
 
+yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "control-plane-runtime")) as $control |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime")) as $runtime |
+  ($control.data.CONTROL_PLANE_RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($control.data.CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE == null) and
+  ($control.data.CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE == null) and
+  ($runtime.data.RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($runtime.data.RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE == "https://github.com/codex-k8s/matter-codex/issues/310") and
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0
+' >/dev/null || fail "runtime archive/restore capability is not disabled in the exact application render"
+yq -o=json eval-all '.' "$temporary_directory/application-owner.yaml" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  ([$resources[] | select(.metadata.name | test("^(runtime-(archive|restore-verifier|rehydrate)(-|$)|runtime-s3-(archive|restore)(-|$)|runtime-s3-(exchanger|readback)-|runtime-controller-(archive-workers-s3|s3-security-policy)$)"))] | length) == 0 and
+  (first($resources[] | select(.kind == "NetworkPolicy" and .metadata.name == "runtime-controller-workers-exact-paths")) |
+    .spec.podSelector.matchExpressions[0].values == ["runtime-cleanup-authorizer"])
+' >/dev/null || fail "runtime archive/restore owner resources remain in the exact bootstrap render"
+
 for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
-  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy"; do
+  "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" "$workload_contracts" "$workload_policy"; do
   kubectl --context "$expected_context" apply --dry-run=client -f "$manifest" >/dev/null
 done
 
-expected_secrets=$( {
-  yq eval-all -r '.. | select(has("secretKeyRef")) | .secretKeyRef.name' "$temporary_directory/application-interfaces.yaml"
-  yq eval-all -r '.. | select(has("secret")) | select(.secret.secretName != null) | .secret.secretName' "$temporary_directory/application-interfaces.yaml"
-} | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u )
-expected_secret_keys=$(yq eval-all -r '.. | select(has("secretKeyRef")) |
-  [.secretKeyRef.name,.secretKeyRef.key] | @tsv' "$temporary_directory/application-interfaces.yaml" |
-  sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u)
-defined_configmaps="$temporary_directory/defined-configmaps"
-referenced_configmaps="$temporary_directory/referenced-configmaps"
-yq eval-all -r 'select(.kind == "ConfigMap") | .metadata.name' "$temporary_directory/application-interfaces.yaml" |
-  sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$defined_configmaps"
-{
-  yq eval-all -r '.. | select(has("configMapRef")) | .configMapRef.name' "$temporary_directory/application-interfaces.yaml"
-  yq eval-all -r '.. | select(has("configMapKeyRef")) | .configMapKeyRef.name' "$temporary_directory/application-interfaces.yaml"
-  yq eval-all -r '.. | select(has("configMap")) | select(.configMap.name != null) | .configMap.name' "$temporary_directory/application-interfaces.yaml"
-} | sed '/^---$/d;/^null$/d;/^$/d' | LC_ALL=C sort -u >"$referenced_configmaps"
-expected_material_configmaps=$(comm -13 "$defined_configmaps" "$referenced_configmaps" |
-  sed '/^kube-root-ca\.crt$/d;/^mattercodex-image-admission-policy$/d')
-[[ -n "$expected_secrets" ]] || fail "application Secret interface set is empty"
-
-if [[ -n "$application_material_file" ]]; then
-  [[ -r "$application_material_file" ]] || fail "application material manifest is not readable"
-  yq -o=json eval-all '.' "$application_material_file" | jq -es '
-    length > 0 and all(.[]; type == "object" and .apiVersion == "v1" and
-      .metadata.namespace == "mattercodex-system" and
-      ((.kind == "Secret" and (.data | type == "object" and length > 0) and (.stringData == null)) or
-       (.kind == "ConfigMap" and
-        (((.data // {}) | type == "object") and ((.binaryData // {}) | type == "object") and
-         ((((.data // {}) | length) + ((.binaryData // {}) | length)) > 0)))))
-  ' >/dev/null || fail "application material manifest has an invalid resource"
-  supplied_secrets=$(yq eval-all -r 'select(.kind == "Secret") | .metadata.name' "$application_material_file" | LC_ALL=C sort -u)
-  supplied_configmaps=$(yq eval-all -r 'select(.kind == "ConfigMap") | .metadata.name' "$application_material_file" | LC_ALL=C sort -u)
-  [[ "$supplied_secrets" == "$expected_secrets" ]] || fail "application material Secret name set mismatch"
-  [[ "$supplied_configmaps" == "$expected_material_configmaps" ]] || fail "application material ConfigMap name set mismatch"
-  while IFS=$'\t' read -r secret_name secret_key; do
-    [[ -n "$secret_name" && -n "$secret_key" ]] || continue
-    SECRET_NAME="$secret_name" SECRET_KEY="$secret_key" yq eval-all -e '
-      select(.kind == "Secret" and .metadata.name == strenv(SECRET_NAME)) |
-      .data[strenv(SECRET_KEY)] != null and .data[strenv(SECRET_KEY)] != ""
-    ' "$application_material_file" >/dev/null || fail "application Secret key interface is absent"
-  done <<<"$expected_secret_keys"
-elif [[ "$mode" == apply ]]; then
-  fail "application material manifest is required for owner-controlled apply"
+materializer="$repository_root/tools/deploy/materialize-direct-production-application.sh"
+if [[ "$mode" != readback ]]; then
+  "$materializer" --mode render --external-material-file "$external_material_file" \
+    --output "$temporary_directory/application-material.yaml" >/dev/null
+  kubectl --context "$expected_context" apply --dry-run=client \
+    -f "$temporary_directory/application-material.yaml" >/dev/null
+  yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+    [ .[] | select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job") |
+      ((.spec.template.spec.containers // []) + (.spec.template.spec.initContainers // []))[] |
+      select(.name == "publisher" or .name == "reconciler" or
+        .name == "internal-rpc-authority-issuer" or
+        .name == "internal-rpc-authority-verifier")
+    ] as $authority |
+    ($authority | length) > 0 and all($authority[];
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_SECRET_BACKEND")] | length) == 1 and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_SECRET_BACKEND")][0] |
+        .value == "direct-production-kubernetes-file" and .valueFrom == null) and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE")] | length) == 1 and
+      ([.env[]? | select(.name == "INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE")][0] |
+        .value == null and
+        .valueFrom.fieldRef.fieldPath == "metadata.labels['"'"'mattercodex.dev/profile'"'"']"))
+  ' >/dev/null || fail "internal-rpc-authority prototype backend binding is invalid"
+  if yq -o=json eval-all '.' "$temporary_directory/application-interfaces.yaml" | jq -s -e '
+    any(.[];
+      ((.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job") and
+       any(((.spec.template.spec.containers // []) +
+            (.spec.template.spec.initContainers // []))[]?.env[]?;
+         .name == "INTEGRATION_GATEWAY_VAULT_ADDRESS" or
+         .name == "INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS" or
+         .name == "RUNTIME_VAULT_ADDRESS")) or
+      (.kind == "ConfigMap" and any((.data // {}) | keys[];
+        . == "INTEGRATION_GATEWAY_VAULT_ADDRESS" or
+        . == "INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS" or
+        . == "RUNTIME_VAULT_ADDRESS")))
+  ' >/dev/null; then
+    kubectl --context "$expected_context" -n mattercodex-system get service vault -o json |
+      jq -e '.spec.ports == [{"name":"https","port":8200,"protocol":"TCP","targetPort":8200}]' >/dev/null ||
+      fail "required exact Vault Service binding is absent"
+    kubectl --context "$expected_context" -n mattercodex-system get endpointslice \
+      -l kubernetes.io/service-name=vault -o json |
+      jq -e '(.items | length) > 0 and any(.items[];
+        any(.ports[]?; .name == "https" and .port == 8200 and .protocol == "TCP") and
+        any(.endpoints[]?; .conditions.ready == true))' >/dev/null ||
+      fail "required exact Vault endpoint binding is absent"
+  fi
 fi
 
 if [[ "$mode" == preflight ]]; then
@@ -139,35 +173,29 @@ if [[ "$mode" == apply ]]; then
   kubectl --context "$expected_context" apply -f "$workload_policy" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/foundation-owner.yaml" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/application-owner.yaml" >/dev/null
+  kubectl --context "$expected_context" apply -f "$kubernetes_api_policies" >/dev/null
   "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode apply >/dev/null
-  kubectl --context "$expected_context" apply -f "$application_material_file" >/dev/null
+  for certificate_name in mattercodex-prototype-ca mattercodex-legacy-mattermost-bridge mattercodex-legacy-bot-service-bridge; do
+    kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=Ready \
+      "certificate/$certificate_name" --timeout=3m >/dev/null
+  done
+  "$materializer" --mode apply --context "$expected_context" \
+    --external-material-file "$external_material_file" >/dev/null
 fi
 
 kubectl --context "$expected_context" diff -f "$workload_contracts" >/dev/null ||
   fail "production workload contract readback mismatch"
+kubectl --context "$expected_context" diff -f "$script_directory/bootstrap.yaml" >/dev/null ||
+  fail "production owner admission policy readback mismatch"
+kubectl --context "$expected_context" diff -f "$temporary_directory/application-owner.yaml" >/dev/null ||
+  fail "production application owner policy readback mismatch"
 kubectl --context "$expected_context" diff -f "$workload_policy" >/dev/null ||
   fail "production workload admission policy readback mismatch"
+kubectl --context "$expected_context" diff -f "$kubernetes_api_policies" >/dev/null ||
+  fail "runtime adapter Kubernetes API egress readback mismatch"
 
 "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode readback >/dev/null
-while IFS= read -r secret_name; do
-  [[ -n "$secret_name" ]] || continue
-  kubectl --context "$expected_context" -n mattercodex-system get secret "$secret_name" -o json |
-    jq -e '.data != null and (.data | length) > 0 and all(.data[]; length > 0)' >/dev/null ||
-    fail "application Secret interface is absent or empty: $secret_name"
-done <<<"$expected_secrets"
-while IFS=$'\t' read -r secret_name secret_key; do
-  [[ -n "$secret_name" && -n "$secret_key" ]] || continue
-  kubectl --context "$expected_context" -n mattercodex-system get secret "$secret_name" -o json |
-    jq -e --arg key "$secret_key" '.data[$key] != null and (.data[$key] | length) > 0' >/dev/null ||
-    fail "application Secret key interface is absent"
-done <<<"$expected_secret_keys"
-while IFS= read -r configmap_name; do
-  [[ -n "$configmap_name" ]] || continue
-  kubectl --context "$expected_context" -n mattercodex-system get configmap "$configmap_name" -o json |
-    jq -e '((((.data // {}) | length) + ((.binaryData // {}) | length)) > 0) and
-      all((.data // {})[]; length > 0) and all((.binaryData // {})[]; length > 0)' >/dev/null ||
-    fail "application ConfigMap material interface is absent or empty"
-done <<<"$expected_material_configmaps"
+"$materializer" --mode readback --context "$expected_context" >/dev/null
 
 while IFS= read -r certificate_name; do
   [[ -n "$certificate_name" && "$certificate_name" != '---' ]] || continue
@@ -194,7 +222,7 @@ require_denied "routine deployer unexpectedly has Secret read access" \
   --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
 
 bootstrap_digest=$(sha256sum "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
-  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy" |
+  "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" "$workload_contracts" "$workload_policy" |
   sha256sum | awk '{print $1}')
 readiness_manifest="$temporary_directory/readiness.yaml"
 printf '%s\n' \

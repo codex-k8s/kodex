@@ -101,18 +101,19 @@ for permission in \
   can_i "$verb" "$resource" mattercodex-system
 done
 for migration in control-plane-migrate integration-gateway-migrate interaction-gateway-migrate \
-  internal-rpc-authority-migrate runtime-controller-migration; do
+  internal-rpc-authority-migrate mattercodex-postgresql-principal-bootstrap runtime-controller-migration; do
   can_i delete "jobs.batch/$migration" mattercodex-system
 done
+can_i get secrets/internal-rpc-authority-snapshot mattercodex-system
 for permission in 'get services' 'list services' 'get deployments.apps' 'list deployments.apps' 'get statefulsets.apps' 'list statefulsets.apps' 'get ingresses.networking.k8s.io' 'list ingresses.networking.k8s.io'; do
   read -r verb resource <<<"$permission"
   can_i "$verb" "$resource" matter-kodex-prod
 done
-require_denied "routine deployer must not read Secrets" \
+ require_denied "routine deployer must not have broad Secret read access" \
   kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system
-require_denied "routine deployer must not read Pod logs" \
+ require_denied "routine deployer must not read Pod logs" \
   kubectl --context "$expected_context" auth can-i get pods/log -n mattercodex-system
-require_denied "routine deployer must not create Certificates" \
+ require_denied "routine deployer must not create Certificates" \
   kubectl --context "$expected_context" auth can-i create certificates.cert-manager.io \
   -n mattercodex-system
 kubectl --context "$expected_context" -n mattercodex-system get configmap mattercodex-bootstrap-readiness \
@@ -164,23 +165,54 @@ wait_rollouts() {
   done < <(MANIFEST_KIND="$manifest_kind" yq eval-all -r 'select(.kind == strenv(MANIFEST_KIND)) | .metadata.name' "$render_file")
 }
 
+run_job() {
+  local name=$1 manifest="$temporary_directory/job-$name.yaml"
+  NAME="$name" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(NAME))' "$render_file" >"$manifest"
+  [[ -s "$manifest" ]] || fail "required Job is absent from render: $name"
+  kubectl --context "$expected_context" -n mattercodex-system delete job "$name" --ignore-not-found --wait >/dev/null
+  kubectl --context "$expected_context" apply -f "$manifest" >/dev/null
+  kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$name" --timeout=5m >/dev/null
+}
+
 if [[ "$operation" == apply ]]; then
   select_kinds "$temporary_directory/foundation.yaml" ConfigMap Service StatefulSet
   kubectl --context "$expected_context" apply -f "$temporary_directory/foundation.yaml" >/dev/null
   wait_rollouts statefulset StatefulSet
 
-  select_kinds "$temporary_directory/migrations.yaml" Job
+  run_job mattercodex-postgresql-principal-bootstrap
+
+  yq eval-all 'select(.kind == "Job" and .metadata.name != "mattercodex-postgresql-principal-bootstrap")' \
+    "$render_file" >"$temporary_directory/migrations.yaml"
   while IFS= read -r migration; do
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system delete job "$migration" --ignore-not-found --wait >/dev/null
-  done < <(yq eval-all -r 'select(.kind == "Job") | .metadata.name' "$render_file")
+  done < <(yq eval-all -r 'select(.kind == "Job" and .metadata.name != "mattercodex-postgresql-principal-bootstrap") | .metadata.name' "$render_file")
   kubectl --context "$expected_context" apply -f "$temporary_directory/migrations.yaml" >/dev/null
   while IFS= read -r migration; do
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$migration" --timeout=5m >/dev/null
-  done < <(yq eval-all -r 'select(.kind == "Job") | .metadata.name' "$render_file")
+  done < <(yq eval-all -r 'select(.kind == "Job" and .metadata.name != "mattercodex-postgresql-principal-bootstrap") | .metadata.name' "$render_file")
+
+  # Migrations may create generation roles; the owner-controlled password binding
+  # is reasserted forward-only before any application can start.
+  run_job mattercodex-postgresql-principal-bootstrap
 
   select_kinds "$temporary_directory/applications.yaml" Deployment CronJob
+  yq eval-all 'select(.kind == "Deployment" and
+    (.metadata.name == "internal-rpc-authority-publisher" or
+     .metadata.name == "internal-rpc-authority-readback-attestor"))' \
+    "$render_file" >"$temporary_directory/authority-publication.yaml"
+  kubectl --context "$expected_context" apply -f "$temporary_directory/authority-publication.yaml" >/dev/null
+  snapshot_ready=false
+  for _ in $(seq 1 60); do
+    if kubectl --context "$expected_context" -n mattercodex-system get secret internal-rpc-authority-snapshot -o json |
+      jq -e '(.data["snapshot.jws"] // "") | length > 0' >/dev/null; then
+      snapshot_ready=true
+      break
+    fi
+    sleep 5
+  done
+  [[ "$snapshot_ready" == true ]] || fail "publisher-owned authority snapshot was not materialized"
   kubectl --context "$expected_context" apply -f "$temporary_directory/applications.yaml" >/dev/null
   wait_rollouts deployment Deployment
 fi

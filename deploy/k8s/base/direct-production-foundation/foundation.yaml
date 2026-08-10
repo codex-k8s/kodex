@@ -187,6 +187,40 @@ spec:
   usages: [server auth]
   issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
 ---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-legacy-mattermost-bridge
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-legacy-mattermost-bridge-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - mattercodex-legacy-mattermost-bridge
+    - mattercodex-legacy-mattermost-bridge.mattercodex-system.svc
+    - mattercodex-legacy-mattermost-bridge.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-legacy-bot-service-bridge
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-legacy-bot-service-bridge-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - mattercodex-legacy-bot-service-bridge
+    - mattercodex-legacy-bot-service-bridge.mattercodex-system.svc
+    - mattercodex-legacy-bot-service-bridge.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -197,16 +231,16 @@ data:
     #!/bin/sh
     set -eu
     psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<EOSQL
-    CREATE ROLE control_plane_runtime LOGIN PASSWORD '${CONTROL_PLANE_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-    CREATE ROLE internal_rpc_authority_runtime LOGIN PASSWORD '${INTERNAL_RPC_AUTHORITY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-    CREATE ROLE runtime_controller_runtime LOGIN PASSWORD '${RUNTIME_CONTROLLER_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-    CREATE ROLE interaction_gateway_runtime LOGIN PASSWORD '${INTERACTION_GATEWAY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-    CREATE ROLE integration_gateway_runtime LOGIN PASSWORD '${INTEGRATION_GATEWAY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-    CREATE DATABASE control_plane OWNER control_plane_runtime;
-    CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_runtime;
-    CREATE DATABASE runtime_controller OWNER runtime_controller_runtime;
-    CREATE DATABASE interaction_gateway OWNER interaction_gateway_runtime;
-    CREATE DATABASE integration_gateway OWNER integration_gateway_runtime;
+    CREATE ROLE control_plane_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE internal_rpc_authority_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE runtime_controller_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE interaction_gateway_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE integration_gateway_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    CREATE DATABASE control_plane OWNER control_plane_owner;
+    CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_owner;
+    CREATE DATABASE runtime_controller OWNER runtime_controller_owner;
+    CREATE DATABASE interaction_gateway OWNER interaction_gateway_owner;
+    CREATE DATABASE integration_gateway OWNER integration_gateway_owner;
     EOSQL
   pg_hba.conf: |
     local all all scram-sha-256
@@ -258,8 +292,6 @@ spec:
               valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
             - name: PGPASSWORD
               valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
-          envFrom:
-            - secretRef: {name: mattercodex-postgresql-app-passwords}
           ports: [{name: postgresql, containerPort: 5432, protocol: TCP}]
           startupProbe:
             exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
@@ -434,20 +466,165 @@ spec: {selector: {app.kubernetes.io/name: mattercodex-redis}, ports: [{name: red
 ---
 apiVersion: v1
 kind: ConfigMap
+metadata: {name: mattercodex-postgresql-principal-bootstrap, namespace: mattercodex-system}
+data:
+  principals.tsv: |
+    control_plane_migrator	control_plane	control_plane_owner	true
+    control_plane_runtime_g1	control_plane	control_plane_runtime	false
+    control_plane_relay_g1	control_plane	control_plane_relay	false
+    integration_gateway_migrator_g1	integration_gateway	integration_gateway_owner,integration_gateway_migrator,integration_gateway_role_controller	true
+    integration_gateway_runtime_g1	integration_gateway	integration_gateway_runtime	false
+    integration_gateway_runtime_g2	integration_gateway	integration_gateway_runtime	false
+    interaction_gateway_migrator	interaction_gateway	interaction_gateway_owner,interaction_gateway_role_controller	true
+    interaction_gateway_runtime_g1	interaction_gateway	interaction_gateway_runtime	false
+    runtime_controller_migrator	runtime_controller	runtime_controller_owner	true
+    runtime_controller_runtime_g1	runtime_controller		false
+    runtime_workload_admission_g1	runtime_controller		false
+    internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner	true
+    ira_database_credential_reconciler	internal_rpc_authority	internal_rpc_authority_database_credential_reconciler	false
+    ira_publisher_g3	internal_rpc_authority	internal_rpc_authority_publisher	false
+    ira_publisher_g4	internal_rpc_authority	internal_rpc_authority_publisher	false
+    ira_publisher_g5	internal_rpc_authority	internal_rpc_authority_publisher	false
+    ira_readback_attestor_g3	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
+    ira_readback_attestor_g4	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
+    ira_readback_attestor_g5	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
+    ira_restore_controller_g1	internal_rpc_authority	internal_rpc_authority_restore_controller	false
+    ira_automation_scheduler_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
+    ira_control_api_gateway_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
+    ira_control_plane_verifier_g1	internal_rpc_authority	internal_rpc_authority_verifier	false
+    ira_integration_gateway_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
+    ira_integration_gateway_verifier_g1	internal_rpc_authority	internal_rpc_authority_verifier	false
+    ira_interaction_gateway_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
+    ira_interaction_gateway_verifier_g1	internal_rpc_authority	internal_rpc_authority_verifier	false
+    ira_runtime_controller_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
+  capability-roles.txt: |
+    control_plane_owner
+    control_plane_runtime
+    control_plane_relay
+    integration_gateway_owner
+    integration_gateway_runtime
+    integration_gateway_migrator
+    integration_gateway_role_controller
+    interaction_gateway_owner
+    interaction_gateway_runtime
+    interaction_gateway_role_controller
+    runtime_controller_owner
+    internal_rpc_authority_owner
+    internal_rpc_authority_issuer
+    internal_rpc_authority_verifier
+    internal_rpc_authority_publisher
+    internal_rpc_authority_readback_attestor
+    internal_rpc_authority_database_credential_reconciler
+    internal_rpc_authority_restore_controller
+  retired-principals.txt: |
+    ira_publisher_g1
+    ira_publisher_g2
+    ira_readback_attestor_g1
+    ira_readback_attestor_g2
+  reconcile.sh: |
+    #!/bin/sh
+    set -eu
+    umask 077
+    sql_file=$(mktemp /tmp/principals.XXXXXX.sql)
+    trap 'rm -f -- "$sql_file"' EXIT HUP INT TERM
+    printf '%s\n' 'SET client_min_messages = warning;' >"$sql_file"
+    while IFS= read -r role; do
+      [ -n "$role" ] || continue
+      case "$role" in (*[!a-z0-9_]*) exit 20 ;; esac
+      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$role" "$role" >>"$sql_file"
+      case "$role" in
+        integration_gateway_role_controller|interaction_gateway_role_controller)
+          printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
+        *) printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
+      esac
+    done </var/run/bootstrap/capability-roles.txt
+    while IFS="$(printf '\t')" read -r principal database memberships create_role; do
+      [ -n "$principal" ] || continue
+      case "$principal:$database:$create_role" in (*[!a-z0-9_,:\-]*) exit 21 ;; esac
+      password=$(cat "/var/run/principals/$principal")
+      case "$password" in (*[!a-f0-9]*|'') exit 22 ;; esac
+      [ "${#password}" -eq 64 ] || exit 23
+      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      if [ "$create_role" = true ]; then role_flag=CREATEROLE; else role_flag=NOCREATEROLE; fi
+      printf "ALTER ROLE %s LOGIN PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file"
+      printf 'GRANT CONNECT ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
+      if [ "$create_role" = true ]; then
+        printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
+      fi
+      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      old_ifs=$IFS; IFS=,
+      for membership in $memberships; do
+        [ -n "$membership" ] || continue
+        printf 'GRANT %s TO %s WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;\n' "$membership" "$principal" >>"$sql_file"
+      done
+      IFS=$old_ifs
+    done </var/run/bootstrap/principals.tsv
+    while IFS= read -r principal; do
+      [ -n "$principal" ] || continue
+      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" "$principal" "$principal" "$principal" >>"$sql_file"
+    done </var/run/bootstrap/retired-principals.txt
+    psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --set ON_ERROR_STOP=1 --file "$sql_file" >/dev/null
+    expected=$(wc -l </var/run/bootstrap/principals.tsv | tr -d ' ')
+    actual=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
+    [ "$actual" = "$expected" ] || exit 24
+    expected_memberships=$(awk -F '\t' '{if ($3 != "") {count=split($3, memberships, ","); total+=count}} END {print total+0}' /var/run/bootstrap/principals.tsv)
+    actual_memberships=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)" | tr -d '[:space:]')
+    [ "$actual_memberships" = "$expected_memberships" ] || exit 25
+    retired_unsafe=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles role WHERE role.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(paste -sd, /var/run/bootstrap/retired-principals.txt)', ',') value) AND (role.rolcanlogin OR EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member WHERE member.member = role.oid))" | tr -d '[:space:]')
+    [ "$retired_unsafe" = 0 ] || exit 26
+    printf 'PostgreSQL principal bootstrap readback completed\n'
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: mattercodex-postgresql-principal-bootstrap, namespace: mattercodex-system}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-postgresql-principal-bootstrap, app.kubernetes.io/component: database-bootstrap}}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: principal-bootstrap
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          command: [/var/run/bootstrap/reconcile.sh]
+          env:
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: bootstrap, mountPath: /var/run/bootstrap, readOnly: true}
+            - {name: principals, mountPath: /var/run/principals, readOnly: true}
+            - {name: tls, mountPath: /var/run/tls, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: bootstrap, configMap: {name: mattercodex-postgresql-principal-bootstrap, defaultMode: 0550}}
+        - {name: principals, secret: {secretName: mattercodex-postgresql-principals, defaultMode: 0400}}
+        - {name: tls, secret: {secretName: mattercodex-postgresql-tls, defaultMode: 0440}}
+        - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 8Mi}}
+---
+apiVersion: v1
+kind: ConfigMap
 metadata: {name: mattercodex-nats-config, namespace: mattercodex-system}
 data:
   nats.conf: |
     server_name: mattercodex-nats
     port: 4222
     http_port: 8222
-    authorization {
-      users: [{user: $NATS_USER, password: $NATS_PASSWORD}]
+    operator: $NATS_OPERATOR_JWT
+    resolver: MEMORY
+    resolver_preload: {
+      $NATS_APPLICATION_ACCOUNT: $NATS_APPLICATION_ACCOUNT_JWT
     }
     tls {
       cert_file: "/var/run/tls/tls.crt"
       key_file: "/var/run/tls/tls.key"
       ca_file: "/var/run/tls/ca.crt"
-      verify: false
+      verify: true
       timeout: 2
     }
     jetstream {
@@ -476,8 +653,9 @@ spec:
           image: docker.io/library/nats:2.14.4-alpine@sha256:f2123f533c2b0cada0a5c5ec434fb2b8cfe1cf220215ef9d7517e1372917ad66
           args: [-c, /etc/nats/nats.conf]
           env:
-            - {name: NATS_USER, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: username}}}
-            - {name: NATS_PASSWORD, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: password}}}
+            - {name: NATS_OPERATOR_JWT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: operator.jwt}}}
+            - {name: NATS_APPLICATION_ACCOUNT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: account.public}}}
+            - {name: NATS_APPLICATION_ACCOUNT_JWT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: account.jwt}}}
           ports: [{name: client-tls, containerPort: 4222}, {name: monitoring, containerPort: 8222}]
           startupProbe: {tcpSocket: {port: client-tls}, periodSeconds: 3, failureThreshold: 40}
           readinessProbe: {httpGet: {path: "/healthz?js-enabled-only=true", port: monitoring}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
@@ -504,6 +682,211 @@ apiVersion: v1
 kind: Service
 metadata: {name: nats, namespace: mattercodex-system}
 spec: {selector: {app.kubernetes.io/name: mattercodex-nats}, ports: [{name: client-tls, port: 4222, targetPort: client-tls}]}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: mattercodex-legacy-transport-bridges, namespace: mattercodex-system}
+data:
+  mattermost.yaml: |
+    static_resources:
+      listeners:
+        - name: downstream_mtls
+          address: {socket_address: {address: 0.0.0.0, port_value: 8443}}
+          filter_chains:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  require_client_certificate: true
+                  common_tls_context:
+                    tls_params: {tls_minimum_protocol_version: TLSv1_3}
+                    tls_certificates:
+                      - certificate_chain: {filename: /var/run/tls/tls.crt}
+                        private_key: {filename: /var/run/tls/tls.key}
+                    validation_context: {trusted_ca: {filename: /var/run/tls/ca.crt}}
+              filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: legacy_mattermost
+                    route_config:
+                      name: legacy_mattermost
+                      virtual_hosts:
+                        - name: legacy_mattermost
+                          domains: ["*"]
+                          routes: [{match: {prefix: "/"}, route: {cluster: legacy_mattermost}}]
+                    http_filters:
+                      - name: envoy.filters.http.rbac
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                          rules:
+                            action: ALLOW
+                            policies:
+                              exact-interaction-gateway:
+                                permissions: [{any: true}]
+                                principals:
+                                  - authenticated:
+                                      principal_name:
+                                        exact: spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway
+                      - {name: envoy.filters.http.router, typed_config: {"@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router}}
+        - name: readiness
+          address: {socket_address: {address: 0.0.0.0, port_value: 9902}}
+          filter_chains:
+            - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: legacy_mattermost_readiness
+                    route_config:
+                      name: legacy_mattermost_readiness
+                      virtual_hosts:
+                        - name: legacy_mattermost_readiness
+                          domains: ["*"]
+                          routes: [{match: {prefix: "/readyz"}, route: {cluster: legacy_mattermost, prefix_rewrite: "/api/v4/system/ping"}}]
+                    http_filters: [{name: envoy.filters.http.router, typed_config: {"@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router}}]
+      clusters:
+        - name: legacy_mattermost
+          type: STRICT_DNS
+          connect_timeout: 3s
+          load_assignment:
+            cluster_name: legacy_mattermost
+            endpoints: [{lb_endpoints: [{endpoint: {address: {socket_address: {address: mattermost.matter-kodex-prod.svc.cluster.local, port_value: 8065}}}}]}]
+    admin: {access_log_path: /dev/null, address: {socket_address: {address: 0.0.0.0, port_value: 9901}}}
+  bot-service.yaml: |
+    static_resources:
+      listeners:
+        - name: downstream_mtls
+          address: {socket_address: {address: 0.0.0.0, port_value: 8443}}
+          filter_chains:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  require_client_certificate: true
+                  common_tls_context:
+                    tls_params: {tls_minimum_protocol_version: TLSv1_3}
+                    tls_certificates:
+                      - certificate_chain: {filename: /var/run/tls/tls.crt}
+                        private_key: {filename: /var/run/tls/tls.key}
+                    validation_context: {trusted_ca: {filename: /var/run/tls/ca.crt}}
+              filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: legacy_bot_service
+                    route_config:
+                      name: legacy_bot_service
+                      virtual_hosts:
+                        - name: legacy_bot_service
+                          domains: ["*"]
+                          routes: [{match: {prefix: "/"}, route: {cluster: legacy_bot_service}}]
+                    http_filters:
+                      - name: envoy.filters.http.rbac
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                          rules:
+                            action: ALLOW
+                            policies:
+                              exact-application-clients:
+                                permissions: [{any: true}]
+                                principals:
+                                  - authenticated:
+                                      principal_name:
+                                        exact: spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway
+                      - {name: envoy.filters.http.router, typed_config: {"@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router}}
+        - name: readiness
+          address: {socket_address: {address: 0.0.0.0, port_value: 9902}}
+          filter_chains:
+            - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: legacy_bot_service_readiness
+                    route_config:
+                      name: legacy_bot_service_readiness
+                      virtual_hosts:
+                        - name: legacy_bot_service_readiness
+                          domains: ["*"]
+                          routes: [{match: {prefix: "/readyz"}, route: {cluster: legacy_bot_service, prefix_rewrite: "/healthz"}}]
+                    http_filters: [{name: envoy.filters.http.router, typed_config: {"@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router}}]
+      clusters:
+        - name: legacy_bot_service
+          type: STRICT_DNS
+          connect_timeout: 3s
+          load_assignment:
+            cluster_name: legacy_bot_service
+            endpoints: [{lb_endpoints: [{endpoint: {address: {socket_address: {address: matter-codex-bot-service.matter-kodex-prod.svc.cluster.local, port_value: 8080}}}}]}]
+    admin: {access_log_path: /dev/null, address: {socket_address: {address: 0.0.0.0, port_value: 9901}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mattercodex-legacy-mattermost-bridge, namespace: mattercodex-system}
+spec:
+  replicas: 2
+  minReadySeconds: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-legacy-mattermost-bridge}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-legacy-mattermost-bridge, app.kubernetes.io/component: legacy-tls-bridge}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: envoy
+          image: docker.io/envoyproxy/envoy:distroless-v1.35.3@sha256:f9080877fdbaecc788e79e200d912382e57f780b63752160e27dfe34f5d0aa36
+          args: [-c, /etc/envoy/envoy.yaml, --log-level, warning]
+          ports: [{name: mtls, containerPort: 8443}, {name: readiness, containerPort: 9902}]
+          readinessProbe: {httpGet: {path: /readyz, port: readiness}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3}
+          livenessProbe: {httpGet: {path: /ready, port: 9901}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: config, mountPath: /etc/envoy, readOnly: true}, {name: tls, mountPath: /var/run/tls, readOnly: true}, {name: tmp, mountPath: /tmp}]
+      volumes:
+        - name: config
+          configMap: {name: mattercodex-legacy-transport-bridges, items: [{key: mattermost.yaml, path: envoy.yaml}]}
+        - {name: tls, secret: {secretName: mattercodex-legacy-mattermost-bridge-tls, defaultMode: 0440}}
+        - {name: tmp, emptyDir: {sizeLimit: 8Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-legacy-mattermost-bridge, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-legacy-mattermost-bridge}, ports: [{name: mtls, port: 8443, targetPort: mtls}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mattercodex-legacy-bot-service-bridge, namespace: mattercodex-system}
+spec:
+  replicas: 2
+  minReadySeconds: 5
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-legacy-bot-service-bridge}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-legacy-bot-service-bridge, app.kubernetes.io/component: legacy-tls-bridge}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: envoy
+          image: docker.io/envoyproxy/envoy:distroless-v1.35.3@sha256:f9080877fdbaecc788e79e200d912382e57f780b63752160e27dfe34f5d0aa36
+          args: [-c, /etc/envoy/envoy.yaml, --log-level, warning]
+          ports: [{name: mtls, containerPort: 8443}, {name: readiness, containerPort: 9902}]
+          readinessProbe: {httpGet: {path: /readyz, port: readiness}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3}
+          livenessProbe: {httpGet: {path: /ready, port: 9901}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: config, mountPath: /etc/envoy, readOnly: true}, {name: tls, mountPath: /var/run/tls, readOnly: true}, {name: tmp, mountPath: /tmp}]
+      volumes:
+        - name: config
+          configMap: {name: mattercodex-legacy-transport-bridges, items: [{key: bot-service.yaml, path: envoy.yaml}]}
+        - {name: tls, secret: {secretName: mattercodex-legacy-bot-service-bridge-tls, defaultMode: 0440}}
+        - {name: tmp, emptyDir: {sizeLimit: 8Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-legacy-bot-service-bridge, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-legacy-bot-service-bridge}, ports: [{name: mtls, port: 8443, targetPort: mtls}]}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -648,7 +1031,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+                values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql, mattercodex-postgresql-principal-bootstrap]
       ports:
         - {protocol: TCP, port: 5432}
 ---
@@ -660,7 +1043,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+        values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql, mattercodex-postgresql-principal-bootstrap]
   policyTypes: [Egress]
   egress:
     - to:
@@ -760,3 +1143,43 @@ spec:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
           podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
       ports: [{protocol: TCP, port: 9000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: legacy-mattermost-bridge-exact-path, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-legacy-mattermost-bridge}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
+      ports: [{protocol: TCP, port: 8443}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: matter-kodex-prod}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mattermost}}
+      ports: [{protocol: TCP, port: 8065}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: legacy-bot-service-bridge-exact-path, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-legacy-bot-service-bridge}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
+      ports: [{protocol: TCP, port: 8443}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: matter-kodex-prod}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: matter-codex-bot-service}}
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]

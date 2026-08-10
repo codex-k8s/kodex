@@ -13,12 +13,15 @@ import (
 )
 
 type Config struct {
-	Gateway    GatewayConfig    `envPrefix:"INTERACTION_GATEWAY_"`
-	Mattermost MattermostConfig `envPrefix:"INTERACTION_GATEWAY_MATTERMOST_"`
-	Object     ObjectConfig     `envPrefix:"INTERACTION_GATEWAY_S3_"`
-	Control    ControlConfig    `envPrefix:"INTERACTION_GATEWAY_CONTROL_PLANE_"`
-	Bot        BotConfig        `envPrefix:"INTERACTION_GATEWAY_BOT_SERVICE_"`
-	Credential CredentialConfig `envPrefix:"INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_"`
+	DeploymentProfile string                 `env:"INTERACTION_GATEWAY_DEPLOYMENT_PROFILE" envDefault:"production"`
+	CredentialBackend string                 `env:"INTERACTION_GATEWAY_BOT_CREDENTIAL_BACKEND" envDefault:"vault"`
+	Gateway           GatewayConfig          `envPrefix:"INTERACTION_GATEWAY_"`
+	Mattermost        MattermostConfig       `envPrefix:"INTERACTION_GATEWAY_MATTERMOST_"`
+	Object            ObjectConfig           `envPrefix:"INTERACTION_GATEWAY_S3_"`
+	Control           ControlConfig          `envPrefix:"INTERACTION_GATEWAY_CONTROL_PLANE_"`
+	Bot               BotConfig              `envPrefix:"INTERACTION_GATEWAY_BOT_SERVICE_"`
+	Credential        CredentialConfig       `envPrefix:"INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_"`
+	DirectCredential  DirectCredentialConfig `envPrefix:"INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_"`
 }
 
 type GatewayConfig struct {
@@ -139,10 +142,10 @@ type BotConfig struct {
 }
 
 type CredentialConfig struct {
-	Address       string        `env:"ADDRESS,required"`
-	TLSServerName string        `env:"TLS_SERVER_NAME,required"`
-	CAFile        string        `env:"CA_FILE,required"`
-	TokenFile     string        `env:"TOKEN_FILE,required"`
+	Address       string        `env:"ADDRESS"`
+	TLSServerName string        `env:"TLS_SERVER_NAME"`
+	CAFile        string        `env:"CA_FILE"`
+	TokenFile     string        `env:"TOKEN_FILE"`
 	AuthMount     string        `env:"AUTH_MOUNT" envDefault:"kubernetes"`
 	Role          string        `env:"ROLE" envDefault:"interaction-gateway-agent-bot-credential"`
 	Mount         string        `env:"MOUNT" envDefault:"mattercodex"`
@@ -150,8 +153,14 @@ type CredentialConfig struct {
 	Timeout       time.Duration `env:"TIMEOUT" envDefault:"5s"`
 }
 
+type DirectCredentialConfig struct {
+	ResourceName string        `env:"RESOURCE_NAME"`
+	DataKey      string        `env:"DATA_KEY"`
+	Timeout      time.Duration `env:"TIMEOUT"`
+}
+
 func loadConfig() (Config, error) {
-	var config Config
+	config := Config{DirectCredential: defaultDirectCredentialConfig()}
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
 		return Config{}, errors.New("parse interaction gateway configuration")
 	}
@@ -159,22 +168,29 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	credentialSelection, err := selectCredentialBackend(config.DeploymentProfile, config.CredentialBackend)
+	if err != nil {
+		return err
+	}
 	gateway := config.Gateway
 	for _, address := range []string{gateway.HTTPListen, gateway.TeamRPCListen, gateway.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("interaction gateway listen address is invalid")
 		}
 	}
-	for _, name := range []string{
+	names := []string{
 		gateway.PostgresTLSServerName, config.Mattermost.TLSServerName,
 		config.Object.TLSServerName, config.Control.TLSServerName, config.Bot.TLSServerName,
-		config.Credential.TLSServerName,
-	} {
+	}
+	if credentialSelection == credentialBackendVault {
+		names = append(names, config.Credential.TLSServerName)
+	}
+	for _, name := range names {
 		if name == "" || net.ParseIP(name) != nil {
 			return errors.New("interaction gateway TLS server name is invalid")
 		}
 	}
-	for _, path := range []string{
+	paths := []string{
 		gateway.TLSCertificateFile, gateway.TLSPrivateKeyFile, gateway.TLSClientCAFile,
 		gateway.SlashTokenFile, gateway.PostgresDSNFile, gateway.PostgresCAFile,
 		gateway.DeliveryKeyFile, gateway.EventPrivateJWKFile, gateway.CallbackKeyFile,
@@ -188,8 +204,11 @@ func (config Config) validate() error {
 		config.Control.ClientCertificateFile, config.Control.ClientPrivateKeyFile,
 		config.Control.ApplicationGrantFile, config.Bot.CAFile, config.Bot.ClientCertificateFile,
 		config.Bot.ClientPrivateKeyFile,
-		config.Credential.CAFile, config.Credential.TokenFile,
-	} {
+	}
+	if credentialSelection == credentialBackendVault {
+		paths = append(paths, config.Credential.CAFile, config.Credential.TokenFile)
+	}
+	for _, path := range paths {
 		if !filepath.IsAbs(path) {
 			return errors.New("interaction gateway runtime path is invalid")
 		}
@@ -197,11 +216,14 @@ func (config Config) validate() error {
 	if config.Object.SessionTokenFile != "" && !filepath.IsAbs(config.Object.SessionTokenFile) {
 		return errors.New("interaction gateway session token path is invalid")
 	}
-	for _, raw := range []string{
+	urls := []string{
 		gateway.ActionCallbackURL, gateway.DialogCallbackURL, gateway.ArtifactDownloadBaseURL,
 		config.Mattermost.SiteURL, config.Object.Endpoint, config.Bot.URL,
-		config.Credential.Address,
-	} {
+	}
+	if credentialSelection == credentialBackendVault {
+		urls = append(urls, config.Credential.Address)
+	}
+	for _, raw := range urls {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 			return errors.New("interaction gateway HTTPS URL is invalid")
@@ -238,13 +260,18 @@ func (config Config) validate() error {
 	if config.Bot.Timeout < time.Second || config.Bot.Timeout > time.Minute {
 		return errors.New("interaction gateway bot-service timeout is invalid")
 	}
-	if config.Credential.Timeout < time.Second || config.Credential.Timeout > 30*time.Second ||
+	if credentialSelection == credentialBackendVault && (config.Credential.Timeout < time.Second || config.Credential.Timeout > 30*time.Second ||
 		config.Credential.Mount == "" || strings.Contains(config.Credential.Mount, "/") ||
 		config.Credential.AuthMount == "" || strings.Contains(config.Credential.AuthMount, "/") ||
 		config.Credential.Role == "" || strings.ContainsAny(config.Credential.Role, " /\r\n\x00") ||
 		config.Credential.PathPrefix == "" || strings.HasPrefix(config.Credential.PathPrefix, "/") ||
-		strings.Contains(config.Credential.PathPrefix, "..") {
+		strings.Contains(config.Credential.PathPrefix, "..")) {
 		return errors.New("interaction gateway bot credential configuration is invalid")
+	}
+	if credentialSelection == credentialBackendDirect && (config.DirectCredential.ResourceName != "interaction-gateway-bot-credentials" ||
+		config.DirectCredential.DataKey != "state.json" || config.DirectCredential.Timeout < time.Second ||
+		config.DirectCredential.Timeout > 10*time.Second) {
+		return errors.New("interaction gateway direct bot credential registry is invalid")
 	}
 	return nil
 }

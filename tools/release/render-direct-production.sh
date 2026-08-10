@@ -24,9 +24,9 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 applications="$temporary_directory/applications.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" |
   yq eval-all '
-    select(.kind == "ConfigMap" or .kind == "Service" or .kind == "Deployment" or .kind == "StatefulSet") |
+    select(.kind == "ConfigMap" or .kind == "Service" or .kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") |
     .metadata.labels."mattercodex.dev/release-managed" = "true" |
-    with(select(.kind == "Deployment" or .kind == "StatefulSet");
+    with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
       .spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
       .spec.template.spec.automountServiceAccountToken = false
     )

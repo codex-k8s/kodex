@@ -13,7 +13,6 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
 	snapshotdelivery "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/snapshot"
@@ -37,6 +36,8 @@ type PublisherConfig struct {
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	PodUID                       string        `env:"POD_UID"`
+	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
+	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -77,6 +78,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/publisher/client-ca.pem",
 		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn",
 		PostgresTLSServerName:        "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		SecretBackend:                string(secretBackendVault),
 		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
 		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",
 		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem",
@@ -98,6 +100,20 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	}
 	if err := parseEnvironment(&config); err != nil {
 		return PublisherConfig{}, err
+	}
+	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+	if err != nil {
+		return PublisherConfig{}, err
+	}
+	if backend == secretBackendDirectProductionPrototype {
+		if err := validatePrototypeKubernetesBoundary(
+			config.KubernetesAPIAddress,
+			config.KubernetesAPITLSServerName,
+			config.KubernetesAPICAFile,
+			config.KubernetesAPITokenFile,
+		); err != nil {
+			return PublisherConfig{}, err
+		}
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return PublisherConfig{}, errors.New("publisher listen address is invalid")
@@ -197,13 +213,7 @@ func RunPublisher(
 		pool.Close()
 		return errors.New("parse authority manifest signer key")
 	}
-	vault, err := vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
-		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultAuthFile,
-		Timeout:                 5 * time.Second,
-	})
+	delivery, err := newPublisherSecretDelivery(config, targetRegistry)
 	if err != nil {
 		pool.Close()
 		return err
@@ -218,7 +228,7 @@ func RunPublisher(
 		Timeout:       5 * time.Second,
 	})
 	if err != nil {
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return err
 	}
@@ -238,18 +248,18 @@ func RunPublisher(
 			Generation:     config.ReadbackSignerGeneration,
 		},
 		store,
-		vault,
+		delivery,
 	)
 	if err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return err
 	}
 	graph, err := publisher.NewGraph(publisher.GraphConfig{
 		Registry:                   targetRegistry,
 		Store:                      store,
-		Vault:                      vault,
+		Vault:                      delivery,
 		Snapshot:                   snapshotDelivery,
 		ManifestSigner:             manifestSignerKey,
 		ManifestSignerGeneration:   config.ManifestSignerGeneration,
@@ -260,26 +270,26 @@ func RunPublisher(
 	})
 	if err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return err
 	}
 	if err := domainService.AttachAuthorityGraph(graph); err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return err
 	}
 	publisherApplication := application.NewPublisher(domainService)
 	if _, err := publisherApplication.PublishAuthorityGraph(startup); err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return errors.New("publish startup authority graph")
 	}
 	if _, err := publisherApplication.PublishReadbackMaterials(startup); err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return errors.New("publish startup readback materials")
 	}
@@ -290,7 +300,7 @@ func RunPublisher(
 	)
 	if err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return err
 	}
@@ -336,7 +346,7 @@ func RunPublisher(
 	grpcListener, err := net.Listen("tcp", config.Listen)
 	if err != nil {
 		snapshotDelivery.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return errors.New("listen on publisher endpoint")
 	}
@@ -344,7 +354,7 @@ func RunPublisher(
 	if err != nil {
 		snapshotDelivery.Close()
 		_ = grpcListener.Close()
-		vault.Close()
+		delivery.Close()
 		pool.Close()
 		return errors.New("listen on publisher technical endpoint")
 	}
@@ -421,9 +431,9 @@ func RunPublisher(
 			},
 		},
 		serviceruntime.ShutdownOperation{
-			Name: "vault-http", Timeout: config.ShutdownTimeout,
+			Name: "secret-delivery", Timeout: config.ShutdownTimeout,
 			Run: func(context.Context) error {
-				vault.Close()
+				delivery.Close()
 				return nil
 			},
 		},

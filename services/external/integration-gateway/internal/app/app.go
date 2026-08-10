@@ -19,7 +19,6 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/authorization/oidc"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/clients/controlplane"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/gateway"
 	managementservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/management"
@@ -32,7 +31,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/provider/codexappserver"
 	providerhttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/provider/http"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/schema"
-	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/secret"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/observability"
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/repository/postgres/gateway"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/security/effectreceipt"
@@ -64,6 +62,7 @@ type state struct {
 	control           *controlplaneclient.Client
 	managementControl *controlplaneclient.Client
 	authority         *authorityclient.LocalConnection
+	secretBoundaries  []managedSecretStore
 }
 
 func Run(lifecycle context.Context, shutdownBase context.Context, version string) (resultErr error) {
@@ -171,24 +170,11 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			return err
 		}
 	}
-	secretBoundary, err := secret.NewVault(secret.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName, CAFile: config.VaultCAFile,
-		Role: config.VaultRole, AuthMount: config.VaultAuthMount, KVMount: config.VaultKVMount,
-		PathPrefix: config.VaultCredentialPathPrefix, ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
-		Timeout: 5 * time.Second,
-	})
+	secretBoundary, gitSecretBoundary, err := newSecretStores(config, gitCatalog)
 	if err != nil {
 		return err
 	}
-	gitSecretBoundary, err := secret.NewVault(secret.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName, CAFile: config.VaultCAFile,
-		Role: config.VaultRole, AuthMount: config.VaultAuthMount, KVMount: config.VaultKVMount,
-		PathPrefix: config.VaultGitCredentialPathPrefix, ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
-		Timeout: 5 * time.Second, ReadOnly: true,
-	})
-	if err != nil {
-		return err
-	}
+	current.secretBoundaries = []managedSecretStore{secretBoundary, gitSecretBoundary}
 	authorizer, err := codexappserver.New(codexappserver.Config{
 		Executable: config.CodexExecutable, TemporaryRoot: config.CodexTemporaryRoot,
 		SSLCertificateFile: config.CodexCAFile, HTTPSProxy: config.ManagementEgressProxyURL, NoProxy: config.ManagementEgressNoProxy,
@@ -247,10 +233,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	oidcVerifier, err := oidc.New(lifecycle, oidc.Config{
-		Issuer: config.OIDCIssuer, Audience: config.OIDCAudience,
-		TLSServerName: config.OIDCTLSServerName, CAFile: config.OIDCCAFile, Timeout: 5 * time.Second,
-	})
+	oidcVerifier, err := newOIDCVerifier(lifecycle, config)
 	if err != nil {
 		return err
 	}
@@ -274,7 +257,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := provider.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
-	for _, dependency := range []checker{managementPostgresChecker{repository}, secretBoundary, gitSecretBoundary, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects} {
+	for _, dependency := range []checker{managementPostgresChecker{repository}, secretBoundary, gitSecretBoundary, oidcVerifier, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects} {
 		if err := dependency.Check(startup); err != nil {
 			return fmt.Errorf("startup barrier: %w", err)
 		}
@@ -346,7 +329,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		continuationWorker(service, current.business, current.logger, config.WorkerInterval),
 		lifecycleWorker(service, current.business, current.logger, config.WorkerInterval),
 		managementWorker(managementService, current.business, current.logger, config.WorkerInterval, shutdownBase),
-		readinessWorker([]checker{managementPostgresChecker{repository}, current.control, provider, cipher, authorityChecker, secretBoundary, gitSecretBoundary, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects}, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
+		readinessWorker([]checker{managementPostgresChecker{repository}, current.control, provider, cipher, authorityChecker, secretBoundary, gitSecretBoundary, oidcVerifier, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects}, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
 	)
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(shutdownBase) }()
@@ -665,6 +648,10 @@ func (current *state) shutdown(background context.Context) error {
 	}
 	if current.authority != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "authority verifier client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.authority.Close() }})
+	}
+	for _, boundary := range current.secretBoundaries {
+		boundary := boundary
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "credential boundary", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { boundary.Close(); return nil }})
 	}
 	if current.pool != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "PostgreSQL", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { current.pool.Close(); return nil }})

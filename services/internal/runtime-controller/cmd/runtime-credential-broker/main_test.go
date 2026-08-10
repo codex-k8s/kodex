@@ -46,6 +46,27 @@ func TestAuthorityReceiptRejectsCrossExecutionReplay(t *testing.T) {
 	}
 }
 
+func TestS3CredentialBackendRequiresExactProfile(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		profile, backend string
+		ok               bool
+	}{
+		{profile: "production", backend: "vault-aws", ok: true},
+		{profile: directProductionPrototypeProfile, backend: "internal-minio-service-account", ok: true},
+		{profile: directProductionPrototypeProfile, backend: "vault-aws"},
+		{profile: "production", backend: "internal-minio-service-account"},
+		{profile: directProductionPrototypeProfile, backend: "direct-production-s3-sts"},
+		{profile: directProductionPrototypeProfile, backend: "static"},
+	}
+	for _, test := range tests {
+		_, err := selectS3CredentialBackend(test.profile, test.backend)
+		if (err == nil) != test.ok {
+			t.Fatalf("selectS3CredentialBackend(%q, %q) error=%v, want ok=%v", test.profile, test.backend, err, test.ok)
+		}
+	}
+}
+
 func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
 	t.Setenv("RUNTIME_S3_REGION", "region")
@@ -84,6 +105,43 @@ func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 	}
 }
 
+func TestExactMinIOPolicyBindsRestoreKMSAndNativeReadback(t *testing.T) {
+	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
+	t.Setenv("RUNTIME_S3_REGION", "mattercodex-1")
+	t.Setenv("RUNTIME_S3_KMS_KEY_ARN", "arn:aws:kms:mattercodex-1:local:key/runtime")
+	t.Setenv("RUNTIME_S3_MINIO_KMS_KEY_ID", "runtime-key")
+	execution := entity.Execution{ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
+		SessionID: uuid.NewString(), RestoreSourceExecutionID: uuid.NewString()}
+	objectKey := strings.Join([]string{"runtime", execution.OrganizationID, execution.ProjectID,
+		execution.SessionID, execution.RestoreSourceExecutionID, "archive.tar.gz"}, "/")
+	execution.RestoreSourceArchiveReference = "s3://runtime-bucket/" + objectKey + "?versionId=exact-version"
+	execution.RestoreSourceArchiveObjectKey = objectKey
+	execution.RestoreSourceArchiveVersionID = "exact-version"
+	execution.RestoreSourceArchiveKMSKeyARN = "arn:aws:kms:mattercodex-1:local:key/runtime"
+	execution.RestoreSourceArchiveObjectLockMode = "COMPLIANCE"
+	execution.RestoreSourceArchiveRetainUntil = time.Now().UTC().Add(time.Hour)
+	execution.RestoreSourceProofReference = "proof://restore"
+	execution.RestoreSourceProofSHA256 = strings.Repeat("a", 64)
+	execution.RestoreSourceProvenanceSHA256 = strings.Repeat("b", 64)
+	policy, _, err := exactS3PolicyForBackend(execution, "restore", s3CredentialBackendInternalMinIO)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(policy)
+	text := string(raw)
+	for _, required := range []string{`"s3:GetBucketObjectLockConfiguration"`, `"s3:GetBucketEncryption"`,
+		`"s3:GetBucketPolicyStatus"`, `"s3:x-amz-server-side-encryption-aws-kms-key-id":"runtime-key"`, `"s3:VersionId":"exact-version"`} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("MinIO restore policy misses %s", required)
+		}
+	}
+	for _, forbidden := range []string{`"kms:Decrypt"`, `"s3:GetBucketPublicAccessBlock"`, `"s3:GetEncryptionConfiguration"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("MinIO restore policy contains unsupported action %s", forbidden)
+		}
+	}
+}
+
 func TestExactS3PolicyUsesCurrentArchiveForInitialRestoreProof(t *testing.T) {
 	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
 	t.Setenv("RUNTIME_S3_REGION", "region")
@@ -118,6 +176,7 @@ func TestS3CredentialProofRejectsAlreadyExistsTupleMismatch(t *testing.T) {
 			"runtime.mattercodex.dev/execution-id": execution.ID, "runtime.mattercodex.dev/organization-id": execution.OrganizationID,
 			"runtime.mattercodex.dev/project-id": execution.ProjectID, "runtime.mattercodex.dev/session-id": execution.SessionID,
 			"runtime.mattercodex.dev/source-execution-id": execution.ID, "runtime.mattercodex.dev/action": action,
+			"runtime.mattercodex.dev/credential-backend":     "vault-aws",
 			"runtime.mattercodex.dev/workload-ticket":        workloadTicket,
 			"runtime.mattercodex.dev/workload-ticket-sha256": hex.EncodeToString(workloadTicketDigest[:]),
 			"runtime.mattercodex.dev/inline-policy-sha256":   policySHA256,

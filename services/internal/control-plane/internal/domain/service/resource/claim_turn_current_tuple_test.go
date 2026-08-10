@@ -1415,6 +1415,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	service, err := New(repository, Config{
 		LeaseSigningKey:            []byte("0123456789abcdef0123456789abcdef"),
 		RuntimeAdmissionSigningKey: ed25519.NewKeyFromSeed([]byte("runtime-admission-signing-test!!")),
+		ArchiveRestoreEnabled:      true,
 		RuntimeArchiveSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key")),
 		RuntimeRestoreSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-restore-signing-test-key")),
 		TurnLeaseDuration:          time.Minute, MaximumScheduleClaims: 10,

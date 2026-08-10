@@ -6,12 +6,14 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/exactkubernetessecret v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
 	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/jsonschema-go v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -32,7 +34,6 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
@@ -89,5 +90,7 @@ replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
 replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+
+replace github.com/codex-k8s/matter-codex/libs/go/exactkubernetessecret => ../../../libs/go/exactkubernetessecret
 
 replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver

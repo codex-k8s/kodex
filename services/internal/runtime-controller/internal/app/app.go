@@ -97,8 +97,10 @@ func Run(
 		ControllerImage: config.ControllerImage, AuthorityImage: config.AuthorityImage,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository,
 		StorageClass:                config.StorageClass, PVCSize: config.PVCSize,
-		ReadClusterRole:  config.ReadClusterRole,
-		AdminClusterRole: config.AdminClusterRole, ArchiveServiceAccount: config.ArchiveServiceAccount,
+		ReadClusterRole:       config.ReadClusterRole,
+		AdminClusterRole:      config.AdminClusterRole,
+		ArchiveRestoreEnabled: config.ArchiveRestoreCapability == "enabled",
+		ArchiveServiceAccount: config.ArchiveServiceAccount,
 		RestoreServiceAccount: config.RestoreServiceAccount, CleanupServiceAccount: config.CleanupServiceAccount,
 		CredentialBrokerServiceAccount:   config.CredentialBrokerServiceAccount,
 		ProjectReadBrokerServiceAccount:  config.ProjectReadBrokerServiceAccount,
@@ -116,7 +118,7 @@ func Run(
 	}
 	service, err := runtimeservice.New(
 		state.controlPlane, cluster, businessMetrics, config.WarmTTL,
-		config.Watchdog,
+		config.Watchdog, config.ArchiveRestoreCapability == "enabled",
 	)
 	if err != nil {
 		return err

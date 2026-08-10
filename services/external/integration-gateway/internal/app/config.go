@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/hex"
 	"errors"
 	"net"
 	"path/filepath"
@@ -16,6 +17,9 @@ const (
 )
 
 type Config struct {
+	DeploymentProfile                 string        `env:"INTEGRATION_GATEWAY_DEPLOYMENT_PROFILE"`
+	SecretBackend                     string        `env:"INTEGRATION_GATEWAY_SECRET_BACKEND"`
+	OIDCVerifierBackend               string        `env:"INTEGRATION_GATEWAY_OIDC_VERIFIER_BACKEND"`
 	HTTPListen                        string        `env:"INTEGRATION_GATEWAY_HTTP_LISTEN"`
 	TechnicalListen                   string        `env:"INTEGRATION_GATEWAY_TECHNICAL_LISTEN"`
 	ResultRPCListen                   string        `env:"INTEGRATION_GATEWAY_RESULT_RPC_LISTEN"`
@@ -64,6 +68,9 @@ type Config struct {
 	VaultCredentialPathPrefix         string        `env:"INTEGRATION_GATEWAY_VAULT_CREDENTIAL_PATH_PREFIX"`
 	VaultGitCredentialPathPrefix      string        `env:"INTEGRATION_GATEWAY_VAULT_GIT_CREDENTIAL_PATH_PREFIX"`
 	VaultServiceAccountTokenFile      string        `env:"INTEGRATION_GATEWAY_VAULT_SERVICE_ACCOUNT_TOKEN_FILE"`
+	KubernetesProviderSecretName      string        `env:"INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_NAME"`
+	KubernetesProviderSecretDataKey   string        `env:"INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_DATA_KEY"`
+	GitCredentialAggregateFile        string        `env:"INTEGRATION_GATEWAY_GIT_CREDENTIAL_AGGREGATE_FILE"`
 	ProviderReceiptIssuer             string        `env:"INTEGRATION_GATEWAY_PROVIDER_RECEIPT_ISSUER"`
 	ProviderReceiptPrivateJWKFile     string        `env:"INTEGRATION_GATEWAY_PROVIDER_RECEIPT_PRIVATE_JWK_FILE"`
 	GitReceiptIssuer                  string        `env:"INTEGRATION_GATEWAY_GIT_RECEIPT_ISSUER"`
@@ -72,6 +79,9 @@ type Config struct {
 	OIDCAudience                      string        `env:"INTEGRATION_GATEWAY_OIDC_AUDIENCE"`
 	OIDCTLSServerName                 string        `env:"INTEGRATION_GATEWAY_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                        string        `env:"INTEGRATION_GATEWAY_OIDC_CA_FILE"`
+	OIDCProviderSnapshotFile          string        `env:"INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_FILE"`
+	OIDCProviderSnapshotSHA256        string        `env:"INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_SHA256"`
+	OIDCProviderSnapshotGeneration    uint64        `env:"INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_GENERATION"`
 	SessionTTL                        time.Duration `env:"INTEGRATION_GATEWAY_SESSION_TTL"`
 	InvocationTTL                     time.Duration `env:"INTEGRATION_GATEWAY_INVOCATION_TTL"`
 	RequestDeadline                   time.Duration `env:"INTEGRATION_GATEWAY_REQUEST_DEADLINE"`
@@ -93,6 +103,7 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
+		DeploymentProfile: "production", SecretBackend: string(secretBackendVault), OIDCVerifierBackend: string(oidcBackendNetwork),
 		HTTPListen: ":8443", TechnicalListen: ":9090", ResultRPCListen: ":9443",
 		TLSCertificateFile: "/var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.crt",
 		TLSPrivateKeyFile:  "/var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.key",
@@ -137,13 +148,17 @@ func loadConfig() (Config, error) {
 		VaultCredentialPathPrefix:         "mattercodex/integration-gateway/provider-credentials",
 		VaultGitCredentialPathPrefix:      "mattercodex/integration-gateway/git-credentials",
 		VaultServiceAccountTokenFile:      "/var/run/secrets/tokens/vault/token",
+		KubernetesProviderSecretName:      "integration-gateway-provider-credentials",
+		KubernetesProviderSecretDataKey:   "state.json",
+		GitCredentialAggregateFile:        "/var/run/secrets/mattercodex/integration-gateway/git-credentials/state.json",
 		ProviderReceiptIssuer:             "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/provider-readback",
 		ProviderReceiptPrivateJWKFile:     "/var/run/secrets/mattercodex/integration-gateway/provider-receipt/private.jwk",
 		GitReceiptIssuer:                  "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/git-reconciliation",
 		GitReceiptPrivateJWKFile:          "/var/run/secrets/mattercodex/integration-gateway/git-receipt/private.jwk",
 		OIDCIssuer:                        "https://sso.mattercodex.local", OIDCAudience: "mattercodex-integration-gateway",
 		OIDCTLSServerName: "sso.mattercodex.local", OIDCCAFile: "/var/run/config/mattercodex/integration-gateway/oidc/ca.pem",
-		SessionTTL: 30 * time.Minute, InvocationTTL: 7 * 24 * time.Hour, RequestDeadline: 30 * time.Second,
+		OIDCProviderSnapshotFile: "/var/run/config/mattercodex/integration-gateway/oidc/provider-snapshot.json",
+		SessionTTL:               30 * time.Minute, InvocationTTL: 7 * 24 * time.Hour, RequestDeadline: 30 * time.Second,
 		StartupTimeout: 15 * time.Second, ShutdownTimeout: 10 * time.Second, ReadinessInterval: 10 * time.Second,
 		WorkerInterval: 250 * time.Millisecond, MaximumBodyBytes: 512 << 10,
 		ManagementLeaseDuration: 20 * time.Second, AuthorizationTTL: 15 * time.Minute,
@@ -158,30 +173,52 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	secretSelection, oidcSelection, err := selectBackends(config.DeploymentProfile, config.SecretBackend, config.OIDCVerifierBackend)
+	if err != nil {
+		return err
+	}
 	for _, address := range []string{config.HTTPListen, config.TechnicalListen, config.ResultRPCListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("integration gateway listen address is invalid")
 		}
 	}
-	for _, name := range []string{
+	names := []string{
 		config.PostgresTLSServerName, config.ControlPlaneTLSServerName,
-		config.ProviderProxyTLSServerName, config.OIDCTLSServerName, config.VaultTLSServerName,
-	} {
+		config.ProviderProxyTLSServerName,
+	}
+	if oidcSelection == oidcBackendNetwork {
+		names = append(names, config.OIDCTLSServerName)
+	}
+	if secretSelection == secretBackendVault {
+		names = append(names, config.VaultTLSServerName)
+	}
+	for _, name := range names {
 		if name == "" || net.ParseIP(name) != nil {
 			return errors.New("integration gateway TLS server name is invalid")
 		}
 	}
-	for _, path := range []string{
+	paths := []string{
 		config.TLSCertificateFile, config.TLSPrivateKeyFile, config.TLSClientCAFile, config.PostgresDSNFile,
 		config.PostgresCAFile, config.PostgresContextKeyFile, config.DefinitionDirectory,
 		config.CredentialDirectory, config.PayloadKeysetFile, config.ControlPlaneCAFile,
 		config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile,
-		config.ControlPlaneApplicationGrantFile, config.ProviderProxyCAFile, config.OIDCCAFile,
+		config.ControlPlaneApplicationGrantFile, config.ProviderProxyCAFile,
 		config.ProviderCatalogFile, config.GitSourceCatalogFile, config.GitExecutable, config.GitTemporaryRoot,
 		config.GitCAFile, config.CodexExecutable, config.CodexTemporaryRoot, config.CodexCAFile,
-		config.VaultCAFile, config.VaultServiceAccountTokenFile, config.ProviderReceiptPrivateJWKFile,
+		config.ProviderReceiptPrivateJWKFile,
 		config.GitReceiptPrivateJWKFile,
-	} {
+	}
+	if secretSelection == secretBackendVault {
+		paths = append(paths, config.VaultCAFile, config.VaultServiceAccountTokenFile)
+	} else {
+		paths = append(paths, config.GitCredentialAggregateFile)
+	}
+	if oidcSelection == oidcBackendNetwork {
+		paths = append(paths, config.OIDCCAFile)
+	} else {
+		paths = append(paths, config.OIDCProviderSnapshotFile)
+	}
+	for _, path := range paths {
 		if !filepath.IsAbs(path) {
 			return errors.New("integration gateway runtime path is invalid")
 		}
@@ -198,12 +235,33 @@ func (config Config) validate() error {
 		config.MaximumGlobalConcurrency < 1 || config.MaximumGlobalConcurrency > 1024 {
 		return errors.New("integration gateway bounded configuration is invalid")
 	}
-	if config.ManagementEgressProxyURL != platformManagementEgressProxyURL || config.ManagementEgressNoProxy != managementEgressNoProxy || config.VaultAddress == "" || config.VaultRole == "" || config.VaultAuthMount == "" || config.VaultKVMount == "" || config.VaultCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == config.VaultCredentialPathPrefix ||
+	if config.ManagementEgressProxyURL != platformManagementEgressProxyURL || config.ManagementEgressNoProxy != managementEgressNoProxy || config.VaultCredentialPathPrefix != "mattercodex/integration-gateway/provider-credentials" || config.VaultGitCredentialPathPrefix != "mattercodex/integration-gateway/git-credentials" ||
 		config.ProviderReceiptIssuer == "" || config.GitReceiptIssuer == "" || config.ManagementLeaseDuration < 5*time.Second || config.ManagementLeaseDuration > time.Minute ||
 		config.AuthorizationTTL < time.Minute || config.AuthorizationTTL > 15*time.Minute || config.ProviderAuthorizationTimeout < time.Minute || config.ProviderAuthorizationTimeout > 20*time.Minute ||
 		config.ProviderAuthorizationPollInterval < 100*time.Millisecond || config.ProviderAuthorizationPollInterval > 5*time.Second || config.GitFetchTimeout < time.Second || config.GitFetchTimeout > time.Minute ||
 		config.EffectReceiptTTL < 30*time.Second || config.EffectReceiptTTL > 5*time.Minute {
 		return errors.New("integration management configuration is invalid")
 	}
+	if secretSelection == secretBackendVault && (config.VaultAddress == "" || config.VaultRole == "" || config.VaultAuthMount == "" || config.VaultKVMount == "") {
+		return errors.New("integration Vault configuration is invalid")
+	}
+	if secretSelection == secretBackendDirect && (config.KubernetesProviderSecretName != "integration-gateway-provider-credentials" ||
+		config.KubernetesProviderSecretDataKey != "state.json" ||
+		config.GitCredentialAggregateFile != "/var/run/secrets/mattercodex/integration-gateway/git-credentials/state.json") {
+		return errors.New("integration direct Secret registry is invalid")
+	}
+	if oidcSelection == oidcBackendDirectFile && (config.OIDCProviderSnapshotFile != "/var/run/config/mattercodex/integration-gateway/oidc/provider-snapshot.json" ||
+		!validSHA256(config.OIDCProviderSnapshotSHA256) || config.OIDCProviderSnapshotGeneration == 0 ||
+		config.OIDCIssuer != "https://sso.mattercodex.local" || config.OIDCAudience != "mattercodex-integration-gateway") {
+		return errors.New("integration direct OIDC registry is invalid")
+	}
 	return nil
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }

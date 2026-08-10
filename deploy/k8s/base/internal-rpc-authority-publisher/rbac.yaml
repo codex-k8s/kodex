@@ -8,13 +8,53 @@ rules:
     resources:
       - secrets
     resourceNames:
+      - internal-rpc-authority-automation-scheduler-issuer-delivery
+      - internal-rpc-authority-automation-scheduler-issuer-key
+      - internal-rpc-authority-automation-scheduler-manifest-trust
+      - internal-rpc-authority-automation-scheduler-proof-trust
+      - internal-rpc-authority-control-api-gateway-issuer-delivery
+      - internal-rpc-authority-control-api-gateway-issuer-key
+      - internal-rpc-authority-control-api-gateway-manifest-trust
+      - internal-rpc-authority-control-api-gateway-proof-trust
+      - internal-rpc-authority-control-plane-manifest-trust
+      - internal-rpc-authority-control-plane-resolver-delivery
+      - internal-rpc-authority-control-plane-resolver-key
+      - internal-rpc-authority-control-plane-resolver-trust
+      - internal-rpc-authority-control-plane-verifier-delivery
+      - internal-rpc-authority-image-admission-issuer-delivery
+      - internal-rpc-authority-image-admission-issuer-key
+      - internal-rpc-authority-image-admission-manifest-trust
+      - internal-rpc-authority-image-admission-proof-trust
+      - internal-rpc-authority-image-promotion-issuer-delivery
+      - internal-rpc-authority-image-promotion-issuer-key
+      - internal-rpc-authority-image-promotion-manifest-trust
+      - internal-rpc-authority-image-promotion-proof-trust
+      - internal-rpc-authority-integration-gateway-issuer-delivery
+      - internal-rpc-authority-integration-gateway-issuer-key
+      - internal-rpc-authority-integration-gateway-manifest-trust
+      - internal-rpc-authority-integration-gateway-proof-trust
+      - internal-rpc-authority-integration-gateway-verifier-delivery
+      - internal-rpc-authority-interaction-gateway-issuer-delivery
+      - internal-rpc-authority-interaction-gateway-issuer-key
+      - internal-rpc-authority-interaction-gateway-manifest-trust
+      - internal-rpc-authority-interaction-gateway-proof-trust
+      - internal-rpc-authority-interaction-gateway-verifier-delivery
+      - internal-rpc-authority-role-image-builder-issuer-delivery
+      - internal-rpc-authority-role-image-builder-issuer-key
+      - internal-rpc-authority-role-image-builder-manifest-trust
+      - internal-rpc-authority-role-image-builder-proof-trust
+      - internal-rpc-authority-runtime-controller-issuer-delivery
+      - internal-rpc-authority-runtime-controller-issuer-key
+      - internal-rpc-authority-runtime-controller-manifest-trust
+      - internal-rpc-authority-runtime-controller-proof-trust
+      - internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery
+      - internal-rpc-authority-runtime-s3-restore-exchanger-issuer-key
+      - internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust
+      - internal-rpc-authority-runtime-s3-restore-exchanger-proof-trust
       - internal-rpc-authority-snapshot
-      - internal-rpc-authority-readback-credential-trust
-      - internal-rpc-authority-restore-role-trust
     verbs:
       - get
       - update
-      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

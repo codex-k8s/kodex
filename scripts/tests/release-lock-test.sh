@@ -150,12 +150,30 @@ fi
 yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml" | jq -sc -e '
   (map(select(.kind == "Role" and .metadata.name == "mattercodex-production-deployer"))[0]) as $role |
   ([$role.rules[] | select(.resources | index("pods/log"))] | length) == 0 and
+  ([$role.rules[] | select(.resources == ["secrets"])] | length) == 1 and
+  ([$role.rules[] | select(.resources == ["secrets"])][0] |
+    .verbs == ["get"] and .resourceNames == ["internal-rpc-authority-snapshot"]) and
   ([$role.rules[] | select((.verbs | index("delete")) and (.resources == ["jobs"])) |
     .resourceNames] | add | sort) ==
   ["control-plane-migrate","integration-gateway-migrate","interaction-gateway-migrate",
-   "internal-rpc-authority-migrate","runtime-controller-migration"]
+   "internal-rpc-authority-migrate","mattercodex-postgresql-principal-bootstrap",
+   "runtime-controller-migration"]
 ' >/dev/null || {
   printf 'Routine production deployer RBAC is broader than the exact workload contract\n' >&2
+  exit 1
+}
+
+yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/rbac.yaml" |
+  jq -sc -e '
+    (map(select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher"))[0]) as $role |
+    ($role.rules | length) == 1 and
+    $role.rules[0].apiGroups == [""] and
+    $role.rules[0].resources == ["secrets"] and
+    $role.rules[0].verbs == ["get","update"] and
+    ($role.rules[0].resourceNames | length) > 0 and
+    ($role.rules[0].resourceNames | length) == ($role.rules[0].resourceNames | unique | length)
+  ' >/dev/null || {
+  printf 'Publisher RBAC is broader than exact Secret GET/PUT authority\n' >&2
   exit 1
 }
 

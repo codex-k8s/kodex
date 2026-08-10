@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
 	"github.com/google/uuid"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -93,6 +98,52 @@ func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
 }
 
 func testInt64Pointer(value int64) *int64 { return &value }
+
+func TestDisabledArchiveRestoreCapabilityRejectsDynamicResources(t *testing.T) {
+	handler := &admissionHandler{archiveRestoreEnabled: false}
+	for _, object := range []struct {
+		resource string
+		value    any
+	}{
+		{resource: "pods", value: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: admissionNamespace,
+			Labels:    map[string]string{"app.kubernetes.io/component": "runtime-s3-credential-readback"},
+		}}},
+		{resource: "secrets", value: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Namespace: admissionNamespace,
+			Labels:    map[string]string{"app.kubernetes.io/component": "runtime-s3-credential"},
+		}}},
+	} {
+		raw, err := json.Marshal(object.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		allowed, message := handler.admit(context.Background(), &admissionv1.AdmissionRequest{
+			UID: "disabled-capability", Operation: admissionv1.Create, Namespace: admissionNamespace,
+			Resource: metav1.GroupVersionResource{Version: "v1", Resource: object.resource},
+			Object:   runtimeRawExtension(raw),
+		})
+		if allowed || message != "runtime archive/restore capability is disabled" {
+			t.Fatalf("disabled %s resource was not rejected: allowed=%v message=%q", object.resource, allowed, message)
+		}
+	}
+}
+
+func TestArchiveRestoreCapabilityProfile(t *testing.T) {
+	t.Setenv("RUNTIME_ARCHIVE_RESTORE_CAPABILITY", "disabled")
+	enabled, err := archiveRestoreCapability()
+	if err != nil || enabled {
+		t.Fatal("disabled archive/restore capability was not selected")
+	}
+	t.Setenv("RUNTIME_ARCHIVE_RESTORE_CAPABILITY", "unexpected")
+	if _, err := archiveRestoreCapability(); err == nil {
+		t.Fatal("unknown archive/restore capability was accepted")
+	}
+}
+
+func runtimeRawExtension(raw []byte) runtime.RawExtension {
+	return runtime.RawExtension{Raw: raw}
+}
 
 func TestExactS3ReadbackPodAdmissionMatrix(t *testing.T) {
 	t.Setenv("RUNTIME_S3_READBACK_IMAGE", "registry.invalid/runtime-controller@sha256:"+strings.Repeat("a", 64))

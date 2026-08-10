@@ -26,7 +26,6 @@ import (
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
 	domainteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/team"
 	botclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/botservice"
-	credentialclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/credential"
 	mattermostclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/mattermost"
 	objectclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/objectstore"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/observability"
@@ -53,21 +52,22 @@ const (
 )
 
 type state struct {
-	config     Config
-	logger     *slog.Logger
-	telemetry  *sharedobservability.Runtime
-	metrics    *sharedobservability.Metrics
-	business   *internalobservability.Metrics
-	readiness  *serviceruntime.Readiness
-	workers    *serviceruntime.WorkerGroup
-	public     *http.Server
-	publicConn net.Listener
-	teamServer *stdgrpc.Server
-	teamConn   net.Listener
-	technical  *httpserver.Server
-	pool       *pgxpool.Pool
-	control    *controlplaneclient.Client
-	authority  *authorityclient.LocalConnection
+	config          Config
+	logger          *slog.Logger
+	telemetry       *sharedobservability.Runtime
+	metrics         *sharedobservability.Metrics
+	business        *internalobservability.Metrics
+	readiness       *serviceruntime.Readiness
+	workers         *serviceruntime.WorkerGroup
+	public          *http.Server
+	publicConn      net.Listener
+	teamServer      *stdgrpc.Server
+	teamConn        net.Listener
+	technical       *httpserver.Server
+	pool            *pgxpool.Pool
+	control         *controlplaneclient.Client
+	authority       *authorityclient.LocalConnection
+	credentialStore managedCredentialStore
 }
 
 func Run(lifecycle context.Context, shutdownBase context.Context, version string) (resultErr error) {
@@ -177,15 +177,11 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	credentialStore, err := credentialclient.New(credentialclient.Config{
-		Address: config.Credential.Address, TLSServerName: config.Credential.TLSServerName,
-		CAFile: config.Credential.CAFile, TokenFile: config.Credential.TokenFile,
-		AuthMount: config.Credential.AuthMount, Role: config.Credential.Role,
-		Mount: config.Credential.Mount, PathPrefix: config.Credential.PathPrefix, Timeout: config.Credential.Timeout,
-	})
+	credentialStore, err := newCredentialStore(config)
 	if err != nil {
 		return err
 	}
+	current.credentialStore = credentialStore
 	teamService, err := domainteam.New(teamRepository, mattermost, control, receiptSigner, current.business, domainteam.Config{
 		InstanceID: config.Gateway.InstanceID, Lease: config.Gateway.TeamOperationLease,
 		SelectorTTL: config.Gateway.TeamSelectorTTL, RecoveryInterval: config.Gateway.TeamRecoveryInterval,
@@ -670,6 +666,9 @@ func (current *state) shutdown(base context.Context) error {
 	}
 	if current.authority != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close authority verifier client", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { return current.authority.Close() }})
+	}
+	if current.credentialStore != nil {
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close bot credential boundary", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { current.credentialStore.Close(); return nil }})
 	}
 	if current.pool != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close PostgreSQL", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { current.pool.Close(); return nil }})
