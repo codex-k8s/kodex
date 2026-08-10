@@ -67,8 +67,9 @@ yq -e '
     .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "tools" and
     .emptyDir.sizeLimit == "256Mi")] | length) == 1 and
-  .template.spec.hostUsers == false and
+  (.template.spec.hostUsers == null) and
   ([.template.spec.containers[] | select(.name == "buildkitd" and
+    (.args | any_c(. == "--oci-worker-no-process-sandbox")) and
     .securityContext.runAsNonRoot == true and
     .securityContext.runAsUser == 1000 and
     .securityContext.allowPrivilegeEscalation == true and
