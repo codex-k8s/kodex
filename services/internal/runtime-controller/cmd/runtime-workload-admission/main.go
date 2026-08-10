@@ -405,6 +405,22 @@ func (handler *admissionHandler) admitS3CredentialSecret(
 	ticketDigest := sha256.Sum256([]byte(ticket))
 	expiresAt, expiryErr := time.Parse(time.RFC3339, secret.Annotations["runtime.mattercodex.dev/expires-at"])
 	expectedActor := "system:serviceaccount:mattercodex-system:runtime-s3-" + action + "-exchanger"
+	backend := secret.Annotations["runtime.mattercodex.dev/credential-backend"]
+	expectedBackend := "vault-aws"
+	if os.Getenv("RUNTIME_DEPLOYMENT_PROFILE") == "direct-production-single-node-prototype" {
+		expectedBackend = "internal-minio-service-account"
+	}
+	accessKey, accessKeyPresent := secret.Data["access-key-id"]
+	secretKey, secretKeyPresent := secret.Data["secret-access-key"]
+	sessionToken, sessionTokenPresent := secret.Data["session-token"]
+	credentialIdentityValid := backend == expectedBackend && backend == "vault-aws" &&
+		secret.Annotations["runtime.mattercodex.dev/sts-session-name"] == "mcx-"+strings.ReplaceAll(execution.ID, "-", "")[:20]+"-"+action &&
+		strings.HasPrefix(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"], "arn:") && len(sessionToken) > 0
+	if backend == expectedBackend && backend == "internal-minio-service-account" {
+		credentialIdentityValid = strings.HasPrefix(secret.Annotations["runtime.mattercodex.dev/sts-session-name"], "mcx-"+action+"-") &&
+			secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"] == "minio:service-account:"+string(accessKey) &&
+			len(sessionToken) == 0
+	}
 	if err != nil || expiryErr != nil || !expiresAt.After(handler.now().UTC().Add(time.Minute)) ||
 		expiresAt.After(handler.now().UTC().Add(16*time.Minute)) || request.UserInfo.Username != expectedActor ||
 		secret.Name != "runtime-s3-"+stableHash(execution.ID, 20)+"-"+action ||
@@ -421,11 +437,10 @@ func (handler *admissionHandler) admitS3CredentialSecret(
 		secret.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
 		secret.Annotations["runtime.mattercodex.dev/source-execution-id"] != sourceExecutionID ||
 		strings.TrimSpace(secret.Annotations["runtime.mattercodex.dev/bucket"]) == "" ||
-		secret.Annotations["runtime.mattercodex.dev/sts-session-name"] != "mcx-"+strings.ReplaceAll(execution.ID, "-", "")[:20]+"-"+action ||
-		!strings.HasPrefix(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"], "arn:") ||
+		!credentialIdentityValid ||
 		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/inline-policy-sha256"]) ||
 		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/readback-sha256"]) ||
-		len(secret.Data["access-key-id"]) == 0 || len(secret.Data["secret-access-key"]) == 0 || len(secret.Data["session-token"]) == 0 {
+		!accessKeyPresent || !secretKeyPresent || !sessionTokenPresent || len(accessKey) == 0 || len(secretKey) == 0 {
 		return false, "runtime S3 credential authority mismatch"
 	}
 	raw, err := json.Marshal(secret)

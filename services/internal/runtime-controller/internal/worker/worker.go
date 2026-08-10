@@ -308,6 +308,8 @@ func loadConfig(mode controlplane.Mode) (Config, error) {
 		},
 		Archive: archive.Config{Endpoint: os.Getenv("RUNTIME_S3_ENDPOINT"), Bucket: os.Getenv("RUNTIME_S3_BUCKET"),
 			Region: os.Getenv("RUNTIME_S3_REGION"), TLSServerName: os.Getenv("RUNTIME_S3_TLS_SERVER_NAME"),
+			DeploymentProfile: os.Getenv("RUNTIME_DEPLOYMENT_PROFILE"), Backend: os.Getenv("RUNTIME_S3_STORAGE_BACKEND"),
+			KMSKeyARN: os.Getenv("RUNTIME_S3_KMS_KEY_ARN"), KMSKeyID: os.Getenv("RUNTIME_S3_MINIO_KMS_KEY_ID"),
 			CAFile:              "/var/run/config/mattercodex/runtime-worker/s3/ca.pem",
 			AccessKeyIDFile:     "/var/run/secrets/mattercodex/runtime-worker/s3/access-key-id",
 			SecretAccessKeyFile: "/var/run/secrets/mattercodex/runtime-worker/s3/secret-access-key", RequestTimeout: 15 * time.Second,

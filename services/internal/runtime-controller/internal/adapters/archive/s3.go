@@ -41,17 +41,25 @@ const (
 	minimumArchiveRetention = 90 * 24 * time.Hour
 )
 
+const (
+	backendAWS   = "aws"
+	backendMinIO = "direct-production-minio"
+)
+
 type Config struct {
 	Endpoint, Bucket, Region, TLSServerName, CAFile string
 	AccessKeyIDFile, SecretAccessKeyFile            string
 	SessionTokenFile                                string
+	DeploymentProfile, Backend                      string
+	KMSKeyARN, KMSKeyID                             string
 	RequestTimeout                                  time.Duration
 }
 
 type Store struct {
-	client  *s3.Client
-	bucket  string
-	timeout time.Duration
+	client                   *s3.Client
+	bucket, backend          string
+	kmsKeyARN, kmsResponseID string
+	timeout                  time.Duration
 }
 
 type Result struct {
@@ -98,6 +106,10 @@ type rehydrateOwner struct {
 }
 
 func Open(ctx context.Context, config Config) (*Store, error) {
+	backend, err := selectBackend(config.DeploymentProfile, config.Backend)
+	if err != nil {
+		return nil, err
+	}
 	if config.Endpoint == "" || config.Bucket == "" || config.Region == "" ||
 		config.TLSServerName == "" || config.CAFile == "" ||
 		config.AccessKeyIDFile == "" || config.SecretAccessKeyFile == "" ||
@@ -117,9 +129,18 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	sessionToken, err := readCredential(config.SessionTokenFile)
-	if err != nil {
-		return nil, err
+	sessionToken := ""
+	if backend == backendAWS {
+		sessionToken, err = readCredential(config.SessionTokenFile)
+		if err != nil {
+			return nil, err
+		}
+	} else if raw, readErr := os.ReadFile(config.SessionTokenFile); readErr != nil || len(raw) != 0 {
+		return nil, errors.New("direct MinIO session token must be empty")
+	}
+	if backend == backendMinIO && (config.KMSKeyARN == "" || !strings.HasPrefix(config.KMSKeyARN, "arn:") ||
+		config.KMSKeyID == "" || strings.ContainsAny(config.KMSKeyID, "\x00\r\n/*?")) {
+		return nil, errors.New("direct MinIO KMS identity is invalid")
 	}
 	caRaw, err := os.ReadFile(config.CAFile)
 	if err != nil || len(caRaw) == 0 || len(caRaw) > 1<<20 {
@@ -144,7 +165,12 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 		options.BaseEndpoint = aws.String(config.Endpoint)
 		options.UsePathStyle = true
 	})
-	store := &Store{client: client, bucket: config.Bucket, timeout: config.RequestTimeout}
+	kmsResponseID := ""
+	if backend == backendMinIO {
+		kmsResponseID = config.KMSKeyID
+	}
+	store := &Store{client: client, bucket: config.Bucket, backend: backend,
+		kmsKeyARN: config.KMSKeyARN, kmsResponseID: kmsResponseID, timeout: config.RequestTimeout}
 	checkCtx, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancel()
 	versioning, err := store.client.GetBucketVersioning(checkCtx, &s3.GetBucketVersioningInput{Bucket: aws.String(config.Bucket)})
@@ -165,15 +191,20 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 		!kmsEncryptionConfigured(encryption.ServerSideEncryptionConfiguration.Rules) {
 		return nil, errors.New("s3 archive KMS encryption is not enabled")
 	}
-	publicAccess, err := store.client.GetPublicAccessBlock(
-		checkCtx, &s3.GetPublicAccessBlockInput{Bucket: aws.String(config.Bucket)},
-	)
-	if err != nil || publicAccess.PublicAccessBlockConfiguration == nil ||
-		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls) ||
-		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy) ||
-		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.IgnorePublicAcls) ||
-		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.RestrictPublicBuckets) {
-		return nil, errors.New("s3 archive public access block is not enforced")
+	if backend == backendMinIO {
+		policyStatus, statusErr := store.client.GetBucketPolicyStatus(checkCtx, &s3.GetBucketPolicyStatusInput{Bucket: aws.String(config.Bucket)})
+		if statusErr != nil || policyStatus.PolicyStatus == nil || aws.ToBool(policyStatus.PolicyStatus.IsPublic) {
+			return nil, errors.New("s3 archive bucket policy is public")
+		}
+	} else {
+		publicAccess, publicErr := store.client.GetPublicAccessBlock(checkCtx, &s3.GetPublicAccessBlockInput{Bucket: aws.String(config.Bucket)})
+		if publicErr != nil || publicAccess.PublicAccessBlockConfiguration == nil ||
+			!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls) ||
+			!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy) ||
+			!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.IgnorePublicAcls) ||
+			!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.RestrictPublicBuckets) {
+			return nil, errors.New("s3 archive public access block is not enforced")
+		}
 	}
 	if _, err := store.client.ListObjectsV2(checkCtx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(config.Bucket), MaxKeys: aws.Int32(1),
@@ -181,6 +212,22 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 		return nil, errors.New("s3 archive identity can list bucket")
 	}
 	return store, nil
+}
+
+func selectBackend(profile, backend string) (string, error) {
+	if profile == "" {
+		profile = "production"
+	}
+	if backend == "" {
+		backend = backendAWS
+	}
+	if profile == "direct-production-single-node-prototype" && backend == backendMinIO {
+		return backend, nil
+	}
+	if profile != "direct-production-single-node-prototype" && backend == backendAWS {
+		return backend, nil
+	}
+	return "", errors.New("s3 archive backend does not match deployment profile")
 }
 
 func accessDenied(err error) bool {
@@ -242,7 +289,8 @@ func (store *Store) Archive(
 		"source-pvc-uid":              provenance.SourcePVCUID,
 		"source-pvc-resource-version": provenance.SourcePVCResourceVersion,
 	}
-	result := Result{SHA256: shaHex, Size: size, Metadata: metadata, RetainUntil: execution.ArchiveRetainUntil}
+	result := Result{SHA256: shaHex, Size: size, Metadata: metadata, RetainUntil: execution.ArchiveRetainUntil,
+		KMSKeyARN: store.outputKMSKeyARN(execution.ArchiveKMSKeyARN)}
 	if existing, found, err := store.existingObject(ctx, key, result); err != nil {
 		return Result{}, err
 	} else if found {
@@ -254,6 +302,7 @@ func (store *Store) Archive(
 		ContentLength: aws.Int64(size), ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 		ChecksumSHA256: aws.String(checksum), ContentType: aws.String("application/gzip"),
 		Metadata: metadata, ServerSideEncryption: types.ServerSideEncryptionAwsKms,
+		SSEKMSKeyId:               store.putKMSKeyID(result.KMSKeyARN),
 		ObjectLockMode:            types.ObjectLockModeCompliance,
 		ObjectLockRetainUntilDate: aws.Time(execution.ArchiveRetainUntil),
 	})
@@ -315,7 +364,7 @@ func (store *Store) RestoreAndProve(
 		"runtime-revision-sha256": execution.RuntimeRevisionSHA256,
 	}
 	result := Result{SHA256: proofSHA256, Size: int64(len(proofRaw)), Metadata: proofMetadata,
-		RetainUntil: execution.ArchiveRetainUntil}
+		RetainUntil: execution.ArchiveRetainUntil, KMSKeyARN: store.outputKMSKeyARN(execution.ArchiveKMSKeyARN)}
 	if existing, found, err := store.existingObject(ctx, proofKey, result); err != nil {
 		return Result{}, err
 	} else if found {
@@ -329,6 +378,7 @@ func (store *Store) RestoreAndProve(
 		ChecksumSHA256:            aws.String(base64.StdEncoding.EncodeToString(proofDigest[:])),
 		Metadata:                  proofMetadata,
 		ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
+		SSEKMSKeyId:               store.putKMSKeyID(result.KMSKeyARN),
 		ObjectLockMode:            types.ObjectLockModeCompliance,
 		ObjectLockRetainUntilDate: aws.Time(execution.ArchiveRetainUntil),
 	})
@@ -628,7 +678,7 @@ func (store *Store) downloadExactArchive(
 		!validVersionID(*object.VersionId) || *object.VersionId != versionID ||
 		object.ChecksumSHA256 == nil || *object.ChecksumSHA256 != base64.StdEncoding.EncodeToString(digest.Sum(nil)) ||
 		object.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
-		object.SSEKMSKeyId == nil || *object.SSEKMSKeyId != execution.ArchiveKMSKeyARN ||
+		object.SSEKMSKeyId == nil || *object.SSEKMSKeyId != store.responseKMSKeyID(execution.ArchiveKMSKeyARN) ||
 		object.ObjectLockMode != types.ObjectLockModeCompliance || object.ObjectLockRetainUntilDate == nil ||
 		!object.ObjectLockRetainUntilDate.Equal(execution.ArchiveRetainUntil) ||
 		!metadataContains(object.Metadata, map[string]string{
@@ -639,7 +689,7 @@ func (store *Store) downloadExactArchive(
 	}
 	if archiveProvenanceSHA256(Result{
 		Reference: reference, SHA256: expectedSHA256, VersionID: versionID,
-		ObjectKey: key, KMSKeyARN: *object.SSEKMSKeyId, ObjectLockMode: "COMPLIANCE",
+		ObjectKey: key, KMSKeyARN: execution.ArchiveKMSKeyARN, ObjectLockMode: "COMPLIANCE",
 		RetainUntil: execution.ArchiveRetainUntil, Metadata: object.Metadata,
 	}) != execution.ArchiveProvenanceSHA256 {
 		return "", errs.ErrArchiveUnverified
@@ -672,7 +722,7 @@ func (store *Store) existingObject(
 		*head.ContentLength != expected.Size || head.ChecksumSHA256 == nil ||
 		*head.ChecksumSHA256 != base64Digest(expected.SHA256) ||
 		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
-		head.SSEKMSKeyId == nil || !strings.HasPrefix(*head.SSEKMSKeyId, "arn:") ||
+		head.SSEKMSKeyId == nil || !store.validKMSResponse(*head.SSEKMSKeyId, expected.KMSKeyARN) ||
 		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		head.ObjectLockRetainUntilDate == nil || !head.ObjectLockRetainUntilDate.Equal(expected.RetainUntil) ||
 		!metadataMatches(head.Metadata, expected.Metadata) {
@@ -680,7 +730,7 @@ func (store *Store) existingObject(
 	}
 	expected.VersionID = *head.VersionId
 	expected.ObjectKey = key
-	expected.KMSKeyARN = *head.SSEKMSKeyId
+	expected.KMSKeyARN = store.logicalKMSKeyARN(*head.SSEKMSKeyId)
 	expected.ObjectLockMode = "COMPLIANCE"
 	expected.Reference = buildReference(store.bucket, key, expected.VersionID)
 	expected.ProvenanceSHA256 = archiveProvenanceSHA256(expected)
@@ -707,17 +757,62 @@ func (store *Store) verifyHead(ctx context.Context, result *Result) error {
 		head.ContentLength == nil || *head.ContentLength != result.Size ||
 		head.ChecksumSHA256 == nil || *head.ChecksumSHA256 != base64Digest(result.SHA256) ||
 		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
-		head.SSEKMSKeyId == nil || !strings.HasPrefix(*head.SSEKMSKeyId, "arn:") ||
+		head.SSEKMSKeyId == nil || !store.validKMSResponse(*head.SSEKMSKeyId, result.KMSKeyARN) ||
 		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		head.ObjectLockRetainUntilDate == nil || !head.ObjectLockRetainUntilDate.Equal(result.RetainUntil) ||
 		!metadataMatches(head.Metadata, result.Metadata) {
 		return errs.ErrArchiveUnverified
 	}
 	result.ObjectKey = key
-	result.KMSKeyARN = *head.SSEKMSKeyId
+	result.KMSKeyARN = store.logicalKMSKeyARN(*head.SSEKMSKeyId)
 	result.ObjectLockMode = "COMPLIANCE"
 	result.ProvenanceSHA256 = archiveProvenanceSHA256(*result)
 	return store.verifyRetention(ctx, bucket, key, versionID, result.RetainUntil)
+}
+
+func (store *Store) writeKMSKeyID(logicalARN string) string {
+	if store.backend == backendMinIO {
+		if logicalARN != store.kmsKeyARN {
+			return ""
+		}
+		return store.kmsResponseID
+	}
+	return logicalARN
+}
+
+func (store *Store) putKMSKeyID(logicalARN string) *string {
+	if store.backend != backendMinIO {
+		return nil
+	}
+	return aws.String(store.writeKMSKeyID(logicalARN))
+}
+
+func (store *Store) outputKMSKeyARN(executionARN string) string {
+	if store.backend == backendMinIO {
+		if executionARN != "" && executionARN != store.kmsKeyARN {
+			return ""
+		}
+		return store.kmsKeyARN
+	}
+	return executionARN
+}
+
+func (store *Store) responseKMSKeyID(logicalARN string) string {
+	return store.writeKMSKeyID(logicalARN)
+}
+
+func (store *Store) validKMSResponse(responseID, logicalARN string) bool {
+	if store.backend == backendMinIO {
+		return responseID == store.responseKMSKeyID(logicalARN)
+	}
+	return strings.HasPrefix(responseID, "arn:")
+}
+
+func (store *Store) logicalKMSKeyARN(responseID string) string {
+	if store.backend == backendMinIO && responseID == store.kmsResponseID {
+		return store.kmsKeyARN
+	}
+	return responseID
 }
 
 func archiveProvenanceSHA256(result Result) string {

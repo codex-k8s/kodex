@@ -208,3 +208,23 @@ func TestPinnedRetentionUsesOwnerPinInsteadOfSlidingWindow(t *testing.T) {
 		t.Fatal("retention shorter than the owner-pinned policy was accepted")
 	}
 }
+
+func TestArchiveBackendRequiresExactDeploymentProfile(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		profile, backend string
+		ok               bool
+	}{
+		{profile: "production", backend: backendAWS, ok: true},
+		{profile: "direct-production-single-node-prototype", backend: backendMinIO, ok: true},
+		{profile: "direct-production-single-node-prototype", backend: backendAWS},
+		{profile: "production", backend: backendMinIO},
+		{profile: "direct-production-single-node-prototype", backend: "static"},
+	}
+	for _, test := range tests {
+		_, err := selectBackend(test.profile, test.backend)
+		if (err == nil) != test.ok {
+			t.Fatalf("selectBackend(%q, %q) error=%v, want ok=%v", test.profile, test.backend, err, test.ok)
+		}
+	}
+}

@@ -4,8 +4,8 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
-updated: 2026-08-04
+version: 1.7.0
+updated: 2026-08-10
 ---
 
 # Диагностика и восстановление runtime-controller
@@ -115,6 +115,42 @@ immutable one-time receipt. Vault action role выдаёт только bootstra
 получен по exact TLS S3/STS endpoint с `archive-role-arn` либо
 `restore-role-arn`; передавать inline policy/session tags в Vault generate
 endpoint запрещено, потому что этот endpoint их не принимает.
+
+В `direct-production-single-node-prototype` вместо Vault/STS должен быть ровно
+`internal-minio-service-account`. Для каждого action проверить только имена и
+metadata, без значений:
+
+- отдельный non-root MinIO parent user и management Secret archive/restore;
+- exact HTTPS admin endpoint/SNI/CA и KMS pair
+  `RUNTIME_S3_KMS_KEY_ARN`/`RUNTIME_S3_MINIO_KMS_KEY_ID`;
+- aggregate state Secret
+  `runtime-s3-<archive|restore>-minio-identity-records` с `state.json`, exact
+  annotations и RBAC только `get/update` на одно имя;
+- child expiration ровно 900 секунд, parent/action/input/policy digests и
+  монотонное generation в подписанном record;
+- `info-service-account` возвращает exact parent, `on`, expiration, name,
+  description и полный canonical policy; после revoke тот же `accessKey`
+  обязан вернуть `NotFound`.
+
+Readiness в direct profile не проверяет отсутствующий Vault. Она выполняет
+bounded deny-all `add/info/delete-service-account` probe на 60 секунд и
+подтверждает удаление. Не исправлять отказ выдачей root/static/shared
+credential, `admin:*`, ручным Secret, пропуском Info/Delete readback или
+сохранением child secret в aggregate state. Terminal execution без следующей
+attempt пока не имеет controller revoke command: до его реализации terminal
+credential считается внешним blocker и ждёт server expiration; вручную
+удалять record либо помечать cleanup успешным нельзя.
+
+Первый fix service-account policy bypass —
+[`RELEASE.2025-10-15T17-29-55Z`](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z) / commit
+`9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, но последующие official
+advisories требуют не ниже
+[`RELEASE.2026-04-14T21-32-45Z`](https://github.com/minio/minio/security/advisories/GHSA-xh8f-g2qw-gcm7).
+Public community
+repository не содержит этот tag/image и архивирован. Поэтому foundation нельзя
+обновлять до получения owner-provided supported MinIO/AIStor distribution и
+exact image digest. Сторонний digest, вымышленный community tag и прежний
+`RELEASE.2025-09-07T16-13-09Z` не использовать.
 
 До успешного `Secret Create` durable credential effect отсутствует: crash
 безопасно получает новый short-lived STS grant, который ещё не доступен

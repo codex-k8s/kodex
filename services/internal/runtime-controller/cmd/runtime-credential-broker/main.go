@@ -27,7 +27,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	sharedclient "github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
+	port "github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/repository/s3credential"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/security/s3policy"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/security/workloadticket"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -42,19 +44,22 @@ import (
 const runtimeConfigFile = "/var/run/config/mattercodex/runtime/runtime.json"
 
 const (
-	vaultTokenFile         = "/var/run/secrets/tokens/vault"
-	workloadTicketKeyFile  = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
-	brokerTLSCAFile        = "/var/run/config/mattercodex/runtime-credential-authority/ca.pem"
-	brokerTLSCertFile      = "/var/run/config/mattercodex/runtime-credential-authority/tls.crt"
-	brokerTLSKeyFile       = "/var/run/config/mattercodex/runtime-credential-authority/tls.key"
-	s3KMSKeyARNFile        = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
-	s3ArchiveRoleARNFile   = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
-	s3RestoreRoleARNFile   = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
-	maximumSTSTTL          = 15 * time.Minute
-	restoreEffectCAFile    = "/var/run/config/mattercodex/runtime-restore-effect/control-plane/ca.pem"
-	restoreEffectCertFile  = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.crt"
-	restoreEffectKeyFile   = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.key"
-	restoreEffectGrantFile = "/var/run/secrets/mattercodex/runtime-restore-effect/application-grant/application-grant.jws"
+	vaultTokenFile                 = "/var/run/secrets/tokens/vault"
+	workloadTicketKeyFile          = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
+	brokerTLSCAFile                = "/var/run/config/mattercodex/runtime-credential-authority/ca.pem"
+	brokerTLSCertFile              = "/var/run/config/mattercodex/runtime-credential-authority/tls.crt"
+	brokerTLSKeyFile               = "/var/run/config/mattercodex/runtime-credential-authority/tls.key"
+	s3KMSKeyARNFile                = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
+	s3ArchiveRoleARNFile           = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
+	s3RestoreRoleARNFile           = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
+	s3MinioManagementAccessKeyFile = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/minio-management-access-key-id"
+	s3MinioManagementSecretKeyFile = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/minio-management-secret-access-key"
+	s3MinioIdentitySigningKeyFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/minio-identity-signing-key"
+	maximumSTSTTL                  = 15 * time.Minute
+	restoreEffectCAFile            = "/var/run/config/mattercodex/runtime-restore-effect/control-plane/ca.pem"
+	restoreEffectCertFile          = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.crt"
+	restoreEffectKeyFile           = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.key"
+	restoreEffectGrantFile         = "/var/run/secrets/mattercodex/runtime-restore-effect/application-grant/application-grant.jws"
 )
 
 type runtimeSnapshot struct {
@@ -102,11 +107,11 @@ func run(ctx context.Context) error {
 		return runAuthority(ctx, strings.TrimPrefix(os.Args[1], "serve-"))
 	}
 	if strings.HasPrefix(os.Args[1], "check-") {
-		return checkAuthorityFiles(strings.TrimPrefix(os.Args[1], "check-"))
+		return checkAuthority(ctx, strings.TrimPrefix(os.Args[1], "check-"))
 	}
 	if strings.HasPrefix(os.Args[1], "ready-") {
 		mode := strings.TrimPrefix(os.Args[1], "ready-")
-		if err := checkAuthorityFiles(mode); err != nil {
+		if err := checkAuthority(ctx, mode); err != nil {
 			return err
 		}
 		if mode != "s3-restore" {
@@ -467,6 +472,9 @@ func runAuthority(ctx context.Context, mode string) error {
 	if err != nil {
 		return errors.New("create credential authority Kubernetes client")
 	}
+	if err := checkS3Provider(ctx, client, namespace, mode); err != nil {
+		return err
+	}
 	var restoreEffects *sharedclient.Client
 	if mode == "s3-restore" {
 		restoreEffects, err = dialRestoreEffectClient(ctx)
@@ -493,6 +501,10 @@ func runAuthority(ctx context.Context, mode string) error {
 		}
 		if _, probeErr := client.CoreV1().ConfigMaps(namespace).Get(probeCtx, "kube-root-ca.crt", metav1.GetOptions{}); probeErr != nil {
 			http.Error(writer, "credential authority dependency is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if providerErr := checkS3Provider(probeCtx, client, namespace, mode); providerErr != nil {
+			http.Error(writer, "credential authority provider is unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		if restoreEffects != nil {
@@ -538,15 +550,20 @@ func checkAuthorityFiles(mode string) error {
 		if err != nil {
 			return err
 		}
-		if backend == s3CredentialBackendDirectSTS {
-			return errors.New("direct-production S3 STS provider requires an external OIDC or identity-plugin binding")
-		}
-		paths = append(paths, vaultTokenFile, requiredEnv("RUNTIME_VAULT_CA_FILE"),
-			requiredEnv("RUNTIME_S3_CA_FILE"), s3KMSKeyARNFile)
-		if mode == "s3-archive" {
-			paths = append(paths, s3ArchiveRoleARNFile)
+		paths = append(paths, requiredEnv("RUNTIME_S3_CA_FILE"), s3KMSKeyARNFile)
+		if backend == s3CredentialBackendInternalMinIO {
+			if requiredEnv("RUNTIME_S3_MINIO_ADMIN_ENDPOINT") == "" || requiredEnv("RUNTIME_S3_MINIO_ADMIN_TLS_SERVER_NAME") == "" ||
+				requiredEnv("RUNTIME_S3_MINIO_PARENT_USER") == "" || requiredEnv("RUNTIME_S3_MINIO_KMS_KEY_ID") == "" {
+				return errors.New("runtime MinIO identity provider configuration is invalid")
+			}
+			paths = append(paths, s3MinioManagementAccessKeyFile, s3MinioManagementSecretKeyFile, s3MinioIdentitySigningKeyFile)
 		} else {
-			paths = append(paths, s3RestoreRoleARNFile)
+			paths = append(paths, vaultTokenFile, requiredEnv("RUNTIME_VAULT_CA_FILE"))
+			if mode == "s3-archive" {
+				paths = append(paths, s3ArchiveRoleARNFile)
+			} else {
+				paths = append(paths, s3RestoreRoleARNFile)
+			}
 		}
 	}
 	if mode == "s3-restore" {
@@ -573,6 +590,38 @@ func checkAuthorityFiles(mode string) error {
 		return errors.New("read runtime workload ticket verification material")
 	}
 	return nil
+}
+
+func checkAuthority(ctx context.Context, mode string) error {
+	if err := checkAuthorityFiles(mode); err != nil {
+		return err
+	}
+	if mode != "s3-archive" && mode != "s3-restore" {
+		return nil
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return errors.New("load credential authority Kubernetes configuration")
+	}
+	config.Timeout = 5 * time.Second
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return errors.New("create credential authority Kubernetes client")
+	}
+	return checkS3Provider(ctx, client, requiredEnv("RUNTIME_NAMESPACE"), mode)
+}
+
+func checkS3Provider(ctx context.Context, client kubernetes.Interface, namespace, mode string) error {
+	if mode != "s3-archive" && mode != "s3-restore" {
+		return nil
+	}
+	action := port.Action(strings.TrimPrefix(mode, "s3-"))
+	provider, err := newS3CredentialProvider(client, namespace, action)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+	return provider.Ready(ctx, action)
 }
 
 func exactMTLSServerConfig(caFile, certificateFile, privateKeyFile string) (*tls.Config, error) {
@@ -1100,8 +1149,12 @@ func materializeS3Credential(
 	if action != "archive" && action != "restore" {
 		return nil, errors.New("runtime S3 credential action is invalid")
 	}
+	backend, err := configuredS3CredentialBackend()
+	if err != nil {
+		return nil, err
+	}
 	secrets := client.CoreV1().Secrets(namespace)
-	policy, sourceExecutionID, err := exactS3Policy(execution, action)
+	policy, sourceExecutionID, err := exactS3PolicyForBackend(execution, action, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -1111,20 +1164,33 @@ func materializeS3Credential(
 	}
 	policyDigest := sha256.Sum256(policyRaw)
 	policySHA256 := hex.EncodeToString(policyDigest[:])
-	provider, err := newS3CredentialProvider()
+	provider, err := newS3CredentialProvider(client, namespace, port.Action(action))
 	if err != nil {
 		return nil, err
 	}
 	defer provider.Close()
-	if err = provider.Check(ctx, action); err != nil {
+	if err = provider.Ready(ctx, port.Action(action)); err != nil {
 		return nil, err
 	}
-	issued, err := provider.Issue(ctx, s3CredentialRequest{
-		Execution: execution, Action: action, SourceExecutionID: sourceExecutionID, PolicyRaw: policyRaw,
-	})
+	providerRequest := port.Request{
+		Execution: execution, Action: port.Action(action), SourceExecutionID: sourceExecutionID, PolicyRaw: policyRaw,
+	}
+	issued, err := provider.Issue(ctx, providerRequest)
 	if err != nil {
 		return nil, err
 	}
+	if err = provider.Check(ctx, providerRequest); err != nil {
+		return nil, err
+	}
+	materialized := false
+	defer func() {
+		if materialized {
+			return
+		}
+		revokeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = provider.Revoke(revokeCtx, providerRequest, issued)
+	}()
 	accessKeyID, secretAccessKey, sessionToken, expiresAt := issued.AccessKeyID, issued.SecretAccessKey, issued.SessionToken, issued.ExpiresAt
 	sessionName := issued.SessionName
 	readbackRaw, err := json.Marshal(struct {
@@ -1162,6 +1228,7 @@ func materializeS3Credential(
 			"runtime.mattercodex.dev/sts-session-name":       sessionName,
 			"runtime.mattercodex.dev/assumed-role-arn":       issued.AssumedRoleARN,
 			"runtime.mattercodex.dev/inline-policy-sha256":   policySHA256,
+			"runtime.mattercodex.dev/credential-backend":     string(backend),
 			"runtime.mattercodex.dev/readback-sha256":        hex.EncodeToString(readbackDigest[:]),
 			"runtime.mattercodex.dev/expires-at":             expiresAt.Format(time.RFC3339),
 		},
@@ -1183,14 +1250,18 @@ func materializeS3Credential(
 	// успешного ответа. В этом случае только scoped readback отличает persisted
 	// exact Secret от настоящего запрета или mismatch.
 	if apierrors.IsAlreadyExists(err) || apierrors.IsForbidden(err) {
-		return materializeS3CredentialReadback(
+		proof, readbackErr := materializeS3CredentialReadback(
 			ctx, client, namespace, snapshot, action, sourceExecutionID, policySHA256,
 		)
+		materialized = readbackErr == nil
+		return proof, readbackErr
 	}
 	if err != nil || !credentialSnapshotSecretMatches(created, destination) || secretDataSHA256(created.Data) != secretDataSHA256(destination.Data) {
 		return nil, errors.New("materialize immutable runtime S3 credential snapshot")
 	}
-	return s3CredentialProof(execution, action, sourceExecutionID, policySHA256, actionTicket, created)
+	proof, proofErr := s3CredentialProof(execution, action, sourceExecutionID, policySHA256, actionTicket, created)
+	materialized = proofErr == nil
+	return proof, proofErr
 }
 
 func s3CredentialProof(
@@ -1198,8 +1269,9 @@ func s3CredentialProof(
 	action, sourceExecutionID, policySHA256, workloadTicket string,
 	created *corev1.Secret,
 ) (map[string]string, error) {
+	backend, backendErr := configuredS3CredentialBackend()
 	workloadTicketDigest := sha256.Sum256([]byte(workloadTicket))
-	if created == nil || created.UID == "" || created.ResourceVersion == "" ||
+	if backendErr != nil || created == nil || created.UID == "" || created.ResourceVersion == "" ||
 		created.Immutable == nil || !*created.Immutable || created.Type != corev1.SecretTypeOpaque ||
 		created.Name != s3CredentialSecretName(execution.ID, action) ||
 		created.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
@@ -1208,6 +1280,7 @@ func s3CredentialProof(
 		created.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
 		created.Annotations["runtime.mattercodex.dev/source-execution-id"] != sourceExecutionID ||
 		created.Annotations["runtime.mattercodex.dev/action"] != action ||
+		created.Annotations["runtime.mattercodex.dev/credential-backend"] != string(backend) ||
 		created.Annotations["runtime.mattercodex.dev/workload-ticket"] != workloadTicket ||
 		created.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] != hex.EncodeToString(workloadTicketDigest[:]) ||
 		created.Annotations["runtime.mattercodex.dev/inline-policy-sha256"] != policySHA256 ||
@@ -1434,86 +1507,31 @@ func materializeS3CredentialReadback(
 }
 
 func exactS3Policy(execution entity.Execution, action string) (map[string]any, string, error) {
-	bucket, kmsKeyARN := requiredEnv("RUNTIME_S3_BUCKET"), requiredEnvOrFile("RUNTIME_S3_KMS_KEY_ARN", s3KMSKeyARNFile)
-	region := requiredEnv("RUNTIME_S3_REGION")
-	if bucket == "" || region == "" || kmsKeyARN == "" || !strings.HasPrefix(kmsKeyARN, "arn:") {
-		return nil, "", errors.New("runtime S3 policy configuration is invalid")
+	backend, err := configuredS3CredentialBackend()
+	if err != nil {
+		return nil, "", err
 	}
-	sourceExecutionID := execution.ID
-	archiveObject := strings.Join([]string{"runtime", execution.OrganizationID, execution.ProjectID, execution.SessionID, execution.ID, "archive.tar.gz"}, "/")
-	archiveARN := "arn:aws:s3:::" + bucket + "/" + archiveObject
-	writeARN := archiveARN
-	statements := []any{
-		map[string]any{"Effect": "Allow", "Action": []string{"s3:GetBucketVersioning", "s3:GetObjectLockConfiguration", "s3:GetEncryptionConfiguration", "s3:GetBucketPublicAccessBlock"}, "Resource": "arn:aws:s3:::" + bucket},
-	}
-	if action == "restore" {
-		var archiveReference string
-		sourceExecutionID, archiveReference = restoreArchiveSource(execution)
-		if sourceExecutionID == "" || archiveReference == "" {
-			return nil, "", errors.New("runtime restore source is invalid")
-		}
-		archiveObject = strings.Join([]string{"runtime", execution.OrganizationID, execution.ProjectID, execution.SessionID, sourceExecutionID, "archive.tar.gz"}, "/")
-		proofObject := strings.Join([]string{"runtime-restore-proof", execution.OrganizationID, execution.ProjectID, execution.SessionID, sourceExecutionID, "restore-proof.json"}, "/")
-		archiveARN, writeARN = "arn:aws:s3:::"+bucket+"/"+archiveObject, "arn:aws:s3:::"+bucket+"/"+proofObject
-		versionID := exactVersionID(archiveReference)
-		parsedReference, parseErr := url.Parse(archiveReference)
-		if parseErr != nil || versionID == "" {
-			return nil, "", errors.New("runtime restore archive version is invalid")
-		}
-		if execution.RestoreSourceExecutionID != "" &&
-			(parsedReference.Scheme != "s3" || parsedReference.Host != bucket ||
-				strings.TrimPrefix(parsedReference.Path, "/") != archiveObject ||
-				execution.RestoreSourceArchiveObjectKey != archiveObject ||
-				execution.RestoreSourceArchiveVersionID != versionID ||
-				execution.RestoreSourceArchiveKMSKeyARN != kmsKeyARN ||
-				execution.RestoreSourceArchiveObjectLockMode != "COMPLIANCE" ||
-				!execution.RestoreSourceArchiveRetainUntil.After(time.Now().UTC()) ||
-				execution.RestoreSourceProofReference == "" ||
-				!validSHA256(execution.RestoreSourceProofSHA256) ||
-				!validSHA256(execution.RestoreSourceProvenanceSHA256)) {
-			return nil, "", errors.New("runtime restore archive authority is invalid")
-		}
-		statements = append(statements,
-			map[string]any{"Effect": "Allow", "Action": []string{"s3:GetObjectVersion", "s3:GetObjectRetention"}, "Resource": archiveARN,
-				"Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "true"}, "StringEquals": map[string]string{"s3:VersionId": versionID}}},
-			map[string]any{"Effect": "Allow", "Action": []string{"s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectRetention"}, "Resource": writeARN,
-				"Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "true"}}},
-		)
-	} else if action == "archive" {
-		statements = append(statements, map[string]any{"Effect": "Allow", "Action": []string{"s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectRetention"}, "Resource": archiveARN,
-			"Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "true"}}})
-	} else {
-		return nil, "", errors.New("runtime S3 credential action is invalid")
-	}
-	statements = append(statements,
-		map[string]any{"Effect": "Allow", "Action": []string{"s3:PutObject", "s3:PutObjectRetention"}, "Resource": writeARN,
-			"Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "true"}, "StringEquals": map[string]string{"s3:x-amz-server-side-encryption": "aws:kms", "s3:object-lock-mode": "COMPLIANCE"}}},
-		map[string]any{"Effect": "Allow", "Action": []string{"kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"}, "Resource": kmsKeyARN,
-			"Condition": map[string]any{"StringEquals": map[string]any{
-				"kms:ViaService":                   "s3." + region + ".amazonaws.com",
-				"kms:EncryptionContext:aws:s3:arn": []string{archiveARN, writeARN},
-			}}},
-		map[string]any{"Effect": "Deny", "Action": []string{"s3:PutObject", "s3:PutObjectRetention"}, "Resource": writeARN,
-			"Condition": map[string]any{"NumericLessThan": map[string]string{"s3:object-lock-remaining-retention-days": "90"}}},
-		map[string]any{"Effect": "Deny", "Action": []string{"s3:ListBucket", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:BypassGovernanceRetention"}, "Resource": []string{"arn:aws:s3:::" + bucket, "arn:aws:s3:::" + bucket + "/*"}},
-		map[string]any{"Effect": "Deny", "Action": "s3:*", "Resource": []string{"arn:aws:s3:::" + bucket, "arn:aws:s3:::" + bucket + "/*"}, "Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "false"}}},
-	)
-	return map[string]any{"Version": "2012-10-17", "Statement": statements}, sourceExecutionID, nil
+	return exactS3PolicyForBackend(execution, action, backend)
 }
 
-func restoreArchiveSource(execution entity.Execution) (string, string) {
-	if execution.RestoreSourceExecutionID != "" || execution.RestoreSourceArchiveReference != "" {
-		return execution.RestoreSourceExecutionID, execution.RestoreSourceArchiveReference
+func exactS3PolicyForBackend(execution entity.Execution, action string, backend s3CredentialBackend) (map[string]any, string, error) {
+	dialect := s3policy.DialectAWS
+	if backend == s3CredentialBackendInternalMinIO {
+		dialect = s3policy.DialectMinIO
 	}
-	return execution.ID, execution.ArchiveReference
-}
-
-func exactVersionID(reference string) string {
-	parsed, err := url.Parse(reference)
-	if err != nil || parsed.Scheme != "s3" || parsed.Query().Get("versionId") == "" || len(parsed.Query()) != 1 {
-		return ""
+	result, err := s3policy.Build(execution, port.Action(action), s3policy.Config{
+		Bucket: requiredEnv("RUNTIME_S3_BUCKET"), Region: requiredEnv("RUNTIME_S3_REGION"),
+		KMSKeyARN: requiredEnvOrFile("RUNTIME_S3_KMS_KEY_ARN", s3KMSKeyARNFile),
+		KMSKeyID:  requiredEnv("RUNTIME_S3_MINIO_KMS_KEY_ID"),
+	}, dialect, time.Now())
+	if err != nil {
+		return nil, "", err
 	}
-	return parsed.Query().Get("versionId")
+	var policy map[string]any
+	if json.Unmarshal(result.Raw, &policy) != nil {
+		return nil, "", errors.New("decode exact runtime S3 policy")
+	}
+	return policy, result.SourceExecutionID, nil
 }
 
 func newS3STSClient(action, accessKey, secretKey, sessionToken string) (*sts.Client, string, error) {

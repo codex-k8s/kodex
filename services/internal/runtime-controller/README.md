@@ -4,8 +4,8 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 2.2.0
-updated: 2026-08-07
+version: 2.3.0
+updated: 2026-08-10
 ---
 
 # Runtime controller
@@ -166,6 +166,87 @@ transport; startup проверяет versioning, Object Lock, KMS, public-acces
 Archive и restore используют независимые Ed25519 issuer/audience/public trust,
 ServiceAccount, Vault bootstrap role/config и разрешённый target role ARN;
 bootstrap identity одной операции не может assume role другой.
+
+### Direct-production MinIO identity provider
+
+Только deployment profile `direct-production-single-node-prototype` принимает
+backend `internal-minio-service-account`; остальные профили принимают только
+`vault-aws`. Старое имя `direct-production-s3-sts`, `static`, пустой direct
+backend и несовпадающие profile/backend закрыто отклоняются. Worker в этом же
+профиле принимает только `RUNTIME_S3_STORAGE_BACKEND=direct-production-minio`;
+обычный профиль сохраняет `aws` и обязательный STS session token.
+
+Archive и restore exchanger используют разные owner-generated MinIO
+management identities. Они передаются только файлами
+`minio-management-access-key-id` и
+`minio-management-secret-access-key`; это не root и не workload credential.
+`RUNTIME_S3_MINIO_PARENT_USER` обязан быть ровно
+`runtime-s3-archive-management` либо `runtime-s3-restore-management` для
+соответствующего action и закрепляет ожидаемого parent, а
+`RUNTIME_S3_MINIO_ADMIN_ENDPOINT`,
+`RUNTIME_S3_MINIO_ADMIN_TLS_SERVER_NAME` и `RUNTIME_S3_CA_FILE` задают один
+HTTPS/TLS 1.3 endpoint с exact SNI/CA. Management policy содержит только
+`admin:CreateServiceAccount`, `admin:ListServiceAccounts` и
+`admin:RemoveServiceAccount` для собственного parent; `admin:*`, управление
+чужим `TargetUser`, users/groups/policies/config и root credential запрещены.
+Adapter намеренно вызывает только:
+
+- `PUT /minio/admin/v3/add-service-account` без `targetUser`;
+- `GET /minio/admin/v3/info-service-account?accessKey=<exact-child>`;
+- `DELETE /minio/admin/v3/delete-service-account?accessKey=<exact-child>`.
+
+Для каждого exact `execution_id/attempt/action` HMAC из owner-generated файла
+`minio-identity-signing-key` детерминированно выводит отдельную пару child
+access/secret и подписывает durable record; значения в record, metadata,
+ошибки и логи не попадают. Expiration всегда задаётся сервером как 900 секунд.
+Caller policy JSON не является authority: adapter повторно строит canonical
+policy из verified `Execution` и сверяет bytes/digest. Archive и restore имеют
+разные parent profile; policy разрешает только exact bucket и object key,
+restore — exact `VersionId`, а запись — только с `aws:kms`, exact
+`s3:x-amz-server-side-encryption-aws-kms-key-id` и `COMPLIANCE`. List, delete,
+bypass и insecure transport запрещены; MinIO policy не получает `kms:*`.
+
+Durable state хранится только в заранее созданных mutable aggregate Secret
+`runtime-s3-archive-minio-identity-records` и
+`runtime-s3-restore-minio-identity-records`, ключ `state.json`, annotations
+`runtime.mattercodex.dev/state-kind=minio-service-account-records` и
+`runtime.mattercodex.dev/action=<archive|restore>`. Exchanger нужны только
+`get/update` с `resourceNames` своего Secret; create/list/watch и доступ ко
+второму action запрещены. CAS использует `resourceVersion`, record связывает
+execution/workload/attempt/action/source, input и policy digests, grant/version/
+fence, parent, child ID, generation, issued/expires/status и HMAC signature.
+Restart повторно получает тот же child только после полного MinIO readback;
+unknown, expiry, parent/policy/metadata/generation mismatch и rollback закрыты.
+Retry сначала удаляет прежний child и подтверждает `NotFound`; `Revoke`
+успешен только после того же readback. Отдельный terminal без новой attempt
+пока не имеет controller→exchanger revoke command и поэтому остаётся явным
+integration blocker, а не скрытым успешным cleanup.
+
+Direct worker получает пустой `session-token`,
+`RUNTIME_S3_KMS_KEY_ARN` как доменный proof identifier и отдельный exact
+`RUNTIME_S3_MINIO_KMS_KEY_ID` как фактический MinIO/KMS header. Readiness
+проверяет `GetBucketVersioning`, `GetBucketObjectLockConfiguration`,
+`GetBucketEncryption`, `GetBucketPolicyStatus` (bucket не public) и запрет
+`ListObjectsV2`. Provider readiness создаёт deny-all probe на 60 секунд,
+выполняет add/info/delete и подтверждает `NotFound`; workload credential при
+этом не сохраняется.
+
+[`RELEASE.2025-10-15T17-29-55Z`](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z), commit
+`9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, является первой версией с
+исправлением
+[CVE-2025-62506/GHSA-jjjj-jwhf-8rgr](https://github.com/minio/minio/security/advisories/GHSA-jjjj-jwhf-8rgr),
+но на текущую дату уже не
+является допустимым production pin: последующие official advisories требуют
+как минимум
+[`RELEASE.2026-04-14T21-32-45Z`](https://github.com/minio/minio/security/advisories/GHSA-xh8f-g2qw-gcm7).
+Последняя community release
+осталась на 2025-10-15, community repository архивирован, а требуемый 2026 tag
+и официальный public image/digest отсутствуют. Поэтому SRE не может безопасно
+заменить foundation image из публичного community source. До появления
+owner-provided supported MinIO/AIStor distribution entitlement и exact image
+digest foundation update блокирован. Сторонний image/digest, самостоятельная
+подмена несуществующего tag и уязвимый `RELEASE.2025-09-07T16-13-09Z`
+запрещены.
 
 PVC cleanup не использует journal `LastTransition` и не имеет собственного
 TTL. Authoritative owner transaction pin-ит `ResourceRetentionPolicy` id,
