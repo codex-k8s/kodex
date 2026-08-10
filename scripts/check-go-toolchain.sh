@@ -1123,7 +1123,7 @@ require_final_runtime_stage_contract \
   "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   'USER 10001:10001' \
   'ENTRYPOINT ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"]' \
-  "73f018092a8a7547127d39856d502d2616622429ec261a26ff37ea92a23cb5b0"
+  "036bfe540b81bbf219060073727887030db521e69ede9c9482176462aa33c262"
 require_final_runtime_stage_contract \
   deploy/images/agent-runner/Dockerfile \
   "FROM node:24-alpine" \

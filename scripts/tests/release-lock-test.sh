@@ -73,6 +73,22 @@ while IFS=$'\t' read -r component dockerfile; do
 done < <(jq -r '.images[] | [.component,.dockerfile] | @tsv' \
   "$repository_root/tools/release/images.json")
 
+for debian_runtime in \
+  services/external/integration-gateway/Dockerfile \
+  services/jobs/agent-runner/Dockerfile; do
+  grep -Fq "sed -i 's#^URIs: http://deb.debian.org/#URIs: https://deb.debian.org/#'" \
+    "$repository_root/$debian_runtime" || {
+      printf 'Dockerfile %s does not upgrade Debian package sources to TLS\n' \
+        "$debian_runtime" >&2
+      exit 1
+    }
+  grep -Fq "if grep -Eq '^URIs: http://'" "$repository_root/$debian_runtime" || {
+    printf 'Dockerfile %s permits plaintext Debian package fallback\n' \
+      "$debian_runtime" >&2
+    exit 1
+  }
+done
+
 if yq eval-all -e 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
   "$temporary_directory/direct-production.yaml" >/dev/null 2>&1; then
   printf 'Deferred hardened supply-chain workload leaked into dark render\n' >&2

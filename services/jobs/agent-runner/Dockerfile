@@ -89,6 +89,11 @@ ENV PATH=/opt/mattercodex/bootstrap-go/bin:/usr/local/bin:/usr/local/sbin:/usr/s
 COPY --from=0 /usr/local/go/ /opt/mattercodex/bootstrap-go/
 
 RUN set -eu; \
+	test -f /etc/apt/sources.list.d/debian.sources; \
+	sed -i 's#^URIs: http://deb.debian.org/#URIs: https://deb.debian.org/#' /etc/apt/sources.list.d/debian.sources; \
+	grep -Fqx 'URIs: https://deb.debian.org/debian' /etc/apt/sources.list.d/debian.sources; \
+	grep -Fqx 'URIs: https://deb.debian.org/debian-security' /etc/apt/sources.list.d/debian.sources; \
+	if grep -Eq '^URIs: http://' /etc/apt/sources.list.d/debian.sources; then exit 1; elif [ "$?" -gt 1 ]; then exit 1; fi; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		bash \
