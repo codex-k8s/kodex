@@ -236,6 +236,13 @@ yq -e '
   exit 1
 }
 yq -e '
+  .jobs.build.steps[-1].uses ==
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+' "$repository_root/.github/workflows/build-release.yml" >/dev/null || {
+  printf 'Build workflow lost the proxy-safe pinned artifact uploader\n' >&2
+  exit 1
+}
+yq -e '
   .jobs.deploy."runs-on" == "mattercodex-deploy" and
   .jobs.deploy.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
   (.jobs.deploy.steps[2].run | contains("verify-github-owner-gate.sh")) and

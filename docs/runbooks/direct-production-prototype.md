@@ -153,6 +153,9 @@ Certificates, отсутствие пустых Secret data и пишет без
 Release lock связывает source SHA, build run, закрытый список компонентов,
 repository, image digest и node pull reference. Deploy дополнительно проверяет
 provenance исходного workflow run и artifact digest.
+Artifact uploader закреплён на proxy-safe `actions/upload-artifact` v7.0.1:
+эта версия не пересылает request headers Envoy proxy при установлении HTTPS
+CONNECT к exact GitHub Actions blob storage destination.
 
 Preflight до первой мутации проверяет все фактически используемые
 `get|list|watch|create|patch|update` permissions, exact-name delete для migrations,
