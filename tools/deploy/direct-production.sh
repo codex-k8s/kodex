@@ -2,6 +2,15 @@
 set -euo pipefail
 
 fail() { printf 'Direct production operation failed: %s\n' "$*" >&2; exit 1; }
+require_denied() {
+  local failure_message=$1 output status
+  shift
+  set +e
+  output=$("$@")
+  status=$?
+  set -e
+  [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
+}
 usage() {
   printf 'Usage: %s --context <exact-context> --operation preflight|apply|readback --mode dark|cutover|rollback --source-sha <40-hex> --lock <path> --lock-sha256 <64-hex> [--gate-evidence <path>]\n' "$0" >&2
 }
@@ -99,12 +108,13 @@ for permission in 'get services' 'list services' 'get deployments.apps' 'list de
   read -r verb resource <<<"$permission"
   can_i "$verb" "$resource" matter-kodex-prod
 done
-kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system | grep -qx no ||
-  fail "routine deployer must not read Secrets"
-kubectl --context "$expected_context" auth can-i get pods/log -n mattercodex-system | grep -qx no ||
-  fail "routine deployer must not read Pod logs"
-kubectl --context "$expected_context" auth can-i create certificates.cert-manager.io -n mattercodex-system | grep -qx no ||
-  fail "routine deployer must not create Certificates"
+require_denied "routine deployer must not read Secrets" \
+  kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system
+require_denied "routine deployer must not read Pod logs" \
+  kubectl --context "$expected_context" auth can-i get pods/log -n mattercodex-system
+require_denied "routine deployer must not create Certificates" \
+  kubectl --context "$expected_context" auth can-i create certificates.cert-manager.io \
+  -n mattercodex-system
 kubectl --context "$expected_context" -n mattercodex-system get configmap mattercodex-bootstrap-readiness \
   -o json | jq -e '.data.status == "ready" and .data.profile == "direct-production single-node prototype"' >/dev/null ||
   fail "owner bootstrap readiness is absent or invalid"
