@@ -63,10 +63,15 @@ source_context="$temporary_directory/source"
 mkdir -p "$metadata_directory" "$source_context"
 git -C "$repository_root" archive "$source_sha" | tar -x -C "$source_context"
 
-while IFS=$'\t' read -r component dockerfile; do
+while IFS=$'\t' read -r component dockerfile target; do
   [[ "$component" =~ ^[a-z0-9-]+$ ]] || fail "invalid component name"
   [[ "$dockerfile" == services/*/Dockerfile || "$dockerfile" == services/*/*/Dockerfile ]] || fail "invalid Dockerfile path"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
+  case "$component:$target" in
+    role-image-builder:runtime|*:"") ;;
+    role-image-builder:*) fail "role-image-builder must use the exact runtime target" ;;
+    *:*) fail "unexpected Dockerfile target for $component" ;;
+  esac
   destination="$registry_push/mattercodex/$component:$source_sha"
   if [[ "$component" == agent-runner ]]; then
     env -u BASH_ENV -u ENV \
@@ -77,17 +82,22 @@ while IFS=$'\t' read -r component dockerfile; do
         --builder docker --context "$repository_root" --dockerfile "$dockerfile" \
         --tag "$destination" --network host
   else
+    target_options=()
+    if [[ -n "$target" ]]; then
+      target_options=(--opt "target=$target")
+    fi
     "$buildctl_path" --addr "$buildkit_host" build \
       --frontend dockerfile.v0 \
       --local context="$source_context" \
       --local dockerfile="$source_context/$(dirname -- "$dockerfile")" \
       --opt filename="$(basename -- "$dockerfile")" \
       --opt "build-arg:SOURCE_SHA=$source_sha" \
+      "${target_options[@]}" \
       "${proxy_frontend_options[@]}" \
       --output "type=image,name=$destination,push=true" \
       --metadata-file "$metadata_directory/$component.json"
   fi
-done < <(jq -r '.images[] | [.component, .dockerfile] | @tsv' "$manifest")
+done < <(jq -r '.images[] | [.component, .dockerfile, (.target // "")] | @tsv' "$manifest")
 
 images_json="$temporary_directory/images.json"
 printf '[]' >"$images_json"

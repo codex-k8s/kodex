@@ -10,7 +10,7 @@
     {"component":"staff-control-center","dockerfile":"services/staff/control-center/Dockerfile"},
     {"component":"egress-gateway","dockerfile":"services/external/egress-gateway/Dockerfile"},
     {"component":"automation-scheduler","dockerfile":"services/jobs/automation-scheduler/Dockerfile"},
-    {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile"},
+    {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"runtime"},
     {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"}
   ]
 }

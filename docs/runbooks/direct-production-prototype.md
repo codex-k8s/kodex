@@ -186,7 +186,10 @@ Prototype временно использует materialized Kubernetes Secrets.
 Это не integration/E2E, HA, backup restore drill или подтверждение hardened
 supply chain. `role-image-builder` и динамический `agent-runner` намеренно не
 запускаются в dark до materialization hardened supply chain #256; их образы
-остаются в release lock, но не выдаются за работающий контур. Наблюдаемость —
+остаются в release lock, но не выдаются за работающий контур. Для
+`role-image-builder` release build выбирает exact Dockerfile target `runtime`:
+deferred `admission-runtime` с внешним `ADMISSION_TOOLS_IMAGE` в Wave A не
+собирается и не подменяется placeholder-образом. Наблюдаемость —
 #254, HA/DR — #255, supply chain/Vault — #256,
 поддерживаемый полный тестовый контур — #216.
 
