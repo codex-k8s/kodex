@@ -34,6 +34,16 @@ if grep -Eq '^kind: Ingress$|namespace: matter-kodex-prod$|sha256:0{64}' "$tempo
   printf 'Direct-production render contains a forbidden marker\n' >&2
   exit 1
 fi
+yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -e '
+  [ .[] | select(.kind == "Deployment" and .metadata.name != "mattercodex-object-store-bootstrap") ] as $deployments |
+  ($deployments | length) > 0 and
+  all($deployments[];
+    ((.spec.replicas | type) == "number" and .spec.replicas >= 2) and
+    ((.spec.strategy.type // "RollingUpdate") == "RollingUpdate"))
+' >/dev/null || {
+  printf 'Direct-production render lost replicated rolling application workloads\n' >&2
+  exit 1
+}
 while IFS= read -r image; do
   [[ "$image" != localhost:5001/mattercodex/* ]] ||
     grep -Fqx "$image" <(jq -r '.images[].pull_ref' "$temporary_directory/valid.json") || {
