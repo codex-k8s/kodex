@@ -318,6 +318,15 @@ verify_owner_gate_config() {
 verify_owner_gate_config "$build_namespace" "$build_owner_gate"
 verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
 
+expected_buildkit_config=$(yq -o=json '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-buildkit-config") |
+  .data
+' "$script_directory/namespace-rbac.yaml" | jq -Sc .)
+actual_buildkit_config=$(kubectl --context "$expected_context" -n "$build_namespace" \
+  get configmap mattercodex-buildkit-config -o json | jq -Sc '.data')
+[[ -n "$expected_buildkit_config" && "$actual_buildkit_config" == "$expected_buildkit_config" ]] ||
+  fail "BuildKit ConfigMap readback mismatch"
+
 readback_scale_set() {
   local namespace=$1 name=$2 service_account=$3 automount=$4 runner_no_proxy=$5 \
     ephemeral_runner_set

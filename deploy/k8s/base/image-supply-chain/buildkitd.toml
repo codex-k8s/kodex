@@ -9,7 +9,7 @@ root = "/var/lib/buildkit"
 
 [worker.oci]
   enabled = true
-  snapshotter = "native"
+  snapshotter = "overlayfs"
   rootless = true
 
 [registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001"]
