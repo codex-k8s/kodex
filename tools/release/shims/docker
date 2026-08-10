@@ -19,11 +19,22 @@ context=$2
 [[ -n "${MATTERCODEX_BUILDKIT_METADATA_FILE:-}" ]] || fail "metadata file is required"
 buildctl_path=${BUILDCTL_PATH:-/var/run/mattercodex-tools/buildctl}
 buildkit_host=${BUILDKIT_HOST:-unix:///var/run/buildkit/buildkitd.sock}
+build_proxy=http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
+build_no_proxy=matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000,localhost,127.0.0.1
+[[ "${HTTPS_PROXY:-}" == "$build_proxy" && "${HTTP_PROXY:-}" == "$build_proxy" &&
+   "${NO_PROXY:-}" == "$build_no_proxy" ]] ||
+  fail "exact non-secret build proxy environment is required"
 exec "$buildctl_path" --addr "$buildkit_host" build \
   --frontend dockerfile.v0 \
   --local context="$context" \
   --local dockerfile="$context/services/jobs/agent-runner" \
   --opt filename=Dockerfile \
   --opt network=host \
+  --opt "build-arg:HTTPS_PROXY=$build_proxy" \
+  --opt "build-arg:HTTP_PROXY=$build_proxy" \
+  --opt "build-arg:https_proxy=$build_proxy" \
+  --opt "build-arg:http_proxy=$build_proxy" \
+  --opt "build-arg:NO_PROXY=$build_no_proxy" \
+  --opt "build-arg:no_proxy=$build_no_proxy" \
   --output "type=image,name=$destination,push=true" \
   --metadata-file "$MATTERCODEX_BUILDKIT_METADATA_FILE"
