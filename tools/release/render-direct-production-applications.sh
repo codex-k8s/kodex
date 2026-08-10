@@ -83,7 +83,10 @@ yq eval-all '
         .env += [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
           {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
-        ]
+        ] |
+        .volumeMounts = ((.volumeMounts // []) |
+          map(select(.name != "authority-vault-token" and
+                     .name != "internal-rpc-authority-vault-token")))
       ) |
       .volumeMounts = ((.volumeMounts // []) |
         map(select((.name | test("otel|sentry|observability")) | not)))
@@ -97,13 +100,18 @@ yq eval-all '
         .env += [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
           {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
-        ]
+        ] |
+        .volumeMounts = ((.volumeMounts // []) |
+          map(select(.name != "authority-vault-token" and
+                     .name != "internal-rpc-authority-vault-token")))
       ) |
       .volumeMounts = ((.volumeMounts // []) |
         map(select((.name | test("otel|sentry|observability")) | not)))
     ) |
     .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
-      map(select((.name | test("otel|sentry|observability")) | not))) |
+      map(select((.name | test("otel|sentry|observability")) | not)) |
+      map(select(.name != "authority-vault-token" and
+                 .name != "internal-rpc-authority-vault-token"))) |
     (.spec.template.spec.volumes[]? | select(.csi != null)) |= {
       "name": .name,
       "secret": {"secretName": .csi.volumeAttributes.secretProviderClass, "defaultMode": 288}
@@ -224,14 +232,28 @@ add_prototype_delivery_mount() {
     DIRECTORY="$directory" VOLUME_NAME="$volume_name" yq -i '
       with(select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job");
         with(select(([
-          .spec.template.spec.containers[]? |
+          (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
           select(.name == strenv(CONTAINER_NAME) and ([
             .env[]? |
             select(.name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == strenv(WORKLOAD_ID))
           ] | length) > 0)
         ] | length) > 0);
-          .spec.template.spec.containers[] |=
-            with(select(.name == strenv(CONTAINER_NAME));
+          .spec.template.spec.containers[]? |=
+            with(select(.name == strenv(CONTAINER_NAME) and ([
+              .env[]? |
+              select(.name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == strenv(WORKLOAD_ID))
+            ] | length) > 0);
+              .volumeMounts = ((.volumeMounts // []) + [{
+                "name":strenv(VOLUME_NAME),
+                "mountPath":"/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/" + strenv(DIRECTORY),
+                "readOnly":true
+              }])
+            ) |
+          .spec.template.spec.initContainers[]? |=
+            with(select(.name == strenv(CONTAINER_NAME) and ([
+              .env[]? |
+              select(.name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == strenv(WORKLOAD_ID))
+            ] | length) > 0);
               .volumeMounts = ((.volumeMounts // []) + [{
                 "name":strenv(VOLUME_NAME),
                 "mountPath":"/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/" + strenv(DIRECTORY),
@@ -253,10 +275,13 @@ add_prototype_delivery_mount image-promotion internal-rpc-authority-issuer inter
 add_prototype_delivery_mount automation-scheduler internal-rpc-authority-issuer internal-rpc-authority-automation-scheduler-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount control-api-gateway internal-rpc-authority-issuer internal-rpc-authority-control-api-gateway-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount integration-gateway internal-rpc-authority-issuer internal-rpc-authority-integration-gateway-issuer-delivery primary prototype-delivery-issuer
+add_prototype_delivery_mount integration-gateway internal-rpc-authority-verifier internal-rpc-authority-integration-gateway-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount interaction-gateway internal-rpc-authority-issuer internal-rpc-authority-interaction-gateway-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount interaction-gateway internal-rpc-authority-verifier internal-rpc-authority-interaction-gateway-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-resolver-delivery resolver prototype-delivery-resolver
+add_prototype_delivery_mount runtime-controller internal-rpc-authority-issuer internal-rpc-authority-runtime-controller-issuer-delivery primary prototype-delivery-issuer
+add_prototype_delivery_mount runtime-s3-restore-exchanger internal-rpc-authority-issuer internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery primary prototype-delivery-issuer
 
 conflicting_resources=$(yq -o=json '.' "$temporary_directory/normalized.yaml" | jq -rs '
   map(select(.kind != null)) |

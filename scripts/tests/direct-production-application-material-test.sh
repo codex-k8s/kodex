@@ -20,11 +20,11 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 157 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 137 and
+  (.resources | length) == 161 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 141 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 20 and
   .counts == {
-    cryptographically_generated:63,
+    cryptographically_generated:67,
     deterministically_derived:76,
     safely_reusable_from_existing_binding:2,
     truly_external_credential:16
@@ -112,7 +112,7 @@ material="$temporary_directory/application-material.yaml"
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) |
-  length == 157 and
+  length == 161 and
   ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
   all(.[]; . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==
@@ -262,6 +262,113 @@ if rg -q 'https://mattermost\.mattermost\.svc\.cluster\.local|matter-codex-bot-s
   exit 1
 fi
 
+target_registry="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml"
+target_registry_json="$temporary_directory/target-registry.json"
+yq -o=json '.targets' "$target_registry" >"$target_registry_json"
+jq -e '
+  length == 13 and
+  ([.[] | [.workload_id,.role]] | unique | length) == 13 and
+  ([.[] | [
+    .auth_private_key.vault_path?,.manifest_trust.vault_path?,
+    .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
+    .restore_coordination.role_credential_vault_path,
+    .restore_coordination.ack_key_vault_path,
+    .readback.credential_vault_path,.readback.possession_key_vault_path
+  ][] | select(. != null)] | length) == 85 and
+  ([.[] | [
+    .auth_private_key.vault_path?,.manifest_trust.vault_path?,
+    .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
+    .restore_coordination.role_credential_vault_path,
+    .restore_coordination.ack_key_vault_path,
+    .readback.credential_vault_path,.readback.possession_key_vault_path
+  ][] | select(. != null)] | unique | length) == 85 and
+  any(.[]; .workload_id == "integration-gateway" and .role == "AUTHORIZATION_VERIFIER" and
+    .service_account == "integration-gateway" and
+    .database_identity.login_principal == "ira_integration_gateway_verifier_g1" and
+    .readback.credential_vault_path == "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/readback-credential") and
+  any(.[]; .workload_id == "runtime-controller" and .role == "AUTHORIZATION_ISSUER" and
+    .service_account == "runtime-controller" and
+    .database_identity.login_principal == "ira_runtime_controller_issuer_g1" and
+    .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/auth-private") and
+  any(.[]; .workload_id == "runtime-s3-restore-exchanger" and .role == "AUTHORIZATION_ISSUER" and
+    .service_account == "runtime-s3-restore-exchanger" and
+    .database_identity.login_principal == "ira_runtime_s3_restore_exchanger_issuer_g1" and
+    .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/auth-private")
+' "$target_registry_json" >/dev/null || {
+  printf 'Publisher target registry does not close the three release profiles\n' >&2
+  exit 1
+}
+
+publisher_rbac="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/rbac.yaml"
+expected_publisher_resources="$temporary_directory/expected-publisher-resources"
+actual_publisher_resources="$temporary_directory/actual-publisher-resources"
+jq -r '.[] | . as $target |
+  (if .role == "AUTHORIZATION_ISSUER" then "issuer"
+   elif .role == "AUTHORIZATION_VERIFIER" then "verifier" else "resolver" end) as $role |
+  ("internal-rpc-authority-" + .workload_id) as $prefix |
+  [$prefix + "-" + $role + "-delivery",
+   (if .auth_private_key then $prefix + "-" + $role + "-key" else empty end),
+   (if .manifest_trust then $prefix + "-manifest-trust" else empty end),
+   (if .authority_proof_trust then
+      (if $role == "resolver" then $prefix + "-resolver-trust" else $prefix + "-proof-trust" end)
+    else empty end),
+   (if .authority_proof_private_key then $prefix + "-resolver-key" else empty end)][]' \
+  "$target_registry_json" | { cat; printf '%s\n' internal-rpc-authority-snapshot; } |
+  LC_ALL=C sort -u >"$expected_publisher_resources"
+yq -o=json 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher")' \
+  "$publisher_rbac" | jq -e '
+    .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:.rules[0].resourceNames,verbs:["get","update"]}] and
+    (.rules[0].resourceNames | length) == 44
+  ' >/dev/null || {
+  printf 'Publisher RBAC contains a forbidden resource or verb\n' >&2
+  exit 1
+}
+yq -r 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher") |
+  .rules[0].resourceNames[]' "$publisher_rbac" | LC_ALL=C sort -u >"$actual_publisher_resources"
+cmp -s "$expected_publisher_resources" "$actual_publisher_resources" || {
+  printf 'Publisher RBAC differs from the target registry\n' >&2
+  exit 1
+}
+
+yq -o=json eval-all '.' "$interfaces" | jq -s -e '
+  def profile($workload; $container; $secret; $init):
+    first(.[] | select(.kind == "Deployment" and .metadata.name == $workload)) as $deployment |
+    (if $init then $deployment.spec.template.spec.initContainers else $deployment.spec.template.spec.containers end) as $containers |
+    any($containers[]; .name == $container and
+      any(.env[]?; .name == "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID" and .value == $workload) and
+      any(.env[]?; .name == "INTERNAL_RPC_AUTHORITY_SECRET_BACKEND" and .value == "direct-production-kubernetes-file") and
+      any(.volumeMounts[]?;
+        .mountPath == "/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/primary" and
+        .readOnly == true) and
+      (any(.volumeMounts[]?;
+        .name == "kube-api-access" or
+        (.mountPath | startswith("/var/run/secrets/kubernetes.io/serviceaccount"))) | not)) and
+    any($deployment.spec.template.spec.volumes[]?;
+      .secret.secretName == $secret and .secret.defaultMode == 288);
+  profile("integration-gateway"; "internal-rpc-authority-verifier";
+    "internal-rpc-authority-integration-gateway-verifier-delivery"; false) and
+  profile("runtime-controller"; "internal-rpc-authority-issuer";
+    "internal-rpc-authority-runtime-controller-issuer-delivery"; false) and
+  profile("runtime-s3-restore-exchanger"; "internal-rpc-authority-issuer";
+    "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery"; true) and
+  (any(.[]; .kind == "Deployment" and .metadata.name == "runtime-s3-restore-exchanger" and
+    any(.spec.template.spec.volumes[]?;
+      .name == "restore-effect-workload-tls" and
+      .secret.secretName == "runtime-restore-effect-workload-tls")) and
+   any(.[]; .kind == "Deployment" and .metadata.name == "runtime-s3-restore-exchanger" and
+    any(.spec.template.spec.volumes[]?;
+      .name == "authority-workload-tls" and
+      .secret.secretName == "internal-rpc-authority-runtime-s3-restore-exchanger-workload-tls")))
+' >/dev/null || {
+  printf 'Three release profiles do not have exact file-only delivery mounts\n' >&2
+  exit 1
+}
+if rg -q 'internal-rpc-authority-runtime-restore-effect|ira_runtime_restore_effect' \
+  "$repository_root/deploy" "$repository_root/infra" "$repository_root/tools"; then
+  printf 'Runtime restore authority identity alias remains in infrastructure\n' >&2
+  exit 1
+fi
+
 while IFS=$'\t' read -r workload_name config_map_name address_env tls_server_name_env ca_file_env; do
   yq -o=json eval-all '.' "$interfaces" | jq -s -e \
     --arg workload_name "$workload_name" --arg config_map_name "$config_map_name" \
@@ -297,6 +404,7 @@ done <<'EOF'
 integration-gateway	integration-gateway-runtime	INTEGRATION_GATEWAY_VAULT_ADDRESS	INTEGRATION_GATEWAY_VAULT_TLS_SERVER_NAME	INTEGRATION_GATEWAY_VAULT_CA_FILE
 interaction-gateway	interaction-gateway-runtime	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_TLS_SERVER_NAME	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_CA_FILE
 runtime-s3-restore-exchanger	-	RUNTIME_VAULT_ADDRESS	RUNTIME_VAULT_TLS_SERVER_NAME	RUNTIME_VAULT_CA_FILE
+runtime-s3-archive-exchanger	-	RUNTIME_VAULT_ADDRESS	RUNTIME_VAULT_TLS_SERVER_NAME	RUNTIME_VAULT_CA_FILE
 EOF
 grep -Fq 'kubernetes.io/service-name=vault' "$repository_root/infra/direct-production/bootstrap.sh" &&
   grep -Fq 'required exact Vault endpoint binding is absent' \
@@ -316,7 +424,8 @@ yq -o=json eval-all '.' "$application_bootstrap" | jq -s -e '
       .ports == [{"protocol":"TCP","port":8200}]);
   exact_vault("integration-gateway-exact-runtime-paths") and
   exact_vault("interaction-gateway-exact-runtime-paths") and
-  exact_vault("runtime-s3-restore-exchanger-exact-paths")
+  exact_vault("runtime-s3-restore-exchanger-exact-paths") and
+  exact_vault("runtime-s3-archive-exchanger-exact-paths")
 ' >/dev/null || {
   printf 'Live Vault NetworkPolicy destination is not exact\n' >&2
   exit 1

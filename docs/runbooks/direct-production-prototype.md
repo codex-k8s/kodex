@@ -191,8 +191,8 @@ tools/deploy/classify-direct-production-application-material.sh \
 ```
 
 Классификатор заново получает interface render из текущего checkout и требует
-ровно 137 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
-введена policy, это 63 криптографически генерируемых, 76 детерминированно
+ровно 141 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
+введена policy, это 67 криптографически генерируемых, 76 детерминированно
 выводимых, 2 полностью безопасно переиспользуемых и 16 внешних ресурсов. Внешний
 фрагмент принимается только как exact closed set из 16 ресурсов и 37 ключей:
 лишний, отсутствующий или пустой ключ, `stringData`, другой namespace либо
@@ -205,7 +205,7 @@ legacy source Secret. Она не выводит значения и не изм
 `matter-kodex-prod`. Классификация сама по себе не является materialization.
 
 `tools/deploy/materialize-direct-production-application.sh` объединяет все
-63 `cryptographically_generated`, 76 `deterministically_derived`, два полностью
+67 `cryptographically_generated`, 76 `deterministically_derived`, два полностью
 `safely_reusable_from_existing_binding` и частичные reusable bindings внутри
 двух external ресурсов. Он использует `umask 077`, secure temporary directory,
 pinned `nsc`, operator/account JWT и минимальные NATS user permissions; создаёт
@@ -239,7 +239,27 @@ Direct-production render задаёт только сочетание
 
 В prototype publisher выполняет только `get` и `update` заранее созданных exact
 Secret из закрытого target registry и подтверждает `resourceVersion`, semantic
-version, canonical digest и полный readback. Reconciler получает `get` только на
+version, canonical digest и полный readback. Registry revision 6 содержит 13
+точных target tuple и 85 уникальных logical path. Publisher Role выводится из
+registry и содержит ровно 44 `resourceNames`; иные verbs и
+`list|watch|create|delete|patch` отсутствуют. Три profile-selected target имеют
+отдельные identity и Secret:
+
+- `verifier/integration-gateway` — четыре verifier-документа в
+  `internal-rpc-authority-integration-gateway-verifier-delivery`;
+- `issuer/runtime-controller` — четыре issuer-документа в
+  `internal-rpc-authority-runtime-controller-issuer-delivery`;
+- `issuer/runtime-s3-restore-exchanger` — отдельный transport actor и четыре
+  issuer-документа в
+  `internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery`.
+
+Последний не является alias для business actor `runtime-restore-effect`:
+transport authority TLS и publisher material отделены от
+`runtime-restore-effect-workload-tls` и application grant. Routine sidecar и
+init container получают только read-only file mount, не получают Kubernetes API
+token и не могут адресовать произвольный Secret/path.
+
+Reconciler получает `get` только на
 exact g1–g5 publisher/readback credential Secrets и `get|update` только на
 `internal-rpc-authority-prototype-static-role-state`; состояние связывает
 source revision/digest, principal, generation, status и monotonic high-watermark. g1/g2 обязаны быть
@@ -253,13 +273,38 @@ Owner materializer заранее создаёт exact publisher/reconciler-owne
 запуске. Неизвестный
 Secret, key, logical path, operation, digest, generation или CAS conflict
 приводит к закрытому отказу. Readiness authority использует тот же backend
-readback, что и рабочая публикация. Однако exact application render пока
-сохраняет рабочие Vault-границы `integration-gateway` provider/Git credentials,
-`interaction-gateway` bot credentials и runtime S3 STS exchange. Пока эти
-границы не получили отдельные profile-selected adapters, owner bootstrap
-закрыто требует точный HTTPS Service `vault` и Ready EndpointSlice на порту
-`8200`. Отсутствие endpoint нельзя обходить неутверждённым dev Vault, fake
-endpoint или plaintext fallback. Полный Vault lifecycle остаётся в #256.
+readback, что и рабочая публикация.
+
+Четыре обязательных direct-production процесса пока сохраняют рабочие
+Vault-границы и потому не могут пройти dark startup/readiness при отсутствии
+`Service/vault:8200`:
+
+| Process | Текущая обязательная граница | Startup/readiness |
+|---|---|---|
+| `integration-gateway` | два `secret.NewVault`: writable provider credential и read-only Git credential | оба `Check` входят в startup barrier и periodic readiness |
+| `interaction-gateway` | единственный `credential.New` для Mattermost bot token lifecycle | `botIdentityService.Check` входит в startup barrier и periodic readiness и вызывает store read path |
+| `runtime-s3-archive-exchanger` | Vault Kubernetes login и `aws/sts/runtime-archive-exchanger`, затем exact `AssumeRole` | probe `check-s3-archive` проверяет только Vault token/CA files; рабочий issuance безусловно требует live Vault, поэтому файловая readiness недостаточна |
+| `runtime-s3-restore-exchanger` | Vault Kubernetes login и `aws/sts/runtime-restore-exchanger`, затем exact `AssumeRole` | probes проверяют Vault token/CA files и restore-effect transport; рабочий issuance безусловно требует live Vault, поэтому readiness недостаточна |
+
+Authority publisher/reconciler/verifier/issuer уже переключены на закрытые
+Kubernetes/file adapters, поэтому к этой таблице не относятся. Оставшиеся
+границы нельзя заменить manifest-only значением: provider/Git и bot stores
+требуют create/read/revoke/CAS/digest semantics, а S3 exchangers — bounded STS
+issuance, exact policy/tags/TTL и revoke/readback. До profile-selected adapter
+owner bootstrap должен закрыто требовать exact HTTPS Service `vault` и Ready
+EndpointSlice на порту `8200`. Отсутствие endpoint нельзя обходить dev Vault,
+fake endpoint, статическим credential или plaintext fallback. Полный Vault
+lifecycle остаётся в #256.
+
+Отдельно `integration-gateway` при запуске вызывает OIDC discovery для exact
+issuer `https://sso.mattercodex.local`; `mattercodex-oidc-ca/ca.pem` является
+внешним binding, а NetworkPolicy допускает только `Service/sso` в namespace
+`identity` на 443. Если этот Service/EndpointSlice отсутствует, startup закрыто
+завершается ошибкой. `integration-gateway-provider-health-credential/token`,
+application grants, Mattermost mapping, KMS/role ARN и authority trust roots
+остаются точным external owner material. Их отсутствие отклоняет materializer;
+оно не заменяется внутренне сгенерированным credential и не скрывается зелёной
+readiness.
 
 ## Bounded smoke
 

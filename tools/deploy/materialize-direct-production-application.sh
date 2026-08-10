@@ -346,7 +346,7 @@ for mapping in \
   integration-gateway:ira_integration_gateway_issuer_g1 \
   interaction-gateway:ira_interaction_gateway_issuer_g1 \
   runtime-controller:ira_runtime_controller_issuer_g1 \
-  runtime-restore-effect:ira_runtime_restore_effect_issuer_g1; do
+  runtime-s3-restore-exchanger:ira_runtime_s3_restore_exchanger_issuer_g1; do
   component=${mapping%%:*}; principal=${mapping#*:}
   resource="internal-rpc-authority-$component-issuer-postgresql"
   put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca" internal_rpc_authority_issuer
@@ -412,7 +412,7 @@ public_jwks control-plane-keyset-genesis interaction-readback.public-keyset.json
 public_jwks control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
 public_jwks interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_jwks interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
-for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller runtime-restore-effect; do
+for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller runtime-s3-restore-exchanger; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
 done
 public_jwks internal-rpc-authority-control-plane-resolver-trust jwks.json internal-rpc-authority-control-plane-resolver-key private.jwk
@@ -452,6 +452,7 @@ generate_tls() {
     integration-egress-proxy-provider-client-tls) service_account=integration-egress-proxy ;;
     provider-health-adapter-server-tls) service=provider-health-adapter; service_account=provider-health-adapter ;;
     runtime-controller-nats-tls) service_account=runtime-controller ;;
+    runtime-restore-effect-workload-tls) service_account=runtime-s3-restore-exchanger ;;
     internal-rpc-authority-*-workload-tls)
       service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls} ;;
     internal-rpc-authority-restore-operator-tls) service_account=internal-rpc-authority-restore-operator ;;

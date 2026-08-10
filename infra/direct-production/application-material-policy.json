@@ -233,7 +233,7 @@
     },
     {
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust",
       "keys": [
         "bundle.jws"
       ]
@@ -1064,7 +1064,7 @@
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-issuer-key",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-key",
       "keys": [
         "private.jwk"
       ]
@@ -1072,7 +1072,7 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-issuer-postgresql",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-issuer-postgresql",
       "keys": [
         "dsn",
         "username"
@@ -1081,7 +1081,7 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-manifest-trust",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust",
       "keys": [
         "bundle.jws"
       ]
@@ -1089,7 +1089,7 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-proof-trust",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-proof-trust",
       "keys": [
         "jwks.json"
       ]
@@ -1097,7 +1097,7 @@
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
-      "name": "internal-rpc-authority-runtime-restore-effect-workload-tls",
+      "name": "internal-rpc-authority-runtime-s3-restore-exchanger-workload-tls",
       "keys": [
         "ca.crt",
         "tls.crt",
@@ -1170,6 +1170,16 @@
       "name": "runtime-restore-effect-application-grant",
       "keys": [
         "application-grant.jws"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "runtime-restore-effect-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
       ]
     },
     {

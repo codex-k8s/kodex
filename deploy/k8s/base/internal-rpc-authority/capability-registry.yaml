@@ -464,8 +464,7 @@ spec:
       readbackCredentialSignerSecretName: internal-rpc-authority-readback-credential-signer
       exactWritableSecretNames:
         - internal-rpc-authority-snapshot
-        - internal-rpc-authority-readback-credential-trust
-        - internal-rpc-authority-restore-role-trust
+      exactWritableSecretNamesFromTargetRegistry: true
       kubernetesRbac:
         apiGroups:
           - ""
@@ -473,12 +472,10 @@ spec:
           - secrets
         resourceNames:
           - internal-rpc-authority-snapshot
-          - internal-rpc-authority-readback-credential-trust
-          - internal-rpc-authority-restore-role-trust
+        resourceNamesFromTargetRegistry: true
         verbs:
           - get
           - update
-          - patch
       forbiddenKubernetesVerbs:
         - create
         - delete

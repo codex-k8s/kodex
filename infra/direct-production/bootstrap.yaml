@@ -178,6 +178,61 @@ spec:
       message: Production workload image or volume is outside the machine allowlist.
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        object.kind != 'Deployment' ||
+        ((object.metadata.name != 'integration-gateway' ||
+          (object.spec.template.spec.automountServiceAccountToken == false &&
+           object.spec.template.spec.containers.exists(c,
+             c.name == 'internal-rpc-authority-verifier' &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' && e.value == 'integration-gateway') &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_SECRET_BACKEND' && e.value == 'direct-production-kubernetes-file') &&
+             c.volumeMounts.exists(m,
+               m.name == 'prototype-delivery-verifier' && m.readOnly == true &&
+               m.mountPath == '/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/primary') &&
+             !c.volumeMounts.exists(m,
+               m.name == 'kube-api-access' ||
+               m.mountPath.startsWith('/var/run/secrets/kubernetes.io/serviceaccount'))) &&
+           object.spec.template.spec.volumes.exists(v,
+             v.name == 'prototype-delivery-verifier' &&
+             has(v.secret) &&
+             v.secret.secretName == 'internal-rpc-authority-integration-gateway-verifier-delivery' &&
+             v.secret.defaultMode == 288))) &&
+         (object.metadata.name != 'runtime-controller' ||
+          (object.spec.template.spec.automountServiceAccountToken == false &&
+           object.spec.template.spec.containers.exists(c,
+             c.name == 'internal-rpc-authority-issuer' &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' && e.value == 'runtime-controller') &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_SECRET_BACKEND' && e.value == 'direct-production-kubernetes-file') &&
+             c.volumeMounts.exists(m,
+               m.name == 'prototype-delivery-issuer' && m.readOnly == true &&
+               m.mountPath == '/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/primary') &&
+             !c.volumeMounts.exists(m,
+               m.name == 'kube-api-access' ||
+               m.mountPath.startsWith('/var/run/secrets/kubernetes.io/serviceaccount'))) &&
+           object.spec.template.spec.volumes.exists(v,
+             v.name == 'prototype-delivery-issuer' &&
+             has(v.secret) &&
+             v.secret.secretName == 'internal-rpc-authority-runtime-controller-issuer-delivery' &&
+             v.secret.defaultMode == 288))) &&
+         (object.metadata.name != 'runtime-s3-restore-exchanger' ||
+          (object.spec.template.spec.automountServiceAccountToken == false &&
+           object.spec.template.spec.initContainers.exists(c,
+             c.name == 'internal-rpc-authority-issuer' &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' && e.value == 'runtime-s3-restore-exchanger') &&
+             c.env.exists(e, e.name == 'INTERNAL_RPC_AUTHORITY_SECRET_BACKEND' && e.value == 'direct-production-kubernetes-file') &&
+             c.volumeMounts.exists(m,
+               m.name == 'prototype-delivery-issuer' && m.readOnly == true &&
+               m.mountPath == '/var/run/secrets/mattercodex/internal-rpc-authority/prototype-delivery/primary') &&
+             !c.volumeMounts.exists(m,
+               m.name == 'kube-api-access' ||
+               m.mountPath.startsWith('/var/run/secrets/kubernetes.io/serviceaccount'))) &&
+           object.spec.template.spec.volumes.exists(v,
+             v.name == 'prototype-delivery-issuer' &&
+             has(v.secret) &&
+             v.secret.secretName == 'internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery' &&
+             v.secret.defaultMode == 288))))
+      message: Production authority sidecar does not match its exact file-only delivery profile.
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
         object.kind != 'CronJob' ||
         (object.spec.jobTemplate.spec.template.spec.containers.all(c,
            c.image.matches('^localhost:5001/mattercodex/internal-rpc-authority@sha256:[a-f0-9]{64}$') &&
