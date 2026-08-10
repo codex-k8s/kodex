@@ -89,6 +89,13 @@ for debian_runtime in \
   }
 done
 
+grep -Fq \
+  'COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt' \
+  "$repository_root/services/external/integration-gateway/Dockerfile" || {
+    printf 'Slim integration-gateway runtime has no pinned pre-APT CA bootstrap\n' >&2
+    exit 1
+  }
+
 if yq eval-all -e 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
   "$temporary_directory/direct-production.yaml" >/dev/null 2>&1; then
   printf 'Deferred hardened supply-chain workload leaked into dark render\n' >&2
