@@ -164,6 +164,30 @@ done < <(jq -r '. as $policy | .runtime_owned_empty_resources[] | . as $binding 
   first($policy.resources[] | select(.kind == $binding.kind and .name == $binding.name)) |
   [.kind,.name,.classification,(.keys | tojson)] | @tsv' "$policy")
 
+# API-backed aggregates задаются закрытым backend, а не Secret volume.
+# Два exact ресурса допускаются только после проверки итогового
+# выбора профиля и имён реестра.
+yq -o=json eval-all '.' "$interfaces" | jq -s -e '
+  any(.[]; .kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime" and
+    .data.INTEGRATION_GATEWAY_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype" and
+    .data.INTEGRATION_GATEWAY_SECRET_BACKEND == "direct-production-kubernetes-file" and
+    .data.INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_NAME == "integration-gateway-provider-credentials" and
+    .data.INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_DATA_KEY == "state.json") and
+  any(.[]; .kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime" and
+    .data.INTERACTION_GATEWAY_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype" and
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_BACKEND == "direct-production-kubernetes-file" and
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_RESOURCE_NAME == "interaction-gateway-bot-credentials" and
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_DATA_KEY == "state.json")
+' >/dev/null || fail "direct runtime aggregate registry is not exact"
+for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
+  resource=$(jq -cer --arg name "$name" '
+    first(.resources[] | select(.kind == "Secret" and .name == $name)) |
+    {kind,name,classification,keys}
+  ' "$policy") || fail "direct runtime aggregate is absent from the closed policy"
+  jq --argjson resource "$resource" '. + [$resource]' "$resources" >"$resources.next"
+  mv "$resources.next" "$resources"
+done
+
 rendered_resource_identities=$(jq -Sc '[.[] | [.kind,.name]] | sort' "$resources")
 policy_resource_identities=$(jq -Sc '[.resources[] | [.kind,.name]] | sort' "$policy")
 [[ "$rendered_resource_identities" == "$policy_resource_identities" ]] ||

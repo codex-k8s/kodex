@@ -60,6 +60,19 @@ kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation
   --scope bootstrap --output "$temporary_directory/application-owner.yaml" >/dev/null
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --scope interfaces --output "$temporary_directory/application-interfaces.yaml" >/dev/null
+kubernetes_api_policies="$temporary_directory/runtime-adapter-kubernetes-api-egress.yaml"
+: >"$kubernetes_api_policies"
+for binding in \
+  integration-gateway-kubernetes-api-exact:integration-gateway \
+  interaction-gateway-kubernetes-api-exact:interaction-gateway; do
+  policy_name=${binding%%:*}
+  selector_value=${binding#*:}
+  "$repository_root/tools/deploy/kubernetes-api-egress.sh" render \
+    --context "$expected_context" --namespace mattercodex-system \
+    --policy "$policy_name" --pod-selector "mattercodex.dev/runtime-secret-api=$selector_value" \
+    >>"$kubernetes_api_policies"
+  printf '%s\n' '---' >>"$kubernetes_api_policies"
+done
 contract_source="$temporary_directory/workload-contract-source.yaml"
 contract_lock="$temporary_directory/workload-contract-release-lock.json"
 contract_source_sha=1111111111111111111111111111111111111111
@@ -80,7 +93,7 @@ workload_contracts="$temporary_directory/workload-contracts.yaml"
 workload_policy="$script_directory/workload-policy.yaml"
 
 for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
-  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy"; do
+  "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" "$workload_contracts" "$workload_policy"; do
   kubectl --context "$expected_context" apply --dry-run=client -f "$manifest" >/dev/null
 done
 
@@ -142,6 +155,7 @@ if [[ "$mode" == apply ]]; then
   kubectl --context "$expected_context" apply -f "$workload_policy" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/foundation-owner.yaml" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/application-owner.yaml" >/dev/null
+  kubectl --context "$expected_context" apply -f "$kubernetes_api_policies" >/dev/null
   "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode apply >/dev/null
   for certificate_name in mattercodex-prototype-ca mattercodex-legacy-mattermost-bridge mattercodex-legacy-bot-service-bridge; do
     kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=Ready \
@@ -155,6 +169,8 @@ kubectl --context "$expected_context" diff -f "$workload_contracts" >/dev/null |
   fail "production workload contract readback mismatch"
 kubectl --context "$expected_context" diff -f "$workload_policy" >/dev/null ||
   fail "production workload admission policy readback mismatch"
+kubectl --context "$expected_context" diff -f "$kubernetes_api_policies" >/dev/null ||
+  fail "runtime adapter Kubernetes API egress readback mismatch"
 
 "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode readback >/dev/null
 "$materializer" --mode readback --context "$expected_context" >/dev/null
@@ -184,7 +200,7 @@ require_denied "routine deployer unexpectedly has Secret read access" \
   --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
 
 bootstrap_digest=$(sha256sum "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
-  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy" |
+  "$temporary_directory/application-owner.yaml" "$kubernetes_api_policies" "$workload_contracts" "$workload_policy" |
   sha256sum | awk '{print $1}')
 readiness_manifest="$temporary_directory/readiness.yaml"
 printf '%s\n' \

@@ -20,18 +20,18 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 161 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 141 and
+  (.resources | length) == 162 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 142 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 20 and
   .counts == {
     cryptographically_generated:67,
     deterministically_derived:76,
     safely_reusable_from_existing_binding:2,
-    truly_external_credential:16
+    truly_external_credential:17
   } and
   all(.resources[];
     (.keys | type == "array" and length > 0 and length == (unique | length))) and
-  ([.external_bindings[].keys[]] | length) == 37 and
+  ([.external_bindings[].keys[]] | length) == 40 and
   (.resources | group_by([.kind,.name]) | all(length == 1))
 ' "$classification" >/dev/null || {
   printf 'Direct-production application material classification is incomplete\n' >&2
@@ -80,11 +80,37 @@ jwk_fixture='{"kty":"OKP","crv":"Ed25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 jwks_fixture="{\"keys\":[$jwk_fixture]}"
 manifest_fixture='{"schema_version":1,"revision":"production-r1"}'
 manifest_digest=$(printf '%s' "$manifest_fixture" | sha256sum | awk '{print $1}')
+node - "$temporary_directory/git-state.json" "$temporary_directory/provider-snapshot.json" \
+  "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" <<'NODE'
+const {createHash, generateKeyPairSync} = require("node:crypto");
+const {writeFileSync} = require("node:fs");
+const sha = value => createHash("sha256").update(value).digest("hex");
+const gitValue = Buffer.from("test-only-git-credential");
+const record = {version:1,status:"ACTIVE",content_sha256:sha(gitValue),value:gitValue.toString("base64")};
+const aggregateInput = {schema_version:1,generation:1,records:{"mattercodex/integration-gateway/git-credentials/matter-codex":record}};
+writeFileSync(process.argv[2], JSON.stringify({...aggregateInput,digest_sha256:sha(JSON.stringify(aggregateInput))})+"\n", {mode:0o600});
+const {publicKey} = generateKeyPairSync("rsa", {modulusLength:2048});
+const exported = publicKey.export({format:"jwk"});
+const key = {use:"sig",kty:"RSA",kid:"test-provider-key",alg:"RS256",n:exported.n,e:exported.e};
+const snapshotInput = {schema_version:1,generation:7,issuer:"https://sso.mattercodex.local",audience:"mattercodex-integration-gateway",algorithms:["RS256"],jwks:{keys:[key]}};
+const digest = sha(JSON.stringify(snapshotInput));
+writeFileSync(process.argv[3], JSON.stringify({...snapshotInput,digest_sha256:digest})+"\n", {mode:0o600});
+writeFileSync(process.argv[4], digest+"\n", {mode:0o600});
+writeFileSync(process.argv[5], "7\n", {mode:0o600});
+NODE
 JWS_FIXTURE="$jws_fixture" JWK_FIXTURE="$jwk_fixture" JWKS_FIXTURE="$jwks_fixture" \
 MANIFEST_FIXTURE="$manifest_fixture" MANIFEST_DIGEST="$manifest_digest" \
-CA_FIXTURE="$(base64 -w0 "$temporary_directory/test-ca.pem")" jq -c '
-  def value($key):
-    if ($key | test("(\\.jws|\\.jwt)$")) then env.JWS_FIXTURE
+CA_FIXTURE="$(base64 -w0 "$temporary_directory/test-ca.pem")" \
+GIT_AGGREGATE="$(base64 -w0 "$temporary_directory/git-state.json")" \
+OIDC_SNAPSHOT="$(base64 -w0 "$temporary_directory/provider-snapshot.json")" \
+OIDC_SHA256="$(tr -d '\n' <"$temporary_directory/provider-snapshot.sha256")" \
+OIDC_GENERATION="$(tr -d '\n' <"$temporary_directory/provider-snapshot.generation")" jq -c '
+  def value($name;$key):
+    if $name == "integration-gateway-git-credentials" and $key == "state.json" then (env.GIT_AGGREGATE | @base64d)
+    elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.json" then (env.OIDC_SNAPSHOT | @base64d)
+    elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.sha256" then env.OIDC_SHA256
+    elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.generation" then env.OIDC_GENERATION
+    elif ($key | test("(\\.jws|\\.jwt)$")) then env.JWS_FIXTURE
     elif ($key | endswith(".jwk")) then env.JWK_FIXTURE
     elif ($key | endswith("public-keyset.json")) then env.JWKS_FIXTURE
     elif $key == "manifest.yaml" then env.MANIFEST_FIXTURE
@@ -96,10 +122,10 @@ CA_FIXTURE="$(base64 -w0 "$temporary_directory/test-ca.pem")" jq -c '
   .external_bindings[] as $binding |
   if $binding.kind == "Secret" then
     {apiVersion:"v1",kind:$binding.kind,metadata:{name:$binding.name,namespace:"mattercodex-system"},
-     data:($binding.keys | map({key:.,value:(value(.) | @base64)}) | from_entries)}
+     data:($binding.keys | map({key:.,value:(value($binding.name;.) | @base64)}) | from_entries)}
   else
     {apiVersion:"v1",kind:$binding.kind,metadata:{name:$binding.name,namespace:"mattercodex-system"},
-     data:($binding.keys | map({key:.,value:value(.)}) | from_entries)}
+     data:($binding.keys | map({key:.,value:value($binding.name;.)}) | from_entries)}
   end
 ' "$policy" | yq -p=json -P >"$external_fixture"
 "$classifier" --output "$temporary_directory/with-external.json" --external-material-file "$external_fixture" >/dev/null
@@ -112,7 +138,7 @@ material="$temporary_directory/application-material.yaml"
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) |
-  length == 161 and
+  length == 162 and
   ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
   all(.[]; . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==
@@ -132,20 +158,30 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classif
 
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
-yq -er 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-vault-ca") |
-  .data."ca.pem"' "$external_fixture" >"$temporary_directory/vault-ca.pem"
-openssl x509 -in "$temporary_directory/vault-ca.pem" -outform DER \
-  >"$temporary_directory/vault-ca.der"
-for name in integration-gateway-vault-ca interaction-gateway-vault-ca; do
+for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
   jq -er --arg name "$name" '.[] | select(.kind == "Secret" and .metadata.name == $name) |
-    .data."ca.crt"' "$material_json" | base64 -d >"$temporary_directory/$name.pem"
-  openssl x509 -in "$temporary_directory/$name.pem" -outform DER \
-    >"$temporary_directory/$name.der"
-  cmp -s "$temporary_directory/vault-ca.der" "$temporary_directory/$name.der" || {
-    printf 'Vault client CA does not match the exact external Vault authority: %s\n' "$name" >&2
+    .data["state.json"]' "$material_json" | base64 -d >"$temporary_directory/$name-state.json"
+  node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-aggregate \
+    "$temporary_directory/$name-state.json" 1024
+  jq -e '.schema_version == 1 and .generation == 1 and .records == {}' \
+    "$temporary_directory/$name-state.json" >/dev/null || {
+    printf 'Dynamic credential aggregate does not start from the exact empty generation: %s\n' "$name" >&2
     exit 1
   }
 done
+jq -er '.[] | select(.kind == "Secret" and .metadata.name == "integration-gateway-git-credentials") |
+  .data["state.json"]' "$material_json" | base64 -d >"$temporary_directory/rendered-git-state.json"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-git-aggregate \
+  "$temporary_directory/rendered-git-state.json" \
+  "$repository_root/deploy/k8s/base/integration-gateway/git-sources/catalog.json"
+for key in provider-snapshot.json provider-snapshot.sha256 provider-snapshot.generation; do
+  jq -er --arg key "$key" '.[] | select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-oidc-provider") |
+    .data[$key]' "$material_json" >"$temporary_directory/rendered-$key"
+done
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-oidc-snapshot \
+  "$temporary_directory/rendered-provider-snapshot.json" \
+  "$temporary_directory/rendered-provider-snapshot.sha256" \
+  "$temporary_directory/rendered-provider-snapshot.generation"
 for name in control-plane-nats runtime-controller-nats; do
   jq -er --arg name "$name" '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data["user.creds"]' "$material_json" |
     base64 -d >"$temporary_directory/$name.creds"
@@ -369,47 +405,95 @@ if rg -q 'internal-rpc-authority-runtime-restore-effect|ira_runtime_restore_effe
   exit 1
 fi
 
-while IFS=$'\t' read -r workload_name config_map_name address_env tls_server_name_env ca_file_env; do
-  yq -o=json eval-all '.' "$interfaces" | jq -s -e \
-    --arg workload_name "$workload_name" --arg config_map_name "$config_map_name" \
-    --arg address_env "$address_env" --arg tls_server_name_env "$tls_server_name_env" \
-    --arg ca_file_env "$ca_file_env" '
-    def exact_values($data):
-      ($data[$address_env] == "https://vault.mattercodex-system.svc:8200" or
-       $data[$address_env] == "https://vault.mattercodex-system.svc.cluster.local:8200") and
-      $data[$tls_server_name_env] == "vault.mattercodex-system.svc.cluster.local" and
-      ($data[$ca_file_env] | type == "string" and startswith("/var/run/config/mattercodex/"));
-    if $config_map_name != "-" then
-      any(.[]; .kind == "ConfigMap" and .metadata.name == $config_map_name and exact_values(.data)) and
-      any(.[]; .kind == "Deployment" and .metadata.name == $workload_name and
-        any(.spec.template.spec.containers[]?;
-          any(.envFrom[]?; .configMapRef.name == $config_map_name)))
-    else
-      any(.[]; .kind == "Deployment" and .metadata.name == $workload_name and
-        any(((.spec.template.spec.containers // []) +
-             (.spec.template.spec.initContainers // []))[]?;
-          (.env // [] | map({key:.name,value:.value}) | from_entries) as $data |
-          exact_values($data)))
-    end
-  ' >/dev/null || {
-    printf 'Expected live Vault application boundary is absent: %s\n' "$workload_name" >&2
+yq -o=json eval-all '.' "$interfaces" | jq -s -e '
+  def exact_adapter($deployment; $name):
+    $deployment.spec.template.spec.automountServiceAccountToken == false and
+    $deployment.spec.template.metadata.labels["mattercodex.dev/runtime-secret-api"] == $name and
+    any($deployment.spec.template.spec.containers[]; .name == $name and
+      any(.volumeMounts[]; .name == "direct-kubernetes-api-token" and .readOnly == true and
+        .mountPath == "/var/run/secrets/tokens/kubernetes-api") and
+      any(.volumeMounts[]; .name == "direct-kubernetes-api-ca" and .readOnly == true and
+        .mountPath == "/var/run/config/kubernetes.io/serviceaccount")) and
+    ([$deployment.spec.template.spec.volumes[]? | select(.projected.sources[]?.serviceAccountToken != null)] | length) == 1 and
+    all($deployment.spec.template.spec.containers[] | select(.name != $name);
+      all(.volumeMounts[]?; (.name != "direct-kubernetes-api-token" and .name != "direct-kubernetes-api-ca" and
+        .name != "direct-git-credentials" and .name != "direct-oidc-provider"))) and
+    all($deployment.spec.template.spec.initContainers[]?;
+      all(.volumeMounts[]?; (.name != "direct-kubernetes-api-token" and .name != "direct-kubernetes-api-ca" and
+        .name != "direct-git-credentials" and .name != "direct-oidc-provider"))) and
+    any($deployment.spec.template.spec.volumes[]; .name == "direct-kubernetes-api-token" and .projected.defaultMode == 256 and
+      .projected.sources == [{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]) and
+    any($deployment.spec.template.spec.volumes[]; .name == "direct-kubernetes-api-ca" and
+      .configMap == {"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]});
+  map(select(.kind != null)) as $resources |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime")) as $integration_config |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime")) as $interaction_config |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher")) as $publisher_config |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-database-credential-reconciler")) as $reconciler_config |
+  first($resources[] | select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-s3-security-policy")) as $s3_policy |
+  first($resources[] | select(.kind == "Deployment" and .metadata.name == "integration-gateway")) as $integration |
+  first($resources[] | select(.kind == "Deployment" and .metadata.name == "interaction-gateway")) as $interaction |
+  ($integration_config.data.INTEGRATION_GATEWAY_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype") and
+  ($integration_config.data.INTEGRATION_GATEWAY_SECRET_BACKEND == "direct-production-kubernetes-file") and
+  ($integration_config.data.INTEGRATION_GATEWAY_OIDC_VERIFIER_BACKEND == "direct-production-file") and
+  ($integration_config.data | keys | all(startswith("INTEGRATION_GATEWAY_VAULT_") | not)) and
+  ($interaction_config.data.INTERACTION_GATEWAY_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype") and
+  ($interaction_config.data.INTERACTION_GATEWAY_BOT_CREDENTIAL_BACKEND == "direct-production-kubernetes-file") and
+  ($interaction_config.data | keys | all(startswith("INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_") | not)) and
+  ($publisher_config.data | keys | all(test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_") | not)) and
+  ($reconciler_config.data | keys | all(test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_") | not)) and
+  ($s3_policy.data["requirements.yaml"] | contains("identity_source: signed_ticket_mtls_exchange_then_direct_production_s3_sts")) and
+  ($s3_policy.data["requirements.yaml"] | contains("vault_sts") | not) and
+  exact_adapter($integration; "integration-gateway") and
+  exact_adapter($interaction; "interaction-gateway") and
+  any($integration.spec.template.spec.volumes[]; .name == "direct-git-credentials" and
+    .secret.secretName == "integration-gateway-git-credentials" and .secret.items == [{"key":"state.json","path":"state.json"}]) and
+  any($integration.spec.template.spec.volumes[]; .name == "direct-oidc-provider" and
+    .configMap.name == "integration-gateway-oidc-provider" and
+    .configMap.items == [{"key":"provider-snapshot.json","path":"provider-snapshot.json"}]) and
+  all([$resources[] | select(.kind == "Deployment" and
+    (.metadata.name == "runtime-s3-archive-exchanger" or .metadata.name == "runtime-s3-restore-exchanger"))][];
+    any(.spec.template.spec.containers[] | select(.name == "exchanger");
+      ((.env | map({key:.name,value:.value}) | from_entries) as $env |
+       $env.RUNTIME_DEPLOYMENT_PROFILE == "direct-production-single-node-prototype" and
+       $env.RUNTIME_S3_CREDENTIAL_BACKEND == "direct-production-s3-sts" and
+       ($env | keys | all(startswith("RUNTIME_VAULT_") | not)) and
+       all(.volumeMounts[]; .name != "vault-token" and .name != "vault-ca"))))
+' >/dev/null || {
+  printf 'Direct runtime adapter render is not exact or leaks its API token\n' >&2
+  exit 1
+}
+
+for gateway in integration-gateway interaction-gateway; do
+  if [[ "$gateway" == integration-gateway ]]; then
+    adapter_secret=integration-gateway-provider-credentials
+    adapter_role=integration-gateway-provider-credential-runtime
+  else
+    adapter_secret=interaction-gateway-bot-credentials
+    adapter_role=interaction-gateway-bot-credential-runtime
+  fi
+  yq -o=json 'select(.kind == "Role" and .metadata.name == "'"$adapter_role"'")' \
+    "$repository_root/deploy/k8s/base/$gateway/runtime-adapter-rbac.yaml" | jq -e \
+    --arg secret "$adapter_secret" '
+      .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:[$secret],verbs:["get","update"]}]
+    ' >/dev/null || {
+    printf 'Runtime adapter RBAC contains a forbidden resource or verb: %s\n' "$gateway" >&2
     exit 1
   }
-  grep -Fq "\"$address_env\"" \
-    "$repository_root/infra/direct-production/bootstrap.sh" || {
-    printf 'Owner bootstrap does not preflight a live Vault boundary: %s\n' "$workload_name" >&2
+  yq -o=json 'select(.kind == "RoleBinding" and .metadata.name == "'"$adapter_role"'")' \
+    "$repository_root/deploy/k8s/base/$gateway/runtime-adapter-rbac.yaml" | jq -e \
+    --arg gateway "$gateway" --arg role "$adapter_role" '
+      .subjects == [{kind:"ServiceAccount",name:$gateway}] and
+      .roleRef == {apiGroup:"rbac.authorization.k8s.io",kind:"Role",name:$role}
+    ' >/dev/null || {
+    printf 'Runtime adapter RoleBinding crosses the exact service account boundary: %s\n' "$gateway" >&2
     exit 1
   }
-done <<'EOF'
-integration-gateway	integration-gateway-runtime	INTEGRATION_GATEWAY_VAULT_ADDRESS	INTEGRATION_GATEWAY_VAULT_TLS_SERVER_NAME	INTEGRATION_GATEWAY_VAULT_CA_FILE
-interaction-gateway	interaction-gateway-runtime	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_TLS_SERVER_NAME	INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_CA_FILE
-runtime-s3-restore-exchanger	-	RUNTIME_VAULT_ADDRESS	RUNTIME_VAULT_TLS_SERVER_NAME	RUNTIME_VAULT_CA_FILE
-runtime-s3-archive-exchanger	-	RUNTIME_VAULT_ADDRESS	RUNTIME_VAULT_TLS_SERVER_NAME	RUNTIME_VAULT_CA_FILE
-EOF
-grep -Fq 'kubernetes.io/service-name=vault' "$repository_root/infra/direct-production/bootstrap.sh" &&
-  grep -Fq 'required exact Vault endpoint binding is absent' \
-    "$repository_root/infra/direct-production/bootstrap.sh" || {
-  printf 'Owner bootstrap Vault EndpointSlice readback is absent\n' >&2
+done
+grep -Fq 'integration-gateway-kubernetes-api-exact:integration-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
+  grep -Fq 'interaction-gateway-kubernetes-api-exact:interaction-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
+  grep -Fq 'mattercodex.dev/runtime-secret-api' "$repository_root/infra/direct-production/bootstrap.yaml" || {
+  printf 'Owner bootstrap does not bind exact Kubernetes API egress and VAP boundaries\n' >&2
   exit 1
 }
 
@@ -417,17 +501,16 @@ application_bootstrap="$temporary_directory/application-bootstrap.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --scope bootstrap --output "$application_bootstrap" >/dev/null
 yq -o=json eval-all '.' "$application_bootstrap" | jq -s -e '
-  def exact_vault($name):
+  def no_vault($name):
     first(.[] | select(.kind == "NetworkPolicy" and .metadata.name == $name)) as $policy |
-    any($policy.spec.egress[]?;
-      .to == [{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"vault"}}}] and
-      .ports == [{"protocol":"TCP","port":8200}]);
-  exact_vault("integration-gateway-exact-runtime-paths") and
-  exact_vault("interaction-gateway-exact-runtime-paths") and
-  exact_vault("runtime-s3-restore-exchanger-exact-paths") and
-  exact_vault("runtime-s3-archive-exchanger-exact-paths")
+    (any($policy.spec.egress[]?.to[]?;
+      .podSelector.matchLabels["app.kubernetes.io/name"] == "vault") | not);
+  no_vault("integration-gateway-exact-runtime-paths") and
+  no_vault("interaction-gateway-exact-runtime-paths") and
+  no_vault("runtime-s3-restore-exchanger-exact-paths") and
+  no_vault("runtime-s3-archive-exchanger-exact-paths")
 ' >/dev/null || {
-  printf 'Live Vault NetworkPolicy destination is not exact\n' >&2
+  printf 'Direct adapters retain a forbidden Vault network destination\n' >&2
   exit 1
 }
 
@@ -455,6 +538,29 @@ yq -i 'with(select(.kind == "Secret" and .metadata.name == "automation-scheduler
   .data."application-grant.jws" = "")' "$temporary_directory/empty-key.yaml"
 if "$classifier" --output "$temporary_directory/rejected-empty.json" --external-material-file "$temporary_directory/empty-key.yaml" >/dev/null 2>&1; then
   printf 'External material with an empty key was accepted\n' >&2
+  exit 1
+fi
+
+jq '.digest_sha256 = ("0" * 64)' "$temporary_directory/integration-gateway-provider-credentials-state.json" \
+  >"$temporary_directory/invalid-aggregate.json"
+if node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-aggregate \
+  "$temporary_directory/invalid-aggregate.json" 1024 >/dev/null 2>&1; then
+  printf 'Aggregate with an invalid digest was accepted\n' >&2
+  exit 1
+fi
+printf '%s\n' 6 >"$temporary_directory/rollback-generation"
+if node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-oidc-snapshot \
+  "$temporary_directory/rendered-provider-snapshot.json" \
+  "$temporary_directory/rendered-provider-snapshot.sha256" \
+  "$temporary_directory/rollback-generation" >/dev/null 2>&1; then
+  printf 'OIDC provider snapshot generation rollback was accepted\n' >&2
+  exit 1
+fi
+jq '.records = {}' "$temporary_directory/rendered-git-state.json" >"$temporary_directory/incomplete-git-state.json"
+if node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-git-aggregate \
+  "$temporary_directory/incomplete-git-state.json" \
+  "$repository_root/deploy/k8s/base/integration-gateway/git-sources/catalog.json" >/dev/null 2>&1; then
+  printf 'Incomplete Git credential aggregate was accepted\n' >&2
   exit 1
 fi
 

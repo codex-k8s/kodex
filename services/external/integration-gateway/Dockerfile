@@ -10,6 +10,7 @@ WORKDIR /workspace
 
 COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
+COPY libs/go/exactkubernetessecret/ libs/go/exactkubernetessecret/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationgatewayapi/ libs/go/integrationgatewayapi/

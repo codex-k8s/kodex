@@ -5,6 +5,7 @@ resources:
   - ../vault-ca-delivery
   - ../image-supply-chain
   - serviceaccount.yaml
+  - runtime-adapter-rbac.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml

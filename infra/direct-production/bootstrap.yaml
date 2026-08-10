@@ -233,6 +233,63 @@ spec:
       message: Production authority sidecar does not match its exact file-only delivery profile.
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        object.kind != 'Deployment' ||
+        (object.metadata.name != 'integration-gateway' && object.metadata.name != 'interaction-gateway') ||
+        (object.spec.template.spec.automountServiceAccountToken == false &&
+         object.spec.template.metadata.labels['mattercodex.dev/runtime-secret-api'] == object.metadata.name &&
+         object.spec.template.spec.containers.exists(c,
+           c.name == object.metadata.name &&
+           c.envFrom.exists(e, has(e.configMapRef) && e.configMapRef.name == object.metadata.name + '-runtime') &&
+           c.volumeMounts.exists(m, m.name == 'direct-kubernetes-api-token' && m.readOnly == true &&
+             m.mountPath == '/var/run/secrets/tokens/kubernetes-api') &&
+           c.volumeMounts.exists(m, m.name == 'direct-kubernetes-api-ca' && m.readOnly == true &&
+             m.mountPath == '/var/run/config/kubernetes.io/serviceaccount')) &&
+         object.spec.template.spec.volumes.filter(v,
+           has(v.projected) && v.projected.sources.exists(s, has(s.serviceAccountToken))).size() == 1 &&
+         object.spec.template.spec.containers.filter(c, c.name != object.metadata.name).all(c,
+           !has(c.volumeMounts) || c.volumeMounts.all(m,
+             m.name != 'direct-kubernetes-api-token' && m.name != 'direct-kubernetes-api-ca' &&
+             m.name != 'direct-git-credentials' && m.name != 'direct-oidc-provider' &&
+             !m.mountPath.startsWith('/var/run/secrets/tokens/kubernetes-api') &&
+             !m.mountPath.startsWith('/var/run/config/kubernetes.io/serviceaccount') &&
+             !m.mountPath.startsWith('/var/run/secrets/mattercodex/integration-gateway/git-credentials') &&
+             !m.mountPath.startsWith('/var/run/config/mattercodex/integration-gateway/oidc'))) &&
+         (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
+           !has(c.volumeMounts) || c.volumeMounts.all(m,
+             m.name != 'direct-kubernetes-api-token' && m.name != 'direct-kubernetes-api-ca' &&
+             m.name != 'direct-git-credentials' && m.name != 'direct-oidc-provider' &&
+             !m.mountPath.startsWith('/var/run/secrets/tokens/kubernetes-api') &&
+             !m.mountPath.startsWith('/var/run/config/kubernetes.io/serviceaccount') &&
+             !m.mountPath.startsWith('/var/run/secrets/mattercodex/integration-gateway/git-credentials') &&
+             !m.mountPath.startsWith('/var/run/config/mattercodex/integration-gateway/oidc')))) &&
+         object.spec.template.spec.volumes.exists(v,
+           v.name == 'direct-kubernetes-api-token' && has(v.projected) && v.projected.defaultMode == 256 &&
+           v.projected.sources.size() == 1 && v.projected.sources[0].serviceAccountToken.path == 'token' &&
+           v.projected.sources[0].serviceAccountToken.audience == 'https://kubernetes.default.svc' &&
+           v.projected.sources[0].serviceAccountToken.expirationSeconds == 600) &&
+         object.spec.template.spec.volumes.exists(v,
+           v.name == 'direct-kubernetes-api-ca' && has(v.configMap) &&
+           v.configMap.name == 'kube-root-ca.crt' && v.configMap.defaultMode == 288 &&
+           v.configMap.items.size() == 1 && v.configMap.items[0].key == 'ca.crt' && v.configMap.items[0].path == 'ca.crt') &&
+         (object.metadata.name != 'integration-gateway' ||
+           (object.spec.template.spec.containers.exists(c,
+              c.name == 'integration-gateway' &&
+              c.volumeMounts.exists(m, m.name == 'direct-git-credentials' && m.readOnly == true &&
+                m.mountPath == '/var/run/secrets/mattercodex/integration-gateway/git-credentials') &&
+              c.volumeMounts.exists(m, m.name == 'direct-oidc-provider' && m.readOnly == true &&
+                m.mountPath == '/var/run/config/mattercodex/integration-gateway/oidc')) &&
+            object.spec.template.spec.volumes.exists(v,
+              v.name == 'direct-git-credentials' && has(v.secret) &&
+              v.secret.secretName == 'integration-gateway-git-credentials' && v.secret.defaultMode == 288 &&
+              v.secret.items.size() == 1 && v.secret.items[0].key == 'state.json' && v.secret.items[0].path == 'state.json') &&
+            object.spec.template.spec.volumes.exists(v,
+              v.name == 'direct-oidc-provider' && has(v.configMap) &&
+              v.configMap.name == 'integration-gateway-oidc-provider' && v.configMap.defaultMode == 288 &&
+              v.configMap.items.size() == 1 && v.configMap.items[0].key == 'provider-snapshot.json' &&
+              v.configMap.items[0].path == 'provider-snapshot.json'))))
+      message: Production direct runtime adapter token and file boundaries are invalid.
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
         object.kind != 'CronJob' ||
         (object.spec.jobTemplate.spec.template.spec.containers.all(c,
            c.image.matches('^localhost:5001/mattercodex/internal-rpc-authority@sha256:[a-f0-9]{64}$') &&

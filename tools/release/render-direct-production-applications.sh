@@ -80,13 +80,12 @@ yq eval-all '
       with(select(.name == "publisher" or .name == "reconciler" or
           .name == "internal-rpc-authority-issuer" or
           .name == "internal-rpc-authority-verifier");
-        .env += [
+        .env = ((.env // []) | map(select((.name | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not))) + [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
           {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
         ] |
         .volumeMounts = ((.volumeMounts // []) |
-          map(select(.name != "authority-vault-token" and
-                     .name != "internal-rpc-authority-vault-token")))
+          map(select((.name | contains("vault")) | not)))
       ) |
       .volumeMounts = ((.volumeMounts // []) |
         map(select((.name | test("otel|sentry|observability")) | not)))
@@ -97,21 +96,19 @@ yq eval-all '
         [{"name": "OTEL_SDK_DISABLED", "value": "true"}]) |
       with(select(.name == "internal-rpc-authority-issuer" or
           .name == "internal-rpc-authority-verifier");
-        .env += [
+        .env = ((.env // []) | map(select((.name | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not))) + [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
           {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
         ] |
         .volumeMounts = ((.volumeMounts // []) |
-          map(select(.name != "authority-vault-token" and
-                     .name != "internal-rpc-authority-vault-token")))
+          map(select((.name | contains("vault")) | not)))
       ) |
       .volumeMounts = ((.volumeMounts // []) |
         map(select((.name | test("otel|sentry|observability")) | not)))
     ) |
     .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
       map(select((.name | test("otel|sentry|observability")) | not)) |
-      map(select(.name != "authority-vault-token" and
-                 .name != "internal-rpc-authority-vault-token"))) |
+      map(select((.name | contains("vault")) | not))) |
     (.spec.template.spec.volumes[]? | select(.csi != null)) |= {
       "name": .name,
       "secret": {"secretName": .csi.volumeAttributes.secretProviderClass, "defaultMode": 288}
@@ -178,6 +175,19 @@ yq eval-all '
   with(select(.kind == "ConfigMap" and .data != null);
     .data = (.data | with_entries(select((.key | test("^(OTEL_|SENTRY_)")) | not)))
   ) |
+  with(select(.kind == "ConfigMap" and
+      (.metadata.name == "internal-rpc-authority-publisher" or
+       .metadata.name == "internal-rpc-authority-database-credential-reconciler"));
+    .data = (.data | with_entries(
+      select((.key | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not)
+    ))
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-s3-security-policy");
+    .data."requirements.yaml" |= sub(
+      "identity_source: signed_ticket_mtls_exchange_then_vault_sts";
+      "identity_source: signed_ticket_mtls_exchange_then_direct_production_s3_sts"
+    )
+  ) |
   (.. | select(tag == "!!str")) |= sub(
     "^https://object-store\\.storage\\.svc\\.cluster\\.local$";
     "https://mattercodex-object-store.mattercodex-system.svc.cluster.local"
@@ -223,6 +233,103 @@ yq eval-all '
     "matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000/mattercodex/role-images-staging"
   )
 ' "$temporary_directory/filtered.yaml" >"$temporary_directory/normalized.yaml"
+
+# Direct-production adapters A–D используют две exact namespaced Secret CAS-границы
+# и immutable file material. Projected Kubernetes API token получают только main
+# containers gateway; authority sidecars остаются file-only.
+yq -i '
+  with(select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime");
+    .data = ((.data // {}) | with_entries(select((.key | test("^INTEGRATION_GATEWAY_VAULT_")) | not))) |
+    .data.INTEGRATION_GATEWAY_DEPLOYMENT_PROFILE = "direct-production-single-node-prototype" |
+    .data.INTEGRATION_GATEWAY_SECRET_BACKEND = "direct-production-kubernetes-file" |
+    .data.INTEGRATION_GATEWAY_OIDC_VERIFIER_BACKEND = "direct-production-file" |
+    .data.INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_NAME = "integration-gateway-provider-credentials" |
+    .data.INTEGRATION_GATEWAY_KUBERNETES_PROVIDER_SECRET_DATA_KEY = "state.json" |
+    .data.INTEGRATION_GATEWAY_GIT_CREDENTIAL_AGGREGATE_FILE = "/var/run/secrets/mattercodex/integration-gateway/git-credentials/state.json" |
+    .data.INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_FILE = "/var/run/config/mattercodex/integration-gateway/oidc/provider-snapshot.json"
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime");
+    .data = ((.data // {}) | with_entries(select((.key | test("^INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_")) | not))) |
+    .data.INTERACTION_GATEWAY_DEPLOYMENT_PROFILE = "direct-production-single-node-prototype" |
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_BACKEND = "direct-production-kubernetes-file" |
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_RESOURCE_NAME = "interaction-gateway-bot-credentials" |
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_DATA_KEY = "state.json" |
+    .data.INTERACTION_GATEWAY_BOT_CREDENTIAL_KUBERNETES_TIMEOUT = "5s"
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "integration-gateway");
+    .spec.template.metadata.labels."mattercodex.dev/runtime-secret-api" = "integration-gateway" |
+    .spec.template.spec.containers[] |= with(select(.name == "integration-gateway");
+      .env = ((.env // []) | map(select(.name != "INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_SHA256" and
+        .name != "INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_GENERATION")) + [
+        {"name":"INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_SHA256","valueFrom":{"configMapKeyRef":{"name":"integration-gateway-oidc-provider","key":"provider-snapshot.sha256"}}},
+        {"name":"INTEGRATION_GATEWAY_OIDC_PROVIDER_SNAPSHOT_GENERATION","valueFrom":{"configMapKeyRef":{"name":"integration-gateway-oidc-provider","key":"provider-snapshot.generation"}}}
+      ]) |
+      .volumeMounts = ((.volumeMounts // []) |
+        map(select(.name != "vault-ca" and .name != "vault-token" and .name != "oidc-ca")) + [
+          {"name":"direct-kubernetes-api-token","mountPath":"/var/run/secrets/tokens/kubernetes-api","readOnly":true},
+          {"name":"direct-kubernetes-api-ca","mountPath":"/var/run/config/kubernetes.io/serviceaccount","readOnly":true},
+          {"name":"direct-git-credentials","mountPath":"/var/run/secrets/mattercodex/integration-gateway/git-credentials","readOnly":true},
+          {"name":"direct-oidc-provider","mountPath":"/var/run/config/mattercodex/integration-gateway/oidc","readOnly":true}
+        ]
+      )
+    ) |
+    .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
+      map(select(.name != "vault-ca" and .name != "vault-token" and .name != "oidc-ca")) + [
+        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]}},
+        {"name":"direct-kubernetes-api-ca","configMap":{"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]}},
+        {"name":"direct-git-credentials","secret":{"secretName":"integration-gateway-git-credentials","defaultMode":288,"items":[{"key":"state.json","path":"state.json"}]}},
+        {"name":"direct-oidc-provider","configMap":{"name":"integration-gateway-oidc-provider","defaultMode":288,"items":[{"key":"provider-snapshot.json","path":"provider-snapshot.json"}]}}
+      ]
+    )
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "interaction-gateway");
+    .spec.template.metadata.labels."mattercodex.dev/runtime-secret-api" = "interaction-gateway" |
+    .spec.template.spec.containers[] |= with(select(.name == "interaction-gateway");
+      .volumeMounts = ((.volumeMounts // []) |
+        map(select(.name != "vault-ca" and .name != "vault-token")) + [
+          {"name":"direct-kubernetes-api-token","mountPath":"/var/run/secrets/tokens/kubernetes-api","readOnly":true},
+          {"name":"direct-kubernetes-api-ca","mountPath":"/var/run/config/kubernetes.io/serviceaccount","readOnly":true}
+        ]
+      )
+    ) |
+    .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
+      map(select(.name != "vault-ca" and .name != "vault-token")) + [
+        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]}},
+        {"name":"direct-kubernetes-api-ca","configMap":{"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]}}
+      ]
+    )
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher");
+    .spec.template.spec.volumes[] |= with(select(.name == "publisher-config" and .projected != null);
+      .projected.sources = ((.projected.sources // []) |
+        map(select(.configMap.name != "internal-rpc-authority-vault-ca")))
+    )
+  ) |
+  with(select(.kind == "Deployment" and (.metadata.name == "runtime-s3-archive-exchanger" or .metadata.name == "runtime-s3-restore-exchanger"));
+    .spec.template.spec.containers[] |= with(select(.name == "exchanger");
+      .env = ((.env // []) | map(select((.name | test("^RUNTIME_VAULT_")) | not)) + [
+        {"name":"RUNTIME_DEPLOYMENT_PROFILE","value":"direct-production-single-node-prototype"},
+        {"name":"RUNTIME_S3_CREDENTIAL_BACKEND","value":"direct-production-s3-sts"}
+      ]) |
+      .volumeMounts = ((.volumeMounts // []) | map(select(.name != "vault-token" and .name != "vault-ca")))
+    ) |
+    .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
+      map(select(.name != "vault-token" and .name != "vault-ca")))
+  ) |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths");
+    .spec.egress = ((.spec.egress // []) | map(select(
+      .to[0].podSelector.matchLabels."app.kubernetes.io/name" != "vault" and
+      .to[0].podSelector.matchLabels."app.kubernetes.io/name" != "sso")))
+  ) |
+  with(select(.kind == "NetworkPolicy" and
+      (.metadata.name == "interaction-gateway-exact-runtime-paths" or
+       .metadata.name == "interaction-gateway-migration-exact-paths" or
+       .metadata.name == "runtime-s3-archive-exchanger-exact-paths" or
+       .metadata.name == "runtime-s3-restore-exchanger-exact-paths"));
+    .spec.egress = ((.spec.egress // []) | map(select(
+      .to[0].podSelector.matchLabels."app.kubernetes.io/name" != "vault")))
+  )
+' "$temporary_directory/normalized.yaml"
 
 # File readers получают только Secret своей exact target. Список закрыт и
 # повторяет утверждённый target registry publisher.

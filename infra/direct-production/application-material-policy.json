@@ -45,6 +45,24 @@
     },
     {
       "kind": "Secret",
+      "name": "integration-gateway-git-credentials",
+      "keys": [
+        "state.json"
+      ],
+      "requirement": "материализованный владельцем агрегат Git credential для точного каталога репозиториев"
+    },
+    {
+      "kind": "ConfigMap",
+      "name": "integration-gateway-oidc-provider",
+      "keys": [
+        "provider-snapshot.generation",
+        "provider-snapshot.json",
+        "provider-snapshot.sha256"
+      ],
+      "requirement": "материализованный владельцем snapshot OIDC provider с закреплённым поколением и каноническим SHA-256"
+    },
+    {
+      "kind": "Secret",
       "name": "integration-gateway-application-grant",
       "keys": [
         "readiness.jwt"
@@ -138,19 +156,11 @@
     },
     {
       "kind": "ConfigMap",
-      "name": "internal-rpc-authority-vault-ca",
-      "keys": [
-        "ca.pem"
-      ],
-      "requirement": "CA bundle точного внешнего Vault endpoint"
-    },
-    {
-      "kind": "ConfigMap",
       "name": "mattercodex-oidc-ca",
       "keys": [
         "ca.pem"
       ],
-      "requirement": "CA bundle точного внешнего OIDC issuer"
+      "requirement": "CA bundle точного внешнего OIDC issuer для control-plane и control-api-gateway"
     }
   ],
   "reusable_bindings": [
@@ -530,9 +540,17 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "integration-gateway-vault-ca",
+      "name": "integration-gateway-provider-credentials",
       "keys": [
-        "ca.crt"
+        "state.json"
+      ]
+    },
+    {
+      "classification": "truly_external_credential",
+      "kind": "Secret",
+      "name": "integration-gateway-git-credentials",
+      "keys": [
+        "state.json"
       ]
     },
     {
@@ -593,9 +611,9 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
-      "name": "interaction-gateway-vault-ca",
+      "name": "interaction-gateway-bot-credentials",
       "keys": [
-        "ca.crt"
+        "state.json"
       ]
     },
     {
@@ -1391,14 +1409,6 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
-      "kind": "ConfigMap",
-      "name": "internal-rpc-authority-vault-ca",
-      "keys": [
-        "ca.pem"
-      ]
-    },
-    {
       "classification": "deterministically_derived",
       "kind": "ConfigMap",
       "name": "mattercodex-internal-ca",
@@ -1412,6 +1422,16 @@
       "name": "mattercodex-nats-ca",
       "keys": [
         "ca.pem"
+      ]
+    },
+    {
+      "classification": "truly_external_credential",
+      "kind": "ConfigMap",
+      "name": "integration-gateway-oidc-provider",
+      "keys": [
+        "provider-snapshot.generation",
+        "provider-snapshot.json",
+        "provider-snapshot.sha256"
       ]
     },
     {

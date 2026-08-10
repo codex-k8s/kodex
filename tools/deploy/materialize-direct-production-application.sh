@@ -179,6 +179,23 @@ if [[ "$mode" == readback ]]; then
     ([.publisher_owned_runtime_keys[]? |
       select(.kind == $resource.kind and .name == $resource.name) | .keys[]]) as $runtime |
     [.kind,.name,(.keys|sort|tojson),((.keys+$runtime)|unique|sort|tojson)] | @tsv' "$policy")
+  for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
+    jq -er '.data["state.json"]' "$temporary_directory/readback-Secret-$name.json" |
+      base64 -d >"$temporary_directory/$name-state.json" || fail "Secret/$name aggregate readback is invalid"
+    node "$helper" validate-aggregate "$temporary_directory/$name-state.json" 1024 >/dev/null
+  done
+  jq -er '.data["state.json"]' "$temporary_directory/readback-Secret-integration-gateway-git-credentials.json" |
+    base64 -d >"$temporary_directory/integration-gateway-git-state.json" ||
+    fail "Secret/integration-gateway-git-credentials readback is invalid"
+  node "$helper" validate-git-aggregate "$temporary_directory/integration-gateway-git-state.json" \
+    "$repository_root/deploy/k8s/base/integration-gateway/git-sources/catalog.json" >/dev/null
+  for key in provider-snapshot.json provider-snapshot.sha256 provider-snapshot.generation; do
+    jq -jr --arg key "$key" '.data[$key]' \
+      "$temporary_directory/readback-ConfigMap-integration-gateway-oidc-provider.json" \
+      >"$temporary_directory/$key" || fail "ConfigMap/integration-gateway-oidc-provider readback is invalid"
+  done
+  node "$helper" validate-oidc-snapshot "$temporary_directory/provider-snapshot.json" \
+    "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" >/dev/null
   printf 'Direct production application material readback completed\n'
   exit 0
 fi
@@ -235,6 +252,25 @@ mapping_digest=$(value_path Secret interaction-gateway-mapping manifest.sha256)
 mapping_revision=$(tr -d '\n' <"$(value_path Secret interaction-gateway-mapping revision)")
 [[ "$mapping_revision" =~ ^production-r[1-9][0-9]*$ ]] || fail "external mapping revision is invalid"
 [[ "$(yq -er '.revision' "$mapping_manifest")" == "$mapping_revision" ]] || fail "external mapping revision mismatch"
+node "$helper" validate-git-aggregate \
+  "$(value_path Secret integration-gateway-git-credentials state.json)" \
+  "$repository_root/deploy/k8s/base/integration-gateway/git-sources/catalog.json" >/dev/null
+node "$helper" validate-oidc-snapshot \
+  "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.json)" \
+  "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.sha256)" \
+  "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.generation)" >/dev/null
+
+# Dynamic aggregate Secrets начинаются с канонического пустого поколения
+# и сохраняются при idempotent materialization без сброса runtime CAS state.
+for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
+  aggregate=$(value_path Secret "$name" state.json)
+  if [[ -f "$aggregate" ]]; then
+    node "$helper" validate-aggregate "$aggregate" 1024 >/dev/null
+  else
+    mkdir -p "$(dirname -- "$aggregate")"
+    node "$helper" generate-empty-aggregate "$aggregate"
+  fi
+done
 
 # Reusable bindings are copied only through exact owner-controlled bindings.
 while IFS=$'\t' read -r target_kind target_name target_key source_namespace source_name source_key; do
@@ -384,11 +420,6 @@ for item in \
   'Secret integration-gateway-postgresql-ca ca.crt' 'Secret interaction-gateway-postgresql-ca ca.crt'; do
   read -r kind name key <<<"$item"; put_file "$kind" "$name" "$key" "$ca_cert"
 done
-for name in integration-gateway-vault-ca interaction-gateway-vault-ca; do
-  put_file Secret "$name" ca.crt \
-    "$(value_path ConfigMap internal-rpc-authority-vault-ca ca.pem)"
-done
-
 # Preserve private protocol keys, generating only absent ones.
 while IFS=$'\t' read -r name key; do
   if ! has_value Secret "$name" "$key"; then

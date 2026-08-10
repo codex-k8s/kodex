@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - serviceaccount.yaml
+  - runtime-adapter-rbac.yaml
   - deployment.yaml
   - service.yaml
   - management-service.yaml

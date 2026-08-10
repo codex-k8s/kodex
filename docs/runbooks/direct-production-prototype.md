@@ -275,36 +275,72 @@ Secret, key, logical path, operation, digest, generation или CAS conflict
 приводит к закрытому отказу. Readiness authority использует тот же backend
 readback, что и рабочая публикация.
 
-Четыре обязательных direct-production процесса пока сохраняют рабочие
-Vault-границы и потому не могут пройти dark startup/readiness при отсутствии
-`Service/vault:8200`:
+В direct-production application runtime adapters A–D заменяют живой Vault
+на закрытые Kubernetes/file границы:
 
-| Process | Текущая обязательная граница | Startup/readiness |
+| Consumer | Exact binding | Authority и readback |
 |---|---|---|
-| `integration-gateway` | два `secret.NewVault`: writable provider credential и read-only Git credential | оба `Check` входят в startup barrier и periodic readiness |
-| `interaction-gateway` | единственный `credential.New` для Mattermost bot token lifecycle | `botIdentityService.Check` входит в startup barrier и periodic readiness и вызывает store read path |
-| `runtime-s3-archive-exchanger` | Vault Kubernetes login и `aws/sts/runtime-archive-exchanger`, затем exact `AssumeRole` | probe `check-s3-archive` проверяет только Vault token/CA files; рабочий issuance безусловно требует live Vault, поэтому файловая readiness недостаточна |
-| `runtime-s3-restore-exchanger` | Vault Kubernetes login и `aws/sts/runtime-restore-exchanger`, затем exact `AssumeRole` | probes проверяют Vault token/CA files и restore-effect transport; рабочий issuance безусловно требует live Vault, поэтому readiness недостаточна |
+| `integration-gateway` provider store | `Secret/integration-gateway-provider-credentials`, единственный key `state.json` | main container получает projected token с audience `https://kubernetes.default.svc`; Role даёт ровно `get|update` одного Secret; `resourceVersion` CAS, generation, canonical digest и readback проверяются adapter и materializer |
+| `integration-gateway` Git store | `Secret/integration-gateway-git-credentials/state.json` | owner-materialized read-only aggregate с exact `credential_secret_ref`/version из repository catalog; API token для чтения не используется |
+| `integration-gateway` OIDC verifier | `ConfigMap/integration-gateway-oidc-provider`: `provider-snapshot.json`, `provider-snapshot.sha256`, `provider-snapshot.generation` | owner-materialized public JWKS snapshot; только `RS256`, exact issuer/audience, unique public `kid`, pinned generation и canonical SHA-256; network discovery для этого consumer отключен |
+| `interaction-gateway` bot credential store | `Secret/interaction-gateway-bot-credentials`, единственный key `state.json` | отдельные ServiceAccount и Role с ровно `get|update`; UUID binding, immutable active value, monotonic revoke, CAS/digest/readback |
 
-Authority publisher/reconciler/verifier/issuer уже переключены на закрытые
-Kubernetes/file adapters, поэтому к этой таблице не относятся. Оставшиеся
-границы нельзя заменить manifest-only значением: provider/Git и bot stores
-требуют create/read/revoke/CAS/digest semantics, а S3 exchangers — bounded STS
-issuance, exact policy/tags/TTL и revoke/readback. До profile-selected adapter
-owner bootstrap должен закрыто требовать exact HTTPS Service `vault` и Ready
-EndpointSlice на порту `8200`. Отсутствие endpoint нельзя обходить dev Vault,
-fake endpoint, статическим credential или plaintext fallback. Полный Vault
-lifecycle остаётся в #256.
+Два writable aggregate Secret заранее создаются materializer с
+`schema_version=1`, `generation=1`, пустым `records` и верным digest.
+Повторная materialization сохраняет уже обслуживаемое CAS состояние.
+VAP и render фиксируют exact token/CA/file volumes; sidecar и init containers
+эти mounts не получают. Kubernetes API egress выводится в bootstrap из
+фактических `Service/kubernetes` и ready EndpointSlice как exact `/32`.
+`list|watch|create|delete|patch`, `pods/log`, Certificate и cluster-scoped доступа нет.
+Authority publisher/reconciler/verifier/issuer также используют direct
+Kubernetes/file profiles; их игнорируемые Vault env/mounts удалены из
+итогового render.
 
-Отдельно `integration-gateway` при запуске вызывает OIDC discovery для exact
-issuer `https://sso.mattercodex.local`; `mattercodex-oidc-ca/ca.pem` является
-внешним binding, а NetworkPolicy допускает только `Service/sso` в namespace
-`identity` на 443. Если этот Service/EndpointSlice отсутствует, startup закрыто
-завершается ошибкой. `integration-gateway-provider-health-credential/token`,
-application grants, Mattermost mapping, KMS/role ARN и authority trust roots
-остаются точным external owner material. Их отсутствие отклоняет materializer;
-оно не заменяется внутренне сгенерированным credential и не скрывается зелёной
-readiness.
+Единственная оставшаяся внутренняя startup/readiness граница — S3 STS
+для `runtime-s3-archive-exchanger` и `runtime-s3-restore-exchanger`. Render
+выбирает `direct-production-s3-sts` и удаляет Vault token/CA/egress, но
+фиксирует тот же identity source в `runtime-controller-s3-security-policy`;
+текущий adapter намеренно закрыто отказывается без доказанного binding.
+Проверено read-only:
+
+- Kubernetes issuer — `https://kubernetes.default.svc.cluster.local`, JWKS использует
+  `RS256`, но anonymous discovery из кластера отвечает `401`;
+- projected ServiceAccount token сохраняется валидным до `exp`, а
+  индивидуального offline revoke в Kubernetes нет;
+- pinned MinIO
+  `RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`
+  предшествует release с исправлением High-severity STS session-policy
+  bypass от 2025-10-15;
+- MinIO web-identity даёт minimum TTL `900` и policy intersection, но
+  exact per-execution issue/self-revoke/readback и patched server в текущем контуре
+  отсутствуют.
+
+Поэтому Kubernetes SA OIDC не маскируется как готовый runtime S3
+binding. Для снятия blocker владелец должен выбрать и безопасно
+материализовать exact TLS STS/identity-plugin endpoint и CA, issuer
+metadata/JWKS, audience, role/policy identifiers и issuer-owned private
+authentication credential. Binding обязан давать TTL `900`, intersection
+по exact action/object/version/KMS, lease, immediate revoke и functional readback.
+Значения не передаются через Mattermost. После выбора binding developer
+добавляет реальные `Issue`, `Revoke` и readback в
+`services/internal/runtime-controller/cmd/runtime-credential-broker/s3_provider.go`
+без static/root credential и shared identity.
+
+Внешний closed set состоит из 17 resources / 40 keys. В нем
+остаются application grants и public trust roots, Mattermost mapping,
+`integration-gateway-provider-health-credential`, Git aggregate, OIDC provider
+snapshot, `mattercodex-oidc-ca` для сетевых OIDC consumers control plane,
+а также runtime S3 KMS/role identifiers. Внутренние credential в этот
+set не входят. Отсутствие любого key отклоняет materializer.
+
+Context7 при этой проверке вернул ошибку monthly quota, поэтому
+использованы официальные [Kubernetes projected volumes](https://kubernetes.io/docs/concepts/storage/projected-volumes/),
+[ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/),
+[ServiceAccount administration](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/),
+[MinIO AssumeRoleWithWebIdentity](https://docs.min.io/aistor/developers/security-token-service/assumerolewithwebidentity/),
+[MinIO STS](https://docs.min.io/aistor/developers/security-token-service/),
+[MinIO identity plugin](https://docs.min.io/aistor/administration/iam/identity/plugin-identity/)
+и [MinIO security release](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z).
 
 ## Bounded smoke
 
