@@ -171,6 +171,13 @@ grep -Fq 'deployments?environment=$environment&per_page=100' \
   "$repository_root/tools/release/verify-github-owner-gate.sh"
 grep -Fq 'deployments/$deployment_id/statuses?per_page=100' \
   "$repository_root/tools/release/verify-github-owner-gate.sh"
+grep -Fq 'curl --config "$curl_config" --fail --silent --show-error' \
+  "$repository_root/tools/release/verify-github-owner-gate.sh"
+grep -Fq 'unset GH_TOKEN' "$repository_root/tools/release/verify-github-owner-gate.sh"
+if rg -q 'gh api' "$repository_root/tools/release/verify-github-owner-gate.sh"; then
+  printf 'Workflow owner gate still depends on gh CLI unavailable in the pinned runner image\n' >&2
+  exit 1
+fi
 if rg -q 'repos/\$GITHUB_REPOSITORY/environments/' \
   "$repository_root/tools/release/verify-github-owner-gate.sh"; then
   printf 'Workflow owner gate still requires unavailable environment administration permission\n' >&2
