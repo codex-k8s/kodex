@@ -254,6 +254,22 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
 			},
+			"runtime-controller": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+				vaultRole:                 "internal-rpc-authority-runtime-controller",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
+			},
+			"runtime-s3-restore-exchanger": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
+				vaultRole:                 "internal-rpc-authority-runtime-s3-restore-exchanger",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/restore-ack",
+			},
 		},
 		ModeVerifier: {
 			"control-plane": {
@@ -264,6 +280,14 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
 				resolverEnabled:           true,
+			},
+			"integration-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+				vaultRole:                 "internal-rpc-authority-integration-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/restore-ack",
 			},
 			"interaction-gateway": {
 				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
