@@ -481,20 +481,26 @@ for migration_contract in \
     exit 1
   }
 done
-for migration_binding in \
-  'control-plane-postgres-migration:control_plane_owner' \
-  'integration-gateway-postgres-migrator:integration_gateway_owner' \
-  'interaction-gateway-postgres-migrator:interaction_gateway_owner' \
-  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_owner' \
-  'runtime-controller-postgres-migration:runtime_controller_owner'; do
-  migration_secret=${migration_binding%%:*}
-  migration_owner=${migration_binding#*:}
-  rg -q "^put_pg $migration_secret dsn [a-z0-9_]+ [a-z0-9_]+ \\\"\\\$[a-z_]+\\\" $migration_owner$" \
+for migration_secret in \
+  control-plane-postgres-migration \
+  integration-gateway-postgres-migrator \
+  interaction-gateway-postgres-migrator \
+  internal-rpc-authority-migrator-postgresql \
+  runtime-controller-postgres-migration; do
+  rg -q "^put_pg $migration_secret dsn [a-z0-9_]+ [a-z0-9_]+ \\\"\\\$[a-z_]+\\\"$" \
     "$repository_root/tools/deploy/materialize-direct-production-application.sh" || {
-    printf 'Migration DSN does not assume its exact owner role: %s\n' "$migration_secret" >&2
+    printf 'Migration DSN does not preserve its exact migrator session role: %s\n' "$migration_secret" >&2
     exit 1
   }
 done
+runtime_migration="$repository_root/services/internal/runtime-controller/cmd/cli/migrations/20260803018800_runtime_controller.sql"
+[[ "$(rg -c '^-- \+goose StatementBegin$' "$runtime_migration")" -eq 3 ]] &&
+  [[ "$(rg -c '^-- \+goose StatementEnd$' "$runtime_migration")" -eq 3 ]] &&
+  rg -Uq -- '-- \+goose StatementBegin\nCREATE FUNCTION runtime_event_ordering_key[\s\S]*?\n\$function\$;\n-- \+goose StatementEnd' "$runtime_migration" &&
+  rg -Uq -- '-- \+goose StatementBegin\nCREATE FUNCTION apply_projection[\s\S]*?\n\$function\$;\n-- \+goose StatementEnd' "$runtime_migration" || {
+  printf 'Runtime-controller function bodies are not bounded goose statements\n' >&2
+  exit 1
+}
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and

@@ -205,19 +205,20 @@ grep -Eq '^postgresql://[^:]+:[a-f0-9]{64}@control-plane-postgresql-rw\.matterco
     exit 1
   }
 for migration_binding in \
-  'control-plane-postgres-migration:control_plane_owner' \
-  'integration-gateway-postgres-migrator:integration_gateway_owner' \
-  'interaction-gateway-postgres-migrator:interaction_gateway_owner' \
-  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_owner' \
-  'runtime-controller-postgres-migration:runtime_controller_owner'; do
+  'control-plane-postgres-migration:control_plane_migrator' \
+  'integration-gateway-postgres-migrator:integration_gateway_migrator_g1' \
+  'interaction-gateway-postgres-migrator:interaction_gateway_migrator' \
+  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_migrator' \
+  'runtime-controller-postgres-migration:runtime_controller_migrator'; do
   migration_secret=${migration_binding%%:*}
-  migration_owner=${migration_binding#*:}
+  migration_principal=${migration_binding#*:}
   jq -er --arg name "$migration_secret" \
     '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data.dsn' "$material_json" |
     base64 -d >"$temporary_directory/$migration_secret-dsn"
-  grep -Eq "&options=-c%20role%3D${migration_owner}$" \
-    "$temporary_directory/$migration_secret-dsn" || {
-    printf 'Generated PostgreSQL migration DSN does not assume its owner role: %s\n' "$migration_secret" >&2
+  grep -Eq "^postgresql://${migration_principal}:[a-f0-9]{64}@" \
+    "$temporary_directory/$migration_secret-dsn" &&
+    ! grep -Fq '&options=-c%20role%3D' "$temporary_directory/$migration_secret-dsn" || {
+    printf 'Generated PostgreSQL migration DSN does not preserve the migrator session role: %s\n' "$migration_secret" >&2
     exit 1
   }
 done
