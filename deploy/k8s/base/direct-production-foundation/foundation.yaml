@@ -598,7 +598,12 @@ data:
       [ "${#password}" -eq 64 ] || exit 23
       printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
       if [ "$create_role" = true ]; then role_flag=CREATEROLE; else role_flag=NOCREATEROLE; fi
-      printf "ALTER ROLE %s LOGIN PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file"
+      case "$principal" in
+        ira_publisher_g[1-5]|ira_readback_attestor_g[1-5])
+          printf "ALTER ROLE %s PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file" ;;
+        *)
+          printf "ALTER ROLE %s LOGIN PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file" ;;
+      esac
       printf 'GRANT CONNECT ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       if [ "$create_role" = true ]; then
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
@@ -681,8 +686,14 @@ data:
     done <"$principals_file"
     [ "$migration_principals" -eq 5 ] || exit 34
     expected=$(wc -l </var/run/bootstrap/principals.tsv | tr -d ' ')
-    actual=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
+    actual=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
     [ "$actual" = "$expected" ] || exit 24
+    expected_static_login=$(awk -F '\t' '
+      $1 !~ /^ira_publisher_g[1-5]$/ && $1 !~ /^ira_readback_attestor_g[1-5]$/ { count++ }
+      END { print count + 0 }
+    ' /var/run/bootstrap/principals.tsv)
+    actual_static_login=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolname !~ '^ira_publisher_g[1-5]$' AND rolname !~ '^ira_readback_attestor_g[1-5]$' AND rolcanlogin" | tr -d '[:space:]')
+    [ "$actual_static_login" = "$expected_static_login" ] || exit 37
     expected_memberships=$(awk -F '\t' '{if ($3 != "") {count=split($3, memberships, ","); total+=count}} END {print total+0}' /var/run/bootstrap/principals.tsv)
     expected_admin_memberships=$(awk -F '\t' '
       NR == FNR { principals[$1] = 1; next }

@@ -337,6 +337,13 @@ for principal in \
     exit 1
   }
 done
+rg -q 'ira_publisher_g\[1-5\]|ira_readback_attestor_g\[1-5\]' \
+  "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'ALTER ROLE %s PASSWORD' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'actual_static_login' "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  printf 'Credential generation LOGIN ownership is not preserved by PostgreSQL bootstrap\n' >&2
+  exit 1
+}
 rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'actual_admin_membership.*member.admin_option.*NOT member.inherit_option.*NOT member.set_option' \
     "$temporary_directory/postgresql-principal-reconcile.sh" || {
