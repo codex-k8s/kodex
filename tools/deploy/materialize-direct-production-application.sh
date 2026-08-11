@@ -415,8 +415,10 @@ put_pg runtime-controller-postgres-migration dsn runtime_controller_migrator run
 put_pg runtime-controller-postgres dsn runtime_controller_runtime_g1 runtime_controller "$rt_ca"
 put_pg runtime-workload-admission-postgres dsn runtime_workload_admission_g1 runtime_controller "$rt_ca"
 put_pg internal-rpc-authority-migrator-postgresql dsn internal_rpc_authority_migrator internal_rpc_authority "$ira_ca"
-put_pg internal-rpc-authority-database-credential-reconciler-postgresql dsn ira_database_credential_reconciler internal_rpc_authority "$ira_ca" internal_rpc_authority_database_credential_reconciler
-put_pg internal-rpc-authority-restore-controller-postgresql dsn ira_restore_controller_g1 internal_rpc_authority "$ira_ca" internal_rpc_authority_restore_controller
+# Authority runtime проверяет исходный LOGIN principal и только затем сам
+# активирует capability role через AfterConnect. DSN не должен делать SET ROLE.
+put_pg internal-rpc-authority-database-credential-reconciler-postgresql dsn ira_database_credential_reconciler internal_rpc_authority "$ira_ca"
+put_pg internal-rpc-authority-restore-controller-postgresql dsn ira_restore_controller_g1 internal_rpc_authority "$ira_ca"
 for mapping in \
   automation-scheduler:ira_automation_scheduler_issuer_g1 \
   control-api-gateway:ira_control_api_gateway_issuer_g1 \
@@ -425,13 +427,13 @@ for mapping in \
   runtime-controller:ira_runtime_controller_issuer_g1; do
   component=${mapping%%:*}; principal=${mapping#*:}
   resource="internal-rpc-authority-$component-issuer-postgresql"
-  put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca" internal_rpc_authority_issuer
+  put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca"
   put_text Secret "$resource" username "$principal"
 done
 for mapping in control-plane:ira_control_plane_verifier_g1 integration-gateway:ira_integration_gateway_verifier_g1 interaction-gateway:ira_interaction_gateway_verifier_g1; do
   component=${mapping%%:*}; principal=${mapping#*:}
   resource="internal-rpc-authority-$component-verifier-postgresql"
-  put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca" internal_rpc_authority_verifier
+  put_pg "$resource" dsn "$principal" internal_rpc_authority "$ira_ca"
   put_text Secret "$resource" username "$principal"
 done
 for generation in 3 4 5; do
