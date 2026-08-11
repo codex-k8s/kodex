@@ -62,9 +62,10 @@ proof от домена-владельца и связывается с зара
 - `internal-rpc-authority-database-credential-reconciler` поддерживает
   выведенные сервером `CURRENT`/`NEXT` principal PostgreSQL для publisher и
   readback attestor через аутентификацию Vault Kubernetes;
-- `internal-rpc-authority-cli migrate expand|contract|up|status|version`
+- `internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version`
   выполняет однонаправленный жизненный цикл goose без штатного отката; полный `up`
-  закрыто отклоняется, пока не завершён `expand`.
+  закрыто отклоняется, пока не завершён `expand`, а `deploy` последовательно и
+  повторяемо выполняет полный `expand -> contract check -> up` для migration Job.
 
 Issuer и verifier загружают подписанный канонический снимок через независимый
 корень доверия манифеста. Обновление сначала проходит полную криптографическую
