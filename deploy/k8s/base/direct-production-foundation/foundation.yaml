@@ -582,7 +582,20 @@ data:
       if [ "$create_role" = true ]; then
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       fi
-      printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
+      admin_targets_for_principal=$(awk -F '\t' -v principal="$principal" '
+        $1 == principal { if (found++) printf ","; printf "%s", $2 }
+        END { print "" }
+      ' /var/run/bootstrap/admin-memberships.tsv)
+      desired_memberships=$memberships
+      if [ -n "$admin_targets_for_principal" ]; then
+        if [ -n "$desired_memberships" ]; then
+          desired_memberships="$desired_memberships,$admin_targets_for_principal"
+        else
+          desired_memberships=$admin_targets_for_principal
+        fi
+      fi
+      case "$desired_memberships" in (*[!a-z0-9_,]*) exit 30 ;; esac
+      printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' AND role.rolname NOT IN (SELECT trim(value) FROM regexp_split_to_table('%s', ',') value) LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$desired_memberships" "$principal" "$dollar_quote" >>"$sql_file"
       if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FALSE; fi
       old_ifs=$IFS; IFS=,
       for membership in $memberships; do
