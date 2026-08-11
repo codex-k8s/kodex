@@ -2757,7 +2757,7 @@ func authorityIssuerEnv(workload, spiffe string) []corev1.EnvVar {
 		{Name: "INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID", Value: "10001"},
 		{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", Value: "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn"},
 		{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-" + workload + "-issuer-postgresql"}, Key: "username"}}},
-		{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", Value: "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"},
+		{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME", Value: "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local"},
 		{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_CA_FILE", Value: "/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem"},
 		{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "otel-collector.observability.svc:4317"},
 		{Name: "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", Value: "otel-collector.observability.svc.cluster.local"},

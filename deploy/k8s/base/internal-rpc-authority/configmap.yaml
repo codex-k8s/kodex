@@ -9,7 +9,7 @@ data:
   INTERNAL_RPC_AUTHORITY_RECONCILER_LISTEN: ":8443"
   INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN: ":9090"
   INTERNAL_RPC_AUTHORITY_RECONCILER_CALLER_SPIFFE_ID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
-  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local"
+  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local"
   INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: "ira_database_credential_reconciler"
   INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS: "https://vault.mattercodex-system.svc:8200"
   INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME: "vault.mattercodex-system.svc.cluster.local"

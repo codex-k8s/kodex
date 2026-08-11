@@ -295,7 +295,7 @@ spec:
           vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem
           postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/postgresql-ca.pem
           vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
-          postgresqlTlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           postgresqlSslMode: verify-full
           workloadTokenRenewalRequired: true
           credentialRefreshBeforeRotationRequired: true
@@ -309,7 +309,7 @@ spec:
               port: 8200
               protocol: TCP
               policy: internal-rpc-authority-publisher-to-vault
-            - destination: internal-rpc-authority-postgresql.mattercodex-system.svc
+            - destination: internal-rpc-authority-postgresql-rw.mattercodex-system.svc
               port: 5432
               protocol: TCP
               policy: internal-rpc-authority-publisher-to-postgresql
@@ -628,7 +628,7 @@ spec:
           - PREVIOUS
           - RETIRED
       postgres:
-        tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+        tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
         sslMode: verify-full
         migratorMembershipAllowed: false
         tableOwnerMembershipAllowed: false
@@ -693,7 +693,7 @@ spec:
         exactDestinations:
           - kubernetes.default.svc:443
           - vault.mattercodex-system.svc:8200
-          - internal-rpc-authority-postgresql.mattercodex-system.svc:5432
+          - internal-rpc-authority-postgresql-rw.mattercodex-system.svc:5432
           - otel-collector.observability.svc:4317
           - sentry-relay.observability.svc:8443
         kubernetesApiEnvironmentRenderMustPinServiceAndReadyEndpoints: true
@@ -779,7 +779,7 @@ spec:
           vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/vault-ca.pem
           postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/postgresql-ca.pem
           vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
-          postgresqlTlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           postgresqlSslMode: verify-full
           workloadTokenRenewalRequired: true
           credentialRefreshBeforeRotationRequired: true
@@ -811,7 +811,7 @@ spec:
               port: 8200
               protocol: TCP
               policy: internal-rpc-authority-readback-attestor-to-vault
-            - destination: internal-rpc-authority-postgresql.mattercodex-system.svc
+            - destination: internal-rpc-authority-postgresql-rw.mattercodex-system.svc
               port: 5432
               protocol: TCP
               policy: internal-rpc-authority-readback-attestor-to-postgresql
@@ -2180,7 +2180,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-restore-controller
           namespace: mattercodex-system
@@ -2203,7 +2203,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: vault
           namespace: mattercodex-system
@@ -2260,7 +2260,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
     publisher:
       ingress:
@@ -2273,7 +2273,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
           namespace: default
@@ -2391,7 +2391,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
       sourceEgressPolicyRequired: true
       destinationIngressPolicyRequired: true
       environmentRenderMustPinServiceClusterIp: true
@@ -2415,7 +2415,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
       sourceEgressPolicyRequired: true
       destinationIngressPolicyRequired: true
       environmentRenderMustPinServiceClusterIp: true
@@ -2456,7 +2456,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
     recovery:
       ingress: NONE
@@ -2465,7 +2465,7 @@ spec:
           namespace: mattercodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
           namespace: default

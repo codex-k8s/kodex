@@ -973,7 +973,7 @@ protected tables и не исполняет consumer readback functions. Attesto
 файловые username/password только через Vault Kubernetes auth. Token renewal,
 credential refresh, rotation и перевод retired principal в `NOLOGIN`
 обязательны. PostgreSQL использует `sslmode=verify-full`, точный SNI
-`internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local` и
+`internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local` и
 отдельную CA; Vault — точный SNI
 `vault.mattercodex-system.svc.cluster.local`. NetworkPolicy разрешает только
 точный Vault:8200 и PostgreSQL:5432 destinations: source egress policies

@@ -57,7 +57,7 @@ data:
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN: ":8443"
   INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN: ":9090"
   INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID: internal-rpc-authority-primary
-  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
   INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: ira_restore_controller_g1
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION: "1"
   INTERNAL_RPC_AUTHORITY_PUBLISHER_ADDRESS: internal-rpc-authority-publisher.mattercodex-system.svc:8444

@@ -25,6 +25,15 @@ spec:
         fsGroup: 29006
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgresql
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          command: [/bin/sh, -ec]
+          args: ['until pg_isready --host="$POSTGRES_HOST" --port=5432 --timeout=2; do sleep 2; done']
+          env:
+            - {name: POSTGRES_HOST, value: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       containers:
         - name: migrate
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -36,7 +45,7 @@ spec:
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
-              value: internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local
+              value: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
           resources:
             requests:
               cpu: 25m

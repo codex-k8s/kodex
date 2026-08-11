@@ -77,7 +77,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		TLSPrivateKeyFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.key",
 		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/publisher/client-ca.pem",
 		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn",
-		PostgresTLSServerName:        "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName:        "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
 		SecretBackend:                string(secretBackendVault),
 		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
 		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",

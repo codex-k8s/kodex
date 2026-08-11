@@ -319,6 +319,32 @@ grep -Fq "tr '\\t' '|' </var/run/bootstrap/principals.tsv" \
   printf 'PostgreSQL principal bootstrap does not preserve empty TSV fields\n' >&2
   exit 1
 }
+if rg -n '(control-plane|internal-rpc-authority|runtime-controller)-postgresql\.mattercodex-system' \
+  "$repository_root/deploy" "$repository_root/services" "$repository_root/contracts" >/dev/null; then
+  printf 'PostgreSQL runtime contract still references a non-canonical service alias\n' >&2
+  exit 1
+fi
+for migration_contract in \
+  'deploy/k8s/base/control-plane/migration-job.yaml:control-plane-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/integration-gateway/migration-job.yaml:integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/interaction-gateway/migration-job.yaml:interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml:internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/runtime-controller/migration-job.yaml:runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local'; do
+  migration_file=${migration_contract%%:*}
+  migration_host=${migration_contract#*:}
+  yq -o=json '.' "$repository_root/$migration_file" | jq -e --arg postgres_host "$migration_host" '
+    .spec.activeDeadlineSeconds > 0 and .spec.activeDeadlineSeconds <= 300 and
+    (.spec.template.spec.initContainers[] | select(.name == "wait-for-postgresql") |
+      (.image | test("^docker.io/library/postgres:[^@]+@sha256:[a-f0-9]{64}$")) and
+      .env == [{"name":"POSTGRES_HOST","value":$postgres_host}] and
+      (.args | join(" ") | contains("until pg_isready")) and
+      .securityContext.runAsNonRoot == true and
+      .securityContext.readOnlyRootFilesystem == true)
+  ' >/dev/null || {
+    printf 'Migration Job has no bounded PostgreSQL network-readiness barrier: %s\n' "$migration_file" >&2
+    exit 1
+  }
+done
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
