@@ -364,8 +364,12 @@ deferred `admission-runtime` с внешним `ADMISSION_TOOLS_IMAGE` в Wave A
 
 Foundation PostgreSQL использует только `hostssl` с SCRAM и явный
 `hostnossl reject`; PostgreSQL и Redis probes проходят authenticated TLS с
-точным service hostname/SNI и CA. Data policies содержат одновременно точные namespace и Pod
-selectors. Build registry path допускает только Service port `5000`; Kubernetes
+точным service hostname/SNI и CA. В single-node профиле bootstrap читает
+единственный IPv4 `PodCIDR` и материализует его как ingress boundary для
+межподовых соединений: это переносимый fallback для CNI, которые не сохраняют
+source pod identity при проверке ingress. Исходящий путь остается ограничен
+точными destination selectors и портами, а identity подтверждают TLS,
+PostgreSQL roles и прикладные credentials. Build registry path допускает только Service port `5000`; Kubernetes
 API для controller/listener/deployer материализуется как read-only discovered
 exact `/32` destinations. Единственное внешнее `0.0.0.0/0:443` принадлежит
 изолированному allowlist proxy без application credentials; application/build
