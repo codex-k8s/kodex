@@ -247,6 +247,19 @@ yq eval-all -e '
   printf 'PostgreSQL TLS-only pg_hba contract is absent\n' >&2
   exit 1
 }
+yq eval-all -e '
+  select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql") |
+  (.spec.template.spec.securityContext.runAsUser == 999) and
+  (.spec.template.spec.securityContext.runAsGroup == 999) and
+  (.spec.template.spec.securityContext.fsGroup == 999) and
+  (.spec.template.spec.containers | any_c(
+    .name == "postgresql" and
+    .image == "pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
+  ))
+' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
+  printf 'Direct-production PostgreSQL does not provide the pinned pgvector runtime\n' >&2
+  exit 1
+}
 
 yq eval-all -e '
   select(.kind == "StatefulSet" and .metadata.name == "mattercodex-nats") |
