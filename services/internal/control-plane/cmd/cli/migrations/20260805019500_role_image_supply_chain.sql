@@ -70,7 +70,7 @@ CREATE INDEX resources_image_build_queue_idx
     ON control_plane.resources (
         organization_id,
         project_id,
-        ((spec ->> 'availableAt')::timestamptz),
+        (spec ->> 'availableAt'),
         created_at,
         id
     )
