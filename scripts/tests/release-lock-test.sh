@@ -4,10 +4,17 @@ set -euo pipefail
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 validator="$repository_root/tools/release/validate-release-lock.sh"
 renderer="$repository_root/tools/release/render-direct-production.sh"
+secret_bootstrap="$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 source_sha=1111111111111111111111111111111111111111
 digest=sha256:2222222222222222222222222222222222222222222222222222222222222222
+grep -Fq "openssl rand -hex 32 | tr -d '\\n'" "$secret_bootstrap" &&
+  grep -Fq 'legacy newline-terminated material' "$secret_bootstrap" &&
+  grep -Fq 'tail -c 1 "$file" | base64' "$secret_bootstrap" || {
+  printf 'Direct-production secret bootstrap does not canonicalize legacy newline-terminated material\n' >&2
+  exit 1
+}
 jq --arg source_sha "$source_sha" --arg digest "$digest" '
   {schema_version:1,profile:"direct-production single-node prototype",source_sha:$source_sha,build_run_id:"123",registry_push:"matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000",node_pull:"localhost:5001",images:[.images[]|{component,repository:("mattercodex/"+.component),digest:$digest,pull_ref:("localhost:5001/mattercodex/"+.component+"@"+$digest)}]}
 ' "$repository_root/tools/release/images.json" | jq -S . >"$temporary_directory/valid.json"
@@ -274,12 +281,14 @@ yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/direct-production-foun
     (map(select(.kind == "StatefulSet" and .metadata.name == "mattercodex-redis"))[0]
       .spec.template.spec.containers[0]) as $redis |
     all([$postgres.startupProbe,$postgres.readinessProbe,$postgres.livenessProbe][];
+      (.exec.command | join(" ") | contains("host=mattercodex-postgresql hostaddr=127.0.0.1")) and
       (.exec.command | join(" ") | contains("sslmode=verify-full"))) and
     all([$redis.readinessProbe,$redis.livenessProbe][];
       (.exec.command | index("--tls")) != null and
       (.exec.command | index("--sni")) != null and
       (.exec.command | index("--cacert")) != null and
-      (.exec.command | index("mattercodex-redis")) != null)
+      (.exec.command | index("mattercodex-redis")) != null and
+      (.exec.command | index("127.0.0.1")) != null)
   ' >/dev/null || {
   printf 'Foundation TLS probes do not verify the intended hostname and CA\n' >&2
   exit 1
