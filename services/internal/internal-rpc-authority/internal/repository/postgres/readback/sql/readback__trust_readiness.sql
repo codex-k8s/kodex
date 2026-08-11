@@ -14,7 +14,7 @@ SELECT EXISTS (
       AND served_state_digest_sha256 = @served_state_digest_sha256
 )
 AND pg_catalog.has_function_privilege(
-    pg_catalog.session_user,
+    current_user,
     'internal_rpc_authority.activate_readback_trust(text,text,bigint,text,bigint,text,bigint,bigint,text,text,timestamptz)',
     'EXECUTE'
 );
