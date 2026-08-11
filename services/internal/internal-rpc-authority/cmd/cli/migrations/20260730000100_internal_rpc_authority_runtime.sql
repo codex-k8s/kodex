@@ -175,6 +175,8 @@ GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner
 
 SET ROLE internal_rpc_authority_owner;
 REVOKE ALL ON SCHEMA internal_rpc_authority FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA internal_rpc_authority
+    TO internal_rpc_authority_readback_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority TO
     internal_rpc_authority_issuer,
     internal_rpc_authority_verifier,
