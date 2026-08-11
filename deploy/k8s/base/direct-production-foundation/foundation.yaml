@@ -525,7 +525,7 @@ data:
     #!/bin/sh
     set -eu
     umask 077
-    sql_file=$(mktemp /tmp/principals.XXXXXX.sql)
+    sql_file=$(mktemp /tmp/principals.sql.XXXXXX)
     trap 'rm -f -- "$sql_file"' EXIT HUP INT TERM
     printf '%s\n' 'SET client_min_messages = warning;' >"$sql_file"
     while IFS= read -r role; do
