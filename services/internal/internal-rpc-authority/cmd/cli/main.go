@@ -27,6 +27,7 @@ type command string
 const (
 	commandExpand   command = "expand"
 	commandContract command = "contract"
+	commandDeploy   command = "deploy"
 	commandUp       command = "up"
 	commandStatus   command = "status"
 	commandVersion  command = "version"
@@ -90,6 +91,8 @@ func run(ctx context.Context, arguments []string) error {
 		return migrateExpand(ctx, database)
 	case commandContract:
 		return migrateContract(ctx, database)
+	case commandDeploy:
+		return migrateDeploy(ctx, database)
 	case commandUp:
 		return migrateUp(ctx, database)
 	case commandStatus:
@@ -104,15 +107,15 @@ func run(ctx context.Context, arguments []string) error {
 func parseCommand(arguments []string) (command, error) {
 	if len(arguments) != 2 || arguments[0] != "migrate" {
 		return "", errors.New(
-			"usage: internal-rpc-authority-cli migrate expand|contract|up|status|version",
+			"usage: internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version",
 		)
 	}
 	switch command(arguments[1]) {
-	case commandExpand, commandContract, commandUp, commandStatus, commandVersion:
+	case commandExpand, commandContract, commandDeploy, commandUp, commandStatus, commandVersion:
 		return command(arguments[1]), nil
 	default:
 		return "", errors.New(
-			"usage: internal-rpc-authority-cli migrate expand|contract|up|status|version",
+			"usage: internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version",
 		)
 	}
 }
@@ -133,6 +136,18 @@ func migrateContract(ctx context.Context, database *sql.DB) error {
 		return errors.New("expand migrations must complete before contract")
 	}
 	return nil
+}
+
+// migrateDeploy выполняет полный migration lifecycle для первого развертывания
+// или повторного запуска уже частично примененной forward-only цепочки.
+func migrateDeploy(ctx context.Context, database *sql.DB) error {
+	if err := migrateExpand(ctx, database); err != nil {
+		return err
+	}
+	if err := migrateContract(ctx, database); err != nil {
+		return err
+	}
+	return migrateUp(ctx, database)
 }
 
 func migrateUp(ctx context.Context, database *sql.DB) error {

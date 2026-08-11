@@ -41,7 +41,7 @@ spec:
           command:
             - /usr/local/bin/internal-rpc-authority-cli
             - migrate
-            - expand
+            - deploy
           env:
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
