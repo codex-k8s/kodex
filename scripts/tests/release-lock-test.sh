@@ -373,7 +373,7 @@ for migration_scope in \
     exit 1
   }
   if rg --pcre2 -U -q \
-    '(?s)ALTER ROLE\b[^;]*\b(?:NOSUPERUSER|NOREPLICATION|NOBYPASSRLS)\b' \
+    '(?s)ALTER ROLE\b[^;]*\b(?:NOSUPERUSER|NOCREATEDB|NOREPLICATION|NOBYPASSRLS)\b' \
     "$repository_root/$migration_directory"; then
     printf 'Bounded PostgreSQL migrator changes a superuser-only role attribute: %s\n' \
       "$migration_directory" >&2

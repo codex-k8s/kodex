@@ -162,7 +162,7 @@ BEGIN
         END IF;
         IF role_safe IS NOT NULL THEN
             EXECUTE format(
-                'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE INHERIT',
+                'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE INHERIT',
                 candidate.principal_name, candidate.password
             );
         ELSE

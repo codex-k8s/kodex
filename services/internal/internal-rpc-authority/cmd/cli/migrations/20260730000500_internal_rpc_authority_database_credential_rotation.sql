@@ -56,7 +56,7 @@ BEGIN
             'ira_readback_attestor_g3',
             'ira_readback_attestor_g4'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'credential lifecycle role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -66,7 +66,7 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
-    NOLOGIN NOCREATEDB CREATEROLE INHERIT;
+    NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend
     TO internal_rpc_authority_credential_lifecycle_definer;
 

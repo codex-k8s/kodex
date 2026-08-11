@@ -12,7 +12,7 @@ BEGIN
         SELECT 1
         FROM pg_catalog.pg_roles
         WHERE rolname = 'control_plane_role_controller'
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'control-plane role controller has prohibited attributes'
             USING ERRCODE = '42501';
@@ -22,7 +22,7 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE control_plane_role_controller
-    NOLOGIN NOCREATEDB CREATEROLE INHERIT;
+    NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
 GRANT USAGE ON SCHEMA control_plane_extensions
     TO control_plane_role_controller;
@@ -95,7 +95,7 @@ BEGIN
         );
     ELSE
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE NOINHERIT',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE NOINHERIT',
             requested_name,
             requested_password
         );

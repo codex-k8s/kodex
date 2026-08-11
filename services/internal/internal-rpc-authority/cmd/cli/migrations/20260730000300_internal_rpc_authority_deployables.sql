@@ -35,7 +35,7 @@ BEGIN
             'internal_rpc_authority_restore_controller',
             'ira_restore_controller_g1'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'restore managed role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -45,9 +45,9 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_restore_controller
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_restore_controller_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 GRANT internal_rpc_authority_restore_controller TO ira_restore_controller_g1;
 SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority

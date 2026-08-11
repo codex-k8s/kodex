@@ -37,7 +37,7 @@ BEGIN
             'integration_gateway_migrator',
             'integration_gateway_role_controller'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'integration-gateway managed role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -47,13 +47,13 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE integration_gateway_owner
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_runtime
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_migrator
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_role_controller
-    NOLOGIN NOCREATEDB CREATEROLE NOINHERIT;
+    NOLOGIN CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO integration_gateway_role_controller;
 GRANT integration_gateway_runtime TO integration_gateway_role_controller WITH ADMIN OPTION;
 SET ROLE integration_gateway_owner;
@@ -134,7 +134,7 @@ BEGIN
     END IF;
     IF coalesce(role_exists, false) THEN
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE INHERIT',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE INHERIT',
             requested_principal_name,
             requested_password
         );

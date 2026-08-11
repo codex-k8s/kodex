@@ -37,7 +37,7 @@ BEGIN
             'ira_integration_gateway_issuer_g1',
             'ira_integration_gateway_issuer_g2'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'integration issuer role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -47,9 +47,9 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE ira_integration_gateway_issuer_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_integration_gateway_issuer_g2
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 GRANT internal_rpc_authority_issuer
     TO ira_integration_gateway_issuer_g1,
        ira_integration_gateway_issuer_g2;

@@ -119,7 +119,7 @@ BEGIN
             'ira_control_plane_verifier_g2',
             'ira_database_credential_reconciler'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'internal-rpc-authority managed role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -129,37 +129,37 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_readback_owner
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_issuer
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_verifier
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_publisher
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_readback_attestor
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_database_credential_reconciler
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_recovery
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_publisher_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_publisher_g2
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_readback_attestor_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_readback_attestor_g2
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_api_gateway_issuer_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_api_gateway_issuer_g2
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_plane_verifier_g1
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_plane_verifier_g2
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_database_credential_reconciler
-    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    LOGIN NOCREATEROLE NOINHERIT;
 
 GRANT internal_rpc_authority_publisher TO ira_publisher_g1, ira_publisher_g2;
 GRANT internal_rpc_authority_readback_attestor

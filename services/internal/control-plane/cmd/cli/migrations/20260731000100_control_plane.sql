@@ -37,7 +37,7 @@ BEGIN
             'control_plane_runtime',
             'control_plane_relay'
         )
-          AND (rolsuper OR rolreplication OR rolbypassrls)
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
     ) THEN
         RAISE EXCEPTION 'control-plane managed role has prohibited attributes'
             USING ERRCODE = '42501';
@@ -47,11 +47,11 @@ $role_safety$;
 -- +goose StatementEnd
 
 ALTER ROLE control_plane_owner
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_runtime
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_relay
-    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 
 CREATE SCHEMA control_plane AUTHORIZATION control_plane_owner;
 CREATE SCHEMA control_plane_extensions AUTHORIZATION control_plane_owner;
