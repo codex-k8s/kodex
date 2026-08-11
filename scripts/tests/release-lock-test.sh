@@ -353,6 +353,11 @@ grep -Fq "format('REVOKE %%I FROM %%I GRANTED BY %%I'" \
   printf 'PostgreSQL principal retirement ignores the membership grantor\n' >&2
   exit 1
 }
+grep -Fq 'SELECT DISTINCT member.roleid, member.member' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal readback counts grantor rows instead of canonical memberships\n' >&2
+  exit 1
+}
 for migration_registry_entry in \
   'control_plane_migrator:control_plane_owner,control_plane_runtime,control_plane_relay,control_plane_role_controller,pg_signal_backend' \
   'integration_gateway_migrator_g1:integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend' \

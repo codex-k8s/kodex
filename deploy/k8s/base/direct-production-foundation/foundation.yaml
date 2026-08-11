@@ -650,7 +650,7 @@ data:
       END { print count + 0 }
     ' /var/run/bootstrap/principals.tsv /var/run/bootstrap/admin-memberships.tsv)
     expected_memberships=$((expected_memberships + expected_admin_memberships))
-    actual_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)" | tr -d '[:space:]')
+    actual_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM (SELECT DISTINCT member.roleid, member.member FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)) canonical_memberships" | tr -d '[:space:]')
     [ "$actual_memberships" = "$expected_memberships" ] || exit 25
     while IFS='	' read -r administrator managed_role; do
       actual_admin_membership=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles administrator ON administrator.oid = member.member JOIN pg_catalog.pg_roles managed ON managed.oid = member.roleid WHERE administrator.rolname = '$administrator' AND managed.rolname = '$managed_role' AND member.admin_option AND NOT member.inherit_option AND NOT member.set_option" | tr -d '[:space:]')
