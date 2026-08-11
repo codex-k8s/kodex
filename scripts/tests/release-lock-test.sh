@@ -341,6 +341,13 @@ grep -Fq 'if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FA
   printf 'PostgreSQL migrator role graph does not bind ADMIN to the bounded create-role flag\n' >&2
   exit 1
 }
+grep -Fq 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'member.admin_option AND NOT member.inherit_option AND NOT member.set_option' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL managed login principals lack bounded ADMIN-only ownership\n' >&2
+  exit 1
+}
 for migration_registry_entry in \
   'control_plane_migrator:control_plane_owner,control_plane_runtime,control_plane_relay,pg_signal_backend' \
   'integration_gateway_migrator_g1:integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend' \

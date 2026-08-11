@@ -240,6 +240,17 @@ sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
   printf 'PostgreSQL principal registry is incomplete\n' >&2
   exit 1
 }
+[[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
+  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 24 ]] || {
+  printf 'PostgreSQL bounded administrator registry is incomplete\n' >&2
+  exit 1
+}
+rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'actual_admin_memberships.*member.admin_option.*NOT member.inherit_option.*NOT member.set_option' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  printf 'PostgreSQL bounded administrator readback is incomplete\n' >&2
+  exit 1
+}
 rg -q 'ALTER ROLE %s NOLOGIN.*pg_terminate_backend' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q "format\('REVOKE %%I FROM %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'PostgreSQL retirement boundary is incomplete\n' >&2
