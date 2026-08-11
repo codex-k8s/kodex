@@ -307,7 +307,7 @@ sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
   exit 1
 }
 [[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
-  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 37 ]] || {
+  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 39 ]] || {
   printf 'PostgreSQL bounded administrator registry is incomplete\n' >&2
   exit 1
 }
@@ -315,10 +315,25 @@ for membership in \
   $'control_plane_role_controller\tcontrol_plane_runtime_g1' \
   $'integration_gateway_role_controller\tintegration_gateway_runtime_g1' \
   $'integration_gateway_role_controller\tintegration_gateway_runtime_g2' \
-  $'interaction_gateway_role_controller\tinteraction_gateway_runtime_g1'; do
+  $'interaction_gateway_role_controller\tinteraction_gateway_runtime_g1' \
+  $'internal_rpc_authority_credential_lifecycle_definer\tinternal_rpc_authority_publisher' \
+  $'internal_rpc_authority_credential_lifecycle_definer\tinternal_rpc_authority_readback_attestor'; do
   jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
     .data["admin-memberships.tsv"]' "$foundation_json" | grep -Fxq "$membership" || {
     printf 'Required PostgreSQL bounded administrator membership is absent\n' >&2
+    exit 1
+  }
+done
+for principal in \
+  ira_publisher_g3 ira_publisher_g4 ira_publisher_g5 \
+  ira_readback_attestor_g3 ira_readback_attestor_g4 ira_readback_attestor_g5; do
+  jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
+    .data["principals.tsv"]' "$foundation_json" |
+    awk -F '\t' -v principal="$principal" '
+      $1 == principal && $2 == "internal_rpc_authority" && $3 == "" && $4 == "false" { found = 1 }
+      END { exit(found ? 0 : 1) }
+    ' || {
+    printf 'Credential generation principal has a bootstrap-owned capability: %s\n' "$principal" >&2
     exit 1
   }
 done
