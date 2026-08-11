@@ -312,6 +312,13 @@ grep -Fq 'attempt=$((attempt + 1))' \
   printf 'PostgreSQL principal bootstrap has no bounded network-readiness retry\n' >&2
   exit 1
 }
+grep -Fq "tr '\\t' '|' </var/run/bootstrap/principals.tsv" \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq "while IFS='|' read -r principal database memberships create_role" \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal bootstrap does not preserve empty TSV fields\n' >&2
+  exit 1
+}
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
