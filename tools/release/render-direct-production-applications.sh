@@ -223,6 +223,22 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
       with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "mattermost");
         .to = [{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"mattercodex-legacy-mattermost-bridge"}}}] |
         .ports = [{"protocol":"TCP","port":8443}]
+      ) |
+      with(select(
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" == "control-plane-postgresql" or
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" == "internal-rpc-authority-postgresql" or
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" == "runtime-controller-postgresql"
+      );
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-postgresql"
+      ) |
+      with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "control-plane-redis");
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-redis"
+      ) |
+      with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "nats");
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-nats"
+      ) |
+      with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "object-store");
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-object-store"
       )
     )
   ) |

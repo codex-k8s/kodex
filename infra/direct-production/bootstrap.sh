@@ -27,6 +27,20 @@ require_no_diff_except_generation() {
   ')
   [[ -z "$meaningful" ]] || fail "$failure_message"
 }
+normalize_single_node_ingress() {
+  local source_file=$1
+  POD_CIDR="$pod_cidr" yq eval-all '
+    with(select(.kind == "NetworkPolicy");
+      .spec.ingress[]? |= with(select(.from != null);
+        .from |= map(with(select(
+          .podSelector != null and
+          (.namespaceSelector == null or
+           .namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system")
+        ); . = {"ipBlock":{"cidr":strenv(POD_CIDR)}}))
+      )
+    )
+  ' "$source_file"
+}
 usage() {
   printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--external-material-file <path>]\n' "$0" >&2
 }
@@ -52,6 +66,12 @@ for command_name in kubectl jq rg yq sha256sum; do
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
 
+pod_cidr=$(kubectl --context "$expected_context" get nodes -o json | jq -r '
+  if (.items | length) == 1 then (.items[0].spec.podCIDR // "") else "" end
+')
+[[ "$pod_cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]] ||
+  fail "single-node direct production requires one exact IPv4 PodCIDR"
+
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 temporary_directory=$(mktemp -d)
@@ -69,11 +89,15 @@ done
 kubectl --context "$expected_context" api-resources --api-group=cert-manager.io | grep -q '^certificates' ||
   fail "cert-manager API is required before bootstrap"
 
+foundation_owner_source="$temporary_directory/foundation-owner-source.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" |
   yq eval-all 'select(.kind == "ResourceQuota" or .kind == "LimitRange" or .kind == "Issuer" or
-    .kind == "Certificate" or .kind == "NetworkPolicy")' >"$temporary_directory/foundation-owner.yaml"
+    .kind == "Certificate" or .kind == "NetworkPolicy")' >"$foundation_owner_source"
+normalize_single_node_ingress "$foundation_owner_source" >"$temporary_directory/foundation-owner.yaml"
+application_owner_source="$temporary_directory/application-owner-source.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" \
-  --scope bootstrap --output "$temporary_directory/application-owner.yaml" >/dev/null
+  --scope bootstrap --output "$application_owner_source" >/dev/null
+normalize_single_node_ingress "$application_owner_source" >"$temporary_directory/application-owner.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --scope interfaces --output "$temporary_directory/application-interfaces.yaml" >/dev/null
 kubernetes_api_policies="$temporary_directory/runtime-adapter-kubernetes-api-egress.yaml"
