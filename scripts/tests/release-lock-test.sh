@@ -527,6 +527,7 @@ yq -e '
   .jobs.deploy."runs-on" == "mattercodex-deploy" and
   .jobs.deploy.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
   (.jobs.deploy.steps[2].run | contains("verify-github-owner-gate.sh")) and
+  (.jobs.deploy.steps[2].run | contains("verify-github-build-run.sh")) and
   (.jobs.deploy.steps[-1].run | contains("direct-production.sh"))
 ' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null || {
   printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
@@ -553,6 +554,18 @@ grep -Fq 'deployments/$deployment_id/statuses?per_page=100' \
 grep -Fq 'curl --config "$curl_config" --fail --silent --show-error' \
   "$repository_root/tools/release/verify-github-owner-gate.sh"
 grep -Fq 'unset GH_TOKEN' "$repository_root/tools/release/verify-github-owner-gate.sh"
+build_run_verifier="$repository_root/tools/release/verify-github-build-run.sh"
+grep -Fq 'jobs?filter=latest&per_page=100' "$build_run_verifier"
+grep -Fq '.total_count == 1 and (.jobs | length) == 1' "$build_run_verifier"
+grep -Fq '.jobs[0].status == "completed" and .jobs[0].conclusion == "success"' "$build_run_verifier"
+grep -Fq '.environment == "production-build" and .state == "success"' "$build_run_verifier"
+grep -Fq '(.status == "completed" and .conclusion == "success")' "$build_run_verifier"
+grep -Fq '((.status == "queued" or .status == "in_progress") and .conclusion == null)' "$build_run_verifier"
+grep -Fq 'unset GH_TOKEN' "$build_run_verifier"
+if rg -q 'gh api' "$build_run_verifier"; then
+  printf 'Build run verifier depends on gh CLI unavailable in the pinned runner image\n' >&2
+  exit 1
+fi
 if rg -q 'gh api' "$repository_root/tools/release/verify-github-owner-gate.sh"; then
   printf 'Workflow owner gate still depends on gh CLI unavailable in the pinned runner image\n' >&2
   exit 1
