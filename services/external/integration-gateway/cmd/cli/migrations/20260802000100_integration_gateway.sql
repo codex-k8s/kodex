@@ -755,10 +755,20 @@ ALTER TABLE integration_gateway.execution_work_scopes OWNER TO integration_gatew
 ALTER TABLE integration_gateway.lifecycle_work_scopes OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.activate_runtime_context(text, text, text, name, bigint, text, uuid, bigint, bytea)
     OWNER TO integration_gateway_owner;
+GRANT CREATE ON SCHEMA integration_gateway
+    TO integration_gateway_role_controller;
+RESET ROLE;
+GRANT integration_gateway_role_controller TO integration_gateway_owner;
+SET ROLE integration_gateway_owner;
 ALTER FUNCTION integration_gateway.bootstrap_runtime_principal(text, bigint, text)
     OWNER TO integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.retire_runtime_principal(text)
     OWNER TO integration_gateway_role_controller;
+RESET ROLE;
+REVOKE integration_gateway_role_controller FROM integration_gateway_owner;
+SET ROLE integration_gateway_owner;
+REVOKE CREATE ON SCHEMA integration_gateway
+    FROM integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.runtime_scope() OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.sync_execution_work_scope() OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.sync_lifecycle_work_scope() OWNER TO integration_gateway_owner;
