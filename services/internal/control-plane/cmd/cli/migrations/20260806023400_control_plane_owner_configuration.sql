@@ -742,8 +742,26 @@ SECURITY INVOKER
 SET search_path = pg_catalog, control_plane
 AS $function$
 BEGIN
-    RAISE EXCEPTION 'legacy ROLE and PROMPT_PROFILE configuration is immutable'
-        USING ERRCODE = '0A000';
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.kind IN ('ROLE', 'PROMPT_PROFILE') THEN
+            RAISE EXCEPTION 'legacy ROLE and PROMPT_PROFILE configuration is immutable'
+                USING ERRCODE = '0A000';
+        END IF;
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.kind IN ('ROLE', 'PROMPT_PROFILE') THEN
+            RAISE EXCEPTION 'legacy ROLE and PROMPT_PROFILE configuration is immutable'
+                USING ERRCODE = '0A000';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF NEW.kind IN ('ROLE', 'PROMPT_PROFILE')
+       OR OLD.kind IN ('ROLE', 'PROMPT_PROFILE') THEN
+        RAISE EXCEPTION 'legacy ROLE and PROMPT_PROFILE configuration is immutable'
+            USING ERRCODE = '0A000';
+    END IF;
+    RETURN NEW;
 END
 $function$;
 REVOKE ALL ON FUNCTION control_plane.reject_legacy_configuration_mutation() FROM PUBLIC;
@@ -752,10 +770,6 @@ GRANT EXECUTE ON FUNCTION control_plane.reject_legacy_configuration_mutation()
 CREATE TRIGGER resources_legacy_configuration_freeze
     BEFORE INSERT OR UPDATE OR DELETE ON control_plane.resources
     FOR EACH ROW
-    WHEN (
-        coalesce(NEW.kind, '') IN ('ROLE', 'PROMPT_PROFILE')
-        OR coalesce(OLD.kind, '') IN ('ROLE', 'PROMPT_PROFILE')
-    )
     EXECUTE FUNCTION control_plane.reject_legacy_configuration_mutation();
 
 -- Organization-wide recovery остаётся одной physical transaction. Только
