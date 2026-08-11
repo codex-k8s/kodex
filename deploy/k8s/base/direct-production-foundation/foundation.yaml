@@ -471,7 +471,7 @@ kind: ConfigMap
 metadata: {name: mattercodex-postgresql-principal-bootstrap, namespace: mattercodex-system}
 data:
   principals.tsv: |
-    control_plane_migrator	control_plane	control_plane_owner,control_plane_runtime,control_plane_relay,pg_signal_backend	true
+    control_plane_migrator	control_plane	control_plane_owner,control_plane_runtime,control_plane_relay,control_plane_role_controller,pg_signal_backend	true
     control_plane_runtime_g1	control_plane	control_plane_runtime	false
     control_plane_relay_g1	control_plane	control_plane_relay	false
     integration_gateway_migrator_g1	integration_gateway	integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend	true
@@ -503,6 +503,7 @@ data:
     control_plane_owner
     control_plane_runtime
     control_plane_relay
+    control_plane_role_controller
     integration_gateway_owner
     integration_gateway_runtime
     integration_gateway_migrator
@@ -576,7 +577,7 @@ data:
       case "$role" in (*[!a-z0-9_]*) exit 20 ;; esac
       printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$role" "$role" "$dollar_quote" >>"$sql_file"
       case "$role" in
-        integration_gateway_role_controller|interaction_gateway_role_controller)
+        control_plane_role_controller|integration_gateway_role_controller|interaction_gateway_role_controller)
           printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
         internal_rpc_authority_credential_lifecycle_definer)
           printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
