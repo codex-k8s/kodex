@@ -6,6 +6,7 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 classifier="$repository_root/tools/deploy/classify-direct-production-application-material.sh"
 materializer="$repository_root/tools/deploy/materialize-direct-production-application.sh"
 policy="$repository_root/infra/direct-production/application-material-policy.json"
+prototype_policy="$repository_root/infra/direct-production/internal-rpc-authority-prototype-material-policy.json"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
@@ -200,10 +201,14 @@ while IFS=$'\t' read -r name key; do
     "$material_json" | base64 -d >"$temporary_directory/private-jwk"
   node "$repository_root/tools/deploy/direct-production-material-helper.mjs" \
     validate-private-jwk "$temporary_directory/private-jwk"
-done < <(jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
-  select(. == "private.jwk" or . == "evidence-private.jwk" or
-    . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") |
-  [$name,.] | @tsv' "$policy")
+done < <(
+  jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
+    select(. == "private.jwk" or . == "evidence-private.jwk" or
+      . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") |
+    [$name,.] | @tsv' "$policy"
+  jq -r '.runtime_owned_empty_resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
+    select(. == "private.jwk") | [$name,.] | @tsv' "$prototype_policy"
+)
 grep -Fq "openssl rand -hex 32 | tr -d '\\n'" "$materializer" &&
   grep -Fq "base64 -d | tr -d '\\n' >\"\$root\"" "$materializer" || {
   printf 'Application material hex generation or root readback is not canonical\n' >&2
