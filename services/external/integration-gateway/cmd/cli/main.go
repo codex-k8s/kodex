@@ -218,6 +218,33 @@ func reconcile(ctx, cleanupBase context.Context, configuration config, migration
 	}).Scan(&highWatermark, &durableServedGeneration, &requestedCurrentStatus); err != nil {
 		return errors.New("read runtime credential high-watermark")
 	}
+	if highWatermark == 0 && requestedCurrentStatus == "" {
+		var current principal
+		currentCount := 0
+		for _, candidate := range principals {
+			if candidate.Status == "CURRENT" {
+				current = candidate
+				currentCount++
+			}
+		}
+		if currentCount != 1 || current.Generation != configuration.CurrentGeneration {
+			return errors.New("initial runtime credential set is invalid")
+		}
+		stageSQL, readErr := operationalSQL.ReadFile("sql/runtime__stage_initial.sql")
+		if readErr != nil {
+			return errors.New("load initial runtime credential stage command")
+		}
+		if _, err := connection.Exec(ctx, string(stageSQL), pgx.StrictNamedArgs{
+			"principal_name": current.Name,
+			"generation":     current.Generation,
+			"password":       current.Password,
+			"not_before":     current.NotBefore,
+			"not_after":      current.NotAfter,
+		}); err != nil {
+			return errors.New("stage initial runtime database identity")
+		}
+		requestedCurrentStatus = "NEXT"
+	}
 	if highWatermark > 0 {
 		if configuration.CurrentGeneration < highWatermark ||
 			(requestedCurrentStatus != "CURRENT" && requestedCurrentStatus != "NEXT") {

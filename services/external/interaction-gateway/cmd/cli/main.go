@@ -95,11 +95,14 @@ func run(ctx context.Context, arguments []string) error {
 			return errors.New("acquire interaction gateway migration connection")
 		}
 		defer connection.Close()
-		if _, err := connection.ExecContext(ctx, "SET ROLE interaction_gateway_migrator"); err != nil {
-			return errors.New("assume interaction gateway migration role")
+		if _, err := connection.ExecContext(ctx, "SET ROLE interaction_gateway_role_controller"); err != nil {
+			return errors.New("assume interaction gateway role controller")
 		}
 		if err := reconcileTenantPrincipal(ctx, connection, value); err != nil {
 			return err
+		}
+		if _, err := connection.ExecContext(ctx, "SET ROLE interaction_gateway_owner"); err != nil {
+			return errors.New("assume interaction gateway migration owner role")
 		}
 		return reconcileReadbackKeysetGenesis(ctx, connection, value)
 	case "status":
