@@ -294,16 +294,16 @@ spec:
               valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
           ports: [{name: postgresql, containerPort: 5432, protocol: TCP}]
           startupProbe:
-            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            exec: {command: [psql, "host=mattercodex-postgresql hostaddr=127.0.0.1 dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
             periodSeconds: 3
             failureThreshold: 60
           readinessProbe:
-            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            exec: {command: [psql, "host=mattercodex-postgresql hostaddr=127.0.0.1 dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 6
           livenessProbe:
-            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            exec: {command: [psql, "host=mattercodex-postgresql hostaddr=127.0.0.1 dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
             periodSeconds: 15
             timeoutSeconds: 3
             failureThreshold: 4
@@ -437,8 +437,8 @@ spec:
             - name: REDISCLI_AUTH
               valueFrom: {secretKeyRef: {name: mattercodex-redis-credentials, key: password}}
           ports: [{name: redis-tls, containerPort: 6379}]
-          readinessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, mattercodex-redis, ping]}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
-          livenessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, mattercodex-redis, ping]}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          readinessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, 127.0.0.1, ping]}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
+          livenessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, 127.0.0.1, ping]}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 1Gi}}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           volumeMounts:
