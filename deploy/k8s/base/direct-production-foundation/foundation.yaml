@@ -484,12 +484,12 @@ data:
     runtime_workload_admission_g1	runtime_controller		false
     internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner,internal_rpc_authority_readback_owner,internal_rpc_authority_credential_lifecycle_definer,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_recovery,internal_rpc_authority_restore_controller,pg_signal_backend	true
     ira_database_credential_reconciler	internal_rpc_authority	internal_rpc_authority_database_credential_reconciler	false
-    ira_publisher_g3	internal_rpc_authority	internal_rpc_authority_publisher	false
-    ira_publisher_g4	internal_rpc_authority	internal_rpc_authority_publisher	false
-    ira_publisher_g5	internal_rpc_authority	internal_rpc_authority_publisher	false
-    ira_readback_attestor_g3	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
-    ira_readback_attestor_g4	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
-    ira_readback_attestor_g5	internal_rpc_authority	internal_rpc_authority_readback_attestor	false
+    ira_publisher_g3	internal_rpc_authority		false
+    ira_publisher_g4	internal_rpc_authority		false
+    ira_publisher_g5	internal_rpc_authority		false
+    ira_readback_attestor_g3	internal_rpc_authority		false
+    ira_readback_attestor_g4	internal_rpc_authority		false
+    ira_readback_attestor_g5	internal_rpc_authority		false
     ira_restore_controller_g1	internal_rpc_authority	internal_rpc_authority_restore_controller	false
     ira_automation_scheduler_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
     ira_control_api_gateway_issuer_g1	internal_rpc_authority	internal_rpc_authority_issuer	false
@@ -555,6 +555,8 @@ data:
     internal_rpc_authority_migrator	ira_readback_attestor_g5
     internal_rpc_authority_migrator	ira_restore_controller_g1
     internal_rpc_authority_migrator	ira_runtime_controller_issuer_g1
+    internal_rpc_authority_credential_lifecycle_definer	internal_rpc_authority_publisher
+    internal_rpc_authority_credential_lifecycle_definer	internal_rpc_authority_readback_attestor
     internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g1
     internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g2
     internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g3
