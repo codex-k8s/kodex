@@ -416,7 +416,6 @@ GRANT EXECUTE ON FUNCTION internal_rpc_authority.activate_readback_trust(
 
 REVOKE CREATE ON SCHEMA internal_rpc_authority FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA internal_rpc_authority FROM PUBLIC;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA internal_rpc_authority FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION
 internal_rpc_authority.issue_authority_readback_attestation_challenge(
     uuid, uuid, uuid, text, text, uuid, text, uuid, text
