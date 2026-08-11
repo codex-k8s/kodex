@@ -53,6 +53,7 @@ ALTER ROLE control_plane_runtime
 ALTER ROLE control_plane_relay
     NOLOGIN NOCREATEROLE NOINHERIT;
 
+SET ROLE control_plane_owner;
 CREATE SCHEMA control_plane AUTHORIZATION control_plane_owner;
 CREATE SCHEMA control_plane_extensions AUTHORIZATION control_plane_owner;
 REVOKE ALL ON SCHEMA control_plane FROM PUBLIC;
