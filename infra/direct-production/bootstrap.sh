@@ -103,16 +103,34 @@ normalize_single_node_ingress "$application_owner_source" >"$temporary_directory
 kubernetes_api_policies="$temporary_directory/runtime-adapter-kubernetes-api-egress.yaml"
 : >"$kubernetes_api_policies"
 for binding in \
-  integration-gateway-kubernetes-api-exact:integration-gateway \
-  interaction-gateway-kubernetes-api-exact:interaction-gateway; do
-  policy_name=${binding%%:*}
-  selector_value=${binding#*:}
+  'integration-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=integration-gateway' \
+  'interaction-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=interaction-gateway' \
+  'internal-rpc-authority-reconciler-kubernetes-api-exact|app.kubernetes.io/name=internal-rpc-authority' \
+  'internal-rpc-authority-publisher-kubernetes-api-exact|app.kubernetes.io/name=internal-rpc-authority-publisher' \
+  'internal-rpc-authority-restore-controller-kubernetes-api-exact|app.kubernetes.io/name=internal-rpc-authority-restore-controller' \
+  'runtime-controller-kubernetes-api-exact|app.kubernetes.io/name=runtime-controller' \
+  'runtime-workload-admission-kubernetes-api-exact|app.kubernetes.io/name=runtime-workload-admission' \
+  'runtime-workload-materializer-kubernetes-api-exact|app.kubernetes.io/name=runtime-workload-materializer'; do
+  policy_name=${binding%%|*}
+  pod_selector=${binding#*|}
   "$repository_root/tools/deploy/kubernetes-api-egress.sh" render \
     --context "$expected_context" --namespace mattercodex-system \
-    --policy "$policy_name" --pod-selector "mattercodex.dev/runtime-secret-api=$selector_value" \
+    --policy "$policy_name" --pod-selector "$pod_selector" \
     >>"$kubernetes_api_policies"
   printf '%s\n' '---' >>"$kubernetes_api_policies"
 done
+yq -o=json eval-all '.' "$kubernetes_api_policies" | jq -s -e '
+  [ .[] | select(.kind == "NetworkPolicy") | .metadata.name ] | sort == [
+    "integration-gateway-kubernetes-api-exact",
+    "interaction-gateway-kubernetes-api-exact",
+    "internal-rpc-authority-publisher-kubernetes-api-exact",
+    "internal-rpc-authority-reconciler-kubernetes-api-exact",
+    "internal-rpc-authority-restore-controller-kubernetes-api-exact",
+    "runtime-controller-kubernetes-api-exact",
+    "runtime-workload-admission-kubernetes-api-exact",
+    "runtime-workload-materializer-kubernetes-api-exact"
+  ]
+' >/dev/null || fail "Kubernetes API egress policy set is incomplete"
 contract_source="$temporary_directory/workload-contract-source.yaml"
 contract_lock="$temporary_directory/workload-contract-release-lock.json"
 contract_source_sha=1111111111111111111111111111111111111111
