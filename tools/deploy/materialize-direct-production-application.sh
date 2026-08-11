@@ -462,7 +462,10 @@ for item in \
 done
 # Preserve private protocol keys, generating only absent ones.
 while IFS=$'\t' read -r name key; do
-  if ! has_value Secret "$name" "$key"; then
+  if has_value Secret "$name" "$key"; then
+    node "$helper" validate-private-jwk "$(value_path Secret "$name" "$key")" >/dev/null ||
+      fail "existing Secret/$name/$key is not a canonical private ES256 JWK"
+  else
     path=$(value_path Secret "$name" "$key"); mkdir -p "$(dirname -- "$path")"
     node "$helper" generate-jwk "$path"
   fi
