@@ -23,6 +23,7 @@ CREATE TABLE runtime_event_schema_versions (
         CHECK (octet_length(schema_digest) = 32)
 );
 
+-- +goose StatementBegin
 CREATE FUNCTION runtime_event_ordering_key(
     organization_id text,
     event_name text,
@@ -47,6 +48,7 @@ AS $function$
             )
     END
 $function$;
+-- +goose StatementEnd
 
 -- PostgreSQL выдаёт PUBLIC EXECUTE на новые функции по умолчанию.
 REVOKE ALL ON FUNCTION runtime_event_ordering_key(text, text, text, text)
@@ -394,6 +396,7 @@ CREATE TABLE runtime_configuration_projection (
     PRIMARY KEY (organization_id, project_id, resource_kind, resource_id)
 );
 
+-- +goose StatementBegin
 CREATE FUNCTION apply_projection(input jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -465,6 +468,7 @@ BEGIN
     RETURN jsonb_build_object('applied', true);
 END
 $function$;
+-- +goose StatementEnd
 
 REVOKE ALL ON FUNCTION apply_projection(jsonb) FROM PUBLIC;
 GRANT USAGE ON SCHEMA runtime_controller TO runtime_controller_runtime_g1;

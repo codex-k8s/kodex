@@ -363,20 +363,20 @@ ig_ca=/var/run/config/mattercodex/integration-gateway/postgres/ca.pem
 ix_ca=/var/run/config/mattercodex/interaction-gateway/postgres/ca.pem
 rt_ca=/var/run/config/mattercodex/runtime-controller/postgres/ca.pem
 ira_ca=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
-put_pg control-plane-postgres-migration dsn control_plane_migrator control_plane "$cp_ca" control_plane_owner
+put_pg control-plane-postgres-migration dsn control_plane_migrator control_plane "$cp_ca"
 put_pg control-plane-postgres-migration runtime-current-dsn control_plane_runtime_g1 control_plane "$cp_ca" control_plane_runtime
 put_pg control-plane-postgres-runtime dsn control_plane_runtime_g1 control_plane "$cp_ca" control_plane_runtime
 put_pg control-plane-postgres-relay dsn control_plane_relay_g1 control_plane "$cp_ca" control_plane_relay
-put_pg integration-gateway-postgres-migrator dsn integration_gateway_migrator_g1 integration_gateway "$ig_ca" integration_gateway_owner
+put_pg integration-gateway-postgres-migrator dsn integration_gateway_migrator_g1 integration_gateway "$ig_ca"
 put_pg integration-gateway-postgres-migrator runtime-current-dsn integration_gateway_runtime_g1 integration_gateway "$ig_ca" integration_gateway_runtime
 put_pg integration-gateway-postgres-migrator runtime-next-dsn integration_gateway_runtime_g2 integration_gateway "$ig_ca" integration_gateway_runtime
 put_pg integration-gateway-postgres-runtime dsn integration_gateway_runtime_g1 integration_gateway "$ig_ca" integration_gateway_runtime
-put_pg interaction-gateway-postgres-migrator dsn interaction_gateway_migrator interaction_gateway "$ix_ca" interaction_gateway_owner
+put_pg interaction-gateway-postgres-migrator dsn interaction_gateway_migrator interaction_gateway "$ix_ca"
 put_pg interaction-gateway-runtime postgres-dsn interaction_gateway_runtime_g1 interaction_gateway "$ix_ca" interaction_gateway_runtime
-put_pg runtime-controller-postgres-migration dsn runtime_controller_migrator runtime_controller "$rt_ca" runtime_controller_owner
+put_pg runtime-controller-postgres-migration dsn runtime_controller_migrator runtime_controller "$rt_ca"
 put_pg runtime-controller-postgres dsn runtime_controller_runtime_g1 runtime_controller "$rt_ca"
 put_pg runtime-workload-admission-postgres dsn runtime_workload_admission_g1 runtime_controller "$rt_ca"
-put_pg internal-rpc-authority-migrator-postgresql dsn internal_rpc_authority_migrator internal_rpc_authority "$ira_ca" internal_rpc_authority_owner
+put_pg internal-rpc-authority-migrator-postgresql dsn internal_rpc_authority_migrator internal_rpc_authority "$ira_ca"
 put_pg internal-rpc-authority-database-credential-reconciler-postgresql dsn ira_database_credential_reconciler internal_rpc_authority "$ira_ca" internal_rpc_authority_database_credential_reconciler
 put_pg internal-rpc-authority-restore-controller-postgresql dsn ira_restore_controller_g1 internal_rpc_authority "$ira_ca" internal_rpc_authority_restore_controller
 for mapping in \
