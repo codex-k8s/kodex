@@ -122,7 +122,9 @@ kubectl --context "$expected_context" -n mattercodex-system get configmap matter
 kubectl --context "$expected_context" -n matter-kodex-prod get service matter-codex-registry >/dev/null
 non_job_render="$temporary_directory/non-jobs.yaml"
 yq eval-all 'select(.kind != "Job")' "$render_file" >"$non_job_render"
-kubectl --context "$expected_context" apply --dry-run=server -f "$non_job_render" >/dev/null
+kubectl --context "$expected_context" apply --server-side \
+  --field-manager=mattercodex-production-deployer --dry-run=server \
+  -f "$non_job_render" >/dev/null
 while IFS= read -r migration; do
   [[ -n "$migration" && "$migration" != '---' ]] || continue
   migration_manifest="$temporary_directory/job-$migration.yaml"
@@ -170,13 +172,15 @@ run_job() {
   NAME="$name" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(NAME))' "$render_file" >"$manifest"
   [[ -s "$manifest" ]] || fail "required Job is absent from render: $name"
   kubectl --context "$expected_context" -n mattercodex-system delete job "$name" --ignore-not-found --wait >/dev/null
-  kubectl --context "$expected_context" apply -f "$manifest" >/dev/null
+  kubectl --context "$expected_context" apply --server-side \
+    --field-manager=mattercodex-production-deployer -f "$manifest" >/dev/null
   kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$name" --timeout=5m >/dev/null
 }
 
 if [[ "$operation" == apply ]]; then
   select_kinds "$temporary_directory/foundation.yaml" ConfigMap Service StatefulSet
-  kubectl --context "$expected_context" apply -f "$temporary_directory/foundation.yaml" >/dev/null
+  kubectl --context "$expected_context" apply --server-side \
+    --field-manager=mattercodex-production-deployer -f "$temporary_directory/foundation.yaml" >/dev/null
   wait_rollouts statefulset StatefulSet
 
   run_job mattercodex-postgresql-principal-bootstrap
@@ -187,7 +191,8 @@ if [[ "$operation" == apply ]]; then
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system delete job "$migration" --ignore-not-found --wait >/dev/null
   done < <(yq eval-all -r 'select(.kind == "Job" and .metadata.name != "mattercodex-postgresql-principal-bootstrap") | .metadata.name' "$render_file")
-  kubectl --context "$expected_context" apply -f "$temporary_directory/migrations.yaml" >/dev/null
+  kubectl --context "$expected_context" apply --server-side \
+    --field-manager=mattercodex-production-deployer -f "$temporary_directory/migrations.yaml" >/dev/null
   while IFS= read -r migration; do
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$migration" --timeout=5m >/dev/null
@@ -202,7 +207,8 @@ if [[ "$operation" == apply ]]; then
     (.metadata.name == "internal-rpc-authority-publisher" or
      .metadata.name == "internal-rpc-authority-readback-attestor"))' \
     "$render_file" >"$temporary_directory/authority-publication.yaml"
-  kubectl --context "$expected_context" apply -f "$temporary_directory/authority-publication.yaml" >/dev/null
+  kubectl --context "$expected_context" apply --server-side \
+    --field-manager=mattercodex-production-deployer -f "$temporary_directory/authority-publication.yaml" >/dev/null
   snapshot_ready=false
   for _ in $(seq 1 60); do
     if kubectl --context "$expected_context" -n mattercodex-system get secret internal-rpc-authority-snapshot -o json |
@@ -213,7 +219,8 @@ if [[ "$operation" == apply ]]; then
     sleep 5
   done
   [[ "$snapshot_ready" == true ]] || fail "publisher-owned authority snapshot was not materialized"
-  kubectl --context "$expected_context" apply -f "$temporary_directory/applications.yaml" >/dev/null
+  kubectl --context "$expected_context" apply --server-side \
+    --field-manager=mattercodex-production-deployer -f "$temporary_directory/applications.yaml" >/dev/null
   wait_rollouts deployment Deployment
 fi
 

@@ -44,13 +44,13 @@ spec:
           v.name + '\u001e' +
           (has(v.secret) ? 'secret\u001e' + v.secret.secretName + '\u001d' +
              ((has(v.secret.optional) && v.secret.optional) ? 'true' : 'false') + '\u001d' +
-             (has(v.secret.defaultMode) ? string(v.secret.defaultMode) : '0') + '\u001d' +
+             (has(v.secret.defaultMode) ? string(v.secret.defaultMode) : '420') + '\u001d' +
              (has(v.secret.items) ? v.secret.items.map(i,
                i.key + '\u001b' + i.path + '\u001b' +
                (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
            has(v.configMap) ? 'configMap\u001e' + v.configMap.name + '\u001d' +
              ((has(v.configMap.optional) && v.configMap.optional) ? 'true' : 'false') + '\u001d' +
-             (has(v.configMap.defaultMode) ? string(v.configMap.defaultMode) : '0') + '\u001d' +
+             (has(v.configMap.defaultMode) ? string(v.configMap.defaultMode) : '420') + '\u001d' +
              (has(v.configMap.items) ? v.configMap.items.map(i,
                i.key + '\u001b' + i.path + '\u001b' +
                (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
@@ -61,7 +61,7 @@ spec:
              (has(v.emptyDir.medium) ? v.emptyDir.medium : '') + '\u001d' +
              (has(v.emptyDir.sizeLimit) ? string(v.emptyDir.sizeLimit) : '') :
            has(v.projected) ? 'projected\u001e' +
-             (has(v.projected.defaultMode) ? string(v.projected.defaultMode) : '0') + '\u001d' +
+             (has(v.projected.defaultMode) ? string(v.projected.defaultMode) : '420') + '\u001d' +
              v.projected.sources.map(s,
              has(s.serviceAccountToken) ? 'serviceAccountToken\u001d' +
                s.serviceAccountToken.audience + '\u001d' +
@@ -89,7 +89,8 @@ spec:
       message: Production workload is absent from the owner contract.
     - expression: >-
         !variables.isProductionDeployer ||
-        (variables.podSpec.serviceAccountName ==
+        ((has(variables.podSpec.serviceAccountName) ?
+            variables.podSpec.serviceAccountName : 'default') ==
            params.data[variables.workloadKey + '.serviceAccountName'] &&
          has(variables.podSpec.automountServiceAccountToken) &&
          variables.podSpec.automountServiceAccountToken == false &&

@@ -141,7 +141,7 @@ spec:
         (object.kind == 'Service' && object.metadata.name in [
           'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
           'egress-gateway-technical','integration-egress-proxy','integration-gateway','integration-gateway-postgresql-rw',
-          'interaction-gateway','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
+          'interaction-gateway','interaction-gateway-management','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-postgresql-rw','internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor',
           'internal-rpc-authority-restore-controller','mattercodex-nats','mattercodex-object-store','mattercodex-postgresql',
           'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-redis','nats','object-store',
@@ -171,7 +171,7 @@ spec:
            c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000')) &&
          (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
-           c.image.matches('^localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}$') &&
+           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000'))) &&
          (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))))
       message: Production workload image or volume is outside the machine allowlist.
