@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 CREATE TABLE integration_gateway.runtime_credential_fence (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     current_high_watermark bigint NOT NULL CHECK (current_high_watermark >= 0),

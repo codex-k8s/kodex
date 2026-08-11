@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Forward-only expand для runtime evidence. Миграция 20260802000100 уже могла
 -- быть применена и поэтому остаётся byte-for-byte равной exact main.
 RESET ROLE;
@@ -34,6 +36,7 @@ ALTER TABLE control_plane.runtime_executions
         restore_source_proof_sha256 IS NULL OR restore_source_proof_sha256 ~ '^[a-f0-9]{64}$'
     );
 
+-- +goose StatementBegin
 DO $drop_runtime_checks$
 DECLARE
     constraint_name text;
@@ -53,6 +56,7 @@ BEGIN
     END LOOP;
 END
 $drop_runtime_checks$;
+-- +goose StatementEnd
 
 ALTER TABLE control_plane.runtime_executions
     ADD CONSTRAINT runtime_executions_terminal_outcome_v2_ck CHECK (
@@ -132,6 +136,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -139,3 +144,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

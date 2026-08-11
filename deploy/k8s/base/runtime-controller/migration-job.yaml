@@ -18,7 +18,7 @@ spec:
       serviceAccountName: runtime-controller-migration
       automountServiceAccountToken: false
       enableServiceLinks: false
-      restartPolicy: OnFailure
+      restartPolicy: Never
       securityContext:
         runAsNonRoot: true
         fsGroup: 10001

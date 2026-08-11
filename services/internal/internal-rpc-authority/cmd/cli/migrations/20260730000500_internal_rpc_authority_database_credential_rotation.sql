@@ -1,4 +1,8 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -37,6 +41,7 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
     NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
@@ -44,6 +49,7 @@ ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
 GRANT pg_signal_backend
     TO internal_rpc_authority_credential_lifecycle_definer;
 
+SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_credential_lifecycle_definer;
 GRANT SELECT, INSERT, UPDATE

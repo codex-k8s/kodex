@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 CREATE SCHEMA IF NOT EXISTS interaction_gateway_security;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA interaction_gateway_security;
 

@@ -469,18 +469,18 @@ kind: ConfigMap
 metadata: {name: mattercodex-postgresql-principal-bootstrap, namespace: mattercodex-system}
 data:
   principals.tsv: |
-    control_plane_migrator	control_plane	control_plane_owner	true
+    control_plane_migrator	control_plane	control_plane_owner,control_plane_runtime,control_plane_relay,pg_signal_backend	true
     control_plane_runtime_g1	control_plane	control_plane_runtime	false
     control_plane_relay_g1	control_plane	control_plane_relay	false
-    integration_gateway_migrator_g1	integration_gateway	integration_gateway_owner,integration_gateway_migrator,integration_gateway_role_controller	true
+    integration_gateway_migrator_g1	integration_gateway	integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend	true
     integration_gateway_runtime_g1	integration_gateway	integration_gateway_runtime	false
     integration_gateway_runtime_g2	integration_gateway	integration_gateway_runtime	false
-    interaction_gateway_migrator	interaction_gateway	interaction_gateway_owner,interaction_gateway_role_controller	true
+    interaction_gateway_migrator	interaction_gateway	interaction_gateway_owner,interaction_gateway_runtime,interaction_gateway_role_controller,pg_signal_backend	true
     interaction_gateway_runtime_g1	interaction_gateway	interaction_gateway_runtime	false
     runtime_controller_migrator	runtime_controller	runtime_controller_owner	true
     runtime_controller_runtime_g1	runtime_controller		false
     runtime_workload_admission_g1	runtime_controller		false
-    internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner	true
+    internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_restore_controller,pg_signal_backend	true
     ira_database_credential_reconciler	internal_rpc_authority	internal_rpc_authority_database_credential_reconciler	false
     ira_publisher_g3	internal_rpc_authority	internal_rpc_authority_publisher	false
     ira_publisher_g4	internal_rpc_authority	internal_rpc_authority_publisher	false
@@ -556,10 +556,11 @@ data:
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       fi
       printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
+      if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FALSE; fi
       old_ifs=$IFS; IFS=,
       for membership in $memberships; do
         [ -n "$membership" ] || continue
-        printf 'GRANT %s TO %s WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;\n' "$membership" "$principal" >>"$sql_file"
+        printf 'GRANT %s TO %s WITH INHERIT FALSE, SET TRUE, ADMIN %s;\n' "$membership" "$principal" "$admin_flag" >>"$sql_file"
       done
       IFS=$old_ifs
     done <"$principals_file"

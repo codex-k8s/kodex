@@ -1,4 +1,8 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -19,6 +23,7 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_restore_controller
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
@@ -27,6 +32,7 @@ ALTER ROLE ira_restore_controller_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 GRANT internal_rpc_authority_restore_controller TO ira_restore_controller_g1;
+SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_restore_controller;
 

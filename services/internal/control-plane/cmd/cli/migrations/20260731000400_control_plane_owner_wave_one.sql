@@ -1,8 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Owner wave 1 добавляет server-owned delegation/scheduled-run lineage,
 -- ремонт terminal outbox и отдельную least-privilege роль ротации LOGIN.
 RESET ROLE;
 
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -15,6 +18,7 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 ALTER ROLE control_plane_role_controller
     NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
@@ -31,6 +35,7 @@ GRANT SELECT, INSERT, UPDATE ON
 -- Каждая уже зарегистрированная LOGIN-роль делегируется controller с
 -- ADMIN OPTION; новые поколения не пройдут readback/reconcile без такого же
 -- code-first bootstrap grant.
+-- +goose StatementBegin
 DO $managed_roles$
 DECLARE
     managed_name name;
@@ -45,6 +50,7 @@ BEGIN
     END LOOP;
 END
 $managed_roles$;
+-- +goose StatementEnd
 
 ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     OWNER TO control_plane_role_controller;
@@ -364,6 +370,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -371,3 +378,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

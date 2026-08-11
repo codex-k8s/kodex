@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE TABLE control_plane.interaction_delivery_work (
     id uuid PRIMARY KEY,
     organization_id uuid NOT NULL,

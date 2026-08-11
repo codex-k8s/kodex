@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE TABLE control_plane.interaction_delivery_readback_keyset_fence (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     keyset_revision bigint NOT NULL CHECK (keyset_revision > 0),

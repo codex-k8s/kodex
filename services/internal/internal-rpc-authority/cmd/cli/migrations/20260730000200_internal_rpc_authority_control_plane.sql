@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
 ALTER TABLE internal_rpc_authority.authority_readback_intents
     ADD COLUMN workload_spiffe_id text NOT NULL
         CHECK (workload_spiffe_id ~ '^spiffe://mattercodex[.]local/'),

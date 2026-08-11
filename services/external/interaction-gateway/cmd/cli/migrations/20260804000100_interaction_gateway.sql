@@ -1,4 +1,7 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
+RESET ROLE;
 -- +goose StatementBegin
 DO $roles$
 BEGIN
@@ -18,6 +21,7 @@ ALTER ROLE interaction_gateway_role_controller
     NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 GRANT pg_signal_backend TO interaction_gateway_role_controller;
 GRANT interaction_gateway_runtime TO interaction_gateway_role_controller WITH ADMIN OPTION;
+SET ROLE interaction_gateway_owner;
 
 CREATE TABLE interaction_gateway_metadata (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),

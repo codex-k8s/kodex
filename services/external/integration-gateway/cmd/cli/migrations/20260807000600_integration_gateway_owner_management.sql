@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 -- Целевая owner schema Issue #236. До one-shot cutover #196 эти таблицы не
 -- синхронизируются с legacy bot-service и не обслуживают runtime сессии.
 

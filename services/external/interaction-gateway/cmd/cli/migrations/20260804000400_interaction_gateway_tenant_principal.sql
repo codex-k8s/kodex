@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 ALTER TABLE interaction_gateway_runtime_principals DROP CONSTRAINT interaction_gateway_runtime_principals_status_check;
 ALTER TABLE interaction_gateway_runtime_principals ADD CONSTRAINT interaction_gateway_runtime_principals_status_check
     CHECK (status IN ('NEXT', 'CURRENT', 'PREVIOUS', 'RETIRED'));

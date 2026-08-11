@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
 -- Attestor не владеет строками challenge/receipt и не может обходить
 -- server-derived binding прямым DML. Единственная изменяющая граница —
 -- точные SECURITY DEFINER функции владельца состояния.

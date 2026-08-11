@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Immutable runtime snapshot/fence и typed integration continuation являются
 -- owner state control-plane и не используют generic resources lifecycle.
 RESET ROLE;
@@ -315,6 +317,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -322,3 +325,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

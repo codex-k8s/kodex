@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 ALTER TABLE control_plane.resources
     DROP CONSTRAINT resources_kind_check,
     ADD CONSTRAINT resources_kind_check CHECK (kind IN (
@@ -89,6 +91,7 @@ CREATE INDEX resources_promoted_image_spec_idx
     WHERE kind = 'IMAGE_ARTIFACT' AND state = 'ACTIVE';
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -96,3 +99,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

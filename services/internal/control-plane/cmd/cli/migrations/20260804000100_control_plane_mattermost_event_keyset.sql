@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE TABLE control_plane.mattermost_event_verifier_fence (
     producer_id text PRIMARY KEY CHECK (producer_id ~ '^[a-z][a-z0-9.-]{2,127}$'),
     keyset_revision bigint NOT NULL CHECK (keyset_revision >= 0),

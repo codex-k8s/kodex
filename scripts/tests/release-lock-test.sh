@@ -319,6 +319,60 @@ grep -Fq "tr '\\t' '|' </var/run/bootstrap/principals.tsv" \
   printf 'PostgreSQL principal bootstrap does not preserve empty TSV fields\n' >&2
   exit 1
 }
+grep -Fq 'if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FALSE; fi' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'WITH INHERIT FALSE, SET TRUE, ADMIN %s' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL migrator role graph does not bind ADMIN to the bounded create-role flag\n' >&2
+  exit 1
+}
+for migration_registry_entry in \
+  'control_plane_migrator:control_plane_owner,control_plane_runtime,control_plane_relay,pg_signal_backend' \
+  'integration_gateway_migrator_g1:integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend' \
+  'interaction_gateway_migrator:interaction_gateway_owner,interaction_gateway_runtime,interaction_gateway_role_controller,pg_signal_backend' \
+  'internal_rpc_authority_migrator:internal_rpc_authority_owner,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_restore_controller,pg_signal_backend'; do
+  migration_principal=${migration_registry_entry%%:*}
+  migration_memberships=${migration_registry_entry#*:}
+  awk -F '\t' -v principal="$migration_principal" -v memberships="$migration_memberships" '
+    {gsub(/^[[:space:]]+/, "", $1)}
+    $1 == principal && $3 == memberships && $4 == "true" {found=1}
+    END {exit(found ? 0 : 1)}
+  ' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+    printf 'PostgreSQL migrator registry is incomplete: %s\n' "$migration_principal" >&2
+    exit 1
+  }
+done
+for migration_scope in \
+  'services/internal/control-plane/cmd/cli/migrations:control_plane_owner' \
+  'services/external/integration-gateway/cmd/cli/migrations:integration_gateway_owner' \
+  'services/external/interaction-gateway/cmd/cli/migrations:interaction_gateway_owner' \
+  'services/internal/internal-rpc-authority/cmd/cli/migrations:internal_rpc_authority_owner' \
+  'services/internal/runtime-controller/cmd/cli/migrations:runtime_controller_owner'; do
+  migration_directory=${migration_scope%%:*}
+  migration_owner=${migration_scope#*:}
+  duplicate_versions=$(find "$repository_root/$migration_directory" -maxdepth 1 -type f -name '*.sql' -printf '%f\n' |
+    cut -d_ -f1 | LC_ALL=C sort | uniq -d)
+  [[ -z "$duplicate_versions" ]] || {
+    printf 'Goose migration versions are duplicated in %s: %s\n' "$migration_directory" "$duplicate_versions" >&2
+    exit 1
+  }
+  for migration_file in "$repository_root/$migration_directory"/*.sql; do
+    [[ "$(sed -n '1p' "$migration_file")" == '-- +goose Up' ]] &&
+      [[ "$(sed -n '2p' "$migration_file")" == 'RESET ROLE;' ]] &&
+      [[ "$(sed -n '3p' "$migration_file")" == "SET ROLE $migration_owner;" ]] || {
+      printf 'Goose migration does not establish its exact owner role: %s\n' "$migration_file" >&2
+      exit 1
+    }
+  done
+  awk '
+    FNR == 1 {previous=""}
+    /^DO \$[A-Za-z0-9_]*\$$/ && previous != "-- +goose StatementBegin" {exit 1}
+    NF {previous=$0}
+  ' "$repository_root/$migration_directory"/*.sql || {
+    printf 'Goose migration has an unbounded PostgreSQL DO block: %s\n' "$migration_directory" >&2
+    exit 1
+  }
+done
 if rg -n '(control-plane|internal-rpc-authority|runtime-controller)-postgresql\.mattercodex-system' \
   "$repository_root/deploy" "$repository_root/services" "$repository_root/contracts" >/dev/null; then
   printf 'PostgreSQL runtime contract still references a non-canonical service alias\n' >&2
@@ -334,6 +388,7 @@ for migration_contract in \
   migration_host=${migration_contract#*:}
   yq -o=json '.' "$repository_root/$migration_file" | jq -e --arg postgres_host "$migration_host" '
     .spec.activeDeadlineSeconds > 0 and .spec.activeDeadlineSeconds <= 300 and
+    .spec.template.spec.restartPolicy == "Never" and
     .spec.template.spec.securityContext.runAsNonRoot == true and
     (.spec.template.spec.securityContext.fsGroup | type == "number") and
     .spec.template.spec.securityContext.fsGroupChangePolicy == "OnRootMismatch" and

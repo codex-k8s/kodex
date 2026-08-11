@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Owner wave 2 замыкает owner-gate graph, пропорциональный provider pool,
 -- tenant-scoped outbox repair и исполнимый bootstrap PostgreSQL LOGIN.
 RESET ROLE;
@@ -172,6 +174,7 @@ ALTER TABLE control_plane.schedule_occurrences
     );
 ALTER TABLE control_plane.scheduled_runs
     DROP CONSTRAINT scheduled_runs_state_check;
+-- +goose StatementBegin
 DO $scheduled_run_finished_constraint$
 DECLARE
     constraint_name name;
@@ -191,6 +194,7 @@ BEGIN
     END LOOP;
 END
 $scheduled_run_finished_constraint$;
+-- +goose StatementEnd
 ALTER TABLE control_plane.scheduled_runs
     ADD CONSTRAINT scheduled_runs_state_check CHECK (state IN (
         'CLAIMED', 'WAITING_OWNER', 'SUCCEEDED', 'FAILED', 'CANCELLED'
@@ -632,6 +636,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -639,3 +644,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

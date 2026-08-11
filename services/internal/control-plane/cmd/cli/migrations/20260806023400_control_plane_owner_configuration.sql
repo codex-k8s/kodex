@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Целевая owner-конфигурация Issue #234 вводится одним forward-only cutover:
 -- новые защищённые виды получают специализированный history, а legacy
 -- ROLE/PROMPT_PROFILE становятся неизменяемыми version-pinned входами уже
@@ -61,6 +63,7 @@ CREATE UNIQUE INDEX resources_workspace_mapping_uidx
 -- Историческая Session остаётся immutable, но не занимает admission boundary.
 -- Сначала закрыто доказываем, что уже существующий live graph однозначен;
 -- только затем заменяем более широкий индекс из 20260731000100.
+-- +goose StatementBegin
 DO $session_conversation_preflight$
 BEGIN
     IF EXISTS (
@@ -81,6 +84,7 @@ BEGIN
     END IF;
 END
 $session_conversation_preflight$;
+-- +goose StatementEnd
 DROP INDEX control_plane.resources_session_conversation_uidx;
 CREATE UNIQUE INDEX resources_session_conversation_uidx
     ON control_plane.resources (
@@ -506,6 +510,7 @@ GRANT EXECUTE ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, te
 -- Runtime owner-gate, integration continuation и blocked completion завершают
 -- текущую attempt до свежего continuation/retry. Старый inline CHECK не
 -- включал реально сохраняемые WAITING_* и BLOCKED состояния.
+-- +goose StatementBegin
 DO $turn_attempt_state_validation$
 BEGIN
     IF EXISTS (
@@ -521,6 +526,7 @@ BEGIN
     END IF;
 END
 $turn_attempt_state_validation$;
+-- +goose StatementEnd
 
 ALTER TABLE control_plane.turn_attempts
     DROP CONSTRAINT turn_attempts_state_check,
@@ -602,6 +608,7 @@ WHERE candidate.rank = 1
   AND candidate.turn_id = attempt.turn_id
   AND candidate.attempt = attempt.attempt;
 
+-- +goose StatementBegin
 DO $turn_attempt_revision_backfill$
 BEGIN
     IF EXISTS (
@@ -613,6 +620,7 @@ BEGIN
     END IF;
 END
 $turn_attempt_revision_backfill$;
+-- +goose StatementEnd
 
 ALTER TABLE control_plane.turn_attempts
     ALTER COLUMN runtime_revision_id SET NOT NULL,
@@ -952,6 +960,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -959,3 +968,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

@@ -1,6 +1,10 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
 CREATE SCHEMA IF NOT EXISTS internal_rpc_authority;
 
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'internal_rpc_authority_readback_owner') THEN
@@ -87,6 +91,7 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_readback_owner
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
@@ -131,6 +136,7 @@ GRANT internal_rpc_authority_verifier
 GRANT internal_rpc_authority_database_credential_reconciler
     TO ira_database_credential_reconciler;
 
+SET ROLE internal_rpc_authority_owner;
 REVOKE ALL ON SCHEMA internal_rpc_authority FROM PUBLIC;
 GRANT USAGE ON SCHEMA internal_rpc_authority TO
     internal_rpc_authority_issuer,

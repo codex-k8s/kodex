@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 CREATE TABLE interaction_gateway_delivery_readback_keyset_fence (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     keyset_revision bigint NOT NULL CHECK (keyset_revision > 0),

@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 ALTER TABLE interaction_gateway_deliveries
     ADD COLUMN bot_provider_user_id text NOT NULL DEFAULT '' CHECK (length(bot_provider_user_id) <= 64),
     ADD COLUMN bot_provider_generation bigint NOT NULL DEFAULT 0 CHECK (bot_provider_generation >= 0);

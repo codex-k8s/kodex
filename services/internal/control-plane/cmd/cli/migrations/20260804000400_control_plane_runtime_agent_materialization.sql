@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE UNIQUE INDEX runtime_agent_session_owner_unique
 	ON control_plane.resources (
 		organization_id,

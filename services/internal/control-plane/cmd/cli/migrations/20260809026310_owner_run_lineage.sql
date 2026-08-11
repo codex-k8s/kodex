@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- owner_run_graph_process_ids выполняет bounded breadth-first traversal до
 -- материализации owner lineage. Очередь и visited set никогда не превышают
 -- caller-supplied hard cap; tenant/owner predicates остаются внутри функции.
@@ -138,8 +140,10 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $$
 BEGIN
     RAISE EXCEPTION 'migration 20260809026310 is forward-only: owner lineage read contract cannot be discarded';
 END;
 $$;
+-- +goose StatementEnd

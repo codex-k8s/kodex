@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 CREATE TABLE interaction_gateway_download_grants (
     id uuid PRIMARY KEY,
     generation bigint NOT NULL CHECK (generation > 0),

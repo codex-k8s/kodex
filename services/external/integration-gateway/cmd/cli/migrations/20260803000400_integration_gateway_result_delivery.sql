@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 ALTER TABLE integration_gateway.results
     ADD COLUMN delivery_version bigint NOT NULL DEFAULT 1 CHECK (delivery_version > 0),
     ADD COLUMN delivery_fence bigint NOT NULL DEFAULT 1 CHECK (delivery_fence > 0),

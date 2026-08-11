@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- CHANGES_REQUESTED продолжает тот же ProcessRun через новый неизменяемый
 -- turn/revision, сохраняя первоначальную binding scheduled_runs.
 RESET ROLE;
@@ -53,6 +55,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -60,3 +63,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

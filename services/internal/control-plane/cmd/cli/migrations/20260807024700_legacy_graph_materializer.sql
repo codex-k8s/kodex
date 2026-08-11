@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Typed owner materializer Issue #247 не выдаёт migration workload прямого
 -- DML и не принимает JSON dispatcher. Все записи выполняет обычный runtime
 -- principal под signed transaction context и RLS.

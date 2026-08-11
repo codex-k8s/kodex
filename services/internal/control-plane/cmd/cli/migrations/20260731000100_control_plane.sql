@@ -1,7 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Базовая миграция только вперёд создаёт роли с минимальными полномочиями,
 -- авторитетную схему, RLS, идемпотентность, аудит, outbox и доменные ограничения.
 -- Порядок намеренно начинается с NOLOGIN-ролей и завершается явными GRANT.
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'control_plane_owner') THEN
@@ -18,6 +22,7 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 
 ALTER ROLE control_plane_owner
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
@@ -32,6 +37,7 @@ REVOKE ALL ON SCHEMA control_plane FROM PUBLIC;
 REVOKE ALL ON SCHEMA control_plane_extensions FROM PUBLIC;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA control_plane_extensions;
+-- +goose StatementBegin
 DO $pgcrypto_schema$
 BEGIN
     IF NOT EXISTS (
@@ -46,6 +52,7 @@ BEGIN
     END IF;
 END
 $pgcrypto_schema$;
+-- +goose StatementEnd
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA control_plane_extensions FROM PUBLIC;
 GRANT USAGE ON SCHEMA control_plane_extensions TO control_plane_owner;
 GRANT EXECUTE ON FUNCTION

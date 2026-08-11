@@ -1,8 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 CREATE SCHEMA IF NOT EXISTS integration_gateway;
 CREATE SCHEMA IF NOT EXISTS integration_gateway_extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA integration_gateway_extensions;
 
+RESET ROLE;
 -- +goose StatementBegin
 DO $roles$
 BEGIN
@@ -32,6 +35,7 @@ ALTER ROLE integration_gateway_role_controller
     NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 GRANT pg_signal_backend TO integration_gateway_role_controller;
 GRANT integration_gateway_runtime TO integration_gateway_role_controller WITH ADMIN OPTION;
+SET ROLE integration_gateway_owner;
 
 CREATE TABLE integration_gateway.runtime_principals (
     principal_name name PRIMARY KEY,
