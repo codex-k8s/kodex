@@ -41,7 +41,11 @@ SET ROLE integration_gateway_role_controller;
 
 -- Старый migration image не может обойти owner procedure через прежние entrypoints.
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION integration_gateway.bootstrap_runtime_principal(text, bigint, text)
+CREATE OR REPLACE FUNCTION integration_gateway.bootstrap_runtime_principal(
+    requested_principal_name text,
+    requested_generation bigint,
+    requested_password text
+)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -54,7 +58,9 @@ $function$;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION integration_gateway.retire_runtime_principal(text)
+CREATE OR REPLACE FUNCTION integration_gateway.retire_runtime_principal(
+    requested_principal_name text
+)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
