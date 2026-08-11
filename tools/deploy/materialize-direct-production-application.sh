@@ -91,7 +91,7 @@ put_file() {
   cp "$4" "$path"
   chmod 0600 "$path"
 }
-random_hex_file() { openssl rand -hex 32 >"$1"; chmod 0600 "$1"; }
+random_hex_file() { openssl rand -hex 32 | tr -d '\n' >"$1"; chmod 0600 "$1"; }
 
 expected_keys() {
   jq -c --arg kind "$1" --arg name "$2" 'first(.resources[] | select(.kind == $kind and .name == $name)).keys | sort' "$policy"
@@ -294,7 +294,7 @@ root_json="$temporary_directory/internal/root.json"
 if [[ -n "$expected_context" ]] && kubectl --context "$expected_context" -n "$namespace" \
   get secret mattercodex-application-material-root -o json >"$root_json" 2>/dev/null; then
   [[ "$(jq -c '[.data|keys[]]|sort' "$root_json")" == '["root.hex"]' ]] || fail "material root key set mismatch"
-  jq -jr '.data["root.hex"]' "$root_json" | base64 -d >"$root"
+  jq -jr '.data["root.hex"]' "$root_json" | base64 -d | tr -d '\n' >"$root"
   [[ "$(wc -c <"$root")" -eq 64 ]] && grep -Eq '^[a-f0-9]{64}$' "$root" || fail "material root is invalid"
 else
   random_hex_file "$root"
