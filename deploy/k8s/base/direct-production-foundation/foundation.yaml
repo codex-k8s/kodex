@@ -608,6 +608,10 @@ data:
       if [ "$create_role" = true ]; then
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       fi
+      # The fenced lifecycle reconciler exclusively owns generation memberships.
+      case "$principal" in
+        ira_publisher_g[1-5]|ira_readback_attestor_g[1-5]) continue ;;
+      esac
       admin_targets_for_principal=$(awk -F '\t' -v principal="$principal" '
         $1 == principal { if (found++) printf ","; printf "%s", $2 }
         END { print "" }

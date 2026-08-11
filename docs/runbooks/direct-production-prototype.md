@@ -286,7 +286,7 @@ owner bootstrap. Их `LOGIN` и membership полностью принадле�
 credential lifecycle; bootstrap выдаёт lifecycle definer только bounded
 `ADMIN OPTION` без `INHERIT` и `SET`. Повторный owner bootstrap обновляет пароли
 generation principals, но сохраняет их текущее `LOGIN`/`NOLOGIN` состояние и
-не конкурирует с lifecycle reconciler. После migrations bootstrap удаляет
+не создаёт и не отзывает их capability membership. После migrations bootstrap удаляет
 дубли bounded administrator membership от прежних grantors и создаёт одну
 каноническую grant с точными option.
 
