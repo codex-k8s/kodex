@@ -170,6 +170,8 @@ GRANT internal_rpc_authority_verifier
     TO ira_control_plane_verifier_g1, ira_control_plane_verifier_g2;
 GRANT internal_rpc_authority_database_credential_reconciler
     TO ira_database_credential_reconciler;
+GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner
+    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 
 SET ROLE internal_rpc_authority_owner;
 REVOKE ALL ON SCHEMA internal_rpc_authority FROM PUBLIC;
