@@ -305,6 +305,13 @@ grep -Fq "dollar_quote='\$bootstrap\$'" \
   printf 'PostgreSQL principal bootstrap uses expandable SQL dollar quoting\n' >&2
   exit 1
 }
+grep -Fq 'attempt=$((attempt + 1))' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq '[ "$attempt" -lt 30 ] || exit 27' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal bootstrap has no bounded network-readiness retry\n' >&2
+  exit 1
+}
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
