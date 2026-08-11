@@ -158,6 +158,11 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classif
 
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
+grep -Fq "openssl rand -hex 32 | tr -d '\\n'" "$materializer" &&
+  grep -Fq "base64 -d | tr -d '\\n' >\"\$root\"" "$materializer" || {
+  printf 'Application material hex generation or root readback is not canonical\n' >&2
+  exit 1
+}
 for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
   jq -er --arg name "$name" '.[] | select(.kind == "Secret" and .metadata.name == $name) |
     .data["state.json"]' "$material_json" | base64 -d >"$temporary_directory/$name-state.json"
