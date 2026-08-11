@@ -64,7 +64,7 @@ spec:
              (has(v.projected.defaultMode) ? string(v.projected.defaultMode) : '420') + '\u001d' +
              v.projected.sources.map(s,
              has(s.serviceAccountToken) ? 'serviceAccountToken\u001d' +
-               s.serviceAccountToken.audience + '\u001d' +
+               (has(s.serviceAccountToken.audience) ? s.serviceAccountToken.audience : '') + '\u001d' +
                string(s.serviceAccountToken.expirationSeconds) + '\u001d' +
                s.serviceAccountToken.path :
              has(s.configMap) ? 'configMap\u001d' + s.configMap.name + '\u001d' +
