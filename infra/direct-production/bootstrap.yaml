@@ -168,10 +168,10 @@ spec:
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
         !(object.kind in ['Deployment','StatefulSet','Job']) ||
         (object.spec.template.spec.containers.all(c,
-           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
+           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64}|pgvector/pgvector:[^@]+@sha256:[a-f0-9]{64})$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000')) &&
          (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
-           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
+           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller|staff-control-center)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64}|pgvector/pgvector:[^@]+@sha256:[a-f0-9]{64})$') &&
            !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000'))) &&
          (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))))
       message: Production workload image or volume is outside the machine allowlist.
