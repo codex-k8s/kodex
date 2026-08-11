@@ -198,7 +198,7 @@ spec:
           projected:
             defaultMode: 0400
             sources:
-              - serviceAccountToken: {path: token, audience: "https://kubernetes.default.svc", expirationSeconds: 600}
+              - serviceAccountToken: {path: token, expirationSeconds: 600}
         - name: kubernetes-ca
           configMap:
             name: kube-root-ca.crt
@@ -328,7 +328,6 @@ spec:
                 sources:
                   - serviceAccountToken:
                       path: token
-                      audience: https://kubernetes.default.svc
                       expirationSeconds: 600
             - name: kubernetes-ca
               configMap:
@@ -407,7 +406,7 @@ spec:
               projected:
                 defaultMode: 0400
                 sources:
-                  - serviceAccountToken: {path: token, audience: "https://kubernetes.default.svc", expirationSeconds: 600}
+                  - serviceAccountToken: {path: token, expirationSeconds: 600}
             - name: kubernetes-ca
               configMap:
                 name: kube-root-ca.crt
@@ -478,7 +477,7 @@ spec:
               projected:
                 defaultMode: 0400
                 sources:
-                  - serviceAccountToken: {path: token, audience: "https://kubernetes.default.svc", expirationSeconds: 600}
+                  - serviceAccountToken: {path: token, expirationSeconds: 600}
             - name: kubernetes-ca
               configMap:
                 name: kube-root-ca.crt

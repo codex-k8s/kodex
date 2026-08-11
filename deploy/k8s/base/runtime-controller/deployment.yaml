@@ -114,7 +114,7 @@ spec:
           projected:
             defaultMode: 0440
             sources:
-              - serviceAccountToken: {audience: https://kubernetes.default.svc, expirationSeconds: 600, path: token}
+              - serviceAccountToken: {expirationSeconds: 600, path: token}
               - configMap:
                   name: kube-root-ca.crt
                   items: [{key: ca.crt, path: ca.crt}]
