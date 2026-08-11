@@ -252,6 +252,16 @@ rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgres
   printf 'PostgreSQL bounded administrator readback is incomplete\n' >&2
   exit 1
 }
+rg -q 'GRANT USAGE, CREATE ON SCHEMA public TO \$principal' \
+  "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'ALTER TABLE public.goose_db_version OWNER TO \$principal' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'has_schema_privilege' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q '\[ "\$migration_principals" -eq 5 \] \|\| exit 34' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  printf 'PostgreSQL Goose bootstrap ownership is incomplete\n' >&2
+  exit 1
+}
 rg -q 'ALTER ROLE %s NOLOGIN.*pg_terminate_backend' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q "format\('REVOKE %%I FROM %%I GRANTED BY %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'PostgreSQL retirement boundary is incomplete\n' >&2

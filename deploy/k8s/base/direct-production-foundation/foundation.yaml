@@ -640,6 +640,31 @@ data:
       sleep 2
     done
     psql "$postgres_dsn" --no-password --set ON_ERROR_STOP=1 --file "$sql_file" >/dev/null
+    migration_principals=0
+    while IFS='|' read -r principal database memberships create_role; do
+      [ "$create_role" = true ] || continue
+      migration_principals=$((migration_principals + 1))
+      database_dsn="host=mattercodex-postgresql dbname=$database user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt"
+      psql "$database_dsn" --no-password --set ON_ERROR_STOP=1 \
+        --command "GRANT USAGE, CREATE ON SCHEMA public TO $principal" >/dev/null
+      goose_table_count=$(psql "$database_dsn" --no-password --tuples-only --no-align \
+        --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_class WHERE oid = pg_catalog.to_regclass('public.goose_db_version')" | tr -d '[:space:]')
+      case "$goose_table_count" in
+        0) ;;
+        1) psql "$database_dsn" --no-password --set ON_ERROR_STOP=1 \
+             --command "ALTER TABLE public.goose_db_version OWNER TO $principal" >/dev/null ;;
+        *) exit 31 ;;
+      esac
+      schema_access=$(psql "$database_dsn" --no-password --tuples-only --no-align \
+        --set ON_ERROR_STOP=1 --command "SELECT pg_catalog.has_schema_privilege('$principal', 'public', 'USAGE') AND pg_catalog.has_schema_privilege('$principal', 'public', 'CREATE')" | tr -d '[:space:]')
+      [ "$schema_access" = t ] || exit 32
+      if [ "$goose_table_count" = 1 ]; then
+        goose_table_owner=$(psql "$database_dsn" --no-password --tuples-only --no-align \
+          --set ON_ERROR_STOP=1 --command "SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = pg_catalog.to_regclass('public.goose_db_version')" | tr -d '[:space:]')
+        [ "$goose_table_owner" = "$principal" ] || exit 33
+      fi
+    done <"$principals_file"
+    [ "$migration_principals" -eq 5 ] || exit 34
     expected=$(wc -l </var/run/bootstrap/principals.tsv | tr -d ' ')
     actual=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
     [ "$actual" = "$expected" ] || exit 24
