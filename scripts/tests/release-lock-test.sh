@@ -285,6 +285,15 @@ yq eval-all -e '
   printf 'Direct-production PostgreSQL does not provide the pinned pgvector runtime\n' >&2
   exit 1
 }
+yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml" | jq -sc -e '
+  map(select(.kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "mattercodex-production-deployer-allowlist"))[0].spec.validations |
+  map(.expression) |
+  any(.[]; contains("pgvector/pgvector:[^@]+@sha256:[a-f0-9]{64}"))
+' >/dev/null || {
+  printf 'Production deployer machine allowlist rejects the pinned pgvector runtime\n' >&2
+  exit 1
+}
 
 yq eval-all -e '
   select(.kind == "StatefulSet" and .metadata.name == "mattercodex-nats") |
