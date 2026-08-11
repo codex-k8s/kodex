@@ -43,6 +43,29 @@ lock_sha=$(sha256sum "$temporary_directory/valid.json" | awk '{print $1}')
 "$validator" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" --sha256 "$lock_sha" >/dev/null
 "$renderer" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" \
   --sha256 "$lock_sha" --output "$temporary_directory/direct-production.yaml" >/dev/null
+yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -e '
+  map(select(type == "object" and .kind != null)) as $resources |
+  ($resources | length) > 0 and
+  all($resources[];
+    .metadata.namespace == "mattercodex-system" and
+    .metadata.labels["mattercodex.dev/profile"] == "direct-production-single-node-prototype" and
+    .metadata.labels["mattercodex.dev/release-managed"] == "true" and
+    (if (.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") then
+       .spec.template.metadata.labels["mattercodex.dev/release-managed"] == "true"
+     elif .kind == "CronJob" then
+       .spec.jobTemplate.spec.template.metadata.labels["mattercodex.dev/release-managed"] == "true"
+     else true end))
+' >/dev/null || {
+  printf 'Direct-production render crosses the owner-gated release boundary\n' >&2
+  exit 1
+}
+grep -Fq 'apply --server-side --force-conflicts' \
+  "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq 'render contains a resource outside the owner-gated release boundary' \
+    "$repository_root/tools/deploy/direct-production.sh" || {
+  printf 'Direct-production deployer does not perform bounded SSA ownership adoption\n' >&2
+  exit 1
+}
 for expected_resource in \
   Deployment/control-plane Deployment/runtime-controller Deployment/interaction-gateway \
   Deployment/integration-gateway Deployment/control-api-gateway Deployment/automation-scheduler \
@@ -494,7 +517,7 @@ yq -e '
   printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
   exit 1
 }
-grep -Fq -- '--field-manager=mattercodex-production-deployer --dry-run=server' \
+grep -Fq 'apply_release_manifest --dry-run=server -f "$non_job_render"' \
   "$repository_root/tools/deploy/direct-production.sh" || {
   printf 'Direct-production preflight does not use server-side apply for large ConfigMaps\n' >&2
   exit 1
