@@ -80,6 +80,27 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render_file="$temporary_directory/direct-production.yaml"
 "$renderer" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" --output "$render_file" >/dev/null
+yq -o=json eval-all '.' "$render_file" | jq -sc -e '
+  map(select(type == "object" and .kind != null)) as $resources |
+  ($resources | length) > 0 and
+  all($resources[];
+    .metadata.namespace == "mattercodex-system" and
+    .metadata.labels["mattercodex.dev/profile"] == "direct-production-single-node-prototype" and
+    .metadata.labels["mattercodex.dev/release-managed"] == "true" and
+    (if (.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") then
+       .spec.template.metadata.labels["mattercodex.dev/release-managed"] == "true"
+     elif .kind == "CronJob" then
+       .spec.jobTemplate.spec.template.metadata.labels["mattercodex.dev/release-managed"] == "true"
+     else true end))
+' >/dev/null || fail "render contains a resource outside the owner-gated release boundary"
+
+# Owner bootstrap initially materializes foundation resources with client-side
+# apply. The exact, lock-validated release manifest then becomes their sole SSA
+# owner. Force is deliberately scoped to slices of that validated manifest.
+apply_release_manifest() {
+  kubectl --context "$expected_context" apply --server-side --force-conflicts \
+    --field-manager=mattercodex-production-deployer "$@"
+}
 
 can_i() {
   local verb=$1 resource=$2 namespace=$3
@@ -122,9 +143,7 @@ kubectl --context "$expected_context" -n mattercodex-system get configmap matter
 kubectl --context "$expected_context" -n matter-kodex-prod get service matter-codex-registry >/dev/null
 non_job_render="$temporary_directory/non-jobs.yaml"
 yq eval-all 'select(.kind != "Job")' "$render_file" >"$non_job_render"
-kubectl --context "$expected_context" apply --server-side \
-  --field-manager=mattercodex-production-deployer --dry-run=server \
-  -f "$non_job_render" >/dev/null
+apply_release_manifest --dry-run=server -f "$non_job_render" >/dev/null
 while IFS= read -r migration; do
   [[ -n "$migration" && "$migration" != '---' ]] || continue
   migration_manifest="$temporary_directory/job-$migration.yaml"
@@ -142,7 +161,7 @@ yq eval-all '
   select(.kind == "Deployment" and .metadata.name == "control-plane") |
   (.spec.template.spec.volumes[] | select(.secret != null) | .secret.secretName) = "forbidden-production-secret"
 ' "$render_file" >"$negative_secret_mount"
-if kubectl --context "$expected_context" apply --dry-run=server -f "$negative_secret_mount" >/dev/null 2>&1; then
+if apply_release_manifest --dry-run=server -f "$negative_secret_mount" >/dev/null 2>&1; then
   fail "production admission accepted a forged Secret mount"
 fi
 
@@ -172,15 +191,13 @@ run_job() {
   NAME="$name" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(NAME))' "$render_file" >"$manifest"
   [[ -s "$manifest" ]] || fail "required Job is absent from render: $name"
   kubectl --context "$expected_context" -n mattercodex-system delete job "$name" --ignore-not-found --wait >/dev/null
-  kubectl --context "$expected_context" apply --server-side \
-    --field-manager=mattercodex-production-deployer -f "$manifest" >/dev/null
+  apply_release_manifest -f "$manifest" >/dev/null
   kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$name" --timeout=5m >/dev/null
 }
 
 if [[ "$operation" == apply ]]; then
   select_kinds "$temporary_directory/foundation.yaml" ConfigMap Service StatefulSet
-  kubectl --context "$expected_context" apply --server-side \
-    --field-manager=mattercodex-production-deployer -f "$temporary_directory/foundation.yaml" >/dev/null
+  apply_release_manifest -f "$temporary_directory/foundation.yaml" >/dev/null
   wait_rollouts statefulset StatefulSet
 
   run_job mattercodex-postgresql-principal-bootstrap
@@ -191,8 +208,7 @@ if [[ "$operation" == apply ]]; then
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system delete job "$migration" --ignore-not-found --wait >/dev/null
   done < <(yq eval-all -r 'select(.kind == "Job" and .metadata.name != "mattercodex-postgresql-principal-bootstrap") | .metadata.name' "$render_file")
-  kubectl --context "$expected_context" apply --server-side \
-    --field-manager=mattercodex-production-deployer -f "$temporary_directory/migrations.yaml" >/dev/null
+  apply_release_manifest -f "$temporary_directory/migrations.yaml" >/dev/null
   while IFS= read -r migration; do
     [[ -n "$migration" && "$migration" != '---' ]] || continue
     kubectl --context "$expected_context" -n mattercodex-system wait --for=condition=complete "job/$migration" --timeout=5m >/dev/null
@@ -207,8 +223,7 @@ if [[ "$operation" == apply ]]; then
     (.metadata.name == "internal-rpc-authority-publisher" or
      .metadata.name == "internal-rpc-authority-readback-attestor"))' \
     "$render_file" >"$temporary_directory/authority-publication.yaml"
-  kubectl --context "$expected_context" apply --server-side \
-    --field-manager=mattercodex-production-deployer -f "$temporary_directory/authority-publication.yaml" >/dev/null
+  apply_release_manifest -f "$temporary_directory/authority-publication.yaml" >/dev/null
   snapshot_ready=false
   for _ in $(seq 1 60); do
     if kubectl --context "$expected_context" -n mattercodex-system get secret internal-rpc-authority-snapshot -o json |
@@ -219,8 +234,7 @@ if [[ "$operation" == apply ]]; then
     sleep 5
   done
   [[ "$snapshot_ready" == true ]] || fail "publisher-owned authority snapshot was not materialized"
-  kubectl --context "$expected_context" apply --server-side \
-    --field-manager=mattercodex-production-deployer -f "$temporary_directory/applications.yaml" >/dev/null
+  apply_release_manifest -f "$temporary_directory/applications.yaml" >/dev/null
   wait_rollouts deployment Deployment
 fi
 
