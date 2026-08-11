@@ -477,9 +477,10 @@ public_jwks() {
   node "$helper" public-jwks "$destination" "$(value_path Secret "$3" "$4")"
 }
 public_keyset_genesis() {
-  local destination public_keyset
+  local destination public_keyset uncanonical
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
   public_keyset="$temporary_directory/$1-$2.jwks.json"
+  uncanonical="$temporary_directory/$1-$2.genesis.json"
   node "$helper" public-jwks "$public_keyset" "$(value_path Secret "$3" "$4")"
   jq -e '
     (.keys | type == "array" and length == 1) as $valid |
@@ -490,7 +491,8 @@ public_keyset_genesis() {
       served_generation: 1,
       keys: [.keys[] | {generation: 1, status: "CURRENT", jwk: .}]
     } else error("public keyset genesis requires exactly one key") end
-  ' "$public_keyset" >"$destination"
+  ' "$public_keyset" >"$uncanonical"
+  node "$helper" canonicalize-json "$uncanonical" "$destination"
 }
 public_jwk() {
   local destination

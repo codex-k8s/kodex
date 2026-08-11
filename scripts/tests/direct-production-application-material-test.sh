@@ -10,6 +10,16 @@ prototype_policy="$repository_root/infra/direct-production/internal-rpc-authorit
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
+printf '%s\n' '{"z":1,"a":{"y":2,"x":3}}' >"$temporary_directory/uncanonical.json"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" canonicalize-json \
+  "$temporary_directory/uncanonical.json" "$temporary_directory/canonical.json"
+[[ "$(<"$temporary_directory/canonical.json")" == '{"a":{"x":3,"y":2},"z":1}' ]] &&
+  node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-canonical-json \
+    "$temporary_directory/canonical.json" || {
+  printf 'Canonical JSON helper does not produce exact compact key ordering\n' >&2
+  exit 1
+}
+
 classification="$temporary_directory/classification.json"
 "$classifier" --output "$classification" >/dev/null
 [[ "$(stat -c '%a' "$classification")" == 600 ]] || {
@@ -165,9 +175,13 @@ for binding in \
   'interaction-gateway-postgres-migrator:delivery-readback.public-keyset.json'; do
   name=${binding%%:*}
   key=${binding#*:}
+  genesis="$temporary_directory/$name-$key"
   jq -er --arg name "$name" --arg key "$key" \
     '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data[$key]' \
-    "$material_json" | base64 -d | jq -e '
+    "$material_json" | base64 -d >"$genesis"
+  node "$repository_root/tools/deploy/direct-production-material-helper.mjs" \
+    validate-canonical-json "$genesis"
+  jq -e '
       .version == 1 and .revision == 1 and .high_watermark == 1 and
       .served_generation == 1 and (.keys | length == 1) and
       all(.keys[];
@@ -177,7 +191,7 @@ for binding in \
         .jwk.key_ops == ["verify"] and
         (.jwk.x | type == "string" and length > 0) and
         (.jwk.y | type == "string" and length > 0) and .jwk.d == null)
-    ' >/dev/null || {
+    ' "$genesis" >/dev/null || {
       printf 'Generated public keyset genesis is invalid: %s/%s\n' "$name" "$key" >&2
       exit 1
     }

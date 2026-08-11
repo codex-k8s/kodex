@@ -66,6 +66,26 @@ function writeJSON(path, value) {
   writeFileSync(path, `${JSON.stringify(value)}\n`, { mode: 0o600 });
 }
 
+function canonicalJSON(value) {
+  if (value === null || typeof value === "boolean" || typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) fail("canonical JSON contains a non-finite number");
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJSON(item)).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.keys(value).sort().map(
+      (key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`,
+    );
+    return `{${entries.join(",")}}`;
+  }
+  fail("canonical JSON contains an unsupported value");
+}
+
 function decodeJWT(value) {
   const parts = value.trim().split(".");
   if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) fail("JWT is invalid");
@@ -196,6 +216,18 @@ switch (command) {
   case "validate-private-jwk": {
     if (args.length !== 1) fail("validate-private-jwk requires an input path");
     validatePrivateJWK(args[0]);
+    break;
+  }
+  case "canonicalize-json": {
+    if (args.length !== 2) fail("canonicalize-json requires input and output paths");
+    const value = JSON.parse(readFileSync(args[0], "utf8"));
+    writeFileSync(args[1], canonicalJSON(value), { mode: 0o600 });
+    break;
+  }
+  case "validate-canonical-json": {
+    if (args.length !== 1) fail("validate-canonical-json requires an input path");
+    const raw = readFileSync(args[0], "utf8");
+    if (raw !== canonicalJSON(JSON.parse(raw))) fail("JSON document is not canonical");
     break;
   }
   case "public-jwk": {
