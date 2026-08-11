@@ -90,6 +90,9 @@ func run(ctx context.Context, arguments []string) error {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return err
 		}
+		if _, err := database.ExecContext(ctx, "SET ROLE interaction_gateway_migrator"); err != nil {
+			return errors.New("assume interaction gateway migration role")
+		}
 		if err := reconcileTenantPrincipal(ctx, database, value); err != nil {
 			return err
 		}

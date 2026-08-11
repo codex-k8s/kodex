@@ -253,7 +253,45 @@ mapping_digest=$(value_path Secret interaction-gateway-mapping manifest.sha256)
 [[ "$(sha256sum "$mapping_manifest" | awk '{print $1}')" == "$(tr -d '\n' <"$mapping_digest")" ]] || fail "external mapping digest mismatch"
 mapping_revision=$(tr -d '\n' <"$(value_path Secret interaction-gateway-mapping revision)")
 [[ "$mapping_revision" =~ ^production-r[1-9][0-9]*$ ]] || fail "external mapping revision is invalid"
-[[ "$(yq -er '.revision' "$mapping_manifest")" == "$mapping_revision" ]] || fail "external mapping revision mismatch"
+jq -e --arg revision "$mapping_revision" '
+  def uuid: type == "string" and test("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+  def provider_id: type == "string" and length > 0 and length <= 64;
+  def stable_key: type == "string" and test("^[a-z0-9-]{1,64}$");
+  . as $manifest |
+  .version == 1 and .revision == $revision and
+  (.source | type == "string" and startswith("vault://")) and
+  (.channels | type == "array" and length > 0) and
+  (.actors | type == "array" and length > 0) and
+  (.bots | type == "array" and length > 0) and
+  (any(.channels[]; .owner_delivery == true)) and
+  ([.channels[] | [.team_id,.channel_id]] | length == (unique | length)) and
+  ([.actors[] | [.mattermost_user_id,.organization_id,.project_id]] | length == (unique | length)) and
+  ([.bots[].stable_key] | length == (unique | length)) and
+  all(.channels[]; . as $channel |
+    ($channel.team_id | provider_id) and
+    ($channel.channel_id | provider_id) and
+    ($channel.organization_id | uuid) and
+    ($channel.project_id | uuid) and
+    ($channel.chat_id | uuid) and
+    ($channel.role_id | uuid) and
+    ($channel.lifecycle_actor_id | uuid) and
+    ($channel.locale == "ru" or $channel.locale == "en") and
+    ($channel.bot_stable_key | stable_key) and
+    ([$manifest.bots[].stable_key] | index($channel.bot_stable_key) != null) and
+    ([$manifest.actors[] | select(
+      .actor_id == $channel.lifecycle_actor_id and
+      .organization_id == $channel.organization_id and
+      .project_id == $channel.project_id)] | length == 1)) and
+  all(.actors[];
+    (.mattermost_user_id | provider_id) and
+    (.actor_id | uuid) and
+    (.organization_id | uuid) and
+    (.project_id | uuid)) and
+  all(.bots[];
+    (.stable_key | stable_key) and
+    (.user_id | provider_id) and
+    (.token_file | type == "string" and startswith("/var/run/secrets/mattercodex/interaction-gateway/bots/")))
+' "$mapping_manifest" >/dev/null || fail "external mapping manifest is invalid"
 node "$helper" validate-git-aggregate \
   "$(value_path Secret integration-gateway-git-credentials state.json)" \
   "$repository_root/deploy/k8s/base/integration-gateway/git-sources/catalog.json" >/dev/null

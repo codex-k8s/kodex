@@ -528,6 +528,15 @@ for migration_cli in \
     exit 1
   }
 done
+grep -Fq 'SET ROLE control_plane_owner' \
+  "$repository_root/services/internal/control-plane/cmd/cli/main.go" &&
+  grep -Fq 'SET ROLE integration_gateway_migrator' \
+    "$repository_root/services/external/integration-gateway/cmd/cli/main.go" &&
+  grep -Fq 'SET ROLE interaction_gateway_migrator' \
+    "$repository_root/services/external/interaction-gateway/cmd/cli/main.go" || {
+  printf 'Post-migration reconciliation does not assume its bounded PostgreSQL role\n' >&2
+  exit 1
+}
 if find \
     "$repository_root/services/internal/control-plane/cmd/cli/migrations" \
     "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations" \
