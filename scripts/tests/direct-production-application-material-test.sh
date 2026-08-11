@@ -345,6 +345,9 @@ rg -q 'ira_publisher_g\[1-5\]|ira_readback_attestor_g\[1-5\]' \
   exit 1
 }
 rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'DECLARE admin_grantor text' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q "REVOKE %%I FROM %%I GRANTED BY %%I.*admin_grantor" \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'actual_admin_membership.*member.admin_option.*NOT member.inherit_option.*NOT member.set_option' \
     "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'PostgreSQL bounded administrator readback is incomplete\n' >&2
