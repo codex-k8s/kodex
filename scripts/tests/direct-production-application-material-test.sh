@@ -78,7 +78,7 @@ jws_fixture=$(node -e '
   process.stdout.write(`${h}.${p}.${s}`)')
 jwk_fixture='{"kty":"OKP","crv":"Ed25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","alg":"EdDSA","kid":"test","use":"sig"}'
 jwks_fixture="{\"keys\":[$jwk_fixture]}"
-manifest_fixture='{"schema_version":1,"revision":"production-r1"}'
+manifest_fixture='{"version":1,"source":"vault://mattercodex/interaction-gateway/mapping/production/revisions/production-r1","revision":"production-r1","channels":[{"team_id":"team","channel_id":"channel","organization_id":"11111111-1111-4111-8111-111111111111","project_id":"22222222-2222-4222-8222-222222222222","chat_id":"33333333-3333-4333-8333-333333333333","role_id":"44444444-4444-4444-8444-444444444444","locale":"ru","bot_stable_key":"primary","owner_delivery":true,"lifecycle_actor_id":"55555555-5555-4555-8555-555555555555"}],"actors":[{"mattermost_user_id":"owner","actor_id":"55555555-5555-4555-8555-555555555555","organization_id":"11111111-1111-4111-8111-111111111111","project_id":"22222222-2222-4222-8222-222222222222"}],"bots":[{"stable_key":"primary","user_id":"bot","token_file":"/var/run/secrets/mattercodex/interaction-gateway/bots/mattermost-bot-token"}]}'
 manifest_digest=$(printf '%s' "$manifest_fixture" | sha256sum | awk '{print $1}')
 node - "$temporary_directory/git-state.json" "$temporary_directory/provider-snapshot.json" \
   "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" <<'NODE'

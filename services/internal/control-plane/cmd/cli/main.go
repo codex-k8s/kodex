@@ -163,6 +163,9 @@ func migrateExpand(
 	); err != nil {
 		return fmt.Errorf("apply control-plane expand migration: %w", err)
 	}
+	if _, err := database.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
+		return errors.New("assume control-plane migration owner role")
+	}
 	return reconcileRuntimePrincipals(
 		ctx,
 		database,
@@ -186,6 +189,9 @@ func migrateUp(
 	}
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 		return fmt.Errorf("apply control-plane migrations: %w", err)
+	}
+	if _, err := database.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
+		return errors.New("assume control-plane migration owner role")
 	}
 	return reconcileRuntimePrincipals(
 		ctx,
