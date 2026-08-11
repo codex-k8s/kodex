@@ -284,7 +284,9 @@ readback, что и рабочая публикация.
 Publisher и readback generation principals не получают capability roles от
 owner bootstrap. Их `LOGIN` и membership полностью принадлежат fenced database
 credential lifecycle; bootstrap выдаёт lifecycle definer только bounded
-`ADMIN OPTION` без `INHERIT` и `SET`.
+`ADMIN OPTION` без `INHERIT` и `SET`. Повторный owner bootstrap обновляет пароли
+generation principals, но сохраняет их текущее `LOGIN`/`NOLOGIN` состояние и
+не конкурирует с lifecycle reconciler.
 
 Два writable aggregate Secret заранее создаются materializer с
 `schema_version=1`, `generation=1`, пустым `records` и верным digest.
