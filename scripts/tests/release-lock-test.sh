@@ -373,6 +373,17 @@ grep -Fq 'if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FA
   printf 'PostgreSQL migrator role graph does not bind ADMIN to the bounded create-role flag\n' >&2
   exit 1
 }
+grep -Fq 'GRANT USAGE, CREATE ON SCHEMA public TO $principal' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'ALTER TABLE public.goose_db_version OWNER TO $principal' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'has_schema_privilege(' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq '[ "$migration_principals" -eq 5 ] || exit 34' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL migrators cannot own the Goose bootstrap boundary\n' >&2
+  exit 1
+}
 grep -Fq 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' \
   "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
   grep -Fq 'member.admin_option AND NOT member.inherit_option AND NOT member.set_option' \
