@@ -526,51 +526,61 @@ data:
     set -eu
     umask 077
     sql_file=$(mktemp /tmp/principals.sql.XXXXXX)
-    trap 'rm -f -- "$sql_file"' EXIT HUP INT TERM
+    principals_file=$(mktemp /tmp/principals.tsv.XXXXXX)
+    dollar_quote='$bootstrap$'
+    postgres_dsn='host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt'
+    trap 'rm -f -- "$sql_file" "$principals_file"' EXIT HUP INT TERM
+    tr '\t' '|' </var/run/bootstrap/principals.tsv >"$principals_file"
     printf '%s\n' 'SET client_min_messages = warning;' >"$sql_file"
     while IFS= read -r role; do
       [ -n "$role" ] || continue
       case "$role" in (*[!a-z0-9_]*) exit 20 ;; esac
-      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$role" "$role" >>"$sql_file"
+      printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$role" "$role" "$dollar_quote" >>"$sql_file"
       case "$role" in
         integration_gateway_role_controller|interaction_gateway_role_controller)
           printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
         *) printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
       esac
     done </var/run/bootstrap/capability-roles.txt
-    while IFS="$(printf '\t')" read -r principal database memberships create_role; do
+    while IFS='|' read -r principal database memberships create_role; do
       [ -n "$principal" ] || continue
       case "$principal:$database:$create_role" in (*[!a-z0-9_,:\-]*) exit 21 ;; esac
       password=$(cat "/var/run/principals/$principal")
       case "$password" in (*[!a-f0-9]*|'') exit 22 ;; esac
       [ "${#password}" -eq 64 ] || exit 23
-      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
       if [ "$create_role" = true ]; then role_flag=CREATEROLE; else role_flag=NOCREATEROLE; fi
       printf "ALTER ROLE %s LOGIN PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file"
       printf 'GRANT CONNECT ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       if [ "$create_role" = true ]; then
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       fi
-      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
       old_ifs=$IFS; IFS=,
       for membership in $memberships; do
         [ -n "$membership" ] || continue
         printf 'GRANT %s TO %s WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;\n' "$membership" "$principal" >>"$sql_file"
       done
       IFS=$old_ifs
-    done </var/run/bootstrap/principals.tsv
+    done <"$principals_file"
     while IFS= read -r principal; do
       [ -n "$principal" ] || continue
-      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" "$principal" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$principal" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
     done </var/run/bootstrap/retired-principals.txt
-    psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --set ON_ERROR_STOP=1 --file "$sql_file" >/dev/null
+    attempt=0
+    until psql "$postgres_dsn" --no-password --tuples-only --command 'SELECT 1' >/dev/null 2>&1; do
+      attempt=$((attempt + 1))
+      [ "$attempt" -lt 30 ] || exit 27
+      sleep 2
+    done
+    psql "$postgres_dsn" --no-password --set ON_ERROR_STOP=1 --file "$sql_file" >/dev/null
     expected=$(wc -l </var/run/bootstrap/principals.tsv | tr -d ' ')
-    actual=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
+    actual=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
     [ "$actual" = "$expected" ] || exit 24
     expected_memberships=$(awk -F '\t' '{if ($3 != "") {count=split($3, memberships, ","); total+=count}} END {print total+0}' /var/run/bootstrap/principals.tsv)
-    actual_memberships=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)" | tr -d '[:space:]')
+    actual_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)" | tr -d '[:space:]')
     [ "$actual_memberships" = "$expected_memberships" ] || exit 25
-    retired_unsafe=$(psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles role WHERE role.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(paste -sd, /var/run/bootstrap/retired-principals.txt)', ',') value) AND (role.rolcanlogin OR EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member WHERE member.member = role.oid))" | tr -d '[:space:]')
+    retired_unsafe=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles role WHERE role.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(paste -sd, /var/run/bootstrap/retired-principals.txt)', ',') value) AND (role.rolcanlogin OR EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member WHERE member.member = role.oid))" | tr -d '[:space:]')
     [ "$retired_unsafe" = 0 ] || exit 26
     printf 'PostgreSQL principal bootstrap readback completed\n'
 ---
