@@ -50,6 +50,8 @@ GRANT SELECT, INSERT, UPDATE ON
 -- Каждая уже зарегистрированная LOGIN-роль делегируется controller с
 -- ADMIN OPTION; новые поколения не пройдут readback/reconcile без такого же
 -- code-first bootstrap grant.
+GRANT USAGE ON SCHEMA control_plane TO control_plane_migrator;
+GRANT SELECT ON control_plane.runtime_principals TO control_plane_migrator;
 RESET ROLE;
 -- +goose StatementBegin
 DO $managed_roles$
@@ -69,6 +71,8 @@ $managed_roles$;
 -- +goose StatementEnd
 
 SET ROLE control_plane_owner;
+REVOKE SELECT ON control_plane.runtime_principals FROM control_plane_migrator;
+REVOKE USAGE ON SCHEMA control_plane FROM control_plane_migrator;
 ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     OWNER TO control_plane_role_controller;
 REVOKE ALL ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
