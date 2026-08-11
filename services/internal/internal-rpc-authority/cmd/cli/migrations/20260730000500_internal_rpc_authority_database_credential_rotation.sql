@@ -69,9 +69,14 @@ ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
     NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend
     TO internal_rpc_authority_credential_lifecycle_definer;
+GRANT internal_rpc_authority_credential_lifecycle_definer
+    TO internal_rpc_authority_owner
+    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 
 SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority
+    TO internal_rpc_authority_credential_lifecycle_definer;
+GRANT CREATE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_credential_lifecycle_definer;
 GRANT SELECT, INSERT, UPDATE
     ON internal_rpc_authority.authority_runtime_database_identities,
@@ -313,6 +318,12 @@ ALTER FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
 ALTER FUNCTION internal_rpc_authority.retire_runtime_database_identity(
     text, text, bigint, uuid, text
 ) OWNER TO internal_rpc_authority_credential_lifecycle_definer;
+REVOKE CREATE ON SCHEMA internal_rpc_authority
+    FROM internal_rpc_authority_credential_lifecycle_definer;
+RESET ROLE;
+REVOKE internal_rpc_authority_credential_lifecycle_definer
+    FROM internal_rpc_authority_owner;
+SET ROLE internal_rpc_authority_owner;
 
 REVOKE ALL ON FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     text, text, bigint, text, uuid, text
