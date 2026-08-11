@@ -34,6 +34,10 @@ GRANT SELECT, INSERT, UPDATE ON integration_gateway.runtime_context_keys
     TO integration_gateway_role_controller;
 GRANT SELECT, UPDATE ON integration_gateway.runtime_credential_fence
     TO integration_gateway_role_controller;
+GRANT CREATE ON SCHEMA integration_gateway
+    TO integration_gateway_role_controller;
+RESET ROLE;
+SET ROLE integration_gateway_role_controller;
 
 -- Старый migration image не может обойти owner procedure через прежние entrypoints.
 -- +goose StatementBegin
@@ -256,6 +260,24 @@ END
 $function$;
 -- +goose StatementEnd
 
+REVOKE ALL ON FUNCTION integration_gateway.reconcile_runtime_credentials(
+    jsonb, text, bytea, bigint, bigint
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION integration_gateway.confirm_runtime_credential_served(
+    bigint, text
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION integration_gateway.reconcile_runtime_credentials(
+    jsonb, text, bytea, bigint, bigint
+) TO integration_gateway_migrator;
+GRANT EXECUTE ON FUNCTION integration_gateway.confirm_runtime_credential_served(
+    bigint, text
+) TO integration_gateway_migrator;
+
+RESET ROLE;
+SET ROLE integration_gateway_owner;
+REVOKE CREATE ON SCHEMA integration_gateway
+    FROM integration_gateway_role_controller;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION integration_gateway.runtime_identity_ready()
 RETURNS boolean
@@ -284,14 +306,6 @@ END
 $function$;
 -- +goose StatementEnd
 
-GRANT EXECUTE ON FUNCTION integration_gateway.reconcile_runtime_credentials(jsonb, text, bytea, bigint, bigint)
-    TO integration_gateway_migrator;
-GRANT EXECUTE ON FUNCTION integration_gateway.confirm_runtime_credential_served(bigint, text)
-    TO integration_gateway_migrator;
-ALTER FUNCTION integration_gateway.reconcile_runtime_credentials(jsonb, text, bytea, bigint, bigint)
-    OWNER TO integration_gateway_role_controller;
-ALTER FUNCTION integration_gateway.confirm_runtime_credential_served(bigint, text)
-    OWNER TO integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.runtime_identity_ready()
     OWNER TO integration_gateway_owner;
 ALTER TABLE integration_gateway.runtime_credential_fence
