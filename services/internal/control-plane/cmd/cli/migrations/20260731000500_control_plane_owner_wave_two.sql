@@ -24,6 +24,7 @@ $role_safety$;
 ALTER ROLE control_plane_role_controller
     NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
+SET ROLE control_plane_owner;
 GRANT USAGE ON SCHEMA control_plane_extensions
     TO control_plane_role_controller;
 GRANT EXECUTE ON FUNCTION

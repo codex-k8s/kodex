@@ -38,6 +38,7 @@ ALTER ROLE control_plane_role_controller
     NOLOGIN CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
 GRANT control_plane_runtime TO control_plane_role_controller WITH ADMIN OPTION;
+SET ROLE control_plane_owner;
 GRANT USAGE ON SCHEMA control_plane TO control_plane_role_controller;
 GRANT SELECT, INSERT, UPDATE ON
     control_plane.runtime_principals,
@@ -49,6 +50,7 @@ GRANT SELECT, INSERT, UPDATE ON
 -- Каждая уже зарегистрированная LOGIN-роль делегируется controller с
 -- ADMIN OPTION; новые поколения не пройдут readback/reconcile без такого же
 -- code-first bootstrap grant.
+RESET ROLE;
 -- +goose StatementBegin
 DO $managed_roles$
 DECLARE
@@ -66,6 +68,7 @@ END
 $managed_roles$;
 -- +goose StatementEnd
 
+SET ROLE control_plane_owner;
 ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     OWNER TO control_plane_role_controller;
 REVOKE ALL ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
