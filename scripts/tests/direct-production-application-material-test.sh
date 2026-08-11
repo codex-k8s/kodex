@@ -252,7 +252,7 @@ rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgres
   exit 1
 }
 rg -q 'ALTER ROLE %s NOLOGIN.*pg_terminate_backend' "$temporary_directory/postgresql-principal-reconcile.sh" &&
-  rg -q "format\('REVOKE %%I FROM %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  rg -q "format\('REVOKE %%I FROM %%I GRANTED BY %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'PostgreSQL retirement boundary is incomplete\n' >&2
   exit 1
 }

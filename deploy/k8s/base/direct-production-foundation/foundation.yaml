@@ -610,7 +610,7 @@ data:
         fi
       fi
       case "$desired_memberships" in (*[!a-z0-9_,]*) exit 30 ;; esac
-      printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' AND role.rolname NOT IN (SELECT trim(value) FROM regexp_split_to_table('%s', ',') value) LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$desired_memberships" "$principal" "$dollar_quote" >>"$sql_file"
+      printf "DO %s DECLARE membership text; membership_grantor text; BEGIN FOR membership, membership_grantor IN SELECT role.rolname, grantor.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member JOIN pg_catalog.pg_roles grantor ON grantor.oid = member.grantor WHERE login.rolname = '%s' AND role.rolname NOT IN (SELECT trim(value) FROM regexp_split_to_table('%s', ',') value) LOOP EXECUTE format('REVOKE %%I FROM %%I GRANTED BY %%I', membership, '%s', membership_grantor); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$desired_memberships" "$principal" "$dollar_quote" >>"$sql_file"
       if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FALSE; fi
       old_ifs=$IFS; IFS=,
       for membership in $memberships; do
@@ -631,7 +631,7 @@ data:
     done </var/run/bootstrap/admin-memberships.tsv
     while IFS= read -r principal; do
       [ -n "$principal" ] || continue
-      printf "DO %s DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$principal" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
+      printf "DO %s DECLARE membership text; membership_grantor text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership, membership_grantor IN SELECT role.rolname, grantor.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member JOIN pg_catalog.pg_roles grantor ON grantor.oid = member.grantor WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I GRANTED BY %%I', membership, '%s', membership_grantor); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$principal" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
     done </var/run/bootstrap/retired-principals.txt
     attempt=0
     until psql "$postgres_dsn" --no-password --tuples-only --command 'SELECT 1' >/dev/null 2>&1; do
