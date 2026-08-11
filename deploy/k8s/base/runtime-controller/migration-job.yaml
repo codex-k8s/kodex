@@ -21,6 +21,8 @@ spec:
       restartPolicy: OnFailure
       securityContext:
         runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: {type: RuntimeDefault}
       initContainers:
         - name: wait-for-postgresql

@@ -23,6 +23,7 @@ spec:
         runAsUser: 29006
         runAsGroup: 29006
         fsGroup: 29006
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       initContainers:

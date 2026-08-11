@@ -334,6 +334,9 @@ for migration_contract in \
   migration_host=${migration_contract#*:}
   yq -o=json '.' "$repository_root/$migration_file" | jq -e --arg postgres_host "$migration_host" '
     .spec.activeDeadlineSeconds > 0 and .spec.activeDeadlineSeconds <= 300 and
+    .spec.template.spec.securityContext.runAsNonRoot == true and
+    (.spec.template.spec.securityContext.fsGroup | type == "number") and
+    .spec.template.spec.securityContext.fsGroupChangePolicy == "OnRootMismatch" and
     (.spec.template.spec.initContainers[] | select(.name == "wait-for-postgresql") |
       (.image | test("^docker.io/library/postgres:[^@]+@sha256:[a-f0-9]{64}$")) and
       .env == [{"name":"POSTGRES_HOST","value":$postgres_host}] and
@@ -342,6 +345,20 @@ for migration_contract in \
       .securityContext.readOnlyRootFilesystem == true)
   ' >/dev/null || {
     printf 'Migration Job has no bounded PostgreSQL network-readiness barrier: %s\n' "$migration_file" >&2
+    exit 1
+  }
+done
+for migration_binding in \
+  'control-plane-postgres-migration:control_plane_owner' \
+  'integration-gateway-postgres-migrator:integration_gateway_owner' \
+  'interaction-gateway-postgres-migrator:interaction_gateway_owner' \
+  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_owner' \
+  'runtime-controller-postgres-migration:runtime_controller_owner'; do
+  migration_secret=${migration_binding%%:*}
+  migration_owner=${migration_binding#*:}
+  rg -q "^put_pg $migration_secret dsn [a-z0-9_]+ [a-z0-9_]+ \\\"\\\$[a-z_]+\\\" $migration_owner$" \
+    "$repository_root/tools/deploy/materialize-direct-production-application.sh" || {
+    printf 'Migration DSN does not assume its exact owner role: %s\n' "$migration_secret" >&2
     exit 1
   }
 done
