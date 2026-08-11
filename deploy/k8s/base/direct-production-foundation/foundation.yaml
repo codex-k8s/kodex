@@ -482,7 +482,7 @@ data:
     runtime_controller_migrator	runtime_controller	runtime_controller_owner	true
     runtime_controller_runtime_g1	runtime_controller		false
     runtime_workload_admission_g1	runtime_controller		false
-    internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_restore_controller,pg_signal_backend	true
+    internal_rpc_authority_migrator	internal_rpc_authority	internal_rpc_authority_owner,internal_rpc_authority_readback_owner,internal_rpc_authority_credential_lifecycle_definer,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_restore_controller,pg_signal_backend	true
     ira_database_credential_reconciler	internal_rpc_authority	internal_rpc_authority_database_credential_reconciler	false
     ira_publisher_g3	internal_rpc_authority	internal_rpc_authority_publisher	false
     ira_publisher_g4	internal_rpc_authority	internal_rpc_authority_publisher	false
@@ -512,6 +512,8 @@ data:
     interaction_gateway_role_controller
     runtime_controller_owner
     internal_rpc_authority_owner
+    internal_rpc_authority_readback_owner
+    internal_rpc_authority_credential_lifecycle_definer
     internal_rpc_authority_issuer
     internal_rpc_authority_verifier
     internal_rpc_authority_publisher
@@ -524,7 +526,6 @@ data:
     ira_readback_attestor_g1
     ira_readback_attestor_g2
   admin-memberships.tsv: |
-    internal_rpc_authority_migrator	internal_rpc_authority_credential_lifecycle_definer
     internal_rpc_authority_migrator	ira_automation_scheduler_issuer_g1
     internal_rpc_authority_migrator	ira_control_api_gateway_issuer_g1
     internal_rpc_authority_migrator	ira_control_api_gateway_issuer_g2
@@ -548,6 +549,16 @@ data:
     internal_rpc_authority_migrator	ira_readback_attestor_g5
     internal_rpc_authority_migrator	ira_restore_controller_g1
     internal_rpc_authority_migrator	ira_runtime_controller_issuer_g1
+    internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g1
+    internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g2
+    internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g3
+    internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g4
+    internal_rpc_authority_credential_lifecycle_definer	ira_publisher_g5
+    internal_rpc_authority_credential_lifecycle_definer	ira_readback_attestor_g1
+    internal_rpc_authority_credential_lifecycle_definer	ira_readback_attestor_g2
+    internal_rpc_authority_credential_lifecycle_definer	ira_readback_attestor_g3
+    internal_rpc_authority_credential_lifecycle_definer	ira_readback_attestor_g4
+    internal_rpc_authority_credential_lifecycle_definer	ira_readback_attestor_g5
   reconcile.sh: |
     #!/bin/sh
     set -eu
@@ -566,6 +577,8 @@ data:
       case "$role" in
         integration_gateway_role_controller|interaction_gateway_role_controller)
           printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
+        internal_rpc_authority_credential_lifecycle_definer)
+          printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
         *) printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
       esac
     done </var/run/bootstrap/capability-roles.txt
@@ -607,7 +620,12 @@ data:
     while IFS='	' read -r administrator managed_role; do
       [ -n "$administrator" ] && [ -n "$managed_role" ] || continue
       case "$administrator:$managed_role" in (*[!a-z0-9_:]*) exit 28 ;; esac
-      printf "DO %s BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') AND EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN GRANT %s TO %s WITH INHERIT FALSE, SET FALSE, ADMIN TRUE; END IF; END %s;\n" "$dollar_quote" "$administrator" "$managed_role" "$managed_role" "$administrator" "$dollar_quote" >>"$sql_file"
+      if [ "$managed_role" = internal_rpc_authority_credential_lifecycle_definer ]; then
+        managed_role_flag=CREATEROLE
+      else
+        managed_role_flag=NOCREATEROLE
+      fi
+      printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN RAISE EXCEPTION 'bounded administrator role is unavailable'; END IF; GRANT %s TO %s WITH INHERIT FALSE, SET FALSE, ADMIN TRUE; END %s;\n" "$dollar_quote" "$managed_role" "$managed_role" "$managed_role_flag" "$administrator" "$managed_role" "$administrator" "$dollar_quote" >>"$sql_file"
     done </var/run/bootstrap/admin-memberships.tsv
     while IFS= read -r principal; do
       [ -n "$principal" ] || continue
@@ -624,13 +642,18 @@ data:
     actual=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value) AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls" | tr -d '[:space:]')
     [ "$actual" = "$expected" ] || exit 24
     expected_memberships=$(awk -F '\t' '{if ($3 != "") {count=split($3, memberships, ","); total+=count}} END {print total+0}' /var/run/bootstrap/principals.tsv)
-    admin_targets=$(cut -f2 /var/run/bootstrap/admin-memberships.tsv | paste -sd, -)
-    expected_admin_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (SELECT trim(value) FROM regexp_split_to_table('$admin_targets', ',') value)" | tr -d '[:space:]')
+    expected_admin_memberships=$(awk -F '\t' '
+      NR == FNR { principals[$1] = 1; next }
+      $1 in principals { count++ }
+      END { print count + 0 }
+    ' /var/run/bootstrap/principals.tsv /var/run/bootstrap/admin-memberships.tsv)
     expected_memberships=$((expected_memberships + expected_admin_memberships))
     actual_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(cut -f1 /var/run/bootstrap/principals.tsv | paste -sd, -)', ',') value)" | tr -d '[:space:]')
     [ "$actual_memberships" = "$expected_memberships" ] || exit 25
-    actual_admin_memberships=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles administrator ON administrator.oid = member.member JOIN pg_catalog.pg_roles managed ON managed.oid = member.roleid WHERE administrator.rolname = 'internal_rpc_authority_migrator' AND managed.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$admin_targets', ',') value) AND member.admin_option AND NOT member.inherit_option AND NOT member.set_option" | tr -d '[:space:]')
-    [ "$actual_admin_memberships" = "$expected_admin_memberships" ] || exit 29
+    while IFS='	' read -r administrator managed_role; do
+      actual_admin_membership=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles administrator ON administrator.oid = member.member JOIN pg_catalog.pg_roles managed ON managed.oid = member.roleid WHERE administrator.rolname = '$administrator' AND managed.rolname = '$managed_role' AND member.admin_option AND NOT member.inherit_option AND NOT member.set_option" | tr -d '[:space:]')
+      [ "$actual_admin_membership" = 1 ] || exit 29
+    done </var/run/bootstrap/admin-memberships.tsv
     retired_unsafe=$(psql "$postgres_dsn" --no-password --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_catalog.pg_roles role WHERE role.rolname IN (SELECT trim(value) FROM regexp_split_to_table('$(paste -sd, /var/run/bootstrap/retired-principals.txt)', ',') value) AND (role.rolcanlogin OR EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member WHERE member.member = role.oid))" | tr -d '[:space:]')
     [ "$retired_unsafe" = 0 ] || exit 26
     printf 'PostgreSQL principal bootstrap readback completed\n'
