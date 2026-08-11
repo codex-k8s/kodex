@@ -530,11 +530,25 @@ for migration_cli in \
 done
 grep -Fq 'SET ROLE control_plane_owner' \
   "$repository_root/services/internal/control-plane/cmd/cli/main.go" &&
+  grep -Fq 'connection, err := database.Conn(ctx)' \
+    "$repository_root/services/internal/control-plane/cmd/cli/main.go" &&
+  grep -Fq 'connection.ExecContext(ctx, "SET ROLE control_plane_owner")' \
+    "$repository_root/services/internal/control-plane/cmd/cli/main.go" &&
   grep -Fq 'SET ROLE integration_gateway_migrator' \
     "$repository_root/services/external/integration-gateway/cmd/cli/main.go" &&
+  grep -Fq 'connection.Exec(ctx, "SET ROLE integration_gateway_migrator")' \
+    "$repository_root/services/external/integration-gateway/cmd/cli/main.go" &&
   grep -Fq 'SET ROLE interaction_gateway_migrator' \
-    "$repository_root/services/external/interaction-gateway/cmd/cli/main.go" || {
-  printf 'Post-migration reconciliation does not assume its bounded PostgreSQL role\n' >&2
+    "$repository_root/services/external/interaction-gateway/cmd/cli/main.go" &&
+  grep -Fq 'connection.ExecContext(ctx, "SET ROLE interaction_gateway_migrator")' \
+    "$repository_root/services/external/interaction-gateway/cmd/cli/main.go" &&
+  ! grep -Fq 'database.ExecContext(ctx, "SET ROLE' \
+    "$repository_root/services/internal/control-plane/cmd/cli/main.go" &&
+  ! grep -Fq 'database.ExecContext(ctx, "SET ROLE' \
+    "$repository_root/services/external/interaction-gateway/cmd/cli/main.go" &&
+  ! grep -Fq 'database.ExecContext(ctx, "SET ROLE' \
+    "$repository_root/services/external/integration-gateway/cmd/cli/main.go" || {
+  printf 'Post-migration reconciliation does not pin its bounded PostgreSQL role to the reconciliation session\n' >&2
   exit 1
 }
 if find \

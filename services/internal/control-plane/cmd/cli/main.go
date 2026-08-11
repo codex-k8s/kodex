@@ -103,22 +103,18 @@ func run(ctx context.Context, arguments []string) error {
 		if err := migrateExpand(
 			ctx,
 			database,
-			config.TLSServerName,
-			roots,
 		); err != nil {
 			return err
 		}
-		return reconcileKeysetGeneses(ctx, database, config)
+		return reconcileMigrationState(ctx, database, config, roots)
 	case "up":
 		if err := migrateUp(
 			ctx,
 			database,
-			config.TLSServerName,
-			roots,
 		); err != nil {
 			return err
 		}
-		return reconcileKeysetGeneses(ctx, database, config)
+		return reconcileMigrationState(ctx, database, config, roots)
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":
@@ -152,8 +148,6 @@ func readRuntimeFile(path string, maximum int64) ([]byte, error) {
 func migrateExpand(
 	ctx context.Context,
 	database *sql.DB,
-	serverName string,
-	roots *x509.CertPool,
 ) error {
 	if err := goose.UpToContext(
 		ctx,
@@ -163,22 +157,12 @@ func migrateExpand(
 	); err != nil {
 		return fmt.Errorf("apply control-plane expand migration: %w", err)
 	}
-	if _, err := database.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
-		return errors.New("assume control-plane migration owner role")
-	}
-	return reconcileRuntimePrincipals(
-		ctx,
-		database,
-		serverName,
-		roots,
-	)
+	return nil
 }
 
 func migrateUp(
 	ctx context.Context,
 	database *sql.DB,
-	serverName string,
-	roots *x509.CertPool,
 ) error {
 	version, err := goose.GetDBVersionContext(ctx, database)
 	if err != nil {
@@ -190,20 +174,43 @@ func migrateUp(
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 		return fmt.Errorf("apply control-plane migrations: %w", err)
 	}
-	if _, err := database.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
+	return nil
+}
+
+type migrationConnection interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func reconcileMigrationState(
+	ctx context.Context,
+	database *sql.DB,
+	config migrationConfig,
+	roots *x509.CertPool,
+) error {
+	connection, err := database.Conn(ctx)
+	if err != nil {
+		return errors.New("acquire control-plane migration connection")
+	}
+	defer connection.Close()
+	if _, err := connection.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
 		return errors.New("assume control-plane migration owner role")
 	}
-	return reconcileRuntimePrincipals(
+	if err := reconcileRuntimePrincipals(
 		ctx,
-		database,
-		serverName,
+		connection,
+		config.TLSServerName,
 		roots,
-	)
+	); err != nil {
+		return err
+	}
+	return reconcileKeysetGeneses(ctx, connection, config)
 }
 
 func reconcileRuntimePrincipals(
 	ctx context.Context,
-	database *sql.DB,
+	database migrationConnection,
 	serverName string,
 	roots *x509.CertPool,
 ) error {

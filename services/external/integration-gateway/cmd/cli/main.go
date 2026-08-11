@@ -124,9 +124,6 @@ func run(ctx, cleanupBase context.Context, arguments []string) error {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return errors.New("apply integration gateway migrations")
 		}
-		if _, err := database.ExecContext(ctx, "SET ROLE integration_gateway_migrator"); err != nil {
-			return errors.New("assume integration gateway migration role")
-		}
 		return reconcile(ctx, cleanupBase, configuration, pgxConfig)
 	default:
 		return errors.New("unsupported migration command")
@@ -209,6 +206,9 @@ func reconcile(ctx, cleanupBase context.Context, configuration config, migration
 		defer cancel()
 		resultErr = errors.Join(resultErr, connection.Close(cleanup))
 	}()
+	if _, err := connection.Exec(ctx, "SET ROLE integration_gateway_migrator"); err != nil {
+		return errors.New("assume integration gateway migration role")
+	}
 	stateSQL, _ := operationalSQL.ReadFile("sql/runtime__state.sql")
 	var highWatermark uint64
 	var durableServedGeneration uint64
