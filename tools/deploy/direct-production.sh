@@ -149,8 +149,22 @@ while IFS= read -r migration; do
   migration_manifest="$temporary_directory/job-$migration.yaml"
   MIGRATION="$migration" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(MIGRATION))' \
     "$render_file" >"$migration_manifest"
+  kubectl --context "$expected_context" create --dry-run=client -f "$migration_manifest" >/dev/null
   if kubectl --context "$expected_context" -n mattercodex-system get job "$migration" >/dev/null 2>&1; then
-    kubectl --context "$expected_context" replace --force --dry-run=server -f "$migration_manifest" >/dev/null
+    set +e
+    replace_output=$(kubectl --context "$expected_context" replace --dry-run=server \
+      -f "$migration_manifest" 2>&1)
+    replace_status=$?
+    set -e
+    if ((replace_status != 0)); then
+      [[ "$replace_output" == *"field is immutable"* ]] ||
+        fail "existing migration Job failed server-side validation: $migration"
+      for rejection_marker in 'forbidden' 'denied request' 'strict decoding error' \
+        'error validating data' 'unknown field'; do
+        [[ "${replace_output,,}" != *"$rejection_marker"* ]] ||
+          fail "existing migration Job was rejected before immutable replacement: $migration"
+      done
+    fi
   else
     kubectl --context "$expected_context" create --dry-run=server -f "$migration_manifest" >/dev/null
   fi

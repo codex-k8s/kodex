@@ -531,6 +531,15 @@ grep -Fq 'apply_release_manifest --dry-run=server -f "$non_job_render"' \
   printf 'Direct-production preflight does not use server-side apply for large ConfigMaps\n' >&2
   exit 1
 }
+grep -Fq 'create --dry-run=client -f "$migration_manifest"' \
+  "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq '[[ "$replace_output" == *"field is immutable"* ]]' \
+    "$repository_root/tools/deploy/direct-production.sh" &&
+  ! grep -Fq 'replace --force --dry-run=server' \
+    "$repository_root/tools/deploy/direct-production.sh" || {
+  printf 'Existing migration Job preflight is not safe for immutable resources\n' >&2
+  exit 1
+}
 grep -Fq 'deployments?environment=$environment&per_page=100' \
   "$repository_root/tools/release/verify-github-owner-gate.sh"
 grep -Fq 'deployments/$deployment_id/statuses?per_page=100' \
