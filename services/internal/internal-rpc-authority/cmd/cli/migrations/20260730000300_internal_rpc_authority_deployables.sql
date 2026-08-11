@@ -1,4 +1,8 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -19,14 +23,33 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'internal_rpc_authority_restore_controller',
+            'ira_restore_controller_g1'
+        )
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'restore managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_restore_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_restore_controller_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEROLE NOINHERIT;
 GRANT internal_rpc_authority_restore_controller TO ira_restore_controller_g1;
+SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_restore_controller;
 

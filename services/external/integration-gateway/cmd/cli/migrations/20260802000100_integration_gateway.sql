@@ -1,8 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 CREATE SCHEMA IF NOT EXISTS integration_gateway;
 CREATE SCHEMA IF NOT EXISTS integration_gateway_extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA integration_gateway_extensions;
 
+RESET ROLE;
 -- +goose StatementBegin
 DO $roles$
 BEGIN
@@ -22,16 +25,38 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'integration_gateway_owner',
+            'integration_gateway_runtime',
+            'integration_gateway_migrator',
+            'integration_gateway_role_controller'
+        )
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'integration-gateway managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE integration_gateway_owner
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_runtime
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_migrator
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO integration_gateway_role_controller;
 GRANT integration_gateway_runtime TO integration_gateway_role_controller WITH ADMIN OPTION;
+SET ROLE integration_gateway_owner;
 
 CREATE TABLE integration_gateway.runtime_principals (
     principal_name name PRIMARY KEY,
@@ -76,6 +101,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, integration_gateway
 AS $function$
+DECLARE
+    role_exists boolean;
+    role_safe boolean;
 BEGIN
     IF NOT pg_has_role(session_user, 'integration_gateway_migrator', 'member')
        OR requested_principal_name <> ('integration_gateway_runtime_g' || requested_generation::text)
@@ -90,9 +118,23 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'retired runtime principal cannot be reactivated' USING ERRCODE = '28000';
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = requested_principal_name) THEN
+    SELECT true,
+           role.rolcanlogin
+           AND NOT role.rolsuper
+           AND NOT role.rolcreatedb
+           AND NOT role.rolcreaterole
+           AND NOT role.rolreplication
+           AND NOT role.rolbypassrls
+      INTO role_exists, role_safe
+      FROM pg_catalog.pg_roles AS role
+     WHERE role.rolname = requested_principal_name;
+    IF coalesce(role_exists, false) AND NOT role_safe THEN
+        RAISE EXCEPTION 'existing runtime principal role is unsafe'
+            USING ERRCODE = '42501';
+    END IF;
+    IF coalesce(role_exists, false) THEN
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE INHERIT',
             requested_principal_name,
             requested_password
         );
@@ -713,10 +755,20 @@ ALTER TABLE integration_gateway.execution_work_scopes OWNER TO integration_gatew
 ALTER TABLE integration_gateway.lifecycle_work_scopes OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.activate_runtime_context(text, text, text, name, bigint, text, uuid, bigint, bytea)
     OWNER TO integration_gateway_owner;
+GRANT CREATE ON SCHEMA integration_gateway
+    TO integration_gateway_role_controller;
+RESET ROLE;
+GRANT integration_gateway_role_controller TO integration_gateway_owner;
+SET ROLE integration_gateway_owner;
 ALTER FUNCTION integration_gateway.bootstrap_runtime_principal(text, bigint, text)
     OWNER TO integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.retire_runtime_principal(text)
     OWNER TO integration_gateway_role_controller;
+RESET ROLE;
+REVOKE integration_gateway_role_controller FROM integration_gateway_owner;
+SET ROLE integration_gateway_owner;
+REVOKE CREATE ON SCHEMA integration_gateway
+    FROM integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.runtime_scope() OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.sync_execution_work_scope() OWNER TO integration_gateway_owner;
 ALTER FUNCTION integration_gateway.sync_lifecycle_work_scope() OWNER TO integration_gateway_owner;

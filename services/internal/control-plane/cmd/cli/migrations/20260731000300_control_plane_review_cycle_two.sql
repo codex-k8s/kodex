@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Укрепление второго цикла добавляет локальные FTS и pgvector-проекцию,
 -- полный жизненный цикл запусков расписаний и устойчивое к откату намерение.
 -- PostgreSQL остаётся авторитетным источником; векторная проекция перестраиваема.
@@ -46,6 +48,7 @@ FROM control_plane.resources AS schedule
 WHERE schedule.id = occurrence.schedule_id
   AND schedule.kind = 'SCHEDULE';
 
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF EXISTS (
@@ -64,6 +67,7 @@ BEGIN
     END IF;
 END
 $$;
+-- +goose StatementEnd
 
 ALTER TABLE control_plane.schedule_occurrences
     ALTER COLUMN prompt_profile_id SET NOT NULL,
@@ -526,6 +530,7 @@ UPDATE control_plane.schema_state
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -533,3 +538,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

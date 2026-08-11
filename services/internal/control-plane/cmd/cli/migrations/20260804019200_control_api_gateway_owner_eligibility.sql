@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Owner eligibility применяется внутри authoritative SQL до cursor LIMIT.
 RESET ROLE;
 SET ROLE control_plane_owner;

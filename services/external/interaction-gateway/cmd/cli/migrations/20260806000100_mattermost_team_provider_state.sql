@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 CREATE TABLE interaction_gateway_team_metadata (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     schema_version bigint NOT NULL CHECK (schema_version = 1)

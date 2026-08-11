@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 ALTER TABLE interaction_gateway_runtime_principals DROP CONSTRAINT interaction_gateway_runtime_principals_status_check;
 ALTER TABLE interaction_gateway_runtime_principals ADD CONSTRAINT interaction_gateway_runtime_principals_status_check
     CHECK (status IN ('NEXT', 'CURRENT', 'PREVIOUS', 'RETIRED'));
@@ -180,12 +182,29 @@ REVOKE ALL ON FUNCTION interaction_gateway_stage_runtime_identity(bigint,uuid,js
 REVOKE ALL ON FUNCTION interaction_gateway_promote_runtime_identity(bigint) FROM PUBLIC;
 REVOKE ALL ON FUNCTION interaction_gateway_activate_runtime_context(uuid,uuid,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION interaction_gateway_runtime_identity_ready(bigint,uuid,jsonb) FROM PUBLIC;
+GRANT SELECT, INSERT, UPDATE ON interaction_gateway_runtime_credential_fence,
+    interaction_gateway_runtime_principals,
+    interaction_gateway_runtime_principal_authorities
+    TO interaction_gateway_role_controller;
+GRANT SELECT, INSERT, UPDATE, DELETE ON interaction_gateway_runtime_principal_tenants
+    TO interaction_gateway_role_controller;
 GRANT EXECUTE ON FUNCTION interaction_gateway_activate_runtime_context(uuid,uuid,text) TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_runtime_identity_ready(bigint,uuid,jsonb) TO interaction_gateway_runtime;
-ALTER FUNCTION interaction_gateway_stage_runtime_identity(bigint,uuid,jsonb) OWNER TO interaction_gateway_role_controller;
-ALTER FUNCTION interaction_gateway_promote_runtime_identity(bigint) OWNER TO interaction_gateway_role_controller;
 GRANT EXECUTE ON FUNCTION interaction_gateway_stage_runtime_identity(bigint,uuid,jsonb) TO interaction_gateway_migrator;
 GRANT EXECUTE ON FUNCTION interaction_gateway_promote_runtime_identity(bigint) TO interaction_gateway_migrator;
+
+GRANT CREATE ON SCHEMA public TO interaction_gateway_role_controller;
+RESET ROLE;
+GRANT interaction_gateway_role_controller TO interaction_gateway_owner;
+SET ROLE interaction_gateway_owner;
+ALTER FUNCTION interaction_gateway_stage_runtime_identity(bigint,uuid,jsonb)
+    OWNER TO interaction_gateway_role_controller;
+ALTER FUNCTION interaction_gateway_promote_runtime_identity(bigint)
+    OWNER TO interaction_gateway_role_controller;
+RESET ROLE;
+REVOKE interaction_gateway_role_controller FROM interaction_gateway_owner;
+SET ROLE interaction_gateway_owner;
+REVOKE CREATE ON SCHEMA public FROM interaction_gateway_role_controller;
 
 -- Старый caller-signed HMAC scope закрыт после перехода на immutable session_user.
 REVOKE EXECUTE ON FUNCTION interaction_gateway_activate_runtime_context(uuid,uuid,text,name,bigint,text,uuid,bigint,bytea)

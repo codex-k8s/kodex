@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
 -- Полный snapshot graph принадлежит publisher, но таблицы и переходы
 -- остаются у отдельного NOLOGIN owner. Runtime получает только exact EXECUTE.
 ALTER TABLE internal_rpc_authority.authority_snapshot_history

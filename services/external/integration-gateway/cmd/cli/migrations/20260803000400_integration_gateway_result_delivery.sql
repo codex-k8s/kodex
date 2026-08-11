@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 ALTER TABLE integration_gateway.results
     ADD COLUMN delivery_version bigint NOT NULL DEFAULT 1 CHECK (delivery_version > 0),
     ADD COLUMN delivery_fence bigint NOT NULL DEFAULT 1 CHECK (delivery_fence > 0),
@@ -20,8 +22,18 @@ ALTER TABLE integration_gateway.result_delivery_receipts ENABLE ROW LEVEL SECURI
 ALTER TABLE integration_gateway.result_delivery_receipts FORCE ROW LEVEL SECURITY;
 CREATE POLICY result_delivery_receipts_runtime_scope
     ON integration_gateway.result_delivery_receipts
-    USING (integration_gateway.scope_matches(tenant_id, project_id))
-    WITH CHECK (integration_gateway.scope_matches(tenant_id, project_id));
+    USING (
+        (tenant_id, project_id) = (
+            SELECT scope.tenant_id, scope.project_id
+            FROM integration_gateway.runtime_scope() AS scope
+        )
+    )
+    WITH CHECK (
+        (tenant_id, project_id) = (
+            SELECT scope.tenant_id, scope.project_id
+            FROM integration_gateway.runtime_scope() AS scope
+        )
+    );
 GRANT SELECT, INSERT ON integration_gateway.result_delivery_receipts TO integration_gateway_runtime;
 GRANT SELECT, UPDATE ON integration_gateway.results TO integration_gateway_runtime;
 ALTER TABLE integration_gateway.result_delivery_receipts OWNER TO integration_gateway_owner;

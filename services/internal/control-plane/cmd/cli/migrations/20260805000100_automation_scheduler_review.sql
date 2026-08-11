@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE TABLE control_plane.automation_scheduler_cursors (
     organization_id uuid NOT NULL,
     operation text NOT NULL CHECK (operation IN ('DUE', 'CLAIM')),

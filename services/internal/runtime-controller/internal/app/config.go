@@ -114,7 +114,7 @@ func loadConfig() (Config, error) {
 		NATSCredentialsFile: "/var/run/secrets/mattercodex/runtime-controller/nats/user.creds",
 		NATSStream:          "CONTROL_PLANE", NATSDurable: "RUNTIME_CONTROLLER_V1", NATSReplicas: 3,
 		PostgresDSNFile:       "/var/run/secrets/mattercodex/runtime-controller/postgres/dsn",
-		PostgresTLSServerName: "runtime-controller-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName: "runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local",
 		PostgresCAFile:        "/var/run/config/mattercodex/runtime-controller/postgres/ca.pem",
 		PostgresPrincipal:     "runtime_controller_runtime_g1",
 		StartupTimeout:        30 * time.Second, ShutdownTimeout: 20 * time.Second,

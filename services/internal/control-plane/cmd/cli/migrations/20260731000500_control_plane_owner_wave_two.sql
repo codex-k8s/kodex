@@ -1,12 +1,31 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Owner wave 2 замыкает owner-gate graph, пропорциональный provider pool,
 -- tenant-scoped outbox repair и исполнимый bootstrap PostgreSQL LOGIN.
 RESET ROLE;
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname = 'control_plane_role_controller'
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'control-plane role controller has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE control_plane_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
+SET ROLE control_plane_owner;
+GRANT CREATE ON SCHEMA control_plane TO control_plane_role_controller;
 GRANT USAGE ON SCHEMA control_plane_extensions
     TO control_plane_role_controller;
 GRANT EXECUTE ON FUNCTION
@@ -78,7 +97,7 @@ BEGIN
         );
     ELSE
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE NOINHERIT',
             requested_name,
             requested_password
         );
@@ -103,10 +122,16 @@ REVOKE ALL ON FUNCTION control_plane.bootstrap_runtime_principal(
 GRANT EXECUTE ON FUNCTION control_plane.bootstrap_runtime_principal(
     text, bigint, text
 ) TO control_plane_owner;
+RESET ROLE;
+GRANT control_plane_role_controller TO control_plane_owner;
+SET ROLE control_plane_owner;
 ALTER FUNCTION control_plane.bootstrap_runtime_principal(text, bigint, text)
     OWNER TO control_plane_role_controller;
 
+RESET ROLE;
+REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
+REVOKE CREATE ON SCHEMA control_plane FROM control_plane_role_controller;
 SET search_path = pg_catalog, control_plane;
 
 -- Старые process rows получают точные версии их immutable lineage до того,
@@ -172,6 +197,7 @@ ALTER TABLE control_plane.schedule_occurrences
     );
 ALTER TABLE control_plane.scheduled_runs
     DROP CONSTRAINT scheduled_runs_state_check;
+-- +goose StatementBegin
 DO $scheduled_run_finished_constraint$
 DECLARE
     constraint_name name;
@@ -191,6 +217,7 @@ BEGIN
     END LOOP;
 END
 $scheduled_run_finished_constraint$;
+-- +goose StatementEnd
 ALTER TABLE control_plane.scheduled_runs
     ADD CONSTRAINT scheduled_runs_state_check CHECK (state IN (
         'CLAIMED', 'WAITING_OWNER', 'SUCCEEDED', 'FAILED', 'CANCELLED'
@@ -632,6 +659,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -639,3 +667,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

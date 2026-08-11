@@ -1,4 +1,7 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
+RESET ROLE;
 -- +goose StatementBegin
 DO $roles$
 BEGIN
@@ -12,12 +15,32 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'interaction_gateway_runtime',
+            'interaction_gateway_role_controller'
+        )
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'interaction-gateway managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE interaction_gateway_runtime
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE interaction_gateway_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO interaction_gateway_role_controller;
 GRANT interaction_gateway_runtime TO interaction_gateway_role_controller WITH ADMIN OPTION;
+SET ROLE interaction_gateway_owner;
 
 CREATE TABLE interaction_gateway_metadata (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),

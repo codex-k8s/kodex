@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Durable verifying-side session fence и public TLS served watermark принадлежат
 -- control-plane; gateway не получает прямой PostgreSQL path.
 RESET ROLE;

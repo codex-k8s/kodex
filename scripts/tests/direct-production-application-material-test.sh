@@ -204,6 +204,23 @@ grep -Eq '^postgresql://[^:]+:[a-f0-9]{64}@control-plane-postgresql-rw\.matterco
     printf 'Generated PostgreSQL DSN semantics are invalid\n' >&2
     exit 1
   }
+for migration_binding in \
+  'control-plane-postgres-migration:control_plane_owner' \
+  'integration-gateway-postgres-migrator:integration_gateway_owner' \
+  'interaction-gateway-postgres-migrator:interaction_gateway_owner' \
+  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_owner' \
+  'runtime-controller-postgres-migration:runtime_controller_owner'; do
+  migration_secret=${migration_binding%%:*}
+  migration_owner=${migration_binding#*:}
+  jq -er --arg name "$migration_secret" \
+    '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data.dsn' "$material_json" |
+    base64 -d >"$temporary_directory/$migration_secret-dsn"
+  grep -Eq "&options=-c%20role%3D${migration_owner}$" \
+    "$temporary_directory/$migration_secret-dsn" || {
+    printf 'Generated PostgreSQL migration DSN does not assume its owner role: %s\n' "$migration_secret" >&2
+    exit 1
+  }
+done
 jq -er '.[] | select(.kind=="Secret" and .metadata.name=="control-api-gateway-public-tls-material") | .data["tls.crt"]' "$material_json" |
   base64 -d >"$temporary_directory/control-api.crt"
 openssl x509 -in "$temporary_directory/control-api.crt" -noout -checkhost control-api.mattercodex.local >/dev/null 2>&1 || {
@@ -223,8 +240,19 @@ sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
   printf 'PostgreSQL principal registry is incomplete\n' >&2
   exit 1
 }
+[[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
+  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 33 ]] || {
+  printf 'PostgreSQL bounded administrator registry is incomplete\n' >&2
+  exit 1
+}
+rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'actual_admin_membership.*member.admin_option.*NOT member.inherit_option.*NOT member.set_option' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  printf 'PostgreSQL bounded administrator readback is incomplete\n' >&2
+  exit 1
+}
 rg -q 'ALTER ROLE %s NOLOGIN.*pg_terminate_backend' "$temporary_directory/postgresql-principal-reconcile.sh" &&
-  rg -q "format\('REVOKE %%I FROM %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
+  rg -q "format\('REVOKE %%I FROM %%I GRANTED BY %%I'" "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'PostgreSQL retirement boundary is incomplete\n' >&2
   exit 1
 }

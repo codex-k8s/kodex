@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 ALTER TABLE interaction_gateway_team_metadata
     DROP CONSTRAINT interaction_gateway_team_metadata_schema_version_check;
 UPDATE interaction_gateway_team_metadata SET schema_version = 2 WHERE singleton;

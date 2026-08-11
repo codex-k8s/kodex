@@ -56,7 +56,7 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 		TLSPrivateKeyFile:      "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.key",
 		ClientCAFile:           "/var/run/config/mattercodex/internal-rpc-authority/readback-attestor/client-ca.pem",
 		PostgresDSNFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/dsn",
-		PostgresTLSServerName:  "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName:  "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
 		RootPublicJWKFile:      "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk",
 		RootMetadataFile:       "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-metadata.json",
 		ManifestBundleJWSFile:  "/var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws",

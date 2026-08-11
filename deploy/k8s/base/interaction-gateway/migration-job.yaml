@@ -17,6 +17,15 @@ spec:
       restartPolicy: Never
       enableServiceLinks: false
       securityContext: {runAsNonRoot: true, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        - name: wait-for-postgresql
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          command: [/bin/sh, -ec]
+          args: ['until pg_isready --host="$POSTGRES_HOST" --port=5432 --timeout=2; do sleep 2; done']
+          env:
+            - {name: POSTGRES_HOST, value: interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       containers:
         - name: migrate
           image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/interaction-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000

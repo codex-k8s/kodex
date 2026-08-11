@@ -100,7 +100,7 @@ func LoadConfig(mode Mode) (Config, error) {
 		SocketMode:                       0o660,
 		TechnicalListen:                  ":9090",
 		PostgresDSNFile:                  "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn",
-		PostgresTLSServerName:            "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName:            "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
 		PostgresMaxConnections:           8,
 		SnapshotJWSFile:                  "/var/run/config/mattercodex/internal-rpc-authority/snapshot/snapshot.jws",
 		ManifestRootPublicJWKFile:        "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",

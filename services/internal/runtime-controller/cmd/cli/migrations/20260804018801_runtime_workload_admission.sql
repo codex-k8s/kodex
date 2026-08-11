@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE runtime_controller_owner;
 SET ROLE runtime_controller_owner;
 SET search_path TO runtime_controller, pg_catalog;
 
@@ -17,8 +19,10 @@ GRANT SELECT, INSERT, UPDATE ON runtime_workload_ticket_admissions TO runtime_wo
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION 'runtime workload admission receipts are forward-only' USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

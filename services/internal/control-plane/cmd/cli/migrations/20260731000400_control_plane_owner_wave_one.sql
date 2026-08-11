@@ -1,8 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Owner wave 1 добавляет server-owned delegation/scheduled-run lineage,
 -- ремонт terminal outbox и отдельную least-privilege роль ротации LOGIN.
 RESET ROLE;
 
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -15,12 +18,29 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname = 'control_plane_role_controller'
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'control-plane role controller has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
 ALTER ROLE control_plane_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
 GRANT control_plane_runtime TO control_plane_role_controller WITH ADMIN OPTION;
+SET ROLE control_plane_owner;
 GRANT USAGE ON SCHEMA control_plane TO control_plane_role_controller;
+GRANT CREATE ON SCHEMA control_plane TO control_plane_role_controller;
 GRANT SELECT, INSERT, UPDATE ON
     control_plane.runtime_principals,
     control_plane.runtime_context_keys,
@@ -31,6 +51,10 @@ GRANT SELECT, INSERT, UPDATE ON
 -- Каждая уже зарегистрированная LOGIN-роль делегируется controller с
 -- ADMIN OPTION; новые поколения не пройдут readback/reconcile без такого же
 -- code-first bootstrap grant.
+GRANT USAGE ON SCHEMA control_plane TO control_plane_migrator;
+GRANT SELECT ON control_plane.runtime_principals TO control_plane_migrator;
+RESET ROLE;
+-- +goose StatementBegin
 DO $managed_roles$
 DECLARE
     managed_name name;
@@ -45,15 +69,23 @@ BEGIN
     END LOOP;
 END
 $managed_roles$;
+-- +goose StatementEnd
 
-ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
-    OWNER TO control_plane_role_controller;
+GRANT control_plane_role_controller TO control_plane_owner;
+SET ROLE control_plane_owner;
+REVOKE SELECT ON control_plane.runtime_principals FROM control_plane_migrator;
+REVOKE USAGE ON SCHEMA control_plane FROM control_plane_migrator;
 REVOKE ALL ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     TO control_plane_owner;
+ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
+    OWNER TO control_plane_role_controller;
 
+RESET ROLE;
+REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
+REVOKE CREATE ON SCHEMA control_plane FROM control_plane_role_controller;
 SET search_path = pg_catalog, control_plane;
 
 CREATE FUNCTION control_plane.require_runtime_principal_controller()
@@ -188,6 +220,7 @@ CREATE POLICY scheduled_runs_runtime_scope ON control_plane.scheduled_runs
     ));
 
 ALTER TABLE control_plane.outbox_events
+    ADD COLUMN updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     ADD COLUMN repair_count integer NOT NULL DEFAULT 0
         CHECK (repair_count BETWEEN 0 AND 5);
 CREATE TABLE control_plane.outbox_repairs (
@@ -364,6 +397,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -371,3 +405,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

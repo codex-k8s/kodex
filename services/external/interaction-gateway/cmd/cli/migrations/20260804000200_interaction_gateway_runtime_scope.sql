@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
 CREATE SCHEMA IF NOT EXISTS interaction_gateway_security;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA interaction_gateway_security;
 
@@ -95,7 +97,8 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_catalog.pg_roles
          WHERE rolname = requested_principal::text AND rolcanlogin
-           AND NOT rolsuper AND NOT rolbypassrls
+           AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
+           AND NOT rolreplication AND NOT rolbypassrls
     ) THEN
         RAISE EXCEPTION 'runtime principal is unavailable' USING ERRCODE = '28000';
     END IF;
@@ -610,8 +613,17 @@ REVOKE ALL ON interaction_gateway_runtime_credential_fence, interaction_gateway_
     interaction_gateway_inbound_work_scopes, interaction_gateway_delivery_work_scopes,
     interaction_gateway_turn_watch_work_scopes, interaction_gateway_owner_gate_claim_requests
     FROM PUBLIC, interaction_gateway_runtime;
-GRANT SELECT ON interaction_gateway_runtime_credential_fence TO interaction_gateway_role_controller;
-GRANT SELECT, UPDATE ON interaction_gateway_runtime_principals TO interaction_gateway_role_controller;
+GRANT SELECT, INSERT, UPDATE ON interaction_gateway_runtime_credential_fence
+    TO interaction_gateway_role_controller;
+GRANT SELECT, INSERT, UPDATE ON interaction_gateway_runtime_principals
+    TO interaction_gateway_role_controller;
+GRANT SELECT, INSERT, UPDATE ON interaction_gateway_runtime_context_keys
+    TO interaction_gateway_role_controller;
+GRANT USAGE ON SCHEMA interaction_gateway_security TO interaction_gateway_role_controller;
+GRANT EXECUTE ON FUNCTION interaction_gateway_security.digest(bytea, text)
+    TO interaction_gateway_role_controller;
+GRANT EXECUTE ON FUNCTION interaction_gateway_security.gen_random_bytes(integer)
+    TO interaction_gateway_role_controller;
 GRANT USAGE ON SCHEMA interaction_gateway_security TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_security.hmac(bytea, bytea, text) TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_activate_runtime_context(uuid, uuid, text, name, bigint, text, uuid, bigint, bytea)
@@ -624,8 +636,24 @@ GRANT EXECUTE ON FUNCTION interaction_gateway_delivery_scope_by_post(text) TO in
 GRANT EXECUTE ON FUNCTION interaction_gateway_claim_owner_gate_request() TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_bind_owner_gate_request(uuid, uuid, uuid) TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_complete_owner_gate_request(uuid) TO interaction_gateway_runtime;
-ALTER FUNCTION interaction_gateway_retire_runtime_identity(bigint) OWNER TO interaction_gateway_role_controller;
+GRANT EXECUTE ON FUNCTION interaction_gateway_reconcile_runtime_identity(bigint, text, bytea)
+    TO interaction_gateway_migrator;
 GRANT EXECUTE ON FUNCTION interaction_gateway_retire_runtime_identity(bigint) TO interaction_gateway_migrator;
+
+-- Передача SECURITY DEFINER-функций выполняется через краткоживущую membership:
+-- PostgreSQL требует и SET ROLE в нового owner, и CREATE в schema функции.
+GRANT CREATE ON SCHEMA public TO interaction_gateway_role_controller;
+RESET ROLE;
+GRANT interaction_gateway_role_controller TO interaction_gateway_owner;
+SET ROLE interaction_gateway_owner;
+ALTER FUNCTION interaction_gateway_reconcile_runtime_identity(bigint, text, bytea)
+    OWNER TO interaction_gateway_role_controller;
+ALTER FUNCTION interaction_gateway_retire_runtime_identity(bigint)
+    OWNER TO interaction_gateway_role_controller;
+RESET ROLE;
+REVOKE interaction_gateway_role_controller FROM interaction_gateway_owner;
+SET ROLE interaction_gateway_owner;
+REVOKE CREATE ON SCHEMA public FROM interaction_gateway_role_controller;
 
 -- +goose Down
 -- Forward-only: credential high-watermark, retired identities и durable receipts не откатываются.

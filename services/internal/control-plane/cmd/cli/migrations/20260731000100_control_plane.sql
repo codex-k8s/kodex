@@ -1,7 +1,11 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Базовая миграция только вперёд создаёт роли с минимальными полномочиями,
 -- авторитетную схему, RLS, идемпотентность, аудит, outbox и доменные ограничения.
 -- Порядок намеренно начинается с NOLOGIN-ролей и завершается явными GRANT.
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'control_plane_owner') THEN
@@ -18,20 +22,45 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
+
+-- PostgreSQL разрешает bounded CREATEROLE менять только непривилегированные
+-- атрибуты. Привилегированные атрибуты проверяются fail-closed до ALTER ROLE.
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'control_plane_owner',
+            'control_plane_runtime',
+            'control_plane_relay'
+        )
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'control-plane managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
 
 ALTER ROLE control_plane_owner
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_runtime
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_relay
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEROLE NOINHERIT;
 
+SET ROLE control_plane_owner;
 CREATE SCHEMA control_plane AUTHORIZATION control_plane_owner;
 CREATE SCHEMA control_plane_extensions AUTHORIZATION control_plane_owner;
 REVOKE ALL ON SCHEMA control_plane FROM PUBLIC;
 REVOKE ALL ON SCHEMA control_plane_extensions FROM PUBLIC;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA control_plane_extensions;
+-- +goose StatementBegin
 DO $pgcrypto_schema$
 BEGIN
     IF NOT EXISTS (
@@ -46,6 +75,7 @@ BEGIN
     END IF;
 END
 $pgcrypto_schema$;
+-- +goose StatementEnd
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA control_plane_extensions FROM PUBLIC;
 GRANT USAGE ON SCHEMA control_plane_extensions TO control_plane_owner;
 GRANT EXECUTE ON FUNCTION

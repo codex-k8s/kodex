@@ -115,7 +115,7 @@ func loadConfig() (Config, error) {
 		PostgresPrincipalGeneration:         1,
 		PostgresContextKeyID:                "control-plane-db-context-g1",
 		PostgresContextKeyFile:              "/var/run/secrets/mattercodex/control-plane/postgres-context/key",
-		PostgresTLSServerName:               "control-plane-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName:               "control-plane-postgresql-rw.mattercodex-system.svc.cluster.local",
 		PostgresCAFile:                      "/var/run/config/mattercodex/control-plane/postgres/ca.pem",
 		PostgresMaxConnections:              16,
 		RedisAddress:                        "control-plane-redis.mattercodex-system.svc:6379",

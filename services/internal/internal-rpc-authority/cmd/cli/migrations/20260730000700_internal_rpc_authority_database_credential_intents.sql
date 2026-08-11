@@ -1,4 +1,8 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ira_publisher_g5') THEN
@@ -15,7 +19,13 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
 
+SET ROLE internal_rpc_authority_owner;
+GRANT CREATE ON SCHEMA internal_rpc_authority
+    TO internal_rpc_authority_credential_lifecycle_definer;
+RESET ROLE;
+SET ROLE internal_rpc_authority_credential_lifecycle_definer;
 CREATE OR REPLACE FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -207,6 +217,11 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $function$;
+
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+REVOKE CREATE ON SCHEMA internal_rpc_authority
+    FROM internal_rpc_authority_credential_lifecycle_definer;
 
 CREATE TABLE internal_rpc_authority.database_credential_rotation_intents (
     request_id uuid PRIMARY KEY,

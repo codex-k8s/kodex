@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Укрепление первого цикла вводит ротацию principals исполнения, подписанный
 -- локальный для транзакции контекст RLS, аренды, попытки и устойчивые квитанции.
 -- Функции SECURITY DEFINER ниже всегда фиксируют search_path и проверяют роль.
@@ -745,6 +747,7 @@ UPDATE control_plane.schema_state
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -752,3 +755,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

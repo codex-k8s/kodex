@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 ALTER TABLE integration_gateway.execution_attempts
     ADD COLUMN provider_dispatched_at timestamptz;
 

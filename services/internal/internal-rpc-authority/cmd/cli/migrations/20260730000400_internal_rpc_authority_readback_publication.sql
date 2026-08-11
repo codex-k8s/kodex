@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
 DROP POLICY IF EXISTS authority_readback_intents_publisher
     ON internal_rpc_authority.authority_readback_intents;
 

@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 CREATE TABLE control_plane.mattermost_event_key_history (
     producer_id text NOT NULL REFERENCES control_plane.mattermost_event_verifier_fence(producer_id),
     generation bigint NOT NULL CHECK (generation > 0),

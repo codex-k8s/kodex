@@ -242,9 +242,24 @@ yq eval-all -e '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-postgresql-init") |
   (.data."pg_hba.conf" | contains("local all all peer")) and
   (.data."pg_hba.conf" | contains("hostnossl all all 0.0.0.0/0 reject")) and
-  (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256"))
+  (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256")) and
+  (.data."10-mattercodex-databases.sh" |
+    contains("\\connect control_plane\nCREATE EXTENSION IF NOT EXISTS vector;"))
 ' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
   printf 'PostgreSQL TLS-only pg_hba contract is absent\n' >&2
+  exit 1
+}
+yq eval-all -e '
+  select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql") |
+  (.spec.template.spec.securityContext.runAsUser == 999) and
+  (.spec.template.spec.securityContext.runAsGroup == 999) and
+  (.spec.template.spec.securityContext.fsGroup == 999) and
+  (.spec.template.spec.containers | any_c(
+    .name == "postgresql" and
+    .image == "pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb"
+  ))
+' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
+  printf 'Direct-production PostgreSQL does not provide the pinned pgvector runtime\n' >&2
   exit 1
 }
 
@@ -319,6 +334,135 @@ grep -Fq "tr '\\t' '|' </var/run/bootstrap/principals.tsv" \
   printf 'PostgreSQL principal bootstrap does not preserve empty TSV fields\n' >&2
   exit 1
 }
+grep -Fq 'if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FALSE; fi' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'WITH INHERIT FALSE, SET TRUE, ADMIN %s' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL migrator role graph does not bind ADMIN to the bounded create-role flag\n' >&2
+  exit 1
+}
+grep -Fq 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'member.admin_option AND NOT member.inherit_option AND NOT member.set_option' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL managed login principals lack bounded ADMIN-only ownership\n' >&2
+  exit 1
+}
+grep -Fq "format('REVOKE %%I FROM %%I GRANTED BY %%I'" \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal retirement ignores the membership grantor\n' >&2
+  exit 1
+}
+grep -Fq 'SELECT DISTINCT member.roleid, member.member' \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal readback counts grantor rows instead of canonical memberships\n' >&2
+  exit 1
+}
+for migration_registry_entry in \
+  'control_plane_migrator:control_plane_owner,control_plane_runtime,control_plane_relay,control_plane_role_controller,pg_signal_backend' \
+  'integration_gateway_migrator_g1:integration_gateway_owner,integration_gateway_runtime,integration_gateway_migrator,integration_gateway_role_controller,pg_signal_backend' \
+  'interaction_gateway_migrator:interaction_gateway_owner,interaction_gateway_runtime,interaction_gateway_role_controller,pg_signal_backend' \
+  'internal_rpc_authority_migrator:internal_rpc_authority_owner,internal_rpc_authority_readback_owner,internal_rpc_authority_credential_lifecycle_definer,internal_rpc_authority_issuer,internal_rpc_authority_verifier,internal_rpc_authority_publisher,internal_rpc_authority_readback_attestor,internal_rpc_authority_database_credential_reconciler,internal_rpc_authority_recovery,internal_rpc_authority_restore_controller,pg_signal_backend'; do
+  migration_principal=${migration_registry_entry%%:*}
+  migration_memberships=${migration_registry_entry#*:}
+  awk -F '\t' -v principal="$migration_principal" -v memberships="$migration_memberships" '
+    {gsub(/^[[:space:]]+/, "", $1)}
+    $1 == principal && $3 == memberships && $4 == "true" {found=1}
+    END {exit(found ? 0 : 1)}
+  ' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+    printf 'PostgreSQL migrator registry is incomplete: %s\n' "$migration_principal" >&2
+    exit 1
+  }
+done
+grep -Fq 'GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner' \
+  "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations/20260730000100_internal_rpc_authority_runtime.sql" &&
+  grep -Fq 'WITH INHERIT TRUE, SET TRUE, ADMIN FALSE' \
+    "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations/20260730000100_internal_rpc_authority_runtime.sql" || {
+  printf 'Internal RPC authority object-owner transfer graph is incomplete\n' >&2
+  exit 1
+}
+for migration_scope in \
+  'services/internal/control-plane/cmd/cli/migrations:control_plane_owner' \
+  'services/external/integration-gateway/cmd/cli/migrations:integration_gateway_owner' \
+  'services/external/interaction-gateway/cmd/cli/migrations:interaction_gateway_owner' \
+  'services/internal/internal-rpc-authority/cmd/cli/migrations:internal_rpc_authority_owner' \
+  'services/internal/runtime-controller/cmd/cli/migrations:runtime_controller_owner'; do
+  migration_directory=${migration_scope%%:*}
+  migration_owner=${migration_scope#*:}
+  duplicate_versions=$(find "$repository_root/$migration_directory" -maxdepth 1 -type f -name '*.sql' -printf '%f\n' |
+    cut -d_ -f1 | LC_ALL=C sort | uniq -d)
+  [[ -z "$duplicate_versions" ]] || {
+    printf 'Goose migration versions are duplicated in %s: %s\n' "$migration_directory" "$duplicate_versions" >&2
+    exit 1
+  }
+  for migration_file in "$repository_root/$migration_directory"/*.sql; do
+    [[ "$(sed -n '1p' "$migration_file")" == '-- +goose Up' ]] &&
+      [[ "$(sed -n '2p' "$migration_file")" == 'RESET ROLE;' ]] &&
+      [[ "$(sed -n '3p' "$migration_file")" == "SET ROLE $migration_owner;" ]] || {
+      printf 'Goose migration does not establish its exact owner role: %s\n' "$migration_file" >&2
+      exit 1
+    }
+  done
+  awk '
+    FNR == 1 {previous=""}
+    /^DO \$[A-Za-z0-9_]*\$$/ && previous != "-- +goose StatementBegin" {exit 1}
+    NF {previous=$0}
+  ' "$repository_root/$migration_directory"/*.sql || {
+    printf 'Goose migration has an unbounded PostgreSQL DO block: %s\n' "$migration_directory" >&2
+    exit 1
+  }
+  if rg --pcre2 -U -q \
+    '(?s)ALTER ROLE\b[^;]*\b(?:NOSUPERUSER|NOCREATEDB|NOREPLICATION|NOBYPASSRLS)\b' \
+    "$repository_root/$migration_directory"; then
+    printf 'Bounded PostgreSQL migrator changes a superuser-only role attribute: %s\n' \
+      "$migration_directory" >&2
+    exit 1
+  fi
+done
+if rg -n '(control-plane|internal-rpc-authority|runtime-controller)-postgresql\.mattercodex-system' \
+  "$repository_root/deploy" "$repository_root/services" "$repository_root/contracts" >/dev/null; then
+  printf 'PostgreSQL runtime contract still references a non-canonical service alias\n' >&2
+  exit 1
+fi
+for migration_contract in \
+  'deploy/k8s/base/control-plane/migration-job.yaml:control-plane-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/integration-gateway/migration-job.yaml:integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/interaction-gateway/migration-job.yaml:interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml:internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local' \
+  'deploy/k8s/base/runtime-controller/migration-job.yaml:runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local'; do
+  migration_file=${migration_contract%%:*}
+  migration_host=${migration_contract#*:}
+  yq -o=json '.' "$repository_root/$migration_file" | jq -e --arg postgres_host "$migration_host" '
+    .spec.activeDeadlineSeconds > 0 and .spec.activeDeadlineSeconds <= 300 and
+    .spec.template.spec.restartPolicy == "Never" and
+    .spec.template.spec.securityContext.runAsNonRoot == true and
+    (.spec.template.spec.securityContext.fsGroup | type == "number") and
+    .spec.template.spec.securityContext.fsGroupChangePolicy == "OnRootMismatch" and
+    (.spec.template.spec.initContainers[] | select(.name == "wait-for-postgresql") |
+      (.image | test("^docker.io/library/postgres:[^@]+@sha256:[a-f0-9]{64}$")) and
+      .env == [{"name":"POSTGRES_HOST","value":$postgres_host}] and
+      (.args | join(" ") | contains("until pg_isready")) and
+      .securityContext.runAsNonRoot == true and
+      .securityContext.readOnlyRootFilesystem == true)
+  ' >/dev/null || {
+    printf 'Migration Job has no bounded PostgreSQL network-readiness barrier: %s\n' "$migration_file" >&2
+    exit 1
+  }
+done
+for migration_binding in \
+  'control-plane-postgres-migration:control_plane_owner' \
+  'integration-gateway-postgres-migrator:integration_gateway_owner' \
+  'interaction-gateway-postgres-migrator:interaction_gateway_owner' \
+  'internal-rpc-authority-migrator-postgresql:internal_rpc_authority_owner' \
+  'runtime-controller-postgres-migration:runtime_controller_owner'; do
+  migration_secret=${migration_binding%%:*}
+  migration_owner=${migration_binding#*:}
+  rg -q "^put_pg $migration_secret dsn [a-z0-9_]+ [a-z0-9_]+ \\\"\\\$[a-z_]+\\\" $migration_owner$" \
+    "$repository_root/tools/deploy/materialize-direct-production-application.sh" || {
+    printf 'Migration DSN does not assume its exact owner role: %s\n' "$migration_secret" >&2
+    exit 1
+  }
+done
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and

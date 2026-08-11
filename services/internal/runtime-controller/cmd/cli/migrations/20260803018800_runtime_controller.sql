@@ -481,8 +481,10 @@ VALUES ('postgresinbox', 1, decode('4c44aeb7b45033cd140b9d49db24d67d0ff620687249
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION 'runtime-controller inbox migration is forward-only' USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

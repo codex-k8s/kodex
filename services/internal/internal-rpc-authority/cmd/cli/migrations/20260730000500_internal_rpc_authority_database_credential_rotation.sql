@@ -1,4 +1,8 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE internal_rpc_authority_owner;
+RESET ROLE;
+-- +goose StatementBegin
 DO $roles$
 BEGIN
     IF NOT EXISTS (
@@ -37,14 +41,42 @@ BEGIN
     END IF;
 END
 $roles$;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'internal_rpc_authority_credential_lifecycle_definer',
+            'ira_publisher_g3',
+            'ira_publisher_g4',
+            'ira_readback_attestor_g3',
+            'ira_readback_attestor_g4'
+        )
+          AND (rolsuper OR rolcreatedb OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'credential lifecycle role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
 
 ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend
     TO internal_rpc_authority_credential_lifecycle_definer;
+GRANT internal_rpc_authority_credential_lifecycle_definer
+    TO internal_rpc_authority_owner
+    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 
+SET ROLE internal_rpc_authority_owner;
 GRANT USAGE ON SCHEMA internal_rpc_authority
+    TO internal_rpc_authority_credential_lifecycle_definer;
+GRANT CREATE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_credential_lifecycle_definer;
 GRANT SELECT, INSERT, UPDATE
     ON internal_rpc_authority.authority_runtime_database_identities,
@@ -280,13 +312,6 @@ BEGIN
 END
 $function$;
 
-ALTER FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
-    text, text, bigint, text, uuid, text
-) OWNER TO internal_rpc_authority_credential_lifecycle_definer;
-ALTER FUNCTION internal_rpc_authority.retire_runtime_database_identity(
-    text, text, bigint, uuid, text
-) OWNER TO internal_rpc_authority_credential_lifecycle_definer;
-
 REVOKE ALL ON FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     text, text, bigint, text, uuid, text
 ) FROM PUBLIC;
@@ -299,6 +324,19 @@ GRANT EXECUTE ON FUNCTION internal_rpc_authority.reconcile_runtime_database_iden
 GRANT EXECUTE ON FUNCTION internal_rpc_authority.retire_runtime_database_identity(
     text, text, bigint, uuid, text
 ) TO internal_rpc_authority_database_credential_reconciler;
+
+ALTER FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
+    text, text, bigint, text, uuid, text
+) OWNER TO internal_rpc_authority_credential_lifecycle_definer;
+ALTER FUNCTION internal_rpc_authority.retire_runtime_database_identity(
+    text, text, bigint, uuid, text
+) OWNER TO internal_rpc_authority_credential_lifecycle_definer;
+REVOKE CREATE ON SCHEMA internal_rpc_authority
+    FROM internal_rpc_authority_credential_lifecycle_definer;
+RESET ROLE;
+REVOKE internal_rpc_authority_credential_lifecycle_definer
+    FROM internal_rpc_authority_owner;
+SET ROLE internal_rpc_authority_owner;
 
 REVOKE CREATE ON SCHEMA internal_rpc_authority FROM PUBLIC;
 

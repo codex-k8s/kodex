@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 CREATE TABLE integration_gateway.runtime_credential_fence (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     current_high_watermark bigint NOT NULL CHECK (current_high_watermark >= 0),
@@ -32,10 +34,18 @@ GRANT SELECT, INSERT, UPDATE ON integration_gateway.runtime_context_keys
     TO integration_gateway_role_controller;
 GRANT SELECT, UPDATE ON integration_gateway.runtime_credential_fence
     TO integration_gateway_role_controller;
+GRANT CREATE ON SCHEMA integration_gateway
+    TO integration_gateway_role_controller;
+RESET ROLE;
+SET ROLE integration_gateway_role_controller;
 
 -- Старый migration image не может обойти owner procedure через прежние entrypoints.
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION integration_gateway.bootstrap_runtime_principal(text, bigint, text)
+CREATE OR REPLACE FUNCTION integration_gateway.bootstrap_runtime_principal(
+    requested_principal_name text,
+    requested_generation bigint,
+    requested_password text
+)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -48,7 +58,9 @@ $function$;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION integration_gateway.retire_runtime_principal(text)
+CREATE OR REPLACE FUNCTION integration_gateway.retire_runtime_principal(
+    requested_principal_name text
+)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -81,6 +93,7 @@ DECLARE
     current_count integer;
     desired_count integer;
     old_status text;
+    role_safe boolean;
 BEGIN
     IF NOT pg_has_role(session_user, 'integration_gateway_migrator', 'member')
        OR current_user <> 'integration_gateway_role_controller'
@@ -144,9 +157,22 @@ BEGIN
             RAISE EXCEPTION 'runtime credential promotion requires durable NEXT' USING ERRCODE = '28000';
         END IF;
 
-        IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = candidate.principal_name) THEN
+        SELECT role.rolcanlogin
+               AND NOT role.rolsuper
+               AND NOT role.rolcreatedb
+               AND NOT role.rolcreaterole
+               AND NOT role.rolreplication
+               AND NOT role.rolbypassrls
+          INTO role_safe
+          FROM pg_catalog.pg_roles AS role
+         WHERE role.rolname = candidate.principal_name;
+        IF role_safe IS NOT NULL AND NOT role_safe THEN
+            RAISE EXCEPTION 'existing runtime principal role is unsafe'
+                USING ERRCODE = '42501';
+        END IF;
+        IF role_safe IS NOT NULL THEN
             EXECUTE format(
-                'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS',
+                'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEROLE INHERIT',
                 candidate.principal_name, candidate.password
             );
         ELSE
@@ -240,6 +266,24 @@ END
 $function$;
 -- +goose StatementEnd
 
+REVOKE ALL ON FUNCTION integration_gateway.reconcile_runtime_credentials(
+    jsonb, text, bytea, bigint, bigint
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION integration_gateway.confirm_runtime_credential_served(
+    bigint, text
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION integration_gateway.reconcile_runtime_credentials(
+    jsonb, text, bytea, bigint, bigint
+) TO integration_gateway_migrator;
+GRANT EXECUTE ON FUNCTION integration_gateway.confirm_runtime_credential_served(
+    bigint, text
+) TO integration_gateway_migrator;
+
+RESET ROLE;
+SET ROLE integration_gateway_owner;
+REVOKE CREATE ON SCHEMA integration_gateway
+    FROM integration_gateway_role_controller;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION integration_gateway.runtime_identity_ready()
 RETURNS boolean
@@ -268,14 +312,6 @@ END
 $function$;
 -- +goose StatementEnd
 
-GRANT EXECUTE ON FUNCTION integration_gateway.reconcile_runtime_credentials(jsonb, text, bytea, bigint, bigint)
-    TO integration_gateway_migrator;
-GRANT EXECUTE ON FUNCTION integration_gateway.confirm_runtime_credential_served(bigint, text)
-    TO integration_gateway_migrator;
-ALTER FUNCTION integration_gateway.reconcile_runtime_credentials(jsonb, text, bytea, bigint, bigint)
-    OWNER TO integration_gateway_role_controller;
-ALTER FUNCTION integration_gateway.confirm_runtime_credential_served(bigint, text)
-    OWNER TO integration_gateway_role_controller;
 ALTER FUNCTION integration_gateway.runtime_identity_ready()
     OWNER TO integration_gateway_owner;
 ALTER TABLE integration_gateway.runtime_credential_fence

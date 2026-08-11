@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE integration_gateway_owner;
 CREATE TABLE integration_gateway.result_grant_verifier_fence (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     keyset_revision bigint NOT NULL CHECK (keyset_revision >= 0),

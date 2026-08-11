@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Применённая 20260731000500 остаётся неизменной. Эта forward-only migration
 -- одинаково обновляет fresh-install и upgrade-path eligibility WorkClaim.
 RESET ROLE;
@@ -89,6 +91,7 @@ GRANT EXECUTE ON FUNCTION control_plane.work_claim_graph_is_active(
     control_plane.resources
 ) TO control_plane_runtime, control_plane_owner;
 
+-- +goose StatementBegin
 DO $readback$
 DECLARE
     function_oid regprocedure :=
@@ -123,6 +126,7 @@ BEGIN
     END IF;
 END
 $readback$;
+-- +goose StatementEnd
 
 UPDATE control_plane.schema_state
 SET version = 20260803000100, migrated_at = clock_timestamp()
@@ -130,6 +134,7 @@ WHERE singleton = true;
 RESET ROLE;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -137,3 +142,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

@@ -75,7 +75,7 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 		TLSPrivateKeyFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.key",
 		ClientCAFile:             "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/client-ca.pem",
 		PostgresDSNFile:          "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn",
-		PostgresTLSServerName:    "internal-rpc-authority-postgresql.mattercodex-system.svc.cluster.local",
+		PostgresTLSServerName:    "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
 		DatabaseClusterID:        "internal-rpc-authority-primary",
 		TargetRegistryFile:       "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/key-delivery-targets.yaml",
 		ManifestRootJWKFile:      "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",

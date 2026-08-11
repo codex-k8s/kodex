@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 ALTER TABLE control_plane.schedule_occurrences
     ADD COLUMN version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     ADD COLUMN recovery_evidence_sha256 text,
@@ -93,6 +95,7 @@ CREATE POLICY schedule_occurrence_capabilities_scope
 GRANT SELECT, INSERT, UPDATE ON control_plane.schedule_occurrence_capabilities TO control_plane_runtime;
 
 -- +goose Down
+-- +goose StatementBegin
 DO $forward_only$
 BEGIN
     RAISE EXCEPTION
@@ -100,3 +103,4 @@ BEGIN
         USING ERRCODE = '0A000';
 END
 $forward_only$;
+-- +goose StatementEnd

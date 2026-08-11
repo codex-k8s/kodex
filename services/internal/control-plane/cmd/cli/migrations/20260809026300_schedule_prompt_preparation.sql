@@ -1,4 +1,6 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE control_plane_owner;
 -- Durable single-winner внешнего Schedule prompt effect. Строка связывает
 -- exact owner/target/preconditions/idempotency/content до S3 RPC; private
 -- object locator никогда не выходит из control-plane.
