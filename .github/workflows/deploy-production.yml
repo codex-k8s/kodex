@@ -67,17 +67,9 @@ jobs:
             --workflow .github/workflows/deploy-production.yml --environment production \
             --workflow-sha "$WORKFLOW_SHA" --owner-actor-id "$OWNER_ACTOR_ID" \
             --source-sha "$SOURCE_SHA" --mode "${{ inputs.mode }}" --output owner-gate.json
-          temporary_directory=$(mktemp -d)
-          trap 'rm -rf -- "$temporary_directory"' EXIT
-          umask 077
-          printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$GH_TOKEN" > "$temporary_directory/curl.conf"
-          unset GH_TOKEN
-          curl --config "$temporary_directory/curl.conf" --fail --silent --show-error \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > "$temporary_directory/run.json"
-          jq -e --arg sha "$SOURCE_SHA" --arg repo "$GITHUB_REPOSITORY" '
-            .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success" and
-            .head_sha == $sha and .head_repository.full_name == $repo and .path == ".github/workflows/build-release.yml"
-          ' "$temporary_directory/run.json" >/dev/null || { echo 'Build run provenance mismatch' >&2; exit 1; }
+          tools/release/verify-github-build-run.sh \
+            --build-run-id "$BUILD_RUN_ID" --source-sha "$SOURCE_SHA" \
+            --owner-actor-id "$OWNER_ACTOR_ID" --output build-run-evidence.json
       - name: Download exact release lock
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
