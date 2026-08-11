@@ -473,16 +473,32 @@ public_jwks() {
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
   node "$helper" public-jwks "$destination" "$(value_path Secret "$3" "$4")"
 }
+public_keyset_genesis() {
+  local destination public_keyset
+  destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
+  public_keyset="$temporary_directory/$1-$2.jwks.json"
+  node "$helper" public-jwks "$public_keyset" "$(value_path Secret "$3" "$4")"
+  jq -e '
+    (.keys | type == "array" and length == 1) as $valid |
+    if $valid then {
+      version: 1,
+      revision: 1,
+      high_watermark: 1,
+      served_generation: 1,
+      keys: [.keys[] | {generation: 1, status: "CURRENT", jwk: .}]
+    } else error("public keyset genesis requires exactly one key") end
+  ' "$public_keyset" >"$destination"
+}
 public_jwk() {
   local destination
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
   node "$helper" public-jwk "$(value_path Secret "$3" "$4")" "$destination"
 }
 public_jwks control-plane-interaction-readback-trust public-keyset.json control-plane-interaction-readback-signer private.jwk
-public_jwks control-plane-keyset-genesis interaction-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
-public_jwks control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
+public_keyset_genesis control-plane-keyset-genesis interaction-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
+public_keyset_genesis control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
 public_jwks interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
-public_jwks interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
+public_keyset_genesis interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
 done
