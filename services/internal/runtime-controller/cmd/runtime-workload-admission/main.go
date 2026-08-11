@@ -327,7 +327,7 @@ func desiredS3ReadbackPod(snapshot runtimeSnapshot, action, policySHA256 string)
 			{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "runtime-config-" + stableHash(execution.ID, 24)}, DefaultMode: &defaultMode}}},
 			{Name: "ticket-trust", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: trustName}, DefaultMode: &defaultMode}}},
 			{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: &defaultMode, Sources: []corev1.VolumeProjection{
-				{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: &tokenTTL, Path: "token"}},
+				{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{ExpirationSeconds: &tokenTTL, Path: "token"}},
 				{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
 			}}}},
 		},
@@ -542,7 +542,7 @@ func exactCredentialCopyPod(username string, pod *corev1.Pod, snapshot runtimeSn
 		case "kube-api-access":
 			if volume.Projected != nil {
 				for _, source := range volume.Projected.Sources {
-					if source.ServiceAccountToken != nil && source.ServiceAccountToken.Audience == "https://kubernetes.default.svc" &&
+					if source.ServiceAccountToken != nil && source.ServiceAccountToken.Audience == "" &&
 						source.ServiceAccountToken.ExpirationSeconds != nil && *source.ServiceAccountToken.ExpirationSeconds <= 600 {
 						tokenOK = true
 					}

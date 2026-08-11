@@ -338,7 +338,7 @@ yq -i '
     ) |
     .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
       map(select(.name != "vault-ca" and .name != "vault-token" and .name != "oidc-ca")) + [
-        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]}},
+        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","expirationSeconds":600}}]}},
         {"name":"direct-kubernetes-api-ca","configMap":{"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]}},
         {"name":"direct-git-credentials","secret":{"secretName":"integration-gateway-git-credentials","defaultMode":288,"items":[{"key":"state.json","path":"state.json"}]}},
         {"name":"direct-oidc-provider","configMap":{"name":"integration-gateway-oidc-provider","defaultMode":288,"items":[{"key":"provider-snapshot.json","path":"provider-snapshot.json"}]}}
@@ -357,7 +357,7 @@ yq -i '
     ) |
     .spec.template.spec.volumes = ((.spec.template.spec.volumes // []) |
       map(select(.name != "vault-ca" and .name != "vault-token")) + [
-        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]}},
+        {"name":"direct-kubernetes-api-token","projected":{"defaultMode":256,"sources":[{"serviceAccountToken":{"path":"token","expirationSeconds":600}}]}},
         {"name":"direct-kubernetes-api-ca","configMap":{"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]}}
       ]
     )

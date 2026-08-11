@@ -542,7 +542,7 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
       all(.volumeMounts[]?; (.name != "direct-kubernetes-api-token" and .name != "direct-kubernetes-api-ca" and
         .name != "direct-git-credentials" and .name != "direct-oidc-provider"))) and
     any($deployment.spec.template.spec.volumes[]; .name == "direct-kubernetes-api-token" and .projected.defaultMode == 256 and
-      .projected.sources == [{"serviceAccountToken":{"path":"token","audience":"https://kubernetes.default.svc","expirationSeconds":600}}]) and
+      .projected.sources == [{"serviceAccountToken":{"path":"token","expirationSeconds":600}}]) and
     any($deployment.spec.template.spec.volumes[]; .name == "direct-kubernetes-api-ca" and
       .configMap == {"name":"kube-root-ca.crt","defaultMode":288,"items":[{"key":"ca.crt","path":"ca.crt"}]});
   map(select(.kind != null)) as $resources |
@@ -618,8 +618,8 @@ for gateway in integration-gateway interaction-gateway; do
     exit 1
   }
 done
-grep -Fq 'integration-gateway-kubernetes-api-exact:integration-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
-  grep -Fq 'interaction-gateway-kubernetes-api-exact:interaction-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
+grep -Fq 'integration-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=integration-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
+  grep -Fq 'interaction-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=interaction-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
   grep -Fq 'mattercodex.dev/runtime-secret-api' "$repository_root/infra/direct-production/bootstrap.yaml" || {
   printf 'Owner bootstrap does not bind exact Kubernetes API egress and VAP boundaries\n' >&2
   exit 1

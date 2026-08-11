@@ -341,7 +341,7 @@ func materializeCredentialCopy(
 				{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
 					DefaultMode: &defaultMode,
 					Sources: []corev1.VolumeProjection{
-						{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: &tokenTTL, Path: "token"}},
+						{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{ExpirationSeconds: &tokenTTL, Path: "token"}},
 						{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
 						{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"}}}}},
 					},
@@ -979,7 +979,7 @@ func compatibleWarmVolumes(volumes []corev1.Volume, execution entity.Execution, 
 		case "runtime-config":
 			seenConfig = volume.ConfigMap != nil && strings.HasPrefix(volume.ConfigMap.Name, "runtime-config-")
 		case "kube-api-access":
-			seenToken = volume.Projected != nil && projectedTokenHasAudience(volume.Projected, "https://kubernetes.default.svc")
+			seenToken = volume.Projected != nil && projectedTokenHasAudience(volume.Projected, "")
 		case "tmp":
 			if volume.EmptyDir == nil || volume.EmptyDir.SizeLimit == nil {
 				return false
@@ -1035,7 +1035,7 @@ func exactRuntimeVolumes(volumes []corev1.Volume, execution entity.Execution, cr
 				return false
 			}
 		case "kube-api-access":
-			if volume.Projected == nil || !projectedTokenHasAudience(volume.Projected, "https://kubernetes.default.svc") {
+			if volume.Projected == nil || !projectedTokenHasAudience(volume.Projected, "") {
 				return false
 			}
 		default:
@@ -1837,7 +1837,7 @@ func projectedKubeAPIVolume(defaultMode *int32, tokenTTL *int64) corev1.VolumeSo
 		DefaultMode: defaultMode,
 		Sources: []corev1.VolumeProjection{
 			{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-				Audience: "https://kubernetes.default.svc", ExpirationSeconds: tokenTTL, Path: "token",
+				ExpirationSeconds: tokenTTL, Path: "token",
 			}},
 			{ConfigMap: &corev1.ConfigMapProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"},
