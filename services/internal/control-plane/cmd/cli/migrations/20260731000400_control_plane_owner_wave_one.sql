@@ -70,16 +70,19 @@ END
 $managed_roles$;
 -- +goose StatementEnd
 
+GRANT control_plane_role_controller TO control_plane_owner;
 SET ROLE control_plane_owner;
 REVOKE SELECT ON control_plane.runtime_principals FROM control_plane_migrator;
 REVOKE USAGE ON SCHEMA control_plane FROM control_plane_migrator;
-ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
-    OWNER TO control_plane_role_controller;
 REVOKE ALL ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
     TO control_plane_owner;
+ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
+    OWNER TO control_plane_role_controller;
 
+RESET ROLE;
+REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 

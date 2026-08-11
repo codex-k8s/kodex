@@ -121,9 +121,14 @@ REVOKE ALL ON FUNCTION control_plane.bootstrap_runtime_principal(
 GRANT EXECUTE ON FUNCTION control_plane.bootstrap_runtime_principal(
     text, bigint, text
 ) TO control_plane_owner;
+RESET ROLE;
+GRANT control_plane_role_controller TO control_plane_owner;
+SET ROLE control_plane_owner;
 ALTER FUNCTION control_plane.bootstrap_runtime_principal(text, bigint, text)
     OWNER TO control_plane_role_controller;
 
+RESET ROLE;
+REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 
