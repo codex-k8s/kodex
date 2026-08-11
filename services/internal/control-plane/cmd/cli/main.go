@@ -194,8 +194,8 @@ func reconcileMigrationState(
 		return errors.New("acquire control-plane migration connection")
 	}
 	defer connection.Close()
-	if _, err := connection.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
-		return errors.New("assume control-plane migration owner role")
+	if _, err := connection.ExecContext(ctx, "SET ROLE control_plane_role_controller"); err != nil {
+		return errors.New("assume control-plane role controller")
 	}
 	if err := reconcileRuntimePrincipals(
 		ctx,
@@ -204,6 +204,9 @@ func reconcileMigrationState(
 		roots,
 	); err != nil {
 		return err
+	}
+	if _, err := connection.ExecContext(ctx, "SET ROLE control_plane_owner"); err != nil {
+		return errors.New("assume control-plane migration owner role")
 	}
 	return reconcileKeysetGeneses(ctx, connection, config)
 }
