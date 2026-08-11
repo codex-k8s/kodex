@@ -298,6 +298,13 @@ grep -Fq 'sql_file=$(mktemp /tmp/principals.sql.XXXXXX)' \
   printf 'PostgreSQL principal bootstrap uses a non-portable mktemp template\n' >&2
   exit 1
 }
+grep -Fq "dollar_quote='\$bootstrap\$'" \
+  "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  ! grep -Fq '\\$bootstrap\\$' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
+  printf 'PostgreSQL principal bootstrap uses expandable SQL dollar quoting\n' >&2
+  exit 1
+}
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and

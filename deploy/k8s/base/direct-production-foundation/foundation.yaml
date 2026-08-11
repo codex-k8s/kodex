@@ -526,12 +526,13 @@ data:
     set -eu
     umask 077
     sql_file=$(mktemp /tmp/principals.sql.XXXXXX)
+    dollar_quote='$bootstrap$'
     trap 'rm -f -- "$sql_file"' EXIT HUP INT TERM
     printf '%s\n' 'SET client_min_messages = warning;' >"$sql_file"
     while IFS= read -r role; do
       [ -n "$role" ] || continue
       case "$role" in (*[!a-z0-9_]*) exit 20 ;; esac
-      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$role" "$role" >>"$sql_file"
+      printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$role" "$role" "$dollar_quote" >>"$sql_file"
       case "$role" in
         integration_gateway_role_controller|interaction_gateway_role_controller)
           printf 'ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;\n' "$role" >>"$sql_file" ;;
@@ -544,14 +545,14 @@ data:
       password=$(cat "/var/run/principals/$principal")
       case "$password" in (*[!a-f0-9]*|'') exit 22 ;; esac
       [ "${#password}" -eq 64 ] || exit 23
-      printf "DO \\$bootstrap\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN CREATE ROLE %s; END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
       if [ "$create_role" = true ]; then role_flag=CREATEROLE; else role_flag=NOCREATEROLE; fi
       printf "ALTER ROLE %s LOGIN PASSWORD '%s' NOSUPERUSER NOCREATEDB %s NOINHERIT NOREPLICATION NOBYPASSRLS;\n" "$principal" "$password" "$role_flag" >>"$sql_file"
       printf 'GRANT CONNECT ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       if [ "$create_role" = true ]; then
         printf 'GRANT CREATE, TEMP ON DATABASE %s TO %s;\n' "$database" "$principal" >>"$sql_file"
       fi
-      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END \\$bootstrap\\$;\n" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s DECLARE membership text; BEGIN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; END %s;\n" "$dollar_quote" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
       old_ifs=$IFS; IFS=,
       for membership in $memberships; do
         [ -n "$membership" ] || continue
@@ -561,7 +562,7 @@ data:
     done </var/run/bootstrap/principals.tsv
     while IFS= read -r principal; do
       [ -n "$principal" ] || continue
-      printf "DO \\$bootstrap\\$ DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END \\$bootstrap\\$;\n" "$principal" "$principal" "$principal" "$principal" "$principal" >>"$sql_file"
+      printf "DO %s DECLARE membership text; BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN FOR membership IN SELECT role.rolname FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles role ON role.oid = member.roleid JOIN pg_catalog.pg_roles login ON login.oid = member.member WHERE login.rolname = '%s' LOOP EXECUTE format('REVOKE %%I FROM %%I', membership, '%s'); END LOOP; ALTER ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity WHERE usename = '%s' AND pid <> pg_catalog.pg_backend_pid(); END IF; END %s;\n" "$dollar_quote" "$principal" "$principal" "$principal" "$principal" "$principal" "$dollar_quote" >>"$sql_file"
     done </var/run/bootstrap/retired-principals.txt
     psql "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt" --no-password --set ON_ERROR_STOP=1 --file "$sql_file" >/dev/null
     expected=$(wc -l </var/run/bootstrap/principals.tsv | tr -d ' ')
