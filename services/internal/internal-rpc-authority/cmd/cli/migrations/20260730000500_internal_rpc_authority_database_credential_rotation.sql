@@ -94,6 +94,7 @@ CREATE POLICY database_credential_receipts_lifecycle_definer
     USING (true)
     WITH CHECK (true);
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -207,7 +208,9 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION internal_rpc_authority.retire_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -311,6 +314,7 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $function$;
+-- +goose StatementEnd
 
 REVOKE ALL ON FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     text, text, bigint, text, uuid, text

@@ -26,6 +26,7 @@ GRANT CREATE ON SCHEMA internal_rpc_authority
     TO internal_rpc_authority_credential_lifecycle_definer;
 RESET ROLE;
 SET ROLE internal_rpc_authority_credential_lifecycle_definer;
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -128,7 +129,9 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION internal_rpc_authority.retire_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -217,6 +220,7 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $function$;
+-- +goose StatementEnd
 
 RESET ROLE;
 SET ROLE internal_rpc_authority_owner;
@@ -300,6 +304,7 @@ GRANT SELECT
     ON internal_rpc_authority.database_credential_session_readbacks
     TO internal_rpc_authority_database_credential_reconciler;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.record_database_credential_session_readback(
     p_credential_digest_sha256 text,
     p_pod_uid uuid
@@ -368,6 +373,7 @@ BEGIN
     RETURN identity.lifecycle_status;
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.record_database_credential_session_readback(
     text, uuid

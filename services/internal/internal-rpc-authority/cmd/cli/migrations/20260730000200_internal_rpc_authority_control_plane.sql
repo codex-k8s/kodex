@@ -104,6 +104,7 @@ ALTER TABLE internal_rpc_authority.authority_restore_fences
 ALTER TABLE internal_rpc_authority.authority_restore_fences
     VALIDATE CONSTRAINT authority_restore_fences_phase_check;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.runtime_restore_fence_allows_work()
 RETURNS boolean
 LANGUAGE sql
@@ -129,6 +130,7 @@ AS $function$
            )
     );
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.runtime_restore_fence_allows_work()
     OWNER TO internal_rpc_authority_readback_owner;

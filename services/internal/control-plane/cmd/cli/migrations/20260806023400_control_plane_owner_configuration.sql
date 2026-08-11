@@ -418,6 +418,7 @@ DROP FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint);
 ALTER TABLE control_plane.provider_pool_cursors
     RENAME COLUMN role_id TO selection_key_id;
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.next_provider_pool_slot(
     requested_selection_key_id uuid,
     requested_policy_revision bigint,
@@ -503,6 +504,7 @@ BEGIN
     RETURN selected_slot;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint)
     TO control_plane_runtime;
@@ -735,6 +737,7 @@ REVOKE ALL ON control_plane.runtime_incident_history FROM PUBLIC;
 GRANT SELECT, INSERT ON control_plane.runtime_incident_history TO control_plane_runtime;
 GRANT UPDATE ON control_plane.runtime_execution_incidents TO control_plane_runtime;
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.reject_legacy_configuration_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -764,6 +767,7 @@ BEGIN
     RETURN NEW;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.reject_legacy_configuration_mutation() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.reject_legacy_configuration_mutation()
     TO control_plane_runtime;
@@ -776,6 +780,7 @@ CREATE TRIGGER resources_legacy_configuration_freeze
 -- runtime adapter, владеющий HMAC key, может переключить exact Project scope;
 -- organization, actor, session_user и generation обязаны совпасть с уже
 -- активированным контекстом текущей транзакции.
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.switch_runtime_workspace_context(
     requested_organization_id uuid,
     requested_project_id uuid,
@@ -824,6 +829,7 @@ BEGIN
     );
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.switch_runtime_workspace_context(
     uuid, uuid, uuid, name, bigint, text, uuid, bigint, bytea
 ) FROM PUBLIC;
@@ -834,6 +840,7 @@ GRANT EXECUTE ON FUNCTION control_plane.switch_runtime_workspace_context(
 -- Candidate discovery не выполняет effect и не держит lock между
 -- транзакциями. Exact version/attempt/generation повторно проверяет terminal
 -- command под owner locks; поэтому гонка всегда закрывается OCC-отказом.
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.next_workspace_recovery_candidate()
 RETURNS TABLE (
     organization_id uuid,
@@ -964,6 +971,7 @@ BEGIN
      LIMIT 1;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.next_workspace_recovery_candidate() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.next_workspace_recovery_candidate()
     TO control_plane_runtime;

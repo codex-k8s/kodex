@@ -184,6 +184,7 @@ CREATE TABLE control_plane.delegation_callback_deliveries (
 -- PREPARED intent и receipt identity неизменяемы даже для runtime role.
 -- Разрешены только однонаправленный terminal winner и одноразовая запись
 -- фактического operation evidence.
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.guard_legacy_graph_plan_update()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -214,11 +215,13 @@ BEGIN
     RETURN NEW;
 END
 $function$;
+-- +goose StatementEnd
 
 CREATE TRIGGER legacy_graph_plan_update_fence
 BEFORE UPDATE ON control_plane.legacy_graph_migration_plans
 FOR EACH ROW EXECUTE FUNCTION control_plane.guard_legacy_graph_plan_update();
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.guard_legacy_graph_operation_update()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -245,6 +248,7 @@ BEGIN
     RETURN NEW;
 END
 $function$;
+-- +goose StatementEnd
 
 CREATE TRIGGER legacy_graph_operation_update_fence
 BEFORE UPDATE ON control_plane.legacy_graph_operation_receipts

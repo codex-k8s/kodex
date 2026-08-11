@@ -60,6 +60,7 @@ CREATE INDEX runtime_transaction_contexts_expiry_idx
 
 -- Активация принимает область только вместе с HMAC, точным session_user,
 -- поколением, PID серверного процесса и текущей транзакцией.
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.activate_runtime_context(
     requested_organization_id uuid,
     requested_project_id uuid,
@@ -165,7 +166,9 @@ BEGIN
     );
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.runtime_scope(
     OUT organization_id uuid,
     OUT project_id uuid,
@@ -196,9 +199,11 @@ BEGIN
     END IF;
 END
 $function$;
+-- +goose StatementEnd
 
 -- Сверка применяет целый набор CURRENT/NEXT/PREVIOUS одной транзакцией,
 -- переводит отсутствующие поколения в RETIRED и завершает их серверные сессии.
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.reconcile_runtime_principals(
     requested_principals jsonb,
     requested_key_id text,
@@ -321,7 +326,9 @@ BEGIN
        AND activity.pid <> pg_backend_pid();
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.runtime_identity()
 RETURNS TABLE (
     schema_version bigint,
@@ -354,7 +361,9 @@ AS $function$
       AND clock_timestamp() < principal.not_after
       AND pg_has_role(session_user, 'control_plane_runtime', 'member')
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.safe_diagnostics()
 RETURNS TABLE (
     schema_version bigint,
@@ -413,6 +422,7 @@ BEGIN
     GROUP BY state.version, principal.status, principal.generation;
 END
 $function$;
+-- +goose StatementEnd
 
 -- Попытки и аренды получают неизменяемые привязки нагрузки, поколения и барьера;
 -- уникальный индекс запрещает два активных хода одной сессии.

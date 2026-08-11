@@ -18,6 +18,7 @@ CREATE INDEX resources_owner_process_parent_idx
     )
     WHERE kind = 'PROCESS_RUN' AND state <> 'DELETED';
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.owner_run_graph_process_ids(
     p_organization_id uuid,
     p_project_id uuid,
@@ -126,6 +127,7 @@ BEGIN
     ORDER BY item.ordinality;
 END;
 $$;
+-- +goose StatementEnd
 
 ALTER FUNCTION control_plane.owner_run_graph_process_ids(uuid, uuid, uuid, uuid, integer)
     OWNER TO control_plane_owner;

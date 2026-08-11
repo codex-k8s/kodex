@@ -71,6 +71,7 @@ VALUES (
 )
 ON CONFLICT (database_cluster_id) DO NOTHING;
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION
     internal_rpc_authority.runtime_restore_fence_allows_work()
 RETURNS boolean
@@ -90,10 +91,12 @@ AS $function$
        )
     FROM internal_rpc_authority.authority_restore_fences AS fence;
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.runtime_restore_fence_allows_work()
     OWNER TO internal_rpc_authority_readback_owner;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.apply_restore_fence(
     p_database_cluster_id text,
     p_restore_epoch bigint,
@@ -164,6 +167,7 @@ BEGIN
     RETURN coalesce(applied, false);
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.apply_restore_fence(
     text, bigint, text, text, timestamptz
