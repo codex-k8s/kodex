@@ -209,6 +209,7 @@ CREATE TABLE control_plane.runtime_principal_readbacks (
         REFERENCES control_plane.runtime_principals (principal_name)
 );
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.register_runtime_principal_readback()
 RETURNS bigint
 LANGUAGE plpgsql
@@ -261,9 +262,11 @@ BEGIN
     RETURN active_generation;
 END
 $function$;
+-- +goose StatementEnd
 
 -- Усиленная сверка проверяет предшественника, верхнюю границу и readback, делает
 -- роли RETIRED недоступными для входа, отзывает членство и завершает процессы.
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.reconcile_runtime_principals(
     requested_principals jsonb,
     requested_key_id text,
@@ -512,6 +515,7 @@ BEGIN
        AND activity.pid <> pg_backend_pid();
 END
 $function$;
+-- +goose StatementEnd
 
 REVOKE ALL ON FUNCTION control_plane.register_runtime_principal_readback()
     FROM PUBLIC;

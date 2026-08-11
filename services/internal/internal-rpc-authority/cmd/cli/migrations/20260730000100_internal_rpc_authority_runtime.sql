@@ -443,6 +443,7 @@ GRANT SELECT, INSERT, DELETE
     ON internal_rpc_authority.authority_proof_reservations
     TO internal_rpc_authority_issuer;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -522,7 +523,9 @@ BEGIN
     RETURN FOUND;
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.retire_runtime_database_identity(
     requested_capability text,
     requested_principal text,
@@ -568,6 +571,7 @@ BEGIN
     RETURN FOUND;
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.reconcile_runtime_database_identity(
     text, text, bigint, text, uuid, text

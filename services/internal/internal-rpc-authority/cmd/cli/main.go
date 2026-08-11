@@ -81,6 +81,7 @@ func run(ctx context.Context, arguments []string) error {
 		return errors.New("verify PostgreSQL connectivity")
 	}
 	goose.SetBaseFS(migrations)
+	goose.SetTableName("public.goose_db_version")
 	if err := goose.SetDialect("postgres"); err != nil {
 		return errors.New("configure PostgreSQL migration dialect")
 	}

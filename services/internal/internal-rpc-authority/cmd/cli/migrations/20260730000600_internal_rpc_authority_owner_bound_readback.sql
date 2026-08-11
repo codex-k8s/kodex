@@ -36,6 +36,7 @@ CREATE POLICY authority_readback_receipts_owner_write
     USING (true)
     WITH CHECK (true);
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION
 internal_rpc_authority.issue_authority_readback_attestation_challenge(
     p_intent_id uuid,
@@ -122,7 +123,9 @@ BEGIN
     RETURN accepted_id;
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION
 internal_rpc_authority.consume_authority_readback_attestation_challenge(
     p_challenge_id uuid,
@@ -215,6 +218,7 @@ BEGIN
     RETURN p_receipt_id;
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION
 internal_rpc_authority.issue_authority_readback_attestation_challenge(
@@ -284,6 +288,7 @@ GRANT SELECT
     ON internal_rpc_authority.authority_readback_trust_watermarks
     TO internal_rpc_authority_readback_attestor;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.activate_readback_trust(
     p_root_id text,
     p_root_fingerprint_sha256 text,
@@ -400,6 +405,7 @@ BEGIN
     RETURN true;
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.activate_readback_trust(
     text, text, bigint, text, bigint, text, bigint, bigint, text, text,

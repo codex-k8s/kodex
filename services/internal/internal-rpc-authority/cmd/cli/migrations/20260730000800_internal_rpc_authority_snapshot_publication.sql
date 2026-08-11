@@ -70,6 +70,7 @@ GRANT SELECT ON internal_rpc_authority.authority_rotation_intents
 GRANT SELECT ON internal_rpc_authority.authority_snapshot_readbacks
     TO internal_rpc_authority_publisher;
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.publisher_append_snapshot_history(
     p_source_revision bigint,
     p_source_digest_sha256 text,
@@ -212,7 +213,9 @@ BEGIN
     RETURN true;
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.publisher_promote_snapshot(
     p_publication_intent_id uuid,
     p_source_revision bigint,
@@ -268,7 +271,9 @@ BEGIN
     RETURN FOUND;
 END
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION
 internal_rpc_authority.validate_snapshot_attestation_receipt(
     p_receipt_id uuid,
@@ -313,7 +318,9 @@ AS $function$
           AND intent.served_state_digest_sha256 = p_source_digest_sha256
     );
 $function$;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION
 internal_rpc_authority.consume_authority_readback_attestation_challenge(
     p_challenge_id uuid,
@@ -449,6 +456,7 @@ BEGIN
     RETURN p_receipt_id;
 END
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.publisher_append_snapshot_history(
     bigint, text, bigint, bigint, bigint, bigint, text, text, uuid, text, integer

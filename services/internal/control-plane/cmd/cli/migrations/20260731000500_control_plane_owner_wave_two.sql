@@ -37,6 +37,7 @@ GRANT EXECUTE ON FUNCTION
 
 -- Функция принадлежит только привилегированному migration principal. Runtime
 -- не получает CREATEROLE и не может выбрать имя вне точного поколения.
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.bootstrap_runtime_principal(
     requested_name text,
     requested_generation bigint,
@@ -116,6 +117,7 @@ BEGIN
     END IF;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.bootstrap_runtime_principal(
     text, bigint, text
 ) FROM PUBLIC;
@@ -253,6 +255,7 @@ CREATE POLICY provider_pool_cursors_runtime_scope
         organization_id = (control_plane.runtime_scope()).organization_id
         AND project_id = (control_plane.runtime_scope()).project_id
     );
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.next_provider_pool_slot(
     requested_role_id uuid,
     requested_policy_revision bigint,
@@ -338,6 +341,7 @@ BEGIN
     RETURN selected_slot;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.next_provider_pool_slot(
     uuid, bigint, text, bigint
 ) FROM PUBLIC;
@@ -347,6 +351,7 @@ GRANT EXECUTE ON FUNCTION control_plane.next_provider_pool_slot(
 
 -- Все generic single/list/search read paths отбрасывают ACTIVE WorkClaim,
 -- если авторитетный execution graph уже закрыт или сменил attempt/grant.
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.work_claim_graph_is_active(
     claim control_plane.resources
 ) RETURNS boolean
@@ -422,6 +427,7 @@ AS $function$
                )
        )
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.work_claim_graph_is_active(
     control_plane.resources
 ) FROM PUBLIC;
@@ -502,6 +508,7 @@ CREATE POLICY outbox_repairs_owner_bounded_insert ON control_plane.outbox_repair
         AND project_id = (control_plane.runtime_scope()).project_id
     );
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.repair_terminal_outbox_event(
     requested_event_id uuid,
     requested_sequence bigint,
@@ -652,6 +659,7 @@ BEGIN
     WHERE event.event_id = event_row.event_id;
 END
 $function$;
+-- +goose StatementEnd
 
 UPDATE control_plane.schema_state
 SET version = 20260731000500, migrated_at = clock_timestamp()

@@ -7,6 +7,7 @@ RESET ROLE;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.work_claim_graph_is_active(
     claim control_plane.resources
 ) RETURNS boolean
@@ -83,6 +84,7 @@ AS $function$
                )
        )
 $function$;
+-- +goose StatementEnd
 
 REVOKE ALL ON FUNCTION control_plane.work_claim_graph_is_active(
     control_plane.resources

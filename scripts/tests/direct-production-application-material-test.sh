@@ -252,10 +252,13 @@ rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgres
   printf 'PostgreSQL bounded administrator readback is incomplete\n' >&2
   exit 1
 }
-rg -q 'GRANT USAGE, CREATE ON SCHEMA public TO \$principal' \
+rg -q 'CREATE TABLE IF NOT EXISTS public.goose_db_version' \
   "$temporary_directory/postgresql-principal-reconcile.sh" &&
-  rg -q 'ALTER TABLE public.goose_db_version OWNER TO \$principal' \
+  rg -q 'ALTER TABLE public.goose_db_version OWNER TO \$owner_role' \
     "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.goose_db_version TO \$principal' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'has_sequence_privilege' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'has_schema_privilege' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q '\[ "\$migration_principals" -eq 5 \] \|\| exit 34' \
     "$temporary_directory/postgresql-principal-reconcile.sh" || {

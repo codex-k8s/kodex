@@ -88,6 +88,7 @@ SET ROLE control_plane_owner;
 REVOKE CREATE ON SCHEMA control_plane FROM control_plane_role_controller;
 SET search_path = pg_catalog, control_plane;
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.require_runtime_principal_controller()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -111,6 +112,7 @@ BEGIN
     RETURN NEW;
 END
 $function$;
+-- +goose StatementEnd
 CREATE TRIGGER runtime_principal_controller_fence
 BEFORE INSERT OR UPDATE OF principal_name, status
 ON control_plane.runtime_principals
@@ -276,6 +278,7 @@ CREATE POLICY outbox_repairs_owner_bounded_insert ON control_plane.outbox_repair
           AND event.project_id = (control_plane.runtime_scope()).project_id
     ));
 
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.repair_terminal_outbox_event(
     requested_event_id uuid,
     requested_sequence bigint,
@@ -373,6 +376,7 @@ BEGIN
     FROM repaired;
 END
 $function$;
+-- +goose StatementEnd
 REVOKE ALL ON FUNCTION control_plane.repair_terminal_outbox_event(
     uuid, bigint, integer, text, text, text, text, uuid, uuid, bigint,
     timestamptz

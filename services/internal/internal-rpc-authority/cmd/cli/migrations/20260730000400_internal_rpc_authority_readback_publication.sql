@@ -55,6 +55,7 @@ ALTER TABLE internal_rpc_authority.authority_snapshot_watermarks
     ADD COLUMN readback_attestation_receipt_id uuid
         REFERENCES internal_rpc_authority.authority_readback_attestation_receipts(receipt_id);
 
+-- +goose StatementBegin
 CREATE FUNCTION internal_rpc_authority.validate_snapshot_attestation_receipt(
     p_receipt_id uuid,
     p_workload_id text,
@@ -86,6 +87,7 @@ AS $function$
           AND intent.served_state_digest_sha256 = p_source_digest_sha256
     );
 $function$;
+-- +goose StatementEnd
 
 ALTER FUNCTION internal_rpc_authority.validate_snapshot_attestation_receipt(
     uuid, text, bigint, text

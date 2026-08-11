@@ -373,15 +373,19 @@ grep -Fq 'if [ "$create_role" = true ]; then admin_flag=TRUE; else admin_flag=FA
   printf 'PostgreSQL migrator role graph does not bind ADMIN to the bounded create-role flag\n' >&2
   exit 1
 }
-grep -Fq 'GRANT USAGE, CREATE ON SCHEMA public TO $principal' \
+grep -Fq 'CREATE TABLE IF NOT EXISTS public.goose_db_version' \
   "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
-  grep -Fq 'ALTER TABLE public.goose_db_version OWNER TO $principal' \
+  grep -Fq 'ALTER TABLE public.goose_db_version OWNER TO $owner_role' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.goose_db_version TO $principal' \
+    "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
+  grep -Fq 'has_sequence_privilege' \
     "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
   grep -Fq 'has_schema_privilege(' \
     "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" &&
   grep -Fq '[ "$migration_principals" -eq 5 ] || exit 34' \
     "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" || {
-  printf 'PostgreSQL migrators cannot own the Goose bootstrap boundary\n' >&2
+  printf 'PostgreSQL migrators cannot use the bounded Goose bootstrap objects\n' >&2
   exit 1
 }
 grep -Fq 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' \
@@ -512,6 +516,42 @@ runtime_migration="$repository_root/services/internal/runtime-controller/cmd/cli
   printf 'Runtime-controller function bodies are not bounded goose statements\n' >&2
   exit 1
 }
+for migration_cli in \
+  services/internal/control-plane/cmd/cli/main.go \
+  services/internal/internal-rpc-authority/cmd/cli/main.go \
+  services/internal/runtime-controller/cmd/cli/main.go \
+  services/external/interaction-gateway/cmd/cli/main.go \
+  services/external/integration-gateway/cmd/cli/main.go; do
+  grep -Fq 'goose.SetTableName("public.goose_db_version")' \
+    "$repository_root/$migration_cli" || {
+    printf 'Migration CLI does not qualify the Goose version table: %s\n' "$migration_cli" >&2
+    exit 1
+  }
+done
+if find \
+    "$repository_root/services/internal/control-plane/cmd/cli/migrations" \
+    "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations" \
+    "$repository_root/services/internal/runtime-controller/cmd/cli/migrations" \
+    "$repository_root/services/external/interaction-gateway/cmd/cli/migrations" \
+    "$repository_root/services/external/integration-gateway/cmd/cli/migrations" \
+    -name '*.sql' -print0 | sort -z | xargs -0 awk '
+      FNR == 1 {
+        if (NR > 1 && bounded) failures++
+        bounded=0
+      }
+      /^-- \+goose StatementBegin$/ { bounded=1; next }
+      /^-- \+goose StatementEnd$/ { bounded=0; next }
+      /^(CREATE( OR REPLACE)? FUNCTION|DO[[:space:]]+\$)/ && !bounded {
+        print FILENAME ":" FNR ": unbounded PostgreSQL procedural statement" > "/dev/stderr"
+        failures++
+      }
+      END { exit failures != 0 }
+    '; then
+  :
+else
+  printf 'Migration corpus contains procedural SQL outside Goose statement boundaries\n' >&2
+  exit 1
+fi
 yq -e '
   .jobs.build."runs-on" == "mattercodex-build" and
   .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
