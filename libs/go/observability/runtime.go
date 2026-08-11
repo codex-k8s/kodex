@@ -26,6 +26,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
 	"go.opentelemetry.io/otel/trace"
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
@@ -39,6 +40,7 @@ const (
 
 // RuntimeConfig задаёт OTel, Sentry и идентичность сервиса.
 type RuntimeConfig struct {
+	Disabled           bool
 	ServiceName        string
 	ServiceVersion     string
 	Environment        string
@@ -60,6 +62,19 @@ type Runtime struct {
 
 // RuntimeConfigFromEnv читает и проверяет настройки телеметрии.
 func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, error) {
+	config := RuntimeConfig{
+		Disabled:       strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true"),
+		ServiceName:    serviceName,
+		ServiceVersion: serviceVersion,
+		Environment:    strings.TrimSpace(os.Getenv("DEPLOYMENT_ENVIRONMENT")),
+	}
+	if config.Disabled {
+		if err := validateRuntimeConfig(config); err != nil {
+			return RuntimeConfig{}, err
+		}
+		return config, nil
+	}
+
 	ratio := defaultTraceRatio
 	if raw := strings.TrimSpace(os.Getenv("OTEL_TRACES_SAMPLER_ARG")); raw != "" {
 		parsed, err := strconv.ParseFloat(raw, 64)
@@ -76,17 +91,12 @@ func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, er
 	if err != nil {
 		return RuntimeConfig{}, err
 	}
-	config := RuntimeConfig{
-		ServiceName:        serviceName,
-		ServiceVersion:     serviceVersion,
-		Environment:        strings.TrimSpace(os.Getenv("DEPLOYMENT_ENVIRONMENT")),
-		OTLPEndpoint:       strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
-		OTLPTLSServerName:  strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TLS_SERVER_NAME")),
-		OTLPCAFile:         strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_CA_FILE")),
-		TraceSampleRatio:   ratio,
-		SentryDSN:          strings.TrimSpace(sentryDSN),
-		SentryExpectedHost: strings.TrimSpace(os.Getenv("SENTRY_EXPECTED_HOST")),
-	}
+	config.OTLPEndpoint = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	config.OTLPTLSServerName = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_TLS_SERVER_NAME"))
+	config.OTLPCAFile = strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_CA_FILE"))
+	config.TraceSampleRatio = ratio
+	config.SentryDSN = strings.TrimSpace(sentryDSN)
+	config.SentryExpectedHost = strings.TrimSpace(os.Getenv("SENTRY_EXPECTED_HOST"))
 	if err := validateRuntimeConfig(config); err != nil {
 		return RuntimeConfig{}, err
 	}
@@ -97,6 +107,18 @@ func RuntimeConfigFromEnv(serviceName, serviceVersion string) (RuntimeConfig, er
 func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 	if err := validateRuntimeConfig(config); err != nil {
 		return nil, err
+	}
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+	if config.Disabled {
+		provider := nooptrace.NewTracerProvider()
+		otel.SetTracerProvider(provider)
+		return &Runtime{
+			serviceName: config.ServiceName,
+			tracer:      provider.Tracer(config.ServiceName),
+		}, nil
 	}
 	certificatePool, err := loadRuntimeCertificatePool(config.OTLPCAFile)
 	if err != nil {
@@ -147,10 +169,6 @@ func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 		return nil, fmt.Errorf("construct Sentry client: %w", err)
 	}
 	otel.SetTracerProvider(provider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
 	return &Runtime{
 		serviceName: config.ServiceName,
 		tracer:      provider.Tracer(config.ServiceName),
@@ -283,6 +301,9 @@ func validateRuntimeConfig(config RuntimeConfig) error {
 		config.TraceSampleRatio < 0 ||
 		config.TraceSampleRatio > 1 {
 		return errors.New("telemetry service identity is invalid")
+	}
+	if config.Disabled {
+		return nil
 	}
 	host, port, err := net.SplitHostPort(config.OTLPEndpoint)
 	if err != nil ||

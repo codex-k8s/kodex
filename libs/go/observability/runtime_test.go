@@ -47,6 +47,35 @@ func TestRuntimeConfigRejectsUnpinnedDestinations(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigUsesNoopRuntimeWhenSDKIsDisabled(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "true")
+	t.Setenv("DEPLOYMENT_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN_FILE", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_CA_FILE", "")
+
+	config, err := RuntimeConfigFromEnv("authority", "test")
+	if err != nil {
+		t.Fatalf("disabled telemetry config rejected: %v", err)
+	}
+	if !config.Disabled {
+		t.Fatal("disabled telemetry config was not preserved")
+	}
+	runtime, err := NewRuntime(context.Background(), config)
+	if err != nil {
+		t.Fatalf("construct no-op telemetry runtime: %v", err)
+	}
+	_, span := runtime.tracer.Start(context.Background(), "operation")
+	span.End()
+	if err := runtime.ShutdownTracing(context.Background()); err != nil {
+		t.Fatalf("shutdown no-op tracing: %v", err)
+	}
+	if err := runtime.FlushSentry(context.Background()); err != nil {
+		t.Fatalf("flush no-op Sentry: %v", err)
+	}
+}
+
 func TestTraceHandlerAddsBoundedTraceIdentity(t *testing.T) {
 	t.Parallel()
 	provider := sdktrace.NewTracerProvider(
