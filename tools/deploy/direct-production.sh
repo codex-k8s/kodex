@@ -235,9 +235,10 @@ if [[ "$operation" == apply ]]; then
   select_kinds "$temporary_directory/applications.yaml" Deployment CronJob
   yq eval-all 'select(.kind == "Deployment" and
     (.metadata.name == "internal-rpc-authority-publisher" or
-     .metadata.name == "internal-rpc-authority-readback-attestor"))' \
-    "$render_file" >"$temporary_directory/authority-publication.yaml"
-  apply_release_manifest -f "$temporary_directory/authority-publication.yaml" >/dev/null
+     .metadata.name == "internal-rpc-authority-readback-attestor" or
+     .metadata.name == "internal-rpc-authority-database-credential-reconciler"))' \
+    "$render_file" >"$temporary_directory/authority-bootstrap.yaml"
+  apply_release_manifest -f "$temporary_directory/authority-bootstrap.yaml" >/dev/null
   snapshot_ready=false
   for _ in $(seq 1 60); do
     if kubectl --context "$expected_context" -n mattercodex-system get secret internal-rpc-authority-snapshot -o json |
