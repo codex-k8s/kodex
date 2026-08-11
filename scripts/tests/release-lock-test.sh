@@ -180,6 +180,18 @@ yq -o=json '.data."deployment.internal-rpc-authority-restore-controller.volumes"
   printf 'Production workload contract does not model the Kubernetes ConfigMap defaultMode\n' >&2
   exit 1
 }
+yq -o=json '.data."deployment.integration-gateway.volumes"' \
+  "$temporary_directory/workload-contracts.yaml" |
+  jq -e 'contains("direct-kubernetes-api-token\u001eprojected\u001e256\u001dserviceAccountToken\u001d\u001d600\u001dtoken")' \
+  >/dev/null || {
+  printf 'Production workload contract does not model the default Kubernetes API audience\n' >&2
+  exit 1
+}
+rg -q "has\\(s.serviceAccountToken.audience\\) \\? s.serviceAccountToken.audience : ''" \
+  "$repository_root/infra/direct-production/workload-policy.yaml" || {
+  printf 'Production workload admission does not model the optional Kubernetes API audience\n' >&2
+  exit 1
+}
 cp "$temporary_directory/direct-production.yaml" "$temporary_directory/forged-secret.yaml"
 yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");

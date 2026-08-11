@@ -54,7 +54,7 @@ yq -o=json eval-all '.' "$manifest" | jq -sc '
   def projected_contract:
     (.projected.sources // []) |
     map(if .serviceAccountToken? != null then
-      ["serviceAccountToken", .serviceAccountToken.audience,
+      ["serviceAccountToken", (.serviceAccountToken.audience // ""),
        (.serviceAccountToken.expirationSeconds | tostring), .serviceAccountToken.path] | join("\u001d")
     elif .configMap? != null then
       ["configMap", .configMap.name,

@@ -120,7 +120,10 @@ spec:
   validations:
     - expression: >-
         request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
-        (object.metadata.namespace == 'mattercodex-system' &&
+        (has(object.metadata.labels) &&
+         'mattercodex.dev/profile' in object.metadata.labels &&
+         'mattercodex.dev/release-managed' in object.metadata.labels &&
+         object.metadata.namespace == 'mattercodex-system' &&
          object.metadata.labels['mattercodex.dev/profile'] == 'direct-production-single-node-prototype' &&
          object.metadata.labels['mattercodex.dev/release-managed'] == 'true')
       message: Production deployer may manage only labeled direct-production release resources.
