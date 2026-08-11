@@ -81,12 +81,12 @@ yq -o=json eval-all '.' "$manifest" | jq -sc '
       (if .secret? != null then
          [.secret.secretName,
           (if (.secret.optional // false) then "true" else "false" end),
-          (.secret.defaultMode // 0 | tostring),
+          (.secret.defaultMode // 420 | tostring),
           (.secret.items | volume_items_contract)] | join("\u001d")
        elif .configMap? != null then
          [.configMap.name,
           (if (.configMap.optional // false) then "true" else "false" end),
-          (.configMap.defaultMode // 0 | tostring),
+          (.configMap.defaultMode // 420 | tostring),
           (.configMap.items | volume_items_contract)] | join("\u001d")
        elif .persistentVolumeClaim? != null then
          [.persistentVolumeClaim.claimName,
@@ -94,7 +94,7 @@ yq -o=json eval-all '.' "$manifest" | jq -sc '
          join("\u001d")
        elif .emptyDir? != null then ((.emptyDir.medium // "") + "\u001d" + (.emptyDir.sizeLimit // ""))
        elif .projected? != null then
-         ((.projected.defaultMode // 0 | tostring) + "\u001d" + projected_contract)
+         ((.projected.defaultMode // 420 | tostring) + "\u001d" + projected_contract)
        else "forbidden" end)
     ] | join("\u001e");
   [ .[] |

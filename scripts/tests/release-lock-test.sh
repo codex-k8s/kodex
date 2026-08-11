@@ -65,6 +65,17 @@ yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -
   printf 'Direct-production render lost replicated rolling application workloads\n' >&2
   exit 1
 }
+yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -e '
+  all(.[];
+    if (.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob") then
+      (if .kind == "CronJob" then .spec.jobTemplate.spec.template.spec else .spec.template.spec end) as $pod |
+      all((($pod.containers // []) + ($pod.initContainers // []))[];
+        all((.ports // [])[]; (.name | length) <= 15))
+    else true end)
+' >/dev/null || {
+  printf 'Direct-production render contains a container port name longer than 15 characters\n' >&2
+  exit 1
+}
 while IFS= read -r image; do
   [[ "$image" != localhost:5001/mattercodex/* ]] ||
     grep -Fqx "$image" <(jq -r '.images[].pull_ref' "$temporary_directory/valid.json") || {
@@ -130,6 +141,13 @@ yq -o=json '.data' "$temporary_directory/workload-contracts.yaml" |
   jq -e 'length > 0 and all(to_entries[];
     (.key | endswith(".automountServiceAccountToken") | not) or .value == "false")' >/dev/null || {
   printf 'Production workload contract is empty or allows ServiceAccount token automount\n' >&2
+  exit 1
+}
+yq -o=json '.data."deployment.internal-rpc-authority-restore-controller.volumes"' \
+  "$temporary_directory/workload-contracts.yaml" |
+  jq -e 'contains("kubernetes-ca\u001econfigMap\u001ekube-root-ca.crt\u001dfalse\u001d420\u001d")' \
+  >/dev/null || {
+  printf 'Production workload contract does not model the Kubernetes ConfigMap defaultMode\n' >&2
   exit 1
 }
 cp "$temporary_directory/direct-production.yaml" "$temporary_directory/forged-secret.yaml"
@@ -267,6 +285,11 @@ yq -e '
   (.jobs.deploy.steps[-1].run | contains("direct-production.sh"))
 ' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null || {
   printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
+  exit 1
+}
+grep -Fq -- '--field-manager=mattercodex-production-deployer --dry-run=server' \
+  "$repository_root/tools/deploy/direct-production.sh" || {
+  printf 'Direct-production preflight does not use server-side apply for large ConfigMaps\n' >&2
   exit 1
 }
 grep -Fq 'deployments?environment=$environment&per_page=100' \
