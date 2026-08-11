@@ -242,7 +242,9 @@ yq eval-all -e '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-postgresql-init") |
   (.data."pg_hba.conf" | contains("local all all peer")) and
   (.data."pg_hba.conf" | contains("hostnossl all all 0.0.0.0/0 reject")) and
-  (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256"))
+  (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256")) and
+  (.data."10-mattercodex-databases.sh" |
+    contains("\\connect control_plane\nCREATE EXTENSION IF NOT EXISTS vector;"))
 ' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
   printf 'PostgreSQL TLS-only pg_hba contract is absent\n' >&2
   exit 1

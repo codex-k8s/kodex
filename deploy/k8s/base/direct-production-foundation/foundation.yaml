@@ -241,6 +241,8 @@ data:
     CREATE DATABASE runtime_controller OWNER runtime_controller_owner;
     CREATE DATABASE interaction_gateway OWNER interaction_gateway_owner;
     CREATE DATABASE integration_gateway OWNER integration_gateway_owner;
+    \connect control_plane
+    CREATE EXTENSION IF NOT EXISTS vector;
     EOSQL
   pg_hba.conf: |
     local all all peer
