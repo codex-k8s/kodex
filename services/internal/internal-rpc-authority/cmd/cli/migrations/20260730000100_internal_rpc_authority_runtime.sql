@@ -171,7 +171,7 @@ GRANT internal_rpc_authority_verifier
 GRANT internal_rpc_authority_database_credential_reconciler
     TO ira_database_credential_reconciler;
 GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner
-    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
+    WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
 
 SET ROLE internal_rpc_authority_owner;
 REVOKE ALL ON SCHEMA internal_rpc_authority FROM PUBLIC;

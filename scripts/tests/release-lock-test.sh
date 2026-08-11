@@ -366,7 +366,7 @@ for migration_registry_entry in \
 done
 grep -Fq 'GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner' \
   "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations/20260730000100_internal_rpc_authority_runtime.sql" &&
-  grep -Fq 'WITH INHERIT FALSE, SET TRUE, ADMIN FALSE' \
+  grep -Fq 'WITH INHERIT TRUE, SET TRUE, ADMIN FALSE' \
     "$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations/20260730000100_internal_rpc_authority_runtime.sql" || {
   printf 'Internal RPC authority object-owner transfer graph is incomplete\n' >&2
   exit 1
