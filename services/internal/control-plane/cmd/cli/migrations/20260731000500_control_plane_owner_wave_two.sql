@@ -25,6 +25,7 @@ ALTER ROLE control_plane_role_controller
     NOLOGIN CREATEROLE INHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
 SET ROLE control_plane_owner;
+GRANT CREATE ON SCHEMA control_plane TO control_plane_role_controller;
 GRANT USAGE ON SCHEMA control_plane_extensions
     TO control_plane_role_controller;
 GRANT EXECUTE ON FUNCTION
@@ -130,6 +131,7 @@ ALTER FUNCTION control_plane.bootstrap_runtime_principal(text, bigint, text)
 RESET ROLE;
 REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
+REVOKE CREATE ON SCHEMA control_plane FROM control_plane_role_controller;
 SET search_path = pg_catalog, control_plane;
 
 -- Старые process rows получают точные версии их immutable lineage до того,

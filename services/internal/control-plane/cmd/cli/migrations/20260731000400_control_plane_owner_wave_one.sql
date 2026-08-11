@@ -40,6 +40,7 @@ GRANT pg_signal_backend TO control_plane_role_controller;
 GRANT control_plane_runtime TO control_plane_role_controller WITH ADMIN OPTION;
 SET ROLE control_plane_owner;
 GRANT USAGE ON SCHEMA control_plane TO control_plane_role_controller;
+GRANT CREATE ON SCHEMA control_plane TO control_plane_role_controller;
 GRANT SELECT, INSERT, UPDATE ON
     control_plane.runtime_principals,
     control_plane.runtime_context_keys,
@@ -84,6 +85,7 @@ ALTER FUNCTION control_plane.reconcile_runtime_principals(jsonb, text, bytea)
 RESET ROLE;
 REVOKE control_plane_role_controller FROM control_plane_owner;
 SET ROLE control_plane_owner;
+REVOKE CREATE ON SCHEMA control_plane FROM control_plane_role_controller;
 SET search_path = pg_catalog, control_plane;
 
 CREATE FUNCTION control_plane.require_runtime_principal_controller()
