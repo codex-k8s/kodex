@@ -233,10 +233,38 @@ yq -o=json eval-all '.' "$repository_root/infra/arc/network-policy.yaml" | jq -s
 }
 yq eval-all -e '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-postgresql-init") |
+  (.data."pg_hba.conf" | contains("local all all peer")) and
   (.data."pg_hba.conf" | contains("hostnossl all all 0.0.0.0/0 reject")) and
   (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256"))
 ' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
   printf 'PostgreSQL TLS-only pg_hba contract is absent\n' >&2
+  exit 1
+}
+
+yq eval-all -e '
+  select(.kind == "StatefulSet" and .metadata.name == "mattercodex-nats") |
+  .spec.template.spec as $pod |
+  (($pod.initContainers[0].name == "render-config") and
+   ($pod.initContainers[0].args[0] | contains("system-account.jwt")) and
+   ($pod.containers[0].args | length == 2) and
+   ($pod.containers[0].args[0] == "-c") and
+   ($pod.containers[0].args[1] == "/var/run/runtime/nats.conf") and
+   (($pod.containers[0] | has("env")) | not) and
+   ($pod.volumes | any_c(.name == "credentials" and .secret.secretName == "mattercodex-nats-credentials")))
+' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
+  printf 'NATS secret-backed runtime render contract is absent\n' >&2
+  exit 1
+}
+
+yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/runtime-controller/serviceaccounts-rbac.yaml" |
+  jq -sc -e '
+    map(select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "runtime-controller-exact-pod-authority"))[0]
+      .spec.validations | map(.expression) |
+    map(select(contains("object.metadata.labels['"'"'app.kubernetes.io/component'"'"'] != '"'"'role-runtime'"'"'"))) as $role_guards |
+    ($role_guards | length) == 2 and
+    all($role_guards[]; contains("!('"'"'app.kubernetes.io/component'"'"' in object.metadata.labels)"))
+  ' >/dev/null || {
+  printf 'Runtime role Pod admission does not safely ignore unrelated labeled Pods\n' >&2
   exit 1
 }
 yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" |

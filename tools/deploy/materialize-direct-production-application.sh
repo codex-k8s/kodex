@@ -526,8 +526,8 @@ done
 if [[ "$nats_existing" -eq 3 ]]; then
   nats_server_json="$temporary_directory/nats-server.json"
   kubectl --context "$expected_context" -n "$namespace" get secret mattercodex-nats-credentials -o json >"$nats_server_json"
-  [[ "$(jq -c '[.data|keys[]]|sort' "$nats_server_json")" == '["account.jwt","account.public","operator.jwt"]' ]] || fail "NATS server credential key set mismatch"
-  for key in operator.jwt account.jwt account.public; do
+  [[ "$(jq -c '[.data|keys[]]|sort' "$nats_server_json")" == '["account.jwt","account.public","operator.jwt","system-account.jwt","system-account.public"]' ]] || fail "NATS server credential key set mismatch"
+  for key in operator.jwt system-account.jwt system-account.public account.jwt account.public; do
     jq -jr --arg key "$key" '.data[$key]' "$nats_server_json" | base64 -d >"$temporary_directory/internal/$key"
   done
 elif [[ "$nats_existing" -ne 0 ]]; then
@@ -551,10 +551,13 @@ else
   "$nsc_bin" -H "$NSC_HOME" generate creds -a applications -n control-plane -o "$(value_path Secret control-plane-nats user.creds)" >/dev/null 2>&1
   "$nsc_bin" -H "$NSC_HOME" generate creds -a applications -n runtime-controller -o "$(value_path Secret runtime-controller-nats user.creds)" >/dev/null 2>&1
   "$nsc_bin" -H "$NSC_HOME" describe operator -n mattercodex -R -o "$temporary_directory/internal/operator.decorated" >/dev/null
+  "$nsc_bin" -H "$NSC_HOME" describe account -n SYS -R -o "$temporary_directory/internal/system-account.decorated" >/dev/null
   "$nsc_bin" -H "$NSC_HOME" describe account -n applications -R -o "$temporary_directory/internal/account.decorated" >/dev/null
   node "$helper" extract-jwt "$temporary_directory/internal/operator.decorated" "$temporary_directory/internal/operator.jwt"
+  node "$helper" extract-jwt "$temporary_directory/internal/system-account.decorated" "$temporary_directory/internal/system-account.jwt"
   node "$helper" extract-jwt "$temporary_directory/internal/account.decorated" "$temporary_directory/internal/account.jwt"
-  "$nsc_bin" -H "$NSC_HOME" describe account -n applications -J | jq -er '.sub' >"$temporary_directory/internal/account.public"
+  "$nsc_bin" -H "$NSC_HOME" describe account -n SYS -J | jq -jer '.sub' >"$temporary_directory/internal/system-account.public"
+  "$nsc_bin" -H "$NSC_HOME" describe account -n applications -J | jq -jer '.sub' >"$temporary_directory/internal/account.public"
 fi
 for name in control-plane-nats runtime-controller-nats; do
   creds=$(value_path Secret "$name" user.creds)
@@ -567,6 +570,7 @@ for name in control-plane-nats runtime-controller-nats; do
   fi
 done
 node "$helper" validate-nats-server "$temporary_directory/internal/operator.jwt" \
+  "$temporary_directory/internal/system-account.jwt" "$temporary_directory/internal/system-account.public" \
   "$temporary_directory/internal/account.jwt" "$temporary_directory/internal/account.public"
 
 # Fill remaining symmetric values through domain-separated HKDF; unknown interfaces fail closed.
@@ -632,6 +636,8 @@ if [[ "$nats_existing" -eq 0 ]]; then
   printf '%s\n' '---' >>"$internal"
   kubectl -n "$namespace" create secret generic mattercodex-nats-credentials \
     --from-file=operator.jwt="$temporary_directory/internal/operator.jwt" \
+    --from-file=system-account.jwt="$temporary_directory/internal/system-account.jwt" \
+    --from-file=system-account.public="$temporary_directory/internal/system-account.public" \
     --from-file=account.jwt="$temporary_directory/internal/account.jwt" \
     --from-file=account.public="$temporary_directory/internal/account.public" --dry-run=client -o yaml >>"$internal"
 fi

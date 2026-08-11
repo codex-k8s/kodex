@@ -243,7 +243,7 @@ data:
     CREATE DATABASE integration_gateway OWNER integration_gateway_owner;
     EOSQL
   pg_hba.conf: |
-    local all all scram-sha-256
+    local all all peer
     hostnossl all all 0.0.0.0/0 reject
     hostnossl all all ::/0 reject
     hostssl all all 0.0.0.0/0 scram-sha-256
@@ -615,10 +615,12 @@ data:
     server_name: mattercodex-nats
     port: 4222
     http_port: 8222
-    operator: $NATS_OPERATOR_JWT
+    operator: __NATS_OPERATOR_JWT__
+    system_account: __NATS_SYSTEM_ACCOUNT__
     resolver: MEMORY
     resolver_preload: {
-      $NATS_APPLICATION_ACCOUNT: $NATS_APPLICATION_ACCOUNT_JWT
+      __NATS_SYSTEM_ACCOUNT__: __NATS_SYSTEM_ACCOUNT_JWT__,
+      __NATS_APPLICATION_ACCOUNT__: __NATS_APPLICATION_ACCOUNT_JWT__
     }
     tls {
       cert_file: "/var/run/tls/tls.crt"
@@ -648,14 +650,38 @@ spec:
       enableServiceLinks: false
       terminationGracePeriodSeconds: 60
       securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, fsGroupChangePolicy: OnRootMismatch}
+      initContainers:
+        - name: render-config
+          image: docker.io/library/nats:2.14.4-alpine@sha256:f2123f533c2b0cada0a5c5ec434fb2b8cfe1cf220215ef9d7517e1372917ad66
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              umask 077
+              operator_jwt=$(cat /var/run/credentials/operator.jwt)
+              system_account=$(cat /var/run/credentials/system-account.public)
+              system_account_jwt=$(cat /var/run/credentials/system-account.jwt)
+              application_account=$(cat /var/run/credentials/account.public)
+              application_account_jwt=$(cat /var/run/credentials/account.jwt)
+              case "$operator_jwt:$system_account_jwt:$application_account_jwt" in (*[!A-Za-z0-9._:-]*|'') exit 20 ;; esac
+              case "$system_account:$application_account" in (*[!A-Z0-9:]*|'') exit 21 ;; esac
+              [ "${#system_account}" -eq 56 ] && [ "${#application_account}" -eq 56 ] || exit 22
+              sed \
+                -e "s|__NATS_OPERATOR_JWT__|$operator_jwt|" \
+                -e "s|__NATS_SYSTEM_ACCOUNT__|$system_account|g" \
+                -e "s|__NATS_SYSTEM_ACCOUNT_JWT__|$system_account_jwt|" \
+                -e "s|__NATS_APPLICATION_ACCOUNT__|$application_account|" \
+                -e "s|__NATS_APPLICATION_ACCOUNT_JWT__|$application_account_jwt|" \
+                /var/run/config/nats.conf > /var/run/runtime/nats.conf
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: config, mountPath: /var/run/config, readOnly: true}
+            - {name: credentials, mountPath: /var/run/credentials, readOnly: true}
+            - {name: runtime, mountPath: /var/run/runtime}
       containers:
         - name: nats
           image: docker.io/library/nats:2.14.4-alpine@sha256:f2123f533c2b0cada0a5c5ec434fb2b8cfe1cf220215ef9d7517e1372917ad66
-          args: [-c, /etc/nats/nats.conf]
-          env:
-            - {name: NATS_OPERATOR_JWT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: operator.jwt}}}
-            - {name: NATS_APPLICATION_ACCOUNT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: account.public}}}
-            - {name: NATS_APPLICATION_ACCOUNT_JWT, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: account.jwt}}}
+          args: [-c, /var/run/runtime/nats.conf]
           ports: [{name: client-tls, containerPort: 4222}, {name: monitoring, containerPort: 8222}]
           startupProbe: {tcpSocket: {port: client-tls}, periodSeconds: 3, failureThreshold: 40}
           readinessProbe: {httpGet: {path: "/healthz?js-enabled-only=true", port: monitoring}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
@@ -664,10 +690,12 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           volumeMounts:
             - {name: data, mountPath: /data}
-            - {name: config, mountPath: /etc/nats, readOnly: true}
+            - {name: runtime, mountPath: /var/run/runtime, readOnly: true}
             - {name: tls, mountPath: /var/run/tls, readOnly: true}
       volumes:
         - {name: config, configMap: {name: mattercodex-nats-config}}
+        - {name: credentials, secret: {secretName: mattercodex-nats-credentials, defaultMode: 0440}}
+        - {name: runtime, emptyDir: {sizeLimit: 1Mi}}
         - {name: tls, secret: {secretName: mattercodex-nats-tls, defaultMode: 0440}}
   volumeClaimTemplates:
     - metadata: {name: data}
