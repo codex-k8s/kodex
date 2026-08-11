@@ -24,12 +24,34 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- PostgreSQL разрешает bounded CREATEROLE менять только непривилегированные
+-- атрибуты. Привилегированные атрибуты проверяются fail-closed до ALTER ROLE.
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'control_plane_owner',
+            'control_plane_runtime',
+            'control_plane_relay'
+        )
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'control-plane managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE control_plane_owner
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_runtime
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE control_plane_relay
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 
 CREATE SCHEMA control_plane AUTHORIZATION control_plane_owner;
 CREATE SCHEMA control_plane_extensions AUTHORIZATION control_plane_owner;

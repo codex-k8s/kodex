@@ -83,6 +83,7 @@ DECLARE
     current_count integer;
     desired_count integer;
     old_status text;
+    role_safe boolean;
 BEGIN
     IF NOT pg_has_role(session_user, 'integration_gateway_migrator', 'member')
        OR current_user <> 'integration_gateway_role_controller'
@@ -146,9 +147,22 @@ BEGIN
             RAISE EXCEPTION 'runtime credential promotion requires durable NEXT' USING ERRCODE = '28000';
         END IF;
 
-        IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = candidate.principal_name) THEN
+        SELECT role.rolcanlogin
+               AND NOT role.rolsuper
+               AND NOT role.rolcreatedb
+               AND NOT role.rolcreaterole
+               AND NOT role.rolreplication
+               AND NOT role.rolbypassrls
+          INTO role_safe
+          FROM pg_catalog.pg_roles AS role
+         WHERE role.rolname = candidate.principal_name;
+        IF role_safe IS NOT NULL AND NOT role_safe THEN
+            RAISE EXCEPTION 'existing runtime principal role is unsafe'
+                USING ERRCODE = '42501';
+        END IF;
+        IF role_safe IS NOT NULL THEN
             EXECUTE format(
-                'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS',
+                'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE INHERIT',
                 candidate.principal_name, candidate.password
             );
         ELSE

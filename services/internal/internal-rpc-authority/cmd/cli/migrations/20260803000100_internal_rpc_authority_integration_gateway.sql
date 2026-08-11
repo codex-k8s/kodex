@@ -27,12 +27,29 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'ira_integration_gateway_issuer_g1',
+            'ira_integration_gateway_issuer_g2'
+        )
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'integration issuer role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE ira_integration_gateway_issuer_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_integration_gateway_issuer_g2
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 GRANT internal_rpc_authority_issuer
     TO ira_integration_gateway_issuer_g1,
        ira_integration_gateway_issuer_g2;

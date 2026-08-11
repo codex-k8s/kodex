@@ -25,14 +25,35 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'integration_gateway_owner',
+            'integration_gateway_runtime',
+            'integration_gateway_migrator',
+            'integration_gateway_role_controller'
+        )
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'integration-gateway managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE integration_gateway_owner
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_runtime
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_migrator
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE integration_gateway_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB CREATEROLE NOINHERIT;
 GRANT pg_signal_backend TO integration_gateway_role_controller;
 GRANT integration_gateway_runtime TO integration_gateway_role_controller WITH ADMIN OPTION;
 SET ROLE integration_gateway_owner;
@@ -80,6 +101,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, integration_gateway
 AS $function$
+DECLARE
+    role_exists boolean;
+    role_safe boolean;
 BEGIN
     IF NOT pg_has_role(session_user, 'integration_gateway_migrator', 'member')
        OR requested_principal_name <> ('integration_gateway_runtime_g' || requested_generation::text)
@@ -94,9 +118,23 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'retired runtime principal cannot be reactivated' USING ERRCODE = '28000';
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = requested_principal_name) THEN
+    SELECT true,
+           role.rolcanlogin
+           AND NOT role.rolsuper
+           AND NOT role.rolcreatedb
+           AND NOT role.rolcreaterole
+           AND NOT role.rolreplication
+           AND NOT role.rolbypassrls
+      INTO role_exists, role_safe
+      FROM pg_catalog.pg_roles AS role
+     WHERE role.rolname = requested_principal_name;
+    IF coalesce(role_exists, false) AND NOT role_safe THEN
+        RAISE EXCEPTION 'existing runtime principal role is unsafe'
+            USING ERRCODE = '42501';
+    END IF;
+    IF coalesce(role_exists, false) THEN
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE INHERIT',
             requested_principal_name,
             requested_password
         );

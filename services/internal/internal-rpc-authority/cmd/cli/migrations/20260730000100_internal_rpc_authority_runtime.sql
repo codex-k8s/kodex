@@ -93,38 +93,73 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- PostgreSQL разрешает bounded CREATEROLE менять только непривилегированные
+-- атрибуты. Привилегированные атрибуты проверяются fail-closed до ALTER ROLE.
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'internal_rpc_authority_readback_owner',
+            'internal_rpc_authority_issuer',
+            'internal_rpc_authority_verifier',
+            'internal_rpc_authority_publisher',
+            'internal_rpc_authority_readback_attestor',
+            'internal_rpc_authority_database_credential_reconciler',
+            'internal_rpc_authority_recovery',
+            'ira_publisher_g1',
+            'ira_publisher_g2',
+            'ira_readback_attestor_g1',
+            'ira_readback_attestor_g2',
+            'ira_control_api_gateway_issuer_g1',
+            'ira_control_api_gateway_issuer_g2',
+            'ira_control_plane_verifier_g1',
+            'ira_control_plane_verifier_g2',
+            'ira_database_credential_reconciler'
+        )
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'internal-rpc-authority managed role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE internal_rpc_authority_readback_owner
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_issuer
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_verifier
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_publisher
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_readback_attestor
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_database_credential_reconciler
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE internal_rpc_authority_recovery
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_publisher_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_publisher_g2
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_readback_attestor_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_readback_attestor_g2
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_api_gateway_issuer_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_api_gateway_issuer_g2
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_plane_verifier_g1
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_control_plane_verifier_g2
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 ALTER ROLE ira_database_credential_reconciler
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    LOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 
 GRANT internal_rpc_authority_publisher TO ira_publisher_g1, ira_publisher_g2;
 GRANT internal_rpc_authority_readback_attestor

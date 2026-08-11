@@ -43,9 +43,30 @@ END
 $roles$;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname IN (
+            'internal_rpc_authority_credential_lifecycle_definer',
+            'ira_publisher_g3',
+            'ira_publisher_g4',
+            'ira_readback_attestor_g3',
+            'ira_readback_attestor_g4'
+        )
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'credential lifecycle role has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE internal_rpc_authority_credential_lifecycle_definer
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB CREATEROLE INHERIT;
 GRANT pg_signal_backend
     TO internal_rpc_authority_credential_lifecycle_definer;
 

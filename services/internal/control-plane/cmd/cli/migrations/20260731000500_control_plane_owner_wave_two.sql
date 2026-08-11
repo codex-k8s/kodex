@@ -5,9 +5,24 @@ SET ROLE control_plane_owner;
 -- tenant-scoped outbox repair и исполнимый bootstrap PostgreSQL LOGIN.
 RESET ROLE;
 
+-- +goose StatementBegin
+DO $role_safety$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_roles
+        WHERE rolname = 'control_plane_role_controller'
+          AND (rolsuper OR rolreplication OR rolbypassrls)
+    ) THEN
+        RAISE EXCEPTION 'control-plane role controller has prohibited attributes'
+            USING ERRCODE = '42501';
+    END IF;
+END
+$role_safety$;
+-- +goose StatementEnd
+
 ALTER ROLE control_plane_role_controller
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
-    NOREPLICATION NOBYPASSRLS;
+    NOLOGIN NOCREATEDB CREATEROLE INHERIT;
 GRANT pg_signal_backend TO control_plane_role_controller;
 GRANT USAGE ON SCHEMA control_plane_extensions
     TO control_plane_role_controller;
@@ -80,7 +95,7 @@ BEGIN
         );
     ELSE
         EXECUTE format(
-            'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+            'ALTER ROLE %I LOGIN PASSWORD %L NOCREATEDB NOCREATEROLE NOINHERIT',
             requested_name,
             requested_password
         );

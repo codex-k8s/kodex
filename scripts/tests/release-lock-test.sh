@@ -372,6 +372,13 @@ for migration_scope in \
     printf 'Goose migration has an unbounded PostgreSQL DO block: %s\n' "$migration_directory" >&2
     exit 1
   }
+  if rg --pcre2 -U -q \
+    '(?s)ALTER ROLE\b[^;]*\b(?:NOSUPERUSER|NOREPLICATION|NOBYPASSRLS)\b' \
+    "$repository_root/$migration_directory"; then
+    printf 'Bounded PostgreSQL migrator changes a superuser-only role attribute: %s\n' \
+      "$migration_directory" >&2
+    exit 1
+  fi
 done
 if rg -n '(control-plane|internal-rpc-authority|runtime-controller)-postgresql\.mattercodex-system' \
   "$repository_root/deploy" "$repository_root/services" "$repository_root/contracts" >/dev/null; then
