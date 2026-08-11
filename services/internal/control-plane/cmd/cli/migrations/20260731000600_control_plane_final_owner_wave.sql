@@ -3,7 +3,6 @@ RESET ROLE;
 SET ROLE control_plane_owner;
 -- CHANGES_REQUESTED продолжает тот же ProcessRun через новый неизменяемый
 -- turn/revision, сохраняя первоначальную binding scheduled_runs.
-RESET ROLE;
 
 ALTER TABLE control_plane.scheduled_runs
     ADD COLUMN continuation_turn_id uuid REFERENCES control_plane.resources (id),
