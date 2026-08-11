@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -285,13 +286,13 @@ func RunPublisher(
 		snapshotDelivery.Close()
 		delivery.Close()
 		pool.Close()
-		return errors.New("publish startup authority graph")
+		return fmt.Errorf("publish startup authority graph: %w", err)
 	}
 	if _, err := publisherApplication.PublishReadbackMaterials(startup); err != nil {
 		snapshotDelivery.Close()
 		delivery.Close()
 		pool.Close()
-		return errors.New("publish startup readback materials")
+		return fmt.Errorf("publish startup readback materials: %w", err)
 	}
 	serverTLS, err := loadMTLSServerConfig(
 		config.TLSCertificateFile,
