@@ -90,13 +90,18 @@ func run(ctx context.Context, arguments []string) error {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return err
 		}
-		if _, err := database.ExecContext(ctx, "SET ROLE interaction_gateway_migrator"); err != nil {
+		connection, err := database.Conn(ctx)
+		if err != nil {
+			return errors.New("acquire interaction gateway migration connection")
+		}
+		defer connection.Close()
+		if _, err := connection.ExecContext(ctx, "SET ROLE interaction_gateway_migrator"); err != nil {
 			return errors.New("assume interaction gateway migration role")
 		}
-		if err := reconcileTenantPrincipal(ctx, database, value); err != nil {
+		if err := reconcileTenantPrincipal(ctx, connection, value); err != nil {
 			return err
 		}
-		return reconcileReadbackKeysetGenesis(ctx, database, value)
+		return reconcileReadbackKeysetGenesis(ctx, connection, value)
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":
@@ -111,7 +116,13 @@ func run(ctx context.Context, arguments []string) error {
 	}
 }
 
-func reconcileTenantPrincipal(ctx context.Context, database *sql.DB, value config) error {
+type migrationConnection interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func reconcileTenantPrincipal(ctx context.Context, database migrationConnection, value config) error {
 	raw, err := readFile(value.MappingManifestFile, 1<<20)
 	if err != nil {
 		return errors.New("read Mattermost mapping for PostgreSQL principal")
@@ -179,7 +190,7 @@ func reconcileTenantPrincipal(ctx context.Context, database *sql.DB, value confi
 	return reconcileRetiredTenantPrincipal(ctx, database, value)
 }
 
-func reconcileRetiredTenantPrincipal(ctx context.Context, database *sql.DB, value config) error {
+func reconcileRetiredTenantPrincipal(ctx context.Context, database migrationConnection, value config) error {
 	if value.PreviousPrincipalGeneration == 0 {
 		return nil
 	}
@@ -207,7 +218,7 @@ func reconcileRetiredTenantPrincipal(ctx context.Context, database *sql.DB, valu
 	return nil
 }
 
-func readbackTenantPrincipal(ctx context.Context, database *sql.DB, generation int64,
+func readbackTenantPrincipal(ctx context.Context, database migrationConnection, generation int64,
 	organizationID string, projectIDs []string) error {
 	readbackSQL, err := operationalSQL.ReadFile("sql/tenant_principal__readback.sql")
 	if err != nil {

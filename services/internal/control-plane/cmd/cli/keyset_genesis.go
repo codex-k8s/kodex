@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -52,7 +51,7 @@ type keysetGenesisSpec struct {
 	name, producerID, keysetFile, bootstrapSQL, readbackSQL string
 }
 
-func reconcileKeysetGeneses(ctx context.Context, database *sql.DB, config migrationConfig) error {
+func reconcileKeysetGeneses(ctx context.Context, database migrationConnection, config migrationConfig) error {
 	if !config.KeysetGenesisEnabled {
 		return errors.New("explicit keyset genesis reconciliation is required")
 	}
@@ -76,7 +75,7 @@ func reconcileKeysetGeneses(ctx context.Context, database *sql.DB, config migrat
 	return nil
 }
 
-func reconcileKeysetGenesis(ctx context.Context, database *sql.DB, spec keysetGenesisSpec) error {
+func reconcileKeysetGenesis(ctx context.Context, database migrationConnection, spec keysetGenesisSpec) error {
 	raw, err := readRuntimeFile(spec.keysetFile, 64<<10)
 	if err != nil {
 		return fmt.Errorf("read %s keyset genesis input", spec.name)
@@ -110,7 +109,7 @@ func reconcileKeysetGenesis(ctx context.Context, database *sql.DB, spec keysetGe
 	return nil
 }
 
-func keysetGenesisReadback(ctx context.Context, database *sql.DB, spec keysetGenesisSpec,
+func keysetGenesisReadback(ctx context.Context, database migrationConnection, spec keysetGenesisSpec,
 	document keysetDocument, digest string, identities []keysetIdentity) error {
 	statement, err := operationalSQL.ReadFile(spec.readbackSQL)
 	if err != nil {

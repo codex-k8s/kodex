@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -46,7 +45,7 @@ type genesisIdentity struct {
 	Thumbprint string `json:"thumbprint_sha256"`
 }
 
-func reconcileReadbackKeysetGenesis(ctx context.Context, database *sql.DB, value config) error {
+func reconcileReadbackKeysetGenesis(ctx context.Context, database migrationConnection, value config) error {
 	if !value.KeysetGenesisEnabled {
 		return errors.New("explicit delivery readback keyset genesis reconciliation is required")
 	}
@@ -125,7 +124,7 @@ func reconcileReadbackKeysetGenesis(ctx context.Context, database *sql.DB, value
 	return nil
 }
 
-func readbackDeliveryReadbackGenesis(ctx context.Context, database *sql.DB, document genesisKeyset,
+func readbackDeliveryReadbackGenesis(ctx context.Context, database migrationConnection, document genesisKeyset,
 	digest string, identities []genesisIdentity) error {
 	statement, err := operationalSQL.ReadFile("sql/delivery_readback_keyset__genesis_readback.sql")
 	if err != nil {
