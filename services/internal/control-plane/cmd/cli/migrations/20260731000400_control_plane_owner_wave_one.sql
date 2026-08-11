@@ -220,6 +220,7 @@ CREATE POLICY scheduled_runs_runtime_scope ON control_plane.scheduled_runs
     ));
 
 ALTER TABLE control_plane.outbox_events
+    ADD COLUMN updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     ADD COLUMN repair_count integer NOT NULL DEFAULT 0
         CHECK (repair_count BETWEEN 0 AND 5);
 CREATE TABLE control_plane.outbox_repairs (
