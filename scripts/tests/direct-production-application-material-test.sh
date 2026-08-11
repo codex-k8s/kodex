@@ -171,8 +171,11 @@ for binding in \
       .served_generation == 1 and (.keys | length == 1) and
       all(.keys[];
         .generation == 1 and .status == "CURRENT" and
-        .jwk.kty == "OKP" and .jwk.crv == "Ed25519" and
-        (.jwk.x | type == "string" and length > 0) and .jwk.d == null)
+        .jwk.kty == "EC" and .jwk.crv == "P-256" and
+        .jwk.alg == "ES256" and .jwk.use == "sig" and
+        .jwk.key_ops == ["verify"] and
+        (.jwk.x | type == "string" and length > 0) and
+        (.jwk.y | type == "string" and length > 0) and .jwk.d == null)
     ' >/dev/null || {
       printf 'Generated public keyset genesis is invalid: %s/%s\n' "$name" "$key" >&2
       exit 1
@@ -182,11 +185,25 @@ jq -er '.[] | select(.kind=="Secret" and .metadata.name=="interaction-gateway-ru
   .data["delivery-readback.public-keyset.json"]' "$material_json" |
   base64 -d | jq -e '
     (.version == null and .revision == null) and
-    (.keys | length == 1) and all(.keys[]; .kty == "OKP" and .crv == "Ed25519")
+    (.keys | length == 1) and all(.keys[];
+      .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
+      .use == "sig" and .key_ops == ["verify"] and
+      (.x | type == "string" and length > 0) and
+      (.y | type == "string" and length > 0) and .d == null)
   ' >/dev/null || {
   printf 'Generated runtime public JWKS is invalid\n' >&2
   exit 1
 }
+while IFS=$'\t' read -r name key; do
+  jq -er --arg name "$name" --arg key "$key" \
+    '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data[$key]' \
+    "$material_json" | base64 -d >"$temporary_directory/private-jwk"
+  node "$repository_root/tools/deploy/direct-production-material-helper.mjs" \
+    validate-private-jwk "$temporary_directory/private-jwk"
+done < <(jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
+  select(. == "private.jwk" or . == "evidence-private.jwk" or
+    . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") |
+  [$name,.] | @tsv' "$policy")
 grep -Fq "openssl rand -hex 32 | tr -d '\\n'" "$materializer" &&
   grep -Fq "base64 -d | tr -d '\\n' >\"\$root\"" "$materializer" || {
   printf 'Application material hex generation or root readback is not canonical\n' >&2

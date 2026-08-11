@@ -14,10 +14,52 @@ function encode(value) {
 
 function canonicalPublicJWK(privateJWK) {
   const publicJWK = createPublicKey({ key: privateJWK, format: "jwk" }).export({ format: "jwk" });
+  if (publicJWK.kty !== "EC" || publicJWK.crv !== "P-256" ||
+      typeof publicJWK.x !== "string" || typeof publicJWK.y !== "string") {
+    fail("private ES256 JWK is invalid");
+  }
   const kid = createHash("sha256")
-    .update(JSON.stringify({ crv: publicJWK.crv, kty: publicJWK.kty, x: publicJWK.x }))
+    .update(JSON.stringify({ crv: publicJWK.crv, kty: publicJWK.kty, x: publicJWK.x, y: publicJWK.y }))
     .digest("hex");
-  return { ...publicJWK, alg: "EdDSA", kid, use: "sig" };
+  return {
+    kty: publicJWK.kty,
+    crv: publicJWK.crv,
+    x: publicJWK.x,
+    y: publicJWK.y,
+    alg: "ES256",
+    kid,
+    use: "sig",
+    key_ops: ["verify"],
+  };
+}
+
+function canonicalPrivateJWK(privateJWK) {
+  const publicJWK = canonicalPublicJWK(privateJWK);
+  if (typeof privateJWK.d !== "string" || privateJWK.d.length === 0) {
+    fail("private ES256 JWK is invalid");
+  }
+  return {
+    kty: publicJWK.kty,
+    crv: publicJWK.crv,
+    x: publicJWK.x,
+    y: publicJWK.y,
+    d: privateJWK.d,
+    alg: "ES256",
+    kid: publicJWK.kid,
+    use: "sig",
+    key_ops: ["sign"],
+  };
+}
+
+function validatePrivateJWK(path) {
+  const privateJWK = JSON.parse(readFileSync(path, "utf8"));
+  const canonical = canonicalPrivateJWK(privateJWK);
+  const actualKeys = Object.keys(privateJWK).sort();
+  const expectedKeys = Object.keys(canonical).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys) ||
+      actualKeys.some((key) => JSON.stringify(privateJWK[key]) !== JSON.stringify(canonical[key]))) {
+    fail("private ES256 JWK is not canonical");
+  }
 }
 
 function writeJSON(path, value) {
@@ -146,10 +188,14 @@ switch (command) {
   }
   case "generate-jwk": {
     if (args.length !== 1) fail("generate-jwk requires an output path");
-    const { privateKey } = generateKeyPairSync("ed25519");
+    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
     const privateJWK = privateKey.export({ format: "jwk" });
-    const publicJWK = canonicalPublicJWK(privateJWK);
-    writeJSON(args[0], { ...privateJWK, alg: "EdDSA", kid: publicJWK.kid, use: "sig" });
+    writeJSON(args[0], canonicalPrivateJWK(privateJWK));
+    break;
+  }
+  case "validate-private-jwk": {
+    if (args.length !== 1) fail("validate-private-jwk requires an input path");
+    validatePrivateJWK(args[0]);
     break;
   }
   case "public-jwk": {
