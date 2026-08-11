@@ -231,8 +231,12 @@ rg -q 'ALTER ROLE %s NOLOGIN.*pg_terminate_backend' "$temporary_directory/postgr
 jq -e '
   first(.[] | select(.kind == "ConfigMap" and .metadata.name == "mattercodex-nats-config") |
     .data["nats.conf"]) as $config |
-  ($config | contains("operator: $NATS_OPERATOR_JWT")) and
-  ($config | contains("resolver: MEMORY")) and ($config | contains("verify: true")) and
+  ($config | contains("operator: __NATS_OPERATOR_JWT__")) and
+  ($config | contains("system_account: __NATS_SYSTEM_ACCOUNT__")) and
+  ($config | contains("resolver: MEMORY")) and
+  ($config | contains("__NATS_SYSTEM_ACCOUNT__: __NATS_SYSTEM_ACCOUNT_JWT__")) and
+  ($config | contains("__NATS_APPLICATION_ACCOUNT__: __NATS_APPLICATION_ACCOUNT_JWT__")) and
+  ($config | contains("verify: true")) and
   ($config | contains("username") | not) and ($config | contains("password") | not)
 ' "$foundation_json" >/dev/null || {
   printf 'Foundation NATS operator/account TLS contract is invalid\n' >&2

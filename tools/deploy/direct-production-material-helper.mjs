@@ -217,11 +217,15 @@ switch (command) {
     break;
   }
   case "validate-nats-server": {
-    if (args.length !== 3) fail("validate-nats-server requires operator JWT, account JWT and public account paths");
+    if (args.length !== 5) fail("validate-nats-server requires operator, system account and application account paths");
     const operator = decodeJWTFile(args[0]);
-    const account = decodeJWTFile(args[1]);
-    const accountPublic = readFileSync(args[2], "utf8").trim();
-    if (operator.nats?.type !== "operator" || account.nats?.type !== "account" || account.sub !== accountPublic ||
+    const systemAccount = decodeJWTFile(args[1]);
+    const systemAccountPublic = readFileSync(args[2], "utf8").trim();
+    const account = decodeJWTFile(args[3]);
+    const accountPublic = readFileSync(args[4], "utf8").trim();
+    if (operator.nats?.type !== "operator" || systemAccount.nats?.type !== "account" ||
+        operator.nats?.system_account !== systemAccountPublic || systemAccount.sub !== systemAccountPublic ||
+        systemAccount.iss !== operator.sub || account.nats?.type !== "account" || account.sub !== accountPublic ||
         account.iss !== operator.sub) fail("NATS operator/account binding is invalid");
     break;
   }
