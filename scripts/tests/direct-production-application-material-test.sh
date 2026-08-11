@@ -158,6 +158,35 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classif
 
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
+for binding in \
+  'control-plane-keyset-genesis:interaction-readback.public-keyset.json' \
+  'control-plane-keyset-genesis:mattermost-event.public-keyset.json' \
+  'interaction-gateway-postgres-migrator:delivery-readback.public-keyset.json'; do
+  name=${binding%%:*}
+  key=${binding#*:}
+  jq -er --arg name "$name" --arg key "$key" \
+    '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data[$key]' \
+    "$material_json" | base64 -d | jq -e '
+      .version == 1 and .revision == 1 and .high_watermark == 1 and
+      .served_generation == 1 and (.keys | length == 1) and
+      all(.keys[];
+        .generation == 1 and .status == "CURRENT" and
+        .jwk.kty == "OKP" and .jwk.crv == "Ed25519" and
+        (.jwk.x | type == "string" and length > 0) and .jwk.d == null)
+    ' >/dev/null || {
+      printf 'Generated public keyset genesis is invalid: %s/%s\n' "$name" "$key" >&2
+      exit 1
+    }
+done
+jq -er '.[] | select(.kind=="Secret" and .metadata.name=="interaction-gateway-runtime") |
+  .data["delivery-readback.public-keyset.json"]' "$material_json" |
+  base64 -d | jq -e '
+    (.version == null and .revision == null) and
+    (.keys | length == 1) and all(.keys[]; .kty == "OKP" and .crv == "Ed25519")
+  ' >/dev/null || {
+  printf 'Generated runtime public JWKS is invalid\n' >&2
+  exit 1
+}
 grep -Fq "openssl rand -hex 32 | tr -d '\\n'" "$materializer" &&
   grep -Fq "base64 -d | tr -d '\\n' >\"\$root\"" "$materializer" || {
   printf 'Application material hex generation or root readback is not canonical\n' >&2
@@ -242,10 +271,21 @@ sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
   exit 1
 }
 [[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
-  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 33 ]] || {
+  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 37 ]] || {
   printf 'PostgreSQL bounded administrator registry is incomplete\n' >&2
   exit 1
 }
+for membership in \
+  $'control_plane_role_controller\tcontrol_plane_runtime_g1' \
+  $'integration_gateway_role_controller\tintegration_gateway_runtime_g1' \
+  $'integration_gateway_role_controller\tintegration_gateway_runtime_g2' \
+  $'interaction_gateway_role_controller\tinteraction_gateway_runtime_g1'; do
+  jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
+    .data["admin-memberships.tsv"]' "$foundation_json" | grep -Fxq "$membership" || {
+    printf 'Required PostgreSQL bounded administrator membership is absent\n' >&2
+    exit 1
+  }
+done
 rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'actual_admin_membership.*member.admin_option.*NOT member.inherit_option.*NOT member.set_option' \
     "$temporary_directory/postgresql-principal-reconcile.sh" || {
