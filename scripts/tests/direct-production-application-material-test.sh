@@ -31,18 +31,18 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 147 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 128 and
+  (.resources | length) == 149 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 130 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 19 and
   .counts == {
-    cryptographically_generated:61,
+    cryptographically_generated:68,
     deterministically_derived:70,
     safely_reusable_from_existing_binding:2,
-    truly_external_credential:14
+    truly_external_credential:9
   } and
   all(.resources[];
     (.keys | type == "array" and length > 0 and length == (unique | length))) and
-  ([.external_bindings[].keys[]] | length) == 35 and
+  ([.external_bindings[].keys[]] | length) == 14 and
   (.resources | group_by([.kind,.name]) | all(length == 1))
 ' "$classification" >/dev/null || {
   printf 'Direct-production application material classification is incomplete\n' >&2
@@ -69,13 +69,33 @@ jq -e '
     any(.resources[];
       .kind == $binding.target_kind and .name == $binding.target_name and
       (.classification == "safely_reusable_from_existing_binding" or
-       .classification == "truly_external_credential"))] | all) and
+       .classification == "truly_external_credential" or
+       .classification == "cryptographically_generated"))] | all) and
   ([.publisher_owned_empty_resources[] as $binding |
     any(.resources[];
       .kind == $binding.kind and .name == $binding.name and
       .classification == "deterministically_derived")] | all)
 ' "$policy" >/dev/null || {
   printf 'Application material policy has an ambiguous binding\n' >&2
+  exit 1
+}
+
+jq -n --slurpfile authority "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json" \
+  --slurpfile material "$policy" -e '
+    ($material[0].resources[] |
+      select(.kind == "Secret" and .name == "control-plane-application-grants") |
+      .keys) as $declared |
+    all($authority[0].policy.authority_proof_producers[];
+      .producer_id == "control-plane.oidc" or
+      ((if (.application_credential == "MATTERMOST_SIGNED_EVENT" or
+            .application_credential == "INTEGRATION_CONTINUATION_GRANT") then
+          .producer_id + ".public-keyset.json"
+        else
+          .producer_id + ".public.jwk"
+        end) as $required |
+       ($declared | index($required)) != null))
+  ' >/dev/null || {
+  printf 'Control-plane application grant trust does not cover every authority producer\n' >&2
   exit 1
 }
 
@@ -149,7 +169,7 @@ material="$temporary_directory/application-material.yaml"
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) |
-  length == 147 and
+  length == 149 and
   ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
   all(.[]; . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==

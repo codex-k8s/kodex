@@ -99,6 +99,29 @@ jq -e '
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
       (($binding.keys - .keys) | length) == ([$binding.keys[]] | length)))
 ' "$policy" >/dev/null || fail "application material policy is invalid"
+
+authority_policy="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json"
+missing_application_grant_trust=$(
+  jq -rn --slurpfile authority "$authority_policy" --slurpfile material "$policy" '
+    ($material[0].resources[] |
+      select(.kind == "Secret" and .name == "control-plane-application-grants") |
+      .keys) as $declared |
+    [
+      $authority[0].policy.authority_proof_producers[] |
+      select(.producer_id != "control-plane.oidc") |
+      if (.application_credential == "MATTERMOST_SIGNED_EVENT" or
+          .application_credential == "INTEGRATION_CONTINUATION_GRANT") then
+        .producer_id + ".public-keyset.json"
+      else
+        .producer_id + ".public.jwk"
+      end as $required |
+      select(($declared | index($required)) == null) |
+      $required
+    ] | sort | join(",")
+  '
+)
+[[ -z "$missing_application_grant_trust" ]] ||
+  fail "control-plane application grant trust is incomplete: $missing_application_grant_trust"
 interfaces="$temporary_directory/interfaces.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" --scope interfaces --output "$interfaces" >/dev/null
 
