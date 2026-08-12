@@ -10,5 +10,6 @@ SELECT internal_rpc_authority.publisher_append_snapshot_history(
     @snapshot_compact_jws,
     @publication_intent_id,
     @publication_input_digest_sha256,
-    @expected_readback_count
+    @expected_readback_count,
+    @published_at
 );
