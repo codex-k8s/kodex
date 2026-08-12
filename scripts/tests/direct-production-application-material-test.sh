@@ -353,6 +353,10 @@ rg -q 'ira_publisher_g\[1-5\]|ira_readback_attestor_g\[1-5\]' \
   exit 1
 }
 rg -q 'WITH INHERIT FALSE, SET FALSE, ADMIN TRUE' "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'dependent lifecycle administrator grant is invalid' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -q 'generation grants are owned by the fenced lifecycle reconciler' \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'DECLARE admin_grantor text' "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q "REVOKE %%I FROM %%I GRANTED BY %%I.*admin_grantor" \
     "$temporary_directory/postgresql-principal-reconcile.sh" &&
