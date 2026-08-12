@@ -200,10 +200,10 @@ func Run(
 			return nil, readErr
 		}
 		decoded, decodeErr := hex.DecodeString(strings.TrimSpace(string(raw)))
-		if decodeErr != nil || len(decoded) != ed25519.PrivateKeySize {
+		if decodeErr != nil || len(decoded) != ed25519.SeedSize {
 			return nil, errors.New("runtime workload signing key is invalid")
 		}
-		return ed25519.PrivateKey(decoded), nil
+		return ed25519.NewKeyFromSeed(decoded), nil
 	}
 	admissionSigningKey, err := decodeRuntimeSigningKey(config.RuntimeAdmissionSigningKeyFile)
 	if err != nil {
