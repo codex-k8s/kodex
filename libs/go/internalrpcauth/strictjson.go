@@ -10,6 +10,13 @@ import (
 
 const maxJSONDepth = 16
 
+// DecodeStrictJSON декодирует доверенную неподписанную конфигурацию, запрещая
+// дублирующиеся и неизвестные поля, лишние данные и чрезмерную вложенность.
+// В отличие от DecodeCanonicalJSON функция не требует JCS-представления байтов.
+func DecodeStrictJSON(data []byte, target any) error {
+	return decodeStrictJSON(data, target)
+}
+
 func decodeStrictJSON(data []byte, target any) error {
 	if len(data) == 0 {
 		return errors.New("empty JSON")
