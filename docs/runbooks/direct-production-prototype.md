@@ -282,6 +282,28 @@ Secret, key, logical path, operation, digest, generation или CAS conflict
 приводит к закрытому отказу. Readiness authority использует тот же backend
 readback, что и рабочая публикация.
 
+Если до первого публичного cutover неудачная bootstrap-попытка успела записать
+authority revision, но не создала ни одного delivery receipt и snapshot
+readback, повторный запуск с более новой registry revision закрыто отклоняется.
+Для этого единственного pre-cutover случая используется owner-gated команда:
+
+```bash
+KUBECONFIG=/secure/path/kubeconfig \
+  tools/deploy/reset-direct-production-authority-bootstrap.sh \
+  --owner-approved \
+  --revision EXACT_GIT_SHA \
+  --context EXACT_CONTEXT
+```
+
+Команда сверяет чистый exact checkout, отсутствие публичного ingress
+`control.kodex.works`, отсутствие обслуженного authority state, останавливает
+только зависящие от authority workloads, пересоздаёт только новую БД
+`internal_rpc_authority` и удаляет только publisher/reconciler-owned runtime
+material из закрытых policy. После появления хотя бы одного delivery/readback
+или публичного ingress этот путь необратимо запрещён. Затем владелец повторяет
+application materialization и routine dark deploy. Команда не предназначена
+для rollback, ротации либо восстановления работающего контура.
+
 В direct-production application runtime adapters A–D заменяют живой Vault
 на закрытые Kubernetes/file границы:
 
