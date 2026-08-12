@@ -482,6 +482,9 @@ done < <(jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[
 public_jwks() {
   local destination
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
+  if runtime_owned_empty_key Secret "$1" "$2"; then
+    return
+  fi
   node "$helper" public-jwks "$destination" "$(value_path Secret "$3" "$4")"
 }
 public_keyset_genesis() {

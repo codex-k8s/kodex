@@ -377,7 +377,7 @@ Active classification содержит 149 resources: 68
 `cryptographically_generated`, 70 `deterministically_derived`, 2
 `safely_reusable_from_existing_binding` и 9 `truly_external_credential`.
 Canonical classification SHA-256 —
-`f9fffeb682e032c70dc7186fac2da405eb33567b80b018b35086d3f15a27594c`.
+`54381587e31a411d239b625423e38f70fa97b99449789b23ccf7b1bdbe4bd816`.
 Внешний closed set состоит из 9 resources / 14 keys. В нем остаются Mattermost mapping,
 `integration-gateway-provider-health-credential`, Git aggregate, OIDC provider
 snapshot и `mattercodex-oidc-ca` для сетевых OIDC consumers control plane.
