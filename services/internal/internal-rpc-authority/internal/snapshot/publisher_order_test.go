@@ -2,11 +2,37 @@ package snapshot
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 )
+
+func TestVerifyPublisherSnapshotCompactUsesSnapshotLimit(t *testing.T) {
+	t.Parallel()
+	key := mustPublisherTestKey(t, "snapshot-limit")
+	payload := struct {
+		Data string `json:"data"`
+	}{Data: strings.Repeat("x", internalrpcauth.MaxCompactJWSBytes)}
+	compact, err := internalrpcauth.SignCanonicalJSONWithLimit(
+		payload,
+		key,
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type: snapshotProtectedType, KeyID: key.KeyID,
+		},
+		maxSnapshotBytes,
+	)
+	if err != nil {
+		t.Fatalf("sign large snapshot: %v", err)
+	}
+	if len(compact) <= internalrpcauth.MaxCompactJWSBytes {
+		t.Fatal("test snapshot does not exceed ordinary authorization JWS limit")
+	}
+	if _, err := VerifyPublisherSnapshotCompact(compact, key.PublicOnly()); err != nil {
+		t.Fatalf("verify large snapshot: %v", err)
+	}
+}
 
 func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	t.Parallel()
