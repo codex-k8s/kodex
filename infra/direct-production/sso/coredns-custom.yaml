@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/part-of: mattercodex
+    mattercodex.dev/profile: direct-production-single-node-prototype
+data:
+  mattercodex-sso.override: |
+    rewrite name exact sso.kodex.works sso.identity.svc.cluster.local

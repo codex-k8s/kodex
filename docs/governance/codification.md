@@ -134,5 +134,6 @@ updated: 2026-07-28
 | `SVC-MC-016`       | `services/jobs/legacy-data-migration/README.md`                    |
 | `RUN-MC-014`       | `docs/runbooks/legacy-data-migration.md`                           |
 | `RUN-MC-015`       | `docs/runbooks/direct-production-prototype.md`                     |
+| `RUN-MC-016`       | `docs/runbooks/direct-production-sso.md`                           |
 
 При добавлении управляемого документа реестр обновляется в том же PR.
