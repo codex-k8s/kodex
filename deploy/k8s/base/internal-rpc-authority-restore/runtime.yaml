@@ -163,6 +163,7 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: database-credentials, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database, readOnly: true}
+            - {name: postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
             - {name: server-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls, readOnly: true}
             - {name: controller-config, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-controller, readOnly: true}
             - {name: restore-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-trust, readOnly: true}
@@ -175,6 +176,8 @@ spec:
       volumes:
         - name: database-credentials
           secret: {secretName: internal-rpc-authority-restore-controller-postgresql, defaultMode: 0440}
+        - name: postgresql-ca
+          configMap: {name: internal-rpc-authority-postgresql-ca, defaultMode: 0440}
         - name: server-tls
           secret: {secretName: internal-rpc-authority-restore-controller-tls, defaultMode: 0440}
         - name: controller-config

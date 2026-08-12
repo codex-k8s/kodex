@@ -1211,7 +1211,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/ListMattermostTeams",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1240,7 +1240,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamMappingOperation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1269,7 +1269,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/CreateMattermostTeam",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1298,7 +1298,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/LinkMattermostTeam",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1327,7 +1327,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamBinding",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1356,7 +1356,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/RelinkMattermostTeam",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1385,7 +1385,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/UnlinkMattermostTeam",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1414,7 +1414,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamProviderReadback",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1443,7 +1443,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.MattermostTeamService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1465,13 +1465,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/ListAgentMattermostBotIdentities",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.catalog.read",
         "permission": "interaction.agent-bot.catalog.read",
         "project_required": true,
@@ -1483,13 +1494,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/CreateAndBindAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.create-and-bind",
         "permission": "interaction.agent-bot.create-and-bind",
         "project_required": true,
@@ -1501,13 +1523,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/BindAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.bind",
         "permission": "interaction.agent-bot.bind",
         "project_required": true,
@@ -1519,13 +1552,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.get",
         "permission": "interaction.agent-bot.get",
         "project_required": true,
@@ -1537,13 +1581,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/RebindAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.rebind",
         "permission": "interaction.agent-bot.rebind",
         "project_required": true,
@@ -1555,13 +1610,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/RevokeAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.revoke",
         "permission": "interaction.agent-bot.revoke",
         "project_required": true,
@@ -1573,13 +1639,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentityOperation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.operation.get",
         "permission": "interaction.agent-bot.operation.get",
         "project_required": true,
@@ -1591,13 +1668,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentityProviderReadback",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.provider.readback",
         "permission": "interaction.agent-bot.provider.readback",
         "project_required": true,
@@ -1609,13 +1697,24 @@
       {
         "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
         "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/interactiongateway.v1.AgentMattermostBotIdentityService/CheckAgentMattermostBotIdentityReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
-        "local_target": {"primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001},
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
         "operation_id": "interaction.agent-bot.readiness",
         "permission": "interaction.agent-bot.readiness",
         "project_required": true,
@@ -1634,7 +1733,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/AdmitOwnerSession",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1663,7 +1762,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetOwnerConfigurationCatalog",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1692,7 +1791,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetLegacyConfigurationCutover",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1721,7 +1820,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListLegacyConfigurationCutovers",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1750,7 +1849,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ResolveLegacyConfigurationCutover",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1779,7 +1878,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CreateScheduleFromOwnerSelections",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1808,7 +1907,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageOwnerSchedule",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1837,7 +1936,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetOwnerSchedule",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1866,7 +1965,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListOwnerSchedules",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -1895,7 +1994,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ResolveScheduleRecovery",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1924,7 +2023,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RevokeOwnerSession",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1953,7 +2052,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CreateProject",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -1982,7 +2081,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProjects",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2011,7 +2110,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CreateResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2040,7 +2139,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/UpdateResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2069,7 +2168,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/TransitionResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2098,7 +2197,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/DeleteResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2127,7 +2226,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageAccessResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2156,7 +2255,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/DetachAccessResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2185,7 +2284,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CopyAccessResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2214,7 +2313,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2243,7 +2342,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListResources",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2272,7 +2371,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/SearchResources",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2301,7 +2400,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListAuditEvents",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2330,7 +2429,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2359,7 +2458,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetDiagnostics",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2388,7 +2487,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2417,7 +2516,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2446,7 +2545,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2475,7 +2574,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2504,7 +2603,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageSchedule",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2533,7 +2632,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RunScheduleNow",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2562,7 +2661,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2591,7 +2690,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "caller_workload_id": "agent-runner",
         "full_method": "/controlplane.v1.ControlPlaneService/ClaimTurn",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2620,7 +2719,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "caller_workload_id": "agent-runner",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2649,7 +2748,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "caller_workload_id": "agent-runner",
         "full_method": "/controlplane.v1.ControlPlaneService/ReportRuntimeProgress",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2678,7 +2777,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "caller_workload_id": "automation-scheduler",
         "full_method": "/controlplane.v1.ControlPlaneService/ClaimDueSchedules",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2707,7 +2806,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "caller_workload_id": "automation-scheduler",
         "full_method": "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2736,7 +2835,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "caller_workload_id": "automation-scheduler",
         "full_method": "/controlplane.v1.ControlPlaneService/MaterializeScheduleOccurrence",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2765,7 +2864,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "caller_workload_id": "automation-scheduler",
         "full_method": "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2794,7 +2893,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
         "caller_workload_id": "artifact-scanner",
         "full_method": "/controlplane.v1.ControlPlaneService/RecordArtifactScan",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -2823,7 +2922,24 @@
         "permission": "controlplane.owner_gate.deliver",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2835,7 +2951,24 @@
         "permission": "controlplane.interaction.delivery",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2847,7 +2980,24 @@
         "permission": "controlplane.interaction.delivery",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2859,7 +3009,24 @@
         "permission": "controlplane.interaction.delivery",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2871,7 +3038,24 @@
         "permission": "controlplane.interaction.delivery",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2883,14 +3067,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRuntimeMaterialization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.runtime-materialization.get",
         "permission": "controlplane.runtime_execution.read",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2902,14 +3096,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeOutput",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.runtime-output.authorize",
         "permission": "controlplane.runtime_execution.output.stage",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2921,14 +3125,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RegisterRuntimeOutput",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.runtime-output.register",
         "permission": "controlplane.runtime_execution.output.stage",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2940,7 +3154,24 @@
         "permission": "controlplane.owner_gate.expire",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2952,7 +3183,24 @@
         "permission": "controlplane.owner_gate.deliver",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2964,14 +3212,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageSession",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.session.create",
         "permission": "controlplane.session.manage",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -2983,14 +3241,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/BindSessionMCP",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.session.mcp.bind",
         "permission": "controlplane.session.mcp.bind",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3002,14 +3270,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.conversation.lifecycle",
         "permission": "controlplane.conversation.lifecycle",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3021,14 +3299,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/EnqueueTurn",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.turn.enqueue",
         "permission": "controlplane.turn.enqueue",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3040,14 +3328,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RegisterArtifact",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.artifact.register",
         "permission": "controlplane.artifact.register",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3059,14 +3357,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetResource",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.resource.read",
         "permission": "controlplane.resource.read",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3078,14 +3386,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ResolveOwnerGate",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.owner-gate.resolve",
         "permission": "controlplane.owner_gate.resolve",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3097,14 +3415,24 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageRuntimeAction",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "operation_id": "control.interaction.runtime-action.manage",
         "permission": "controlplane.runtime_execution.owner_action",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3116,7 +3444,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeRestoreEffect",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3145,7 +3473,24 @@
         "permission": "controlplane.runtime_revision.read",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3157,7 +3502,24 @@
         "permission": "controlplane.memory.index",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3169,7 +3531,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3181,7 +3560,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "AUTOMATION_OCCURRENCE",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3193,7 +3589,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3205,7 +3618,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3217,7 +3647,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3229,7 +3676,24 @@
         "permission": "controlplane.resource.read",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3241,7 +3705,24 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -3253,7 +3734,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3282,7 +3763,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3311,7 +3792,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3340,7 +3821,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3369,7 +3850,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3398,7 +3879,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3427,7 +3908,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3456,7 +3937,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "caller_workload_id": "runtime-controller",
         "full_method": "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3485,7 +3966,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
         "caller_workload_id": "runtime-archive",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3514,7 +3995,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
         "caller_workload_id": "runtime-archive",
         "full_method": "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3543,7 +4024,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "caller_workload_id": "runtime-restore-verifier",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3572,7 +4053,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "caller_workload_id": "runtime-restore-verifier",
         "full_method": "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3601,7 +4082,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "caller_workload_id": "runtime-restore-verifier",
         "full_method": "/controlplane.v1.ControlPlaneService/BindRuntimeRestoreTarget",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3630,7 +4111,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "caller_workload_id": "runtime-restore-verifier",
         "full_method": "/controlplane.v1.ControlPlaneService/CompleteRuntimeRehydrate",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3659,7 +4140,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
         "caller_workload_id": "runtime-s3-restore-exchanger",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3688,7 +4169,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
         "caller_workload_id": "runtime-s3-restore-exchanger",
         "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeRestoreEffect",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3717,7 +4198,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "caller_workload_id": "runtime-cleanup-authorizer",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3746,7 +4227,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "caller_workload_id": "runtime-cleanup-authorizer",
         "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3775,7 +4256,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "caller_workload_id": "runtime-cleanup-authorizer",
         "full_method": "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3804,7 +4285,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3833,7 +4314,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3862,7 +4343,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3891,7 +4372,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3920,7 +4401,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3949,7 +4430,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -3978,7 +4459,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -4007,7 +4488,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -4036,7 +4517,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -4065,7 +4546,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/FailIntegrationExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "primary_gid": 10001,
           "shared_fs_gid": 29000,
@@ -4086,7 +4567,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4115,7 +4596,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4144,7 +4625,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4173,7 +4654,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4202,7 +4683,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4231,7 +4712,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4260,7 +4741,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4289,7 +4770,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4318,7 +4799,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4347,7 +4828,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4376,7 +4857,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4405,7 +4886,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4434,7 +4915,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4463,7 +4944,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4492,7 +4973,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4521,7 +5002,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4550,7 +5031,7 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -4587,7 +5068,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/UpdateProject",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4616,7 +5097,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/DeleteProject",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4645,7 +5126,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ResolveOwnerGate",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4674,7 +5155,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListBackups",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4703,7 +5184,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetBackup",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4732,7 +5213,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/RestoreBackup",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4761,7 +5242,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRestoreOperation",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4790,7 +5271,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRestoreOperations",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4819,7 +5300,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageRoleDefinition",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4848,7 +5329,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRoleDefinition",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4877,7 +5358,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRoleDefinitions",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4906,7 +5387,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRoleDefinitionHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4935,7 +5416,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageAgent",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4964,7 +5445,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetAgent",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -4993,7 +5474,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListAgents",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5022,7 +5503,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListAgentHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5051,7 +5532,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageAgentAssignment",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5080,7 +5561,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetAgentAssignment",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5109,7 +5590,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListAgentAssignments",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5138,7 +5619,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListAgentAssignmentHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5167,7 +5648,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageInstructionSet",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5196,7 +5677,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetInstructionSet",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5225,7 +5706,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListInstructionSets",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5254,7 +5735,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListInstructionSetHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5283,7 +5764,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CompareInstructionSetVersions",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5312,7 +5793,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetProviderConnectionReference",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5341,7 +5822,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferences",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5370,7 +5851,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferenceHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5399,7 +5880,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5428,7 +5909,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5457,7 +5938,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderPools",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5486,7 +5967,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderPoolHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5515,7 +5996,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/BindScheduleConfiguration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5544,7 +6025,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageRun",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5573,7 +6054,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListOwnerRuns",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5602,7 +6083,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRunDetail",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5631,7 +6112,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRunTimeline",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5660,7 +6141,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRunLineage",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5689,7 +6170,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRunArtifacts",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5718,7 +6199,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageWorkspaceBackup",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5747,7 +6228,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetWorkspaceBackup",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5776,7 +6257,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListWorkspaceBackups",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5805,7 +6286,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageWorkspaceRestore",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5834,7 +6315,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetWorkspaceRestore",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5863,7 +6344,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListWorkspaceRestores",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5892,7 +6373,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageRuntimeIncident",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5921,7 +6402,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetRuntimeIncident",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5950,7 +6431,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListRuntimeIncidentHistory",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -5979,7 +6460,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetWorkspaceMattermostMapping",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6008,7 +6489,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListWorkspaceMattermostMappings",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6037,7 +6518,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageProviderConnectionReference",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6066,7 +6547,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetProviderConnectionReference",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6095,7 +6576,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferences",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6123,7 +6604,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "caller_workload_id": "legacy-data-migration",
         "full_method": "/controlplane.v1.ControlPlaneService/PrepareLegacyGraphMigration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6151,7 +6632,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "caller_workload_id": "legacy-data-migration",
         "full_method": "/controlplane.v1.ControlPlaneService/MaterializeLegacyGraphMigration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6179,7 +6660,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "caller_workload_id": "legacy-data-migration",
         "full_method": "/controlplane.v1.ControlPlaneService/GetLegacyGraphMigration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6207,7 +6688,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "caller_workload_id": "legacy-data-migration",
         "full_method": "/controlplane.v1.ControlPlaneService/AbortLegacyGraphMigration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6236,7 +6717,23 @@
         "permission": "controlplane.readiness.check",
         "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
+        "target_workload_id": "control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
@@ -6248,7 +6745,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6277,7 +6774,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetWorkspaceMattermostMapping",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6306,7 +6803,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListWorkspaceMattermostMappings",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6335,7 +6832,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6364,7 +6861,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetAgent",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6393,7 +6890,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ReconcileGitRoleDefinition",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6422,7 +6919,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ReconcileGitAgent",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6451,7 +6948,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ReconcileGitInstructionSet",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6480,7 +6977,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ReconcileGitProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6509,7 +7006,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListProviders",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6538,7 +7035,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetProvider",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6567,7 +7064,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/StartProviderAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6596,7 +7093,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetProviderAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6625,7 +7122,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/RestartProviderAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6654,7 +7151,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/CancelProviderAuthorization",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6683,7 +7180,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListProviderConnections",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6712,7 +7209,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetProviderConnection",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6741,7 +7238,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ReauthorizeProviderConnection",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6770,7 +7267,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/RevokeProviderConnection",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6799,7 +7296,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ManageProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6828,7 +7325,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6857,7 +7354,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListProviderPools",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6886,7 +7383,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListIntegrationDefinitions",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6915,7 +7412,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetIntegrationDefinition",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6944,7 +7441,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ConfigureIntegration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -6973,7 +7470,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetIntegrationConfiguration",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7002,7 +7499,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListIntegrationConfigurations",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7031,7 +7528,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/TestIntegrationConnection",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7060,7 +7557,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetIntegrationTestReceipt",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7089,7 +7586,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListIntegrationApprovals",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7118,7 +7615,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetIntegrationApproval",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7147,7 +7644,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/DecideIntegrationApproval",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7176,7 +7673,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ManageGitSourceBinding",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7205,7 +7702,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetGitSourceBinding",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7234,7 +7731,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ListGitSourceBindings",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7263,7 +7760,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/ReconcileGitSourceBinding",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7292,7 +7789,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
         "full_method": "/integrationgateway.v1.IntegrationManagementService/GetManagementDiagnostics",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7321,7 +7818,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetProviderConnectionReference",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7350,7 +7847,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferences",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7379,7 +7876,7 @@
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "caller_workload_id": "integration-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/ManageProviderPool",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
@@ -7402,6 +7899,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 27,
+  "policy_revision": 28,
   "v": 1
 }

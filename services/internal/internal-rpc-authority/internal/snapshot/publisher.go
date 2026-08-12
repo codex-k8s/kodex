@@ -121,7 +121,15 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 		len(policyDocument.Policy.ProofProducers) == 0 {
 		return PublisherBuildResult{}, errors.New("authority publisher policy rejected")
 	}
-	issuers, err := publisherIssuerSets(options.AuthorizationKeys, now)
+	authorizationKeys, proofKeys, err := bindPublisherKeyAudiences(
+		options.AuthorizationKeys,
+		options.AuthorityProofKeys,
+		policyDocument.Policy,
+	)
+	if err != nil {
+		return PublisherBuildResult{}, err
+	}
+	issuers, err := publisherIssuerSets(authorizationKeys, now)
 	if err != nil {
 		return PublisherBuildResult{}, err
 	}
@@ -177,8 +185,10 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	if !bytes.Equal(verifiedPayload, expectedPayload) {
 		return PublisherBuildResult{}, errors.New("signed authority snapshot readback mismatch")
 	}
+	proofOptions := options
+	proofOptions.AuthorityProofKeys = proofKeys
 	proofTrust, err := publisherProofTrust(
-		options,
+		proofOptions,
 		now,
 		digest,
 	)
@@ -192,6 +202,60 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 		ProofTrustJSON:     proofTrust,
 		PolicyRevision:     policyDocument.PolicyRevision,
 	}, nil
+}
+
+func bindPublisherKeyAudiences(
+	authorizationKeys []PublisherKey,
+	proofKeys []PublisherKey,
+	policyValue policy,
+) ([]PublisherKey, []PublisherKey, error) {
+	authorizationAudiences := make(map[string]map[string]struct{})
+	for _, binding := range policyValue.OperationBindings {
+		if binding.CallerSPIFFEID == "" ||
+			binding.Issuer != binding.CallerSPIFFEID ||
+			binding.Audience == "" {
+			return nil, nil, errors.New("authority operation binding issuer rejected")
+		}
+		if authorizationAudiences[binding.CallerSPIFFEID] == nil {
+			authorizationAudiences[binding.CallerSPIFFEID] = make(map[string]struct{})
+		}
+		authorizationAudiences[binding.CallerSPIFFEID][binding.Audience] = struct{}{}
+	}
+	proofAudiences := make(map[string]map[string]struct{})
+	for _, producer := range policyValue.ProofProducers {
+		if producer.AuthorityProofIssuer == "" || producer.AuthorityProofAudience == "" {
+			return nil, nil, errors.New("authority proof producer identity rejected")
+		}
+		if proofAudiences[producer.AuthorityProofIssuer] == nil {
+			proofAudiences[producer.AuthorityProofIssuer] = make(map[string]struct{})
+		}
+		proofAudiences[producer.AuthorityProofIssuer][producer.AuthorityProofAudience] = struct{}{}
+	}
+	bind := func(values []PublisherKey, expected map[string]map[string]struct{}) ([]PublisherKey, error) {
+		result := make([]PublisherKey, len(values))
+		for index, value := range values {
+			audiences := expected[value.Issuer]
+			if len(audiences) == 0 {
+				return nil, errors.New("publisher key has no policy audience")
+			}
+			value.Audiences = make([]string, 0, len(audiences))
+			for audience := range audiences {
+				value.Audiences = append(value.Audiences, audience)
+			}
+			sort.Strings(value.Audiences)
+			result[index] = value
+		}
+		return result, nil
+	}
+	boundAuthorization, err := bind(authorizationKeys, authorizationAudiences)
+	if err != nil {
+		return nil, nil, err
+	}
+	boundProof, err := bind(proofKeys, proofAudiences)
+	if err != nil {
+		return nil, nil, err
+	}
+	return boundAuthorization, boundProof, nil
 }
 
 // VerifyPublisherManifestSigner проверяет root→bundle→CURRENT signer до I/O.

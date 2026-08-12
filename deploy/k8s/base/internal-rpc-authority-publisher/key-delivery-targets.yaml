@@ -1,6 +1,6 @@
 # Рабочий registry publisher для полного issuer/verifier/resolver пути.
 version: 1
-source_revision: 6
+source_revision: 7
 targets:
   - workload_id: role-image-builder
     role: AUTHORIZATION_ISSUER
