@@ -173,6 +173,13 @@ yq -o=json '.data' "$temporary_directory/workload-contracts.yaml" |
   printf 'Production workload contract is empty or allows ServiceAccount token automount\n' >&2
   exit 1
 }
+yq -e '
+  .metadata.labels."mattercodex.dev/profile" == "direct-production-single-node-prototype" and
+  .metadata.labels."mattercodex.dev/release-managed" == "true"
+' "$temporary_directory/workload-contracts.yaml" >/dev/null || {
+  printf 'Production workload contract is outside the release admission boundary\n' >&2
+  exit 1
+}
 yq -o=json '.data."deployment.internal-rpc-authority-restore-controller.volumes"' \
   "$temporary_directory/workload-contracts.yaml" |
   jq -e 'contains("kubernetes-ca\u001econfigMap\u001ekube-root-ca.crt\u001dfalse\u001d420\u001d")' \
