@@ -205,10 +205,10 @@ tools/deploy/classify-direct-production-application-material.sh \
 ```
 
 Классификатор заново получает interface render из текущего checkout и требует
-ровно 141 Secret и 20 ConfigMap в `mattercodex-system`. Для revision, на которой
-введена policy, это 67 криптографически генерируемых, 76 детерминированно
-выводимых, 2 полностью безопасно переиспользуемых и 16 внешних ресурсов. Внешний
-фрагмент принимается только как exact closed set из 16 ресурсов и 37 ключей:
+ровно 130 Secret и 19 ConfigMap в `mattercodex-system`. Для текущей revision это
+68 криптографически генерируемых, 70 детерминированно выводимых, 2 полностью
+безопасно переиспользуемых и 9 внешних ресурсов. Внешний фрагмент принимается
+только как exact closed set из 9 ресурсов и 14 ключей:
 лишний, отсутствующий или пустой ключ, `stringData`, другой namespace либо
 неизвестный kind приводят к закрытому отказу. Значения не включаются в отчёт.
 Фрагмент с правами слабее `0600` проверяется отдельным запуском с
@@ -219,9 +219,9 @@ legacy source Secret. Она не выводит значения и не изм
 `matter-kodex-prod`. Классификация сама по себе не является materialization.
 
 `tools/deploy/materialize-direct-production-application.sh` объединяет все
-67 `cryptographically_generated`, 76 `deterministically_derived`, два полностью
-`safely_reusable_from_existing_binding` и частичные reusable bindings внутри
-двух external ресурсов. Он использует `umask 077`, secure temporary directory,
+68 `cryptographically_generated`, 70 `deterministically_derived`, два полностью
+`safely_reusable_from_existing_binding` и три exact reusable bindings. Он
+использует `umask 077`, secure temporary directory,
 pinned `nsc`, operator/account JWT и минимальные NATS user permissions; создаёт
 owner-only password store для 29 поколенческих PostgreSQL LOGIN principals и
 verify-full DSN с exact hostname/CA; подписывает TLS identities общей prototype
@@ -373,15 +373,19 @@ image/digest, per-execution TTL `900`, policy intersection, immediate terminal/
 cancel/delete/retry revoke/readback, KMS и передача storage/profile/KMS env в
 dynamic Jobs. Cutover остаётся запрещён.
 
-Active classification содержит 147 resources: 61
+Active classification содержит 149 resources: 68
 `cryptographically_generated`, 70 `deterministically_derived`, 2
-`safely_reusable_from_existing_binding` и 14 `truly_external_credential`.
+`safely_reusable_from_existing_binding` и 9 `truly_external_credential`.
 Canonical classification SHA-256 —
-`4121cbe03b74f62224f96b8edf761c465eb900d9addd9f383ec39929c388e630`.
-Внешний closed set состоит из 14 resources / 35 keys. В нем
-остаются application grants и public trust roots, Mattermost mapping,
+`f9fffeb682e032c70dc7186fac2da405eb33567b80b018b35086d3f15a27594c`.
+Внешний closed set состоит из 9 resources / 14 keys. В нем остаются Mattermost mapping,
 `integration-gateway-provider-health-credential`, Git aggregate, OIDC provider
 snapshot и `mattercodex-oidc-ca` для сетевых OIDC consumers control plane.
+Readiness application grants и их ES256 trust roots генерируются владельцем
+профиля. Отдельный `application-grant-rotator` обновляет пять readiness-only
+grants раз в минуту с TTL четыре минуты и имеет `patch` только на их точные
+Secret names. Рабочие grants с session/turn/process authority этим bootstrap
+не заменяются.
 Runtime archive/restore KMS/role identifiers в external fragment отсутствуют.
 Внутренние credential в этот
 set не входят. Отсутствие любого key отклоняет materializer.

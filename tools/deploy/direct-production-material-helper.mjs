@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, hkdfSync, sign } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, hkdfSync, randomUUID, sign } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
 function fail(message) {
@@ -254,6 +254,52 @@ switch (command) {
     const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
     const privateJWK = privateKey.export({ format: "jwk" });
     writeJSON(args[0], canonicalPrivateJWK(privateJWK));
+    break;
+  }
+  case "generate-public-jwk": {
+    if (args.length !== 1) fail("generate-public-jwk requires an output path");
+    const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    writeJSON(args[0], canonicalPublicJWK(privateKey.export({ format: "jwk" })));
+    break;
+  }
+  case "validate-public-jwk": {
+    if (args.length !== 1) fail("validate-public-jwk requires an input path");
+    const publicJWK = JSON.parse(readFileSync(args[0], "utf8"));
+    const canonical = canonicalPublicJWK(publicJWK);
+    if (JSON.stringify(publicJWK) !== JSON.stringify(canonical)) fail("public ES256 JWK is not canonical");
+    break;
+  }
+  case "generate-readiness-grant": {
+    if (args.length !== 4 || !/^[1-9][0-9]*$/.test(args[3])) {
+      fail("generate-readiness-grant requires private JWK, output, workload and TTL");
+    }
+    const [privatePath, outputPath, workload, ttlRaw] = args;
+    if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(workload)) fail("readiness workload is invalid");
+    const ttl = Number(ttlRaw);
+    if (!Number.isSafeInteger(ttl) || ttl < 120 || ttl > 300) fail("readiness grant TTL is invalid");
+    const privateJWK = canonicalPrivateJWK(JSON.parse(readFileSync(privatePath, "utf8")));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      aud: `urn:mattercodex:workload-readiness:${workload}`,
+      caller_spiffe_id: `spiffe://mattercodex.local/ns/mattercodex-system/sa/${workload}`,
+      exp: now + ttl,
+      iat: now,
+      iss: `https://control-plane.mattercodex-system.svc.cluster.local/authority/readiness/${workload}`,
+      jti: randomUUID(),
+      nbf: now,
+      organization_id: "d9b072a0-3980-57c0-a6fe-289b7a608f31",
+      project_id: "",
+      revision: now,
+      sub: "63dfc7d7-9439-5e8d-8953-24f975da8f32",
+      tenant_owner: false,
+      v: 1,
+      workload_id: workload,
+    };
+    const compact = signCanonicalES256(payload, {
+      alg: "ES256", crit: ["mcxv"], kid: privateJWK.kid,
+      mcxv: 1, typ: "mattercodex-application-grant+jws",
+    }, privateJWK);
+    writeFileSync(outputPath, compact, { mode: 0o600 });
     break;
   }
   case "generate-restore-role-trust": {

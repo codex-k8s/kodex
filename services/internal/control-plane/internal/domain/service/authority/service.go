@@ -453,12 +453,13 @@ func (service *Service) Check(ctx context.Context) (ReadinessState, error) {
 }
 
 func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) error {
+	readinessGrant := identity.CredentialPurpose == "WORKLOAD_READINESS_GRANT"
 	if !operationPattern.MatchString(identity.ProducerID) || identity.CredentialPurpose == "" ||
 		identity.CredentialGeneration == 0 || value.ValidateID(identity.ActorID) != nil ||
 		value.ValidateID(identity.OrganizationID) != nil ||
 		(identity.ProjectID != "" && value.ValidateID(identity.ProjectID) != nil) ||
 		value.ValidateID(identity.SessionJTI) != nil ||
-		(identity.CallerWorkload == "control-api-gateway" && value.ValidateID(identity.SessionID) != nil) ||
+		(!readinessGrant && identity.CallerWorkload == "control-api-gateway" && value.ValidateID(identity.SessionID) != nil) ||
 		identity.SessionRevision == 0 ||
 		len(identity.SubjectDigest) != 64 ||
 		len(identity.CredentialDigest) != 64 {
@@ -466,7 +467,7 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 	}
 	interactionGrantIsBound := identity.CallerWorkload == "interaction-gateway" && (identity.BoundSessionID != "" || identity.BoundTurnID != "" || identity.BoundAttempt != 0 ||
 		identity.BoundInputSHA256 != "" || identity.BoundGeneration != 0)
-	if (identity.CallerWorkload == "agent-runner" ||
+	if !readinessGrant && (identity.CallerWorkload == "agent-runner" ||
 		identity.CallerWorkload == "runtime-controller" ||
 		interactionGrantIsBound ||
 		identity.CallerWorkload == "runtime-restore-verifier" ||

@@ -5,46 +5,6 @@
   "external_bindings": [
     {
       "kind": "Secret",
-      "name": "automation-scheduler-application-grant",
-      "keys": [
-        "application-grant.jws"
-      ],
-      "requirement": "точный workload application grant, выпущенный владельцем"
-    },
-    {
-      "kind": "Secret",
-      "name": "control-api-gateway-application-grant",
-      "keys": [
-        "readiness.jwt"
-      ],
-      "requirement": "точный control-plane readiness grant, выпущенный владельцем"
-    },
-    {
-      "kind": "Secret",
-      "name": "control-plane-application-grants",
-      "keys": [
-        "control-plane.agent-session.public.jwk",
-        "control-plane.artifact-scanner.public.jwk",
-        "control-plane.automation.public.jwk",
-        "control-plane.integration-continuation.public-keyset.json",
-        "control-plane.integration-gateway.public.jwk",
-        "control-plane.integration-git-reconciliation.public.jwk",
-        "control-plane.integration-provider-readback.public.jwk",
-        "control-plane.interaction-gateway.public-keyset.json",
-        "control-plane.interaction-provider-readback.public.jwk",
-        "control-plane.legacy-data-migration.public.jwk",
-        "control-plane.memory-indexer.public.jwk",
-        "control-plane.owner-gate-delivery.public.jwk",
-        "control-plane.runtime-archive.public.jwk",
-        "control-plane.runtime-cleanup-authorizer.public.jwk",
-        "control-plane.runtime-controller.public.jwk",
-        "control-plane.runtime-restore-effect.public.jwk",
-        "control-plane.runtime-restore-verifier.public.jwk"
-      ],
-      "requirement": "публичное доверие для независимо выпускаемых владельцем application grants"
-    },
-    {
-      "kind": "Secret",
       "name": "integration-gateway-git-credentials",
       "keys": [
         "state.json"
@@ -63,14 +23,6 @@
     },
     {
       "kind": "Secret",
-      "name": "integration-gateway-application-grant",
-      "keys": [
-        "readiness.jwt"
-      ],
-      "requirement": "точный control-plane readiness grant, выпущенный владельцем"
-    },
-    {
-      "kind": "Secret",
       "name": "integration-gateway-provider-health-credential",
       "keys": [
         "token"
@@ -86,14 +38,6 @@
         "revision"
       ],
       "requirement": "принадлежащая окружению immutable revision Mattermost mapping"
-    },
-    {
-      "kind": "Secret",
-      "name": "interaction-gateway-runtime",
-      "keys": [
-        "owner-gate-delivery.jwt"
-      ],
-      "requirement": "точный delivery grant владельца; остальные ключи генерируются, выводятся или переиспользуются"
     },
     {
       "kind": "Secret",
@@ -127,14 +71,6 @@
         "manifest-root.jws"
       ],
       "requirement": "readback credential/root bundles, подписанные соответствующими offline roots"
-    },
-    {
-      "kind": "Secret",
-      "name": "runtime-controller-application-grant",
-      "keys": [
-        "application-grant.jws"
-      ],
-      "requirement": "точный workload application grant, выпущенный владельцем"
     },
     {
       "kind": "ConfigMap",
@@ -233,7 +169,7 @@
   ],
   "resources": [
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "automation-scheduler-application-grant",
       "keys": [
@@ -241,7 +177,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "control-api-gateway-application-grant",
       "keys": [
@@ -269,25 +205,30 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "control-plane-application-grants",
       "keys": [
         "control-plane.agent-session.public.jwk",
         "control-plane.artifact-scanner.public.jwk",
+        "control-plane.automation-readiness.public.jwk",
         "control-plane.automation.public.jwk",
+        "control-plane.control-api-readiness.public.jwk",
         "control-plane.integration-continuation.public-keyset.json",
         "control-plane.integration-gateway.public.jwk",
         "control-plane.integration-git-reconciliation.public.jwk",
         "control-plane.integration-provider-readback.public.jwk",
+        "control-plane.integration-readiness.public.jwk",
         "control-plane.interaction-gateway.public-keyset.json",
         "control-plane.interaction-provider-readback.public.jwk",
         "control-plane.legacy-data-migration.public.jwk",
         "control-plane.memory-indexer.public.jwk",
         "control-plane.owner-gate-delivery.public.jwk",
+        "control-plane.owner-gate-readiness.public.jwk",
         "control-plane.runtime-archive.public.jwk",
         "control-plane.runtime-cleanup-authorizer.public.jwk",
         "control-plane.runtime-controller.public.jwk",
+        "control-plane.runtime-readiness.public.jwk",
         "control-plane.runtime-restore-effect.public.jwk",
         "control-plane.runtime-restore-verifier.public.jwk"
       ]
@@ -428,7 +369,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "integration-gateway-application-grant",
       "keys": [
@@ -564,7 +505,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "interaction-gateway-runtime",
       "keys": [
@@ -573,7 +514,6 @@
         "delivery-key",
         "delivery-readback.public-keyset.json",
         "mattermost-event.private.jwk",
-        "owner-gate-delivery.jwt",
         "postgres-dsn",
         "provider-readback.private.jwk",
         "s3-access-key",
@@ -1072,7 +1012,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "runtime-controller-application-grant",
       "keys": [
@@ -1329,6 +1269,26 @@
       "name": "runtime-controller-postgresql-ca",
       "keys": [
         "ca.pem"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "control-plane-readiness-grant-signers",
+      "keys": [
+        "automation-scheduler.private.jwk",
+        "control-api-gateway.private.jwk",
+        "integration-gateway.private.jwk",
+        "interaction-gateway.private.jwk",
+        "runtime-controller.private.jwk"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "interaction-gateway-application-grant",
+      "keys": [
+        "readiness.jwt"
       ]
     }
   ]

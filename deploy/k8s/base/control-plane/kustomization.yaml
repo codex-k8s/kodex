@@ -4,6 +4,7 @@ namespace: mattercodex-system
 resources:
   - ../image-supply-chain
   - serviceaccount.yaml
+  - application-grant-rotator.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml
