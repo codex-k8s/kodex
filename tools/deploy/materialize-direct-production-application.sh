@@ -478,7 +478,7 @@ while IFS=$'\t' read -r name key; do
     node "$helper" generate-jwk "$path"
   fi
 done < <(jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
-  select(. == "private.jwk" or . == "next-private.jwk" or . == "evidence-private.jwk" or . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") | [$name,.] | @tsv' "$policy")
+  select(endswith(".private.jwk") or . == "private.jwk" or . == "next-private.jwk" or . == "evidence-private.jwk") | [$name,.] | @tsv' "$policy")
 public_jwks() {
   local destination
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
@@ -507,11 +507,47 @@ public_jwk() {
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
   node "$helper" public-jwk "$(value_path Secret "$3" "$4")" "$destination"
 }
+generated_public_jwk() {
+  local destination
+  destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
+  if ! node "$helper" validate-public-jwk "$destination" >/dev/null 2>&1; then
+    node "$helper" generate-public-jwk "$destination"
+  fi
+}
 public_keyset_genesis control-plane-interaction-readback-trust public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis control-plane-keyset-genesis interaction-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
 public_keyset_genesis interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
+public_keyset_genesis control-plane-application-grants control-plane.integration-continuation.public-keyset.json control-plane-integration-continuation-grant-signer private.jwk
+public_keyset_genesis control-plane-application-grants control-plane.interaction-gateway.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
+public_jwk control-plane-application-grants control-plane.integration-provider-readback.public.jwk integration-gateway-provider-receipt-signer private.jwk
+public_jwk control-plane-application-grants control-plane.integration-git-reconciliation.public.jwk integration-gateway-git-receipt-signer private.jwk
+public_jwk control-plane-application-grants control-plane.interaction-provider-readback.public.jwk interaction-gateway-runtime provider-readback.private.jwk
+for binding in \
+  'control-api-gateway:control-plane.control-api-readiness.public.jwk' \
+  'automation-scheduler:control-plane.automation-readiness.public.jwk' \
+  'integration-gateway:control-plane.integration-readiness.public.jwk' \
+  'interaction-gateway:control-plane.owner-gate-readiness.public.jwk' \
+  'runtime-controller:control-plane.runtime-readiness.public.jwk'; do
+  workload=${binding%%:*}; trust_key=${binding#*:}
+  public_jwk control-plane-application-grants "$trust_key" control-plane-readiness-grant-signers "$workload.private.jwk"
+done
+while IFS= read -r key; do
+  generated_public_jwk control-plane-application-grants "$key"
+done < <(jq -r '.resources[] | select(.kind=="Secret" and .name=="control-plane-application-grants") | .keys[] | select(endswith(".public.jwk"))' "$policy")
+generate_readiness_grant() {
+  local workload=$1 target_name=$2 target_key=$3 destination
+  destination=$(value_path Secret "$target_name" "$target_key"); mkdir -p "$(dirname -- "$destination")"
+  node "$helper" generate-readiness-grant \
+    "$(value_path Secret control-plane-readiness-grant-signers "$workload.private.jwk")" \
+    "$destination" "$workload" 240
+}
+generate_readiness_grant control-api-gateway control-api-gateway-application-grant readiness.jwt
+generate_readiness_grant automation-scheduler automation-scheduler-application-grant application-grant.jws
+generate_readiness_grant integration-gateway integration-gateway-application-grant readiness.jwt
+generate_readiness_grant interaction-gateway interaction-gateway-application-grant readiness.jwt
+generate_readiness_grant runtime-controller runtime-controller-application-grant application-grant.jws
 for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
 done

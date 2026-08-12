@@ -301,6 +301,8 @@ func supportedCredential(credential string) bool {
 		"IMAGE_PROMOTION_GRANT":
 		// server-owned capability следующего exact integration transition.
 		return true
+	case "WORKLOAD_READINESS_GRANT":
+		return true
 	case "INTEGRATION_CONTINUATION_GRANT":
 		return true
 	default:

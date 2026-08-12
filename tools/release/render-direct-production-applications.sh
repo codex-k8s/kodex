@@ -134,7 +134,8 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
     )
   ) |
   with(select(.kind == "Deployment");
-    (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1"
+    (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1" |
+    with(select(.metadata.name == "application-grant-rotator"); .spec.replicas = 1)
   ) |
   with(select(.kind == "CronJob");
     .spec.jobTemplate.spec.template.metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |

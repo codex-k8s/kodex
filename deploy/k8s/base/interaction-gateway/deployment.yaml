@@ -67,6 +67,7 @@ spec:
             - {name: mattermost-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/mattermost, readOnly: true}
             - {name: object-store-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/object-store, readOnly: true}
             - {name: mapping, mountPath: /var/run/config/mattercodex/interaction-gateway/mapping, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/interaction-gateway/application-grant, readOnly: true}
             - {name: runtime, mountPath: /var/run/secrets/mattercodex/interaction-gateway/runtime, readOnly: true}
             - {name: vault-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/vault, readOnly: true}
             - {name: vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
@@ -187,6 +188,7 @@ spec:
         - {name: mattermost-ca, configMap: {name: mattermost-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
         - {name: object-store-ca, configMap: {name: object-store-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
         - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}, {key: manifest.sha256, path: manifest.sha256}, {key: revision, path: revision}]}}
+        - {name: application-grant, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-application-grant}}}
         - {name: runtime, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-runtime}}}
         - {name: vault-ca, secret: {secretName: interaction-gateway-vault-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}}
         - name: vault-token

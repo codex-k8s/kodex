@@ -202,6 +202,7 @@ func (verifier *Verifier) Authenticate(
 	issuedAt := time.Unix(parsed.IssuedAt, 0).UTC()
 	notBefore := time.Unix(parsed.NotBefore, 0).UTC()
 	expiresAt := time.Unix(parsed.ExpiresAt, 0).UTC()
+	readinessGrant := verifier.config.Purpose == "WORKLOAD_READINESS_GRANT"
 	if parsed.Version != 1 ||
 		parsed.Issuer != verifier.config.Issuer ||
 		parsed.Audience != verifier.config.Audience ||
@@ -209,7 +210,7 @@ func (verifier *Verifier) Authenticate(
 		parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID ||
 		value.ValidateID(parsed.Subject) != nil ||
 		value.ValidateID(parsed.OrganizationID) != nil ||
-		(parsed.ProjectID == "" && verifier.config.WorkloadID != "automation-scheduler" &&
+		(parsed.ProjectID == "" && !readinessGrant && verifier.config.WorkloadID != "automation-scheduler" &&
 			verifier.config.WorkloadID != "legacy-data-migration") ||
 		(parsed.ProjectID != "" && value.ValidateID(parsed.ProjectID) != nil) ||
 		value.ValidateID(parsed.JTI) != nil ||
@@ -231,7 +232,7 @@ func (verifier *Verifier) Authenticate(
 	if !legacyMigration && (parsed.SourceRootReference != "" || parsed.SourceRootSHA256 != "") {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
-	if (verifier.config.WorkloadID == "agent-runner" ||
+	if !readinessGrant && (verifier.config.WorkloadID == "agent-runner" ||
 		verifier.config.WorkloadID == "runtime-controller" ||
 		verifier.config.WorkloadID == "integration-gateway" ||
 		verifier.config.WorkloadID == "runtime-restore-verifier" ||

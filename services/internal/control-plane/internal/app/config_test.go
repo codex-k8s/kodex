@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 27 {
+	if loaded.Revision != 29 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
@@ -34,6 +34,11 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control-plane.image-promotion",
 		"control-plane.legacy-data-migration",
 		"control-plane.oidc",
+		"control-plane.control-api-readiness",
+		"control-plane.automation-readiness",
+		"control-plane.integration-readiness",
+		"control-plane.owner-gate-readiness",
+		"control-plane.runtime-readiness",
 	} {
 		if _, ok := loaded.Producers[producerID]; !ok {
 			t.Fatalf("required producer is absent: %s", producerID)
