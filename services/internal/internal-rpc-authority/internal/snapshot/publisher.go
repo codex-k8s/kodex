@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -265,8 +266,17 @@ func publisherIssuerSets(
 	}
 	result := make([]issuerKeySet, 0, len(order))
 	for _, issuer := range order {
+		sort.Slice(grouped[issuer].Keys, func(left, right int) bool {
+			if grouped[issuer].Keys[left].Generation != grouped[issuer].Keys[right].Generation {
+				return grouped[issuer].Keys[left].Generation < grouped[issuer].Keys[right].Generation
+			}
+			return grouped[issuer].Keys[left].Status < grouped[issuer].Keys[right].Status
+		})
 		result = append(result, *grouped[issuer])
 	}
+	sort.Slice(result, func(left, right int) bool {
+		return result[left].Issuer < result[right].Issuer
+	})
 	return result, nil
 }
 
@@ -314,6 +324,15 @@ func publisherProofTrust(
 	if len(documentValue.Keys) == 0 {
 		return nil, errors.New("authority proof trust has no key")
 	}
+	sort.Slice(documentValue.Keys, func(left, right int) bool {
+		if documentValue.Keys[left].Issuer != documentValue.Keys[right].Issuer {
+			return documentValue.Keys[left].Issuer < documentValue.Keys[right].Issuer
+		}
+		if documentValue.Keys[left].Generation != documentValue.Keys[right].Generation {
+			return documentValue.Keys[left].Generation < documentValue.Keys[right].Generation
+		}
+		return documentValue.Keys[left].Status < documentValue.Keys[right].Status
+	})
 	return internalrpcauth.CanonicalJSON(documentValue)
 }
 
