@@ -242,6 +242,12 @@ exact legacy namespace/Pod selector/port; legacy workloads и Services не
 readback-attestor, ждёт непустой `snapshot.jws`, и только затем запускает
 остальные consumers.
 
+Principal bootstrap создаёт Goose metadata table до мигратора, назначает ей
+ограниченные права и атомарно добавляет единственную applied baseline-запись
+`version_id=0`, только если таблица пуста. Поэтому чистая БД и повторный запуск
+используют один путь: существующая migration history не переписывается, а
+пустая предсозданная таблица не приводит к `no next version found`.
+
 Direct-production render задаёт только сочетание
 `INTERNAL_RPC_AUTHORITY_SECRET_BACKEND=direct-production-kubernetes-file` и
 `INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE=direct-production-single-node-prototype`.

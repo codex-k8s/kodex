@@ -680,6 +680,9 @@ data:
           );
           ALTER TABLE public.goose_db_version OWNER TO $owner_role;
           ALTER SEQUENCE public.goose_db_version_id_seq OWNER TO $owner_role;
+          INSERT INTO public.goose_db_version (version_id, is_applied)
+          SELECT 0, true
+          WHERE NOT EXISTS (SELECT 1 FROM public.goose_db_version);
           GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.goose_db_version TO $principal;
           GRANT USAGE, SELECT, UPDATE ON SEQUENCE public.goose_db_version_id_seq TO $principal" >/dev/null
       goose_table_count=$(psql "$database_dsn" --no-password --tuples-only --no-align \
@@ -691,6 +694,9 @@ data:
       goose_table_owner=$(psql "$database_dsn" --no-password --tuples-only --no-align \
         --set ON_ERROR_STOP=1 --command "SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = pg_catalog.to_regclass('public.goose_db_version')" | tr -d '[:space:]')
       [ "$goose_table_owner" = "$owner_role" ] || exit 33
+      goose_baseline=$(psql "$database_dsn" --no-password --tuples-only --no-align \
+        --set ON_ERROR_STOP=1 --command "SELECT count(*) FILTER (WHERE version_id = 0 AND is_applied) = 1 FROM public.goose_db_version" | tr -d '[:space:]')
+      [ "$goose_baseline" = t ] || exit 37
       goose_access=$(psql "$database_dsn" --no-password --tuples-only --no-align \
         --set ON_ERROR_STOP=1 --command "SELECT pg_catalog.has_table_privilege('$principal', 'public.goose_db_version', 'SELECT') AND pg_catalog.has_table_privilege('$principal', 'public.goose_db_version', 'INSERT') AND pg_catalog.has_table_privilege('$principal', 'public.goose_db_version', 'UPDATE') AND pg_catalog.has_table_privilege('$principal', 'public.goose_db_version', 'DELETE') AND pg_catalog.has_sequence_privilege('$principal', 'public.goose_db_version_id_seq', 'USAGE') AND pg_catalog.has_sequence_privilege('$principal', 'public.goose_db_version_id_seq', 'SELECT') AND pg_catalog.has_sequence_privilege('$principal', 'public.goose_db_version_id_seq', 'UPDATE')" | tr -d '[:space:]')
       [ "$goose_access" = t ] || exit 36
