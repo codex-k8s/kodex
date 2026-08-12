@@ -61,6 +61,23 @@ func TestStrictJSONRejectsDuplicateFields(t *testing.T) {
 	}
 }
 
+func TestDecodeStrictJSONAllowsNonCanonicalConfiguration(t *testing.T) {
+	var value struct {
+		Name    string `json:"name"`
+		Version int    `json:"version"`
+	}
+	raw := []byte("{\n  \"version\": 1,\n  \"name\": \"policy\"\n}")
+	if err := DecodeStrictJSON(raw, &value); err != nil {
+		t.Fatalf("decode strict non-canonical JSON: %v", err)
+	}
+	if value.Name != "policy" || value.Version != 1 {
+		t.Fatalf("unexpected decoded configuration: %#v", value)
+	}
+	if err := DecodeCanonicalJSON(raw, &value); !errors.Is(err, ErrCanonicalPayload) {
+		t.Fatalf("canonical decoder accepted non-canonical input: %v", err)
+	}
+}
+
 func TestValidateTimes(t *testing.T) {
 	now := time.Unix(100, 0)
 	if err := ValidateTimes(now, now, now, now.Add(30*time.Second), 30*time.Second, 5*time.Second); err != nil {

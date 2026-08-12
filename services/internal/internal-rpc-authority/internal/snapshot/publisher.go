@@ -88,7 +88,7 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	}
 	policyRaw = trimSingleTrailingNewline(policyRaw)
 	var policyDocument publisherPolicyDocument
-	if err := internalrpcauth.DecodeCanonicalJSON(
+	if err := internalrpcauth.DecodeStrictJSON(
 		policyRaw,
 		&policyDocument,
 	); err != nil ||
