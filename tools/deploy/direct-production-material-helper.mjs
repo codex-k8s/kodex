@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, hkdfSync } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, hkdfSync, sign } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
 function fail(message) {
@@ -112,6 +112,18 @@ function decodeCompactJWS(path) {
 
 function sha256JSON(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function signCanonicalES256(payload, protectedHeader, privateJWK) {
+  const encodedHeader = encode(canonicalJSON(protectedHeader));
+  const encodedPayload = encode(canonicalJSON(payload));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const signature = sign("sha256", Buffer.from(signingInput), {
+    key: createPrivateKey({ key: privateJWK, format: "jwk" }),
+    dsaEncoding: "ieee-p1363",
+  });
+  if (signature.length !== 64) fail("ES256 signature is invalid");
+  return `${signingInput}.${signature.toString("base64url")}`;
 }
 
 function validateAggregate(path, maximumRecords) {
@@ -242,6 +254,70 @@ switch (command) {
     const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
     const privateJWK = privateKey.export({ format: "jwk" });
     writeJSON(args[0], canonicalPrivateJWK(privateJWK));
+    break;
+  }
+  case "generate-restore-role-trust": {
+    if (args.length !== 7) {
+      fail("generate-restore-role-trust requires output, manifest signer, CURRENT signer, NEXT signer, source revision, manifest signer generation and validity seconds");
+    }
+    const [output, manifestPath, currentPath, nextPath, sourceRaw, manifestGenerationRaw, validityRaw] = args;
+    const sourceRevision = Number(sourceRaw);
+    const manifestSignerGeneration = Number(manifestGenerationRaw);
+    const validitySeconds = Number(validityRaw);
+    if (!Number.isSafeInteger(sourceRevision) || sourceRevision !== 1 ||
+        !Number.isSafeInteger(manifestSignerGeneration) || manifestSignerGeneration < 1 ||
+        !Number.isSafeInteger(validitySeconds) || validitySeconds < 86400 || validitySeconds > 366 * 86400) {
+      fail("restore role trust lifecycle parameters are invalid");
+    }
+    const manifestSigner = canonicalPrivateJWK(JSON.parse(readFileSync(manifestPath, "utf8")));
+    const current = canonicalPublicJWK(JSON.parse(readFileSync(currentPath, "utf8")));
+    const next = canonicalPublicJWK(JSON.parse(readFileSync(nextPath, "utf8")));
+    if (current.kid === next.kid) fail("restore role CURRENT and NEXT signers must differ");
+    const publishedAt = Math.floor(Date.now() / 1000);
+    const notBefore = publishedAt - 300;
+    const notAfter = publishedAt + validitySeconds;
+    const keys = [
+      {
+        status: "CURRENT",
+        credential_signer_generation: 1,
+        kid: current.kid,
+        public_jwk: current,
+        jwk_thumbprint_sha256: current.kid,
+        not_before: notBefore,
+        not_after: notAfter,
+      },
+      {
+        status: "NEXT",
+        credential_signer_generation: 2,
+        kid: next.kid,
+        public_jwk: next,
+        jwk_thumbprint_sha256: next.kid,
+        not_before: notBefore,
+        not_after: notAfter,
+      },
+    ];
+    const payload = {
+      v: 1,
+      iss: "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher",
+      aud: "urn:mattercodex:internal-rpc-authority-restore-controller",
+      source_revision: sourceRevision,
+      key_set_revision: sourceRevision,
+      trust_set_digest_sha256: createHash("sha256").update(canonicalJSON(keys)).digest("hex"),
+      predecessor: { revision: 0, digest_sha256: "0".repeat(64) },
+      history: [],
+      manifest_signer_generation: manifestSignerGeneration,
+      keys,
+      published_at: publishedAt,
+      valid_until: notAfter,
+    };
+    const compact = signCanonicalES256(payload, {
+      alg: "ES256",
+      crit: ["mcxv"],
+      kid: manifestSigner.kid,
+      mcxv: 1,
+      typ: "mattercodex-internal-rpc-restore-role-trust+jws",
+    }, manifestSigner);
+    writeFileSync(output, `${compact}\n`, { mode: 0o600 });
     break;
   }
   case "validate-private-jwk": {

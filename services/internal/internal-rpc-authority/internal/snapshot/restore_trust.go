@@ -13,6 +13,8 @@ import (
 
 const restoreRoleTrustType = "mattercodex-internal-rpc-restore-role-trust+jws"
 
+const restoreRoleTrustMaximumValidity = 366 * 24 * time.Hour
+
 // RestoreRoleTrustOptions задаёт цепочку доверия роли восстановления.
 type RestoreRoleTrustOptions struct {
 	ManifestRootPublicJWKFile  string
@@ -117,7 +119,9 @@ func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 		document.SignerGeneration != signerGeneration ||
 		!snapshotDigestPattern.MatchString(document.TrustSetDigest) ||
 		document.PublishedAt > now.Add(5*time.Second).Unix() ||
-		document.ValidUntil != document.PublishedAt+86400 ||
+		document.ValidUntil <= document.PublishedAt ||
+		document.ValidUntil > document.PublishedAt+
+			int64(restoreRoleTrustMaximumValidity/time.Second) ||
 		!now.Before(time.Unix(document.ValidUntil, 0)) ||
 		len(document.Keys) < 2 ||
 		len(document.Keys) > 3 {

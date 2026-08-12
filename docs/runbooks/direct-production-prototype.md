@@ -154,6 +154,9 @@ credentials, проверяет готовность exact TLS Certificates, д�
 только `internal-rpc-authority-snapshot/snapshot.jws` до первого publisher
 readback и пишет безопасный
 `mattercodex-bootstrap-readiness` без значений credentials.
+Restore-role trust не принимается как внешний произвольный JWS: materializer
+генерирует отличающиеся `CURRENT`/`NEXT` ES256 signer keys, подписывает bundle
+manifest signer ключом из offline ceremony и ограничивает его срок действия.
 
 ## Release и dark deploy
 
