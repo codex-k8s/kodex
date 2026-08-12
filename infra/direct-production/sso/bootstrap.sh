@@ -4,13 +4,14 @@ umask 077
 
 fail() { printf 'Direct production SSO bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode apply|readback --oidc-ca-file <path> [--external-material-file <path>] [--owner-username <name>] [--owner-email <email>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode apply|readback --oidc-ca-file <path> --public-ipv4 <address> [--external-material-file <path>] [--owner-username <name>] [--owner-email <email>]\n' "$0" >&2
 }
 
 context=""
 mode=""
 oidc_ca_file=""
 external_material_file=""
+public_ipv4=""
 owner_username="lepehovsv"
 owner_email="lepehovsv@gmail.com"
 while (($# > 0)); do
@@ -19,6 +20,7 @@ while (($# > 0)); do
     --mode) mode="${2:-}"; shift 2 ;;
     --oidc-ca-file) oidc_ca_file="${2:-}"; shift 2 ;;
     --external-material-file) external_material_file="${2:-}"; shift 2 ;;
+    --public-ipv4) public_ipv4="${2:-}"; shift 2 ;;
     --owner-username) owner_username="${2:-}"; shift 2 ;;
     --owner-email) owner_email="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -29,6 +31,11 @@ done
 [[ -n "$context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in apply|readback) ;; *) fail "mode must be apply or readback" ;; esac
 [[ -r "$oidc_ca_file" ]] || fail "OIDC CA file is required"
+[[ "$public_ipv4" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "public IPv4 address is invalid"
+IFS=. read -r ipv4_a ipv4_b ipv4_c ipv4_d <<<"$public_ipv4"
+for octet in "$ipv4_a" "$ipv4_b" "$ipv4_c" "$ipv4_d"; do
+  ((10#$octet <= 255)) || fail "public IPv4 address is invalid"
+done
 [[ "$owner_username" =~ ^[a-z0-9][a-z0-9._-]{2,63}$ ]] || fail "owner username is invalid"
 [[ "$owner_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail "owner email is invalid"
 for command_name in curl jq kubectl openssl sha256sum yq; do
@@ -43,8 +50,12 @@ trap 'rm -rf -- "$temporary_directory"' EXIT HUP INT TERM
 
 render="$temporary_directory/sso.yaml"
 kubectl kustomize "$script_directory" >"$render"
+oidc_egress="$temporary_directory/control-api-oidc-egress.yaml"
+PUBLIC_OIDC_CIDR="$public_ipv4/32" yq '
+  .spec.egress[0].to[0].ipBlock.cidr = strenv(PUBLIC_OIDC_CIDR)
+' "$script_directory/control-api-oidc-egress.yaml" >"$oidc_egress"
 kubectl apply --dry-run=client --validate=false -f "$render" >/dev/null
-kubectl apply --dry-run=client --validate=false -f "$script_directory/coredns-custom.yaml" >/dev/null
+kubectl apply --dry-run=client --validate=false -f "$oidc_egress" >/dev/null
 
 validate_bootstrap_secret() {
   kubectl --context "$context" -n identity get secret keycloak-bootstrap -o json |
@@ -99,13 +110,10 @@ if [[ "$mode" == apply ]]; then
   fi
   validate_bootstrap_secret
 
-  kubectl --context "$context" apply --server-side --force-conflicts \
-    --field-manager=mattercodex-sso-bootstrap -f "$script_directory/coredns-custom.yaml" >/dev/null
-  kubectl --context "$context" -n kube-system rollout restart deployment/coredns >/dev/null
-  kubectl --context "$context" -n kube-system rollout status deployment/coredns --timeout=3m >/dev/null
-
   kubectl --context "$context" apply --server-side --field-manager=mattercodex-sso-bootstrap \
     -f "$render" >/dev/null
+  kubectl --context "$context" apply --server-side --field-manager=mattercodex-sso-bootstrap \
+    -f "$oidc_egress" >/dev/null
   kubectl --context "$context" -n identity wait --for=condition=Ready certificate/sso-public-tls --timeout=5m >/dev/null
   kubectl --context "$context" -n identity rollout status statefulset/keycloak-postgresql --timeout=5m >/dev/null
   kubectl --context "$context" -n identity rollout status deployment/sso --timeout=8m >/dev/null
@@ -113,6 +121,8 @@ if [[ "$mode" == apply ]]; then
 fi
 
 validate_bootstrap_secret
+[[ "$(kubectl --context "$context" -n mattercodex-system get networkpolicy control-api-gateway-public-oidc-egress -o jsonpath='{.spec.egress[0].to[0].ipBlock.cidr}')" == "$public_ipv4/32" ]] ||
+  fail "control API OIDC egress readback mismatch"
 kubectl --context "$context" -n identity get certificate sso-public-tls -o json |
   jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "True")' >/dev/null ||
   fail "SSO public certificate is not Ready"

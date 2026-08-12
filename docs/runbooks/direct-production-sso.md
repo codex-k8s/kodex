@@ -15,7 +15,7 @@ updated: 2026-08-12
 Профиль разворачивает Keycloak в namespace `identity`, отдельную PostgreSQL и
 публичный issuer `https://sso.kodex.works/realms/mattercodex`. Control Center
 использует Authorization Code + PKCE, а `control-api-gateway` проверяет тот же
-issuer по внутреннему DNS-маршруту, TLS 1.3 и фиксированному CA.
+issuer по обычному DNS, TLS 1.3, фиксированному CA и exact `/32` egress.
 
 Keycloak и его PostgreSQL не входят в release-managed dark manifest
 `mattercodex-system`: SSO должен быть готов до запуска OIDC consumers. Все
@@ -25,9 +25,10 @@ Keycloak и его PostgreSQL не входят в release-managed dark manifest
 
 1. Убедиться, что `sso.kodex.works` указывает на публичный ingress кластера, а
    ClusterIssuer `letsencrypt-prod` готов.
-2. Выбрать точный Kubernetes context и доверенный CA публичного сертификата.
+2. Выбрать точный Kubernetes context, публичный IPv4 ingress и доверенный CA
+   публичного сертификата.
 3. Выполнить `infra/direct-production/sso/bootstrap.sh --mode apply` с exact
-   context, `--oidc-ca-file` и защищенным external-material file из
+   context, `--oidc-ca-file`, `--public-ipv4` и защищенным external-material file из
    `RUN-MC-015`.
 4. Дождаться readback discovery, JWKS, Certificate, PostgreSQL и Keycloak.
 
@@ -63,6 +64,7 @@ Google Identity Provider включается отдельно после нас
 - Ready PostgreSQL и Keycloak;
 - exact issuer и JWKS URI;
 - непустой RSA JWKS.
+- exact `/32` egress от `control-api-gateway` к публичному OIDC ingress.
 
 После SSO readback обновленный CA обязан быть сохранен и в
 `ConfigMap/mattercodex-oidc-ca`, и в защищенном external-material source, иначе
