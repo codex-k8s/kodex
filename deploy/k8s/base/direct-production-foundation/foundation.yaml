@@ -637,6 +637,13 @@ data:
     while IFS='	' read -r administrator managed_role; do
       [ -n "$administrator" ] && [ -n "$managed_role" ] || continue
       case "$administrator:$managed_role" in (*[!a-z0-9_:]*) exit 28 ;; esac
+      case "$administrator:$managed_role" in
+        internal_rpc_authority_credential_lifecycle_definer:internal_rpc_authority_publisher|internal_rpc_authority_credential_lifecycle_definer:internal_rpc_authority_readback_attestor)
+          # Preserve an exact capability-admin grant because its dependent
+          # generation grants are owned by the fenced lifecycle reconciler.
+          printf "DO %s BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN RAISE EXCEPTION 'bounded lifecycle administrator role is unavailable'; END IF; IF EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles managed ON managed.oid = member.roleid JOIN pg_catalog.pg_roles administrator ON administrator.oid = member.member WHERE managed.rolname = '%s' AND administrator.rolname = '%s' AND NOT (member.admin_option AND NOT member.inherit_option AND NOT member.set_option)) THEN RAISE EXCEPTION 'dependent lifecycle administrator grant is invalid'; END IF; IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members member JOIN pg_catalog.pg_roles managed ON managed.oid = member.roleid JOIN pg_catalog.pg_roles administrator ON administrator.oid = member.member WHERE managed.rolname = '%s' AND administrator.rolname = '%s' AND member.admin_option AND NOT member.inherit_option AND NOT member.set_option) THEN EXECUTE format('GRANT %%I TO %%I WITH INHERIT FALSE, SET FALSE, ADMIN TRUE', '%s', '%s'); END IF; END %s;\n" "$dollar_quote" "$managed_role" "$administrator" "$managed_role" "$administrator" "$managed_role" "$administrator" "$managed_role" "$administrator" "$dollar_quote" >>"$sql_file"
+          continue ;;
+      esac
       if [ "$managed_role" = internal_rpc_authority_credential_lifecycle_definer ]; then
         managed_role_flag=CREATEROLE
       else
