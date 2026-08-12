@@ -10,6 +10,13 @@ prototype_policy="$repository_root/infra/direct-production/internal-rpc-authorit
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
+materializer_existing_key_check=$(sed -n '/^verify_key_set_json()/,/^}/p' "$materializer")
+grep -Fq '(($actual - $allowed) | length) == 0' <<<"$materializer_existing_key_check" &&
+  ! grep -Fq '$expected - $actual' <<<"$materializer_existing_key_check" || {
+  printf 'Materializer must preserve an allowed existing subset so new declared keys can be generated\n' >&2
+  exit 1
+}
+
 printf '%s\n' '{"z":1,"a":{"y":2,"x":3}}' >"$temporary_directory/uncanonical.json"
 node "$repository_root/tools/deploy/direct-production-material-helper.mjs" canonicalize-json \
   "$temporary_directory/uncanonical.json" "$temporary_directory/canonical.json"
