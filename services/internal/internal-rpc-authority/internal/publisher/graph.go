@@ -268,16 +268,12 @@ func (graph *Graph) Publish(
 				"durable authority snapshot publication mutation rejected",
 			)
 		}
-		verified, verifyErr := internalrpcauth.VerifyCanonicalJSON(
+		verifiedPayload, verifyErr := snapshot.VerifyPublisherSnapshotCompact(
 			existing.SnapshotCompactJWS,
 			graph.config.ManifestSigner.PublicOnly(),
-			internalrpcauth.ProtectedHeaderExpectation{
-				Type:  "mattercodex-internal-rpc-snapshot+jws",
-				KeyID: graph.config.ManifestSigner.KeyID,
-			},
 		)
 		if verifyErr != nil ||
-			!bytes.Equal(verified.CanonicalPayload, built.SnapshotPayload) {
+			!bytes.Equal(verifiedPayload, built.SnapshotPayload) {
 			return model.AuthoritySnapshotPublication{}, errors.New(
 				"durable authority snapshot compact readback rejected",
 			)

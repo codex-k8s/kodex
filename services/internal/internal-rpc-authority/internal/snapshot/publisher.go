@@ -54,6 +54,26 @@ type PublisherBuildResult struct {
 	PolicyRevision     uint64
 }
 
+// VerifyPublisherSnapshotCompact проверяет полный snapshot с его отдельным
+// bounded limit, не расширяя лимит обычного authorization JWS.
+func VerifyPublisherSnapshotCompact(
+	compact string,
+	key internalrpcauth.ES256Key,
+) ([]byte, error) {
+	verified, err := internalrpcauth.VerifyCanonicalJSONWithLimit(
+		compact,
+		key,
+		internalrpcauth.ProtectedHeaderExpectation{
+			Type: snapshotProtectedType, KeyID: key.KeyID,
+		},
+		maxSnapshotBytes,
+	)
+	if err != nil {
+		return nil, errors.New("verify complete authority snapshot")
+	}
+	return append([]byte(nil), verified.CanonicalPayload...), nil
+}
+
 type publisherPolicyDocument struct {
 	Version        int    `json:"v"`
 	PolicyRevision uint64 `json:"policy_revision"`
@@ -137,13 +157,9 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	if err != nil {
 		return PublisherBuildResult{}, errors.New("sign complete authority snapshot")
 	}
-	verified, err := internalrpcauth.VerifyCanonicalJSONWithLimit(
+	verifiedPayload, err := VerifyPublisherSnapshotCompact(
 		compact,
 		options.ManifestSigner.PublicOnly(),
-		internalrpcauth.ProtectedHeaderExpectation{
-			Type: snapshotProtectedType, KeyID: options.ManifestSigner.KeyID,
-		},
-		maxSnapshotBytes,
 	)
 	if err != nil {
 		return PublisherBuildResult{}, errors.New("read back signed authority snapshot")
@@ -158,7 +174,7 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 			"encode signed authority snapshot readback",
 		)
 	}
-	if !bytes.Equal(verified.CanonicalPayload, expectedPayload) {
+	if !bytes.Equal(verifiedPayload, expectedPayload) {
 		return PublisherBuildResult{}, errors.New("signed authority snapshot readback mismatch")
 	}
 	proofTrust, err := publisherProofTrust(
@@ -171,7 +187,7 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	}
 	return PublisherBuildResult{
 		SnapshotCompactJWS: compact,
-		SnapshotPayload:    append([]byte(nil), verified.CanonicalPayload...),
+		SnapshotPayload:    verifiedPayload,
 		SourceDigestSHA256: digest,
 		ProofTrustJSON:     proofTrust,
 		PolicyRevision:     policyDocument.PolicyRevision,
