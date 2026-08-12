@@ -37,9 +37,9 @@ data:
                   typed_config:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                     stat_prefix: integration_provider
-                    request_headers_to_remove: [x-forwarded-for, x-envoy-external-address]
                     route_config:
                       name: exact_provider_routes
+                      request_headers_to_remove: [x-forwarded-for, x-envoy-external-address]
                       virtual_hosts:
                         - name: provider_health
                           domains: ["integration-egress-proxy.mattercodex-system.svc:8443"]
