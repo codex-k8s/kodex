@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	authoritysnapshot "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
 const maxResponseBytes = 2 << 20
@@ -108,7 +108,7 @@ func (delivery *Delivery) Publish(
 	if publication.SourceRevision == 0 ||
 		!validDigest(publication.SourceDigestSHA256) ||
 		publication.SnapshotCompactJWS == "" ||
-		len(publication.SnapshotCompactJWS) > internalrpcauth.MaxCompactJWSBytes {
+		len(publication.SnapshotCompactJWS) > authoritysnapshot.MaxPublisherSnapshotBytes {
 		return model.AuthoritySnapshotPublication{}, errors.New(
 			"authority snapshot publication is invalid",
 		)
@@ -212,7 +212,7 @@ func (delivery *Delivery) Read(
 	compactRaw, err := base64.StdEncoding.Strict().DecodeString(encoded)
 	if err != nil ||
 		len(compactRaw) == 0 ||
-		len(compactRaw) > internalrpcauth.MaxCompactJWSBytes {
+		len(compactRaw) > authoritysnapshot.MaxPublisherSnapshotBytes {
 		return model.AuthoritySnapshotPublication{}, errors.New(
 			"served authority snapshot compact JWS rejected",
 		)
