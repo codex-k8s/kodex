@@ -98,6 +98,18 @@ function decodeJWTFile(path) {
   return decodeJWT(value);
 }
 
+function decodeCompactJWS(path) {
+  const compact = readFileSync(path, "utf8").trim();
+  const parts = compact.split(".");
+  if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) {
+    fail("compact JWS is invalid");
+  }
+  return {
+    header: JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")),
+    payload: JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")),
+  };
+}
+
 function sha256JSON(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -143,6 +155,25 @@ function validateAggregate(path, maximumRecords) {
 
 const [command, ...args] = process.argv.slice(2);
 switch (command) {
+  case "validate-authority-bootstrap": {
+    if (args.length !== 4) fail("validate-authority-bootstrap requires four input paths");
+    const manifestSigner = canonicalPrivateJWK(JSON.parse(readFileSync(args[0], "utf8")));
+    const manifestTrust = decodeCompactJWS(args[1]);
+    const readbackSigner = canonicalPrivateJWK(JSON.parse(readFileSync(args[2], "utf8")));
+    const readbackTrust = decodeCompactJWS(args[3]);
+    const manifestCurrent = Array.isArray(manifestTrust.payload.keys)
+      ? manifestTrust.payload.keys.filter((key) => key.status === "CURRENT") : [];
+    const readbackCurrent = Array.isArray(readbackTrust.payload.keys)
+      ? readbackTrust.payload.keys.filter((key) => key.status === "CURRENT") : [];
+    if (manifestTrust.header.alg !== "ES256" || manifestCurrent.length !== 1 ||
+        manifestCurrent[0].kid !== manifestSigner.kid || manifestCurrent[0].generation !== 1 ||
+        readbackTrust.header.alg !== "ES256" || readbackCurrent.length !== 1 ||
+        readbackCurrent[0].kid !== readbackSigner.kid ||
+        readbackCurrent[0].credential_signer_generation !== 1) {
+      fail("authority signer and independently signed trust material do not match");
+    }
+    break;
+  }
   case "generate-empty-aggregate": {
     if (args.length !== 1) fail("generate-empty-aggregate requires an output path");
     const document = { schema_version: 1, generation: 1, records: {} };
