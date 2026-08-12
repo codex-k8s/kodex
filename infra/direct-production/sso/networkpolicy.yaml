@@ -43,6 +43,13 @@ spec:
               app.kubernetes.io/name: control-api-gateway
               app.kubernetes.io/component: external-gateway
       ports: [{protocol: TCP, port: 8443}]
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+              app.kubernetes.io/component: internal-service
+      ports: [{protocol: TCP, port: 8443}]
   egress:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
