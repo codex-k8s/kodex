@@ -177,8 +177,8 @@ if [[ "$mode" == readback ]]; then
         $value != null and ($value | type == "string" and length > 0)
       ' "$json" >/dev/null || fail "$kind/$name contains an empty key"
     done < <(jq -r '(.data // {} | keys[]),(.binaryData // {} | keys[])' "$json")
-  done < <(jq -r '.resources[] | . as $resource |
-    ([.publisher_owned_runtime_keys[]? |
+  done < <(jq -r '. as $policy | .resources[] | . as $resource |
+    ([$policy.publisher_owned_runtime_keys[]? |
       select(.kind == $resource.kind and .name == $resource.name) | .keys[]]) as $runtime |
     [.kind,.name,(.keys|sort|tojson),((.keys+$runtime)|unique|sort|tojson)] | @tsv' "$policy")
   for name in integration-gateway-provider-credentials interaction-gateway-bot-credentials; do
@@ -715,8 +715,9 @@ while IFS=$'\t' read -r kind name; do
     [[ -f "$(value_path "$kind" "$name" "$key")" ]] || continue
     args+=("--from-file=$key=$(value_path "$kind" "$name" "$key")")
   done < <(jq -r --arg kind "$kind" --arg name "$name" '
+    . as $policy |
     first(.resources[]|select(.kind==$kind and .name==$name)) as $resource |
-    (($resource.keys + [.publisher_owned_runtime_keys[]? |
+    (($resource.keys + [$policy.publisher_owned_runtime_keys[]? |
       select(.kind==$kind and .name==$name) | .keys[]]) | unique[])
   ' "$policy")
   if [[ "$kind" == Secret ]]; then
