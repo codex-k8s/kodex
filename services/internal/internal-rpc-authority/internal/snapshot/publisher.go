@@ -125,22 +125,24 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 		Issuers:          issuers,
 		Policy:           policyDocument.Policy,
 	}
-	compact, err := internalrpcauth.SignCanonicalJSON(
+	compact, err := internalrpcauth.SignCanonicalJSONWithLimit(
 		value,
 		options.ManifestSigner,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type: snapshotProtectedType, KeyID: options.ManifestSigner.KeyID,
 		},
+		maxSnapshotBytes,
 	)
 	if err != nil {
 		return PublisherBuildResult{}, errors.New("sign complete authority snapshot")
 	}
-	verified, err := internalrpcauth.VerifyCanonicalJSON(
+	verified, err := internalrpcauth.VerifyCanonicalJSONWithLimit(
 		compact,
 		options.ManifestSigner.PublicOnly(),
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type: snapshotProtectedType, KeyID: options.ManifestSigner.KeyID,
 		},
+		maxSnapshotBytes,
 	)
 	if err != nil {
 		return PublisherBuildResult{}, errors.New("read back signed authority snapshot")
@@ -212,6 +214,7 @@ func VerifyPublisherManifestSigner(
 		dummy,
 		now,
 		snapshotProtectedType,
+		internalrpcauth.MaxCompactJWSBytes,
 	)
 	if err != nil ||
 		generation != signerGeneration ||

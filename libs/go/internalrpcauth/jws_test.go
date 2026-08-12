@@ -78,6 +78,25 @@ func TestDecodeStrictJSONAllowsNonCanonicalConfiguration(t *testing.T) {
 	}
 }
 
+func TestExplicitCompactLimitDoesNotExpandDefaultBoundary(t *testing.T) {
+	key := testJWK(t, "large-signer-g1")
+	expect := ProtectedHeaderExpectation{Type: "large-document+jws", KeyID: key.KeyID}
+	payload := map[string]any{"data": strings.Repeat("x", MaxCompactJWSBytes)}
+	if _, err := SignCanonicalJSON(payload, key, expect); !errors.Is(err, ErrMalformedJWS) {
+		t.Fatalf("default compact boundary accepted a large document: %v", err)
+	}
+	compact, err := SignCanonicalJSONWithLimit(payload, key, expect, 1<<20)
+	if err != nil {
+		t.Fatalf("sign large service document: %v", err)
+	}
+	if _, err := VerifyCanonicalJSON(compact, key.PublicOnly(), expect); !errors.Is(err, ErrMalformedJWS) {
+		t.Fatalf("default verifier boundary accepted a large document: %v", err)
+	}
+	if _, err := VerifyCanonicalJSONWithLimit(compact, key.PublicOnly(), expect, 1<<20); err != nil {
+		t.Fatalf("verify large service document: %v", err)
+	}
+}
+
 func TestValidateTimes(t *testing.T) {
 	now := time.Unix(100, 0)
 	if err := ValidateTimes(now, now, now, now.Add(30*time.Second), 30*time.Second, 5*time.Second); err != nil {

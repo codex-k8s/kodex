@@ -237,13 +237,14 @@ func Load(options LoadOptions) (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	verified, err := internalrpcauth.VerifyCanonicalJSON(
+	verified, err := internalrpcauth.VerifyCanonicalJSONWithLimit(
 		compact,
 		manifestKey,
 		internalrpcauth.ProtectedHeaderExpectation{
 			Type:  snapshotProtectedType,
 			KeyID: manifestKey.KeyID,
 		},
+		maxSnapshotBytes,
 	)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("verify signed authority snapshot: %w", err)
@@ -383,6 +384,7 @@ func loadManifestVerificationKey(
 		snapshotCompact,
 		now,
 		snapshotProtectedType,
+		maxSnapshotBytes,
 	)
 }
 
@@ -391,6 +393,7 @@ func loadManifestVerificationKeyForType(
 	signedCompact string,
 	now time.Time,
 	expectedProtectedType string,
+	maxCompactBytes int,
 ) (internalrpcauth.ES256Key, uint64, error) {
 	rootRaw, err := readRegularFile(
 		options.ManifestRootPublicJWKFile,
@@ -483,7 +486,10 @@ func loadManifestVerificationKeyForType(
 	); err != nil {
 		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("manifest trust bundle history rejected: %w", err)
 	}
-	snapshotHeader, err := internalrpcauth.ParseProtectedHeader(signedCompact)
+	snapshotHeader, err := internalrpcauth.ParseProtectedHeaderWithLimit(
+		signedCompact,
+		maxCompactBytes,
+	)
 	if err != nil || snapshotHeader.Type != expectedProtectedType {
 		return internalrpcauth.ES256Key{}, 0, errors.New("signed document header rejected before manifest key resolution")
 	}
