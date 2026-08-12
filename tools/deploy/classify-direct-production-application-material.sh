@@ -109,12 +109,12 @@ missing_application_grant_trust=$(
     [
       $authority[0].policy.authority_proof_producers[] |
       select(.producer_id != "control-plane.oidc") |
-      if (.application_credential == "MATTERMOST_SIGNED_EVENT" or
-          .application_credential == "INTEGRATION_CONTINUATION_GRANT") then
-        .producer_id + ".public-keyset.json"
-      else
-        .producer_id + ".public.jwk"
-      end as $required |
+      (if (.application_credential == "MATTERMOST_SIGNED_EVENT" or
+           .application_credential == "INTEGRATION_CONTINUATION_GRANT") then
+         .producer_id + ".public-keyset.json"
+       else
+         .producer_id + ".public.jwk"
+       end) as $required |
       select(($declared | index($required)) == null) |
       $required
     ] | sort | join(",")
