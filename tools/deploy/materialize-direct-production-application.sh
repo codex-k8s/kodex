@@ -751,11 +751,12 @@ if [[ "$nats_existing" -eq 0 ]]; then
     --from-file=account.jwt="$temporary_directory/internal/account.jwt" \
     --from-file=account.public="$temporary_directory/internal/account.public" --dry-run=client -o yaml >>"$internal"
 fi
-kubectl --context "$expected_context" apply --dry-run=server -f "$internal" >/dev/null
-kubectl --context "$expected_context" apply --dry-run=server -f "$render" >/dev/null
+apply_args=(--server-side --force-conflicts --field-manager=mattercodex-application-material)
+kubectl --context "$expected_context" apply "${apply_args[@]}" --dry-run=server -f "$internal" >/dev/null
+kubectl --context "$expected_context" apply "${apply_args[@]}" --dry-run=server -f "$render" >/dev/null
 if [[ "$mode" == apply ]]; then
-  kubectl --context "$expected_context" apply -f "$internal" >/dev/null
-  kubectl --context "$expected_context" apply -f "$render" >/dev/null
+  kubectl --context "$expected_context" apply "${apply_args[@]}" -f "$internal" >/dev/null
+  kubectl --context "$expected_context" apply "${apply_args[@]}" -f "$render" >/dev/null
   "$0" --mode readback --context "$expected_context"
 else
   printf 'Direct production application material preflight completed\n'
