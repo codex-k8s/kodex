@@ -327,8 +327,10 @@ credential lifecycle; bootstrap выдаёт lifecycle definer только boun
 `ADMIN OPTION` без `INHERIT` и `SET`. Повторный owner bootstrap обновляет пароли
 generation principals, но сохраняет их текущее `LOGIN`/`NOLOGIN` состояние и
 не создаёт и не отзывает их capability membership. После migrations bootstrap удаляет
-дубли bounded administrator membership от прежних grantors и создаёт одну
-каноническую grant с точными option.
+дубли bounded administrator membership от migration principals, сохраняя
+активной owner-цепочку, и подтверждает одну каноническую grant от `postgres` с
+точными option. Поэтому удаление дубля не каскадирует generation grants,
+выданные lifecycle reconciler.
 
 Два writable aggregate Secret заранее создаются materializer с
 `schema_version=1`, `generation=1`, пустым `records` и верным digest.
