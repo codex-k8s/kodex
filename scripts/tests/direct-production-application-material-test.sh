@@ -344,6 +344,10 @@ rg -q 'ira_publisher_g\[1-5\]|ira_readback_attestor_g\[1-5\]' \
     "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -Fq 'ira_publisher_g[1-5]|ira_readback_attestor_g[1-5]) continue' \
     "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -Fq "login.rolname !~ '^ira_publisher_g[1-5]$'" \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
+  rg -Fq "login.rolname !~ '^ira_readback_attestor_g[1-5]$'" \
+    "$temporary_directory/postgresql-principal-reconcile.sh" &&
   rg -q 'actual_static_login' "$temporary_directory/postgresql-principal-reconcile.sh" || {
   printf 'Credential generation LOGIN ownership is not preserved by PostgreSQL bootstrap\n' >&2
   exit 1
