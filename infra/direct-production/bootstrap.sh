@@ -277,6 +277,12 @@ printf '%s\n' \
   '    mattercodex.dev/release-managed: "true"' >"$positive_manifest"
 kubectl --context "$expected_context" --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer \
   apply --dry-run=server -f "$positive_manifest" >/dev/null || fail "positive deploy admission check failed"
+workload_contract_manifest="$temporary_directory/workload-contract-positive.yaml"
+sed 's/name: mattercodex-release-lock/name: mattercodex-production-workload-contracts/' \
+  "$positive_manifest" >"$workload_contract_manifest"
+kubectl --context "$expected_context" --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer \
+  apply --dry-run=server -f "$workload_contract_manifest" >/dev/null ||
+  fail "workload contract deploy admission check failed"
 negative_manifest="$temporary_directory/negative.yaml"
 sed 's/name: mattercodex-release-lock/name: forbidden-production-resource/' "$positive_manifest" >"$negative_manifest"
 if kubectl --context "$expected_context" --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer \
