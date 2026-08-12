@@ -139,7 +139,7 @@ spec:
           'internal-rpc-authority-readback-attestor-postgresql-connection','internal-rpc-authority-restore-controller',
           'internal-rpc-authority-restore-coordination','mattercodex-image-admission-policy','mattercodex-nats-config',
           'mattercodex-legacy-transport-bridges','mattercodex-postgresql-init','mattercodex-postgresql-principal-bootstrap',
-          'mattercodex-redis-config','mattercodex-release-lock','runtime-controller-runtime'] ||
+          'mattercodex-production-workload-contracts','mattercodex-redis-config','mattercodex-release-lock','runtime-controller-runtime'] ||
          object.metadata.name.matches('^staff-control-center-runtime-[a-z0-9]{10}$'))) ||
         (object.kind == 'Service' && object.metadata.name in [
           'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',

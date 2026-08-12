@@ -4,11 +4,14 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
+version: 1.7.0
 updated: 2026-08-12
 ---
 
 # Direct-production single-node prototype
+
+Публичный SSO описан в `RUN-MC-019`, а owner UI и его TLS/mTLS ingress bridge -
+в `RUN-MC-020` (`docs/runbooks/direct-production-control-center.md`).
 
 ## Назначение
 
@@ -239,6 +242,12 @@ exact legacy namespace/Pod selector/port; legacy workloads и Services не
 readback-attestor, ждёт непустой `snapshot.jws`, и только затем запускает
 остальные consumers.
 
+Principal bootstrap создаёт Goose metadata table до мигратора, назначает ей
+ограниченные права и атомарно добавляет единственную applied baseline-запись
+`version_id=0`, только если таблица пуста. Поэтому чистая БД и повторный запуск
+используют один путь: существующая migration history не переписывается, а
+пустая предсозданная таблица не приводит к `no next version found`.
+
 Direct-production render задаёт только сочетание
 `INTERNAL_RPC_AUTHORITY_SECRET_BACKEND=direct-production-kubernetes-file` и
 `INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE=direct-production-single-node-prototype`.
@@ -278,6 +287,29 @@ Owner materializer заранее создаёт exact publisher/reconciler-owne
 Secret, key, logical path, operation, digest, generation или CAS conflict
 приводит к закрытому отказу. Readiness authority использует тот же backend
 readback, что и рабочая публикация.
+
+Если до первого публичного cutover неудачная bootstrap-попытка успела записать
+authority revision, но не создала ни одного delivery receipt и snapshot
+readback, повторный запуск с более новой registry revision закрыто отклоняется.
+Для этого единственного pre-cutover случая используется owner-gated команда:
+
+```bash
+KUBECONFIG=/secure/path/kubeconfig \
+  tools/deploy/reset-direct-production-authority-bootstrap.sh \
+  --owner-approved \
+  --revision EXACT_GIT_SHA \
+  --context EXACT_CONTEXT
+```
+
+Команда сверяет чистый exact checkout, отсутствие публичного ingress
+`control.kodex.works`, отсутствие обслуженного authority state, останавливает
+только зависящие от authority workloads, пересоздаёт только новую БД
+`internal_rpc_authority` из чистого `template0` и удаляет только
+publisher/reconciler-owned runtime
+material из закрытых policy. После появления хотя бы одного delivery/readback
+или публичного ingress этот путь необратимо запрещён. Затем владелец повторяет
+application materialization и routine dark deploy. Команда не предназначена
+для rollback, ротации либо восстановления работающего контура.
 
 В direct-production application runtime adapters A–D заменяют живой Vault
 на закрытые Kubernetes/file границы:
