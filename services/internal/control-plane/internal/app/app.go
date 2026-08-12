@@ -391,7 +391,7 @@ func Run(
 			),
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("initialize application grant verifier for producer %q: %w", producerID, err)
 		}
 		authenticators = append(authenticators, verifier)
 	}
