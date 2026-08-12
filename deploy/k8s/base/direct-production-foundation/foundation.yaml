@@ -10,7 +10,7 @@ spec:
     requests.cpu: "8"
     requests.memory: 16Gi
     requests.storage: 160Gi
-    limits.memory: 28Gi
+    limits.memory: 64Gi
 ---
 apiVersion: v1
 kind: LimitRange

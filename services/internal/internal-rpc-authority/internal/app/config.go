@@ -300,9 +300,23 @@ func applyWorkloadProfile(config *Config) error {
 		},
 	}
 	profile, ok := profiles[config.Mode][config.WorkloadID]
-	if !ok || config.WorkloadSPIFFEID != profile.spiffeID || config.VaultAuthRole != profile.vaultRole {
+	if !ok || config.WorkloadSPIFFEID != profile.spiffeID {
 		return errors.New("authority workload profile is not registered")
 	}
+	backend := secretBackendVault
+	if config.SecretBackend != "" || config.DeploymentProfile != "" {
+		selected, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+		if err != nil {
+			return err
+		}
+		backend = selected
+	}
+	if backend == secretBackendVault && config.VaultAuthRole != profile.vaultRole {
+		return errors.New("authority workload profile is not registered")
+	}
+	// Direct delivery не использует Vault, но сохраняет каноническую identity
+	// профиля для общей валидации и диагностического readback.
+	config.VaultAuthRole = profile.vaultRole
 	config.ReadbackCredentialVaultPath = profile.readbackCredentialPath
 	config.ReadbackPossessionVaultPath = profile.readbackPossessionPath
 	config.RestoreRoleCredentialVaultPath = profile.restoreRoleCredentialPath

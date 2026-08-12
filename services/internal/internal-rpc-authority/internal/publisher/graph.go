@@ -19,11 +19,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
-const (
-	authorizationAudience = "urn:mattercodex:internal-rpc:control-plane"
-	proofAudience         = "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway"
-)
-
 // GraphConfig задаёт independently rooted входы полного publisher graph.
 type GraphConfig struct {
 	Registry                   model.DeliveryTargetRegistry
@@ -185,7 +180,7 @@ func (graph *Graph) Publish(
 					target.WorkloadSPIFFEID,
 					target.WorkloadID,
 					"AUTHORIZATION_CONTEXT",
-					[]string{authorizationAudience},
+					nil,
 					keySet,
 				)...,
 			)
@@ -204,7 +199,7 @@ func (graph *Graph) Publish(
 					target.WorkloadSPIFFEID,
 					target.WorkloadID,
 					"AUTHORITY_PROOF",
-					[]string{proofAudience},
+					nil,
 					keySet,
 				)...,
 			)

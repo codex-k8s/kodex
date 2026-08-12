@@ -14,6 +14,22 @@ func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 	}
 }
 
+func TestApplyWorkloadProfileBindsDirectDeliveryWithoutVaultEnvironment(t *testing.T) {
+	config := Config{
+		Mode:              ModeIssuer,
+		SecretBackend:     string(secretBackendDirectProductionPrototype),
+		DeploymentProfile: directProductionPrototypeProfile,
+		WorkloadID:        "automation-scheduler",
+		WorkloadSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+	}
+	if err := applyWorkloadProfile(&config); err != nil {
+		t.Fatalf("apply direct delivery profile: %v", err)
+	}
+	if config.VaultAuthRole != "internal-rpc-authority-automation-scheduler" {
+		t.Fatal("direct delivery did not bind canonical workload identity")
+	}
+}
+
 func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,

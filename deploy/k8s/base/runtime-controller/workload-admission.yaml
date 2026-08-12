@@ -68,6 +68,7 @@ spec:
             - {name: tls, mountPath: /var/run/secrets/mattercodex/runtime-admission, readOnly: true}
             - {name: ticket-trust, mountPath: /var/run/config/mattercodex/runtime-workload-ticket, readOnly: true}
             - {name: postgres, mountPath: /var/run/secrets/mattercodex/runtime-admission-postgres, readOnly: true}
+            - {name: postgres-ca, mountPath: /var/run/config/mattercodex/runtime-controller/postgres, readOnly: true}
       volumes:
         - name: kube-api-access
           projected:
@@ -81,6 +82,8 @@ spec:
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: runtime-workload-admission-ticket-trust}}
         - name: postgres
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: runtime-workload-admission-postgres}}
+        - name: postgres-ca
+          configMap: {name: runtime-controller-postgresql-ca, defaultMode: 0440}
 ---
 apiVersion: v1
 kind: Service

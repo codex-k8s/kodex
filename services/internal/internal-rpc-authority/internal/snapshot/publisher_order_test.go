@@ -82,6 +82,49 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	}
 }
 
+func TestBindPublisherKeyAudiencesUsesSignedPolicy(t *testing.T) {
+	t.Parallel()
+	issuer := "spiffe://mattercodex.local/ns/mattercodex-system/sa/caller"
+	proofIssuer := "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+	key := mustPublisherTestKey(t, "bound-audiences")
+	authorization, proof, err := bindPublisherKeyAudiences(
+		[]PublisherKey{{Issuer: issuer, Key: key}},
+		[]PublisherKey{{Issuer: proofIssuer, Key: key}},
+		policy{
+			OperationBindings: []operationBinding{
+				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:mattercodex:beta"},
+				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:mattercodex:alpha"},
+			},
+			ProofProducers: []authorityProofProducer{
+				{AuthorityProofIssuer: proofIssuer, AuthorityProofAudience: "urn:mattercodex:proof"},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("bind publisher audiences: %v", err)
+	}
+	if strings.Join(authorization[0].Audiences, ",") != "urn:mattercodex:alpha,urn:mattercodex:beta" {
+		t.Fatalf("unexpected authorization audiences: %v", authorization[0].Audiences)
+	}
+	if strings.Join(proof[0].Audiences, ",") != "urn:mattercodex:proof" {
+		t.Fatalf("unexpected proof audiences: %v", proof[0].Audiences)
+	}
+}
+
+func TestBindPublisherKeyAudiencesRejectsDelegatedIssuer(t *testing.T) {
+	t.Parallel()
+	_, _, err := bindPublisherKeyAudiences(nil, nil, policy{
+		OperationBindings: []operationBinding{{
+			CallerSPIFFEID: "spiffe://mattercodex.local/caller",
+			Issuer:         "spiffe://mattercodex.local/other",
+			Audience:       "urn:mattercodex:target",
+		}},
+	})
+	if err == nil {
+		t.Fatal("delegated issuer without matching caller key was accepted")
+	}
+}
+
 func publisherTestKey(
 	issuer string,
 	workloadID string,
