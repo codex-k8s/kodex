@@ -27,7 +27,10 @@ const (
 	restoreControllerAudience  = "urn:mattercodex:internal-rpc-authority-restore-controller"
 	restoreIssuanceTTL         = 30 * time.Second
 	restoreRoleCredentialTTL   = 5 * time.Minute
-	publishedReadbackIntentTTL = 2 * time.Minute
+	// Projected Kubernetes Secret updates can lag behind the publisher by up to
+	// a kubelet sync period. Keep the pinned intent comfortably valid across
+	// that delivery lag and a bounded sidecar startup retry window.
+	publishedReadbackIntentTTL = 10 * time.Minute
 )
 
 // RestoreCredentialSigner описывает ключ удостоверений восстановления.

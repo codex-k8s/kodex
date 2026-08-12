@@ -23,5 +23,4 @@ WHERE intent_id = @intent_id
   AND workload_spiffe_id = @peer_spiffe_id
   AND status = 'PINNED'
   AND expires_at > pg_catalog.clock_timestamp()
-  AND internal_rpc_authority.runtime_restore_fence_allows_work()
-FOR SHARE;
+  AND internal_rpc_authority.runtime_restore_fence_allows_work();

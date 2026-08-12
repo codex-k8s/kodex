@@ -536,6 +536,21 @@ func (controller *RestoreController) Recover(ctx context.Context) error {
 
 // Ready сверяет устойчивое состояние координации и ограждения.
 func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreState, error) {
+	state, err := controller.StartupReady(ctx)
+	if err != nil {
+		return model.RestoreState{}, err
+	}
+	if err := controller.publisher.PublisherReady(ctx); err != nil {
+		return model.RestoreState{}, err
+	}
+	return state, nil
+}
+
+// StartupReady сверяет durable coordination и fence без циклической
+// зависимости от readback всех workload, которые сами опрашивают controller.
+func (controller *RestoreController) StartupReady(
+	ctx context.Context,
+) (model.RestoreState, error) {
 	if err := controller.coordination.CoordinationReady(ctx); err != nil {
 		return model.RestoreState{}, err
 	}
@@ -544,9 +559,6 @@ func (controller *RestoreController) Ready(ctx context.Context) (model.RestoreSt
 		return model.RestoreState{}, err
 	}
 	if err := controller.fence.RestoreFenceReady(ctx, state); err != nil {
-		return model.RestoreState{}, err
-	}
-	if err := controller.publisher.PublisherReady(ctx); err != nil {
 		return model.RestoreState{}, err
 	}
 	return state, nil

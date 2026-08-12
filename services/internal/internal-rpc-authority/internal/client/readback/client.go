@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,21 +125,27 @@ func (attestor *VaultAttestor) Attest(
 		ctx,
 		attestor.config.CredentialPath,
 	)
-	if err != nil || !found {
+	if err != nil {
+		return "", fmt.Errorf("read normal readback credential: %w", err)
+	}
+	if !found {
 		return "", errors.New("read normal readback credential from Vault")
 	}
 	possessionMaterial, found, err := attestor.config.Delivery.ReadKV2(
 		ctx,
 		attestor.config.PossessionPath,
 	)
-	if err != nil || !found {
+	if err != nil {
+		return "", fmt.Errorf("read readback possession key: %w", err)
+	}
+	if !found {
 		return "", errors.New("read readback possession key from Vault")
 	}
 	key, err := internalrpcauth.ParsePrivateJWK(
 		[]byte(possessionMaterial.Data["possession_private_jwk"]),
 	)
 	if err != nil {
-		return "", errors.New("parse readback possession private key")
+		return "", fmt.Errorf("parse readback possession private key: %w", err)
 	}
 	client, err := New(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
@@ -189,26 +196,26 @@ func (attestor *FileAttestor) Attest(
 ) (string, error) {
 	intentID, err := readMountedValue(attestor.config.IntentIDFile, 128)
 	if err != nil {
-		return "", errors.New("read pinned readback intent")
+		return "", fmt.Errorf("read pinned readback intent: %w", err)
 	}
 	credential, err := readMountedValue(
 		attestor.config.CredentialCompactFile,
 		internalrpcauth.MaxCompactJWSBytes,
 	)
 	if err != nil {
-		return "", errors.New("read normal readback credential")
+		return "", fmt.Errorf("read normal readback credential: %w", err)
 	}
 	credentialJTI, err := readMountedValue(attestor.config.CredentialJTIFile, 128)
 	if err != nil {
-		return "", errors.New("read normal readback credential jti")
+		return "", fmt.Errorf("read normal readback credential jti: %w", err)
 	}
 	privateRaw, err := readMountedValue(attestor.config.PossessionPrivateJWKFile, 64<<10)
 	if err != nil {
-		return "", errors.New("read readback possession private key")
+		return "", fmt.Errorf("read readback possession private key: %w", err)
 	}
 	key, err := internalrpcauth.ParsePrivateJWK([]byte(privateRaw))
 	if err != nil {
-		return "", errors.New("parse readback possession private key")
+		return "", fmt.Errorf("parse readback possession private key: %w", err)
 	}
 	client, err := New(Config{
 		Address: attestor.config.Address, TLS: attestor.config.TLS,
@@ -301,7 +308,7 @@ func (client *Client) Attest(
 		grpc.WithUnaryInterceptor(client.config.UnaryInterceptor),
 	)
 	if err != nil {
-		return "", errors.New("connect to readback attestor")
+		return "", fmt.Errorf("connect to readback attestor: %w", err)
 	}
 	defer connection.Close()
 	api := internalrpcauthorityv1.NewAuthorityReadbackAttestorServiceClient(connection)
@@ -315,7 +322,7 @@ func (client *Client) Attest(
 		},
 	)
 	if err != nil {
-		return "", errors.New("issue readback attestation challenge")
+		return "", fmt.Errorf("issue readback attestation challenge: %w", err)
 	}
 	if challenge.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||
@@ -333,7 +340,7 @@ func (client *Client) Attest(
 		client.config.PossessionKey.PublicOnly(),
 	)
 	if err != nil {
-		return "", errors.New("fingerprint readback possession key")
+		return "", fmt.Errorf("fingerprint readback possession key: %w", err)
 	}
 	now := client.now().UTC().Truncate(time.Second)
 	evidence := model.ReadbackAttestationClaims{
@@ -371,7 +378,7 @@ func (client *Client) Attest(
 		},
 	)
 	if err != nil {
-		return "", errors.New("sign readback attestation evidence")
+		return "", fmt.Errorf("sign readback attestation evidence: %w", err)
 	}
 	attestationKey := deterministicUUID(
 		"readback-attestation",
@@ -390,7 +397,7 @@ func (client *Client) Attest(
 		},
 	)
 	if err != nil {
-		return "", errors.New("attest served authority state")
+		return "", fmt.Errorf("attest served authority state: %w", err)
 	}
 	if receipt.GetKind() !=
 		internalrpcauthorityv1.ReadbackAttestationKind_READBACK_ATTESTATION_KIND_SNAPSHOT ||

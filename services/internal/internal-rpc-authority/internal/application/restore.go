@@ -96,6 +96,13 @@ func (application *RestoreController) Ready(
 	return application.domain.Ready(ctx)
 }
 
+// StartupReady возвращает durable startup barrier без publisher readback.
+func (application *RestoreController) StartupReady(
+	ctx context.Context,
+) (model.RestoreState, error) {
+	return application.domain.StartupReady(ctx)
+}
+
 // RoleTrustMetadata возвращает обслуживаемые метаданные доверия ролей.
 func (application *RestoreController) RoleTrustMetadata() model.RestoreRoleTrustMetadata {
 	return application.domain.RoleTrustMetadata()
