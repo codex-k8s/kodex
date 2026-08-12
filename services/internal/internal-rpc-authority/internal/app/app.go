@@ -473,7 +473,7 @@ func activateSnapshotUntilReady(
 	ctx context.Context,
 	authorityApplication *application.Authority,
 ) error {
-	const retryInterval = 250 * time.Millisecond
+	const retryInterval = time.Second
 	for {
 		err := authorityApplication.ActivateSnapshot(ctx)
 		if err == nil {

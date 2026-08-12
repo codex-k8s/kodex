@@ -282,7 +282,7 @@ spec:
             defaultMode: 0440
         - name: internal-rpc-authority-sockets
           emptyDir:
-            sizeLimit: 8Mi
+            sizeLimit: 32Mi
         - name: internal-rpc-authority-snapshot
           secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}
         - name: internal-rpc-authority-manifest-trust

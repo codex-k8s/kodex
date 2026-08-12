@@ -232,7 +232,7 @@ spec:
             defaultMode: 288
             items: [{key: ca.pem, path: ca.pem}]
         - name: internal-rpc-authority-sockets
-          emptyDir: {sizeLimit: 8Mi}
+          emptyDir: {sizeLimit: 32Mi}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 288}}
         - {name: authority-manifest-trust, secret: {secretName: internal-rpc-authority-bot-service-manifest-trust, defaultMode: 288}}
         - {name: authority-proof-trust, secret: {secretName: internal-rpc-authority-bot-service-proof-trust, defaultMode: 288}}

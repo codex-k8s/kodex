@@ -22,7 +22,7 @@ const (
 	readbackCredentialPurpose     = "READBACK_CREDENTIAL"
 	readbackAudience              = "urn:mattercodex:internal-rpc-authority-readback-attestor"
 	readbackPublisherIssuer       = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
-	readbackCredentialTTL         = 30 * time.Second
+	readbackCredentialTTL         = 5 * time.Minute
 	readbackChallengeTTL          = 30 * time.Second
 	readbackAllowedClockSkew      = 5 * time.Second
 	readbackChallengeFullMethod   = "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"

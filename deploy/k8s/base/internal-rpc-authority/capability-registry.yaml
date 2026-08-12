@@ -61,7 +61,7 @@ spec:
       name: internal-rpc-authority-sockets
       type: emptyDir
       medium: Filesystem
-      sizeLimit: 8Mi
+      sizeLimit: 32Mi
       mountPath: /run/mattercodex/internal-rpc-authority
     identity:
       applicationUid: 10001

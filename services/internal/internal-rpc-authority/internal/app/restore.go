@@ -509,7 +509,7 @@ func newRestoreTechnicalServer(
 		}
 		ctx, cancel := context.WithTimeout(request.Context(), 3*time.Second)
 		defer cancel()
-		if _, err := restoreApplication.Ready(ctx); err != nil {
+		if _, err := restoreApplication.StartupReady(ctx); err != nil {
 			metrics.SetReady(false)
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return

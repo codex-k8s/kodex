@@ -83,6 +83,8 @@ spec:
               value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
               value: ":9091"
+            - name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT
+              value: 60s
             - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
               value: "10001"
             - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID
@@ -104,6 +106,13 @@ spec:
               port: auth-metrics
             timeoutSeconds: 3
             periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: auth-metrics
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /livez
@@ -178,7 +187,7 @@ spec:
         - name: internal-rpc-authority-sockets
           emptyDir:
             medium: ""
-            sizeLimit: 8Mi
+            sizeLimit: 32Mi
         - name: internal-rpc-authority-snapshot
           secret:
             secretName: internal-rpc-authority-snapshot

@@ -161,6 +161,7 @@ spec:
             - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: internal-rpc-authority-integration-gateway}
             - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
             - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
+            - {name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT, value: 60s}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
@@ -181,6 +182,11 @@ spec:
             httpGet: {path: /readyz, port: auth-metrics}
             timeoutSeconds: 3
             periodSeconds: 5
+          startupProbe:
+            httpGet: {path: /livez, port: auth-metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 60
           livenessProbe:
             httpGet: {path: /livez, port: auth-metrics}
             timeoutSeconds: 2
@@ -229,6 +235,7 @@ spec:
             - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: internal-rpc-authority-integration-gateway}
             - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
             - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9092"}
+            - {name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT, value: 60s}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
@@ -249,6 +256,11 @@ spec:
             httpGet: {path: /readyz, port: verify-metrics}
             timeoutSeconds: 3
             periodSeconds: 5
+          startupProbe:
+            httpGet: {path: /livez, port: verify-metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 60
           livenessProbe:
             httpGet: {path: /livez, port: verify-metrics}
             timeoutSeconds: 2
@@ -281,7 +293,7 @@ spec:
             - {name: authority-observability-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
             - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
       volumes:
-        - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
+        - {name: authority-sockets, emptyDir: {sizeLimit: 32Mi}}
         - name: server-tls
           secret: {secretName: internal-rpc-authority-integration-gateway-workload-tls, defaultMode: 0440}
         - name: client-ca

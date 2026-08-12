@@ -374,6 +374,12 @@ func RunPublisher(
 			_, publishErr := publisherApplication.PublishReadbackMaterials(ctx)
 			readyErr := publisherApplication.Ready(ctx)
 			if graphErr != nil || publishErr != nil || readyErr != nil {
+				logger.Error(
+					"authority publisher reconciliation failed",
+					"graph_error", graphErr,
+					"readback_error", publishErr,
+					"readiness_error", readyErr,
+				)
 				readiness.Set(false, "readback-publication-failed")
 				metrics.SetReady(false)
 			} else {
