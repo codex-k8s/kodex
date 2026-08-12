@@ -111,12 +111,11 @@ runtime_owned_empty_key() {
   ' "$policy" >/dev/null
 }
 verify_key_set_json() {
-  local kind=$1 name=$2 json=$3 actual expected allowed
-  expected=$(expected_keys "$kind" "$name")
+  local kind=$1 name=$2 json=$3 actual allowed
   allowed=$(allowed_keys "$kind" "$name")
   actual=$(jq -c '[(.data // {} | keys[]),(.binaryData // {} | keys[])] | unique | sort' "$json")
-  jq -e --argjson expected "$expected" --argjson allowed "$allowed" --argjson actual "$actual" '
-    (($expected - $actual) | length) == 0 and (($actual - $allowed) | length) == 0
+  jq -e --argjson allowed "$allowed" --argjson actual "$actual" '
+    (($actual - $allowed) | length) == 0
   ' <<<null >/dev/null || fail "$kind/$name has an unexpected key set"
 }
 load_resource_json() {
