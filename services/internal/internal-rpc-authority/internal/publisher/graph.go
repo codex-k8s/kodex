@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -656,8 +657,17 @@ func (graph *Graph) putExact(
 		if existing.Data["source_revision"] == data["source_revision"] &&
 			existing.Data["source_digest_sha256"] == data["source_digest_sha256"] {
 			if !sameExactMaterial(existing.Data, data) {
-				return repository.SecretMaterial{}, errors.New(
-					"same-revision authority graph delivery mutation rejected",
+				desiredDigest, digestErr := internalrpcauth.CanonicalJSONSHA256(data)
+				if digestErr != nil {
+					return repository.SecretMaterial{}, errors.New(
+						"digest rejected same-revision authority graph delivery",
+					)
+				}
+				return repository.SecretMaterial{}, fmt.Errorf(
+					"same-revision authority graph delivery mutation rejected for %q: stored %s, desired %s",
+					path,
+					existing.Digest,
+					desiredDigest,
 				)
 			}
 			return existing, nil

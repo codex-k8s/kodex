@@ -22,8 +22,11 @@ var snapshotDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 const (
 	snapshotProtectedType = "mattercodex-internal-rpc-snapshot+jws"
 	manifestBundleType    = "mattercodex-internal-rpc-manifest-trust+jws"
-	maxSnapshotBytes      = 1 << 20
-	maxKeyFileBytes       = 64 << 10
+	// MaxPublisherSnapshotBytes ограничивает полный служебный snapshot и не
+	// расширяет лимит обычного authorization JWS.
+	MaxPublisherSnapshotBytes = 1 << 20
+	maxSnapshotBytes          = MaxPublisherSnapshotBytes
+	maxKeyFileBytes           = 64 << 10
 )
 
 // Role выбирает назначение загружаемого снимка.
