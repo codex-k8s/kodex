@@ -72,6 +72,20 @@ func SignCanonicalJSON(
 	key ES256Key,
 	expect ProtectedHeaderExpectation,
 ) (string, error) {
+	return SignCanonicalJSONWithLimit(value, key, expect, MaxCompactJWSBytes)
+}
+
+// SignCanonicalJSONWithLimit создаёт compact JWS с явным закрытым лимитом для
+// крупных служебных документов.
+func SignCanonicalJSONWithLimit(
+	value any,
+	key ES256Key,
+	expect ProtectedHeaderExpectation,
+	maxCompactBytes int,
+) (string, error) {
+	if maxCompactBytes <= 0 {
+		return "", ErrMalformedJWS
+	}
 	if err := validateES256Key(key, expect.KeyID, true); err != nil {
 		return "", err
 	}
@@ -106,7 +120,7 @@ func SignCanonicalJSON(
 		return "", fmt.Errorf("sign compact ES256 JWS: %w", err)
 	}
 	compact := string(serialized)
-	if len(compact) > MaxCompactJWSBytes {
+	if len(compact) > maxCompactBytes {
 		return "", fmt.Errorf("%w: compact JWS exceeds limit", ErrMalformedJWS)
 	}
 	return compact, nil
@@ -118,7 +132,18 @@ func VerifyCanonicalJSON(
 	key ES256Key,
 	expect ProtectedHeaderExpectation,
 ) (VerifiedJWS, error) {
-	header, err := ParseProtectedHeader(compact)
+	return VerifyCanonicalJSONWithLimit(compact, key, expect, MaxCompactJWSBytes)
+}
+
+// VerifyCanonicalJSONWithLimit проверяет крупный служебный JWS с явно
+// заданным лимитом.
+func VerifyCanonicalJSONWithLimit(
+	compact string,
+	key ES256Key,
+	expect ProtectedHeaderExpectation,
+	maxCompactBytes int,
+) (VerifiedJWS, error) {
+	header, err := ParseProtectedHeaderWithLimit(compact, maxCompactBytes)
 	if err != nil {
 		return VerifiedJWS{}, err
 	}
@@ -151,7 +176,13 @@ func VerifyCanonicalJSON(
 // Результат не подтверждает подпись и используется лишь для выбора заранее
 // доверенного ключа перед VerifyCanonicalJSON.
 func ParseProtectedHeader(compact string) (ProtectedHeader, error) {
-	if len(compact) == 0 || len(compact) > MaxCompactJWSBytes {
+	return ParseProtectedHeaderWithLimit(compact, MaxCompactJWSBytes)
+}
+
+// ParseProtectedHeaderWithLimit разбирает header крупного служебного JWS с
+// явным лимитом; результат не подтверждает подпись.
+func ParseProtectedHeaderWithLimit(compact string, maxCompactBytes int) (ProtectedHeader, error) {
+	if maxCompactBytes <= 0 || len(compact) == 0 || len(compact) > maxCompactBytes {
 		return ProtectedHeader{}, ErrMalformedJWS
 	}
 	parts := strings.Split(compact, ".")

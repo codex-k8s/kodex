@@ -78,6 +78,7 @@ func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 		compact,
 		now,
 		restoreRoleTrustType,
+		internalrpcauth.MaxCompactJWSBytes,
 	)
 	if err != nil {
 		return nil, model.RestoreRoleTrustMetadata{}, err
