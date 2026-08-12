@@ -77,7 +77,7 @@ update_oidc_ca() {
     [[ -f "$external_material_file" && ! -L "$external_material_file" ]] ||
       fail "external material file is invalid"
     mode_bits=$(stat -c '%a' "$external_material_file")
-    ((8#$mode_bits & 0077 == 0)) || fail "external material file permissions are too broad"
+    (((8#$mode_bits & 0077) == 0)) || fail "external material file permissions are too broad"
     ca_value=$(<"$oidc_ca_file")
     OIDC_CA_VALUE="$ca_value" yq eval-all '
       (select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-system" and
