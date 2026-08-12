@@ -1,4 +1,6 @@
 -- +goose Up
+SET ROLE interaction_gateway_owner;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION interaction_gateway_activate_runtime_context(
     requested_organization_id uuid, requested_project_id uuid, requested_actor_id text
