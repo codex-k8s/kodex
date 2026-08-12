@@ -70,7 +70,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	state.oidc, err = oidcauth.New(startup, oidcauth.Config{Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, TLSServerName: config.OIDCTLSServerName, CAFile: config.OIDCCAFile, Timeout: config.RPCTimeout})
+	state.oidc, err = oidcauth.New(startup, oidcauth.Config{Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName, CAFile: config.OIDCCAFile, Timeout: config.RPCTimeout})
 	if err != nil {
 		return err
 	}

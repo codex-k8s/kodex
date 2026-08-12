@@ -54,9 +54,20 @@ type configMapEnvelope struct {
 }
 
 type objectMetadata struct {
-	Name            string `json:"name"`
-	Namespace       string `json:"namespace"`
-	ResourceVersion string `json:"resourceVersion,omitempty"`
+	Name                       string            `json:"name"`
+	GenerateName               string            `json:"generateName,omitempty"`
+	Namespace                  string            `json:"namespace"`
+	UID                        string            `json:"uid,omitempty"`
+	ResourceVersion            string            `json:"resourceVersion,omitempty"`
+	Generation                 int64             `json:"generation,omitempty"`
+	CreationTimestamp          string            `json:"creationTimestamp,omitempty"`
+	DeletionTimestamp          *string           `json:"deletionTimestamp,omitempty"`
+	DeletionGracePeriodSeconds *int64            `json:"deletionGracePeriodSeconds,omitempty"`
+	Labels                     map[string]string `json:"labels,omitempty"`
+	Annotations                map[string]string `json:"annotations,omitempty"`
+	OwnerReferences            []json.RawMessage `json:"ownerReferences,omitempty"`
+	Finalizers                 []string          `json:"finalizers,omitempty"`
+	ManagedFields              []json.RawMessage `json:"managedFields,omitempty"`
 }
 
 type tokenReviewRequest struct {

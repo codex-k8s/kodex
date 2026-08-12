@@ -330,6 +330,7 @@ func Run(
 		Purpose:              loadedPolicy.OIDC.Credential,
 		Issuer:               loadedPolicy.OIDC.CredentialIssuer,
 		Audience:             loadedPolicy.OIDC.CredentialAudience,
+		ConnectAddress:       config.OIDCConnectAddress,
 		TLSServerName:        config.OIDCTLSServerName,
 		CAFile:               config.OIDCCAFile,
 		ExpectedCallerSPIFFE: loadedPolicy.OIDC.CallerSPIFFEID,

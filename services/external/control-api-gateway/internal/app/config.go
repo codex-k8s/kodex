@@ -31,6 +31,7 @@ type Config struct {
 	PublicTLSServerName               string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME"`
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
+	OIDCConnectAddress                string        `env:"CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS"`
 	OIDCTLSServerName                 string        `env:"CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                        string        `env:"CONTROL_API_GATEWAY_OIDC_CA_FILE"`
 	AllowedOrigins                    string        `env:"CONTROL_API_GATEWAY_ALLOWED_ORIGINS"`
@@ -72,7 +73,8 @@ func loadConfig() (Config, error) {
 		PublicTLSMaterialFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json",
 		PublicTLSServerName:   "control-api.mattercodex.local",
 		OIDCIssuer:            "https://sso.kodex.works/realms/mattercodex", OIDCAudience: "mattercodex-control-api",
-		OIDCTLSServerName: "sso.kodex.works", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
+		OIDCConnectAddress: "sso.identity.svc.cluster.local:443",
+		OIDCTLSServerName:  "sso.kodex.works", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
 		AllowedOrigins:         "https://control.kodex.works",
 		SessionCurrentKeyFile:  "/var/run/secrets/mattercodex/control-api-gateway/session/current.hex",
 		SessionPreviousKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/session/previous.hex", SessionTTL: 15 * time.Minute,
@@ -116,6 +118,10 @@ func (config Config) validate() error {
 	issuer, err := url.Parse(config.OIDCIssuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Hostname() != config.OIDCTLSServerName || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return errors.New("control API OIDC issuer is invalid")
+	}
+	oidcConnectHost, oidcConnectPort, oidcConnectErr := net.SplitHostPort(config.OIDCConnectAddress)
+	if oidcConnectErr != nil || oidcConnectHost == "" || net.ParseIP(oidcConnectHost) != nil || oidcConnectPort != "443" {
+		return errors.New("control API OIDC connect address is invalid")
 	}
 	if config.PublicTLSServerName == "" || net.ParseIP(config.PublicTLSServerName) != nil ||
 		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||

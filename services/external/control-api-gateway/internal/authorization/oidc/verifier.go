@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,11 +20,12 @@ import (
 const maximumBearerBytes = 2300
 
 type Config struct {
-	Issuer        string
-	Audience      string
-	TLSServerName string
-	CAFile        string
-	Timeout       time.Duration
+	Issuer         string
+	Audience       string
+	ConnectAddress string
+	TLSServerName  string
+	CAFile         string
+	Timeout        time.Duration
 }
 
 type Principal struct {
@@ -67,9 +69,11 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 		return nil, errors.New("OIDC verifier configuration is invalid")
 	}
 	issuerURL, err := url.Parse(config.Issuer)
+	connectHost, connectPort, connectErr := net.SplitHostPort(config.ConnectAddress)
 	if err != nil || issuerURL.Scheme != "https" || issuerURL.Hostname() == "" || issuerURL.User != nil ||
 		issuerURL.RawQuery != "" || issuerURL.Fragment != "" ||
-		!strings.EqualFold(issuerURL.Hostname(), config.TLSServerName) {
+		!strings.EqualFold(issuerURL.Hostname(), config.TLSServerName) || connectErr != nil ||
+		connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
 		return nil, errors.New("OIDC issuer is not permitted")
 	}
 	caRaw, err := os.ReadFile(config.CAFile)
@@ -80,8 +84,16 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	if !roots.AppendCertsFromPEM(caRaw) {
 		return nil, errors.New("parse OIDC CA")
 	}
+	dialer := &net.Dialer{Timeout: config.Timeout, KeepAlive: 30 * time.Second}
+	issuerAddress := net.JoinHostPort(issuerURL.Hostname(), "443")
 	base := &http.Transport{
 		Proxy: nil,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if !strings.HasPrefix(network, "tcp") || !strings.EqualFold(address, issuerAddress) {
+				return nil, errors.New("OIDC endpoint is not permitted")
+			}
+			return dialer.DialContext(ctx, network, config.ConnectAddress)
+		},
 		TLSClientConfig: &tls.Config{
 			MinVersion: tls.VersionTLS13,
 			ServerName: config.TLSServerName,
