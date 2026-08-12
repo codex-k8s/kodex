@@ -306,7 +306,13 @@ switch (command) {
     const parts = value.split(".");
     if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) fail("compact JWS is invalid");
     const header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
-    if (header.alg !== "EdDSA" || typeof header.kid !== "string" || header.kid.length === 0) fail("compact JWS header is invalid");
+    const ed25519Profile = header.alg === "EdDSA" &&
+      typeof header.kid === "string" && header.kid.length > 0;
+    const authorityES256Profile = header.alg === "ES256" &&
+      typeof header.kid === "string" && header.kid.length > 0 &&
+      typeof header.typ === "string" && header.typ.startsWith("mattercodex-internal-rpc-") &&
+      JSON.stringify(header.crit) === '["mcxv"]' && header.mcxv === 1;
+    if (!ed25519Profile && !authorityES256Profile) fail("compact JWS header is invalid");
     JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     if (Buffer.from(parts[2], "base64url").length !== 64) fail("compact JWS signature is invalid");
     break;
