@@ -232,7 +232,7 @@ func (repository *Repository) ReadbackReady(
 	if err := repository.pool.QueryRow(
 		ctx,
 		trustReadinessSQL,
-		readbackTrustArgs(state),
+		readbackTrustReadinessArgs(state),
 	).Scan(&ready); err != nil {
 		return fmt.Errorf("verify readback trust watermark: %w", err)
 	}
@@ -240,6 +240,20 @@ func (repository *Repository) ReadbackReady(
 		return errors.New("readback trust watermark is not ready")
 	}
 	return nil
+}
+
+func readbackTrustReadinessArgs(state model.ReadbackTrustState) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"root_id":                       state.RootID,
+		"root_fingerprint_sha256":       state.RootFingerprintSHA256,
+		"manifest_bundle_revision":      state.ManifestBundleRevision,
+		"manifest_bundle_digest_sha256": state.ManifestBundleDigestSHA256,
+		"trust_source_revision":         state.TrustSourceRevision,
+		"trust_set_digest_sha256":       state.TrustSetDigestSHA256,
+		"trust_key_set_revision":        state.TrustKeySetRevision,
+		"signer_generation":             state.SignerGeneration,
+		"served_state_digest_sha256":    state.ServedStateDigestSHA256,
+	}
 }
 
 func readbackTrustArgs(state model.ReadbackTrustState) pgx.StrictNamedArgs {
