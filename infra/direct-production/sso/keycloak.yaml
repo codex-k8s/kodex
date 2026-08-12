@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sso
+  labels:
+    app.kubernetes.io/name: sso
+    app.kubernetes.io/component: identity-provider
+spec:
+  selector:
+    app.kubernetes.io/name: sso
+    app.kubernetes.io/component: identity-provider
+  ports:
+    - {name: http, port: 80, targetPort: http, protocol: TCP}
+    - {name: https, port: 443, targetPort: https, protocol: TCP}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sso
+  labels:
+    app.kubernetes.io/name: sso
+    app.kubernetes.io/component: identity-provider
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sso
+      app.kubernetes.io/component: identity-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sso
+        app.kubernetes.io/component: identity-provider
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: wait-postgresql
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          command: [sh, -ec]
+          args: [until pg_isready -h keycloak-postgresql.identity.svc.cluster.local -U keycloak -d keycloak; do sleep 2; done]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {memory: 64Mi}
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.0@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+          imagePullPolicy: IfNotPresent
+          args: [start, --import-realm]
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+            - {name: https, containerPort: 8443, protocol: TCP}
+            - {name: management, containerPort: 9000, protocol: TCP}
+          env:
+            - {name: KC_DB, value: postgres}
+            - {name: KC_DB_URL_HOST, value: keycloak-postgresql.identity.svc.cluster.local}
+            - {name: KC_DB_URL_PORT, value: "5432"}
+            - {name: KC_DB_URL_DATABASE, value: keycloak}
+            - {name: KC_DB_USERNAME, value: keycloak}
+            - name: KC_DB_PASSWORD
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: database-password}}
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: admin-username}}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: admin-password}}
+            - name: MATTERCODEX_OWNER_USERNAME
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: owner-username}}
+            - name: MATTERCODEX_OWNER_EMAIL
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: owner-email}}
+            - name: MATTERCODEX_OWNER_INITIAL_PASSWORD
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: owner-initial-password}}
+            - name: MATTERCODEX_ORGANIZATION_ID
+              valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: organization-id}}
+            - {name: KC_HOSTNAME, value: https://sso.kodex.works}
+            - {name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "false"}
+            - {name: KC_PROXY_HEADERS, value: xforwarded}
+            - {name: KC_HTTP_ENABLED, value: "true"}
+            - {name: KC_HTTPS_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/sso/tls/tls.crt}
+            - {name: KC_HTTPS_CERTIFICATE_KEY_FILE, value: /var/run/secrets/mattercodex/sso/tls/tls.key}
+            - {name: KC_HEALTH_ENABLED, value: "true"}
+            - {name: KC_METRICS_ENABLED, value: "true"}
+            - {name: KC_CACHE, value: local}
+            - {name: JAVA_OPTS_KC_HEAP, value: "-XX:MaxRAMPercentage=65 -XX:InitialRAMPercentage=30"}
+          startupProbe:
+            httpGet: {path: /health/started, port: management, scheme: HTTP}
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 80
+          readinessProbe:
+            httpGet: {path: /health/ready, port: management, scheme: HTTP}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 4
+          livenessProbe:
+            httpGet: {path: /health/live, port: management, scheme: HTTP}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          resources:
+            requests: {cpu: 250m, memory: 768Mi}
+            limits: {memory: 2Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: realm, mountPath: /opt/keycloak/data/import, readOnly: true}
+            - {name: public-tls, mountPath: /var/run/secrets/mattercodex/sso/tls, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: realm
+          configMap:
+            name: mattercodex-keycloak-realm
+            items: [{key: mattercodex-realm.json, path: mattercodex-realm.json}]
+        - name: public-tls
+          secret: {secretName: sso-public-tls, defaultMode: 0440}
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sso
+  labels:
+    app.kubernetes.io/name: sso
+    app.kubernetes.io/component: identity-provider
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: kodex-public
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: kodex-public
+  tls:
+    - hosts: [sso.kodex.works]
+      secretName: sso-public-tls
+  rules:
+    - host: sso.kodex.works
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: sso, port: {name: http}}
