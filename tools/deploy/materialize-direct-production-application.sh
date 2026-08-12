@@ -586,8 +586,9 @@ cert_der="$temporary_directory/control-api.der"
 openssl x509 -in "$(value_path Secret control-api-gateway-public-tls-material tls.crt)" -outform DER -out "$cert_der"
 openssl x509 -in "$(value_path Secret control-api-gateway-public-tls-material tls.crt)" -noout \
   -checkhost control-api.mattercodex.local >/dev/null 2>&1 || fail "control API public TLS hostname is invalid"
-jq -n --arg hostname control-api.mattercodex.local --arg digest "$(sha256sum "$cert_der" | awk '{print $1}')" \
-  '{schema_version:1,hostname:$hostname,certificate_sha256:$digest}' >"$material_json"
+jq -n --arg digest "$(sha256sum "$cert_der" | awk '{print $1}')" \
+  '{generation:1,certificateSha256:$digest,predecessorGeneration:0,predecessorCertificateSha256:""}' \
+  >"$material_json"
 
 # NATS account and users are generated as one atomic set; a partial live set is rejected.
 nats_existing=0

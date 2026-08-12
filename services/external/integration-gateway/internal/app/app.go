@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
@@ -365,10 +366,22 @@ func loadDefinitions(ctx context.Context, directory string, service *domainservi
 	}
 	parsedDefinitions := make([]entity.Definition, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || (filepath.Ext(entry.Name()) != ".yaml" && filepath.Ext(entry.Name()) != ".yml") {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if entry.IsDir() || (filepath.Ext(name) != ".yaml" && filepath.Ext(name) != ".yml") {
 			return errors.New("integration definition entry is invalid")
 		}
-		raw, err := readRuntimeFile(filepath.Join(directory, entry.Name()), definition.MaximumDefinitionBytes)
+		if entry.Type()&os.ModeSymlink != 0 {
+			target, readLinkErr := os.Readlink(filepath.Join(directory, name))
+			if readLinkErr != nil || target != filepath.Join("..data", name) {
+				return errors.New("integration definition projected entry is invalid")
+			}
+		} else if !entry.Type().IsRegular() {
+			return errors.New("integration definition entry is invalid")
+		}
+		raw, err := readRuntimeFile(filepath.Join(directory, name), definition.MaximumDefinitionBytes)
 		if err != nil {
 			return err
 		}
@@ -377,6 +390,9 @@ func loadDefinitions(ctx context.Context, directory string, service *domainservi
 			return err
 		}
 		parsedDefinitions = append(parsedDefinitions, parsed)
+	}
+	if len(parsedDefinitions) == 0 {
+		return errors.New("integration definition directory contains no definitions")
 	}
 	// Полный закрытый registry проверяется до первой materialization в БД.
 	for _, parsed := range parsedDefinitions {

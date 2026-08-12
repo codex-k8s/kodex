@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net"
@@ -98,8 +99,9 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	key, err := readRuntimeFile(config.Gateway.DeliveryKeyFile, 128)
-	if err != nil || len(key) != 32 {
+	encodedKey, err := readRuntimeFile(config.Gateway.DeliveryKeyFile, 128)
+	key, decodeErr := hex.DecodeString(strings.TrimSpace(string(encodedKey)))
+	if err != nil || decodeErr != nil || len(key) != 32 {
 		return errors.New("delivery encryption key is unavailable")
 	}
 	current.control, err = controlplaneclient.Dial(startup, controlplaneclient.Config{
