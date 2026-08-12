@@ -97,11 +97,27 @@
     },
     {
       "kind": "Secret",
+      "name": "internal-rpc-authority-publisher-manifest-signer",
+      "keys": [
+        "private.jwk"
+      ],
+      "requirement": "manifest signer из той же offline ceremony, что и подписанный publisher trust bundle"
+    },
+    {
+      "kind": "Secret",
       "name": "internal-rpc-authority-publisher-manifest-trust",
       "keys": [
         "manifest-trust.jws"
       ],
       "requirement": "publisher trust bundle, подписанный offline manifest root"
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-publisher-readback-signer",
+      "keys": [
+        "private.jwk"
+      ],
+      "requirement": "readback credential signer из той же offline ceremony, что и readback trust snapshot"
     },
     {
       "kind": "Secret",
@@ -868,7 +884,7 @@
       ]
     },
     {
-      "classification": "cryptographically_generated",
+      "classification": "truly_external_credential",
       "kind": "Secret",
       "name": "internal-rpc-authority-publisher-manifest-signer",
       "keys": [
@@ -884,7 +900,7 @@
       ]
     },
     {
-      "classification": "cryptographically_generated",
+      "classification": "truly_external_credential",
       "kind": "Secret",
       "name": "internal-rpc-authority-publisher-readback-signer",
       "keys": [

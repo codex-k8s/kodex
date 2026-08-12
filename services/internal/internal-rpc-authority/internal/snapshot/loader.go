@@ -471,7 +471,8 @@ func loadManifestVerificationKeyForType(
 		bundle.BundleRevision < metadata.SourceRevision ||
 		!snapshotDigestPattern.MatchString(bundle.BundleDigest) ||
 		bundle.PublishedAt > now.Add(5*time.Second).Unix() ||
-		bundle.ValidUntil != bundle.PublishedAt+86400 ||
+		bundle.ValidUntil <= bundle.PublishedAt ||
+		bundle.ValidUntil > bundle.PublishedAt+366*24*60*60 ||
 		!now.Before(time.Unix(bundle.ValidUntil, 0)) {
 		return internalrpcauth.ES256Key{}, 0, errors.New("manifest trust bundle metadata rejected")
 	}

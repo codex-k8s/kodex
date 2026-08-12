@@ -1,10 +1,27 @@
 package snapshot
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 )
+
+func TestBootstrapRootMetadataIsCanonical(t *testing.T) {
+	for _, name := range []string{"manifest-root", "readback-root"} {
+		path := filepath.Join("..", "bootstrap", name, "bootstrap-metadata.json")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s metadata: %v", name, err)
+		}
+		var value map[string]json.RawMessage
+		if err := internalrpcauth.DecodeCanonicalJSON(raw, &value); err != nil {
+			t.Fatalf("%s metadata is not canonical: %v", name, err)
+		}
+	}
+}
 
 func TestReadRegularFileAcceptsExactGroupReadableSecret(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private.jwk")

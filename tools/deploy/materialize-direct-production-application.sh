@@ -241,6 +241,7 @@ while IFS=$'\t' read -r kind name key; do
   [[ -s "$path" ]] || fail "external $kind/$name key is empty"
   case "$key" in
     *.jws|*.jwt) node "$helper" validate-jws "$path" >/dev/null ;;
+    private.jwk) node "$helper" validate-private-jwk "$path" >/dev/null ;;
     *.jwk) jq -e 'type == "object" and .kty == "OKP" and .crv == "Ed25519" and (.x|type=="string" and length>0) and .d == null' "$path" >/dev/null || fail "external public JWK is invalid" ;;
     *public-keyset.json) jq -e '.keys|type=="array" and length>0 and all(.[];.kty=="OKP" and .crv=="Ed25519" and (.x|type=="string" and length>0) and .d==null)' "$path" >/dev/null || fail "external public keyset is invalid" ;;
     *.sha256) grep -Eq '^[a-f0-9]{64}$' "$path" || fail "external SHA-256 is invalid" ;;
@@ -248,6 +249,11 @@ while IFS=$'\t' read -r kind name key; do
     ca.pem) openssl x509 -in "$path" -noout >/dev/null 2>&1 || fail "external CA is invalid" ;;
   esac
 done < <(jq -r '.external_bindings[] | .kind as $kind | .name as $name | .keys[] | [$kind,$name,.] | @tsv' "$policy")
+node "$helper" validate-authority-bootstrap \
+  "$(value_path Secret internal-rpc-authority-publisher-manifest-signer private.jwk)" \
+  "$(value_path Secret internal-rpc-authority-publisher-manifest-trust manifest-trust.jws)" \
+  "$(value_path Secret internal-rpc-authority-publisher-readback-signer private.jwk)" \
+  "$(value_path Secret internal-rpc-authority-readback-trust credential-trust.jws)"
 mapping_manifest=$(value_path Secret interaction-gateway-mapping manifest.yaml)
 mapping_digest=$(value_path Secret interaction-gateway-mapping manifest.sha256)
 [[ "$(sha256sum "$mapping_manifest" | awk '{print $1}')" == "$(tr -d '\n' <"$mapping_digest")" ]] || fail "external mapping digest mismatch"
