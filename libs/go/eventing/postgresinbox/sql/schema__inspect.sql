@@ -86,8 +86,8 @@ WITH target_tables(table_name, expected_privileges) AS (
         relation.relname || '.' || attribute.attname,
         format_type(attribute.atttypid, attribute.atttypmod) || '|' ||
         CASE WHEN attribute.attnotnull THEN '1' ELSE '0' END || '|' ||
-        COALESCE(NULLIF(attribute.attidentity, ''), '-') || '|' ||
-        COALESCE(NULLIF(attribute.attgenerated, ''), '-') || '|' ||
+        COALESCE(NULLIF(attribute.attidentity::text, ''), '-') || '|' ||
+        COALESCE(NULLIF(attribute.attgenerated::text, ''), '-') || '|' ||
         COALESCE(
             regexp_replace(
                 pg_catalog.pg_get_expr(definition.adbin, definition.adrelid, true),
@@ -261,7 +261,7 @@ WITH target_tables(table_name, expected_privileges) AS (
             ARRAY(
                 SELECT privilege_name
                 FROM unnest(ARRAY[
-                    'DELETE', 'INSERT', 'MAINTAIN', 'REFERENCES',
+                    'DELETE', 'INSERT', 'REFERENCES',
                     'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE'
                 ]::text[]) AS privilege_name
                 WHERE pg_catalog.has_table_privilege(
@@ -305,6 +305,18 @@ WITH target_tables(table_name, expected_privileges) AS (
                       AND acl.privilege_type = expected.privilege
                       AND NOT acl.is_grantable
                 )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_catalog.aclexplode(COALESCE(
+                    relation.relacl,
+                    pg_catalog.acldefault('r', relation.relowner)
+                )) AS acl
+                WHERE acl.grantee = (
+                    SELECT oid FROM pg_catalog.pg_roles
+                    WHERE rolname = session_user
+                )
+                  AND acl.privilege_type = 'MAINTAIN'
             )
             AND NOT EXISTS (
                 SELECT 1
