@@ -49,6 +49,7 @@ script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 validator="$repository_root/tools/release/validate-release-lock.sh"
 renderer="$repository_root/tools/release/render-direct-production.sh"
+workload_contract_renderer="$repository_root/tools/release/render-production-workload-contracts.sh"
 "$validator" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
 
 if [[ "$operation" != preflight ]]; then
@@ -80,6 +81,8 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render_file="$temporary_directory/direct-production.yaml"
 "$renderer" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" --output "$render_file" >/dev/null
+workload_contract_file="$temporary_directory/production-workload-contracts.yaml"
+"$workload_contract_renderer" --manifest "$render_file" --output "$workload_contract_file" >/dev/null
 yq -o=json eval-all '.' "$render_file" | jq -sc -e '
   map(select(type == "object" and .kind != null)) as $resources |
   ($resources | length) > 0 and
@@ -141,6 +144,15 @@ kubectl --context "$expected_context" -n mattercodex-system get configmap matter
   -o json | jq -e '.data.status == "ready" and .data.profile == "direct-production single-node prototype"' >/dev/null ||
   fail "owner bootstrap readiness is absent or invalid"
 kubectl --context "$expected_context" -n matter-kodex-prod get service matter-codex-registry >/dev/null
+
+# The admission allowlist is derived from the same exact, lock-validated render
+# as the workloads. Apply it first so server-side validation compares the new
+# workload revision with its matching owner contract instead of the previous
+# release. Preflight remains read-only and therefore validates against the
+# currently installed contract.
+if [[ "$operation" == apply ]]; then
+  apply_release_manifest -f "$workload_contract_file" >/dev/null
+fi
 non_job_render="$temporary_directory/non-jobs.yaml"
 yq eval-all 'select(.kind != "Job")' "$render_file" >"$non_job_render"
 apply_release_manifest --dry-run=server -f "$non_job_render" >/dev/null
@@ -256,6 +268,12 @@ fi
 stored_source=$(kubectl --context "$expected_context" -n mattercodex-system get configmap mattercodex-release-lock -o jsonpath='{.data.source_sha}')
 stored_lock=$(kubectl --context "$expected_context" -n mattercodex-system get configmap mattercodex-release-lock -o jsonpath='{.data.release_lock_sha256}')
 [[ "$stored_source" == "$source_sha" && "$stored_lock" == "$lock_sha256" ]] || fail "release readback mismatch"
+
+expected_workload_contract=$(yq -o=json '.data' "$workload_contract_file" | jq -Sc .)
+actual_workload_contract=$(kubectl --context "$expected_context" -n mattercodex-system \
+  get configmap mattercodex-production-workload-contracts -o json | jq -Sc '.data')
+[[ "$actual_workload_contract" == "$expected_workload_contract" ]] ||
+  fail "production workload contract readback mismatch"
 
 expected_resources=$(yq -o=json eval-all '.' "$render_file" | jq -Scs '
   map(select(type == "object" and (.kind == "ConfigMap" or .kind == "Service" or .kind == "Deployment" or
