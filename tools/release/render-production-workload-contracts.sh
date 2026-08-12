@@ -145,6 +145,7 @@ jq '
   {apiVersion:"v1",kind:"ConfigMap",
    metadata:{name:"mattercodex-production-workload-contracts",namespace:"mattercodex-system",
      labels:{"mattercodex.dev/profile":"direct-production-single-node-prototype",
+       "mattercodex.dev/release-managed":"true",
        "app.kubernetes.io/managed-by":"mattercodex-owner-bootstrap"}},
    data:.}
 ' "$workloads" | yq -P >"$output"
