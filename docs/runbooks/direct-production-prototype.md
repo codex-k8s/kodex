@@ -298,7 +298,8 @@ KUBECONFIG=/secure/path/kubeconfig \
 Команда сверяет чистый exact checkout, отсутствие публичного ingress
 `control.kodex.works`, отсутствие обслуженного authority state, останавливает
 только зависящие от authority workloads, пересоздаёт только новую БД
-`internal_rpc_authority` и удаляет только publisher/reconciler-owned runtime
+`internal_rpc_authority` из чистого `template0` и удаляет только
+publisher/reconciler-owned runtime
 material из закрытых policy. После появления хотя бы одного delivery/readback
 или публичного ingress этот путь необратимо запрещён. Затем владелец повторяет
 application materialization и routine dark deploy. Команда не предназначена

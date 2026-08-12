@@ -49,15 +49,50 @@ if kubectl -n "$namespace" get ingress -o json | jq -e '
   fail "public Control Center ingress already exists"
 fi
 
-read -r history_count delivery_count readback_count < <(
+schema_present=$(
   kubectl -n "$namespace" exec -i "$postgres_pod" -- \
-    psql -U postgres -d internal_rpc_authority -At -F ' ' <<'SQL'
+    psql -U postgres -d internal_rpc_authority -At <<'SQL'
+SELECT to_regclass('internal_rpc_authority.authority_snapshot_history') IS NOT NULL;
+SQL
+)
+case "$schema_present" in
+  t)
+    read -r history_count delivery_count readback_count < <(
+      kubectl -n "$namespace" exec -i "$postgres_pod" -- \
+        psql -U postgres -d internal_rpc_authority -At -F ' ' <<'SQL'
 SELECT
   (SELECT count(*) FROM internal_rpc_authority.authority_snapshot_history),
   (SELECT count(*) FROM internal_rpc_authority.authority_publisher_delivery_receipts),
   (SELECT count(*) FROM internal_rpc_authority.authority_snapshot_readbacks);
 SQL
-)
+    )
+    ;;
+  f)
+    goose_table_present=$(
+      kubectl -n "$namespace" exec -i "$postgres_pod" -- \
+        psql -U postgres -d internal_rpc_authority -At <<'SQL'
+SELECT to_regclass('public.goose_db_version') IS NOT NULL;
+SQL
+    )
+    if [[ "$goose_table_present" == t ]]; then
+      goose_rows=$(
+        kubectl -n "$namespace" exec -i "$postgres_pod" -- \
+          psql -U postgres -d internal_rpc_authority -At <<'SQL'
+SELECT count(*) FROM public.goose_db_version;
+SQL
+      )
+    elif [[ "$goose_table_present" == f ]]; then
+      goose_rows=0
+    else
+      fail "Goose schema readback is invalid"
+    fi
+    [[ "$goose_rows" == 0 ]] || fail "an unknown partial migration state exists"
+    history_count=1
+    delivery_count=0
+    readback_count=0
+    ;;
+  *) fail "authority schema readback is invalid" ;;
+esac
 [[ "$history_count" =~ ^[0-9]+$ && "$delivery_count" =~ ^[0-9]+$ && "$readback_count" =~ ^[0-9]+$ ]] ||
   fail "authority bootstrap evidence is invalid"
 (( delivery_count == 0 && readback_count == 0 )) ||
@@ -88,7 +123,7 @@ FROM pg_stat_activity
 WHERE datname = 'internal_rpc_authority'
   AND pid <> pg_backend_pid();
 DROP DATABASE internal_rpc_authority;
-CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_owner;
+CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_owner TEMPLATE template0;
 REVOKE ALL ON DATABASE internal_rpc_authority FROM PUBLIC;
 SQL
 
