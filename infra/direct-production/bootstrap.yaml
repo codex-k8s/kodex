@@ -154,7 +154,7 @@ spec:
         (object.kind == 'StatefulSet' && object.metadata.name in [
           'mattercodex-nats','mattercodex-object-store','mattercodex-postgresql','mattercodex-redis']) ||
         (object.kind == 'Deployment' && object.metadata.name in [
-          'automation-scheduler','control-api-gateway','control-plane','egress-gateway','integration-egress-proxy',
+          'application-grant-rotator','automation-scheduler','control-api-gateway','control-plane','egress-gateway','integration-egress-proxy',
           'integration-gateway','interaction-gateway','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor','internal-rpc-authority-restore-controller',
           'mattercodex-legacy-bot-service-bridge','mattercodex-legacy-mattermost-bridge','mattercodex-object-store-bootstrap',
