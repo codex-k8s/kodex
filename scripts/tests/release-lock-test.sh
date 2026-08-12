@@ -628,6 +628,15 @@ grep -Fq 'apply_release_manifest --dry-run=server -f "$non_job_render"' \
   printf 'Direct-production preflight does not use server-side apply for large ConfigMaps\n' >&2
   exit 1
 }
+grep -Fq '"$workload_contract_renderer" --manifest "$render_file" --output "$workload_contract_file"' \
+  "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq 'apply_release_manifest -f "$workload_contract_file"' \
+    "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq 'production workload contract readback mismatch' \
+    "$repository_root/tools/deploy/direct-production.sh" || {
+  printf 'Direct-production deploy does not update and read back the exact workload contract\n' >&2
+  exit 1
+}
 grep -Fq 'create --dry-run=client -f "$migration_manifest"' \
   "$repository_root/tools/deploy/direct-production.sh" &&
   grep -Fq '[[ "$replace_output" == *"field is immutable"* ]]' \
