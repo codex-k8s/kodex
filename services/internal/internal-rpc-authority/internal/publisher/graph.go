@@ -232,38 +232,6 @@ func (graph *Graph) Publish(
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, err
 	}
-	for _, target := range graph.config.Registry.Targets {
-		if _, err := graph.putExact(
-			ctx,
-			target.ManifestTrustVaultPath,
-			map[string]string{
-				"manifest-trust.jws": string(manifestBundle),
-				"source_revision": strconv.FormatUint(
-					graph.config.Registry.SourceRevision,
-					10,
-				),
-				"source_digest_sha256": graph.config.Registry.SourceDigest,
-			},
-		); err != nil {
-			return model.AuthoritySnapshotPublication{}, err
-		}
-		if target.ProofTrustVaultPath != "" {
-			if _, err := graph.putExact(
-				ctx,
-				target.ProofTrustVaultPath,
-				map[string]string{
-					"proof-trust.jwk": string(built.ProofTrustJSON),
-					"source_revision": strconv.FormatUint(
-						graph.config.Registry.SourceRevision,
-						10,
-					),
-					"source_digest_sha256": graph.config.Registry.SourceDigest,
-				},
-			); err != nil {
-				return model.AuthoritySnapshotPublication{}, err
-			}
-		}
-	}
 	predecessorRevision := uint64(0)
 	predecessorDigest := strings.Repeat("0", 64)
 	if len(historyForBuild) > 0 {
@@ -325,6 +293,40 @@ func (graph *Graph) Publish(
 			return model.AuthoritySnapshotPublication{}, errors.New(
 				"persist authority snapshot publication intent",
 			)
+		}
+	}
+	// Durable intent precedes external delivery so concurrent replicas and a
+	// restart after partial delivery rebuild the exact signed publication.
+	for _, target := range graph.config.Registry.Targets {
+		if _, err := graph.putExact(
+			ctx,
+			target.ManifestTrustVaultPath,
+			map[string]string{
+				"manifest-trust.jws": string(manifestBundle),
+				"source_revision": strconv.FormatUint(
+					graph.config.Registry.SourceRevision,
+					10,
+				),
+				"source_digest_sha256": graph.config.Registry.SourceDigest,
+			},
+		); err != nil {
+			return model.AuthoritySnapshotPublication{}, err
+		}
+		if target.ProofTrustVaultPath != "" {
+			if _, err := graph.putExact(
+				ctx,
+				target.ProofTrustVaultPath,
+				map[string]string{
+					"proof-trust.jwk": string(built.ProofTrustJSON),
+					"source_revision": strconv.FormatUint(
+						graph.config.Registry.SourceRevision,
+						10,
+					),
+					"source_digest_sha256": graph.config.Registry.SourceDigest,
+				},
+			); err != nil {
+				return model.AuthoritySnapshotPublication{}, err
+			}
 		}
 	}
 	served, err := graph.config.Snapshot.Publish(ctx, persisted)

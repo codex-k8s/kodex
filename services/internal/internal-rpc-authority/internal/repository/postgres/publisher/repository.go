@@ -114,6 +114,7 @@ func (repository *Repository) AppendSnapshot(
 			"publication_intent_id":           value.IntentID,
 			"publication_input_digest_sha256": value.InputDigestSHA256,
 			"expected_readback_count":         expectedReadbacks,
+			"published_at":                    value.PublishedAt,
 		},
 	).Scan(&accepted); err != nil {
 		return model.AuthoritySnapshotPublication{}, fmt.Errorf(
