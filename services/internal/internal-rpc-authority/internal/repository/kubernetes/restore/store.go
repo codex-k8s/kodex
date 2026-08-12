@@ -204,7 +204,11 @@ func (store *Store) Load(ctx context.Context) (model.RestoreState, error) {
 	if err != nil {
 		return model.RestoreState{}, err
 	}
-	return decodeState(envelope.Data[stateDataKey])
+	raw := envelope.Data[stateDataKey]
+	if strings.TrimSpace(raw) == "" {
+		return model.RestoreState{}, nil
+	}
+	return decodeState(raw)
 }
 
 // VerifyOperatorCredential проверяет projected ServiceAccount token через
