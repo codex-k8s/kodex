@@ -251,10 +251,19 @@ if [[ "$operation" == apply ]]; then
      .metadata.name == "internal-rpc-authority-database-credential-reconciler"))' \
     "$render_file" >"$temporary_directory/authority-bootstrap.yaml"
   apply_release_manifest -f "$temporary_directory/authority-bootstrap.yaml" >/dev/null
+  expected_authority_revision=$(yq -r '
+    select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+    .data."key-delivery-targets.yaml" | from_yaml | .source_revision
+  ' "$render_file")
+  [[ "$expected_authority_revision" =~ ^[1-9][0-9]*$ ]] ||
+    fail "publisher authority source revision is invalid"
   snapshot_ready=false
   for _ in $(seq 1 60); do
     if kubectl --context "$expected_context" -n mattercodex-system get secret internal-rpc-authority-snapshot -o json |
-      jq -e '(.data["snapshot.jws"] // "") | length > 0' >/dev/null; then
+      jq -e --arg expected_revision "$expected_authority_revision" '
+        ((.data["snapshot.jws"] // "") | length > 0) and
+        .metadata.annotations["mattercodex.dev/source-revision"] == $expected_revision
+      ' >/dev/null; then
       snapshot_ready=true
       break
     fi

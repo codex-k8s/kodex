@@ -126,9 +126,23 @@
     },
     {
       "kind": "Secret",
+      "name": "internal-rpc-authority-automation-scheduler-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
+    },
+    {
+      "kind": "Secret",
       "name": "internal-rpc-authority-control-api-gateway-manifest-trust",
       "keys": [
         "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-control-api-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
       ]
     },
     {
@@ -140,9 +154,23 @@
     },
     {
       "kind": "Secret",
+      "name": "internal-rpc-authority-control-plane-resolver-trust",
+      "keys": [
+        "jwks.json"
+      ]
+    },
+    {
+      "kind": "Secret",
       "name": "internal-rpc-authority-integration-gateway-manifest-trust",
       "keys": [
         "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-integration-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
       ]
     },
     {
@@ -154,9 +182,23 @@
     },
     {
       "kind": "Secret",
+      "name": "internal-rpc-authority-interaction-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
+    },
+    {
+      "kind": "Secret",
       "name": "internal-rpc-authority-runtime-controller-manifest-trust",
       "keys": [
         "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-runtime-controller-proof-trust",
+      "keys": [
+        "jwks.json"
       ]
     },
     {
