@@ -478,7 +478,7 @@ while IFS=$'\t' read -r name key; do
     node "$helper" generate-jwk "$path"
   fi
 done < <(jq -r '.resources[] | select(.kind=="Secret") | .name as $name | .keys[] |
-  select(. == "private.jwk" or . == "evidence-private.jwk" or . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") | [$name,.] | @tsv' "$policy")
+  select(. == "private.jwk" or . == "next-private.jwk" or . == "evidence-private.jwk" or . == "mattermost-event.private.jwk" or . == "provider-readback.private.jwk") | [$name,.] | @tsv' "$policy")
 public_jwks() {
   local destination
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
@@ -519,6 +519,12 @@ public_jwks internal-rpc-authority-control-plane-resolver-trust jwks.json intern
 public_jwk internal-rpc-authority-restore-role-trust evidence-public.jwk internal-rpc-authority-restore-pitr-evidence-signer evidence-private.jwk
 put_file Secret internal-rpc-authority-restore-role-trust manifest-trust.jws \
   "$(value_path Secret internal-rpc-authority-publisher-manifest-trust manifest-trust.jws)"
+node "$helper" generate-restore-role-trust \
+  "$(value_path Secret internal-rpc-authority-restore-role-trust restore-role-trust.jws)" \
+  "$(value_path Secret internal-rpc-authority-publisher-manifest-signer private.jwk)" \
+  "$(value_path Secret internal-rpc-authority-publisher-signers private.jwk)" \
+  "$(value_path Secret internal-rpc-authority-publisher-signers next-private.jwk)" \
+  1 1 31536000
 mkdir -p "$(dirname -- "$(value_path Secret integration-gateway-payload-keyset keyset.json)")"
 node "$helper" generate-payload-keyset "$root" "$(value_path Secret integration-gateway-payload-keyset keyset.json)"
 

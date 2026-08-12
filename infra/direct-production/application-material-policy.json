@@ -130,14 +130,6 @@
     },
     {
       "kind": "Secret",
-      "name": "internal-rpc-authority-restore-role-trust",
-      "keys": [
-        "restore-role-trust.jws"
-      ],
-      "requirement": "restore-role bundle, подписанный независимым manifest root"
-    },
-    {
-      "kind": "Secret",
       "name": "runtime-controller-application-grant",
       "keys": [
         "application-grant.jws"
@@ -912,6 +904,7 @@
       "kind": "Secret",
       "name": "internal-rpc-authority-publisher-signers",
       "keys": [
+        "next-private.jwk",
         "private.jwk"
       ]
     },
@@ -1008,7 +1001,7 @@
       ]
     },
     {
-      "classification": "truly_external_credential",
+      "classification": "cryptographically_generated",
       "kind": "Secret",
       "name": "internal-rpc-authority-restore-role-trust",
       "keys": [
