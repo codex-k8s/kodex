@@ -20,9 +20,13 @@ jq --arg source_sha "$source_sha" --arg digest "$digest" '
 ' "$repository_root/tools/release/images.json" | jq -S . >"$temporary_directory/valid.json"
 jq -e '
   ([.images[] | select(.component == "role-image-builder" and .target == "runtime")] | length) == 1 and
-  all(.images[] | select(.component != "role-image-builder"); has("target") | not)
+  all(.images[] | select(.component != "role-image-builder"); has("target") | not) and
+  ([.images[] | select(.component == "bot-service" and
+    .dockerfile == "services/external/bot-service/Dockerfile")] | length) == 1 and
+  ([.images[] | select(.component == "legacy-data-migration" and
+    .dockerfile == "services/jobs/legacy-data-migration/Dockerfile")] | length) == 1
 ' "$repository_root/tools/release/images.json" >/dev/null || {
-  printf 'Release image catalog does not select the exact role-image-builder runtime target\n' >&2
+  printf 'Release image catalog lacks an exact runtime or migration image target\n' >&2
   exit 1
 }
 grep -Fq 'target_options=(--opt "target=$target")' \

@@ -4,8 +4,8 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.5.0
-updated: 2026-08-10
+version: 1.6.0
+updated: 2026-08-12
 ---
 
 # Direct-production single-node prototype
@@ -25,6 +25,14 @@ Legacy Mattermost, PostgreSQL, bot-service, Kaniko и registry в
 путём и rollback path. Новый build публикует в существующий Service
 `matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000`, а workloads
 используют node pull endpoint `localhost:5001` только с digest.
+
+Exact release lock также содержит compatibility image `bot-service` той же Git
+revision. Dark deploy не применяет этот образ к legacy Deployment. Он
+используется только отдельной owner-approved операцией подготовки schema
+`000041` по `RUN-MC-014`, с сохранением предыдущего PodTemplate и bounded
+rollback. Image `legacy-data-migration` входит в тот же lock, но запускается
+только отдельным owner-approved execution manifest после завершения source TLS
+preflight; обычный dark deploy его не применяет.
 
 ## Шлюзы
 

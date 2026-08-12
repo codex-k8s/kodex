@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.3.0
-updated: 2026-08-09
+version: 1.4.0
+updated: 2026-08-12
 ---
 
 # Перенос legacy MatterCodex data
@@ -38,7 +38,11 @@ merged revision:
 
 ```bash
 revision="$(git rev-parse HEAD)"
-bot_image='<reviewed-registry/bot-service@sha256:...>'
+release_lock='/secure/path/release-lock.json'
+test "$(jq -r .source_sha "$release_lock")" = "$revision"
+bot_image="$(jq -r '.images[] | select(.component == "bot-service") | .pull_ref' "$release_lock")"
+migration_image="$(jq -r '.images[] | select(.component == "legacy-data-migration") | .pull_ref' "$release_lock")"
+test -n "$bot_image" && test -n "$migration_image"
 maintenance_window='owner-window-000041'
 tools/legacy-postgresql-source/apply-schema-000041.sh \
   --owner-approved \
@@ -47,6 +51,9 @@ tools/legacy-postgresql-source/apply-schema-000041.sh \
   --maintenance-window-id "$maintenance_window" \
   --max-outage-seconds 300
 ```
+
+`migration_image` закрепляется в последующем execution manifest без замены
+digest и не означает разрешение на запуск Job.
 
 Скрипт сохраняет immutable previous bot-service PodTemplate, Deployment UID,
 exact image, Git SHA и migration hash; затем разворачивает только закреплённый
