@@ -85,6 +85,7 @@ type Config struct {
 	PendingRescheduleDelay              time.Duration `env:"CONTROL_PLANE_PENDING_RESCHEDULE_DELAY"`
 	RecoveryPollInterval                time.Duration `env:"CONTROL_PLANE_RECOVERY_POLL_INTERVAL"`
 	OIDCTLSServerName                   string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
+	OIDCConnectAddress                  string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
 	OIDCCAFile                          string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
 	ApplicationGrantTrustDir            string        `env:"CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR"`
 	InstanceID                          string        `env:"POD_UID"`
@@ -167,6 +168,7 @@ func loadConfig() (Config, error) {
 		PendingRescheduleDelay:              30 * time.Second,
 		RecoveryPollInterval:                time.Second,
 		OIDCTLSServerName:                   "sso.kodex.works",
+		OIDCConnectAddress:                  "sso.identity.svc.cluster.local:443",
 		OIDCCAFile:                          "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		ApplicationGrantTrustDir:            "/var/run/config/mattercodex/control-plane/application-grants",
 		StartupTimeout:                      15 * time.Second,
@@ -255,6 +257,10 @@ func (config Config) validate() error {
 		if serverName == "" || net.ParseIP(serverName) != nil {
 			return errors.New("control-plane TLS server name is invalid")
 		}
+	}
+	oidcConnectHost, oidcConnectPort, oidcConnectErr := net.SplitHostPort(config.OIDCConnectAddress)
+	if oidcConnectErr != nil || oidcConnectHost == "" || net.ParseIP(oidcConnectHost) != nil || oidcConnectPort != "443" {
+		return errors.New("control-plane OIDC connect address is invalid")
 	}
 	for _, path := range []string{
 		config.ServerCertificateFile,

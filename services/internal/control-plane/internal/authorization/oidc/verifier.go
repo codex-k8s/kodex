@@ -39,6 +39,7 @@ type Config struct {
 	Purpose              string
 	Issuer               string
 	Audience             string
+	ConnectAddress       string
 	TLSServerName        string
 	CAFile               string
 	ExpectedCallerSPIFFE string
@@ -69,9 +70,11 @@ type claims struct {
 // прослушивателя.
 func New(ctx context.Context, config Config) (*Verifier, error) {
 	issuer, err := url.Parse(config.Issuer)
+	connectHost, connectPort, connectErr := net.SplitHostPort(config.ConnectAddress)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" ||
 		issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" ||
 		config.ProducerID == "" || config.Purpose == "" || config.Audience == "" || config.TLSServerName == "" ||
+		connectErr != nil || connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" ||
 		net.ParseIP(config.TLSServerName) != nil ||
 		config.ExpectedCallerSPIFFE == "" ||
 		config.ExpectedWorkload == "" ||
@@ -95,12 +98,16 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	if !roots.AppendCertsFromPEM(caRaw) {
 		return nil, errors.New("OIDC trust bundle is invalid")
 	}
+	dialer := &net.Dialer{Timeout: config.HTTPTimeout, KeepAlive: 30 * time.Second}
+	issuerAddress := net.JoinHostPort(issuer.Hostname(), "443")
 	transport := &http.Transport{
 		Proxy: nil,
-		DialContext: (&net.Dialer{
-			Timeout:   config.HTTPTimeout,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if !strings.HasPrefix(network, "tcp") || !strings.EqualFold(address, issuerAddress) {
+				return nil, errors.New("OIDC endpoint is not permitted")
+			}
+			return dialer.DialContext(ctx, network, config.ConnectAddress)
+		},
 		TLSClientConfig: &tls.Config{
 			MinVersion: tls.VersionTLS13,
 			ServerName: config.TLSServerName,

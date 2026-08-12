@@ -507,10 +507,10 @@ public_jwk() {
   destination=$(value_path Secret "$1" "$2"); mkdir -p "$(dirname -- "$destination")"
   node "$helper" public-jwk "$(value_path Secret "$3" "$4")" "$destination"
 }
-public_jwks control-plane-interaction-readback-trust public-keyset.json control-plane-interaction-readback-signer private.jwk
+public_keyset_genesis control-plane-interaction-readback-trust public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis control-plane-keyset-genesis interaction-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis control-plane-keyset-genesis mattermost-event.public-keyset.json interaction-gateway-runtime mattermost-event.private.jwk
-public_jwks interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
+public_keyset_genesis interaction-gateway-runtime delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 public_keyset_genesis interaction-gateway-postgres-migrator delivery-readback.public-keyset.json control-plane-interaction-readback-signer private.jwk
 for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
