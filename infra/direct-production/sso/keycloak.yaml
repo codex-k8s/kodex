@@ -97,17 +97,17 @@ spec:
             - {name: KC_CACHE, value: local}
             - {name: JAVA_OPTS_KC_HEAP, value: "-XX:MaxRAMPercentage=65 -XX:InitialRAMPercentage=30"}
           startupProbe:
-            httpGet: {path: /health/started, port: management, scheme: HTTP}
+            httpGet: {path: /health/started, port: management, scheme: HTTPS}
             periodSeconds: 3
             timeoutSeconds: 2
             failureThreshold: 80
           readinessProbe:
-            httpGet: {path: /health/ready, port: management, scheme: HTTP}
+            httpGet: {path: /health/ready, port: management, scheme: HTTPS}
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 4
           livenessProbe:
-            httpGet: {path: /health/live, port: management, scheme: HTTP}
+            httpGet: {path: /health/live, port: management, scheme: HTTPS}
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 6
