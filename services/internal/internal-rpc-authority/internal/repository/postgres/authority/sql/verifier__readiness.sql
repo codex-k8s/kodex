@@ -8,7 +8,6 @@ SELECT EXISTS (
       AND key_set_revision = @key_set_revision
       AND policy_revision = @policy_revision
       AND signer_generation = @signer_generation
-      AND readback_attestation_receipt_id = @attestation_receipt_id
       AND internal_rpc_authority.validate_snapshot_attestation_receipt(
           readback_attestation_receipt_id,
           @target_workload_id,

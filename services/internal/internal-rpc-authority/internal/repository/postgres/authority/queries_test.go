@@ -1,8 +1,11 @@
 package authority
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
@@ -21,5 +24,26 @@ func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
 	}
 	if strings.Contains(query, "readback_attestation_receipt_id =\n              EXCLUDED.readback_attestation_receipt_id") {
 		t.Fatal("exact snapshot restart still requires the previous receipt identifier")
+	}
+}
+
+func TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt(t *testing.T) {
+	args := snapshotReadinessArgs("workload", repository.SnapshotState{})
+	if _, _, err := args.RewriteQuery(
+		context.Background(),
+		nil,
+		verifierReadinessSQL,
+		nil,
+	); err != nil {
+		t.Fatalf("snapshot readiness query arguments are not exact: %v", err)
+	}
+	if strings.Contains(verifierReadinessSQL, "@attestation_receipt_id") {
+		t.Fatal("replica readiness still requires its local receipt identifier")
+	}
+	if !strings.Contains(
+		verifierReadinessSQL,
+		"validate_snapshot_attestation_receipt(\n          readback_attestation_receipt_id,",
+	) {
+		t.Fatal("snapshot readiness does not validate the current workload receipt")
 	}
 }
