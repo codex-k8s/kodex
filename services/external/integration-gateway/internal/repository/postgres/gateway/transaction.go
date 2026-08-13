@@ -25,13 +25,27 @@ func (transaction *transaction) StoreDefinition(ctx context.Context, definition 
 	if err != nil {
 		return err
 	}
-	var identifier string
-	if err := transaction.tx.QueryRow(ctx, sqlDefinitionInsert, pgx.StrictNamedArgs{
+	arguments := pgx.StrictNamedArgs{
 		"definition_id": definition.ID, "definition_version": definition.Version,
 		"canonical_digest": definition.Digest, "source": definition.Source,
 		"payload": payload, "created_at": definition.CreatedAt,
-	}).Scan(&identifier); err != nil {
+	}
+	var identifier, storedDigest string
+	err = transaction.tx.QueryRow(ctx, sqlDefinitionInsert, arguments).Scan(
+		&identifier,
+		&storedDigest,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = transaction.tx.QueryRow(ctx, sqlDefinitionGet, pgx.StrictNamedArgs{
+			"definition_id":      definition.ID,
+			"definition_version": definition.Version,
+		}).Scan(&identifier, &storedDigest)
+	}
+	if err != nil {
 		return err
+	}
+	if storedDigest != definition.Digest {
+		return errs.ErrConflict
 	}
 	return transaction.appendAudit(ctx, entity.AuditEvent{
 		ID: uuid.NewString(), TenantID: transaction.tenantID, ProjectID: transaction.projectID,

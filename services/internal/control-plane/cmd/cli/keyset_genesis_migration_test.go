@@ -24,4 +24,7 @@ func TestKeysetGenesisDigestSchemaMigrationIsInsideExpandFence(t *testing.T) {
 	if strings.Contains(statement, "public.digest(") {
 		t.Fatal("keyset genesis digest must not depend on the public schema")
 	}
+	if !strings.Contains(statement, "SET version = 20260812000100") {
+		t.Fatal("latest control-plane migration must advance the runtime schema fence")
+	}
 }

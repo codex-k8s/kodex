@@ -56,6 +56,12 @@ $function$;
 REVOKE ALL ON FUNCTION control_plane.bootstrap_mattermost_event_keyset_genesis(text,bigint,bigint,bigint,text,jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.bootstrap_mattermost_event_keyset_genesis(text,bigint,bigint,bigint,text,jsonb) TO control_plane_migrator;
 
+UPDATE control_plane.schema_state
+SET version = 20260812000100, migrated_at = clock_timestamp()
+WHERE singleton = true;
+
+RESET ROLE;
+
 -- +goose Down
 -- Forward-only: production genesis may depend on the corrected extension schema.
 SELECT 1;

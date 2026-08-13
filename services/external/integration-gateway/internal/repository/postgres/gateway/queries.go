@@ -8,6 +8,9 @@ var sqlTransactionSetScope string
 //go:embed sql/definition__insert.sql
 var sqlDefinitionInsert string
 
+//go:embed sql/definition__get.sql
+var sqlDefinitionGet string
+
 //go:embed sql/connection__upsert.sql
 var sqlConnectionUpsert string
 
