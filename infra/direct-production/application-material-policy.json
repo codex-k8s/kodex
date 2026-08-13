@@ -1336,6 +1336,14 @@
       "keys": [
         "readiness.jwt"
       ]
+    },
+    {
+      "classification": "deterministically_derived",
+      "kind": "Secret",
+      "name": "agent-runner-handoff-key",
+      "keys": [
+        "ed25519.key"
+      ]
     }
   ]
 }

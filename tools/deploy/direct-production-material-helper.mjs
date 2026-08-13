@@ -446,6 +446,30 @@ switch (command) {
     writeFileSync(args[1], Buffer.from(publicJWK.x, "base64url").toString("hex"), { mode: 0o600 });
     break;
   }
+  case "derive-ed25519-keypair": {
+    if (args.length !== 4) fail("derive-ed25519-keypair requires root, label, private and public output paths");
+    const root = Buffer.from(readFileSync(args[0], "utf8").trim(), "hex");
+    if (root.length !== 32 || args[1].length === 0) fail("Ed25519 derivation input is invalid");
+    const seed = Buffer.from(hkdfSync("sha256", root, Buffer.alloc(0), args[1], 32));
+    const prefix = Buffer.from("302e020100300506032b657004220420", "hex");
+    const privateKey = createPrivateKey({ key: Buffer.concat([prefix, seed]), format: "der", type: "pkcs8" });
+    const publicJWK = createPublicKey(privateKey).export({ format: "jwk" });
+    const publicKey = Buffer.from(publicJWK.x, "base64url");
+    if (publicKey.length !== 32) fail("derived Ed25519 public key is invalid");
+    writeFileSync(args[2], Buffer.concat([seed, publicKey]), { mode: 0o600 });
+    writeFileSync(args[3], publicKey, { mode: 0o600 });
+    break;
+  }
+  case "validate-ed25519-keypair": {
+    if (args.length !== 2) fail("validate-ed25519-keypair requires private and public key paths");
+    const privateKey = readFileSync(args[0]);
+    const publicKey = readFileSync(args[1]);
+    if (privateKey.length !== 64 || publicKey.length !== 32 ||
+        !privateKey.subarray(32).equals(publicKey) || publicKey.equals(Buffer.alloc(32))) {
+      fail("Ed25519 keypair is invalid");
+    }
+    break;
+  }
   case "validate-jws": {
     if (args.length !== 1) fail("validate-jws requires an input path");
     const value = readFileSync(args[0], "utf8").trim();
