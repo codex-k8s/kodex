@@ -65,6 +65,7 @@ jq -s '
 ' "$repository_root/infra/direct-production/application-material-policy.json" \
   "$repository_root/infra/direct-production/internal-rpc-authority-prototype-material-policy.json" >"$policy"
 jq -e '
+  . as $policy |
   .schema_version == 1 and
   .prototype_secret_backend == {
     deployment_profile:"direct-production-single-node-prototype",
@@ -73,7 +74,10 @@ jq -e '
   ([.resources[] | [.kind,.name]] | length) ==
     ([.resources[] | [.kind,.name]] | unique | length) and
   all(.runtime_owned_empty_resources[];
-    (.owner == "publisher" or .owner == "reconciler"))
+    (.owner == "publisher" or .owner == "reconciler")) and
+  all(.owner_materialized_resources[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      .classification == "deterministically_derived" and .keys == $binding.keys))
 ' "$policy" >/dev/null || fail "application material policy is invalid"
 values="$temporary_directory/values"
 mkdir -p "$values/Secret" "$values/ConfigMap" "$temporary_directory/internal"
@@ -228,7 +232,9 @@ if [[ "$mode" == readback ]]; then
   expected_handoff_key_id="sha256-$(sha256sum "$handoff_private" | awk '{print substr($1,1,16)}')"
   [[ "$expected_handoff_key_id" != sha256-0000000000000000 ]] || fail "agent runner handoff key id is invalid"
   jq -er --arg key "$expected_handoff_key_id" '
-    ((.data // {}) | length) == 0 and ((.binaryData // {}) | keys) == [$key] and .binaryData[$key]
+    . as $resource |
+    (((.data // {}) | length) == 0 and ((.binaryData // {}) | keys) == [$key]) |
+    select(.) | $resource.binaryData[$key]
   ' "$handoff_trust_json" | base64 -d >"$handoff_public" || fail "ConfigMap/agent-runner-handoff-trust readback is invalid"
   node "$helper" validate-ed25519-keypair "$handoff_private" "$handoff_public"
   printf 'Direct production application material readback completed\n'

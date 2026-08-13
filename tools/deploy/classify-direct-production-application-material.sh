@@ -87,6 +87,9 @@ jq -e '
   all(.external_bindings[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
       (($binding.keys - .keys) | length) == 0)) and
+  all(.owner_materialized_resources[]; . as $binding |
+    any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
+      .classification == "deterministically_derived" and .keys == $binding.keys)) and
   all(.publisher_owned_empty_resources[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
       .keys == $binding.keys)) and
@@ -184,6 +187,22 @@ while IFS=$'\t' read -r kind name classification keys; do
     "$resources" >"$resources.next"
   mv "$resources.next" "$resources"
 done < <(jq -r '. as $policy | .runtime_owned_empty_resources[] | . as $binding |
+  first($policy.resources[] | select(.kind == $binding.kind and .name == $binding.name)) |
+  [.kind,.name,.classification,(.keys | tojson)] | @tsv' "$policy")
+
+# Dynamic agent-runner Pods are created by runtime-controller and therefore are
+# absent from the static application interface render. Their owner-materialized
+# inputs remain an explicit, closed part of the material policy.
+while IFS=$'\t' read -r kind name classification keys; do
+  jq -e --arg kind "$kind" --arg name "$name" '
+    any(.[]; .kind == $kind and .name == $name)
+  ' "$resources" >/dev/null && continue
+  jq --arg kind "$kind" --arg name "$name" --arg classification "$classification" \
+    --argjson keys "$keys" \
+    '. + [{kind:$kind,name:$name,classification:$classification,keys:$keys}]' \
+    "$resources" >"$resources.next"
+  mv "$resources.next" "$resources"
+done < <(jq -r '. as $policy | .owner_materialized_resources[] | . as $binding |
   first($policy.resources[] | select(.kind == $binding.kind and .name == $binding.name)) |
   [.kind,.name,.classification,(.keys | tojson)] | @tsv' "$policy")
 
@@ -323,6 +342,7 @@ jq -S --slurpfile resources "$resources" '
     counts:($resources[0] | group_by(.classification) |
       map({key:.[0].classification,value:length}) | from_entries),
     external_bindings,
+    owner_materialized_resources,
     reusable_bindings,
     runtime_owned_empty_resources,
     publisher_owned_empty_resources,

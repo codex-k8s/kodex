@@ -81,6 +81,16 @@
       "requirement": "CA bundle точного внешнего OIDC issuer для control-plane и control-api-gateway"
     }
   ],
+  "owner_materialized_resources": [
+    {
+      "kind": "Secret",
+      "name": "agent-runner-handoff-key",
+      "keys": [
+        "ed25519.key"
+      ],
+      "requirement": "детерминированный private key для подписания handoff, используемого динамическими agent-runner Pod"
+    }
+  ],
   "reusable_bindings": [
     {
       "target_kind": "Secret",

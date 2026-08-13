@@ -46,12 +46,12 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 149 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 130 and
+  (.resources | length) == 150 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 131 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 19 and
   .counts == {
     cryptographically_generated:68,
-    deterministically_derived:70,
+    deterministically_derived:71,
     safely_reusable_from_existing_binding:2,
     truly_external_credential:9
   } and
@@ -65,6 +65,7 @@ jq -e '
 }
 
 jq -e '
+  . as $policy |
   ([.external_bindings[] | [.kind,.name]] | length) ==
     ([.external_bindings[] | [.kind,.name]] | unique | length) and
   ([.external_bindings[] as $binding |
@@ -74,6 +75,11 @@ jq -e '
   all(.external_bindings[];
     (.keys | length) > 0 and (.keys | length) == (.keys | unique | length) and
     (.requirement | type == "string" and length > 0)) and
+  all(.owner_materialized_resources[]; . as $binding |
+    (.requirement | type == "string" and length > 0) and
+    any($policy.resources[];
+      .kind == $binding.kind and .name == $binding.name and
+      .classification == "deterministically_derived" and .keys == $binding.keys)) and
   all(.reusable_bindings[];
     (.source_namespace == "matter-kodex-prod" or
      (.target_kind == "ConfigMap" and .target_name == "mattermost-ca" and
@@ -203,13 +209,17 @@ material="$temporary_directory/application-material.yaml"
   exit 1
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
-  map(select(.kind != null)) |
-  length == 149 and
-  ([.[] | [.kind,.metadata.name]] | sort) == ([$classification[0].resources[] | [.kind,.name]] | sort) and
-  all(.[]; . as $resource |
+  map(select(.kind != null)) as $resources |
+  ($resources | length) == 151 and
+  ([$resources[] | select(.metadata.name != "agent-runner-handoff-trust") |
+    [.kind,.metadata.name]] | sort) ==
+    ([$classification[0].resources[] | [.kind,.name]] | sort) and
+  ([$resources[] | select(.kind == "ConfigMap" and .metadata.name == "agent-runner-handoff-trust")] |
+    length) == 1 and
+  all($resources[] | select(.metadata.name != "agent-runner-handoff-trust"); . as $resource |
     ([((.data // {}) | keys[]),((.binaryData // {}) | keys[])] | unique | sort) ==
     ([$classification[0].resources[] | select(.kind == $resource.kind and .name == $resource.metadata.name) | .keys[]] | unique | sort)) and
-  all(.[]; . as $resource |
+  all($resources[] | select(.metadata.name != "agent-runner-handoff-trust"); . as $resource |
     all([((.data // {}) | to_entries[]),((.binaryData // {}) | to_entries[])][]; . as $entry |
       (any(($classification[0].runtime_owned_empty_resources // [])[];
         .kind == $resource.kind and
@@ -224,6 +234,18 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classif
 
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
+handoff_private="$temporary_directory/handoff-private.key"
+handoff_public="$temporary_directory/handoff-public.key"
+jq -er '.[] | select(.kind == "Secret" and .metadata.name == "agent-runner-handoff-key") |
+  .data["ed25519.key"]' "$material_json" | base64 -d >"$handoff_private"
+handoff_key_id="sha256-$(sha256sum "$handoff_private" | awk '{print substr($1,1,16)}')"
+jq -er --arg key "$handoff_key_id" '.[] |
+  select(.kind == "ConfigMap" and .metadata.name == "agent-runner-handoff-trust") |
+  . as $resource |
+  (((.data // {}) | length) == 0 and ((.binaryData // {}) | keys) == [$key]) |
+  select(.) | $resource.binaryData[$key]' "$material_json" | base64 -d >"$handoff_public"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" \
+  validate-ed25519-keypair "$handoff_private" "$handoff_public"
 for binding in \
   'control-plane-postgres-context:control-plane-postgres-context-migration' \
   'integration-gateway-postgres-context:integration-gateway-postgres-context-migration'; do
