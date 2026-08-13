@@ -225,6 +225,11 @@ authority доступным только после состояния gRPC con
 Kubernetes startup probe, а timeout отдельной dial attempt не подменяет общий
 startup budget.
 
+High-watermark хранит последний проверенный receipt, но не привязывает exact
+snapshot к нему навсегда. После pod replacement тот же source revision и digest
+можно подтвердить новым неистекшим receipt; регрессия generation/revision и
+смена digest без signed forward history остаются запрещены.
+
 Удостоверения разных назначений control-plane не переиспользуются.
 Удостоверение restore controller/ключ ACK и обычное удостоверение
 readback/ключ владения имеют разные явные `typ`, единственную точную аудиторию,
