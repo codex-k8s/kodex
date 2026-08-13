@@ -145,12 +145,19 @@ func Run(
 		serveResult <- state.httpServer.Serve()
 		cancelServe()
 	}()
+	if err := state.consumer.Check(startup); err != nil {
+		return err
+	}
+	// Readiness означает способность Pod принять лидерство. Standby-реплика
+	// уже прошла те же startup dependency checks и не должна блокировать rollout.
+	state.readiness.Set(true, "standby")
+	state.metrics.SetReady(true)
 	leaderErr := cluster.RunAsLeader(serveContext, config.PodUID, func(leaderContext context.Context) error {
 		state.readiness.Set(true, "ready")
 		state.metrics.SetReady(true)
 		defer func() {
-			state.readiness.Set(false, "leadership_lost")
-			state.metrics.SetReady(false)
+			state.readiness.Set(true, "standby")
+			state.metrics.SetReady(true)
 		}()
 		state.workers = serviceruntime.StartWorkers(leaderContext,
 			func(ctx context.Context) error { return state.consumer.Run(ctx) },
