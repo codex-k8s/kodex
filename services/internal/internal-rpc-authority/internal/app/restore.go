@@ -446,6 +446,14 @@ func openRestorePostgres(
 			sessionrepository.CapabilityRestoreController,
 		)
 	}
+	poolConfig.BeforeAcquire = func(ctx context.Context, connection *pgx.Conn) bool {
+		return sessionrepository.Ensure(
+			ctx,
+			connection,
+			config.PostgresExpectedUser,
+			sessionrepository.CapabilityRestoreController,
+		) == nil
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, errors.New("open restore controller PostgreSQL pool")
