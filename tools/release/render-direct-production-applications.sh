@@ -515,6 +515,14 @@ EOF
     grep -Fvxf <(jq -r '.images[].pull_ref' "$lock_file") >/dev/null; then
     fail "application render contains an internal image outside the release lock"
   fi
+
+  if yq -N -r '
+    .. | select(has("volumeMounts")) | .volumeMounts[] |
+    select(.name == "authority-sockets" or .name == "internal-rpc-authority-sockets") |
+    .mountPath
+  ' "$output" | grep -Fxv '/run/mattercodex' >/dev/null; then
+    fail "application render contains a nested internal RPC authority socket mount"
+  fi
 fi
 
 duplicate_resources=$(yq -o=json '.' "$output" | jq -rs '

@@ -59,7 +59,7 @@ spec:
             limits: {cpu: "1", memory: 512Mi}
           securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex/internal-rpc-authority, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/mattercodex, readOnly: true}
             - {name: workload-tls, mountPath: /var/run/secrets/mattercodex/interaction-gateway/workload-tls, readOnly: true}
             - {name: internal-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/client-ca, readOnly: true}
             - {name: internal-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/control-plane, readOnly: true}

@@ -253,7 +253,7 @@ EOF
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-            - {name: authority-sockets, mountPath: /run/mattercodex/internal-rpc-authority, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/mattercodex, readOnly: true}
             - {name: authority-workload-tls, mountPath: /workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /control-plane, readOnly: true}
             - {name: application-grant, mountPath: /application-grant, readOnly: true}

@@ -44,7 +44,7 @@ spec:
             failureThreshold: 3
           volumeMounts:
             - name: internal-rpc-authority-sockets
-              mountPath: /run/mattercodex/internal-rpc-authority
+              mountPath: /run/mattercodex
               readOnly: true
         - name: internal-rpc-authority-issuer
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000

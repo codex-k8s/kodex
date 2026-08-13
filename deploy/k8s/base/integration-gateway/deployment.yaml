@@ -121,7 +121,7 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex/internal-rpc-authority, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/mattercodex, readOnly: true}
             - {name: server-tls, mountPath: /var/run/secrets/mattercodex/integration-gateway/workload-tls, readOnly: true}
             - {name: client-ca, mountPath: /var/run/config/mattercodex/integration-gateway/client-ca, readOnly: true}
             - {name: postgres-runtime, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-runtime, readOnly: true}
