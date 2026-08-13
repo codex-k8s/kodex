@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,6 +19,47 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
+}
+
+type secretRoundTripper struct {
+	secret secretDocument
+	puts   int
+}
+
+func (roundTripper *secretRoundTripper) RoundTrip(
+	request *http.Request,
+) (*http.Response, error) {
+	if request.Method == http.MethodPut {
+		var updated secretDocument
+		if err := json.NewDecoder(request.Body).Decode(&updated); err != nil {
+			return nil, err
+		}
+		if updated.Metadata.ResourceVersion != roundTripper.secret.Metadata.ResourceVersion {
+			return &http.Response{
+				StatusCode: http.StatusConflict,
+				Body:       io.NopCloser(strings.NewReader("{}")),
+			}, nil
+		}
+		resourceVersion, err := strconv.ParseUint(
+			roundTripper.secret.Metadata.ResourceVersion,
+			10,
+			64,
+		)
+		if err != nil {
+			return nil, err
+		}
+		updated.Metadata.ResourceVersion = strconv.FormatUint(resourceVersion+1, 10)
+		roundTripper.secret = updated
+		roundTripper.puts++
+	}
+	raw, err := json.Marshal(roundTripper.secret)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(string(raw))),
+	}, nil
 }
 
 func TestWorkloadRegistryRejectsUnknownPathOperationAndField(t *testing.T) {
@@ -131,6 +173,60 @@ func TestKubernetesDeliveryRejectsSemanticCASBeforeUpdate(t *testing.T) {
 	}
 }
 
+func TestKubernetesDeliveryUpdatesDirectAliasesAtomically(t *testing.T) {
+	t.Parallel()
+
+	registry, firstPath, secondPath, resourceName := testDirectAliasRegistry(t)
+	oldData := testDirectAliasData("1", "old")
+	newData := testDirectAliasData("2", "new")
+	secret := directAliasSecret(t, resourceName, "41", oldData, map[string]uint64{
+		firstPath: 1, secondPath: 1,
+	})
+	delivery, transport := testKubernetesDelivery(t, registry, secret)
+
+	material, err := delivery.WriteKV2CAS(
+		context.Background(),
+		firstPath,
+		1,
+		newData,
+	)
+	if err != nil {
+		t.Fatalf("rotate shared direct material: %v", err)
+	}
+	if material.Version != 2 || transport.puts != 1 {
+		t.Fatalf("unexpected shared rotation result: version=%d puts=%d", material.Version, transport.puts)
+	}
+	assertDirectAliasMetadata(t, transport.secret, []string{firstPath, secondPath}, 2, newData)
+}
+
+func TestKubernetesDeliveryRecoversInterruptedDirectAliasUpdate(t *testing.T) {
+	t.Parallel()
+
+	registry, firstPath, secondPath, resourceName := testDirectAliasRegistry(t)
+	oldData := testDirectAliasData("1", "old")
+	newData := testDirectAliasData("2", "new")
+	secret := directAliasSecret(t, resourceName, "51", newData, map[string]uint64{
+		firstPath: 2,
+	})
+	oldDigest, err := canonicalDigest(oldData)
+	if err != nil {
+		t.Fatalf("digest old alias material: %v", err)
+	}
+	secondVersionKey, secondDigestKey := metadataKeys(secondPath)
+	secret.Metadata.Annotations[secondVersionKey] = "1"
+	secret.Metadata.Annotations[secondDigestKey] = oldDigest
+	delivery, transport := testKubernetesDelivery(t, registry, secret)
+
+	material, found, err := delivery.ReadKV2(context.Background(), secondPath)
+	if err != nil || !found {
+		t.Fatalf("recover interrupted shared alias update: found=%t err=%v", found, err)
+	}
+	if material.Version != 2 || transport.puts != 1 {
+		t.Fatalf("unexpected alias recovery result: version=%d puts=%d", material.Version, transport.puts)
+	}
+	assertDirectAliasMetadata(t, transport.secret, []string{firstPath, secondPath}, 2, newData)
+}
+
 func TestSecretUpdatePreservesKubernetesMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -236,6 +332,106 @@ func testWorkloadRegistry(t *testing.T) DeliveryRegistry {
 		t.Fatalf("construct workload registry: %v", err)
 	}
 	return registry
+}
+
+func testDirectAliasRegistry(
+	t *testing.T,
+) (DeliveryRegistry, string, string, string) {
+	t.Helper()
+	firstPath := testPath("manifest-trust-first")
+	secondPath := testPath("manifest-trust-second")
+	resourceName := "internal-rpc-authority-test-manifest-trust"
+	fields := map[string]fieldRule{
+		"manifest-trust.jws":   {physical: "bundle.jws", required: true},
+		"source_revision":      {physical: "source_revision", required: true},
+		"source_digest_sha256": {physical: "source_digest_sha256", required: true},
+	}
+	registry := DeliveryRegistry{targets: map[string]deliveryTarget{}}
+	if err := registry.addDirect(firstPath, resourceName, fields); err != nil {
+		t.Fatalf("add first direct alias: %v", err)
+	}
+	if err := registry.addDirect(secondPath, resourceName, fields); err != nil {
+		t.Fatalf("add second direct alias: %v", err)
+	}
+	return registry, firstPath, secondPath, resourceName
+}
+
+func testDirectAliasData(revision, value string) map[string]string {
+	return map[string]string{
+		"manifest-trust.jws":   value,
+		"source_revision":      revision,
+		"source_digest_sha256": strings.Repeat(value[:1], 64),
+	}
+}
+
+func directAliasSecret(
+	t *testing.T,
+	resourceName string,
+	resourceVersion string,
+	data map[string]string,
+	versions map[string]uint64,
+) secretDocument {
+	t.Helper()
+	secret := boundSecret(resourceName, resourceVersion)
+	secret.Metadata.Annotations = make(map[string]string)
+	secret.Data = map[string][]byte{
+		"bundle.jws":           []byte(data["manifest-trust.jws"]),
+		"source_revision":      []byte(data["source_revision"]),
+		"source_digest_sha256": []byte(data["source_digest_sha256"]),
+	}
+	digest, err := canonicalDigest(data)
+	if err != nil {
+		t.Fatalf("digest direct alias material: %v", err)
+	}
+	for path, version := range versions {
+		versionKey, digestKey := metadataKeys(path)
+		secret.Metadata.Annotations[versionKey] = strconv.FormatUint(version, 10)
+		secret.Metadata.Annotations[digestKey] = digest
+	}
+	return secret
+}
+
+func testKubernetesDelivery(
+	t *testing.T,
+	registry DeliveryRegistry,
+	secret secretDocument,
+) (*KubernetesDelivery, *secretRoundTripper) {
+	t.Helper()
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte("bounded-token"), 0o600); err != nil {
+		t.Fatalf("write test token: %v", err)
+	}
+	transport := &secretRoundTripper{secret: secret}
+	return &KubernetesDelivery{
+		config: KubernetesConfig{
+			Address:   "https://kubernetes.default.svc:443",
+			Namespace: Namespace,
+			TokenFile: tokenFile,
+		},
+		registry: registry,
+		client:   &http.Client{Transport: transport},
+	}, transport
+}
+
+func assertDirectAliasMetadata(
+	t *testing.T,
+	secret secretDocument,
+	paths []string,
+	version uint64,
+	data map[string]string,
+) {
+	t.Helper()
+	digest, err := canonicalDigest(data)
+	if err != nil {
+		t.Fatalf("digest expected direct alias material: %v", err)
+	}
+	for _, path := range paths {
+		versionKey, digestKey := metadataKeys(path)
+		if secret.Metadata.Annotations[versionKey] != strconv.FormatUint(version, 10) ||
+			secret.Metadata.Annotations[digestKey] != digest {
+			t.Fatalf("direct alias metadata mismatch for %s", path)
+		}
+	}
 }
 
 func testPath(name string) string {

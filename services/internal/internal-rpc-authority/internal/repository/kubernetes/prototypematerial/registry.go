@@ -32,13 +32,14 @@ type fieldRule struct {
 }
 
 type deliveryTarget struct {
-	path         string
-	resourceName string
-	storageKey   string
-	filePath     string
-	mode         storageMode
-	fields       map[string]fieldRule
-	allowedKeys  map[string]struct{}
+	path          string
+	resourceName  string
+	storageKey    string
+	filePath      string
+	mode          storageMode
+	fields        map[string]fieldRule
+	allowedKeys   map[string]struct{}
+	directAliases map[string]struct{}
 }
 
 // DeliveryRegistry закрывает логические Vault paths до точных Secret и key.
@@ -197,7 +198,13 @@ func (registry *DeliveryRegistry) add(target deliveryTarget) error {
 	if target.resourceName != "" {
 		for _, registered := range registry.targets {
 			if registered.resourceName == target.resourceName {
+				if target.mode == storageModeDirect &&
+					(registered.mode != storageModeDirect ||
+						!equalFieldRules(target.fields, registered.fields)) {
+					return errors.New("prototype direct delivery aliases have different schemas")
+				}
 				target.allowedKeys = registered.allowedKeys
+				target.directAliases = registered.directAliases
 				break
 			}
 		}
@@ -207,6 +214,10 @@ func (registry *DeliveryRegistry) add(target deliveryTarget) error {
 		if target.mode == storageModeDocument {
 			target.allowedKeys[target.storageKey] = struct{}{}
 		} else {
+			if target.directAliases == nil {
+				target.directAliases = make(map[string]struct{})
+			}
+			target.directAliases[target.path] = struct{}{}
 			for _, rule := range target.fields {
 				target.allowedKeys[rule.physical] = struct{}{}
 			}
@@ -214,6 +225,18 @@ func (registry *DeliveryRegistry) add(target deliveryTarget) error {
 	}
 	registry.targets[target.path] = target
 	return nil
+}
+
+func equalFieldRules(left, right map[string]fieldRule) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, leftRule := range left {
+		if right[key] != leftRule {
+			return false
+		}
+	}
+	return true
 }
 
 func (registry DeliveryRegistry) target(path string) (deliveryTarget, error) {
