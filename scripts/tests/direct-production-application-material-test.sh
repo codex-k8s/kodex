@@ -506,23 +506,27 @@ yq -r 'select(.kind == "ConfigMap" and
   .data."key-delivery-targets.yaml"' "$interfaces" >"$target_registry"
 target_registry_json="$temporary_directory/target-registry.json"
 yq -o=json '.targets' "$target_registry" >"$target_registry_json"
+yq -e '.source_revision == 2' "$target_registry" >/dev/null || {
+  printf 'Publisher target registry does not use the forward-only profile revision\n' >&2
+  exit 1
+}
 jq -e '
-  length == 12 and
-  ([.[] | [.workload_id,.role]] | unique | length) == 12 and
+  length == 9 and
+  ([.[] | [.workload_id,.role]] | unique | length) == 9 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | length) == 78 and
+  ][] | select(. != null)] | length) == 57 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | unique | length) == 78 and
+  ][] | select(. != null)] | unique | length) == 57 and
   any(.[]; .workload_id == "integration-gateway" and .role == "AUTHORIZATION_VERIFIER" and
     .service_account == "integration-gateway" and
     .database_identity.login_principal == "ira_integration_gateway_verifier_g1" and
@@ -531,7 +535,10 @@ jq -e '
     .service_account == "runtime-controller" and
     .database_identity.login_principal == "ira_runtime_controller_issuer_g1" and
     .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/auth-private") and
-  (any(.[]; .workload_id == "runtime-s3-restore-exchanger") | not)
+  (any(.[]; .workload_id == "runtime-s3-restore-exchanger" or
+    .workload_id == "role-image-builder" or
+    .workload_id == "image-admission" or
+    .workload_id == "image-promotion") | not)
 ' "$target_registry_json" >/dev/null || {
   printf 'Publisher target registry does not close the active release profiles\n' >&2
   exit 1
@@ -555,7 +562,7 @@ jq -r '.[] | . as $target |
 yq -o=json 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher")' \
   "$application_bootstrap" | jq -e '
     .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:.rules[0].resourceNames,verbs:["get","update"]}] and
-    (.rules[0].resourceNames | length) == 40
+    (.rules[0].resourceNames | length) == 28
   ' >/dev/null || {
   printf 'Publisher RBAC contains a forbidden resource or verb\n' >&2
   exit 1

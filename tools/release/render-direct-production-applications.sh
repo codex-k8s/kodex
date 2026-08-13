@@ -291,14 +291,19 @@ yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry");
     .data."key-delivery-targets.yaml" = (
       .data."key-delivery-targets.yaml" | from_yaml |
-      .source_revision = 1 |
-      .targets = (.targets | map(select(.workload_id != "runtime-s3-restore-exchanger"))) |
+      .source_revision = 2 |
+      .targets = (.targets | map(select(
+        .workload_id != "runtime-s3-restore-exchanger" and
+        .workload_id != "role-image-builder" and
+        .workload_id != "image-admission" and
+        .workload_id != "image-promotion"
+      ))) |
       to_yaml
     )
   ) |
   with(select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher");
     .rules[0].resourceNames |= map(select(
-      test("^internal-rpc-authority-runtime-s3-restore-exchanger-") | not
+      test("^internal-rpc-authority-(runtime-s3-restore-exchanger|role-image-builder|image-admission|image-promotion)-") | not
     ))
   ) |
   with(select(.kind == "NetworkPolicy" and .metadata.name == "runtime-controller-workers-exact-paths");
@@ -427,9 +432,6 @@ add_prototype_delivery_mount() {
     ' "$temporary_directory/normalized.yaml"
 }
 
-add_prototype_delivery_mount role-image-builder internal-rpc-authority-issuer internal-rpc-authority-role-image-builder-issuer-delivery primary prototype-delivery-issuer
-add_prototype_delivery_mount image-admission internal-rpc-authority-issuer internal-rpc-authority-image-admission-issuer-delivery primary prototype-delivery-issuer
-add_prototype_delivery_mount image-promotion internal-rpc-authority-issuer internal-rpc-authority-image-promotion-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount automation-scheduler internal-rpc-authority-issuer internal-rpc-authority-automation-scheduler-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount control-api-gateway internal-rpc-authority-issuer internal-rpc-authority-control-api-gateway-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount integration-gateway internal-rpc-authority-issuer internal-rpc-authority-integration-gateway-issuer-delivery primary prototype-delivery-issuer
