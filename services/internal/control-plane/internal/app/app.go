@@ -427,6 +427,8 @@ func Run(
 		URL:             config.NATSURL,
 		TLSServerName:   config.NATSTLSServerName,
 		CAFile:          config.NATSCAFile,
+		CertificateFile: config.ServerCertificateFile,
+		PrivateKeyFile:  config.ServerPrivateKeyFile,
 		CredentialsFile: config.NATSCredentialsFile,
 		Stream:          config.NATSStream,
 		Subjects: []string{

@@ -24,6 +24,8 @@ type Config struct {
 	URL             string
 	TLSServerName   string
 	CAFile          string
+	CertificateFile string
+	PrivateKeyFile  string
 	CredentialsFile string
 	Stream          string
 	Subjects        []string
@@ -53,12 +55,22 @@ func New(config Config) (*Publisher, error) {
 	if err != nil {
 		return nil, err
 	}
+	certificate, err := loadClientCertificate(
+		config.CertificateFile,
+		config.PrivateKeyFile,
+	)
+	if err != nil {
+		return nil, err
+	}
 	connection, err := nats.Connect(
 		config.URL,
 		nats.Secure(&tls.Config{
 			MinVersion: tls.VersionTLS13,
 			ServerName: config.TLSServerName,
 			RootCAs:    pool,
+			Certificates: []tls.Certificate{
+				certificate,
+			},
 		}),
 		nats.UserCredentials(config.CredentialsFile),
 		nats.Timeout(config.ConnectTimeout),
@@ -157,6 +169,8 @@ func (publisher *Publisher) Close() error {
 func validateConfig(config Config) error {
 	if config.URL == "" || config.TLSServerName == "" ||
 		!filepath.IsAbs(config.CAFile) ||
+		!filepath.IsAbs(config.CertificateFile) ||
+		!filepath.IsAbs(config.PrivateKeyFile) ||
 		!filepath.IsAbs(config.CredentialsFile) ||
 		config.Stream == "" || len(config.Subjects) == 0 ||
 		config.Replicas < 1 || config.MaxMessageBytes < 1024 ||
@@ -189,6 +203,21 @@ func validateConfig(config Config) error {
 		seen[subject] = struct{}{}
 	}
 	return nil
+}
+
+func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.Certificate, error) {
+	for _, path := range []string{certificateFile, privateKeyFile} {
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 ||
+			info.Size() > maximumRuntimeFileBytes || info.Mode().Perm()&0o007 != 0 {
+			return tls.Certificate{}, errors.New("NATS client identity file is unsafe")
+		}
+	}
+	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
+	if err != nil {
+		return tls.Certificate{}, errors.New("load NATS client identity")
+	}
+	return certificate, nil
 }
 
 func loadCertificatePool(path string) (*x509.CertPool, error) {
