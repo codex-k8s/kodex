@@ -69,3 +69,18 @@ func TestGitFetchCompletionPreservesOriginalInputFence(t *testing.T) {
 		t.Fatal("Git fetch completion does not separate fetch input from apply semantic intent")
 	}
 }
+
+func TestDefinitionMaterializationDoesNotRequireMutationPrivilege(t *testing.T) {
+	t.Parallel()
+
+	insert := strings.ToUpper(sqlDefinitionInsert)
+	if !strings.Contains(insert, "ON CONFLICT (DEFINITION_ID, DEFINITION_VERSION) DO NOTHING") {
+		t.Fatal("definition materialization must preserve the immutable stored row")
+	}
+	if strings.Contains(insert, "DO UPDATE") {
+		t.Fatal("definition materialization must not require UPDATE privilege")
+	}
+	if !strings.Contains(sqlDefinitionGet, "canonical_digest") {
+		t.Fatal("definition conflict path must read back the immutable digest")
+	}
+}
