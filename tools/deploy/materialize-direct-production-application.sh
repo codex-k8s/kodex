@@ -197,6 +197,24 @@ if [[ "$mode" == readback ]]; then
   done
   node "$helper" validate-oidc-snapshot "$temporary_directory/provider-snapshot.json" \
     "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" >/dev/null
+  while IFS= read -r name; do
+    service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls}
+    cert="$temporary_directory/readback-$name.crt"
+    ca="$temporary_directory/readback-$name-ca.crt"
+    cert_text="$temporary_directory/readback-$name.text"
+    jq -er '.data["tls.crt"]' "$temporary_directory/readback-Secret-$name.json" | base64 -d >"$cert" ||
+      fail "Secret/$name TLS certificate readback is invalid"
+    jq -er '.data["ca.crt"]' "$temporary_directory/readback-Secret-$name.json" | base64 -d >"$ca" ||
+      fail "Secret/$name TLS CA readback is invalid"
+    openssl verify -CAfile "$ca" "$cert" >/dev/null 2>&1 || fail "Secret/$name TLS chain readback is invalid"
+    openssl x509 -in "$cert" -noout -checkhost "$service_account.$namespace.svc.cluster.local" >/dev/null 2>&1 ||
+      fail "Secret/$name TLS hostname readback is invalid"
+    openssl x509 -in "$cert" -noout -text >"$cert_text"
+    grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" ||
+      fail "Secret/$name SPIFFE identity readback is invalid"
+  done < <(jq -r '.resources[] |
+    select(.kind == "Secret" and (.name | test("^internal-rpc-authority-.*-workload-tls$"))) |
+    .name' "$policy")
   printf 'Direct production application material readback completed\n'
   exit 0
 fi
@@ -593,7 +611,8 @@ generate_tls() {
     provider-health-adapter-server-tls) service=provider-health-adapter; service_account=provider-health-adapter ;;
     runtime-controller-nats-tls) service_account=runtime-controller ;;
     internal-rpc-authority-*-workload-tls)
-      service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls} ;;
+      service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls}
+      service=$service_account ;;
     internal-rpc-authority-restore-operator-tls) service_account=internal-rpc-authority-restore-operator ;;
   esac
   if [[ -s "$cert" && -s "$key" && -s "$ca" ]]; then
@@ -602,7 +621,10 @@ generate_tls() {
       cert_text="$temporary_directory/$name.text"; openssl x509 -in "$cert" -noout -text >"$cert_text"
       grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" || fail "Secret/$name SPIFFE identity is invalid"
     fi
-    return
+    if [[ "$name" != internal-rpc-authority-*-workload-tls ]] ||
+      openssl x509 -in "$cert" -noout -checkhost "$service.$namespace.svc.cluster.local" >/dev/null 2>&1; then
+      return
+    fi
   fi
   mkdir -p "$(dirname -- "$cert")"
   san_file="$temporary_directory/$name.ext"; csr="$temporary_directory/$name.csr"; serial="$temporary_directory/$name.srl"
