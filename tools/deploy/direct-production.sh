@@ -40,7 +40,7 @@ done
 case "$operation" in preflight|apply|readback) ;; *) fail "operation must be preflight, apply or readback" ;; esac
 case "$mode" in dark|cutover|rollback) ;; *) fail "mode must be dark, cutover or rollback" ;; esac
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
-for command_name in kubectl jq yq sha256sum; do
+for command_name in kubectl jq yq sha256sum base64; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
@@ -50,6 +50,7 @@ repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 validator="$repository_root/tools/release/validate-release-lock.sh"
 renderer="$repository_root/tools/release/render-direct-production.sh"
 workload_contract_renderer="$repository_root/tools/release/render-production-workload-contracts.sh"
+authority_revision_resolver="$repository_root/tools/deploy/resolve-authority-source-revision.sh"
 "$validator" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
 
 if [[ "$operation" != preflight ]]; then
@@ -81,6 +82,76 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render_file="$temporary_directory/direct-production.yaml"
 "$renderer" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" --output "$render_file" >/dev/null
+
+desired_authority_registry="$temporary_directory/desired-authority-registry.yaml"
+desired_authority_policy="$temporary_directory/desired-authority-policy.json"
+yq -r '
+  select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data."key-delivery-targets.yaml"
+' "$render_file" >"$desired_authority_registry"
+yq -r '
+  select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  .data."authority-policy.json"
+' "$render_file" >"$desired_authority_policy"
+[[ -s "$desired_authority_registry" && -s "$desired_authority_policy" ]] ||
+  fail "rendered authority registry or policy is absent"
+
+current_authority_registry_object="$temporary_directory/current-authority-registry.json"
+current_authority_snapshot_object="$temporary_directory/current-authority-snapshot.json"
+set +e
+kubectl --context "$expected_context" -n mattercodex-system get \
+  configmap internal-rpc-authority-publisher-target-registry -o json \
+  >"$current_authority_registry_object" 2>/dev/null
+current_authority_registry_status=$?
+kubectl --context "$expected_context" -n mattercodex-system get \
+  secret internal-rpc-authority-snapshot -o json \
+  >"$current_authority_snapshot_object" 2>/dev/null
+current_authority_snapshot_status=$?
+set -e
+if ((current_authority_registry_status == 0 && current_authority_snapshot_status == 0)); then
+  current_authority_registry="$temporary_directory/current-authority-registry.yaml"
+  authority_snapshot_payload="$temporary_directory/authority-snapshot-payload.json"
+  jq -er '.data["key-delivery-targets.yaml"]' "$current_authority_registry_object" \
+    >"$current_authority_registry" || fail "installed authority registry is absent"
+  authority_snapshot_compact=$(jq -er '.data["snapshot.jws"]' "$current_authority_snapshot_object" | base64 --decode) ||
+    fail "installed authority snapshot is absent or malformed"
+  [[ "$authority_snapshot_compact" =~ ^[^.]+\.([^.]+)\.[^.]+$ ]] ||
+    fail "installed authority snapshot is not a compact JWS"
+  authority_snapshot_payload_segment=${BASH_REMATCH[1]}
+  case $((${#authority_snapshot_payload_segment} % 4)) in
+    0) authority_snapshot_payload_padding="" ;;
+    2) authority_snapshot_payload_padding="==" ;;
+    3) authority_snapshot_payload_padding="=" ;;
+    *) fail "installed authority snapshot payload has invalid base64url length" ;;
+  esac
+  printf '%s%s' "$authority_snapshot_payload_segment" "$authority_snapshot_payload_padding" |
+    tr '_-' '/+' | base64 --decode >"$authority_snapshot_payload" ||
+    fail "installed authority snapshot payload cannot be decoded"
+  unset authority_snapshot_compact authority_snapshot_payload_segment authority_snapshot_payload_padding
+  resolved_authority_revision=$("$authority_revision_resolver" \
+    --desired-registry "$desired_authority_registry" \
+    --desired-policy "$desired_authority_policy" \
+    --current-registry "$current_authority_registry" \
+    --snapshot-payload "$authority_snapshot_payload")
+elif ((current_authority_registry_status != 0 && current_authority_snapshot_status != 0)); then
+  resolved_authority_revision=$("$authority_revision_resolver" \
+    --desired-registry "$desired_authority_registry" \
+    --desired-policy "$desired_authority_policy")
+else
+  fail "authority registry and snapshot presence is inconsistent"
+fi
+[[ "$resolved_authority_revision" =~ ^[1-9][0-9]*$ ]] ||
+  fail "resolved authority source revision is invalid"
+RESOLVED_AUTHORITY_REVISION="$resolved_authority_revision" yq -i '
+  with(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry");
+    .data."key-delivery-targets.yaml" = (
+      .data."key-delivery-targets.yaml" | from_yaml |
+      .source_revision = (env(RESOLVED_AUTHORITY_REVISION) | tonumber) |
+      to_yaml
+    )
+  )
+' "$render_file"
+
 workload_contract_file="$temporary_directory/production-workload-contracts.yaml"
 "$workload_contract_renderer" --manifest "$render_file" --output "$workload_contract_file" >/dev/null
 yq -o=json eval-all '.' "$render_file" | jq -sc -e '
