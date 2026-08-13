@@ -38,10 +38,6 @@ spec:
         - podSelector: {matchLabels: {app.kubernetes.io/name: integration-gateway, app.kubernetes.io/component: external-gateway}}
       ports: [{protocol: TCP, port: 9443}]
     - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: identity}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: sso}}
-      ports: [{protocol: TCP, port: 8443}]
-    - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
       ports: [{protocol: TCP, port: 8200}]
     - to:

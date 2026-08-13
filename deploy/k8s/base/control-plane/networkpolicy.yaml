@@ -106,16 +106,6 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: identity
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: sso
-      ports:
-        - protocol: TCP
-          port: 8443
-    - to:
-        - namespaceSelector:
-            matchLabels:
               kubernetes.io/metadata.name: observability
           podSelector:
             matchLabels:
