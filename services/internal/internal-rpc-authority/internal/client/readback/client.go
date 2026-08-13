@@ -2,6 +2,7 @@ package readback
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
@@ -297,12 +298,13 @@ func (client *Client) Attest(
 ) (string, error) {
 	credentialDigestRaw := sha256.Sum256([]byte(client.config.CredentialCompact))
 	credentialDigest := hex.EncodeToString(credentialDigestRaw[:])
-	challengeKey := deterministicUUID(
-		"readback-challenge",
-		client.config.IntentID,
-		credentialDigest,
-		state.SourceDigestSHA256,
-	)
+	// Receipt короче credential, поэтому каждый новый цикл attestation обязан
+	// получить независимый challenge. Один request ID переиспользуется только
+	// внутри этого вызова для безопасного повтора неоднозначного ответа.
+	challengeKey, err := newRequestUUID()
+	if err != nil {
+		return "", fmt.Errorf("create readback challenge request identifier: %w", err)
+	}
 	connection, err := grpc.NewClient(
 		client.config.Address,
 		grpc.WithTransportCredentials(credentials.NewTLS(client.config.TLS.Clone())),
@@ -313,15 +315,28 @@ func (client *Client) Attest(
 	}
 	defer connection.Close()
 	api := internalrpcauthorityv1.NewAuthorityReadbackAttestorServiceClient(connection)
-	challenge, err := api.IssueAttestationChallenge(
-		ctx,
-		&internalrpcauthorityv1.IssueAttestationChallengeRequest{
-			PinnedIntentId:               client.config.IntentID,
-			ReadbackCredentialCompactJws: client.config.CredentialCompact,
-			IdempotencyKey:               challengeKey,
-			CorrelationId:                challengeKey,
-		},
-	)
+	challengeRequest := &internalrpcauthorityv1.IssueAttestationChallengeRequest{
+		PinnedIntentId:               client.config.IntentID,
+		ReadbackCredentialCompactJws: client.config.CredentialCompact,
+		IdempotencyKey:               challengeKey,
+		CorrelationId:                challengeKey,
+	}
+	var challenge *internalrpcauthorityv1.IssueAttestationChallengeResponse
+	for attempt, delay := range []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond} {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+		}
+		challenge, err = api.IssueAttestationChallenge(ctx, challengeRequest)
+		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
+			break
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("issue readback attestation challenge: %w", err)
 	}
@@ -441,4 +456,16 @@ func deterministicUUID(parts ...string) string {
 	encoded := hex.EncodeToString(value)
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32]
+}
+
+func newRequestUUID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = (value[6] & 0x0f) | 0x40
+	value[8] = (value[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(value[:])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
+		encoded[16:20] + "-" + encoded[20:32], nil
 }
