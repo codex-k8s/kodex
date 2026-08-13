@@ -23,9 +23,6 @@
           "control.audit.list",
           "control.runtime-incident.list",
           "control.diagnostics.get",
-          "control.gateway-public-tls.prepare",
-          "control.gateway-public-tls.confirm",
-          "control.gateway-public-tls.check",
           "control.schedule.manage",
           "control.schedule.run-now",
           "control.schedule.occurrences.list",
@@ -1194,7 +1191,10 @@
       },
       {
         "allowed_operation_ids": [
-          "control.readiness.check"
+          "control.readiness.check",
+          "control.gateway-public-tls.prepare",
+          "control.gateway-public-tls.confirm",
+          "control.gateway-public-tls.check"
         ],
         "application_credential": "WORKLOAD_READINESS_GRANT",
         "application_credential_audience": "urn:mattercodex:workload-readiness:control-api-gateway",
@@ -2659,10 +2659,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_proof_producer_id": "control-plane.control-api-readiness",
         "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
+          "WORKLOAD_READINESS"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
@@ -2680,7 +2679,7 @@
         },
         "operation_id": "control.gateway-public-tls.prepare",
         "permission": "controlplane.gateway_public_tls.prepare",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -2688,10 +2687,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_proof_producer_id": "control-plane.control-api-readiness",
         "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
+          "WORKLOAD_READINESS"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
@@ -2709,7 +2707,7 @@
         },
         "operation_id": "control.gateway-public-tls.confirm",
         "permission": "controlplane.gateway_public_tls.confirm",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -2717,10 +2715,9 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_proof_producer_id": "control-plane.control-api-readiness",
         "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
+          "WORKLOAD_READINESS"
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
@@ -2738,7 +2735,7 @@
         },
         "operation_id": "control.gateway-public-tls.check",
         "permission": "controlplane.gateway_public_tls.check",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -8074,6 +8071,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 29,
+  "policy_revision": 30,
   "v": 1
 }
