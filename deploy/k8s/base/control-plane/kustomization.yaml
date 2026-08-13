@@ -20,7 +20,7 @@ configMapGenerator:
   - name: control-plane-runtime
     literals:
       - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
-      - CONTROL_PLANE_REDIS_USERNAME=control-plane
+      - CONTROL_PLANE_REDIS_USERNAME=default
       - CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME=control_plane_runtime_g1
       - CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION=1
       - CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID=control-plane-db-context-g1
