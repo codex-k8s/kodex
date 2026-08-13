@@ -957,8 +957,10 @@ func (repository *Repository) read(
 	callback func(pgx.Tx) error,
 ) error {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.ReadCommitted,
-		AccessMode: pgx.ReadOnly,
+		IsoLevel: pgx.ReadCommitted,
+		// Scope activation persists a transaction-bound, signed RLS context.
+		// Domain callbacks remain read-only, but PostgreSQL transaction cannot be.
+		AccessMode: pgx.ReadWrite,
 	})
 	if err != nil {
 		return mapError(err)

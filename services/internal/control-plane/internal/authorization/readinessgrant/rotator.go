@@ -24,19 +24,17 @@ import (
 )
 
 const (
-	grantType                    = "mattercodex-application-grant+jws"
-	credentialPurpose            = "WORKLOAD_READINESS_GRANT"
-	maximumResponseBytes         = 16 << 10
-	readinessActorID             = "63dfc7d7-9439-5e8d-8953-24f975da8f32"
-	readinessOrganization        = "d9b072a0-3980-57c0-a6fe-289b7a608f31"
-	readinessControlAPIProjectID = "1b2b8575-0cef-5f6f-8e4d-ed3960a28131"
+	grantType             = "mattercodex-application-grant+jws"
+	credentialPurpose     = "WORKLOAD_READINESS_GRANT"
+	maximumResponseBytes  = 16 << 10
+	readinessActorID      = "63dfc7d7-9439-5e8d-8953-24f975da8f32"
+	readinessOrganization = "d9b072a0-3980-57c0-a6fe-289b7a608f31"
 )
 
 // Target связывает один signer с точным workload и одним ключом Secret.
 type Target struct {
 	ProducerID    string
 	WorkloadID    string
-	ProjectID     string
 	CallerSPIFFE  string
 	Issuer        string
 	Audience      string
@@ -47,15 +45,13 @@ type Target struct {
 
 // DefaultTargets возвращает закрытый набор startup grants direct-production.
 func DefaultTargets(signerDirectory string) []Target {
-	targets := []Target{
+	return []Target{
 		readinessTarget(signerDirectory, "control-api-gateway", "control-plane.control-api-readiness", "control-api-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "automation-scheduler", "control-plane.automation-readiness", "automation-scheduler-application-grant", "application-grant.jws"),
 		readinessTarget(signerDirectory, "integration-gateway", "control-plane.integration-readiness", "integration-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "interaction-gateway", "control-plane.owner-gate-readiness", "interaction-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "runtime-controller", "control-plane.runtime-readiness", "runtime-controller-application-grant", "application-grant.jws"),
 	}
-	targets[0].ProjectID = readinessControlAPIProjectID
-	return targets
 }
 
 func readinessTarget(directory, workload, producer, secret, key string) Target {
@@ -103,8 +99,7 @@ func New(namespace string, ttl, interval time.Duration, targets []Target, patche
 		identity := target.SecretName + "\x00" + target.SecretDataKey
 		if target.ProducerID == "" || target.WorkloadID == "" || target.CallerSPIFFE == "" ||
 			target.Issuer == "" || target.Audience == "" || !filepath.IsAbs(target.PrivateJWK) ||
-			target.SecretName == "" || target.SecretDataKey == "" ||
-			(target.ProjectID != "" && uuid.Validate(target.ProjectID) != nil) {
+			target.SecretName == "" || target.SecretDataKey == "" {
 			return nil, errors.New("readiness grant target is invalid")
 		}
 		if _, duplicate := seen[identity]; duplicate {
@@ -152,8 +147,7 @@ func (rotator *Rotator) Rotate(ctx context.Context) error {
 		payload := claims{
 			Version: 1, Issuer: current.target.Issuer, Audience: current.target.Audience,
 			Subject: readinessActorID, OrganizationID: readinessOrganization,
-			ProjectID: current.target.ProjectID,
-			JTI:       uuid.NewString(), Revision: revision, WorkloadID: current.target.WorkloadID,
+			JTI: uuid.NewString(), Revision: revision, WorkloadID: current.target.WorkloadID,
 			CallerSPIFFEID: current.target.CallerSPIFFE, IssuedAt: now.Unix(),
 			NotBefore: now.Unix(), ExpiresAt: now.Add(rotator.ttl).Unix(),
 		}

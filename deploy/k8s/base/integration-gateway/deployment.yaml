@@ -144,7 +144,7 @@ spec:
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/integration-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/integration-gateway/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
-            - {name: management-runtime, mountPath: /var/run/mattercodex/integration-gateway}
+            - {name: management-runtime, mountPath: /var/lib/mattercodex/integration-gateway}
         - name: internal-rpc-authority-issuer
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-issuer]

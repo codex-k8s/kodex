@@ -644,6 +644,10 @@ func (service *Service) ownerSessionCommand(ctx context.Context, principal value
 const (
 	gatewayPublicTLSOverlap         = 15 * time.Minute
 	gatewayPublicTLSMaximumLifetime = 120 * 24 * time.Hour
+	// Public TLS принадлежит deployment control API, а не пользовательскому
+	// Project. Внутренний UUID дает PostgreSQL/RLS устойчивый scope, не
+	// расширяя project authority внешнего readiness grant.
+	gatewayPublicTLSSystemProjectID = "1b2b8575-0cef-5f6f-8e4d-ed3960a28131"
 )
 
 func (service *Service) PrepareGatewayPublicTLS(
@@ -668,7 +672,7 @@ func (service *Service) PrepareGatewayPublicTLS(
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
 	scope := domainrepo.GatewayPublicTLSState{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		WorkloadID: controlAPIGatewayWorkload,
 	}
 	candidate := domainrepo.GatewayPublicTLSMaterial{
@@ -690,7 +694,7 @@ func (service *Service) PrepareGatewayPublicTLS(
 	keyHash := hashString(input.IdempotencyKey)
 	var result domainrepo.GatewayPublicTLSState
 	err = service.repository.Transact(ctx, domainrepo.Scope{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		ActorID: input.Principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
 		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
@@ -714,7 +718,7 @@ func (service *Service) PrepareGatewayPublicTLS(
 			return errs.ErrInternal
 		}
 		return tx.SaveReceipt(ctx, domainrepo.Receipt{
-			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+			OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 			Scope: "prepare_gateway_public_tls", KeyHash: keyHash, RequestHash: requestHash,
 			Payload: payload, CreatedAt: now,
 		})
@@ -737,7 +741,7 @@ func (service *Service) ConfirmGatewayPublicTLS(
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	scope := domainrepo.GatewayPublicTLSState{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		WorkloadID: controlAPIGatewayWorkload,
 	}
 	requestHash, err := canonicalHash(struct {
@@ -751,7 +755,7 @@ func (service *Service) ConfirmGatewayPublicTLS(
 	keyHash := hashString(input.IdempotencyKey)
 	var result domainrepo.GatewayPublicTLSState
 	err = service.repository.Transact(ctx, domainrepo.Scope{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		ActorID: input.Principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
 		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
@@ -775,7 +779,7 @@ func (service *Service) ConfirmGatewayPublicTLS(
 			return errs.ErrInternal
 		}
 		return tx.SaveReceipt(ctx, domainrepo.Receipt{
-			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+			OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 			Scope: "confirm_gateway_public_tls", KeyHash: keyHash, RequestHash: requestHash,
 			Payload: payload, CreatedAt: now,
 		})
@@ -796,12 +800,12 @@ func (service *Service) CheckGatewayPublicTLS(
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
 	scope := domainrepo.GatewayPublicTLSState{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		WorkloadID: controlAPIGatewayWorkload,
 	}
 	var result domainrepo.GatewayPublicTLSState
 	err := service.repository.Transact(ctx, domainrepo.Scope{
-		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		ActorID: input.Principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
 		var readErr error

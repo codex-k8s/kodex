@@ -888,6 +888,10 @@ func scanRuntimeRoute(row rowScanner, route *entity.MattermostRuntimeRoute) erro
 func (repository *Repository) withScope(ctx context.Context, principal entity.TeamPrincipal,
 	access pgx.TxAccessMode, run func(pgx.Tx) error,
 ) error {
+	if access == pgx.ReadOnly {
+		// Durable RLS scope activation writes a transaction-bound context row.
+		access = pgx.ReadWrite
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: access})
 	if err != nil {
 		return err

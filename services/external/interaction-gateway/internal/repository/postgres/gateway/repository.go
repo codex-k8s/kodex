@@ -1069,6 +1069,10 @@ func (repository *Repository) withScope(
 	if value.OrganizationID == "" || value.ProjectID == "" || value.ActorID == "" {
 		return errors.New("interaction repository scope is invalid")
 	}
+	if access == pgx.ReadOnly {
+		// Durable RLS scope activation writes a transaction-bound context row.
+		access = pgx.ReadWrite
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: access})
 	if err != nil {
 		return errors.New("begin scoped interaction transaction")

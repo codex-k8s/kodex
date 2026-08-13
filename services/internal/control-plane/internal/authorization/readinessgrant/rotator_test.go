@@ -39,14 +39,6 @@ func TestDefaultTargetsUseDedicatedSecrets(t *testing.T) {
 	if len(targets) != 5 {
 		t.Fatalf("unexpected readiness target count: %d", len(targets))
 	}
-	if targets[0].WorkloadID != "control-api-gateway" || targets[0].ProjectID != readinessControlAPIProjectID {
-		t.Fatalf("control API readiness scope is not project-bound: %+v", targets[0])
-	}
-	for _, target := range targets[1:] {
-		if target.ProjectID != "" {
-			t.Fatalf("non-project readiness target has project scope: %+v", target)
-		}
-	}
 }
 
 func TestRotateIssuesExactShortLivedGrant(t *testing.T) {
