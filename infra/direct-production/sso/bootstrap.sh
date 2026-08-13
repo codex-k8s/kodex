@@ -121,8 +121,10 @@ if [[ "$mode" == apply ]]; then
 fi
 
 validate_bootstrap_secret
-[[ "$(kubectl --context "$context" -n mattercodex-system get networkpolicy control-api-gateway-public-oidc-egress -o jsonpath='{.spec.egress[0].to[0].ipBlock.cidr}')" == "$public_ipv4/32" ]] ||
-  fail "control API OIDC egress readback mismatch"
+for policy in control-api-gateway-public-oidc-egress control-plane-public-oidc-egress; do
+  [[ "$(kubectl --context "$context" -n mattercodex-system get networkpolicy "$policy" -o jsonpath='{.spec.egress[0].to[0].ipBlock.cidr}')" == "$public_ipv4/32" ]] ||
+    fail "$policy OIDC egress readback mismatch"
+done
 kubectl --context "$context" -n identity get certificate sso-public-tls -o json |
   jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "True")' >/dev/null ||
   fail "SSO public certificate is not Ready"

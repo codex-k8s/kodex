@@ -44,7 +44,7 @@ spec:
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json}
             - {name: CONTROL_API_GATEWAY_OIDC_ISSUER, value: "https://sso.kodex.works/realms/mattercodex"}
             - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: mattercodex-control-api}
-            - {name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS, value: sso.identity.svc.cluster.local:443}
+            - {name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS, value: sso.kodex.works:443}
             - {name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME, value: sso.kodex.works}
             - {name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS, value: "https://control.kodex.works"}
             - {name: CONTROL_API_GATEWAY_SESSION_TTL, value: 15m}
