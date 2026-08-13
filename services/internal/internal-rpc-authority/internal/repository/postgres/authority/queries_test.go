@@ -28,6 +28,33 @@ func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
 	}
 }
 
+func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
+	state := repository.SnapshotState{
+		AttestationReceiptID: "00000000-0000-4000-8000-000000000001",
+	}
+	args := snapshotArgs("control-plane", state)
+	for key, value := range contextReservationArgs(repository.Reservation{}) {
+		args[key] = value
+	}
+	if _, _, err := args.RewriteQuery(
+		context.Background(),
+		nil,
+		verifierAcceptContextSQL,
+		nil,
+	); err != nil {
+		t.Fatalf("context acceptance arguments are not exact: %v", err)
+	}
+	for _, required := range []string{
+		"validate_snapshot_attestation_receipt(",
+		"@attestation_receipt_id",
+		"readback_attestation_receipt_id =\n            EXCLUDED.readback_attestation_receipt_id",
+	} {
+		if !strings.Contains(verifierAcceptContextSQL, required) {
+			t.Fatalf("context acceptance query lost receipt invariant %q", required)
+		}
+	}
+}
+
 func TestReadinessReservationUsesModeSpecificWritePath(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
