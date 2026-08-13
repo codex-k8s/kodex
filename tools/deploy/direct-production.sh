@@ -124,7 +124,7 @@ for permission in \
   read -r verb resource <<<"$permission"
   can_i "$verb" "$resource" mattercodex-system
 done
-for migration in control-plane-migrate integration-gateway-migrate interaction-gateway-migrate \
+for migration in control-plane-broker-bootstrap control-plane-migrate integration-gateway-migrate interaction-gateway-migrate \
   internal-rpc-authority-migrate mattercodex-postgresql-principal-bootstrap runtime-controller-migration; do
   can_i delete "jobs.batch/$migration" mattercodex-system
 done

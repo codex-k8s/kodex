@@ -437,7 +437,7 @@ func Run(
 		Replicas:        config.NATSReplicas,
 		MaxMessageBytes: 256 << 10,
 		MaxMessages:     10_000_000,
-		MaxBytes:        32 << 30,
+		MaxBytes:        config.NATSMaxBytes,
 		MaxPerSubject:   5_000_000,
 		MaxAge:          30 * 24 * time.Hour,
 		DuplicateWindow: 2 * time.Minute,

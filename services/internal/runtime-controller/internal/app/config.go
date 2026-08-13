@@ -65,6 +65,7 @@ type Config struct {
 	NATSStream                       string        `env:"RUNTIME_NATS_STREAM"`
 	NATSDurable                      string        `env:"RUNTIME_NATS_DURABLE"`
 	NATSReplicas                     int           `env:"RUNTIME_NATS_REPLICAS"`
+	NATSMaxBytes                     int64         `env:"RUNTIME_NATS_MAX_BYTES"`
 	PostgresDSNFile                  string        `env:"RUNTIME_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName            string        `env:"RUNTIME_POSTGRES_TLS_SERVER_NAME"`
 	PostgresCAFile                   string        `env:"RUNTIME_POSTGRES_CA_FILE"`
@@ -113,6 +114,7 @@ func loadConfig() (Config, error) {
 		NATSPrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/nats-tls/tls.key",
 		NATSCredentialsFile: "/var/run/secrets/mattercodex/runtime-controller/nats/user.creds",
 		NATSStream:          "CONTROL_PLANE", NATSDurable: "RUNTIME_CONTROLLER_V1", NATSReplicas: 3,
+		NATSMaxBytes:          32 << 30,
 		PostgresDSNFile:       "/var/run/secrets/mattercodex/runtime-controller/postgres/dsn",
 		PostgresTLSServerName: "runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local",
 		PostgresCAFile:        "/var/run/config/mattercodex/runtime-controller/postgres/ca.pem",
@@ -217,7 +219,8 @@ func (config Config) validate() error {
 		config.MaximumPods < 1 || config.MaximumPods > 10_000 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
-		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||
+		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<10 ||
+		config.PostgresPrincipal == "" ||
 		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
 		!value.ValidImageRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
 		!validSHA256(config.RoleRuntimeContractSHA256) ||

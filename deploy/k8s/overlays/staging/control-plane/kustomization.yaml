@@ -5,6 +5,7 @@ resources:
   - ../../../base/control-plane
 patches:
   - path: deployment-patch.yaml
+  - path: broker-bootstrap-job-patch.yaml
 labels:
   - pairs:
       mattercodex.dev/environment: staging

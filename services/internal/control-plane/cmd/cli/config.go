@@ -16,6 +16,19 @@ type migrationConfig struct {
 	InteractionReadbackPublicKeysetFile string `env:"CONTROL_PLANE_INTERACTION_READBACK_PUBLIC_KEYSET_FILE"`
 }
 
+type brokerConfig struct {
+	URL             string        `env:"CONTROL_PLANE_NATS_URL,required,notEmpty"`
+	TLSServerName   string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME,required,notEmpty"`
+	CAFile          string        `env:"CONTROL_PLANE_NATS_CA_FILE,required,notEmpty"`
+	CertificateFile string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE,required,notEmpty"`
+	PrivateKeyFile  string        `env:"CONTROL_PLANE_TLS_PRIVATE_KEY_FILE,required,notEmpty"`
+	CredentialsFile string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE,required,notEmpty"`
+	Stream          string        `env:"CONTROL_PLANE_NATS_STREAM,required,notEmpty"`
+	Replicas        int           `env:"CONTROL_PLANE_NATS_REPLICAS,required"`
+	MaxBytes        int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES,required"`
+	ConnectTimeout  time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
+}
+
 type runtimePrincipalConfig struct {
 	ContextKeyID       string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID,required,notEmpty"`
 	ContextKeyFile     string `env:"CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE,required,notEmpty"`
@@ -48,6 +61,16 @@ func loadMigrationConfig() (migrationConfig, error) {
 	var config migrationConfig
 	if err := env.Parse(&config); err != nil {
 		return migrationConfig{}, errors.New("parse migration environment")
+	}
+	return config, nil
+}
+
+func loadBrokerConfig() (brokerConfig, error) {
+	config := brokerConfig{
+		ConnectTimeout: 2 * time.Second,
+	}
+	if err := env.Parse(&config); err != nil {
+		return brokerConfig{}, errors.New("parse broker bootstrap environment")
 	}
 	return config, nil
 }

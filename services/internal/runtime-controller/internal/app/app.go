@@ -82,6 +82,7 @@ func Run(
 		NATSCAFile: config.NATSCAFile, NATSCertificateFile: config.NATSCertificateFile,
 		NATSPrivateKeyFile: config.NATSPrivateKeyFile, NATSCredentialsFile: config.NATSCredentialsFile,
 		Stream: config.NATSStream, Durable: config.NATSDurable, Replicas: config.NATSReplicas,
+		MaxBytes:        config.NATSMaxBytes,
 		PostgresDSNFile: config.PostgresDSNFile, PostgresTLSServerName: config.PostgresTLSServerName,
 		PostgresCAFile: config.PostgresCAFile, PostgresPrincipal: config.PostgresPrincipal,
 		InstanceID: config.PodUID, FetchTimeout: 2 * time.Second,

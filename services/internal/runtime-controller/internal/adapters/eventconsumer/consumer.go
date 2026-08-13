@@ -32,7 +32,6 @@ const (
 	consumerName          = "runtime-controller"
 	consumerScope         = "v1"
 	streamMaxMessages     = int64(10_000_000)
-	streamMaxBytes        = int64(32 << 30)
 	streamMaxPerSubject   = int64(5_000_000)
 	streamMaxMessageBytes = int32(256 << 10)
 	consumerMaxDeliver    = 8
@@ -47,6 +46,7 @@ type Config struct {
 	NATSURL, NATSTLSServerName, NATSCAFile, NATSCertificateFile, NATSPrivateKeyFile, NATSCredentialsFile string
 	Stream, Durable                                                                                      string
 	Replicas                                                                                             int
+	MaxBytes                                                                                             int64
 	PostgresDSNFile, PostgresTLSServerName, PostgresCAFile, PostgresPrincipal                            string
 	InstanceID                                                                                           string
 	FetchTimeout                                                                                         time.Duration
@@ -67,6 +67,7 @@ type Consumer struct {
 	stream       string
 	durable      string
 	replicas     int
+	maxBytes     int64
 }
 
 type operatorScope struct {
@@ -127,6 +128,7 @@ func Open(
 	if controlPlane == nil || observer == nil || report == nil ||
 		config.NATSURL == "" || config.NATSTLSServerName == "" ||
 		config.Stream == "" || config.Durable == "" || config.Replicas < 1 || config.Replicas > 5 ||
+		config.MaxBytes < int64(streamMaxMessageBytes) ||
 		config.InstanceID == "" || config.PostgresPrincipal == "" ||
 		config.FetchTimeout < time.Second || config.FetchTimeout > 10*time.Second {
 		return nil, errors.New("runtime event consumer configuration is invalid")
@@ -181,7 +183,7 @@ func Open(
 		return nil, errors.New("open runtime JetStream context")
 	}
 	streamInfo, err := jetStream.StreamInfo(config.Stream)
-	if err != nil || !streamCompatible(streamInfo.Config, config.Replicas) {
+	if err != nil || !streamCompatible(streamInfo.Config, config.Replicas, config.MaxBytes) {
 		connection.Close()
 		pool.Close()
 		return nil, errors.New("runtime JetStream stream contract is incompatible")
@@ -213,7 +215,7 @@ func Open(
 		pool: pool, controlPlane: controlPlane, effect: effect,
 		consumer:     postgresinbox.Consumer{Name: consumerName, Scope: consumerScope},
 		fetchTimeout: config.FetchTimeout, observer: observer, report: report,
-		stream: config.Stream, durable: config.Durable, replicas: config.Replicas}, nil
+		stream: config.Stream, durable: config.Durable, replicas: config.Replicas, maxBytes: config.MaxBytes}, nil
 }
 
 func (consumer *Consumer) Run(ctx context.Context) error {
@@ -397,7 +399,7 @@ func (consumer *Consumer) Check(ctx context.Context) error {
 		return errors.New("runtime JetStream consumer is not ready")
 	}
 	streamInfo, err := consumer.jetStream.StreamInfo(consumer.stream)
-	if err != nil || !streamCompatible(streamInfo.Config, consumer.replicas) {
+	if err != nil || !streamCompatible(streamInfo.Config, consumer.replicas, consumer.maxBytes) {
 		return errors.New("runtime JetStream stream readiness contract is incompatible")
 	}
 	durable, err := consumer.jetStream.ConsumerInfo(consumer.stream, consumer.durable)
@@ -517,11 +519,11 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func streamCompatible(config nats.StreamConfig, replicas int) bool {
+func streamCompatible(config nats.StreamConfig, replicas int, maxBytes int64) bool {
 	return config.Replicas == replicas && exactSubjects(config.Subjects, streamSubjects) &&
 		config.Retention == nats.LimitsPolicy && config.Storage == nats.FileStorage &&
 		config.Discard == nats.DiscardOld && config.MaxMsgs == streamMaxMessages &&
-		config.MaxBytes == streamMaxBytes && config.MaxMsgsPerSubject == streamMaxPerSubject &&
+		config.MaxBytes == maxBytes && config.MaxMsgsPerSubject == streamMaxPerSubject &&
 		config.MaxMsgSize == streamMaxMessageBytes && config.MaxAge == 30*24*time.Hour &&
 		config.Duplicates == 2*time.Minute && !config.AllowRollup && config.DenyDelete &&
 		config.DenyPurge && config.Mirror == nil && len(config.Sources) == 0 &&

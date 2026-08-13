@@ -14,7 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -48,8 +50,11 @@ func run(ctx context.Context, arguments []string) error {
 		<-ctx.Done()
 		return nil
 	}
+	if len(arguments) == 2 && arguments[0] == "broker" && arguments[1] == "bootstrap" {
+		return bootstrapBroker(ctx)
+	}
 	if len(arguments) != 2 || arguments[0] != "migrate" {
-		return errors.New("usage: control-plane-cli image-readback|migrate expand|up|status|version")
+		return errors.New("usage: control-plane-cli image-readback|broker bootstrap|migrate expand|up|status|version")
 	}
 	action := arguments[1]
 	if action != "expand" && action != "up" &&
@@ -127,6 +132,42 @@ func run(ctx context.Context, arguments []string) error {
 	default:
 		return errors.New("unsupported migration command")
 	}
+}
+
+func bootstrapBroker(ctx context.Context) error {
+	config, err := loadBrokerConfig()
+	if err != nil {
+		return err
+	}
+	publisher, err := natsjetstream.New(natsjetstream.Config{
+		URL:             config.URL,
+		TLSServerName:   config.TLSServerName,
+		CAFile:          config.CAFile,
+		CertificateFile: config.CertificateFile,
+		PrivateKeyFile:  config.PrivateKeyFile,
+		CredentialsFile: config.CredentialsFile,
+		Stream:          config.Stream,
+		Subjects: []string{
+			"control_plane.runtime_configuration_changed",
+		},
+		Replicas:        config.Replicas,
+		MaxMessageBytes: 256 << 10,
+		MaxMessages:     10_000_000,
+		MaxBytes:        config.MaxBytes,
+		MaxPerSubject:   5_000_000,
+		MaxAge:          30 * 24 * time.Hour,
+		DuplicateWindow: 2 * time.Minute,
+		ConnectTimeout:  config.ConnectTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	defer publisher.Close()
+	if err := publisher.EnsureStream(ctx); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(os.Stdout, "control-plane broker stream verified")
+	return err
 }
 
 func readRuntimeFile(path string, maximum int64) ([]byte, error) {

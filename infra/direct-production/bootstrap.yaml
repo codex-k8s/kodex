@@ -40,6 +40,7 @@ rules:
     resources: [jobs]
     resourceNames:
       - control-plane-migrate
+      - control-plane-broker-bootstrap
       - integration-gateway-migrate
       - interaction-gateway-migrate
       - internal-rpc-authority-migrate
@@ -161,7 +162,7 @@ spec:
           'provider-health-adapter','runtime-controller','staff-control-center',
           'runtime-workload-admission','runtime-workload-materializer']) ||
         (object.kind == 'Job' && object.metadata.name in [
-          'control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
+          'control-plane-broker-bootstrap','control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
           'internal-rpc-authority-migrate','mattercodex-postgresql-principal-bootstrap','runtime-controller-migration']) ||
         (object.kind == 'CronJob' && object.metadata.name in [
           'internal-rpc-authority-restore-operator','internal-rpc-authority-restore-pitr',
