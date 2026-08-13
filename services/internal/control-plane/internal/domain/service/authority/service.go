@@ -101,7 +101,7 @@ func New(
 			operation.FullMethod == "" || operation.Permission == "" ||
 			operation.CallerWorkload == "" ||
 			operation.CallerSPIFFEID == "" ||
-			(operation.ActorKind != "HUMAN" && operation.ActorKind != "WORKLOAD") ||
+			!validActorKind(operation.ActorKind) ||
 			operation.AuthoritySource == "" || operation.ProofAudience == "" ||
 			operation.AuthorizationContextAudience == "" {
 			return nil, errors.New("authority proof operation is invalid")
@@ -113,6 +113,15 @@ func New(
 		config:     config,
 		now:        time.Now,
 	}, nil
+}
+
+func validActorKind(value string) bool {
+	switch value {
+	case "HUMAN", "AGENT", "SERVICE", "AUTOMATION":
+		return true
+	default:
+		return false
+	}
 }
 
 // Resolve выдаёт доказательство после серверной проверки владения и допустимости.
