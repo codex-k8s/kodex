@@ -40,6 +40,7 @@ components=(
   staff-control-center
   automation-scheduler
   role-image-builder
+  agent-runner
   egress-gateway
 )
 for component in "${components[@]}"; do

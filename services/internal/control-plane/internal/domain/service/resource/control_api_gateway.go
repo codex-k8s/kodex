@@ -641,7 +641,10 @@ func (service *Service) ownerSessionCommand(ctx context.Context, principal value
 	return result, err
 }
 
-const gatewayPublicTLSOverlap = 15 * time.Minute
+const (
+	gatewayPublicTLSOverlap         = 15 * time.Minute
+	gatewayPublicTLSMaximumLifetime = 120 * 24 * time.Hour
+)
 
 func (service *Service) PrepareGatewayPublicTLS(
 	ctx context.Context,
@@ -660,7 +663,7 @@ func (service *Service) PrepareGatewayPublicTLS(
 		(input.Generation > 1 && input.PredecessorGeneration+1 != input.Generation) ||
 		(input.PredecessorCertificateSHA256 != "" && !validSHA256Text(input.PredecessorCertificateSHA256)) ||
 		input.NotBefore.IsZero() || !input.NotAfter.After(input.NotBefore) ||
-		input.NotAfter.Sub(input.NotBefore) > 24*time.Hour || input.NotBefore.After(now) ||
+		input.NotAfter.Sub(input.NotBefore) > gatewayPublicTLSMaximumLifetime || input.NotBefore.After(now) ||
 		!input.NotAfter.After(now.Add(5*time.Minute)) {
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}

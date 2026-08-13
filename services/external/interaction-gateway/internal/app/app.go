@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -323,7 +324,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		{"delivery readback", readbackCheck},
 	} {
 		if err := check.run(startup); err != nil {
-			return errors.New("startup barrier: " + check.name + " working path is not ready")
+			return fmt.Errorf("startup barrier: %s working path is not ready: %w", check.name, err)
 		}
 	}
 	publicTLSConfig, err := publicTLS(config.Gateway)
