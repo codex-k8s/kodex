@@ -149,8 +149,27 @@ RESOLVED_AUTHORITY_REVISION="$resolved_authority_revision" yq -i '
       .source_revision = (env(RESOLVED_AUTHORITY_REVISION) | tonumber) |
       to_yaml
     )
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "control-plane");
+    (.spec.template.spec.containers[] | select(.name == "internal-rpc-authority-verifier") | .env) = (
+      ((.spec.template.spec.containers[] | select(.name == "internal-rpc-authority-verifier") | .env) // [] |
+        map(select(.name != "INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION"))) +
+      [{
+        "name": "INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION",
+        "value": strenv(RESOLVED_AUTHORITY_REVISION)
+      }]
+    )
   )
 ' "$render_file"
+resolver_generation_count=$(yq -o=json eval-all '.' "$render_file" | jq -sc --arg revision "$resolved_authority_revision" '
+  [.[].spec.template.spec.containers[]? |
+    select(.name == "internal-rpc-authority-verifier") |
+    .env[]? |
+    select(.name == "INTERNAL_RPC_AUTHORITY_RESOLVER_PROOF_SIGNER_GENERATION" and .value == $revision)] |
+  length
+')
+[[ "$resolver_generation_count" == 1 ]] ||
+  fail "control-plane resolver proof signer generation was not bound to authority revision"
 
 workload_contract_file="$temporary_directory/production-workload-contracts.yaml"
 "$workload_contract_renderer" --manifest "$render_file" --output "$workload_contract_file" >/dev/null
