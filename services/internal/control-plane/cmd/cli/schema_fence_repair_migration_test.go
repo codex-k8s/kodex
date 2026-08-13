@@ -9,8 +9,8 @@ import (
 
 func TestSchemaFenceRepairSupportsAppliedAndFreshDatabases(t *testing.T) {
 	const migrationVersion int64 = 20260813000100
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match repair migration %d", schema.CurrentVersion, migrationVersion)
+	if schema.CurrentVersion < migrationVersion {
+		t.Fatalf("schema fence %d excludes repair migration %d", schema.CurrentVersion, migrationVersion)
 	}
 
 	raw, err := migrations.ReadFile("migrations/20260813000100_control_plane_schema_fence_repair.sql")
