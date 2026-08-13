@@ -2,4 +2,4 @@
 package schema
 
 // CurrentVersion одновременно задаёт migrate expand и readiness runtime/relay.
-const CurrentVersion int64 = 20260813000100
+const CurrentVersion int64 = 20260813000200
