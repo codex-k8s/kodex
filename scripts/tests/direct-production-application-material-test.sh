@@ -126,6 +126,16 @@ jwk_fixture='{"kty":"OKP","crv":"Ed25519","x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 jwks_fixture="{\"keys\":[$jwk_fixture]}"
 manifest_fixture='{"version":1,"source":"vault://mattercodex/interaction-gateway/mapping/production/revisions/production-r1","revision":"production-r1","channels":[{"team_id":"team","channel_id":"channel","organization_id":"11111111-1111-4111-8111-111111111111","project_id":"22222222-2222-4222-8222-222222222222","chat_id":"33333333-3333-4333-8333-333333333333","role_id":"44444444-4444-4444-8444-444444444444","locale":"ru","bot_stable_key":"primary","owner_delivery":true,"lifecycle_actor_id":"55555555-5555-4555-8555-555555555555"}],"actors":[{"mattermost_user_id":"owner","actor_id":"55555555-5555-4555-8555-555555555555","organization_id":"11111111-1111-4111-8111-111111111111","project_id":"22222222-2222-4222-8222-222222222222"}],"bots":[{"stable_key":"primary","user_id":"bot","token_file":"/var/run/secrets/mattercodex/interaction-gateway/bots/mattermost-bot-token"}]}'
 manifest_digest=$(printf '%s' "$manifest_fixture" | sha256sum | awk '{print $1}')
+authority_fixture="$temporary_directory/authority-fixture"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" generate-jwk \
+  "$temporary_directory/manifest-signer.private.jwk"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" generate-jwk \
+  "$temporary_directory/readback-signer.private.jwk"
+(cd "$repository_root/services/internal/internal-rpc-authority" &&
+  go run ./cmd/internal-rpc-authority-bootstrap-material \
+    --manifest-signer "$temporary_directory/manifest-signer.private.jwk" \
+    --readback-signer "$temporary_directory/readback-signer.private.jwk" \
+    --output "$authority_fixture")
 node - "$temporary_directory/git-state.json" "$temporary_directory/provider-snapshot.json" \
   "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" <<'NODE'
 const {createHash, generateKeyPairSync} = require("node:crypto");
@@ -150,12 +160,22 @@ CA_FIXTURE="$(base64 -w0 "$temporary_directory/test-ca.pem")" \
 GIT_AGGREGATE="$(base64 -w0 "$temporary_directory/git-state.json")" \
 OIDC_SNAPSHOT="$(base64 -w0 "$temporary_directory/provider-snapshot.json")" \
 OIDC_SHA256="$(tr -d '\n' <"$temporary_directory/provider-snapshot.sha256")" \
-OIDC_GENERATION="$(tr -d '\n' <"$temporary_directory/provider-snapshot.generation")" jq -c '
+OIDC_GENERATION="$(tr -d '\n' <"$temporary_directory/provider-snapshot.generation")" \
+AUTHORITY_MANIFEST_SIGNER="$(base64 -w0 "$temporary_directory/manifest-signer.private.jwk")" \
+AUTHORITY_READBACK_SIGNER="$(base64 -w0 "$temporary_directory/readback-signer.private.jwk")" \
+AUTHORITY_MANIFEST_TRUST="$(base64 -w0 "$authority_fixture/external/publisher-manifest-trust.jws")" \
+AUTHORITY_READBACK_MANIFEST_ROOT="$(base64 -w0 "$authority_fixture/external/readback-manifest-root.jws")" \
+AUTHORITY_READBACK_TRUST="$(base64 -w0 "$authority_fixture/external/readback-credential-trust.jws")" jq -c '
   def value($name;$key):
     if $name == "integration-gateway-git-credentials" and $key == "state.json" then (env.GIT_AGGREGATE | @base64d)
     elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.json" then (env.OIDC_SNAPSHOT | @base64d)
     elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.sha256" then env.OIDC_SHA256
     elif $name == "integration-gateway-oidc-provider" and $key == "provider-snapshot.generation" then env.OIDC_GENERATION
+    elif $name == "internal-rpc-authority-publisher-manifest-signer" and $key == "private.jwk" then (env.AUTHORITY_MANIFEST_SIGNER | @base64d)
+    elif $name == "internal-rpc-authority-publisher-readback-signer" and $key == "private.jwk" then (env.AUTHORITY_READBACK_SIGNER | @base64d)
+    elif $name == "internal-rpc-authority-publisher-manifest-trust" and $key == "manifest-trust.jws" then (env.AUTHORITY_MANIFEST_TRUST | @base64d)
+    elif $name == "internal-rpc-authority-readback-trust" and $key == "manifest-root.jws" then (env.AUTHORITY_READBACK_MANIFEST_ROOT | @base64d)
+    elif $name == "internal-rpc-authority-readback-trust" and $key == "credential-trust.jws" then (env.AUTHORITY_READBACK_TRUST | @base64d)
     elif ($key | test("(\\.jws|\\.jwt)$")) then env.JWS_FIXTURE
     elif ($key | endswith(".jwk")) then env.JWK_FIXTURE
     elif ($key | endswith("public-keyset.json")) then env.JWKS_FIXTURE
@@ -205,6 +225,23 @@ yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classif
 material_json="$temporary_directory/application-material.json"
 yq -o=json eval-all '.' "$material" | jq -s 'map(select(.kind != null))' >"$material_json"
 for binding in \
+  'control-plane-postgres-context:control-plane-postgres-context-migration' \
+  'integration-gateway-postgres-context:integration-gateway-postgres-context-migration'; do
+  runtime_secret=${binding%%:*}
+  migration_secret=${binding#*:}
+  runtime_key=$(jq -er --arg name "$runtime_secret" \
+    '.[] | select(.kind == "Secret" and .metadata.name == $name) | .data.key' \
+    "$material_json")
+  migration_key=$(jq -er --arg name "$migration_secret" \
+    '.[] | select(.kind == "Secret" and .metadata.name == $name) | .data.key' \
+    "$material_json")
+  [[ "$runtime_key" == "$migration_key" ]] || {
+    printf 'PostgreSQL runtime and migration context keys differ: %s/%s\n' \
+      "$runtime_secret" "$migration_secret" >&2
+    exit 1
+  }
+done
+for binding in \
   'control-plane-keyset-genesis:interaction-readback.public-keyset.json' \
   'control-plane-keyset-genesis:mattermost-event.public-keyset.json' \
   'interaction-gateway-postgres-migrator:delivery-readback.public-keyset.json'; do
@@ -234,12 +271,13 @@ done
 jq -er '.[] | select(.kind=="Secret" and .metadata.name=="interaction-gateway-runtime") |
   .data["delivery-readback.public-keyset.json"]' "$material_json" |
   base64 -d | jq -e '
-    (.version == null and .revision == null) and
-    (.keys | length == 1) and all(.keys[];
-      .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
-      .use == "sig" and .key_ops == ["verify"] and
-      (.x | type == "string" and length > 0) and
-      (.y | type == "string" and length > 0) and .d == null)
+    .version == 1 and .revision == 1 and .high_watermark == 1 and
+    .served_generation == 1 and (.keys | length == 1) and all(.keys[];
+      .generation == 1 and .status == "CURRENT" and
+      .jwk.kty == "EC" and .jwk.crv == "P-256" and .jwk.alg == "ES256" and
+      .jwk.use == "sig" and .jwk.key_ops == ["verify"] and
+      (.jwk.x | type == "string" and length > 0) and
+      (.jwk.y | type == "string" and length > 0) and .jwk.d == null)
   ' >/dev/null || {
   printf 'Generated runtime public JWKS is invalid\n' >&2
   exit 1
@@ -731,8 +769,8 @@ yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml
 cp "$external_fixture" "$temporary_directory/missing-key.yaml"
 yq -i '
   with(select(.kind == "Secret" and
-    .metadata.name == "automation-scheduler-application-grant");
-    del(.data."application-grant.jws"))
+    .metadata.name == "integration-gateway-provider-health-credential");
+    del(.data.token))
 ' "$temporary_directory/missing-key.yaml"
 if "$classifier" --output "$temporary_directory/rejected.json" --external-material-file "$temporary_directory/missing-key.yaml" >/dev/null 2>&1; then
   printf 'Incomplete external material was accepted\n' >&2
@@ -740,7 +778,7 @@ if "$classifier" --output "$temporary_directory/rejected.json" --external-materi
 fi
 
 cp "$external_fixture" "$temporary_directory/extra-key.yaml"
-yq -i 'with(select(.kind == "Secret" and .metadata.name == "automation-scheduler-application-grant");
+yq -i 'with(select(.kind == "Secret" and .metadata.name == "integration-gateway-provider-health-credential");
   .data.unexpected = "Zml4dHVyZQ==")' "$temporary_directory/extra-key.yaml"
 if "$classifier" --output "$temporary_directory/rejected-extra.json" --external-material-file "$temporary_directory/extra-key.yaml" >/dev/null 2>&1; then
   printf 'External material with an extra key was accepted\n' >&2
@@ -748,8 +786,8 @@ if "$classifier" --output "$temporary_directory/rejected-extra.json" --external-
 fi
 
 cp "$external_fixture" "$temporary_directory/empty-key.yaml"
-yq -i 'with(select(.kind == "Secret" and .metadata.name == "automation-scheduler-application-grant");
-  .data."application-grant.jws" = "")' "$temporary_directory/empty-key.yaml"
+yq -i 'with(select(.kind == "Secret" and .metadata.name == "integration-gateway-provider-health-credential");
+  .data.token = "")' "$temporary_directory/empty-key.yaml"
 if "$classifier" --output "$temporary_directory/rejected-empty.json" --external-material-file "$temporary_directory/empty-key.yaml" >/dev/null 2>&1; then
   printf 'External material with an empty key was accepted\n' >&2
   exit 1
