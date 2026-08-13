@@ -33,10 +33,16 @@ import (
 )
 
 const (
-	maxDSNFileBytes = 16 << 10
-	logMessageStart = "internal-rpc-authority runtime started"
-	logMessageStop  = "internal-rpc-authority runtime stopped"
+	maxDSNFileBytes                 = 16 << 10
+	snapshotReadbackRefreshInterval = time.Minute
+	logMessageStart                 = "internal-rpc-authority runtime started"
+	logMessageStop                  = "internal-rpc-authority runtime stopped"
 )
+
+type snapshotMaintenance interface {
+	ServedStateReady(context.Context) error
+	ActivateSnapshot(context.Context) error
+}
 
 // Run запускает локальный issuer или verifier и управляет его жизненным циклом.
 func Run(
@@ -508,6 +514,7 @@ func runSnapshotReload(
 ) {
 	ticker := time.NewTicker(config.SnapshotReloadInterval)
 	defer ticker.Stop()
+	lastReadbackRefresh := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -539,9 +546,14 @@ func runSnapshotReload(
 			loaded.Policy.PolicyRevision == current.PolicyRevision &&
 			loaded.Policy.SignerGeneration == current.SignerGeneration {
 			probeCtx, probeCancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			readyErr := authorityApplication.ServedStateReady(probeCtx)
+			lastReadbackRefresh, err = maintainServedSnapshot(
+				probeCtx,
+				authorityApplication,
+				lastReadbackRefresh,
+				time.Now(),
+			)
 			probeCancel()
-			if readyErr == nil {
+			if err == nil {
 				authorityApplication.SetAvailable(true)
 				readiness.Set(true, "ready")
 				metrics.SetReady(true)
@@ -549,6 +561,7 @@ func runSnapshotReload(
 				authorityApplication.SetAvailable(false)
 				readiness.Set(false, "served-snapshot-readback-failed")
 				metrics.SetReady(false)
+				logger.Error("served snapshot readback refresh failed", "error", err)
 			}
 			continue
 		}
@@ -568,6 +581,7 @@ func runSnapshotReload(
 			logger.Error("authority snapshot activation rejected")
 			continue
 		}
+		lastReadbackRefresh = time.Now()
 		readiness.Set(true, "ready")
 		metrics.SetReady(true)
 		logger.Info(
@@ -578,6 +592,23 @@ func runSnapshotReload(
 			"signer_generation", loaded.Policy.SignerGeneration,
 		)
 	}
+}
+
+func maintainServedSnapshot(
+	ctx context.Context,
+	runtime snapshotMaintenance,
+	lastRefresh time.Time,
+	now time.Time,
+) (time.Time, error) {
+	if now.Sub(lastRefresh) < snapshotReadbackRefreshInterval {
+		if err := runtime.ServedStateReady(ctx); err == nil {
+			return lastRefresh, nil
+		}
+	}
+	if err := runtime.ActivateSnapshot(ctx); err != nil {
+		return lastRefresh, fmt.Errorf("refresh served snapshot readback: %w", err)
+	}
+	return now, nil
 }
 
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
