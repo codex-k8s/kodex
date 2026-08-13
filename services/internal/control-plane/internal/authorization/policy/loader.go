@@ -256,6 +256,8 @@ func producerAuthoritySource(producer Producer) string {
 		return "AGENT_SESSION"
 	case "AUTOMATION_OCCURRENCE_GRANT":
 		return "AUTOMATION_OCCURRENCE"
+	case "WORKLOAD_READINESS_GRANT":
+		return "WORKLOAD_READINESS"
 	case "LEGACY_DATA_MIGRATION_GRANT":
 		return "LEGACY_MIGRATION"
 	case "INTEGRATION_CONTINUATION_GRANT":

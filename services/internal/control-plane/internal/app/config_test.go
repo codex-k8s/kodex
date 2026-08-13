@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 29 {
+	if loaded.Revision != 30 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
@@ -69,6 +69,22 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		}
 		if operation.CallerWorkload == "control-api-gateway" {
 			t.Fatalf("control API gateway reached destructive operation %s", operationID)
+		}
+	}
+	for _, operationID := range []string{
+		"control.gateway-public-tls.prepare",
+		"control.gateway-public-tls.confirm",
+		"control.gateway-public-tls.check",
+	} {
+		operation, ok := loaded.Operations[operationID]
+		if !ok {
+			t.Fatalf("public TLS startup operation is absent: %s", operationID)
+		}
+		if operation.ProducerID != "control-plane.control-api-readiness" ||
+			operation.CredentialPurpose != "WORKLOAD_READINESS_GRANT" ||
+			operation.ProjectRequired || operation.ActorKind != "WORKLOAD" ||
+			operation.AuthoritySource != "WORKLOAD_READINESS" {
+			t.Fatalf("public TLS startup operation requires owner OIDC: %#v", operation)
 		}
 	}
 }
