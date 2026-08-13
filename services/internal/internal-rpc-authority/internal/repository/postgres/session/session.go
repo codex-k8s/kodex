@@ -55,6 +55,51 @@ func Configure(
 	return nil
 }
 
+// Ensure подтверждает capability-роль соединения перед повторной выдачей из
+// пула и восстанавливает её только из ожидаемого LOGIN principal.
+func Ensure(
+	ctx context.Context,
+	connection *pgx.Conn,
+	expectedSessionUser string,
+	capability string,
+) error {
+	if connection == nil || expectedSessionUser == "" {
+		return errors.New("PostgreSQL session configuration is invalid")
+	}
+	queries, err := loadQueries()
+	if err != nil {
+		return err
+	}
+	sessionUser, currentUser, err := identity(ctx, connection, queries.sessionIdentity)
+	if err != nil {
+		return errors.New("read PostgreSQL session identity")
+	}
+	if sessionUser != expectedSessionUser {
+		return errors.New("PostgreSQL session user mismatch")
+	}
+	if currentUser == capability {
+		return nil
+	}
+	if currentUser != expectedSessionUser {
+		return errors.New("PostgreSQL effective identity mismatch")
+	}
+	assume, err := assumeQuery(queries, capability)
+	if err != nil {
+		return err
+	}
+	if _, err := connection.Exec(ctx, assume); err != nil {
+		return errors.New("activate PostgreSQL capability role")
+	}
+	sessionUser, currentUser, err = identity(ctx, connection, queries.sessionIdentity)
+	if err != nil {
+		return errors.New("read effective PostgreSQL identity")
+	}
+	if sessionUser != expectedSessionUser || currentUser != capability {
+		return errors.New("PostgreSQL effective identity mismatch")
+	}
+	return nil
+}
+
 func identity(
 	ctx context.Context,
 	connection *pgx.Conn,

@@ -235,6 +235,12 @@ high-watermark для exact snapshot, а не локальный receipt отд�
 Readiness query получает отдельный точный набор `StrictNamedArgs`: параметры
 activation/history в него не передаются.
 
+PostgreSQL LOGIN principals authority остаются `NOINHERIT`. Пул обязан не
+только выполнить проверенный `SET ROLE` после подключения, но и подтвердить
+точную capability-роль перед каждой повторной выдачей соединения. Сброшенная
+или неожиданно изменённая роль восстанавливается только из ожидаемого LOGIN
+principal; иная session identity закрыто отклоняется.
+
 Удостоверения разных назначений control-plane не переиспользуются.
 Удостоверение restore controller/ключ ACK и обычное удостоверение
 readback/ключ владения имеют разные явные `typ`, единственную точную аудиторию,

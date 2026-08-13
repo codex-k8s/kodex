@@ -391,6 +391,14 @@ func openCredentialPostgres(
 			sessionrepository.CapabilityDatabaseCredentialReconciler,
 		)
 	}
+	poolConfig.BeforeAcquire = func(ctx context.Context, connection *pgx.Conn) bool {
+		return sessionrepository.Ensure(
+			ctx,
+			connection,
+			config.PostgresExpectedSessionUser,
+			sessionrepository.CapabilityDatabaseCredentialReconciler,
+		) == nil
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, errors.New("open database credential PostgreSQL pool")
