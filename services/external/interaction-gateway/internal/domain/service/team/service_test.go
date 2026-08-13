@@ -307,8 +307,9 @@ func TestRequireBoundTeamRejectsUnlinkedOwnerState(t *testing.T) {
 }
 
 func TestReadinessKeepsFirstBindPathAvailableWithoutMapping(t *testing.T) {
-	provider := &fakeProvider{readiness: []entity.MattermostReadinessBinding{{Principal: testPrincipal}}}
-	service, err := New(&fakeRepository{}, provider, &fakeMapping{}, fakeSigner{}, &fakeMetrics{}, Config{
+	provider := &fakeProvider{readiness: []entity.MattermostReadinessBinding{{Principal: testPrincipal, ProviderTeamID: "provider-team-one"}}}
+	mapping := &fakeMapping{listErr: domaincontrol.ErrUnavailable, listErrAfter: -1}
+	service, err := New(&fakeRepository{}, provider, mapping, fakeSigner{}, &fakeMetrics{}, Config{
 		InstanceID: "pod-one", Lease: 10 * time.Second, SelectorTTL: 10 * time.Minute,
 		RecoveryInterval: time.Second, RecoveryWindow: time.Minute,
 	})
@@ -317,6 +318,9 @@ func TestReadinessKeepsFirstBindPathAvailableWithoutMapping(t *testing.T) {
 	}
 	if err := service.Check(context.Background()); err != nil {
 		t.Fatalf("unbound owner cannot reach first bind path: %v", err)
+	}
+	if mapping.listCalls != 0 {
+		t.Fatalf("first-bind readiness called unavailable owner mapping path: %d", mapping.listCalls)
 	}
 }
 
@@ -437,7 +441,7 @@ func TestCurrentGenerationAdmissionAcceptsNewAndRejectsOld(t *testing.T) {
 		ProviderObservedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	repository := &fakeRepository{mappingOperation: entity.WorkspaceMappingOperation{Result: mappingState}}
-	provider := &fakeProvider{readTeam: team, readiness: []entity.MattermostReadinessBinding{{Principal: testPrincipal}}}
+	provider := &fakeProvider{readTeam: team, readiness: []entity.MattermostReadinessBinding{{Principal: testPrincipal, ProviderTeamID: team.ProviderTeamID}}}
 	service := newTestService(t, repository, provider, &fakeMapping{current: mappingState})
 	if _, err := service.RequireBoundTeam(context.Background(), testPrincipal, team.ProviderTeamID); err != nil {
 		t.Fatalf("current generation was rejected: %v", err)

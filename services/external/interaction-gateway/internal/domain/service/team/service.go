@@ -100,6 +100,16 @@ func (service *Service) Check(ctx context.Context) error {
 		return errors.New("Mattermost mapping readiness binding is missing")
 	}
 	for _, binding := range bindings {
+		// До первого bind локальной joined route ещё нет. В этом состоянии
+		// management path должен быть Ready, иначе initial project import не
+		// сможет создать авторитетный mapping в control-plane.
+		admission, admissionErr := service.repository.GetRuntimeAdmission(ctx, binding.Principal, binding.ProviderTeamID)
+		if errors.Is(admissionErr, domainrepo.ErrNotFound) {
+			continue
+		}
+		if admissionErr != nil {
+			return errors.New("Workspace Mattermost joined route is not ready")
+		}
 		mapping, exists, err := service.currentMapping(ctx, binding.Principal)
 		if err != nil {
 			return errors.New("Workspace Mattermost mapping working path is not ready")
@@ -129,8 +139,7 @@ func (service *Service) Check(ctx context.Context) error {
 		if err := service.repository.ReconcileRuntimeRoutes(ctx, binding.Principal, mapping, routes); err != nil {
 			return errors.New("Workspace Mattermost joined route is not ready")
 		}
-		admission, err := service.repository.GetRuntimeAdmission(ctx, binding.Principal, mapping.ProviderTeamID)
-		if err != nil || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
+		if admission.ProviderTeamID != mapping.ProviderTeamID || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
 			admission.MappingGeneration != mapping.Generation || admission.MappingDigestSHA256 != mappingStateDigest(mapping) {
 			return errors.New("Workspace Mattermost joined route is not ready")
 		}

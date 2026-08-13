@@ -37,7 +37,8 @@ type MattermostOwnerObservation struct {
 }
 
 type MattermostReadinessBinding struct {
-	Principal TeamPrincipal
+	Principal      TeamPrincipal
+	ProviderTeamID string
 }
 
 // MattermostRuntimeRoute — durable joined projection exact owner mapping и

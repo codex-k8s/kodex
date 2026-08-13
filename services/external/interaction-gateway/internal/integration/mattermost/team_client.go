@@ -75,7 +75,7 @@ func (client *Client) TeamReadinessBindings() []entity.MattermostReadinessBindin
 		seen[key] = struct{}{}
 		result = append(result, entity.MattermostReadinessBinding{Principal: entity.TeamPrincipal{
 			ActorID: channel.LifecycleActorID, OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-		}})
+		}, ProviderTeamID: channel.TeamID})
 	}
 	slices.SortFunc(result, func(left, right entity.MattermostReadinessBinding) int {
 		leftKey := left.Principal.ProjectID + "\x00" + left.Principal.ActorID

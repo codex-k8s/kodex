@@ -10,7 +10,8 @@ func TestGatewayPublicTLSNamedSQLKeepsForwardOnlyStates(t *testing.T) {
 
 	prepareRequired := []string{
 		"pending_generation = gateway_public_tls_state.applied_generation + 1",
-		"@predecessor_generation = gateway_public_tls_state.applied_generation",
+		"@generation::bigint",
+		"@predecessor_generation::bigint = gateway_public_tls_state.applied_generation",
 		"gateway_public_tls_state.pending_generation IS NULL",
 	}
 	for _, required := range prepareRequired {
