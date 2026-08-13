@@ -124,6 +124,22 @@ func validActorKind(value string) bool {
 	}
 }
 
+func identityProvenance(
+	operation Operation,
+	identity authoritytype.ApplicationIdentity,
+) authoritytype.Provenance {
+	provenance := authoritytype.Provenance{
+		Source:       operation.AuthoritySource,
+		Reference:    identity.SessionJTI,
+		Revision:     identity.SessionRevision,
+		DigestSHA256: identity.CredentialDigest,
+	}
+	if identity.CallerWorkload == "control-api-gateway" && identity.SessionID != "" {
+		provenance.Reference = identity.SessionID
+	}
+	return provenance
+}
+
 // Resolve выдаёт доказательство после серверной проверки владения и допустимости.
 func (service *Service) Resolve(
 	ctx context.Context,
@@ -341,15 +357,7 @@ func (service *Service) Resolve(
 				return err
 			}
 			now := service.now().UTC().Truncate(time.Second)
-			provenance := authoritytype.Provenance{
-				Source:       operation.AuthoritySource,
-				Reference:    input.Identity.SessionJTI,
-				Revision:     input.Identity.SessionRevision,
-				DigestSHA256: input.Identity.CredentialDigest,
-			}
-			if input.Identity.CallerWorkload == "control-api-gateway" {
-				provenance.Reference = input.Identity.SessionID
-			}
+			provenance := identityProvenance(operation, input.Identity)
 			if input.Identity.BoundTurnID != "" {
 				provenance.Reference = fmt.Sprintf(
 					"%s/%d/%d",
