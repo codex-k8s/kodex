@@ -700,6 +700,16 @@ while IFS=$'\t' read -r kind name key; do
   esac
 done < <(jq -r '.resources[] | .kind as $kind | .name as $name | .keys[] | [$kind,$name,.] | @tsv' "$policy")
 
+# Runtime и migrator монтируют один HMAC-ключ контекста PostgreSQL-транзакции.
+# Разные имена Secret задают RBAC-границы, а не разные криптографические ключи.
+for binding in \
+  'control-plane-postgres-context:control-plane-postgres-context-migration' \
+  'integration-gateway-postgres-context:integration-gateway-postgres-context-migration'; do
+  runtime_secret=${binding%%:*}
+  migration_secret=${binding#*:}
+  put_file Secret "$migration_secret" key "$(value_path Secret "$runtime_secret" key)"
+done
+
 # Exact closure и закрытый набор пустых ключей publisher.
 while IFS=$'\t' read -r kind name key; do
   path=$(value_path "$kind" "$name" "$key")
