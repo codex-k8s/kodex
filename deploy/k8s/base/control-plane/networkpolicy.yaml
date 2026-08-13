@@ -92,7 +92,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: control-plane-redis
+              app.kubernetes.io/name: mattercodex-redis
       ports:
         - protocol: TCP
           port: 6379
