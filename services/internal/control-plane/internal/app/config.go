@@ -121,7 +121,7 @@ func loadConfig() (Config, error) {
 		RedisAddress:                        "mattercodex-redis.mattercodex-system.svc:6379",
 		RedisTLSServerName:                  "mattercodex-redis.mattercodex-system.svc.cluster.local",
 		RedisCAFile:                         "/var/run/config/mattercodex/control-plane/redis/ca.pem",
-		RedisUsername:                       "control-plane",
+		RedisUsername:                       "default",
 		RedisPasswordFile:                   "/var/run/secrets/mattercodex/control-plane/redis/password",
 		RedisDatabase:                       0,
 		RedisPoolSize:                       16,
