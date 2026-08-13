@@ -218,6 +218,19 @@ if [[ "$mode" == readback ]]; then
   done < <(jq -r '.resources[] |
     select(.kind == "Secret" and (.name | test("^internal-rpc-authority-.*-workload-tls$"))) |
     .name' "$policy")
+  handoff_private="$temporary_directory/agent-runner-handoff-private.key"
+  handoff_public="$temporary_directory/agent-runner-handoff-public.key"
+  jq -er '.data["ed25519.key"]' "$temporary_directory/readback-Secret-agent-runner-handoff-key.json" |
+    base64 -d >"$handoff_private" || fail "Secret/agent-runner-handoff-key readback is invalid"
+  handoff_trust_json="$temporary_directory/readback-ConfigMap-agent-runner-handoff-trust.json"
+  kubectl --context "$expected_context" -n "$namespace" get configmap agent-runner-handoff-trust -o json \
+    >"$handoff_trust_json" 2>/dev/null || fail "ConfigMap/agent-runner-handoff-trust is absent"
+  expected_handoff_key_id="sha256-$(sha256sum "$handoff_private" | awk '{print substr($1,1,16)}')"
+  [[ "$expected_handoff_key_id" != sha256-0000000000000000 ]] || fail "agent runner handoff key id is invalid"
+  jq -er --arg key "$expected_handoff_key_id" '
+    ((.data // {}) | length) == 0 and ((.binaryData // {}) | keys) == [$key] and .binaryData[$key]
+  ' "$handoff_trust_json" | base64 -d >"$handoff_public" || fail "ConfigMap/agent-runner-handoff-trust readback is invalid"
+  node "$helper" validate-ed25519-keypair "$handoff_private" "$handoff_public"
   printf 'Direct production application material readback completed\n'
   exit 0
 fi
@@ -363,6 +376,15 @@ if [[ -n "$expected_context" ]] && kubectl --context "$expected_context" -n "$na
 else
   random_hex_file "$root"
 fi
+
+handoff_private=$(value_path Secret agent-runner-handoff-key ed25519.key)
+handoff_public="$temporary_directory/internal/agent-runner-handoff-public.key"
+mkdir -p "$(dirname -- "$handoff_private")"
+node "$helper" derive-ed25519-keypair "$root" mattercodex-agent-runner-handoff-v1 \
+  "$handoff_private" "$handoff_public"
+handoff_key_id="sha256-$(sha256sum "$handoff_private" | awk '{print substr($1,1,16)}')"
+[[ "$handoff_key_id" != sha256-0000000000000000 ]] || fail "agent runner handoff key id is invalid"
+node "$helper" validate-ed25519-keypair "$handoff_private" "$handoff_public"
 
 ca_cert="$temporary_directory/internal/ca.crt"
 ca_key="$temporary_directory/internal/ca.key"
@@ -766,6 +788,19 @@ while IFS=$'\t' read -r kind name; do
   fi
   printf '%s\n' '---' >>"$render"
 done < <(jq -r '.resources[] | [.kind,.name] | @tsv' "$policy")
+printf '%s\n' '---' >>"$render"
+kubectl -n "$namespace" create configmap agent-runner-handoff-trust \
+  --from-file="$handoff_key_id=$handoff_public" --dry-run=client -o yaml |
+  yq '
+    .metadata.labels = {
+      "app.kubernetes.io/name":"agent-runner",
+      "app.kubernetes.io/component":"handoff-trust"
+    } |
+    .metadata.annotations = {
+      "mattercodex.dev/rotation-protocol":"forward-only-overlap",
+      "mattercodex.dev/material-owner":"mattercodex-application-material"
+    }
+  ' >>"$render"
 
 if [[ "$mode" == render ]]; then
   output_directory=$(dirname -- "$output"); [[ -d "$output_directory" ]] || fail "output directory is absent"

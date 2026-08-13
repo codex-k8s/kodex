@@ -143,7 +143,7 @@ spec:
           'mattercodex-production-workload-contracts','mattercodex-redis-config','mattercodex-release-lock','runtime-controller-runtime'] ||
          object.metadata.name.matches('^staff-control-center-runtime-[a-z0-9]{10}$'))) ||
         (object.kind == 'Service' && object.metadata.name in [
-          'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
+          'agent-runner-metrics','automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
           'egress-gateway-technical','integration-egress-proxy','integration-gateway','integration-gateway-postgresql-rw',
           'interaction-gateway','interaction-gateway-management','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
           'internal-rpc-authority-postgresql-rw','internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor',

@@ -61,6 +61,7 @@ SCOPE="$scope" yq eval-all '
        .kind == "NetworkPolicy"))
   ) |
   select((.metadata.name | test("^(runtime-(archive|restore-verifier)|runtime-controller-(archive-workers-s3|s3-security-policy)|runtime-s3-(archive|restore)(-.*)?|runtime-s3-(exchanger|readback)-.*)$")) | not) |
+  select(.metadata.name != "agent-runner-handoff-trust") |
   select((.metadata.name | test("^(mattercodex-(buildkit|image-|registry-)|.*role-image-builder.*|.*-dashboard$)")) | not)
 ' "$combined" >"$temporary_directory/filtered.yaml"
 
