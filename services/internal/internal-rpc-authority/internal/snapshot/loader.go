@@ -348,33 +348,47 @@ func Load(options LoadOptions) (Loaded, error) {
 	if len(bindings) == 0 && len(snapshot.Policy.OperationBindings) != 0 {
 		return Loaded{}, errors.New("signed authority snapshot has no binding for configured workload role")
 	}
-	issuer := ownCurrent.Issuer
+	policySnapshot := buildPolicySnapshot(
+		snapshot,
+		ownCurrent,
+		sourceDigest,
+		bindings,
+	)
 	return Loaded{
-		Policy: model.PolicySnapshot{
-			Version:                 snapshot.Version,
-			TrustDomain:             snapshot.Policy.TrustDomain,
-			DefaultDecision:         snapshot.Policy.DefaultDecision,
-			TokenTTLSeconds:         snapshot.Policy.TokenTTLSeconds,
-			AllowedClockSkewSeconds: snapshot.Policy.AllowedClockSkewSeconds,
-			MaxCompactJWSBytes:      snapshot.Policy.MaxCompactJWSBytes,
-			Issuer:                  issuer,
-			SignerKeyID:             ownCurrent.Key.KeyID,
-			SourceRevision:          snapshot.SourceRevision,
-			SourceDigestSHA256:      sourceDigest,
-			PredecessorRevision:     snapshot.Predecessor.Revision,
-			PredecessorDigestSHA256: snapshot.Predecessor.DigestSHA256,
-			KeySetRevision:          snapshot.KeySetRevision,
-			PolicyRevision:          snapshot.PolicyRevision,
-			SignerGeneration:        snapshot.SignerGeneration,
-			History:                 modelHistory(snapshot.History),
-			OperationBindings:       bindings,
-		},
+		Policy: policySnapshot,
 		Keys: service.KeyMaterial{
 			SigningKey:       signingKey,
 			VerificationKeys: verificationKeys,
 			ProofKeys:        proofKeys,
 		},
 	}, nil
+}
+
+func buildPolicySnapshot(
+	snapshot document,
+	current service.VerificationKeyRecord,
+	sourceDigest string,
+	bindings []model.OperationBinding,
+) model.PolicySnapshot {
+	return model.PolicySnapshot{
+		Version:                 snapshot.Version,
+		TrustDomain:             snapshot.Policy.TrustDomain,
+		DefaultDecision:         snapshot.Policy.DefaultDecision,
+		TokenTTLSeconds:         snapshot.Policy.TokenTTLSeconds,
+		AllowedClockSkewSeconds: snapshot.Policy.AllowedClockSkewSeconds,
+		MaxCompactJWSBytes:      snapshot.Policy.MaxCompactJWSBytes,
+		Issuer:                  current.Issuer,
+		SignerKeyID:             current.Key.KeyID,
+		SourceRevision:          snapshot.SourceRevision,
+		SourceDigestSHA256:      sourceDigest,
+		PredecessorRevision:     snapshot.Predecessor.Revision,
+		PredecessorDigestSHA256: snapshot.Predecessor.DigestSHA256,
+		KeySetRevision:          snapshot.KeySetRevision,
+		PolicyRevision:          snapshot.PolicyRevision,
+		SignerGeneration:        current.Generation,
+		History:                 modelHistory(snapshot.History),
+		OperationBindings:       bindings,
+	}
 }
 
 func loadManifestVerificationKey(
