@@ -1450,7 +1450,7 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 	if delivery.OwnerGate != nil {
 		gate := delivery.OwnerGate
 		if err := service.control.RecordOwnerGateDelivery(ctx, "", domaincontrol.RecordDeliveryInput{
-			IdempotencyKey: stableID(delivery.ID, "record-owner-gate"), GateID: gate.GateID,
+			IdempotencyKey: stableID(delivery.ID, "record-owner-gate"), ProjectID: delivery.ProjectID, GateID: gate.GateID,
 			GateVersion: gate.GateVersion, DeliveryID: delivery.ID, PayloadSHA256: gate.DeliveryPayloadSHA256,
 			ClaimToken: gate.ClaimToken, ClaimFence: gate.ClaimFence, PostID: delivery.ProviderPostID,
 			ChannelID: delivery.ChannelID, RootPostID: delivery.RootPostID,
@@ -1461,7 +1461,7 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 	}
 	if delivery.OwnerDelivery != nil {
 		work := domaincontrol.InteractionDeliveryWork{
-			DeliveryID: delivery.ID, Fence: delivery.OwnerDelivery.Fence,
+			DeliveryID: delivery.ID, ProjectID: delivery.ProjectID, Fence: delivery.OwnerDelivery.Fence,
 			LeaseToken: delivery.OwnerDelivery.LeaseToken,
 		}
 		if err := service.control.RecordInteractionDelivery(ctx, stableID(delivery.ID, "record-owner-delivery"),

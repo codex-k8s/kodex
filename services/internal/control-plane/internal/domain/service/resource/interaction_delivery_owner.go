@@ -21,11 +21,18 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context,
 		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
 		return ClaimInteractionDeliveryResult{}, errs.ErrPermissionDenied
 	}
+	principal, err := service.selectInteractionGatewayProject(
+		ctx, input.Principal, "DELIVERY_CLAIM", input.IdempotencyKey,
+	)
+	if err != nil {
+		return ClaimInteractionDeliveryResult{}, err
+	}
+	input.Principal = principal
 	leaseToken := service.leaseToken(input.IdempotencyKey, input.Principal.AuthorityGeneration,
 		1, input.Principal.AuthorityGeneration, input.Principal.CallerWorkload, input.IdempotencyKey)
 	var work domainrepo.InteractionDeliveryWork
 	var credential string
-	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
 		ProjectID: input.Principal.ProjectID, ActorID: input.Principal.ActorID}, func(tx domainrepo.Transaction) error {
 		var claimErr error
 		work, claimErr = tx.ClaimInteractionDelivery(ctx, input.Principal.OrganizationID,
@@ -55,11 +62,17 @@ func (service *Service) IssueInteractionDeliveryReadback(ctx context.Context,
 	}
 	if input.Principal.CallerWorkload != service.ownerGateDeliveryWorkload ||
 		input.Principal.CallerSPIFFEID != service.ownerGateDeliverySPIFFEID ||
-		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.DeliveryID) != nil {
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.DeliveryID) != nil ||
+		input.Readiness {
 		return IssueInteractionDeliveryReadbackResult{}, errs.ErrPermissionDenied
 	}
+	principal, err := scopeInteractionGatewayProject(input.Principal, input.ProjectID)
+	if err != nil {
+		return IssueInteractionDeliveryReadbackResult{}, err
+	}
+	input.Principal = principal
 	var result IssueInteractionDeliveryReadbackResult
-	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
 		ProjectID: input.Principal.ProjectID, ActorID: input.Principal.ActorID}, func(tx domainrepo.Transaction) error {
 		var issueErr error
 		result, issueErr = service.issueInteractionReadback(ctx, tx, input.Principal, input.DeliveryID,
@@ -79,11 +92,16 @@ func (service *Service) ValidateInteractionDeliveryReadback(ctx context.Context,
 		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.GrantID) != nil ||
 		value.ValidateID(input.DeliveryID) != nil || value.ValidateID(input.OrganizationID) != nil ||
 		value.ValidateID(input.ProjectID) != nil || input.OrganizationID != input.Principal.OrganizationID ||
-		input.ProjectID != input.Principal.ProjectID || !validSHA256Text(input.CredentialSHA256) || input.Generation == 0 {
+		!validSHA256Text(input.CredentialSHA256) || input.Generation == 0 {
 		return false, errs.ErrPermissionDenied
 	}
+	principal, err := scopeInteractionGatewayProject(input.Principal, input.ProjectID)
+	if err != nil {
+		return false, err
+	}
+	input.Principal = principal
 	var active bool
-	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
 		ProjectID: input.Principal.ProjectID, ActorID: input.Principal.ActorID}, func(tx domainrepo.Transaction) error {
 		var validateErr error
 		active, validateErr = tx.ValidateInteractionDeliveryReadbackGrant(ctx, input.GrantID, input.DeliveryID,
@@ -131,6 +149,11 @@ func (service *Service) RecordInteractionDelivery(ctx context.Context,
 		input.Fence == 0 || len(input.LeaseToken) != 64 || !validSHA256Text(input.ProviderReceiptSHA256) {
 		return errs.ErrInvalidInput
 	}
+	principal, err := scopeInteractionGatewayProject(input.Principal, input.ProjectID)
+	if err != nil {
+		return err
+	}
+	input.Principal = principal
 	return service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
 		ProjectID: input.Principal.ProjectID, ActorID: input.Principal.ActorID}, func(tx domainrepo.Transaction) error {
 		return tx.CompleteInteractionDelivery(ctx, input.Principal.OrganizationID, input.Principal.ProjectID,

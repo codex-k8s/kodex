@@ -1330,6 +1330,13 @@ func (service *Service) ClaimOwnerGateDelivery(
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
 		return ClaimOwnerGateDeliveryResult{}, errs.ErrInvalidInput
 	}
+	principal, err := service.selectInteractionGatewayProject(
+		ctx, input.Principal, "OWNER_GATE_CLAIM", input.IdempotencyKey,
+	)
+	if err != nil {
+		return ClaimOwnerGateDeliveryResult{}, err
+	}
+	input.Principal = principal
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
 	}{identity(input.Principal)})
@@ -1486,6 +1493,7 @@ func (service *Service) RecordOwnerGateDelivery(
 		return entity.Resource{}, errs.ErrPermissionDenied
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ProjectID) != nil ||
 		value.ValidateID(input.OwnerGateID) != nil ||
 		input.ExpectedVersion == 0 ||
 		value.ValidateID(input.DeliveryID) != nil ||
@@ -1498,6 +1506,11 @@ func (service *Service) RecordOwnerGateDelivery(
 		!validSHA256Text(input.ProviderReceiptSHA256) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	principal, err := scopeInteractionGatewayProject(input.Principal, input.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	input.Principal = principal
 	requestHash, err := semanticCommandHash(input.Principal, struct {
 		OwnerGateID           string
 		ExpectedVersion       uint64

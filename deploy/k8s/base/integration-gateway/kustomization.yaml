@@ -26,6 +26,8 @@ configMapGenerator:
       - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_NAME=integration_gateway_runtime_g1
       - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=1
       - INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=integration-gateway-db-context-g1
+      - INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_UID=29002
+      - INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_GID=29000
       - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_PROXY_URL=http://egress-gateway.mattercodex-system.svc.cluster.local:8080
       - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_NO_PROXY=localhost,127.0.0.1,::1,.svc,.svc.cluster.local
       - INTEGRATION_GATEWAY_VAULT_ADDRESS=https://vault.mattercodex-system.svc.cluster.local:8200

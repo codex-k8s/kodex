@@ -158,6 +158,15 @@ func (verifier *Verifier) Verify(ctx context.Context, authorization string) (Cla
 	return Claims{}, errors.New("interaction delivery readback credential is invalid")
 }
 
+// Check обновляет verifier-owned trust и durable fence без подмены
+// project-scoped delivery credential отдельным workload readiness grant.
+func (verifier *Verifier) Check(ctx context.Context) error {
+	if err := verifier.refresh(ctx); err != nil {
+		return errors.New("interaction delivery readback trust is unavailable")
+	}
+	return nil
+}
+
 func (verifier *Verifier) refresh(ctx context.Context) error {
 	raw, err := readKeyset(verifier.config.PublicKeysetFile)
 	if err != nil {

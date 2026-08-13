@@ -1818,8 +1818,9 @@ func identity(principal value.Principal) commandIdentity {
 	// только текущий bearer. Они участвуют в transport replay protection, но не
 	// меняют долговечный semantic intent уже проверенной workload-команды.
 	// Bound grants несут generation и сохраняют exact session/turn lineage.
-	if principal.AuthoritySource == "AUTOMATION_OCCURRENCE" &&
-		principal.AuthorityGrantGeneration == 0 {
+	if (principal.AuthoritySource == "AUTOMATION_OCCURRENCE" &&
+		principal.AuthorityGrantGeneration == 0) ||
+		principal.AuthoritySource == "WORKLOAD_READINESS" {
 		result.AuthorityReference = ""
 		result.AuthorityRevision = 0
 		result.AuthorityDigest = ""

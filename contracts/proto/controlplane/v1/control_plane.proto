@@ -3852,6 +3852,9 @@ message RecordOwnerGateDeliveryRequest {
   // provider_receipt_sha256 получен только после exact Mattermost read-after-write
   // и связывает provider-owned effect с owner delivery claim.
   string provider_receipt_sha256 = 11;
+  // project_id возвращён сервером в ClaimOwnerGateDeliveryResponse и служит
+  // точным locator для повторной проверки gate, claim fence и tenant scope.
+  string project_id = 12;
 }
 
 // RecordOwnerGateDeliveryResponse описывает версионированное сообщение контракта control-plane.
@@ -3902,6 +3905,8 @@ message RecordInteractionDeliveryRequest {
   uint64 delivery_fence = 3;
   string delivery_lease_token = 4;
   string provider_receipt_sha256 = 5;
+  // project_id возвращён сервером в ClaimInteractionDeliveryResponse.
+  string project_id = 6;
 }
 
 message RecordInteractionDeliveryResponse {
@@ -3913,6 +3918,7 @@ message IssueInteractionDeliveryReadbackGrantRequest {
   string idempotency_key = 1;
   string delivery_id = 2;
   bool readiness = 3;
+  string project_id = 4;
 }
 
 message IssueInteractionDeliveryReadbackGrantResponse {

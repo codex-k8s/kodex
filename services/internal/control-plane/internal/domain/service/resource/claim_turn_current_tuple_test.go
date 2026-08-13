@@ -124,6 +124,12 @@ func (tx *currentTupleTestTransaction) NextAutomationProject(
 	return projects[position], nil
 }
 
+func (tx *currentTupleTestTransaction) NextInteractionGatewayProject(
+	ctx context.Context, organizationID, operation string,
+) (string, error) {
+	return tx.NextAutomationProject(ctx, organizationID, "interaction-gateway:"+operation)
+}
+
 func (tx *currentTupleTestTransaction) EnqueueInteractionDelivery(
 	_ context.Context,
 	work domainrepo.InteractionDeliveryWork,

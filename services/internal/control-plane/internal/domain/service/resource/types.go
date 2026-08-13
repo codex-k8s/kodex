@@ -722,6 +722,7 @@ type ResolveOwnerGateInput struct {
 type RecordOwnerGateDeliveryInput struct {
 	Principal             value.Principal
 	IdempotencyKey        string
+	ProjectID             string
 	OwnerGateID           string
 	ExpectedVersion       uint64
 	DeliveryID            string
@@ -760,6 +761,7 @@ type IssueInteractionDeliveryReadbackInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
 	DeliveryID     string
+	ProjectID      string
 	Readiness      bool
 }
 
@@ -784,6 +786,7 @@ type RecordInteractionDeliveryInput struct {
 	Principal             value.Principal
 	IdempotencyKey        string
 	DeliveryID            string
+	ProjectID             string
 	Fence                 uint64
 	LeaseToken            string
 	ProviderReceiptSHA256 string

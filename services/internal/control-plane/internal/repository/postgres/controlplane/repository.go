@@ -2221,6 +2221,16 @@ func (wrapped *transaction) NextAutomationProject(
 	return projectID, mapError(err)
 }
 
+func (wrapped *transaction) NextInteractionGatewayProject(
+	ctx context.Context, organizationID, operation string,
+) (string, error) {
+	var projectID string
+	err := wrapped.tx.QueryRow(ctx, sqlInteractionGatewayProjectNext, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "operation": operation,
+	}).Scan(&projectID)
+	return projectID, mapError(err)
+}
+
 func (wrapped *transaction) SaveScheduleOccurrence(
 	ctx context.Context,
 	occurrence domainrepo.ScheduleOccurrence,

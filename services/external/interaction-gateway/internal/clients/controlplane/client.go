@@ -338,6 +338,7 @@ func (client *Client) RecordOwnerGateDelivery(ctx context.Context, _ string, inp
 		DeliveryClaimToken: input.ClaimToken, DeliveryFence: input.ClaimFence,
 		MattermostPostId: input.PostID, MattermostChannelId: input.ChannelID,
 		MattermostRootPostId: input.RootPostID, ProviderReceiptSha256: input.ProviderReceiptSHA256,
+		ProjectId: input.ProjectID,
 	})
 	if err != nil || response.GetOwnerGate() == nil {
 		return errors.New("record control-plane owner gate delivery")
@@ -464,7 +465,7 @@ func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotency
 		&controlplanev1.RecordInteractionDeliveryRequest{
 			IdempotencyKey: idempotencyKey,
 			DeliveryId:     work.DeliveryID, DeliveryFence: work.Fence, DeliveryLeaseToken: work.LeaseToken,
-			ProviderReceiptSha256: providerReceiptSHA256,
+			ProviderReceiptSha256: providerReceiptSHA256, ProjectId: work.ProjectID,
 		})
 	if err != nil || response.GetDeliveryId() != work.DeliveryID || response.GetProviderReceiptSha256() != providerReceiptSHA256 {
 		return errors.New("record control-plane interaction delivery")
@@ -472,7 +473,7 @@ func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotency
 	return nil
 }
 
-func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idempotencyKey, deliveryID string,
+func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idempotencyKey, deliveryID, projectID string,
 	readiness bool,
 ) (string, time.Time, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
@@ -480,7 +481,7 @@ func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idem
 	response, err := client.client.ControlPlane.IssueInteractionDeliveryReadbackGrant(bounded,
 		&controlplanev1.IssueInteractionDeliveryReadbackGrantRequest{
 			IdempotencyKey: idempotencyKey,
-			DeliveryId:     deliveryID, Readiness: readiness,
+			DeliveryId:     deliveryID, ProjectId: projectID, Readiness: readiness,
 		})
 	if err != nil || response.GetDeliveryId() != deliveryID || response.GetCredential() == "" || response.GetExpiresAt() == nil {
 		return "", time.Time{}, errors.New("issue interaction delivery readback credential")
