@@ -58,7 +58,6 @@ type Config struct {
 	AuthorityPolicyFile                 string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
 	ProofPrivateJWKFile                 string        `env:"CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE"`
 	ProofTrustFile                      string        `env:"CONTROL_PLANE_PROOF_TRUST_FILE"`
-	ProofSignerGeneration               uint64        `env:"CONTROL_PLANE_PROOF_SIGNER_GENERATION"`
 	ContinuationGrantPrivateJWKFile     string        `env:"CONTROL_PLANE_CONTINUATION_GRANT_PRIVATE_JWK_FILE"`
 	ContinuationGrantSignerGeneration   uint64        `env:"CONTROL_PLANE_CONTINUATION_GRANT_SIGNER_GENERATION"`
 	InteractionReadbackPrivateJWKFile   string        `env:"CONTROL_PLANE_INTERACTION_READBACK_PRIVATE_JWK_FILE"`
@@ -143,7 +142,6 @@ func loadConfig() (Config, error) {
 		AuthorityPolicyFile:                 "/var/run/config/mattercodex/control-plane/authority/policy.json",
 		ProofPrivateJWKFile:                 "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofTrustFile:                      "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
-		ProofSignerGeneration:               1,
 		ContinuationGrantPrivateJWKFile:     "/var/run/secrets/mattercodex/control-plane/continuation-grant/private.jwk",
 		ContinuationGrantSignerGeneration:   1,
 		InteractionReadbackPrivateJWKFile:   "/var/run/secrets/mattercodex/control-plane/interaction-readback/private.jwk",
@@ -229,7 +227,7 @@ func (config Config) validate() error {
 		config.PostgresMaxConnections > 64 ||
 		config.RedisPoolSize < 1 || config.RedisPoolSize > 64 ||
 		config.RedisDatabase < 0 || config.RedisDatabase > 15 ||
-		config.ProofSignerGeneration == 0 || config.ContinuationGrantSignerGeneration == 0 || config.InteractionReadbackSignerGeneration == 0 ||
+		config.ContinuationGrantSignerGeneration == 0 || config.InteractionReadbackSignerGeneration == 0 ||
 		config.PostgresPrincipalName == "" ||
 		config.PostgresPrincipalGeneration == 0 ||
 		config.PostgresContextKeyID == "" ||

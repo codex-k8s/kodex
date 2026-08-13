@@ -304,7 +304,6 @@ func Run(
 		TrustFile:        config.ProofTrustFile,
 		Issuer:           loadedPolicy.Issuer,
 		Audience:         loadedPolicy.ProofAudience,
-		Generation:       config.ProofSignerGeneration,
 		MaximumClockSkew: 5 * time.Second,
 	})
 	if err != nil {

@@ -34,7 +34,6 @@ type Config struct {
 	TrustFile        string
 	Issuer           string
 	Audience         string
-	Generation       uint64
 	MaximumClockSkew time.Duration
 }
 
@@ -82,7 +81,6 @@ type trustKey struct {
 func New(config Config) (*Signer, error) {
 	if config.PrivateJWKFile == "" || config.TrustFile == "" ||
 		config.Issuer == "" || config.Audience == "" ||
-		config.Generation == 0 ||
 		config.MaximumClockSkew < 0 ||
 		config.MaximumClockSkew > 30*time.Second {
 		return nil, errors.New("proof signer configuration is invalid")
@@ -246,7 +244,6 @@ func verifyTrust(
 			return trustDocument{}, trustKey{}, fmt.Errorf("parse proof trust public key: %w", err)
 		}
 		if candidate.Issuer != config.Issuer ||
-			candidate.Generation != config.Generation ||
 			candidate.Status != "CURRENT" ||
 			!slices.Contains(candidate.Audiences, config.Audience) {
 			continue

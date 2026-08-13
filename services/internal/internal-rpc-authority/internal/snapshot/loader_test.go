@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
 func TestBootstrapRootMetadataIsCanonical(t *testing.T) {
@@ -96,6 +97,28 @@ func TestValidateHistoryRejectsGapMutationAndMissingPredecessor(t *testing.T) {
 				t.Fatal("invalid signed history accepted")
 			}
 		})
+	}
+}
+
+func TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration(t *testing.T) {
+	key, err := internalrpcauth.GenerateES256Key("issuer-g2")
+	if err != nil {
+		t.Fatalf("generate issuer key: %v", err)
+	}
+	policy := buildPolicySnapshot(
+		document{SignerGeneration: 1},
+		service.VerificationKeyRecord{
+			Key: key.PublicOnly(), Generation: 2,
+			Issuer: "spiffe://mattercodex.local/ns/mattercodex-system/sa/issuer",
+		},
+		repeatedDigest("a"),
+		nil,
+	)
+	if policy.SignerGeneration != 2 {
+		t.Fatalf(
+			"policy signer generation = %d, want current workload generation 2",
+			policy.SignerGeneration,
+		)
 	}
 }
 
