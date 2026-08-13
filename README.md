@@ -64,3 +64,7 @@ bash scripts/remote/smoke-bot-service.sh --env-file .env --check-url
 ```bash
 bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 ```
+
+## LICENSE
+
+Распространяется под MIT
