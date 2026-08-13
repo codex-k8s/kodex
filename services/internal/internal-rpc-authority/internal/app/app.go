@@ -69,7 +69,15 @@ func Run(
 	if err != nil {
 		return err
 	}
-	store, err := authorityrepository.New(pool, config.WorkloadID)
+	readinessReservationKind := repository.ReservationAuthorizationContext
+	if config.Mode == ModeIssuer {
+		readinessReservationKind = repository.ReservationAuthorityProof
+	}
+	store, err := authorityrepository.New(
+		pool,
+		config.WorkloadID,
+		readinessReservationKind,
+	)
 	if err != nil {
 		pool.Close()
 		return fmt.Errorf("construct authority repository: %w", err)
