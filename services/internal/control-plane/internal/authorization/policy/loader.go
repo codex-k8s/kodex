@@ -240,10 +240,16 @@ func validTarget(candidate binding) bool {
 }
 
 func producerActorKind(producer Producer) string {
-	if producer.Credential == "OIDC_BEARER" || producer.Credential == "MATTERMOST_SIGNED_EVENT" {
+	switch producer.Credential {
+	case "OIDC_BEARER", "MATTERMOST_SIGNED_EVENT":
 		return "HUMAN"
+	case "AGENT_SESSION_GRANT":
+		return "AGENT"
+	case "AUTOMATION_OCCURRENCE_GRANT":
+		return "AUTOMATION"
+	default:
+		return "SERVICE"
 	}
-	return "WORKLOAD"
 }
 
 func producerAuthoritySource(producer Producer) string {

@@ -82,7 +82,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		}
 		if operation.ProducerID != "control-plane.control-api-readiness" ||
 			operation.CredentialPurpose != "WORKLOAD_READINESS_GRANT" ||
-			operation.ProjectRequired || operation.ActorKind != "WORKLOAD" ||
+			operation.ProjectRequired || operation.ActorKind != "SERVICE" ||
 			operation.AuthoritySource != "WORKLOAD_READINESS" {
 			t.Fatalf("public TLS startup operation requires owner OIDC: %#v", operation)
 		}
