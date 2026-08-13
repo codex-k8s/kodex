@@ -62,7 +62,7 @@ spec:
       type: emptyDir
       medium: Filesystem
       sizeLimit: 32Mi
-      mountPath: /run/mattercodex/internal-rpc-authority
+      mountPath: /run/mattercodex
     identity:
       applicationUid: 10001
       applicationPrimaryGid: 10001

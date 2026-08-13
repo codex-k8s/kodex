@@ -139,7 +139,7 @@ spec:
               mountPath: /var/run/config/mattercodex/bot-service-runtime-client-ca
               readOnly: true
             - name: internal-rpc-authority-sockets
-              mountPath: /run/mattercodex/internal-rpc-authority
+              mountPath: /run/mattercodex
               readOnly: true
           startupProbe:
             httpGet:
