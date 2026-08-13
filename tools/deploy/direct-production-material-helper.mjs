@@ -53,12 +53,36 @@ function canonicalPrivateJWK(privateJWK) {
 
 function validatePrivateJWK(path) {
   const privateJWK = JSON.parse(readFileSync(path, "utf8"));
-  const canonical = canonicalPrivateJWK(privateJWK);
   const actualKeys = Object.keys(privateJWK).sort();
-  const expectedKeys = Object.keys(canonical).sort();
+  const expectedKeys = ["alg", "crv", "d", "key_ops", "kid", "kty", "use", "x", "y"].sort();
   if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys) ||
+      privateJWK.kty !== "EC" || privateJWK.crv !== "P-256" ||
+      privateJWK.alg !== "ES256" || privateJWK.use !== "sig" ||
+      JSON.stringify(privateJWK.key_ops) !== JSON.stringify(["sign"]) ||
+      typeof privateJWK.kid !== "string" || privateJWK.kid.length === 0 || privateJWK.kid.length > 64 ||
+      typeof privateJWK.d !== "string" || privateJWK.d.length === 0) {
+    fail("private ES256 JWK is invalid");
+  }
+  let publicJWK;
+  try {
+    publicJWK = createPublicKey({key: privateJWK, format: "jwk"}).export({format: "jwk"});
+  } catch {
+    fail("private ES256 JWK is invalid");
+  }
+  const canonical = {
+    kty: "EC",
+    crv: "P-256",
+    x: publicJWK.x,
+    y: publicJWK.y,
+    d: privateJWK.d,
+    alg: "ES256",
+    kid: privateJWK.kid,
+    use: "sig",
+    key_ops: ["sign"],
+  };
+  if (typeof publicJWK.x !== "string" || typeof publicJWK.y !== "string" ||
       actualKeys.some((key) => JSON.stringify(privateJWK[key]) !== JSON.stringify(canonical[key]))) {
-    fail("private ES256 JWK is not canonical");
+    fail("private ES256 JWK is invalid");
   }
 }
 
