@@ -55,6 +55,7 @@ type Config struct {
 	NATSCredentialsFile                 string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
 	NATSStream                          string        `env:"CONTROL_PLANE_NATS_STREAM"`
 	NATSReplicas                        int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
+	NATSMaxBytes                        int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
 	AuthorityPolicyFile                 string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
 	ProofPrivateJWKFile                 string        `env:"CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE"`
 	ProofTrustFile                      string        `env:"CONTROL_PLANE_PROOF_TRUST_FILE"`
@@ -139,6 +140,7 @@ func loadConfig() (Config, error) {
 		NATSCredentialsFile:                 "/var/run/secrets/mattercodex/control-plane/nats/user.creds",
 		NATSStream:                          "CONTROL_PLANE",
 		NATSReplicas:                        3,
+		NATSMaxBytes:                        32 << 30,
 		AuthorityPolicyFile:                 "/var/run/config/mattercodex/control-plane/authority/policy.json",
 		ProofPrivateJWKFile:                 "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk",
 		ProofTrustFile:                      "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
@@ -223,6 +225,7 @@ func (config Config) validate() error {
 	if !strings.HasPrefix(config.NATSURL, "tls://") ||
 		config.NATSStream != "CONTROL_PLANE" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 ||
+		config.NATSMaxBytes < 256<<10 ||
 		config.PostgresMaxConnections < 2 ||
 		config.PostgresMaxConnections > 64 ||
 		config.RedisPoolSize < 1 || config.RedisPoolSize > 64 ||

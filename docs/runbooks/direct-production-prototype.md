@@ -399,6 +399,8 @@ Context7 при первоначальной проверке runtime storage bo
 Признаки успеха dark deploy:
 
 - StatefulSet PostgreSQL, Redis, NATS JetStream и S3-compatible storage готовы;
+- `control-plane-broker-bootstrap` создал либо подтвердил exact поток
+  `CONTROL_PLANE` с одной репликой и лимитом `4 GiB`;
 - bucket reconciler завершает readiness;
 - все migration Jobs завершены, а application Deployment готовы и доступны;
 - фактический набор release-managed объектов совпадает с render без

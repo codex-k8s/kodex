@@ -1,0 +1,12 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: control-plane-broker-bootstrap
+spec:
+  template:
+    spec:
+      containers:
+        - name: bootstrap
+          env:
+            - name: CONTROL_PLANE_NATS_REPLICAS
+              value: "1"

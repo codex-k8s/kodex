@@ -99,32 +99,68 @@ func (publisher *Publisher) Check(ctx context.Context) error {
 	if err != nil {
 		return errors.New("read NATS JetStream stream info")
 	}
-	actualSubjects := slices.Clone(info.Config.Subjects)
-	expectedSubjects := slices.Clone(publisher.config.Subjects)
-	slices.Sort(actualSubjects)
-	slices.Sort(expectedSubjects)
-	if info.Config.Name != publisher.config.Stream ||
-		!slices.Equal(actualSubjects, expectedSubjects) ||
-		info.Config.Storage != jetstream.FileStorage ||
-		info.Config.Replicas != publisher.config.Replicas ||
-		info.Config.MaxMsgSize != publisher.config.MaxMessageBytes ||
-		info.Config.MaxMsgs != publisher.config.MaxMessages ||
-		info.Config.MaxBytes != publisher.config.MaxBytes ||
-		info.Config.MaxMsgsPerSubject != publisher.config.MaxPerSubject ||
-		info.Config.Retention != jetstream.LimitsPolicy ||
-		info.Config.Discard != jetstream.DiscardOld ||
-		info.Config.MaxAge != publisher.config.MaxAge ||
-		info.Config.Duplicates != publisher.config.DuplicateWindow ||
-		!info.Config.DenyDelete ||
-		!info.Config.DenyPurge ||
-		info.Config.AllowRollup ||
-		info.Config.Mirror != nil ||
-		len(info.Config.Sources) != 0 ||
-		info.Config.RePublish != nil ||
-		info.Config.SubjectTransform != nil {
+	if !streamCompatible(info.Config, publisher.config) {
 		return errors.New("NATS JetStream stream contract mismatch")
 	}
 	return nil
+}
+
+// EnsureStream создаёт отсутствующий поток и закрыто отклоняет любое расхождение контракта.
+func (publisher *Publisher) EnsureStream(ctx context.Context) error {
+	if _, err := publisher.jetstream.Stream(ctx, publisher.config.Stream); err == nil {
+		return publisher.Check(ctx)
+	} else if !errors.Is(err, jetstream.ErrStreamNotFound) {
+		return errors.New("read NATS JetStream stream before bootstrap")
+	}
+	if _, err := publisher.jetstream.CreateStream(ctx, expectedStreamConfig(publisher.config)); err != nil {
+		// Параллельный bootstrap мог создать тот же exact stream между read и create.
+		if checkErr := publisher.Check(ctx); checkErr == nil {
+			return nil
+		}
+		return errors.New("create NATS JetStream stream")
+	}
+	return publisher.Check(ctx)
+}
+
+func expectedStreamConfig(config Config) jetstream.StreamConfig {
+	return jetstream.StreamConfig{
+		Name:              config.Stream,
+		Subjects:          slices.Clone(config.Subjects),
+		Retention:         jetstream.LimitsPolicy,
+		MaxMsgs:           config.MaxMessages,
+		MaxBytes:          config.MaxBytes,
+		MaxAge:            config.MaxAge,
+		MaxMsgsPerSubject: config.MaxPerSubject,
+		MaxMsgSize:        config.MaxMessageBytes,
+		Storage:           jetstream.FileStorage,
+		Replicas:          config.Replicas,
+		Discard:           jetstream.DiscardOld,
+		Duplicates:        config.DuplicateWindow,
+		DenyDelete:        true,
+		DenyPurge:         true,
+	}
+}
+
+func streamCompatible(actual jetstream.StreamConfig, expected Config) bool {
+	actualSubjects := slices.Clone(actual.Subjects)
+	expectedSubjects := slices.Clone(expected.Subjects)
+	slices.Sort(actualSubjects)
+	slices.Sort(expectedSubjects)
+	return actual.Name == expected.Stream &&
+		slices.Equal(actualSubjects, expectedSubjects) &&
+		actual.Storage == jetstream.FileStorage &&
+		actual.Replicas == expected.Replicas &&
+		actual.MaxMsgSize == expected.MaxMessageBytes &&
+		actual.MaxMsgs == expected.MaxMessages &&
+		actual.MaxBytes == expected.MaxBytes &&
+		actual.MaxMsgsPerSubject == expected.MaxPerSubject &&
+		actual.Retention == jetstream.LimitsPolicy &&
+		actual.Discard == jetstream.DiscardOld &&
+		actual.MaxAge == expected.MaxAge &&
+		actual.Duplicates == expected.DuplicateWindow &&
+		actual.DenyDelete && actual.DenyPurge && !actual.AllowRollup &&
+		actual.Mirror == nil && len(actual.Sources) == 0 &&
+		actual.RePublish == nil && actual.SubjectTransform == nil
 }
 
 // Publish отправляет канонический конверт и проверяет подтверждение точного потока.

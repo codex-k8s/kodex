@@ -169,6 +169,8 @@ metric labels. Service-specific metrics находятся в
 Подпакет/модуль `natsjetstream` реализует `Publisher` через актуальный NATS Go
 JetStream API. Он владеет TLS/credentials connection, exact stream check,
 publish acknowledgement и error classification, но не знает доменный payload.
+`EnsureStream` разрешён только release-managed bootstrap job: он создаёт
+отсутствующий exact stream, но не обновляет несовместимый существующий ресурс.
 
 Сервис владеет AsyncAPI, `eventName`, payload, sequence, ordering key,
 миграциями runtime-таблиц, точной NATS-конфигурацией и consumer effect.

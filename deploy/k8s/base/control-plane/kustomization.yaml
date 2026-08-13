@@ -9,6 +9,7 @@ resources:
   - service.yaml
   - poddisruptionbudget.yaml
   - migration-job.yaml
+  - broker-bootstrap-job.yaml
   - networkpolicy.yaml
   - vault-secret-provider-classes.yaml
   - servicemonitor.yaml
@@ -20,6 +21,7 @@ configMapGenerator:
   - name: control-plane-runtime
     literals:
       - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
+      - CONTROL_PLANE_NATS_MAX_BYTES=34359738368
       - CONTROL_PLANE_REDIS_USERNAME=default
       - CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME=control_plane_runtime_g1
       - CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION=1

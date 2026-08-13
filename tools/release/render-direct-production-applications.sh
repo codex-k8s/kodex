@@ -137,6 +137,9 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
     (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1" |
     with(select(.metadata.name == "application-grant-rotator"); .spec.replicas = 1)
   ) |
+  with(select(.kind == "Job" and .metadata.name == "control-plane-broker-bootstrap");
+    (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1"
+  ) |
   with(select(.kind == "CronJob");
     .spec.jobTemplate.spec.template.metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
     .spec.jobTemplate.spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
@@ -179,6 +182,13 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
   ) |
   with(select(.kind == "ConfigMap" and .data != null);
     .data = (.data | with_entries(select((.key | test("^(OTEL_|SENTRY_)")) | not)))
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "control-plane-runtime");
+    .data.CONTROL_PLANE_NATS_MAX_BYTES = "4294967296"
+  ) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime");
+    .data.RUNTIME_NATS_REPLICAS = "1" |
+    .data.RUNTIME_NATS_MAX_BYTES = "4294967296"
   ) |
   with(select(.kind == "ConfigMap" and
       (.metadata.name == "internal-rpc-authority-publisher" or

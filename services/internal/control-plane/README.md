@@ -380,7 +380,7 @@ Redis хранит только ограниченные снимки ресур
 3. точный поток JetStream (`CONTROL_PLANE`, subjects, replicas, файловое
    хранилище, `LimitsPolicy`, `DiscardOld`, максимальный срок 30 дней, окно
    дедупликации 2 минуты,
-   `MaxMsgs=10000000`, `MaxBytes=34359738368`,
+   `MaxMsgs=10000000`, `MaxBytes=CONTROL_PLANE_NATS_MAX_BYTES`,
    `MaxMsgsPerSubject=5000000`, максимальный размер сообщения 262144 байта,
    запрет delete/purge, отсутствие mirror/source/republish/rollup/transform);
 4. независимо доставленные закрытый ключ и доверие доказательства, ревизию
@@ -414,7 +414,7 @@ mutations без tenant/resource labels.
 | `CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME`, `CONTROL_PLANE_POSTGRES_CA_FILE`, `CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS`                                                                                                                      | TLS и пул PostgreSQL                                                                                                                            |
 | `CONTROL_PLANE_POSTGRES_PRINCIPAL_NAME`, `CONTROL_PLANE_POSTGRES_PRINCIPAL_GENERATION`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_ID`, `CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE`                                                                | точное поколение среды исполнения и доказательство контекста транзакции                                                                         |
 | `CONTROL_PLANE_REDIS_ADDRESS`, `CONTROL_PLANE_REDIS_TLS_SERVER_NAME`, `CONTROL_PLANE_REDIS_CA_FILE`, `CONTROL_PLANE_REDIS_USERNAME`, `CONTROL_PLANE_REDIS_PASSWORD_FILE`, `CONTROL_PLANE_REDIS_DATABASE`, `CONTROL_PLANE_REDIS_POOL_SIZE` | ограниченный кэш Redis                                                                                                                          |
-| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS`                                           | точный издатель JetStream; mTLS identity берётся из `CONTROL_PLANE_TLS_CERTIFICATE_FILE` и `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`                 |
+| `CONTROL_PLANE_NATS_URL`, `CONTROL_PLANE_NATS_TLS_SERVER_NAME`, `CONTROL_PLANE_NATS_CA_FILE`, `CONTROL_PLANE_NATS_CREDENTIALS_FILE`, `CONTROL_PLANE_NATS_STREAM`, `CONTROL_PLANE_NATS_REPLICAS`, `CONTROL_PLANE_NATS_MAX_BYTES`                         | точный издатель JetStream; mTLS identity берётся из `CONTROL_PLANE_TLS_CERTIFICATE_FILE` и `CONTROL_PLANE_TLS_PRIVATE_KEY_FILE`                 |
 | `CONTROL_PLANE_AUTHORITY_POLICY_FILE`                                                                                                                                                                                                     | версионированная политика deny-by-default                                                                                                       |
 | `CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR`                                                                                                                                                                                               | независимо доставленные публичные JWK точных разрешений производителей                                                                          |
 | `CONTROL_PLANE_PROOF_PRIVATE_JWK_FILE`, `CONTROL_PLANE_PROOF_TRUST_FILE`                                                                                                                                                                | независимо проверенный signer доказательств; поколение берётся из единственного `CURRENT` ключа, совпавшего с private JWK                       |
@@ -567,8 +567,11 @@ database-expiry predicate и privilege/readback. Downgrade отклоняетс�
 миграцией.
 
 Поток JetStream и учётные данные Vault database/static принадлежат окружению.
-Их точный контракт проверяется стартовым барьером; сервис не создаёт и не
-ослабляет ресурсы брокера или Vault. RBAC Role/RoleBinding намеренно
+Их точный контракт проверяется стартовым барьером. Release-managed Job
+`control-plane-broker-bootstrap` создаёт только отсутствующий exact stream;
+несовместимый существующий поток он не изменяет и закрыто отклоняет. Runtime
+сервиса не создаёт и не ослабляет ресурсы брокера или Vault. RBAC
+Role/RoleBinding намеренно
 отсутствуют: контейнеры приложения и миграции не обращаются к Kubernetes API;
 доставку CSI выполняет драйвер окружения.
 
