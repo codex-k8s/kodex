@@ -4,6 +4,9 @@ umask 077
 
 fail() { printf 'Direct production application materialization failed: %s\n' "$*" >&2; exit 1; }
 trap 'fail "unexpected command failure at line $LINENO"' ERR
+verify_certificate_hostname() {
+  openssl verify -CAfile "$2" -verify_hostname "$3" "$1" >/dev/null 2>&1
+}
 usage() {
   printf 'Usage: %s --mode render|preflight|apply|readback --external-material-file <path> [--context <exact-context>] [--output <path>] [--nsc-bin <path>]\n' "$0" >&2
 }
@@ -207,7 +210,7 @@ if [[ "$mode" == readback ]]; then
     jq -er '.data["ca.crt"]' "$temporary_directory/readback-Secret-$name.json" | base64 -d >"$ca" ||
       fail "Secret/$name TLS CA readback is invalid"
     openssl verify -CAfile "$ca" "$cert" >/dev/null 2>&1 || fail "Secret/$name TLS chain readback is invalid"
-    openssl x509 -in "$cert" -noout -checkhost "$service_account.$namespace.svc.cluster.local" >/dev/null 2>&1 ||
+    verify_certificate_hostname "$cert" "$ca" "$service_account.$namespace.svc.cluster.local" ||
       fail "Secret/$name TLS hostname readback is invalid"
     openssl x509 -in "$cert" -noout -text >"$cert_text"
     grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" ||
@@ -622,7 +625,7 @@ generate_tls() {
       grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" || fail "Secret/$name SPIFFE identity is invalid"
     fi
     if [[ "$name" != internal-rpc-authority-*-workload-tls ]] ||
-      openssl x509 -in "$cert" -noout -checkhost "$service.$namespace.svc.cluster.local" >/dev/null 2>&1; then
+      verify_certificate_hostname "$cert" "$ca" "$service.$namespace.svc.cluster.local"; then
       return
     fi
   fi
@@ -635,7 +638,7 @@ generate_tls() {
   openssl x509 -req -sha256 -in "$csr" -CA "$ca_cert" -CAkey "$ca_key" -CAserial "$serial" -CAcreateserial -days 90 -extfile "$san_file" -out "$cert" >/dev/null 2>&1
   cp "$ca_cert" "$ca"; chmod 0600 "$cert" "$key" "$ca"
   openssl verify -CAfile "$ca" "$cert" >/dev/null 2>&1 || fail "Secret/$name generated TLS chain is invalid"
-  openssl x509 -in "$cert" -noout -checkhost "$service.$namespace.svc.cluster.local" >/dev/null 2>&1 || fail "Secret/$name TLS hostname is invalid"
+  verify_certificate_hostname "$cert" "$ca" "$service.$namespace.svc.cluster.local" || fail "Secret/$name TLS hostname is invalid"
   cert_text="$temporary_directory/$name.text"; openssl x509 -in "$cert" -noout -text >"$cert_text"
   grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" || fail "Secret/$name generated SPIFFE identity is invalid"
 }
@@ -644,8 +647,10 @@ while IFS= read -r name; do generate_tls "$name"; done < <(jq -r '.resources[] |
 material_json=$(value_path Secret control-api-gateway-public-tls-material material.json)
 cert_der="$temporary_directory/control-api.der"
 openssl x509 -in "$(value_path Secret control-api-gateway-public-tls-material tls.crt)" -outform DER -out "$cert_der"
-openssl x509 -in "$(value_path Secret control-api-gateway-public-tls-material tls.crt)" -noout \
-  -checkhost control-api.mattercodex.local >/dev/null 2>&1 || fail "control API public TLS hostname is invalid"
+verify_certificate_hostname \
+  "$(value_path Secret control-api-gateway-public-tls-material tls.crt)" \
+  "$(value_path Secret control-api-gateway-public-tls-material ca.crt)" \
+  control-api.mattercodex.local || fail "control API public TLS hostname is invalid"
 jq -n --arg digest "$(sha256sum "$cert_der" | awk '{print $1}')" \
   '{generation:1,certificateSha256:$digest,predecessorGeneration:0,predecessorCertificateSha256:""}' \
   >"$material_json"
