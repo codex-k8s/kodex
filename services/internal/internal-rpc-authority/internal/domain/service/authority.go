@@ -403,7 +403,7 @@ func (authority *Authority) Verify(
 		claims.Caller.SPIFFEID != binding.CallerSPIFFEID ||
 		claims.Target.WorkloadID != binding.TargetWorkloadID ||
 		claims.Target.SPIFFEID != binding.TargetSPIFFEID ||
-		claims.Target.SPIFFEID != downstreamSPIFFEID ||
+		!matchesObservedCaller(claims, downstreamSPIFFEID) ||
 		claims.FullMethod != binding.FullMethod ||
 		claims.FullMethod != observedFullMethod ||
 		claims.Permission != binding.Permission ||
@@ -452,6 +452,13 @@ func (authority *Authority) Verify(
 		}
 	}
 	return claims, nil
+}
+
+func matchesObservedCaller(
+	claims model.AuthorizationClaims,
+	observedSPIFFEID string,
+) bool {
+	return claims.Caller.SPIFFEID == observedSPIFFEID
 }
 
 func validateKeyRecords(
