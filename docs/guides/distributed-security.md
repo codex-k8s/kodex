@@ -216,6 +216,15 @@ server-issued challenge, поэтому несколько реплик не с�
 одного challenge. Неоднозначный `Unavailable` повторяется ограниченно тем же
 запросом; иная ошибка закрыто останавливает активацию.
 
+Конкурентный consume одного challenge выполняется в `SERIALIZABLE` transaction.
+Только PostgreSQL `40001 serialization_failure` повторяется ограниченно с новой
+transaction и неизменным idempotency payload. Локальный consumer считает UDS
+authority доступным только после состояния gRPC connection `READY`; публикация
+пути socket либо созданный `ClientConn` сами по себе readiness не доказывают.
+Ожидание ограничивает lifecycle/startup context вызывающего workload и его
+Kubernetes startup probe, а timeout отдельной dial attempt не подменяет общий
+startup budget.
+
 Удостоверения разных назначений control-plane не переиспользуются.
 Удостоверение restore controller/ключ ACK и обычное удостоверение
 readback/ключ владения имеют разные явные `typ`, единственную точную аудиторию,

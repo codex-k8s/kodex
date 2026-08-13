@@ -1,9 +1,11 @@
 package readback
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestReadbackTrustReadinessArgsMatchQuery(t *testing.T) {
@@ -26,5 +28,18 @@ func TestReadbackTrustReadinessArgsMatchQuery(t *testing.T) {
 		if _, ok := args[name]; !ok {
 			t.Fatalf("readback readiness argument %q is missing", name)
 		}
+	}
+}
+
+func TestSerializationFailureClassificationIsExact(t *testing.T) {
+	serializationFailure := &pgconn.PgError{Code: "40001"}
+	if !isSerializationFailure(errors.Join(errors.New("consume failed"), serializationFailure)) {
+		t.Fatal("wrapped PostgreSQL serialization failure was not classified for retry")
+	}
+	if isSerializationFailure(&pgconn.PgError{Code: "23505"}) {
+		t.Fatal("non-serialization PostgreSQL failure was classified for retry")
+	}
+	if isSerializationFailure(errors.New("temporary failure")) {
+		t.Fatal("untyped failure was classified for retry")
 	}
 }

@@ -5,12 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var consumeSerializationRetryDelays = [...]time.Duration{
+	0,
+	25 * time.Millisecond,
+	75 * time.Millisecond,
+	150 * time.Millisecond,
+	300 * time.Millisecond,
+}
 
 // Repository сохраняет challenge и неизменяемые receipt проверки доставки.
 type Repository struct {
@@ -109,6 +119,33 @@ func (repository *Repository) ConsumeReadbackChallenge(
 	ctx context.Context,
 	command domainrepository.ConsumeReadbackChallengeCommand,
 ) (model.ReadbackReceipt, error) {
+	var lastErr error
+	for _, delay := range consumeSerializationRetryDelays {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return model.ReadbackReceipt{}, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		receipt, err := repository.consumeReadbackChallengeOnce(ctx, command)
+		if err == nil || !isSerializationFailure(err) {
+			return receipt, err
+		}
+		lastErr = err
+	}
+	return model.ReadbackReceipt{}, fmt.Errorf(
+		"consume readback challenge after serialization retries: %w",
+		lastErr,
+	)
+}
+
+func (repository *Repository) consumeReadbackChallengeOnce(
+	ctx context.Context,
+	command domainrepository.ConsumeReadbackChallengeCommand,
+) (model.ReadbackReceipt, error) {
 	transaction, err := repository.pool.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel: pgx.Serializable,
 	})
@@ -196,6 +233,11 @@ func (repository *Repository) ConsumeReadbackChallenge(
 		return model.ReadbackReceipt{}, fmt.Errorf("commit readback consume transaction: %w", err)
 	}
 	return receipt, nil
+}
+
+func isSerializationFailure(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "40001"
 }
 
 // ActivateReadbackTrust активирует независимо подтверждённый served trust.
