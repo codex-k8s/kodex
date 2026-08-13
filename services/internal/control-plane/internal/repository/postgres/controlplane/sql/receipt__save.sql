@@ -13,7 +13,7 @@ INSERT INTO control_plane.command_receipts (
     @scope,
     @key_hash,
     @request_hash,
-    @result::jsonb,
-    @payload::jsonb,
+    nullif(@result, 'null')::jsonb,
+    nullif(@payload, 'null')::jsonb,
     @created_at
 )
