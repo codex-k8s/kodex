@@ -74,14 +74,6 @@ WITH accepted_snapshot AS (
       AND internal_rpc_authority.authority_snapshot_watermarks.policy_revision <= EXCLUDED.policy_revision
       AND internal_rpc_authority.authority_snapshot_watermarks.signer_generation <= EXCLUDED.signer_generation
       AND (
-          internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id
-              IS NULL
-          OR internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id =
-              EXCLUDED.readback_attestation_receipt_id
-          OR internal_rpc_authority.authority_snapshot_watermarks.source_revision
-              < EXCLUDED.source_revision
-      )
-      AND (
           (
               internal_rpc_authority.authority_snapshot_watermarks.source_revision < EXCLUDED.source_revision
               AND EXISTS (
