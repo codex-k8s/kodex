@@ -17,7 +17,9 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -46,7 +48,6 @@ type Config struct {
 // Client выполняет протокол одноразового запроса и подтверждения.
 type Client struct {
 	config Config
-	now    func() time.Time
 }
 
 // FileConfig задаёт материал проверки, доставленный через файлы.
@@ -286,7 +287,7 @@ func New(config Config) (*Client, error) {
 		config.UnaryInterceptor == nil {
 		return nil, errors.New("invalid readback client configuration")
 	}
-	return &Client{config: config, now: time.Now}, nil
+	return &Client{config: config}, nil
 }
 
 // Attest запрашивает одноразовый challenge и отправляет доказательство владения.
@@ -333,7 +334,10 @@ func (client *Client) Attest(
 		challenge.GetReadbackCredentialDigestSha256() != credentialDigest ||
 		challenge.GetWorkloadGeneration() != client.config.WorkloadGeneration ||
 		challenge.GetCredentialGeneration() != client.config.CredentialGeneration ||
-		challenge.GetPossessionKeyGeneration() != client.config.PossessionKeyGeneration {
+		challenge.GetPossessionKeyGeneration() != client.config.PossessionKeyGeneration ||
+		challenge.GetIssuedAt() == nil || challenge.GetIssuedAt().CheckValid() != nil ||
+		challenge.GetExpiresAt() == nil || challenge.GetExpiresAt().CheckValid() != nil ||
+		!challenge.GetExpiresAt().AsTime().After(challenge.GetIssuedAt().AsTime()) {
 		return "", errors.New("readback challenge binding rejected")
 	}
 	thumbprint, err := internalrpcauth.PublicJWKThumbprintSHA256(
@@ -342,7 +346,10 @@ func (client *Client) Attest(
 	if err != nil {
 		return "", fmt.Errorf("fingerprint readback possession key: %w", err)
 	}
-	now := client.now().UTC().Truncate(time.Second)
+	// Повтор после неоднозначного ответа обязан подписывать байт-в-байт то же
+	// evidence. Server-issued challenge time исключает локальные timestamp из
+	// idempotency digest нескольких replica одного workload.
+	now := challenge.GetIssuedAt().AsTime().UTC().Truncate(time.Second)
 	evidence := model.ReadbackAttestationClaims{
 		Version: model.ContractVersion, Issuer: client.config.WorkloadSPIFFEID,
 		Audience: attestorAudience, Subject: client.config.WorkloadID,
@@ -385,17 +392,30 @@ func (client *Client) Attest(
 		challenge.GetChallengeId(),
 		evidence.JTI,
 	)
-	receipt, err := api.AttestServedState(
-		ctx,
-		&internalrpcauthorityv1.AttestServedStateRequest{
-			PinnedIntentId:                   client.config.IntentID,
-			ChallengeId:                      challenge.GetChallengeId(),
-			ReadbackCredentialCompactJws:     client.config.CredentialCompact,
-			ServedStateAttestationCompactJws: compact,
-			IdempotencyKey:                   attestationKey,
-			CorrelationId:                    attestationKey,
-		},
-	)
+	request := &internalrpcauthorityv1.AttestServedStateRequest{
+		PinnedIntentId:                   client.config.IntentID,
+		ChallengeId:                      challenge.GetChallengeId(),
+		ReadbackCredentialCompactJws:     client.config.CredentialCompact,
+		ServedStateAttestationCompactJws: compact,
+		IdempotencyKey:                   attestationKey,
+		CorrelationId:                    attestationKey,
+	}
+	var receipt *internalrpcauthorityv1.AttestServedStateResponse
+	for attempt, delay := range []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond} {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+		}
+		receipt, err = api.AttestServedState(ctx, request)
+		if err == nil || status.Code(err) != codes.Unavailable || attempt == 2 {
+			break
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("attest served authority state: %w", err)
 	}

@@ -31,6 +31,9 @@ const (
 	// a kubelet sync period. Keep the pinned intent comfortably valid across
 	// that delivery lag and a bounded sidecar startup retry window.
 	publishedReadbackIntentTTL = 10 * time.Minute
+	// Новый material появляется реже длительности credential, оставляя старому
+	// material три минуты overlap для atomic projected Secret delivery.
+	readbackMaterialRotationInterval = 2 * time.Minute
 )
 
 // RestoreCredentialSigner описывает ключ удостоверений восстановления.
@@ -163,8 +166,9 @@ func (publisher *Publisher) PublishReadbackMaterials(
 		return nil, err
 	}
 	observedNow := publisher.now().UTC()
-	bucket := uint64(observedNow.Unix() / 10)
-	now := time.Unix(int64(bucket*10), 0).UTC()
+	rotationSeconds := int64(readbackMaterialRotationInterval / time.Second)
+	bucket := uint64(observedNow.Unix() / rotationSeconds)
+	now := time.Unix(int64(bucket)*rotationSeconds, 0).UTC()
 	publisher.graphMu.RLock()
 	targets := make([]model.DeliveryTarget, 0, len(publisher.registry.Targets))
 	for _, target := range publisher.registry.Targets {
