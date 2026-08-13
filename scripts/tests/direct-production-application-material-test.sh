@@ -362,10 +362,18 @@ for migration_binding in \
 done
 jq -er '.[] | select(.kind=="Secret" and .metadata.name=="control-api-gateway-public-tls-material") | .data["tls.crt"]' "$material_json" |
   base64 -d >"$temporary_directory/control-api.crt"
-openssl x509 -in "$temporary_directory/control-api.crt" -noout -checkhost control-api.mattercodex.local >/dev/null 2>&1 || {
+jq -er '.[] | select(.kind=="Secret" and .metadata.name=="control-api-gateway-public-tls-material") | .data["ca.crt"]' "$material_json" |
+  base64 -d >"$temporary_directory/control-api-ca.crt"
+openssl verify -CAfile "$temporary_directory/control-api-ca.crt" \
+  -verify_hostname control-api.mattercodex.local "$temporary_directory/control-api.crt" >/dev/null 2>&1 || {
   printf 'Generated TLS hostname is invalid\n' >&2
   exit 1
 }
+if openssl verify -CAfile "$temporary_directory/control-api-ca.crt" \
+  -verify_hostname wrong-control-api.mattercodex.local "$temporary_directory/control-api.crt" >/dev/null 2>&1; then
+  printf 'TLS hostname verification accepted an unrelated hostname\n' >&2
+  exit 1
+fi
 
 foundation="$temporary_directory/foundation.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" >"$foundation"
