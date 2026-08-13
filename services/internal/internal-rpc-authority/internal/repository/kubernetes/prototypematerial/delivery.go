@@ -177,7 +177,11 @@ func (delivery *KubernetesDelivery) ReadKV2(
 		}
 		return repository.SecretMaterial{}, false, err
 	}
-	return materialFromSecret(secret, target)
+	material, materialFound, err := materialFromSecret(secret, target)
+	if err == nil || target.mode != storageModeDirect {
+		return material, materialFound, err
+	}
+	return delivery.recoverDirectAliases(ctx, secret, target)
 }
 
 func (delivery *KubernetesDelivery) CreateKV2(
@@ -261,9 +265,11 @@ func (delivery *KubernetesDelivery) write(
 				secret.Data[rule.physical] = []byte(value)
 			}
 		}
-		versionKey, digestKey := metadataKeys(target.path)
-		secret.Metadata.Annotations[versionKey] = strconv.FormatUint(nextVersion, 10)
-		secret.Metadata.Annotations[digestKey] = digest
+		for alias := range target.directAliases {
+			versionKey, digestKey := metadataKeys(alias)
+			secret.Metadata.Annotations[versionKey] = strconv.FormatUint(nextVersion, 10)
+			secret.Metadata.Annotations[digestKey] = digest
+		}
 	default:
 		return repository.SecretMaterial{}, errors.New("prototype delivery storage mode is invalid")
 	}
@@ -281,6 +287,83 @@ func (delivery *KubernetesDelivery) write(
 		return repository.SecretMaterial{}, errors.New("prototype delivery material readback mismatch")
 	}
 	return served, nil
+}
+
+func (delivery *KubernetesDelivery) recoverDirectAliases(
+	ctx context.Context,
+	secret secretDocument,
+	target deliveryTarget,
+) (repository.SecretMaterial, bool, error) {
+	if len(target.directAliases) < 2 {
+		return repository.SecretMaterial{}, false, errors.New(
+			"prototype delivery material metadata is invalid",
+		)
+	}
+	data := make(map[string]string, len(target.fields))
+	for logical, rule := range target.fields {
+		if raw, ok := secret.Data[rule.physical]; ok && len(raw) > 0 {
+			data[logical] = string(raw)
+		}
+	}
+	if err := target.validateData(data); err != nil {
+		return repository.SecretMaterial{}, false, errors.New(
+			"prototype delivery material metadata is invalid",
+		)
+	}
+	digest, err := internalrpcauth.CanonicalJSONSHA256(data)
+	if err != nil {
+		return repository.SecretMaterial{}, false, errors.New(
+			"digest prototype delivery material",
+		)
+	}
+	var recoveredVersion uint64
+	for alias := range target.directAliases {
+		versionKey, digestKey := metadataKeys(alias)
+		if secret.Metadata.Annotations[digestKey] != digest {
+			continue
+		}
+		version, parseErr := strconv.ParseUint(
+			secret.Metadata.Annotations[versionKey],
+			10,
+			64,
+		)
+		if parseErr == nil && version > recoveredVersion {
+			recoveredVersion = version
+		}
+	}
+	if recoveredVersion == 0 {
+		return repository.SecretMaterial{}, false, errors.New(
+			"prototype delivery material metadata is invalid",
+		)
+	}
+	if secret.Metadata.Annotations == nil {
+		secret.Metadata.Annotations = make(map[string]string)
+	}
+	for alias := range target.directAliases {
+		versionKey, digestKey := metadataKeys(alias)
+		secret.Metadata.Annotations[versionKey] = strconv.FormatUint(recoveredVersion, 10)
+		secret.Metadata.Annotations[digestKey] = digest
+	}
+	oldResourceVersion := secret.Metadata.ResourceVersion
+	if err := delivery.putSecret(ctx, secret); err != nil {
+		// Concurrent replicas may have completed the exact same recovery.
+		served, found, readErr := delivery.readSecret(ctx, target.resourceName)
+		if readErr != nil || !found || served.Metadata.ResourceVersion == oldResourceVersion {
+			return repository.SecretMaterial{}, false, errors.New(
+				"recover prototype delivery alias metadata",
+			)
+		}
+		secret = served
+	} else {
+		served, found, readErr := delivery.readSecret(ctx, target.resourceName)
+		if readErr != nil || !found || served.Metadata.ResourceVersion == oldResourceVersion {
+			return repository.SecretMaterial{}, false, errors.New(
+				"prototype delivery alias recovery readback is invalid",
+			)
+		}
+		secret = served
+	}
+	return materialFromSecret(secret, target)
 }
 
 func materialFromSecret(
