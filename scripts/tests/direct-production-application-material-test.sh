@@ -544,7 +544,7 @@ yq -r 'select(.kind == "ConfigMap" and
   .data."key-delivery-targets.yaml"' "$interfaces" >"$target_registry"
 target_registry_json="$temporary_directory/target-registry.json"
 yq -o=json '.targets' "$target_registry" >"$target_registry_json"
-yq -e '.source_revision == 2' "$target_registry" >/dev/null || {
+yq -e '.source_revision == 1' "$target_registry" >/dev/null || {
   printf 'Publisher target registry does not use the forward-only profile revision\n' >&2
   exit 1
 }

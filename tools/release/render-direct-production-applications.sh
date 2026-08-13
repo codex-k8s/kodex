@@ -291,7 +291,7 @@ yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry");
     .data."key-delivery-targets.yaml" = (
       .data."key-delivery-targets.yaml" | from_yaml |
-      .source_revision = 2 |
+      .source_revision = 1 |
       .targets = (.targets | map(select(
         .workload_id != "runtime-s3-restore-exchanger" and
         .workload_id != "role-image-builder" and
