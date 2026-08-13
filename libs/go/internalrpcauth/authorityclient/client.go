@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/udscred"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -64,7 +65,21 @@ func DialLocal(ctx context.Context, config LocalConfig) (*LocalConnection, error
 		_ = connection.Close()
 		return nil, errors.New("local authority connection context canceled")
 	}
-	connection.Connect()
+	for {
+		state := connection.GetState()
+		if state == connectivity.Ready {
+			break
+		}
+		if state == connectivity.Shutdown {
+			_ = connection.Close()
+			return nil, errors.New("local authority connection shut down before readiness")
+		}
+		connection.Connect()
+		if !connection.WaitForStateChange(ctx, state) {
+			_ = connection.Close()
+			return nil, errors.New("local authority connection context ended before readiness")
+		}
+	}
 	return &LocalConnection{connection: connection}, nil
 }
 
