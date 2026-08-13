@@ -77,7 +77,7 @@ func (server *Server) IssueInteractionDeliveryReadbackGrant(ctx context.Context,
 	}
 	issued, err := server.service.IssueInteractionDeliveryReadback(ctx, resource.IssueInteractionDeliveryReadbackInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), DeliveryID: request.GetDeliveryId(),
-		Readiness: request.GetReadiness(),
+		ProjectID: request.GetProjectId(), Readiness: request.GetReadiness(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -114,7 +114,8 @@ func (server *Server) RecordInteractionDelivery(ctx context.Context,
 	}
 	err = server.service.RecordInteractionDelivery(ctx, resource.RecordInteractionDeliveryInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), DeliveryID: request.GetDeliveryId(),
-		Fence: request.GetDeliveryFence(), LeaseToken: request.GetDeliveryLeaseToken(),
+		ProjectID: request.GetProjectId(),
+		Fence:     request.GetDeliveryFence(), LeaseToken: request.GetDeliveryLeaseToken(),
 		ProviderReceiptSHA256: request.GetProviderReceiptSha256(),
 	})
 	if err != nil {

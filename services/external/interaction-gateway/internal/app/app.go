@@ -23,7 +23,6 @@ import (
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/clients/controlplane"
-	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
 	domainbotidentity "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/botidentity"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
 	domainteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/team"
@@ -41,7 +40,6 @@ import (
 	teamgrpc "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/grpc/team"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/api"
 	generatedhttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/generated"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	stdgrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -288,28 +286,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	readbackCheck := func(ctx context.Context) error {
-		deliveryID, key := uuid.NewString(), uuid.NewString()
-		credential, expiresAt, credentialErr := control.IssueInteractionDeliveryReadback(ctx, key, deliveryID, true)
-		if credentialErr != nil {
-			return credentialErr
-		}
-		claims, verifyErr := readbackVerifier.Verify(ctx, "Bearer "+credential)
-		if verifyErr != nil || !claims.Readiness || claims.DeliveryID != deliveryID ||
-			!expiresAt.Equal(time.Unix(claims.ExpiresAt, 0)) ||
-			!slices.Contains(config.Gateway.ReadbackClientSPIFFEIDs, claims.CallerSPIFFEID) {
-			return errors.New("interaction delivery readback working path is not ready")
-		}
-		if validateErr := service.ValidateDeliveryReadback(ctx, claims.JTI, claims.DeliveryID,
-			claims.OrganizationID, claims.ProjectID, claims.CredentialSHA256, claims.Generation); validateErr != nil {
-			return errors.New("interaction delivery readback working path is not ready")
-		}
-		_, readErr := service.GetDeliveryScoped(ctx, claims.OrganizationID, claims.ProjectID, claims.DeliveryID)
-		if readErr != nil && !errors.Is(readErr, domainerrs.ErrNotFound) {
-			return errors.New("interaction delivery readback working path is not ready")
-		}
-		return nil
-	}
+	// Workload readiness grant не может и не должен заменять project-scoped
+	// delivery credential. Startup проверяет обе стороны trust/fence; exact
+	// issue row и delivery scope проверяются при фактической доставке.
+	readbackCheck := readbackVerifier.Check
 	for _, check := range []struct {
 		name string
 		run  func(context.Context) error

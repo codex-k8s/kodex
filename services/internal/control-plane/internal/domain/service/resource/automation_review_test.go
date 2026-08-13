@@ -48,6 +48,20 @@ func TestUnboundAutomationOccurrenceGrantRotationKeepsSemanticIdentity(t *testin
 	}
 }
 
+func TestWorkloadReadinessGrantRotationKeepsSemanticIdentity(t *testing.T) {
+	base := value.Principal{ActorID: "actor", OrganizationID: "organization",
+		Permission: "controlplane.readiness.check", PolicyRevision: 4, AuthorityGeneration: 7,
+		CallerWorkload: "control-api-gateway", CallerSPIFFEID: "spiffe://mattercodex/control-api-gateway",
+		AuthoritySource: "WORKLOAD_READINESS", AuthorityReference: "jti-one",
+		AuthorityRevision: 11, AuthorityDigest: hashString("grant-one")}
+	rotated := base
+	rotated.AuthorityReference, rotated.AuthorityRevision, rotated.AuthorityDigest =
+		"jti-two", 12, hashString("grant-two")
+	if !reflect.DeepEqual(identity(base), identity(rotated)) {
+		t.Fatal("short-lived readiness grant rotation changed semantic intent")
+	}
+}
+
 func TestAutomationAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
 	fixture := newCurrentTupleFixture(t)
 	secondProjectID := uuid.NewString()
@@ -89,6 +103,47 @@ func TestAutomationAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("caller-owned scheduler project was accepted: %v", err)
+	}
+}
+
+func TestInteractionGatewayReadinessAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	secondProjectID := uuid.NewString()
+	secondProject, err := entity.New(secondProjectID, fixture.organization, secondProjectID,
+		"", fixture.actor, enum.KindProject, "Second project", entity.ProjectSpec{
+			Slug: "second-project", Locale: "ru",
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"},
+		}, fixture.tx.now)
+	if err != nil {
+		t.Fatalf("create second project: %v", err)
+	}
+	fixture.tx.resources[secondProject.ID] = secondProject
+	principal := value.Principal{
+		ActorID: fixture.actor, OrganizationID: fixture.organization,
+		Permission: permissionDeliverInteraction, PolicyRevision: 1, AuthorityGeneration: 1,
+		CallerWorkload:  fixture.service.ownerGateDeliveryWorkload,
+		CallerSPIFFEID:  fixture.service.ownerGateDeliverySPIFFEID,
+		AuthoritySource: interactionGatewayAuthoritySource,
+	}
+	first, err := fixture.service.selectInteractionGatewayProject(context.Background(), principal,
+		"DELIVERY_CLAIM", "interaction-first")
+	if err != nil {
+		t.Fatalf("select first interaction project: %v", err)
+	}
+	replayed, err := fixture.service.selectInteractionGatewayProject(context.Background(), principal,
+		"DELIVERY_CLAIM", "interaction-first")
+	if err != nil || replayed.ProjectID != first.ProjectID {
+		t.Fatalf("interaction project replay changed: %q -> %q, err=%v", first.ProjectID, replayed.ProjectID, err)
+	}
+	second, err := fixture.service.selectInteractionGatewayProject(context.Background(), principal,
+		"DELIVERY_CLAIM", "interaction-second")
+	if err != nil || second.ProjectID == first.ProjectID {
+		t.Fatalf("interaction partition did not rotate: %q -> %q, err=%v", first.ProjectID, second.ProjectID, err)
+	}
+	principal.ProjectID = first.ProjectID
+	if _, err := fixture.service.selectInteractionGatewayProject(context.Background(), principal,
+		"DELIVERY_CLAIM", "caller-project"); !errors.Is(err, errs.ErrPermissionDenied) {
+		t.Fatalf("caller-owned interaction project was accepted: %v", err)
 	}
 }
 

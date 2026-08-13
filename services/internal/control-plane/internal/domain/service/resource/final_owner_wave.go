@@ -391,6 +391,13 @@ func (service *Service) ExpireOwnerGate(
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
 		return OwnerGateResult{}, errs.ErrInvalidInput
 	}
+	principal, err := service.selectInteractionGatewayProject(
+		ctx, input.Principal, "OWNER_GATE_EXPIRE", input.IdempotencyKey,
+	)
+	if err != nil {
+		return OwnerGateResult{}, err
+	}
+	input.Principal = principal
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
 	}{identity(input.Principal)})

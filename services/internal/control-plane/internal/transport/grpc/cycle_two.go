@@ -194,6 +194,7 @@ func (server *Server) RecordOwnerGateDelivery(
 		resource.RecordOwnerGateDeliveryInput{
 			Principal:             principal,
 			IdempotencyKey:        request.GetIdempotencyKey(),
+			ProjectID:             request.GetProjectId(),
 			OwnerGateID:           request.GetOwnerGateId(),
 			ExpectedVersion:       request.GetExpectedVersion(),
 			DeliveryID:            request.GetDeliveryId(),

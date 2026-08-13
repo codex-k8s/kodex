@@ -110,7 +110,7 @@ func loadConfig() (Config, error) {
 		TLSClientCAFile:    "/var/run/config/mattercodex/integration-gateway/client-ca/ca.pem",
 		TLSAllowedClientSPIFFEIDs: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner," +
 			"spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-		AuthorityVerifierUID: 29001, AuthorityVerifierGID: 29000,
+		AuthorityVerifierUID: 29002, AuthorityVerifierGID: 29000,
 		PostgresDSNFile:        "/var/run/secrets/mattercodex/integration-gateway/postgres-runtime/dsn",
 		PostgresCAFile:         "/var/run/config/mattercodex/integration-gateway/postgres/ca.pem",
 		PostgresTLSServerName:  "integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local",

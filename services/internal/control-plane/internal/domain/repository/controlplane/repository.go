@@ -737,6 +737,7 @@ type Transaction interface {
 	GetDelegationEdgeByTargetTurn(context.Context, string, string, string) (DelegationEdge, error)
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
 	NextAutomationProject(context.Context, string, string) (string, error)
+	NextInteractionGatewayProject(context.Context, string, string) (string, error)
 	SaveScheduleOccurrence(context.Context, ScheduleOccurrence) error
 	HasOpenScheduleOccurrence(context.Context, string, string, string) (bool, error)
 	HasBlockingScheduleExecution(

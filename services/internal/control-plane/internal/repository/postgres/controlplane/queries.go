@@ -462,6 +462,9 @@ var sqlScheduleDue string
 //go:embed sql/automation_scheduler_project__next.sql
 var sqlAutomationSchedulerProjectNext string
 
+//go:embed sql/interaction_gateway_project__next.sql
+var sqlInteractionGatewayProjectNext string
+
 //go:embed sql/schedule_occurrence__get.sql
 var sqlScheduleOccurrenceGet string
 

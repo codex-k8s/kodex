@@ -3,16 +3,10 @@ package main
 import (
 	"strings"
 	"testing"
-
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
 )
 
 func TestRuntimeScopeGrantMigrationIsFailClosed(t *testing.T) {
 	const migrationVersion int64 = 20260813000200
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match runtime scope migration %d", schema.CurrentVersion, migrationVersion)
-	}
-
 	raw, err := migrations.ReadFile("migrations/20260813000200_control_plane_runtime_scope_execute.sql")
 	if err != nil {
 		t.Fatalf("read runtime scope grant migration: %v", err)

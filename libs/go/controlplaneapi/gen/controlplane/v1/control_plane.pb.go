@@ -29872,8 +29872,11 @@ type RecordOwnerGateDeliveryRequest struct {
 	// provider_receipt_sha256 получен только после exact Mattermost read-after-write
 	// и связывает provider-owned effect с owner delivery claim.
 	ProviderReceiptSha256 string `protobuf:"bytes,11,opt,name=provider_receipt_sha256,json=providerReceiptSha256,proto3" json:"provider_receipt_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// project_id возвращён сервером в ClaimOwnerGateDeliveryResponse и служит
+	// точным locator для повторной проверки gate, claim fence и tenant scope.
+	ProjectId     string `protobuf:"bytes,12,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RecordOwnerGateDeliveryRequest) Reset() {
@@ -29979,6 +29982,13 @@ func (x *RecordOwnerGateDeliveryRequest) GetMattermostRootPostId() string {
 func (x *RecordOwnerGateDeliveryRequest) GetProviderReceiptSha256() string {
 	if x != nil {
 		return x.ProviderReceiptSha256
+	}
+	return ""
+}
+
+func (x *RecordOwnerGateDeliveryRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
 	}
 	return ""
 }
@@ -30355,8 +30365,10 @@ type RecordInteractionDeliveryRequest struct {
 	DeliveryFence         uint64                 `protobuf:"varint,3,opt,name=delivery_fence,json=deliveryFence,proto3" json:"delivery_fence,omitempty"`
 	DeliveryLeaseToken    string                 `protobuf:"bytes,4,opt,name=delivery_lease_token,json=deliveryLeaseToken,proto3" json:"delivery_lease_token,omitempty"`
 	ProviderReceiptSha256 string                 `protobuf:"bytes,5,opt,name=provider_receipt_sha256,json=providerReceiptSha256,proto3" json:"provider_receipt_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// project_id возвращён сервером в ClaimInteractionDeliveryResponse.
+	ProjectId     string `protobuf:"bytes,6,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RecordInteractionDeliveryRequest) Reset() {
@@ -30424,6 +30436,13 @@ func (x *RecordInteractionDeliveryRequest) GetProviderReceiptSha256() string {
 	return ""
 }
 
+func (x *RecordInteractionDeliveryRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
 type RecordInteractionDeliveryResponse struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	DeliveryId            string                 `protobuf:"bytes,1,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
@@ -30481,6 +30500,7 @@ type IssueInteractionDeliveryReadbackGrantRequest struct {
 	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	DeliveryId     string                 `protobuf:"bytes,2,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
 	Readiness      bool                   `protobuf:"varint,3,opt,name=readiness,proto3" json:"readiness,omitempty"`
+	ProjectId      string                 `protobuf:"bytes,4,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -30534,6 +30554,13 @@ func (x *IssueInteractionDeliveryReadbackGrantRequest) GetReadiness() bool {
 		return x.Readiness
 	}
 	return false
+}
+
+func (x *IssueInteractionDeliveryReadbackGrantRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
 }
 
 type IssueInteractionDeliveryReadbackGrantResponse struct {
@@ -50061,7 +50088,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\x12:\n" +
 	"\vprocess_run\x18\x02 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
-	"processRun\"\x9b\x04\n" +
+	"processRun\"\xba\x04\n" +
 	"\x1eRecordOwnerGateDeliveryRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\"\n" +
 	"\rowner_gate_id\x18\x02 \x01(\tR\vownerGateId\x12)\n" +
@@ -50075,7 +50102,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15mattermost_channel_id\x18\t \x01(\tR\x13mattermostChannelId\x125\n" +
 	"\x17mattermost_root_post_id\x18\n" +
 	" \x01(\tR\x14mattermostRootPostId\x126\n" +
-	"\x17provider_receipt_sha256\x18\v \x01(\tR\x15providerReceiptSha256\"[\n" +
+	"\x17provider_receipt_sha256\x18\v \x01(\tR\x15providerReceiptSha256\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\f \x01(\tR\tprojectId\"[\n" +
 	"\x1fRecordOwnerGateDeliveryResponse\x128\n" +
 	"\n" +
 	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\"J\n" +
@@ -50116,23 +50145,27 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0einline_payload\x18\x1b \x01(\fR\rinlinePayload\x120\n" +
 	"\x14notification_room_id\x18\x1c \x01(\tR\x12notificationRoomId\x12\\\n" +
 	"\x13notification_policy\x18\x1d \x01(\x0e2+.controlplane.v1.ScheduleNotificationPolicyR\x12notificationPolicy\x12N\n" +
-	"\x11scheduled_outcome\x18\x1e \x01(\x0e2!.controlplane.v1.ScheduledOutcomeR\x10scheduledOutcome\"\xfd\x01\n" +
+	"\x11scheduled_outcome\x18\x1e \x01(\x0e2!.controlplane.v1.ScheduledOutcomeR\x10scheduledOutcome\"\x9c\x02\n" +
 	" RecordInteractionDeliveryRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1f\n" +
 	"\vdelivery_id\x18\x02 \x01(\tR\n" +
 	"deliveryId\x12%\n" +
 	"\x0edelivery_fence\x18\x03 \x01(\x04R\rdeliveryFence\x120\n" +
 	"\x14delivery_lease_token\x18\x04 \x01(\tR\x12deliveryLeaseToken\x126\n" +
-	"\x17provider_receipt_sha256\x18\x05 \x01(\tR\x15providerReceiptSha256\"|\n" +
+	"\x17provider_receipt_sha256\x18\x05 \x01(\tR\x15providerReceiptSha256\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x06 \x01(\tR\tprojectId\"|\n" +
 	"!RecordInteractionDeliveryResponse\x12\x1f\n" +
 	"\vdelivery_id\x18\x01 \x01(\tR\n" +
 	"deliveryId\x126\n" +
-	"\x17provider_receipt_sha256\x18\x02 \x01(\tR\x15providerReceiptSha256\"\x96\x01\n" +
+	"\x17provider_receipt_sha256\x18\x02 \x01(\tR\x15providerReceiptSha256\"\xb5\x01\n" +
 	",IssueInteractionDeliveryReadbackGrantRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1f\n" +
 	"\vdelivery_id\x18\x02 \x01(\tR\n" +
 	"deliveryId\x12\x1c\n" +
-	"\treadiness\x18\x03 \x01(\bR\treadiness\"\xab\x01\n" +
+	"\treadiness\x18\x03 \x01(\bR\treadiness\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x04 \x01(\tR\tprojectId\"\xab\x01\n" +
 	"-IssueInteractionDeliveryReadbackGrantResponse\x12\x1f\n" +
 	"\vdelivery_id\x18\x01 \x01(\tR\n" +
 	"deliveryId\x12\x1e\n" +

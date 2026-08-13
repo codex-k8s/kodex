@@ -90,7 +90,9 @@ if grep -Eq '^kind: Ingress$|namespace: matter-kodex-prod$|sha256:0{64}' "$tempo
   exit 1
 fi
 yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -e '
-  [ .[] | select(.kind == "Deployment" and .metadata.name != "mattercodex-object-store-bootstrap") ] as $deployments |
+  [ .[] | select(.kind == "Deployment" and
+      .metadata.name != "mattercodex-object-store-bootstrap" and
+      .metadata.name != "application-grant-rotator") ] as $deployments |
   ($deployments | length) > 0 and
   all($deployments[];
     ((.spec.replicas | type) == "number" and .spec.replicas >= 2) and
@@ -226,7 +228,7 @@ yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml
     .verbs == ["get"] and .resourceNames == ["internal-rpc-authority-snapshot"]) and
   ([$role.rules[] | select((.verbs | index("delete")) and (.resources == ["jobs"])) |
     .resourceNames] | add | sort) ==
-  ["control-plane-migrate","integration-gateway-migrate","interaction-gateway-migrate",
+  ["control-plane-broker-bootstrap","control-plane-migrate","integration-gateway-migrate","interaction-gateway-migrate",
    "internal-rpc-authority-migrate","mattercodex-postgresql-principal-bootstrap",
    "runtime-controller-migration"]
 ' >/dev/null || {

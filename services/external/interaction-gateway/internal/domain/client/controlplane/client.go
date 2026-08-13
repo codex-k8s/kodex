@@ -89,6 +89,7 @@ type SessionMCPBindingInput struct {
 
 type RecordDeliveryInput struct {
 	IdempotencyKey        string
+	ProjectID             string
 	GateID                string
 	GateVersion           uint64
 	DeliveryID            string
@@ -237,7 +238,7 @@ type Client interface {
 	ExpireOwnerGate(context.Context, string) error
 	ClaimInteractionDelivery(context.Context, string) (InteractionDeliveryWork, error)
 	RecordInteractionDelivery(context.Context, string, InteractionDeliveryWork, string) error
-	IssueInteractionDeliveryReadback(context.Context, string, string, bool) (string, time.Time, error)
+	IssueInteractionDeliveryReadback(context.Context, string, string, string, bool) (string, time.Time, error)
 	ValidateInteractionDeliveryReadback(context.Context, string, string, string, string, string, string, uint64) (bool, error)
 	GetRuntimeMaterialization(context.Context, string, string, string, uint64, string) (RuntimeMaterialization, error)
 	AuthorizeRuntimeOutput(context.Context, string, string, RuntimeOutputMetadata) (RuntimeOutputAuthorization, error)
