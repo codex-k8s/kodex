@@ -199,7 +199,7 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
   ) |
   (.. | select(tag == "!!str")) |= sub(
     "^https://object-store\\.storage\\.svc\\.cluster\\.local$";
-    "https://mattercodex-object-store.mattercodex-system.svc.cluster.local"
+    "https://mattercodex-object-store.mattercodex-system.svc.cluster.local:9000"
   ) |
   (.. | select(tag == "!!str")) |= sub(
     "^object-store\\.storage\\.svc\\.cluster\\.local$";
@@ -249,7 +249,8 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
         .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-nats"
       ) |
       with(select(.to[0].podSelector.matchLabels."app.kubernetes.io/name" == "object-store");
-        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-object-store"
+        .to[0].podSelector.matchLabels."app.kubernetes.io/name" = "mattercodex-object-store" |
+        .ports = [{"protocol":"TCP","port":9000}]
       )
     )
   ) |

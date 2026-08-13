@@ -22,4 +22,11 @@ func TestReadbackTTLWindowsCoverProjectedSecretDelivery(t *testing.T) {
 			publishedReadbackIntentTTL,
 		)
 	}
+	if readbackCredentialTTL-readbackMaterialRotationInterval <=
+		projectedSecretLagBudget+startupRetryBudget {
+		t.Fatalf(
+			"readback material overlap %s does not cover Secret lag and startup retry budgets",
+			readbackCredentialTTL-readbackMaterialRotationInterval,
+		)
+	}
 }

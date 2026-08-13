@@ -401,6 +401,8 @@ Context7 при первоначальной проверке runtime storage bo
 - StatefulSet PostgreSQL, Redis, NATS JetStream и S3-compatible storage готовы;
 - `control-plane-broker-bootstrap` создал либо подтвердил exact поток
   `CONTROL_PLANE` с одной репликой и лимитом `4 GiB`;
+- endpoint instruction object store использует exact TLS port `9000`, а
+  NetworkPolicy разрешает тот же endpoint;
 - bucket reconciler завершает readiness;
 - все migration Jobs завершены, а application Deployment готовы и доступны;
 - фактический набор release-managed объектов совпадает с render без
