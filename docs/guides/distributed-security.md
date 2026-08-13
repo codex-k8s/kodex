@@ -230,6 +230,11 @@ snapshot к нему навсегда. После pod replacement тот же so
 можно подтвердить новым неистекшим receipt; регрессия generation/revision и
 смена digest без signed forward history остаются запрещены.
 
+Readiness нескольких replica проверяет текущий свежий receipt общего workload
+high-watermark для exact snapshot, а не локальный receipt отдельного pod.
+Readiness query получает отдельный точный набор `StrictNamedArgs`: параметры
+activation/history в него не передаются.
+
 Удостоверения разных назначений control-plane не переиспользуются.
 Удостоверение restore controller/ключ ACK и обычное удостоверение
 readback/ключ владения имеют разные явные `typ`, единственную точную аудиторию,

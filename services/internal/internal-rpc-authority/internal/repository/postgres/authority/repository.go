@@ -122,7 +122,7 @@ func (store *Store) Ready(
 	if err := store.pool.QueryRow(
 		ctx,
 		store.queries.verifierReadiness,
-		snapshotArgs(store.targetWorkloadID, expected),
+		snapshotReadinessArgs(store.targetWorkloadID, expected),
 	).Scan(&ready); err != nil {
 		return fmt.Errorf("check served snapshot: %w", err)
 	}
@@ -235,6 +235,20 @@ func snapshotArgs(
 		"attestation_receipt_id":    value.AttestationReceiptID,
 		"history_revisions":         historyRevisions,
 		"history_digests":           historyDigests,
+	}
+}
+
+func snapshotReadinessArgs(
+	targetWorkloadID string,
+	value repository.SnapshotState,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"target_workload_id":   targetWorkloadID,
+		"source_revision":      value.SourceRevision,
+		"source_digest_sha256": value.SourceDigestSHA256,
+		"key_set_revision":     value.KeySetRevision,
+		"policy_revision":      value.PolicyRevision,
+		"signer_generation":    value.SignerGeneration,
 	}
 }
 
