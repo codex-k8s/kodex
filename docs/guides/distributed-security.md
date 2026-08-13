@@ -241,6 +241,11 @@ PostgreSQL LOGIN principals authority остаются `NOINHERIT`. Пул об�
 или неожиданно изменённая роль восстанавливается только из ожидаемого LOGIN
 principal; иная session identity закрыто отклоняется.
 
+Readiness проверяет write path собственной capability: issuer резервирует
+authority proof, verifier резервирует authorization context. Выдавать одной
+capability доступ к replay-таблице другой capability ради общей проверки
+готовности запрещено.
+
 Удостоверения разных назначений control-plane не переиспользуются.
 Удостоверение restore controller/ключ ACK и обычное удостоверение
 readback/ключ владения имеют разные явные `typ`, единственную точную аудиторию,

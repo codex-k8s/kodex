@@ -16,14 +16,21 @@ import (
 
 // Store реализует устойчивое резервирование и high-watermark снимка.
 type Store struct {
-	pool             *pgxpool.Pool
-	targetWorkloadID string
-	queries          querySet
+	pool                     *pgxpool.Pool
+	targetWorkloadID         string
+	readinessReservationKind repository.ReservationKind
+	queries                  querySet
 }
 
 // New создаёт хранилище для точного целевого workload.
-func New(pool *pgxpool.Pool, targetWorkloadID string) (*Store, error) {
-	if pool == nil || targetWorkloadID == "" {
+func New(
+	pool *pgxpool.Pool,
+	targetWorkloadID string,
+	readinessReservationKind repository.ReservationKind,
+) (*Store, error) {
+	if pool == nil || targetWorkloadID == "" ||
+		readinessReservationKind != repository.ReservationAuthorityProof &&
+			readinessReservationKind != repository.ReservationAuthorizationContext {
 		return nil, errors.New("invalid authority store configuration")
 	}
 	queries, err := loadQueries()
@@ -31,9 +38,10 @@ func New(pool *pgxpool.Pool, targetWorkloadID string) (*Store, error) {
 		return nil, err
 	}
 	return &Store{
-		pool:             pool,
-		targetWorkloadID: targetWorkloadID,
-		queries:          queries,
+		pool:                     pool,
+		targetWorkloadID:         targetWorkloadID,
+		readinessReservationKind: readinessReservationKind,
+		queries:                  queries,
 	}, nil
 }
 
@@ -140,16 +148,15 @@ func (store *Store) Ready(
 	if err != nil {
 		return fmt.Errorf("create replay readiness identifier: %w", err)
 	}
+	query, args, err := store.readinessReservation(probeID, time.Now().UTC())
+	if err != nil {
+		return err
+	}
 	var accepted bool
 	if err := transaction.QueryRow(
 		ctx,
-		store.queries.contextReserve,
-		pgx.StrictNamedArgs{
-			"target_workload_id":      store.targetWorkloadID,
-			"jti":                     probeID,
-			"canonical_digest_sha256": strings.Repeat("0", 64),
-			"expires_at":              time.Now().UTC().Add(time.Minute),
-		},
+		query,
+		args,
 	).Scan(&accepted); err != nil {
 		return fmt.Errorf("check replay write path: %w", err)
 	}
@@ -160,6 +167,30 @@ func (store *Store) Ready(
 		return fmt.Errorf("rollback replay readiness transaction: %w", err)
 	}
 	return nil
+}
+
+func (store *Store) readinessReservation(
+	probeID string,
+	now time.Time,
+) (string, pgx.StrictNamedArgs, error) {
+	reservation := repository.Reservation{
+		Kind:        store.readinessReservationKind,
+		ScopeID:     store.targetWorkloadID,
+		OperationID: "readiness-" + probeID,
+		Issuer:      "internal-rpc-authority-readiness",
+		Revision:    1,
+		JTI:         probeID,
+		Digest:      strings.Repeat("0", 64),
+		ExpiresAt:   now.Add(time.Minute),
+	}
+	switch store.readinessReservationKind {
+	case repository.ReservationAuthorityProof:
+		return store.queries.proofReserve, proofReservationArgs(reservation), nil
+	case repository.ReservationAuthorizationContext:
+		return store.queries.contextReserve, contextReservationArgs(reservation), nil
+	default:
+		return "", nil, errors.New("readiness reservation kind is not registered")
+	}
 }
 
 // DeleteExpired удаляет истёкшие резервирования указанного назначения.
