@@ -27,6 +27,14 @@ node "$repository_root/tools/deploy/direct-production-material-helper.mjs" canon
   exit 1
 }
 
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" generate-jwk \
+  "$temporary_directory/semantic-kid-private.jwk"
+jq '.kid = "publisher-target-g1"' "$temporary_directory/semantic-kid-private.jwk" \
+  >"$temporary_directory/semantic-kid-private.next.jwk"
+mv "$temporary_directory/semantic-kid-private.next.jwk" "$temporary_directory/semantic-kid-private.jwk"
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-private-jwk \
+  "$temporary_directory/semantic-kid-private.jwk"
+
 classification="$temporary_directory/classification.json"
 "$classifier" --output "$classification" >/dev/null
 [[ "$(stat -c '%a' "$classification")" == 600 ]] || {
