@@ -24,7 +24,7 @@ import (
 
 const (
 	maximumTLSFile             = 1 << 20
-	idempotencyProtocolVersion = "v2"
+	idempotencyProtocolVersion = "v3"
 )
 
 type ControlPlane interface {
