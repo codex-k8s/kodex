@@ -25,15 +25,27 @@ watermark AS (
         operation_id,
         authority_proof_issuer
     ) DO UPDATE
-    SET proof_revision = EXCLUDED.proof_revision,
-        canonical_payload_digest_sha256 = EXCLUDED.canonical_payload_digest_sha256,
-        updated_at = EXCLUDED.updated_at
-    WHERE internal_rpc_authority.authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision
-       OR (
-           internal_rpc_authority.authority_proof_watermarks.proof_revision = EXCLUDED.proof_revision
-           AND internal_rpc_authority.authority_proof_watermarks.canonical_payload_digest_sha256 =
-               EXCLUDED.canonical_payload_digest_sha256
-       )
+    -- Proof выдаются общей sequence, но конкурентные consumers предъявляют их
+    -- не по порядку. Старый валидный proof не откатывает watermark; совпавшая
+    -- revision с другим digest по-прежнему блокирует reservation.
+    SET proof_revision = CASE
+            WHEN internal_rpc_authority.authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision
+                THEN EXCLUDED.proof_revision
+            ELSE internal_rpc_authority.authority_proof_watermarks.proof_revision
+        END,
+        canonical_payload_digest_sha256 = CASE
+            WHEN internal_rpc_authority.authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision
+                THEN EXCLUDED.canonical_payload_digest_sha256
+            ELSE internal_rpc_authority.authority_proof_watermarks.canonical_payload_digest_sha256
+        END,
+        updated_at = CASE
+            WHEN internal_rpc_authority.authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision
+                THEN EXCLUDED.updated_at
+            ELSE internal_rpc_authority.authority_proof_watermarks.updated_at
+        END
+    WHERE internal_rpc_authority.authority_proof_watermarks.proof_revision <> EXCLUDED.proof_revision
+       OR internal_rpc_authority.authority_proof_watermarks.canonical_payload_digest_sha256 =
+          EXCLUDED.canonical_payload_digest_sha256
     RETURNING true
 ),
 reservation AS (
