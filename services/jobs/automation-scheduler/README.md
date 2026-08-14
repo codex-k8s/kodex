@@ -14,7 +14,7 @@ Job работает только с server-owned `Schedule`, `ScheduleOccurrenc
 
 | Operation ID | Generated RPC | Назначение |
 | --- | --- | --- |
-| `control.automation-scheduler.readiness` | `CheckReadiness` | Готовность того же защищённого пути |
+| `control.automation-scheduler.readiness` | `CheckReadiness` | Готовность отдельного минимально привилегированного readiness path |
 | `control.schedule.claim-due` | `ClaimDueSchedules` | PostgreSQL clock, cron/interval/timezone, misfire/overlap и immutable occurrence |
 | `control.schedule.claim-occurrence` | `ClaimScheduleOccurrence` | Organization credential только резервирует одну server-selected occurrence и получает exact materialization capability |
 | `control.schedule.materialize-occurrence` | `MaterializeScheduleOccurrence` | Одноразовая capability создаёт root Session/Turn/ProcessRun/RuntimeRevision и выдаёт отдельную completion capability |
@@ -29,7 +29,7 @@ Mattermost API и Kubernetes API в operation profile job отсутствуют
 | --- | --- |
 | Инициатор | Владелец через `control-api-gateway`; actor/organization/project разрешает `control-plane`, не request payload |
 | Расписание | `ManageSchedule` валидирует cron либо interval, IANA timezone и pinned target/prompt/runtime; первый `next_run_at` вычисляет по PostgreSQL time. `RunScheduleNow` создаёт отдельную occurrence и не меняет этот watermark |
-| Producer | `automation-scheduler` с mTLS SPIFFE `.../sa/automation-scheduler`, organization-scoped application grant и локальным UDS issuer вызывает только закрытый operation set; проект выбирает owner-side durable round-robin cursor |
+| Producer | `automation-scheduler` с mTLS SPIFFE `.../sa/automation-scheduler`, отдельными readiness и organization-scoped operational application grants и локальным UDS issuer вызывает только закрытый operation set; проект выбирает owner-side durable round-robin cursor |
 | Due | `ClaimDueSchedules` использует PostgreSQL clock, двигает `next_run_at` и сохраняет детерминированный occurrence key `(schedule_id, scheduled_for)` в одной transaction |
 | Reservation | `ClaimScheduleOccurrence` не создаёт execution graph: owner выбирает project/occurrence, фиксирует `RESERVED` и одноразовую capability exact server JTI/digest/project/occurrence/attempt/input/generation/full method/workload/SPIFFE |
 | Enqueue | `MaterializeScheduleOccurrence` потребляет capability и атомарно создаёт `Session -> RuntimeRevision -> Turn -> ProcessRun -> ScheduledRun`; отдельная completion capability хранится только как digest и lifecycle state |
@@ -78,7 +78,7 @@ Mattermost API и Kubernetes API в operation profile job отсутствуют
 
 | Звено | Материализация |
 | --- | --- |
-| Producer/client | Этот Go module, generated `controlplaneapi`, `controlplaneclient.AutomationSchedulerOperations`, mTLS + organization-only application grant без project scope + UDS issuer; shared authority binary содержит закрытый `automation-scheduler` workload profile |
+| Producer/client | Этот Go module, generated `controlplaneapi`, раздельные `controlplaneclient.AutomationSchedulerReadinessOperations` и `controlplaneclient.AutomationSchedulerOperations`, mTLS + readiness grant без бизнесовых прав + organization-only operational grant без project scope + UDS issuer; shared authority binary содержит закрытый `automation-scheduler` workload profile |
 | Owner consumer | Существующие caster/domain/repository paths `control-plane`; organization-scoped project cursor, schedule/occurrence/run и runtime result сохраняются только там; прямого PostgreSQL client у job нет |
 | Runtime consumer | `agent-runner` и `runtime-controller` забирают созданный Turn/RuntimeExecution своими grants |
 | Notification consumer | `interaction-gateway` owner-gate delivery; прямой Mattermost path для scheduler неприменим |

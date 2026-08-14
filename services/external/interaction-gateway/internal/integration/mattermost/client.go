@@ -150,8 +150,18 @@ func (client *Client) BootstrapBoundaries() []entity.Boundary {
 
 func (client *Client) Check(ctx context.Context) error {
 	routes, err := client.runtimeRouteList(ctx)
-	if err != nil || len(routes) == 0 || client.runtimeBots == nil {
+	if err != nil || client.runtimeBots == nil {
 		return errors.New("mattermost joined runtime route is not ready")
+	}
+	if len(routes) == 0 {
+		if client.primary == nil || client.primary.api == nil {
+			return errors.New("mattermost primary bot is not ready")
+		}
+		user, _, checkErr := client.primary.api.GetMe(ctx, "")
+		if checkErr != nil || user == nil || user.Id == "" || user.DeleteAt != 0 || !user.IsBot {
+			return errors.New("mattermost primary bot is not ready")
+		}
+		return nil
 	}
 	for _, route := range routes {
 		stableKeys := map[string]struct{}{route.Boundary.BotStableKey: {}}

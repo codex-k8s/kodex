@@ -1145,6 +1145,13 @@ func (service *Service) DownloadArtifact(ctx context.Context, grantID, authoriza
 }
 
 func (service *Service) CheckInteraction(ctx context.Context) error {
+	boundaries, err := service.mattermost.ChannelBoundaries(ctx)
+	if err != nil {
+		return err
+	}
+	if len(boundaries) == 0 {
+		return nil
+	}
 	boundary, err := service.mattermost.ReadinessBoundary(ctx)
 	if err != nil {
 		return err

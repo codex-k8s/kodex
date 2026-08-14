@@ -1,5 +1,5 @@
-// Package readinessgrant выпускает короткоживущие разрешения только для
-// защищённой проверки готовности workload.
+// Package readinessgrant выпускает короткоживущие application grants для
+// startup/readiness и узких фоновых workload-операций direct-production.
 package readinessgrant
 
 import (
@@ -48,9 +48,21 @@ func DefaultTargets(signerDirectory string) []Target {
 	return []Target{
 		readinessTarget(signerDirectory, "control-api-gateway", "control-plane.control-api-readiness", "control-api-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "automation-scheduler", "control-plane.automation-readiness", "automation-scheduler-application-grant", "application-grant.jws"),
+		automationTarget(signerDirectory),
 		readinessTarget(signerDirectory, "integration-gateway", "control-plane.integration-readiness", "integration-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "interaction-gateway", "control-plane.owner-gate-readiness", "interaction-gateway-application-grant", "readiness.jwt"),
 		readinessTarget(signerDirectory, "runtime-controller", "control-plane.runtime-readiness", "runtime-controller-application-grant", "application-grant.jws"),
+	}
+}
+
+func automationTarget(directory string) Target {
+	return Target{
+		ProducerID: "control-plane.automation", WorkloadID: "automation-scheduler",
+		CallerSPIFFE: "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		Issuer:       "https://control-plane.mattercodex-system.svc.cluster.local/authority/automation-scheduler",
+		Audience:     "urn:mattercodex:automation-occurrence",
+		PrivateJWK:   filepath.Join(directory, "automation-scheduler-operation.private.jwk"),
+		SecretName:   "automation-scheduler-application-grant", SecretDataKey: "operation-grant.jws",
 	}
 }
 

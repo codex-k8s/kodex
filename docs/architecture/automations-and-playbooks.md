@@ -99,6 +99,9 @@ graph создаёт отдельная one-time capability exact project/occurr
 immutable input/generation/full method/workload/SPIFFE; completion получает
 другую capability с durable issue/consume/revoke/readback. Eligibility paused/FORBID/open graph применяется до
 bounded `LIMIT`, поэтому штатная строка не создаёт global head-of-line blocker.
+Защищённая readiness использует другой короткоживущий grant и отдельный operation
+set без прав на due/reservation/materialization/completion. Оба bearer
+перевыпускаются до истечения, но не подменяют друг друга.
 
 В target rebuild очередь occurrence и retry принадлежит `control-plane`;
 `automation-scheduler` не использует River и его in-memory scheduler. Следующий

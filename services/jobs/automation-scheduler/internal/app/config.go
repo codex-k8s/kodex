@@ -24,6 +24,7 @@ type Config struct {
 	ControlPlaneCertificateFile string        `env:"AUTOMATION_SCHEDULER_CONTROL_PLANE_CERTIFICATE_FILE"`
 	ControlPlanePrivateKeyFile  string        `env:"AUTOMATION_SCHEDULER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile        string        `env:"AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE"`
+	OperationGrantFile          string        `env:"AUTOMATION_SCHEDULER_OPERATION_GRANT_FILE"`
 	StartupTimeout              time.Duration `env:"AUTOMATION_SCHEDULER_STARTUP_TIMEOUT"`
 	ShutdownTimeout             time.Duration `env:"AUTOMATION_SCHEDULER_SHUTDOWN_TIMEOUT"`
 	RPCDeadline                 time.Duration `env:"AUTOMATION_SCHEDULER_RPC_DEADLINE"`
@@ -43,6 +44,7 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws",
+		OperationGrantFile:          "/var/run/secrets/mattercodex/automation-scheduler/application-grant/operation-grant.jws",
 		StartupTimeout:              30 * time.Second,
 		ShutdownTimeout:             20 * time.Second,
 		RPCDeadline:                 3 * time.Second,
@@ -79,6 +81,7 @@ func (config Config) validate() error {
 		config.ControlPlaneCertificateFile,
 		config.ControlPlanePrivateKeyFile,
 		config.ApplicationGrantFile,
+		config.OperationGrantFile,
 	} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("automation-scheduler credential path is invalid")

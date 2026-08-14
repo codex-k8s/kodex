@@ -62,6 +62,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, buildVersion s
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile,
+		OperationGrantFile:   config.OperationGrantFile,
 		ExpectedIssuerUID:    29001, ExpectedIssuerGID: 29000,
 		DialTimeout: 2 * time.Second, RPCDeadline: config.RPCDeadline,
 	})
