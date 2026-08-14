@@ -41,10 +41,13 @@ infra/direct-production/control-center/bootstrap.sh \
   --mode apply
 ```
 
-Скрипт server-side применяет закрытый набор ресурсов, ожидает публичный
-Certificate и две Ready replica bridge, затем проверяет по публичному URL
-`/readyz` и `runtime-config.json`. Secret values, TLS key material и OIDC token
-не выводятся.
+До изменения публичного bridge скрипт запускает временный validation pod с тем
+же digest-pinned образом Envoy и проверяет итоговый `envoy.yaml` через
+`envoy --mode validate`. После успешного preflight скрипт server-side применяет
+закрытый набор ресурсов, ожидает публичный Certificate и две Ready replica
+bridge, затем проверяет по публичному URL `/readyz` и `runtime-config.json`.
+Временные validation-ресурсы удаляются; secret values, TLS key material и OIDC
+token не выводятся.
 
 Повторный readback не изменяет кластер:
 

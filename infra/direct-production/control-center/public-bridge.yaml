@@ -19,11 +19,11 @@ data:
                     stat_prefix: control_center_public
                     use_remote_address: true
                     xff_num_trusted_hops: 1
-                    request_headers_to_add:
-                      - header: {key: X-Forwarded-Proto, value: https}
-                        append_action: OVERWRITE_IF_EXISTS_OR_ADD
                     route_config:
                       name: control_center_public
+                      request_headers_to_add:
+                        - header: {key: X-Forwarded-Proto, value: https}
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       virtual_hosts:
                         - name: control_center_public
                           domains: ["*"]
