@@ -99,6 +99,15 @@ func TestStaleMappingStopsReclaimedInboundDeliveryAndArtifact(t *testing.T) {
 			t.Fatalf("stale joined readiness was green: err=%v calls=%d", err, guard.calls)
 		}
 	})
+
+	t.Run("empty configured project catalog", func(t *testing.T) {
+		mattermost := &securityMattermost{}
+		mattermost.boundaries = []entity.Boundary{}
+		service := securityService(&securityRepository{}, mattermost, &rejectingMappingGuard{}, now)
+		if err := service.CheckInteraction(context.Background()); err != nil {
+			t.Fatalf("empty configured project catalog was not ready: %v", err)
+		}
+	})
 }
 
 func securityService(repository *securityRepository, mattermost *securityMattermost,
@@ -160,6 +169,14 @@ type securityMattermost struct {
 	publishCalls  int
 	validateCalls int
 	validateErr   error
+	boundaries    []entity.Boundary
+}
+
+func (client *securityMattermost) ChannelBoundaries(context.Context) ([]entity.Boundary, error) {
+	if client.boundaries != nil {
+		return client.boundaries, nil
+	}
+	return []entity.Boundary{client.boundary}, nil
 }
 
 func (client *securityMattermost) ResolveMappedChannel(context.Context, string, string) (entity.Boundary, error) {

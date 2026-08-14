@@ -575,6 +575,7 @@ public_keyset_genesis control-plane-application-grants control-plane.interaction
 public_jwk control-plane-application-grants control-plane.integration-provider-readback.public.jwk integration-gateway-provider-receipt-signer private.jwk
 public_jwk control-plane-application-grants control-plane.integration-git-reconciliation.public.jwk integration-gateway-git-receipt-signer private.jwk
 public_jwk control-plane-application-grants control-plane.interaction-provider-readback.public.jwk interaction-gateway-runtime provider-readback.private.jwk
+public_jwk control-plane-application-grants control-plane.automation.public.jwk control-plane-readiness-grant-signers automation-scheduler-operation.private.jwk
 for binding in \
   'control-api-gateway:control-plane.control-api-readiness.public.jwk' \
   'automation-scheduler:control-plane.automation-readiness.public.jwk' \
@@ -596,6 +597,9 @@ generate_readiness_grant() {
 }
 generate_readiness_grant control-api-gateway control-api-gateway-application-grant readiness.jwt
 generate_readiness_grant automation-scheduler automation-scheduler-application-grant application-grant.jws
+node "$helper" generate-automation-grant \
+  "$(value_path Secret control-plane-readiness-grant-signers automation-scheduler-operation.private.jwk)" \
+  "$(value_path Secret automation-scheduler-application-grant operation-grant.jws)" 240
 generate_readiness_grant integration-gateway integration-gateway-application-grant readiness.jwt
 generate_readiness_grant interaction-gateway interaction-gateway-application-grant readiness.jwt
 generate_readiness_grant runtime-controller runtime-controller-application-grant application-grant.jws
@@ -638,7 +642,7 @@ generate_tls() {
   case "$name" in
     control-api-gateway-public-tls-material) service=control-api.mattercodex.local; service_account=control-api-gateway ;;
     integration-egress-proxy-server-tls) service=integration-egress-proxy; service_account=integration-egress-proxy ;;
-    integration-egress-proxy-provider-client-tls) service_account=integration-egress-proxy ;;
+    integration-egress-proxy-provider-client-tls) service=integration-egress-proxy-client; service_account=integration-egress-proxy ;;
     provider-health-adapter-server-tls) service=provider-health-adapter; service_account=provider-health-adapter ;;
     runtime-controller-nats-tls) service_account=runtime-controller ;;
     internal-rpc-authority-*-workload-tls)
@@ -652,8 +656,7 @@ generate_tls() {
       cert_text="$temporary_directory/$name.text"; openssl x509 -in "$cert" -noout -text >"$cert_text"
       grep -Fq "URI:spiffe://mattercodex.local/ns/$namespace/sa/$service_account" "$cert_text" || fail "Secret/$name SPIFFE identity is invalid"
     fi
-    if [[ "$name" != internal-rpc-authority-*-workload-tls ]] ||
-      verify_certificate_hostname "$cert" "$ca" "$service.$namespace.svc.cluster.local"; then
+    if verify_certificate_hostname "$cert" "$ca" "$service.$namespace.svc.cluster.local"; then
       return
     fi
   fi

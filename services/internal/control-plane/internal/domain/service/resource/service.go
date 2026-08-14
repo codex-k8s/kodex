@@ -1824,6 +1824,9 @@ func identity(principal value.Principal) commandIdentity {
 		result.AuthorityReference = ""
 		result.AuthorityRevision = 0
 		result.AuthorityDigest = ""
+		if principal.AuthoritySource == "WORKLOAD_READINESS" {
+			result.GrantGeneration = 0
+		}
 	}
 	return result
 }

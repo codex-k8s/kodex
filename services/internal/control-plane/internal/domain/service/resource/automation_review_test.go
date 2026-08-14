@@ -53,10 +53,11 @@ func TestWorkloadReadinessGrantRotationKeepsSemanticIdentity(t *testing.T) {
 		Permission: "controlplane.readiness.check", PolicyRevision: 4, AuthorityGeneration: 7,
 		CallerWorkload: "control-api-gateway", CallerSPIFFEID: "spiffe://mattercodex/control-api-gateway",
 		AuthoritySource: "WORKLOAD_READINESS", AuthorityReference: "jti-one",
-		AuthorityRevision: 11, AuthorityDigest: hashString("grant-one")}
+		AuthorityRevision: 11, AuthorityDigest: hashString("grant-one"), AuthorityGrantGeneration: 11}
 	rotated := base
 	rotated.AuthorityReference, rotated.AuthorityRevision, rotated.AuthorityDigest =
 		"jti-two", 12, hashString("grant-two")
+	rotated.AuthorityGrantGeneration = 12
 	if !reflect.DeepEqual(identity(base), identity(rotated)) {
 		t.Fatal("short-lived readiness grant rotation changed semantic intent")
 	}

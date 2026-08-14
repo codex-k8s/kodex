@@ -25,6 +25,7 @@ type Config struct {
 	ClientCertificateFile string
 	ClientPrivateKeyFile  string
 	ApplicationGrantFile  string
+	OperationGrantFile    string
 	ExpectedIssuerUID     uint32
 	ExpectedIssuerGID     uint32
 	DialTimeout           time.Duration
@@ -41,6 +42,7 @@ type Claim struct {
 
 type Client struct {
 	shared      *sharedclient.Client
+	readiness   *sharedclient.Client
 	rpcDeadline time.Duration
 }
 
@@ -48,25 +50,38 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if config.RPCDeadline < 500*time.Millisecond || config.RPCDeadline > 10*time.Second {
 		return nil, errors.New("automation scheduler client deadline is invalid")
 	}
-	client, err := sharedclient.Dial(ctx, sharedclient.Config{
+	readiness, err := sharedclient.Dial(ctx, sharedclient.Config{
 		Target: config.Target, TLSServerName: config.TLSServerName,
 		CAFile: config.CAFile, ClientCertificateFile: config.ClientCertificateFile,
 		ClientPrivateKeyFile: config.ClientPrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile,
 		ExpectedIssuerUID:    config.ExpectedIssuerUID, ExpectedIssuerGID: config.ExpectedIssuerGID,
 		DialTimeout: config.DialTimeout,
-		Operations:  sharedclient.AutomationSchedulerOperations(),
+		Operations:  sharedclient.AutomationSchedulerReadinessOperations(),
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &Client{shared: client, rpcDeadline: config.RPCDeadline}, nil
+	client, err := sharedclient.Dial(ctx, sharedclient.Config{
+		Target: config.Target, TLSServerName: config.TLSServerName,
+		CAFile: config.CAFile, ClientCertificateFile: config.ClientCertificateFile,
+		ClientPrivateKeyFile: config.ClientPrivateKeyFile,
+		ApplicationGrantFile: config.OperationGrantFile,
+		ExpectedIssuerUID:    config.ExpectedIssuerUID, ExpectedIssuerGID: config.ExpectedIssuerGID,
+		DialTimeout: config.DialTimeout,
+		Operations:  sharedclient.AutomationSchedulerOperations(),
+	})
+	if err != nil {
+		_ = readiness.Close()
+		return nil, err
+	}
+	return &Client{shared: client, readiness: readiness, rpcDeadline: config.RPCDeadline}, nil
 }
 
 func (client *Client) Check(ctx context.Context) error {
 	checkCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	return client.shared.Check(checkCtx)
+	return client.readiness.Check(checkCtx)
 }
 
 func (client *Client) MaterializeDue(ctx context.Context, key string, limit int) (int, error) {
@@ -170,10 +185,17 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string) (st
 }
 
 func (client *Client) Close() error {
-	if client == nil || client.shared == nil {
+	if client == nil {
 		return nil
 	}
-	return client.shared.Close()
+	var result error
+	if client.shared != nil {
+		result = errors.Join(result, client.shared.Close())
+	}
+	if client.readiness != nil {
+		result = errors.Join(result, client.readiness.Close())
+	}
+	return result
 }
 
 func (client *Client) retryUnknown(ctx context.Context, call func(context.Context) error) error {

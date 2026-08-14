@@ -11,9 +11,14 @@ func AgentRunnerOperations() map[string]string {
 	}
 }
 
+func AutomationSchedulerReadinessOperations() map[string]string {
+	return map[string]string{
+		"control.automation-scheduler.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+	}
+}
+
 func AutomationSchedulerOperations() map[string]string {
 	return map[string]string{
-		"control.automation-scheduler.readiness":  controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.schedule.claim-due":              controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
 		"control.schedule.claim-occurrence":       controlplanev1.ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
 		"control.schedule.materialize-occurrence": controlplanev1.ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,

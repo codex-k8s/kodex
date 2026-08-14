@@ -326,6 +326,38 @@ switch (command) {
     writeFileSync(outputPath, compact, { mode: 0o600 });
     break;
   }
+  case "generate-automation-grant": {
+    if (args.length !== 3 || !/^[1-9][0-9]*$/.test(args[2])) {
+      fail("generate-automation-grant requires private JWK, output and TTL");
+    }
+    const [privatePath, outputPath, ttlRaw] = args;
+    const ttl = Number(ttlRaw);
+    if (!Number.isSafeInteger(ttl) || ttl < 120 || ttl > 300) fail("automation grant TTL is invalid");
+    const privateJWK = canonicalPrivateJWK(JSON.parse(readFileSync(privatePath, "utf8")));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      aud: "urn:mattercodex:automation-occurrence",
+      caller_spiffe_id: "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+      exp: now + ttl,
+      iat: now,
+      iss: "https://control-plane.mattercodex-system.svc.cluster.local/authority/automation-scheduler",
+      jti: randomUUID(),
+      nbf: now,
+      organization_id: "d9b072a0-3980-57c0-a6fe-289b7a608f31",
+      project_id: "",
+      revision: now,
+      sub: "63dfc7d7-9439-5e8d-8953-24f975da8f32",
+      tenant_owner: false,
+      v: 1,
+      workload_id: "automation-scheduler",
+    };
+    const compact = signCanonicalES256(payload, {
+      alg: "ES256", crit: ["mcxv"], kid: privateJWK.kid,
+      mcxv: 1, typ: "mattercodex-application-grant+jws",
+    }, privateJWK);
+    writeFileSync(outputPath, compact, { mode: 0o600 });
+    break;
+  }
   case "generate-restore-role-trust": {
     if (args.length !== 7) {
       fail("generate-restore-role-trust requires output, manifest signer, CURRENT signer, NEXT signer, source revision, manifest signer generation and validity seconds");

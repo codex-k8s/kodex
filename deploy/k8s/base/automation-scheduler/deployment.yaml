@@ -51,6 +51,8 @@ spec:
               value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key
             - name: AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE
               value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws
+            - name: AUTOMATION_SCHEDULER_OPERATION_GRANT_FILE
+              value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/operation-grant.jws
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME

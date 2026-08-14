@@ -899,7 +899,13 @@ data:
                       virtual_hosts:
                         - name: legacy_mattermost
                           domains: ["*"]
-                          routes: [{match: {prefix: "/"}, route: {cluster: legacy_mattermost}}]
+                          routes:
+                            - match: {prefix: "/"}
+                              route:
+                                cluster: legacy_mattermost
+                                host_rewrite_literal: chat.kodex.works
+                    upgrade_configs:
+                      - upgrade_type: websocket
                     http_filters:
                       - name: envoy.filters.http.rbac
                         typed_config:

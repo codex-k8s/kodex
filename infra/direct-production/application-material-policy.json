@@ -225,7 +225,8 @@
       "kind": "Secret",
       "name": "automation-scheduler-application-grant",
       "keys": [
-        "application-grant.jws"
+        "application-grant.jws",
+        "operation-grant.jws"
       ]
     },
     {
@@ -1332,6 +1333,7 @@
       "kind": "Secret",
       "name": "control-plane-readiness-grant-signers",
       "keys": [
+        "automation-scheduler-operation.private.jwk",
         "automation-scheduler.private.jwk",
         "control-api-gateway.private.jwk",
         "integration-gateway.private.jwk",

@@ -31,13 +31,20 @@ func TestDefaultTargetsUseDedicatedSecrets(t *testing.T) {
 		if target.SecretName == "interaction-gateway-runtime" {
 			t.Fatal("readiness rotator must not patch the shared interaction runtime Secret")
 		}
-		if _, duplicate := seen[target.SecretName]; duplicate {
-			t.Fatalf("readiness Secret is reused: %s", target.SecretName)
+		identity := target.SecretName + "/" + target.SecretDataKey
+		if _, duplicate := seen[identity]; duplicate {
+			t.Fatalf("application grant target is reused: %s", identity)
 		}
-		seen[target.SecretName] = struct{}{}
+		seen[identity] = struct{}{}
 	}
-	if len(targets) != 5 {
+	if len(targets) != 6 {
 		t.Fatalf("unexpected readiness target count: %d", len(targets))
+	}
+	operation := targets[2]
+	if operation.ProducerID != "control-plane.automation" ||
+		operation.SecretDataKey != "operation-grant.jws" ||
+		operation.Audience != "urn:mattercodex:automation-occurrence" {
+		t.Fatalf("automation operation target is invalid: %+v", operation)
 	}
 }
 
