@@ -17,9 +17,11 @@ import (
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
 	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 )
@@ -204,17 +206,44 @@ func transportCredentials(caFile, certificateFile, keyFile, serverName string) (
 }
 
 func (client *Client) Check(ctx context.Context) error {
-	if client == nil || client.Interaction == nil || client.Bot == nil || client.Integration == nil {
-		return errors.New("protected owner RPC path is not ready")
+	if client == nil || client.issuer == nil || client.interaction == nil || client.integration == nil {
+		return errors.New("owner RPC transport path is not ready")
 	}
-	interaction, interactionErr := client.Interaction.CheckReadiness(ctx, &interactiongatewayv1.MattermostTeamServiceCheckReadinessRequest{})
-	bot, botErr := client.Bot.ListAgentMattermostBotIdentities(ctx, &interactiongatewayv1.ListAgentMattermostBotIdentitiesRequest{PageSize: 1})
-	integration, integrationErr := client.Integration.GetManagementDiagnostics(ctx, &integrationgatewayv1.GetManagementDiagnosticsRequest{})
-	if interactionErr != nil || interaction == nil || !interaction.GetReady() || !interaction.GetAuthorityReady() ||
-		botErr != nil || bot == nil || integrationErr != nil || integration == nil || integration.GetStatus() != "READY" {
-		return errors.New("protected owner RPC path is not ready")
+	issuer, err := client.issuer.Issuer().CheckReadiness(
+		ctx,
+		&internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest{},
+	)
+	if err != nil || !issuer.GetReady() || issuer.GetSourceRevision() == 0 ||
+		issuer.GetKeySetRevision() == 0 || issuer.GetPolicyRevision() == 0 ||
+		issuer.GetSignerGeneration() == 0 {
+		return errors.New("owner RPC authority issuer is not ready")
+	}
+	if err := waitForReady(ctx, client.interaction); err != nil {
+		return errors.New("interaction owner RPC transport is not ready")
+	}
+	if err := waitForReady(ctx, client.integration); err != nil {
+		return errors.New("integration owner RPC transport is not ready")
 	}
 	return nil
+}
+
+func waitForReady(ctx context.Context, connection *grpc.ClientConn) error {
+	if ctx == nil || connection == nil {
+		return errors.New("owner RPC connection is required")
+	}
+	connection.Connect()
+	for {
+		state := connection.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		if state == connectivity.Shutdown {
+			return errors.New("owner RPC connection is shut down")
+		}
+		if !connection.WaitForStateChange(ctx, state) {
+			return errors.New("owner RPC connection readiness deadline exceeded")
+		}
+	}
 }
 
 func (client *Client) Close() error {

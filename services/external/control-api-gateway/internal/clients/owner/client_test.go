@@ -2,56 +2,43 @@ package owner
 
 import (
 	"context"
+	"net"
 	"testing"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
 	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
-type readinessInteractionClient struct {
-	interactiongatewayv1.MattermostTeamServiceClient
-	response *interactiongatewayv1.MattermostTeamServiceCheckReadinessResponse
-}
-
-func (client readinessInteractionClient) CheckReadiness(context.Context, *interactiongatewayv1.MattermostTeamServiceCheckReadinessRequest, ...grpc.CallOption) (*interactiongatewayv1.MattermostTeamServiceCheckReadinessResponse, error) {
-	return client.response, nil
-}
-
-type readinessIntegrationClient struct {
-	integrationgatewayv1.IntegrationManagementServiceClient
-	response *integrationgatewayv1.GetManagementDiagnosticsResponse
-}
-
-type readinessBotClient struct {
-	interactiongatewayv1.AgentMattermostBotIdentityServiceClient
-	response *interactiongatewayv1.ListAgentMattermostBotIdentitiesResponse
-}
-
-func (client readinessBotClient) ListAgentMattermostBotIdentities(context.Context, *interactiongatewayv1.ListAgentMattermostBotIdentitiesRequest, ...grpc.CallOption) (*interactiongatewayv1.ListAgentMattermostBotIdentitiesResponse, error) {
-	return client.response, nil
-}
-
-func (client readinessIntegrationClient) GetManagementDiagnostics(context.Context, *integrationgatewayv1.GetManagementDiagnosticsRequest, ...grpc.CallOption) (*integrationgatewayv1.GetManagementDiagnosticsResponse, error) {
-	return client.response, nil
-}
-
-func TestCheckRejectsNonReadyOwnerPath(t *testing.T) {
+func TestWaitForReadyObservesTransportStateWithoutBusinessRPC(t *testing.T) {
 	t.Parallel()
-	client := &Client{
-		Interaction: readinessInteractionClient{response: &interactiongatewayv1.MattermostTeamServiceCheckReadinessResponse{Ready: true, AuthorityReady: true}},
-		Bot:         readinessBotClient{response: &interactiongatewayv1.ListAgentMattermostBotIdentitiesResponse{}},
-		Integration: readinessIntegrationClient{response: &integrationgatewayv1.GetManagementDiagnosticsResponse{Status: "UNAVAILABLE"}},
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
 	}
-	if err := client.Check(context.Background()); err == nil {
-		t.Fatal("non-ready integration owner path was accepted")
+	server := grpc.NewServer()
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+	connection, err := grpc.NewClient(
+		"passthrough:///"+listener.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("create connection: %v", err)
 	}
-	client.Integration = readinessIntegrationClient{response: &integrationgatewayv1.GetManagementDiagnosticsResponse{Status: "READY"}}
-	if err := client.Check(context.Background()); err != nil {
-		t.Fatalf("ready owner path was rejected: %v", err)
+	t.Cleanup(func() { _ = connection.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := waitForReady(ctx, connection); err != nil {
+		t.Fatalf("ready transport was rejected: %v", err)
 	}
 }
 

@@ -84,3 +84,24 @@ func TestDefinitionMaterializationDoesNotRequireMutationPrivilege(t *testing.T) 
 		t.Fatal("definition conflict path must read back the immutable digest")
 	}
 }
+
+func TestEmptyWorkSelectorsDoNotExposeNullScopes(t *testing.T) {
+	t.Parallel()
+
+	selectors := map[string]string{
+		"execution":    sqlNextExecutionScope,
+		"lifecycle":    sqlNextLifecycleScope,
+		"continuation": sqlNextContinuationScope,
+		"management":   managementSQL("effect__next_scope"),
+	}
+	for name, source := range selectors {
+		for _, invariant := range []string{"tenant_id IS NOT NULL", "project_id IS NOT NULL"} {
+			if !strings.Contains(source, invariant) {
+				t.Fatalf("%s selector exposes an empty scope without %q", name, invariant)
+			}
+		}
+	}
+	if !strings.Contains(selectors["management"], "actor_id IS NOT NULL") {
+		t.Fatal("management selector exposes an empty actor scope")
+	}
+}
