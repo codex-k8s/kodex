@@ -55,6 +55,27 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 	}
 }
 
+func TestProofReservationAllowsConcurrentOutOfOrderProofs(t *testing.T) {
+	for _, required := range []string{
+		"authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision",
+		"THEN EXCLUDED.proof_revision",
+		"ELSE internal_rpc_authority.authority_proof_watermarks.proof_revision",
+		"authority_proof_watermarks.proof_revision <> EXCLUDED.proof_revision",
+		"authority_proof_watermarks.canonical_payload_digest_sha256 =\n          EXCLUDED.canonical_payload_digest_sha256",
+		"ON CONFLICT (caller_workload_id, jti) DO NOTHING",
+	} {
+		if !strings.Contains(proofReserveSQL, required) {
+			t.Fatalf("proof reservation query lost out-of-order replay invariant %q", required)
+		}
+	}
+	if strings.Contains(
+		proofReserveSQL,
+		"SET proof_revision = EXCLUDED.proof_revision,",
+	) {
+		t.Fatal("an older valid proof can still roll back the replay watermark")
+	}
+}
+
 func TestReadinessReservationUsesModeSpecificWritePath(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
