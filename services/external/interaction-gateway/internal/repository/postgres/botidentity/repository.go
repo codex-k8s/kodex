@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -428,13 +429,20 @@ func (repository *Repository) MarkRepairRequired(ctx context.Context,
 func (repository *Repository) ClaimRecovery(ctx context.Context, owner string,
 	lease time.Duration,
 ) (domainrepo.RecoveryClaim, error) {
-	var organizationID, projectID string
+	var organizationID, projectID sql.NullString
 	if err := queryRow(ctx, repository.pool, workScopeNextSQL).Scan(&organizationID, &projectID); errors.Is(err, pgx.ErrNoRows) {
 		return domainrepo.RecoveryClaim{}, nil
 	} else if err != nil {
 		return domainrepo.RecoveryClaim{}, errors.New("discover Agent bot identity recovery scope")
 	}
-	principal := entity.TeamPrincipal{OrganizationID: organizationID, ProjectID: projectID, ActorID: uuid.NewString()}
+	if !organizationID.Valid || !projectID.Valid {
+		return domainrepo.RecoveryClaim{}, nil
+	}
+	principal := entity.TeamPrincipal{
+		OrganizationID: organizationID.String,
+		ProjectID:      projectID.String,
+		ActorID:        uuid.NewString(),
+	}
 	token, err := newLeaseToken()
 	if err != nil {
 		return domainrepo.RecoveryClaim{}, err

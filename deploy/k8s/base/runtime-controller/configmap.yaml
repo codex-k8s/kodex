@@ -14,6 +14,7 @@ data:
   RUNTIME_PVC_SIZE: "20Gi"
   RUNTIME_READ_CLUSTER_ROLE: "runtime-role-project-read"
   RUNTIME_ADMIN_CLUSTER_ROLE: "cluster-admin"
+  RUNTIME_EXECUTION_CAPABILITY: "enabled"
   RUNTIME_ARCHIVE_SERVICE_ACCOUNT: "runtime-archive"
   RUNTIME_RESTORE_SERVICE_ACCOUNT: "runtime-restore-verifier"
   RUNTIME_CLEANUP_SERVICE_ACCOUNT: "runtime-cleanup-authorizer"

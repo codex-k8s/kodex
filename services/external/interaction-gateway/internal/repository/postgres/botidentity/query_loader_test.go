@@ -40,6 +40,14 @@ func TestOperationQueriesEnforceOneWinnerCheckpointAndFencedRecovery(t *testing.
 	}
 }
 
+func TestEmptyRecoveryScopeRemainsNullable(t *testing.T) {
+	t.Parallel()
+	if !strings.Contains(workScopeNextSQL, "interaction_gateway_next_work_scope") ||
+		strings.Contains(workScopeNextSQL, "COALESCE") {
+		t.Fatal("Agent bot recovery scope must preserve nullable empty-work result")
+	}
+}
+
 func TestGenerationAdvanceAndProviderAcceptAreSeparateNamedStepsForOneTransaction(t *testing.T) {
 	t.Parallel()
 	if !strings.Contains(watermarkAdvanceSQL, "admitted = false") ||

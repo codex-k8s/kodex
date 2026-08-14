@@ -374,10 +374,11 @@ actual_workload_contract=$(kubectl --context "$expected_context" -n mattercodex-
 [[ "$actual_workload_contract" == "$expected_workload_contract" ]] ||
   fail "production workload contract readback mismatch"
 
-expected_resources=$(yq -o=json eval-all '.' "$render_file" | jq -Scs '
+workload_contract_identity=$(yq -o=json '[.kind, .metadata.name]' "$workload_contract_file" | jq -Sc .)
+expected_resources=$(yq -o=json eval-all '.' "$render_file" | jq -Scs --argjson workload_contract "$workload_contract_identity" '
   map(select(type == "object" and (.kind == "ConfigMap" or .kind == "Service" or .kind == "Deployment" or
     .kind == "StatefulSet" or .kind == "Job" or .kind == "CronJob"))) |
-  map([.kind,.metadata.name]) | sort
+  (map([.kind,.metadata.name]) + [$workload_contract]) | sort
 ')
 actual_resources=$(kubectl --context "$expected_context" -n mattercodex-system \
   get configmap,service,deployment,statefulset,job,cronjob -l mattercodex.dev/release-managed=true -o json |
