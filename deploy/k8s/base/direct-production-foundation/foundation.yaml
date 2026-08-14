@@ -286,6 +286,8 @@ spec:
             - -c
             - password_encryption=scram-sha-256
             - -c
+            - max_connections=300
+            - -c
             - hba_file=/var/run/config/pg_hba.conf
           env:
             - {name: POSTGRES_USER, value: postgres}
@@ -310,8 +312,8 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 4
           resources:
-            requests: {cpu: 250m, memory: 512Mi}
-            limits: {memory: 3Gi}
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {memory: 8Gi}
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           volumeMounts:
             - {name: data, mountPath: /var/lib/postgresql}

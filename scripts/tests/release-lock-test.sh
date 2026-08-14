@@ -63,6 +63,26 @@ yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -
   printf 'Direct-production render crosses the owner-gated release boundary\n' >&2
   exit 1
 }
+expected_bridge_config_sha256=$(yq -r '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-legacy-transport-bridges") |
+  .data."mattermost.yaml"
+' "$temporary_directory/direct-production.yaml" | sha256sum | awk '{print $1}')
+actual_bridge_config_sha256=$(yq -r '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-legacy-mattermost-bridge") |
+  .spec.template.metadata.annotations."mattercodex.dev/config-sha256"
+' "$temporary_directory/direct-production.yaml")
+[[ "$actual_bridge_config_sha256" == "$expected_bridge_config_sha256" ]] || {
+  printf 'Legacy Mattermost bridge Pod template is not bound to its Envoy config\n' >&2
+  exit 1
+}
+yq -o=json eval-all '.' "$temporary_directory/direct-production.yaml" | jq -sc -e '
+  first(.[] | select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql")) |
+  (.spec.template.spec.containers[] | select(.name == "postgresql") | .args) as $args |
+  any(range(0; ($args | length) - 1); $args[.] == "-c" and $args[. + 1] == "max_connections=300")
+' >/dev/null || {
+  printf 'Direct-production PostgreSQL connection capacity is not rollout-safe\n' >&2
+  exit 1
+}
 grep -Fq 'apply --server-side --force-conflicts' \
   "$repository_root/tools/deploy/direct-production.sh" &&
   grep -Fq 'render contains a resource outside the owner-gated release boundary' \
