@@ -716,6 +716,7 @@ yq -o=json eval-all '.' "$interfaces" | jq -s -e '
   ($control_config.data.CONTROL_PLANE_RUNTIME_ARCHIVE_SIGNING_KEY_FILE == null) and
   ($control_config.data.CONTROL_PLANE_RUNTIME_RESTORE_SIGNING_KEY_FILE == null) and
   ($runtime_config.data.RUNTIME_ARCHIVE_RESTORE_CAPABILITY == "disabled") and
+  ($runtime_config.data.RUNTIME_EXECUTION_CAPABILITY == "disabled") and
   ($runtime_config.data.RUNTIME_ARCHIVE_RESTORE_FOLLOW_UP_ISSUE == "https://github.com/codex-k8s/matter-codex/issues/310") and
   (all($runtime_config.data | keys[];
     . == "RUNTIME_ARCHIVE_RESTORE_CAPABILITY" or

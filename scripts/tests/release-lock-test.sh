@@ -665,6 +665,10 @@ grep -Fq '"$workload_contract_renderer" --manifest "$render_file" --output "$wor
   "$repository_root/tools/deploy/direct-production.sh" &&
   grep -Fq 'apply_release_manifest -f "$workload_contract_file"' \
     "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq 'workload_contract_identity=' \
+    "$repository_root/tools/deploy/direct-production.sh" &&
+  grep -Fq 'map([.kind,.metadata.name]) + [$workload_contract]' \
+    "$repository_root/tools/deploy/direct-production.sh" &&
   grep -Fq 'production workload contract readback mismatch' \
     "$repository_root/tools/deploy/direct-production.sh" || {
   printf 'Direct-production deploy does not update and read back the exact workload contract\n' >&2

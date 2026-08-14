@@ -77,18 +77,21 @@ func Run(
 	if err != nil {
 		return err
 	}
-	state.consumer, err = eventconsumer.Open(startup, eventconsumer.Config{
-		NATSURL: config.NATSURL, NATSTLSServerName: config.NATSTLSServerName,
-		NATSCAFile: config.NATSCAFile, NATSCertificateFile: config.NATSCertificateFile,
-		NATSPrivateKeyFile: config.NATSPrivateKeyFile, NATSCredentialsFile: config.NATSCredentialsFile,
-		Stream: config.NATSStream, Durable: config.NATSDurable, Replicas: config.NATSReplicas,
-		MaxBytes:        config.NATSMaxBytes,
-		PostgresDSNFile: config.PostgresDSNFile, PostgresTLSServerName: config.PostgresTLSServerName,
-		PostgresCAFile: config.PostgresCAFile, PostgresPrincipal: config.PostgresPrincipal,
-		InstanceID: config.PodUID, FetchTimeout: 2 * time.Second,
-	}, state.controlPlane, businessMetrics, state.report("event_consume"))
-	if err != nil {
-		return err
+	executionEnabled := config.ExecutionCapability == "enabled"
+	if executionEnabled {
+		state.consumer, err = eventconsumer.Open(startup, eventconsumer.Config{
+			NATSURL: config.NATSURL, NATSTLSServerName: config.NATSTLSServerName,
+			NATSCAFile: config.NATSCAFile, NATSCertificateFile: config.NATSCertificateFile,
+			NATSPrivateKeyFile: config.NATSPrivateKeyFile, NATSCredentialsFile: config.NATSCredentialsFile,
+			Stream: config.NATSStream, Durable: config.NATSDurable, Replicas: config.NATSReplicas,
+			MaxBytes:        config.NATSMaxBytes,
+			PostgresDSNFile: config.PostgresDSNFile, PostgresTLSServerName: config.PostgresTLSServerName,
+			PostgresCAFile: config.PostgresCAFile, PostgresPrincipal: config.PostgresPrincipal,
+			InstanceID: config.PodUID, FetchTimeout: 2 * time.Second,
+		}, state.controlPlane, businessMetrics, state.report("event_consume"))
+		if err != nil {
+			return err
+		}
 	}
 	cluster, err := kubeadapter.InCluster(kubeadapter.Config{
 		Environment: config.Environment, Namespace: config.Namespace,
@@ -145,35 +148,37 @@ func Run(
 		serveResult <- state.httpServer.Serve()
 		cancelServe()
 	}()
-	if err := state.consumer.Check(startup); err != nil {
-		return err
+	if state.consumer != nil {
+		if err := state.consumer.Check(startup); err != nil {
+			return err
+		}
 	}
 	// Readiness означает способность Pod принять лидерство. Standby-реплика
 	// уже прошла те же startup dependency checks и не должна блокировать rollout.
 	state.readiness.Set(true, "standby")
 	state.metrics.SetReady(true)
 	leaderErr := cluster.RunAsLeader(serveContext, config.PodUID, func(leaderContext context.Context) error {
-		state.readiness.Set(true, "ready")
+		readyReason := "ready"
+		if !executionEnabled {
+			readyReason = "execution_disabled"
+		}
+		state.readiness.Set(true, readyReason)
 		state.metrics.SetReady(true)
 		defer func() {
 			state.readiness.Set(true, "standby")
 			state.metrics.SetReady(true)
 		}()
-		state.workers = serviceruntime.StartWorkers(leaderContext,
-			func(ctx context.Context) error { return state.consumer.Run(ctx) },
-			periodic(config.ClaimInterval, func(ctx context.Context) error { return service.ReconcileNext(ctx) }, state.report("claim_loop")),
-			periodic(config.ReconcileInterval, func(ctx context.Context) error { return service.ReconcileExisting(ctx) }, state.report("reconcile_loop")),
-			periodic(config.ExpiryInterval, func(ctx context.Context) error { return service.ExpireOne(ctx) }, state.report("expiry_loop")),
-			periodic(time.Hour, func(ctx context.Context) error {
-				return service.CleanupTemporary(ctx, time.Now().UTC().Add(-config.JobTTL))
-			}, state.report("temporary_cleanup_loop")),
+		workers := []serviceruntime.Worker{
 			periodic(config.ReadinessInterval, func(ctx context.Context) error {
 				checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 				defer cancel()
 				if err := service.Check(checkCtx); err != nil {
 					return err
 				}
-				return state.consumer.Check(checkCtx)
+				if state.consumer != nil {
+					return state.consumer.Check(checkCtx)
+				}
+				return nil
 			}, func(ctx context.Context, err error) {
 				if err != nil {
 					state.readiness.Set(false, "dependency_unavailable")
@@ -181,10 +186,22 @@ func Run(
 					state.report("readiness_loop")(ctx, err)
 					return
 				}
-				state.readiness.Set(true, "ready")
+				state.readiness.Set(true, readyReason)
 				state.metrics.SetReady(true)
 			}),
-		)
+		}
+		if executionEnabled {
+			workers = append([]serviceruntime.Worker{
+				func(ctx context.Context) error { return state.consumer.Run(ctx) },
+				periodic(config.ClaimInterval, func(ctx context.Context) error { return service.ReconcileNext(ctx) }, state.report("claim_loop")),
+				periodic(config.ReconcileInterval, func(ctx context.Context) error { return service.ReconcileExisting(ctx) }, state.report("reconcile_loop")),
+				periodic(config.ExpiryInterval, func(ctx context.Context) error { return service.ExpireOne(ctx) }, state.report("expiry_loop")),
+				periodic(time.Hour, func(ctx context.Context) error {
+					return service.CleanupTemporary(ctx, time.Now().UTC().Add(-config.JobTTL))
+				}, state.report("temporary_cleanup_loop")),
+			}, workers...)
+		}
+		state.workers = serviceruntime.StartWorkers(leaderContext, workers...)
 		workerResult := make(chan error, 1)
 		go func() { workerResult <- state.workers.Wait(leaderContext) }()
 		select {

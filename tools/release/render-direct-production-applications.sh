@@ -190,7 +190,8 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime");
     .data.RUNTIME_NATS_REPLICAS = "1" |
-    .data.RUNTIME_NATS_MAX_BYTES = "4294967296"
+    .data.RUNTIME_NATS_MAX_BYTES = "4294967296" |
+    .data.RUNTIME_EXECUTION_CAPABILITY = "disabled"
   ) |
   with(select(.kind == "ConfigMap" and
       (.metadata.name == "internal-rpc-authority-publisher" or

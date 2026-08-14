@@ -39,6 +39,7 @@ type Config struct {
 	PVCSize                          string        `env:"RUNTIME_PVC_SIZE"`
 	ReadClusterRole                  string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
 	AdminClusterRole                 string        `env:"RUNTIME_ADMIN_CLUSTER_ROLE"`
+	ExecutionCapability              string        `env:"RUNTIME_EXECUTION_CAPABILITY"`
 	ArchiveRestoreCapability         string        `env:"RUNTIME_ARCHIVE_RESTORE_CAPABILITY"`
 	ArchiveServiceAccount            string        `env:"RUNTIME_ARCHIVE_SERVICE_ACCOUNT"`
 	RestoreServiceAccount            string        `env:"RUNTIME_RESTORE_SERVICE_ACCOUNT"`
@@ -95,7 +96,8 @@ func loadConfig() (Config, error) {
 		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
 		StorageClass:                    "runtime-session", PVCSize: "20Gi",
 		ReadClusterRole:  "runtime-role-project-read",
-		AdminClusterRole: "cluster-admin", ArchiveRestoreCapability: "enabled", ArchiveServiceAccount: "runtime-archive",
+		AdminClusterRole: "cluster-admin", ExecutionCapability: "enabled",
+		ArchiveRestoreCapability: "enabled", ArchiveServiceAccount: "runtime-archive",
 		RestoreServiceAccount: "runtime-restore-verifier", CleanupServiceAccount: "runtime-cleanup-authorizer",
 		CredentialBrokerServiceAccount:   "runtime-credential-broker",
 		ProjectReadBrokerServiceAccount:  "runtime-project-read-broker",
@@ -160,6 +162,9 @@ func (config Config) validate() error {
 	}
 	if config.ControlPlaneTLSServerName == "" || net.ParseIP(config.ControlPlaneTLSServerName) != nil {
 		return errors.New("runtime-controller TLS endpoint is invalid")
+	}
+	if config.ExecutionCapability != "enabled" && config.ExecutionCapability != "disabled" {
+		return errors.New("runtime execution capability is invalid")
 	}
 	archiveRestoreEnabled := config.ArchiveRestoreCapability == "enabled"
 	archiveRestoreDisabled := config.ArchiveRestoreCapability == "disabled"
