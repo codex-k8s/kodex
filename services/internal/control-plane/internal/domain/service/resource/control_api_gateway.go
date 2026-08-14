@@ -650,6 +650,49 @@ const (
 	gatewayPublicTLSSystemProjectID = "1b2b8575-0cef-5f6f-8e4d-ed3960a28131"
 )
 
+type gatewayPublicTLSIdentity struct {
+	ActorID         string
+	OrganizationID  string
+	ProjectID       string
+	Permission      string
+	CallerWorkload  string
+	CallerSPIFFEID  string
+	AuthoritySource string
+}
+
+func stableGatewayPublicTLSIdentity(principal value.Principal) gatewayPublicTLSIdentity {
+	return gatewayPublicTLSIdentity{
+		ActorID: principal.ActorID, OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, Permission: principal.Permission,
+		CallerWorkload: principal.CallerWorkload, CallerSPIFFEID: principal.CallerSPIFFEID,
+		AuthoritySource: principal.AuthoritySource,
+	}
+}
+
+func gatewayPublicTLSPrepareHash(principal value.Principal, candidate domainrepo.GatewayPublicTLSMaterial,
+	predecessorGeneration uint64, predecessorCertificateSHA256 string,
+) (string, error) {
+	return canonicalHash(struct {
+		Identity                     gatewayPublicTLSIdentity
+		Candidate                    domainrepo.GatewayPublicTLSMaterial
+		PredecessorGeneration        uint64
+		PredecessorCertificateSHA256 string
+	}{
+		stableGatewayPublicTLSIdentity(principal), candidate, predecessorGeneration,
+		predecessorCertificateSHA256,
+	})
+}
+
+func gatewayPublicTLSConfirmHash(principal value.Principal, generation uint64,
+	certificateSHA256 string,
+) (string, error) {
+	return canonicalHash(struct {
+		Identity          gatewayPublicTLSIdentity
+		Generation        uint64
+		CertificateSHA256 string
+	}{stableGatewayPublicTLSIdentity(principal), generation, certificateSHA256})
+}
+
 func (service *Service) PrepareGatewayPublicTLS(
 	ctx context.Context,
 	input PrepareGatewayPublicTLSInput,
@@ -679,15 +722,8 @@ func (service *Service) PrepareGatewayPublicTLS(
 		Generation: input.Generation, CertificateSHA256: input.CertificateSHA256,
 		NotBefore: input.NotBefore.UTC(), NotAfter: input.NotAfter.UTC(),
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity                     commandIdentity
-		Candidate                    domainrepo.GatewayPublicTLSMaterial
-		PredecessorGeneration        uint64
-		PredecessorCertificateSHA256 string
-	}{
-		identity(input.Principal), candidate, input.PredecessorGeneration,
-		input.PredecessorCertificateSHA256,
-	})
+	requestHash, err := gatewayPublicTLSPrepareHash(input.Principal, candidate,
+		input.PredecessorGeneration, input.PredecessorCertificateSHA256)
 	if err != nil {
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
@@ -744,11 +780,8 @@ func (service *Service) ConfirmGatewayPublicTLS(
 		OrganizationID: input.Principal.OrganizationID, ProjectID: gatewayPublicTLSSystemProjectID,
 		WorkloadID: controlAPIGatewayWorkload,
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity          commandIdentity
-		Generation        uint64
-		CertificateSHA256 string
-	}{identity(input.Principal), input.Generation, input.CertificateSHA256})
+	requestHash, err := gatewayPublicTLSConfirmHash(input.Principal, input.Generation,
+		input.CertificateSHA256)
 	if err != nil {
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
