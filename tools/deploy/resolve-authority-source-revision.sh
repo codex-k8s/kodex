@@ -7,19 +7,21 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --desired-registry <path> --desired-policy <path> [--current-registry <path> --snapshot-payload <path>]\n' "$0" >&2
+  printf 'Usage: %s --desired-registry <path> --desired-policy <path> [--current-registry <path> --snapshot-payload <path>] [--publisher-recovery-required]\n' "$0" >&2
 }
 
 desired_registry=""
 desired_policy=""
 current_registry=""
 snapshot_payload=""
+publisher_recovery_required=false
 while (($# > 0)); do
   case "$1" in
     --desired-registry) desired_registry="${2:-}"; shift 2 ;;
     --desired-policy) desired_policy="${2:-}"; shift 2 ;;
     --current-registry) current_registry="${2:-}"; shift 2 ;;
     --snapshot-payload) snapshot_payload="${2:-}"; shift 2 ;;
+    --publisher-recovery-required) publisher_recovery_required=true; shift ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -90,6 +92,19 @@ current_registry_digest=$(canonical_registry_digest "$current_registry")
 desired_registry_digest=$(canonical_registry_digest "$desired_registry")
 desired_policy_digest=$(canonical_policy_digest "$desired_policy")
 snapshot_policy_digest=$(canonical_policy_digest "$snapshot_payload")
+
+if [[ "$publisher_recovery_required" == true ]]; then
+  ((10#$snapshot_revision < 9007199254740991)) || fail "source revision is exhausted"
+  next_revision=$((10#$snapshot_revision + 1))
+  if [[ "$current_revision" == "$snapshot_revision" ]]; then
+    printf '%s\n' "$next_revision"
+    exit 0
+  fi
+  [[ "$current_revision" == "$next_revision" ]] ||
+    fail "publisher recovery found a non-contiguous partial source revision"
+  printf '%s\n' "$current_revision"
+  exit 0
+fi
 
 if [[ "$current_revision" == "$snapshot_revision" &&
       "$current_registry_digest" == "$desired_registry_digest" &&

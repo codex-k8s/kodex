@@ -128,11 +128,21 @@ if ((current_authority_registry_status == 0 && current_authority_snapshot_status
     tr '_-' '/+' | base64 --decode >"$authority_snapshot_payload" ||
     fail "installed authority snapshot payload cannot be decoded"
   unset authority_snapshot_compact authority_snapshot_payload_segment authority_snapshot_payload_padding
+  authority_revision_recovery_arguments=()
+  if ! kubectl --context "$expected_context" -n mattercodex-system get \
+    deployment internal-rpc-authority-publisher -o json 2>/dev/null | jq -e '
+      (.status.observedGeneration // 0) >= .metadata.generation and
+      (.status.readyReplicas // 0) == .spec.replicas and
+      (.status.availableReplicas // 0) == .spec.replicas
+    ' >/dev/null; then
+    authority_revision_recovery_arguments+=(--publisher-recovery-required)
+  fi
   resolved_authority_revision=$("$authority_revision_resolver" \
     --desired-registry "$desired_authority_registry" \
     --desired-policy "$desired_authority_policy" \
     --current-registry "$current_authority_registry" \
-    --snapshot-payload "$authority_snapshot_payload")
+    --snapshot-payload "$authority_snapshot_payload" \
+    "${authority_revision_recovery_arguments[@]}")
 elif ((current_authority_registry_status != 0 && current_authority_snapshot_status != 0)); then
   resolved_authority_revision=$("$authority_revision_resolver" \
     --desired-registry "$desired_authority_registry" \

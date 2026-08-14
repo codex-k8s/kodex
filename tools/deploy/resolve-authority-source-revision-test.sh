@@ -60,6 +60,11 @@ assert_revision 3 unchanged \
   --desired-registry "$desired_registry" --desired-policy "$desired_policy" \
   --current-registry "$current_registry" --snapshot-payload "$snapshot_payload"
 
+assert_revision 4 publisher-recovery \
+  --desired-registry "$desired_registry" --desired-policy "$desired_policy" \
+  --current-registry "$current_registry" --snapshot-payload "$snapshot_payload" \
+  --publisher-recovery-required
+
 write_policy "$desired_policy" 31 control.write
 assert_revision 4 policy-change \
   --desired-registry "$desired_registry" --desired-policy "$desired_policy" \
@@ -76,6 +81,11 @@ write_registry "$current_registry" 4
 assert_revision 4 partial-apply \
   --desired-registry "$desired_registry" --desired-policy "$desired_policy" \
   --current-registry "$current_registry" --snapshot-payload "$snapshot_payload"
+
+assert_revision 4 partial-apply-recovery \
+  --desired-registry "$desired_registry" --desired-policy "$desired_policy" \
+  --current-registry "$current_registry" --snapshot-payload "$snapshot_payload" \
+  --publisher-recovery-required
 
 printf '{"v":1,"source_revision":0,"policy_revision":30,"policy":{}}\n' >"$snapshot_payload"
 if "$resolver" \
