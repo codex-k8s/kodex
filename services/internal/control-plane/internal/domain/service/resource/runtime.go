@@ -1534,6 +1534,9 @@ func (service *Service) ClaimDueSchedules(
 	projectID, err := service.selectAutomationProject(
 		ctx, input.Principal, "DUE", input.IdempotencyKey, partitionHash,
 	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return ClaimDueSchedulesResult{}, nil
+	}
 	if err != nil {
 		return ClaimDueSchedulesResult{}, err
 	}

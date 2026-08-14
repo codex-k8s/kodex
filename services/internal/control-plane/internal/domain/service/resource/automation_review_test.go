@@ -108,6 +108,42 @@ func TestAutomationAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
 	}
 }
 
+func TestAutomationSchedulerTreatsEmptyProjectCatalogAsNoWork(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	for resourceID, current := range fixture.tx.resources {
+		if current.Kind == enum.KindProject {
+			delete(fixture.tx.resources, resourceID)
+		}
+	}
+	principal := fixture.principalFor(
+		permissionClaimSchedule,
+		"scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		fixture.turnID,
+		1,
+		fixture.inputSHA256,
+		fixture.grant,
+	)
+	due, err := fixture.service.ClaimDueSchedules(
+		context.Background(),
+		ClaimDueSchedulesInput{
+			Principal: principal, IdempotencyKey: "empty-project-catalog-due", Limit: 1,
+		},
+	)
+	if err != nil || len(due.Occurrences) != 0 {
+		t.Fatalf("empty project catalog due result = %+v, err=%v", due, err)
+	}
+	_, err = fixture.service.ClaimScheduleOccurrence(
+		context.Background(),
+		ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "empty-project-catalog-claim",
+		},
+	)
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("empty project catalog claim error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestInteractionGatewayReadinessAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
 	fixture := newCurrentTupleFixture(t)
 	secondProjectID := uuid.NewString()
