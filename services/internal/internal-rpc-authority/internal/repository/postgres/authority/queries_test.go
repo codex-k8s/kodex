@@ -55,6 +55,33 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 	}
 }
 
+func TestSnapshotBootstrapUsesIndependentReceiptAndSignedPredecessor(t *testing.T) {
+	queries := map[string]string{
+		"activation": verifierActivateSnapshotSQL,
+		"context":    verifierAcceptContextSQL,
+	}
+	for name, query := range queries {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(
+				query,
+				"FROM internal_rpc_authority.authority_snapshot_watermarks AS initial",
+			) {
+				t.Fatal("first attested snapshot still requires a pre-existing watermark")
+			}
+			for _, required := range []string{
+				"@source_revision > 1",
+				"@predecessor_revision = @source_revision - 1",
+				"AS signed_predecessor(revision, digest_sha256)",
+				"signed_predecessor.digest_sha256 =\n                                @predecessor_digest_sha256",
+			} {
+				if !strings.Contains(query, required) {
+					t.Fatalf("first non-genesis snapshot lost predecessor invariant %q", required)
+				}
+			}
+		})
+	}
+}
+
 func TestProofReservationAllowsConcurrentOutOfOrderProofs(t *testing.T) {
 	for _, required := range []string{
 		"authority_proof_watermarks.proof_revision < EXCLUDED.proof_revision",
