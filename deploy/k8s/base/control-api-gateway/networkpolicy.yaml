@@ -20,6 +20,12 @@ spec:
           podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
       ports: [{protocol: TCP, port: 8443}]
     - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: staff-control-center
+              app.kubernetes.io/component: staff-frontend
+      ports: [{protocol: TCP, port: 8443}]
+    - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
       ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]

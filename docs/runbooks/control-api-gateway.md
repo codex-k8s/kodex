@@ -44,6 +44,10 @@ kubectl kustomize deploy/k8s/overlays/staging/control-api-gateway \
    interaction-gateway, integration-gateway, identity SSO, Vault, issuer
    persistence/readback, OTel и Sentry. Правило только по порту, wildcard CIDR,
    plaintext или `skipTLSVerify` запрещены.
+6. Ingress `8443` должен допускать точные browser-facing peers активного
+   профиля, включая `staff-control-center/staff-frontend`. Односторонний egress
+   frontend без встречного ingress gateway приводит к `502` и не считается
+   рабочим owner path.
 
 Доступ к среде и любая команда `kubectl get` выполняются только после
 отдельного подтверждения владельца. Secret data не читать.
