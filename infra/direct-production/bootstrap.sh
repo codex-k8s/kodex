@@ -103,6 +103,7 @@ normalize_single_node_ingress "$application_owner_source" >"$temporary_directory
 kubernetes_api_policies="$temporary_directory/runtime-adapter-kubernetes-api-egress.yaml"
 : >"$kubernetes_api_policies"
 for binding in \
+  'application-grant-rotator-kubernetes-api-exact|app.kubernetes.io/name=application-grant-rotator' \
   'integration-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=integration-gateway' \
   'interaction-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=interaction-gateway' \
   'internal-rpc-authority-reconciler-kubernetes-api-exact|app.kubernetes.io/name=internal-rpc-authority' \
@@ -121,6 +122,7 @@ for binding in \
 done
 yq -o=json eval-all '.' "$kubernetes_api_policies" | jq -s -e '
   [ .[] | select(.kind == "NetworkPolicy") | .metadata.name ] | sort == [
+    "application-grant-rotator-kubernetes-api-exact",
     "integration-gateway-kubernetes-api-exact",
     "interaction-gateway-kubernetes-api-exact",
     "internal-rpc-authority-publisher-kubernetes-api-exact",

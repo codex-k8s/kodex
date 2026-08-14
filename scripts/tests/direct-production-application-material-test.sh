@@ -765,7 +765,8 @@ for gateway in integration-gateway interaction-gateway; do
     exit 1
   }
 done
-grep -Fq 'integration-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=integration-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
+grep -Fq 'application-grant-rotator-kubernetes-api-exact|app.kubernetes.io/name=application-grant-rotator' "$repository_root/infra/direct-production/bootstrap.sh" &&
+  grep -Fq 'integration-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=integration-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
   grep -Fq 'interaction-gateway-kubernetes-api-exact|mattercodex.dev/runtime-secret-api=interaction-gateway' "$repository_root/infra/direct-production/bootstrap.sh" &&
   grep -Fq 'mattercodex.dev/runtime-secret-api' "$repository_root/infra/direct-production/bootstrap.yaml" || {
   printf 'Owner bootstrap does not bind exact Kubernetes API egress and VAP boundaries\n' >&2
