@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	transactionAttempts = 3
-	nullActorID         = "00000000-0000-0000-0000-000000000000"
+	transactionAttempts  = 5
+	transactionRetryBase = 10 * time.Millisecond
+	nullActorID          = "00000000-0000-0000-0000-000000000000"
 )
 
 // Config связывает каждый оператор SQL с дополнительным контекстом выполнения.
@@ -183,8 +184,21 @@ func (repository *Repository) Transact(
 			return mapError(err)
 		}
 		last = err
+		if attempt+1 < transactionAttempts {
+			timer := time.NewTimer(transactionRetryDelay(attempt))
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
 	}
 	return fmt.Errorf("%w: transaction retry exhausted: %v", errs.ErrUnavailable, last)
+}
+
+func transactionRetryDelay(attempt int) time.Duration {
+	return transactionRetryBase << attempt
 }
 
 // Get выполняет авторитетный поиск с фильтром владения.
