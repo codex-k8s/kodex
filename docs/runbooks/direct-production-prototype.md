@@ -4,8 +4,8 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.7.0
-updated: 2026-08-12
+version: 1.8.0
+updated: 2026-08-14
 ---
 
 # Direct-production single-node prototype
@@ -28,6 +28,13 @@ Legacy Mattermost, PostgreSQL, bot-service, Kaniko и registry в
 путём и rollback path. Новый build публикует в существующий Service
 `matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000`, а workloads
 используют node pull endpoint `localhost:5001` только с digest.
+
+Namespace `mattercodex-system` сохраняет суммарные requests не выше `8 CPU` и
+`16Gi` memory. Отдельная quota `limits.memory=96Gi` является admission
+headroom для одновременных `maxSurge` pod во время rolling update на owner
+single-node с 126 GiB RAM; она не резервирует эту память и не заменяет контроль
+node pressure. Значение оставляет около 30 GiB физического ceiling вне
+application namespace для Kubernetes, legacy-контура и CI.
 
 Exact release lock также содержит compatibility image `bot-service` той же Git
 revision. Dark deploy не применяет этот образ к legacy Deployment. Он
