@@ -413,7 +413,10 @@ kubectl --context "$expected_context" -n mattercodex-system get pvc -o json |
 kubectl --context "$expected_context" -n mattercodex-system get pods -l mattercodex.dev/release-managed=true -o json |
   jq -e -f "$script_directory/verify-running-pod-images.jq" >/dev/null ||
   fail "running image digest readback failed"
-if kubectl --context "$expected_context" -n mattercodex-system get ingress -o name | grep -q .; then
-  fail "dark namespace contains an Ingress"
-fi
+# The exact public entrypoint is owned by the separate owner bootstrap. The
+# dark release itself still contains no Ingress, and every other route is
+# rejected by the allowlist readback below.
+kubectl --context "$expected_context" -n mattercodex-system get ingress -o json |
+  jq -e -f "$script_directory/verify-dark-ingresses.jq" >/dev/null ||
+  fail "dark namespace contains an unapproved Ingress"
 printf 'Direct production %s completed for mode %s\n' "$operation" "$mode"
