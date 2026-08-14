@@ -18,14 +18,21 @@ func TestIdempotencyKeyIsBoundToCurrentProtocolVersion(t *testing.T) {
 
 	manager := &Manager{generation: 7, certificateSHA256: strings.Repeat("a", 64)}
 	current := manager.idempotencyKey("prepare")
-	legacy := uuid.NewSHA1(uuid.NameSpaceOID, []byte(
-		"control-api-gateway-public-tls:prepare:7:"+manager.certificateSHA256,
-	))
-	previous := uuid.NewSHA1(uuid.NameSpaceOID, []byte(
-		"control-api-gateway-public-tls:v2:prepare:7:"+manager.certificateSHA256,
-	))
-	if current == legacy || current == previous {
-		t.Fatal("current public TLS protocol must not reuse a previous receipt namespace")
+	previous := []uuid.UUID{
+		uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+			"control-api-gateway-public-tls:prepare:7:"+manager.certificateSHA256,
+		)),
+		uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+			"control-api-gateway-public-tls:v2:prepare:7:"+manager.certificateSHA256,
+		)),
+		uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+			"control-api-gateway-public-tls:v3:prepare:7:"+manager.certificateSHA256,
+		)),
+	}
+	for _, previousKey := range previous {
+		if current == previousKey {
+			t.Fatal("current public TLS protocol must not reuse a previous receipt namespace")
+		}
 	}
 	if current != manager.idempotencyKey("prepare") {
 		t.Fatal("public TLS idempotency key must remain deterministic")
