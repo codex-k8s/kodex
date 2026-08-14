@@ -31,6 +31,17 @@ kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation
       .spec.template.spec.automountServiceAccountToken = false
     )
   ' >"$output"
+mattermost_bridge_config_sha256=$(yq -r '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-legacy-transport-bridges") |
+  .data."mattermost.yaml"
+' "$output" | sha256sum | awk '{print $1}')
+[[ "$mattermost_bridge_config_sha256" =~ ^[a-f0-9]{64}$ ]] ||
+  fail "legacy Mattermost bridge config digest is invalid"
+MATTERMOST_BRIDGE_CONFIG_SHA256="$mattermost_bridge_config_sha256" yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "mattercodex-legacy-mattermost-bridge");
+    .spec.template.metadata.annotations."mattercodex.dev/config-sha256" = strenv(MATTERMOST_BRIDGE_CONFIG_SHA256)
+  )
+' "$output"
 "$script_directory/render-direct-production-applications.sh" \
   --lock "$lock_file" --scope release --output "$applications" >/dev/null
 printf '%s\n' '---' >>"$output"

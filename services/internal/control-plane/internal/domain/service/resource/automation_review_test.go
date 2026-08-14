@@ -55,6 +55,7 @@ func TestWorkloadReadinessGrantRotationKeepsSemanticIdentity(t *testing.T) {
 		AuthoritySource: "WORKLOAD_READINESS", AuthorityReference: "jti-one",
 		AuthorityRevision: 11, AuthorityDigest: hashString("grant-one"), AuthorityGrantGeneration: 11}
 	rotated := base
+	rotated.PolicyRevision, rotated.AuthorityGeneration = 5, 8
 	rotated.AuthorityReference, rotated.AuthorityRevision, rotated.AuthorityDigest =
 		"jti-two", 12, hashString("grant-two")
 	rotated.AuthorityGrantGeneration = 12

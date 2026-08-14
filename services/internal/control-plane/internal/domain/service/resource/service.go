@@ -1825,6 +1825,11 @@ func identity(principal value.Principal) commandIdentity {
 		result.AuthorityRevision = 0
 		result.AuthorityDigest = ""
 		if principal.AuthoritySource == "WORKLOAD_READINESS" {
+			// Readiness permission, workload и SPIFFE identity проверяются на
+			// каждом RPC. Policy/source signer revisions относятся к transport
+			// proof lifecycle и не меняют повторяемую workload-команду.
+			result.PolicyRevision = 0
+			result.AuthorityGeneration = 0
 			result.GrantGeneration = 0
 		}
 	}
