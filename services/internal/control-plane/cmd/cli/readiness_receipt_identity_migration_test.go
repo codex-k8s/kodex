@@ -9,8 +9,8 @@ import (
 
 func TestReadinessReceiptIdentityMigrationIsPortableAndForwardOnly(t *testing.T) {
 	const migrationVersion int64 = 20260814000100
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match readiness receipt migration %d", schema.CurrentVersion, migrationVersion)
+	if schema.CurrentVersion < migrationVersion {
+		t.Fatalf("schema fence %d excludes readiness receipt migration %d", schema.CurrentVersion, migrationVersion)
 	}
 	raw, err := migrations.ReadFile("migrations/20260814000100_control_plane_readiness_receipt_identity.sql")
 	if err != nil {

@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -103,10 +104,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := state.publicTLS.Prepare(startup, state.control.ControlPlane); err != nil {
-		return err
+		return fmt.Errorf("prepare public TLS admission: %w", err)
 	}
 	if err := state.control.Check(startup); err != nil {
-		return err
+		return fmt.Errorf("check protected control-plane path: %w", err)
 	}
 	state.owner, err = ownerclient.Dial(startup, ownerclient.Config{
 		InteractionTarget: config.InteractionTarget, InteractionTLSServerName: config.InteractionTLSServerName,
@@ -119,7 +120,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := state.owner.Check(startup); err != nil {
-		return err
+		return fmt.Errorf("check protected owner paths: %w", err)
 	}
 	state.readiness.Set(false, "listener_starting")
 	state.metrics.SetReady(false)
