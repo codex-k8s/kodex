@@ -4,7 +4,10 @@ WITH confirmed AS (
         previous_certificate_sha256 = applied_certificate_sha256,
         previous_not_before = applied_not_before,
         previous_not_after = applied_not_after,
-        overlap_expires_at = CASE WHEN applied_generation IS NULL THEN NULL ELSE @overlap_expires_at END,
+        overlap_expires_at = CASE
+            WHEN applied_generation IS NULL THEN NULL
+            ELSE @overlap_expires_at::timestamptz
+        END,
         applied_generation = pending_generation,
         applied_certificate_sha256 = pending_certificate_sha256,
         applied_not_before = pending_not_before,
