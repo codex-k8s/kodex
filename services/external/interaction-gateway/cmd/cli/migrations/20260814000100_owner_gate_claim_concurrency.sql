@@ -1,4 +1,7 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION interaction_gateway_claim_owner_gate_request()
 RETURNS uuid

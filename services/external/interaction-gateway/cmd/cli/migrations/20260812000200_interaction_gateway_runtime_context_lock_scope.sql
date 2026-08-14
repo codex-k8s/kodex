@@ -1,4 +1,5 @@
 -- +goose Up
+RESET ROLE;
 SET ROLE interaction_gateway_owner;
 
 -- +goose StatementBegin
