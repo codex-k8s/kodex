@@ -81,7 +81,11 @@ data:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
               sni: provider-health-adapter.mattercodex-system.svc.cluster.local
               common_tls_context:
-                tls_params: {tls_minimum_protocol_version: TLSv1_3}
+                # У upstream-клиента Envoy maximum по умолчанию равен TLS 1.2,
+                # поэтому для точной политики TLS 1.3 обязательны обе границы.
+                tls_params:
+                  tls_minimum_protocol_version: TLSv1_3
+                  tls_maximum_protocol_version: TLSv1_3
                 tls_certificates:
                   - certificate_chain: {filename: /var/run/secrets/mattercodex/integration-egress-proxy/provider-client/tls.crt}
                     private_key: {filename: /var/run/secrets/mattercodex/integration-egress-proxy/provider-client/tls.key}
@@ -95,7 +99,9 @@ data:
               interval: 5s
               unhealthy_threshold: 2
               healthy_threshold: 1
-              http_health_check: {path: /readyz}
+              http_health_check:
+                path: /readyz
+                expected_statuses: [{start: 204, end: 205}]
     admin:
       access_log_path: /dev/null
       address:
