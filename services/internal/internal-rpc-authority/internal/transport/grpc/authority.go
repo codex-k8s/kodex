@@ -233,6 +233,10 @@ func authoritySource(value string) internalrpcauthorityv1.AuthoritySource {
 		"IMAGE_ARTIFACT":           internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_ARTIFACT,
 		"IMAGE_PROMOTION_CLAIM":    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM,
 		"LEGACY_MIGRATION":         internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_LEGACY_MIGRATION,
+		"WORKLOAD_READINESS":       internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_WORKLOAD_READINESS,
+		"PROVIDER_READBACK":        internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_PROVIDER_READBACK,
+		"GIT_RECONCILIATION":       internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_GIT_RECONCILIATION,
+		"RUNTIME_EXECUTION":        internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_RUNTIME_EXECUTION,
 	}[value]
 }
 
