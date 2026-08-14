@@ -407,18 +407,11 @@ kubectl --context "$expected_context" -n mattercodex-system get job -l mattercod
 kubectl --context "$expected_context" -n mattercodex-system get pvc -o json |
   jq -e '(.items | length) > 0 and all(.items[]; .status.phase == "Bound")' >/dev/null ||
   fail "a direct-production PVC is absent or not Bound"
+# Deployment/StatefulSet readiness and Job completion are checked above. Image
+# readback is scoped to the currently running pods so terminal pods retained by
+# old ReplicaSets after node recovery cannot poison every later deployment.
 kubectl --context "$expected_context" -n mattercodex-system get pods -l mattercodex.dev/release-managed=true -o json |
-  jq -e '(.items | length) > 0 and all(.items[];
-    (.status.phase == "Succeeded") or
-    (.status.phase == "Running" and
-      . as $pod | all(.status.containerStatuses[]?;
-        . as $container_status |
-        ($pod.spec.containers[] | select(.name == $container_status.name) | .image) as $requested_image |
-        .ready == true and
-        (.imageID | test("@sha256:[a-f0-9]{64}$")) and
-        (.imageID | endswith("@sha256:0000000000000000000000000000000000000000000000000000000000000000") | not) and
-        ((($requested_image | startswith("localhost:5001/mattercodex/")) | not) or
-          (.imageID | endswith("@" + ($requested_image | split("@")[1])))))))' >/dev/null ||
+  jq -e -f "$script_directory/verify-running-pod-images.jq" >/dev/null ||
   fail "running image digest readback failed"
 if kubectl --context "$expected_context" -n mattercodex-system get ingress -o name | grep -q .; then
   fail "dark namespace contains an Ingress"
