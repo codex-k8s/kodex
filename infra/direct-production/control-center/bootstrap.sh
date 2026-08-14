@@ -24,12 +24,30 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT HUP INT TERM
+validation_name=""
+cleanup() {
+  if [[ -n "$validation_name" ]]; then
+    kubectl --context "$context" -n mattercodex-system delete \
+      pod "$validation_name" configmap "$validation_name" \
+      --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup EXIT HUP INT TERM
 
 render="$temporary_directory/control-center.yaml"
 kubectl kustomize "$script_directory" >"$render"
-config_sha256=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "control-center-public-bridge") | .data."envoy.yaml"' "$render" | sha256sum | awk '{print $1}')
+envoy_config="$temporary_directory/envoy.yaml"
+yq -r 'select(.kind == "ConfigMap" and .metadata.name == "control-center-public-bridge") | .data."envoy.yaml"' \
+  "$render" >"$envoy_config"
+config_sha256=$(sha256sum "$envoy_config" | awk '{print $1}')
 [[ "$config_sha256" =~ ^[a-f0-9]{64}$ ]] || fail "bridge configuration digest is invalid"
+bridge_image=$(yq -r '
+  select(.kind == "Deployment" and .metadata.name == "control-center-public-bridge") |
+  .spec.template.spec.containers[] | select(.name == "envoy") | .image
+' "$render")
+[[ "$bridge_image" =~ ^[^[:space:]]+@sha256:[a-f0-9]{64}$ ]] ||
+  fail "bridge image must be pinned by digest"
 CONFIG_SHA256="$config_sha256" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "control-center-public-bridge");
     .spec.template.metadata.annotations."mattercodex.dev/config-sha256" = strenv(CONFIG_SHA256)
@@ -38,6 +56,60 @@ CONFIG_SHA256="$config_sha256" yq -i '
 kubectl apply --dry-run=client --validate=false -f "$render" >/dev/null
 
 if [[ "$mode" == apply ]]; then
+  validation_name="control-center-envoy-validation-${config_sha256:0:8}-$$"
+  kubectl --context "$context" -n mattercodex-system create configmap "$validation_name" \
+    --from-file=envoy.yaml="$envoy_config" --dry-run=client -o yaml |
+    kubectl --context "$context" apply --server-side \
+      --field-manager=mattercodex-control-center-bootstrap -f - >/dev/null
+  VALIDATION_NAME="$validation_name" BRIDGE_IMAGE="$bridge_image" yq '
+    select(.kind == "Deployment" and .metadata.name == "control-center-public-bridge") |
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "name": strenv(VALIDATION_NAME),
+        "namespace": "mattercodex-system",
+        "labels": {
+          "app.kubernetes.io/name": "control-center-public-bridge",
+          "app.kubernetes.io/component": "config-validation"
+        }
+      },
+      "spec": .spec.template.spec
+    } |
+    .spec.restartPolicy = "Never" |
+    .spec.containers[0].image = strenv(BRIDGE_IMAGE) |
+    .spec.containers[0].args = ["--mode", "validate", "-c", "/etc/envoy/envoy.yaml"] |
+    del(
+      .spec.containers[0].ports,
+      .spec.containers[0].startupProbe,
+      .spec.containers[0].readinessProbe,
+      .spec.containers[0].livenessProbe
+    ) |
+    .spec.volumes[] |=
+      (select(.name == "config").configMap.name = strenv(VALIDATION_NAME))
+  ' "$render" | kubectl --context "$context" apply -f - >/dev/null
+
+  validation_deadline=$((SECONDS + 90))
+  while true; do
+    validation_phase=$(kubectl --context "$context" -n mattercodex-system get pod \
+      "$validation_name" -o jsonpath='{.status.phase}')
+    case "$validation_phase" in
+      Succeeded) break ;;
+      Failed)
+        kubectl --context "$context" -n mattercodex-system logs "$validation_name" >&2 || true
+        fail "pinned Envoy rejected bridge configuration"
+        ;;
+    esac
+    if ((SECONDS >= validation_deadline)); then
+      kubectl --context "$context" -n mattercodex-system logs "$validation_name" >&2 || true
+      fail "pinned Envoy configuration validation timed out"
+    fi
+    sleep 2
+  done
+  kubectl --context "$context" -n mattercodex-system delete \
+    pod "$validation_name" configmap "$validation_name" --wait=true >/dev/null
+  validation_name=""
+
   kubectl --context "$context" apply --server-side --force-conflicts \
     --field-manager=mattercodex-control-center-bootstrap -f "$render" >/dev/null
   kubectl --context "$context" -n mattercodex-system wait \
@@ -76,4 +148,3 @@ curl --fail --silent --show-error --max-time 10 https://control.kodex.works/read
   jq -e '.status == "ready"' >/dev/null || fail "public readiness readback failed"
 
 printf 'Direct production Control Center %s completed\n' "$mode"
-
