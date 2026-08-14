@@ -28,7 +28,7 @@ validation_name=""
 cleanup() {
   if [[ -n "$validation_name" ]]; then
     kubectl --context "$context" -n mattercodex-system delete \
-      pod "$validation_name" configmap "$validation_name" \
+      "pod/$validation_name" "configmap/$validation_name" \
       --ignore-not-found --wait=false >/dev/null 2>&1 || true
   fi
   rm -rf -- "$temporary_directory"
@@ -107,7 +107,7 @@ if [[ "$mode" == apply ]]; then
     sleep 2
   done
   kubectl --context "$context" -n mattercodex-system delete \
-    pod "$validation_name" configmap "$validation_name" --wait=true >/dev/null
+    "pod/$validation_name" "configmap/$validation_name" --wait=true >/dev/null
   validation_name=""
 
   kubectl --context "$context" apply --server-side --force-conflicts \
