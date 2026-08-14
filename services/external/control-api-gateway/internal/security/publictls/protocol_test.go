@@ -8,9 +8,26 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func TestIdempotencyKeyIsBoundToCurrentProtocolVersion(t *testing.T) {
+	t.Parallel()
+
+	manager := &Manager{generation: 7, certificateSHA256: strings.Repeat("a", 64)}
+	current := manager.idempotencyKey("prepare")
+	legacy := uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+		"control-api-gateway-public-tls:prepare:7:"+manager.certificateSHA256,
+	))
+	if current == legacy {
+		t.Fatal("current public TLS protocol must not reuse legacy receipt namespace")
+	}
+	if current != manager.idempotencyKey("prepare") {
+		t.Fatal("public TLS idempotency key must remain deterministic")
+	}
+}
 
 func TestNewRejectsNonAtomicMaterialLayout(t *testing.T) {
 	t.Parallel()

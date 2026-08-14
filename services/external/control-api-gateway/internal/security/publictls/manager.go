@@ -22,7 +22,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const maximumTLSFile = 1 << 20
+const (
+	maximumTLSFile             = 1 << 20
+	idempotencyProtocolVersion = "v2"
+)
 
 type ControlPlane interface {
 	PrepareGatewayPublicTLS(context.Context, *controlplanev1.PrepareGatewayPublicTLSRequest, ...grpc.CallOption) (*controlplanev1.PrepareGatewayPublicTLSResponse, error)
@@ -189,7 +192,7 @@ func (manager *Manager) Check(ctx context.Context, control ControlPlane) error {
 }
 
 func (manager *Manager) idempotencyKey(operation string) uuid.UUID {
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("control-api-gateway-public-tls:"+operation+":"+strconv.FormatUint(manager.generation, 10)+":"+manager.certificateSHA256))
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("control-api-gateway-public-tls:"+idempotencyProtocolVersion+":"+operation+":"+strconv.FormatUint(manager.generation, 10)+":"+manager.certificateSHA256))
 }
 
 func (manager *Manager) stateContainsExact(state *controlplanev1.GatewayPublicTLSState) bool {
