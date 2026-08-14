@@ -1,5 +1,5 @@
 {
-  "revision": "36b1b4229800ff080120efa6fd2203aa002ad13ebaa678c20cae531d6d6c9035",
+  "revision": "4af443abf22992bbd907a7deda83d663c9623be37e15076cf25d71c828ae441d",
   "environment": "base",
   "apiBaseUrl": "https://control.kodex.works/api/v1",
   "realtimeUrl": "wss://control.kodex.works/api/v1/realtime",
@@ -9,6 +9,6 @@
     "clientId": "mattercodex-control-center",
     "redirectUri": "https://control.kodex.works/auth/callback",
     "postLogoutRedirectUri": "https://control.kodex.works/",
-    "scope": "openid profile mattercodex.owner"
+    "scope": "openid mattercodex.owner"
   }
 }
