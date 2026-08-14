@@ -28,10 +28,33 @@ WITH accepted_snapshot AS (
       )
       AND (
           (
-              @source_revision = 1
-              AND @predecessor_revision = 0
-              AND @predecessor_digest_sha256 =
-                  '0000000000000000000000000000000000000000000000000000000000000000'
+              NOT EXISTS (
+                  SELECT 1
+                  FROM internal_rpc_authority.authority_snapshot_watermarks AS initial
+                  WHERE initial.target_workload_id = @target_workload_id
+              )
+              AND (
+                  (
+                      @source_revision = 1
+                      AND @predecessor_revision = 0
+                      AND @predecessor_digest_sha256 =
+                          '0000000000000000000000000000000000000000000000000000000000000000'
+                  )
+                  OR (
+                      @source_revision > 1
+                      AND @predecessor_revision = @source_revision - 1
+                      AND EXISTS (
+                          SELECT 1
+                          FROM unnest(
+                              @history_revisions::bigint[],
+                              @history_digests::text[]
+                          ) AS signed_predecessor(revision, digest_sha256)
+                          WHERE signed_predecessor.revision = @predecessor_revision
+                            AND signed_predecessor.digest_sha256 =
+                                @predecessor_digest_sha256
+                      )
+                  )
+              )
           )
           OR EXISTS (
         SELECT 1
