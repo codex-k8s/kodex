@@ -75,10 +75,11 @@ type SecretReader interface {
 
 // Agent обрабатывает директиву и отправляет одноразовое подтверждение.
 type Agent struct {
-	config    Config
-	observed  atomic.Uint64
-	quiescing atomic.Bool
-	now       func() time.Time
+	config           Config
+	observed         atomic.Uint64
+	quiescing        atomic.Bool
+	now              func() time.Time
+	directiveFetcher func(context.Context) (*internalrpcauthorityv1.GetRestoreDirectiveResponse, string, error)
 }
 
 // New создаёт агент только из полностью связанной конфигурации.
@@ -115,11 +116,13 @@ func (agent *Agent) Poll(
 	if admission == nil {
 		return errors.New("restore workload admission boundary is nil")
 	}
-	// Каждый startup/rejoin начинается закрыто. Только проверенный ответ
-	// внешнего controller и совпадающее durable served state могут снять fence.
-	admission.SetRestoreBlocked(true)
-	admission.SetAvailable(false)
-	response, roleCompact, err := agent.getDirective(ctx)
+	// Startup/rejoin закрывает VerifyStartup. Рабочий poll сохраняет admission
+	// открытым до ошибки controller либо фактически полученной директивы.
+	fetchDirective := agent.getDirective
+	if agent.directiveFetcher != nil {
+		fetchDirective = agent.directiveFetcher
+	}
+	response, roleCompact, err := fetchDirective(ctx)
 	if err != nil {
 		return err
 	}

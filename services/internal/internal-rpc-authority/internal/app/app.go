@@ -438,7 +438,7 @@ func runRestoreWorkloadAgent(
 			authorityApplication.SetRestoreBlocked(true)
 			readiness.Set(false, "restore-coordination-failed")
 			metrics.SetReady(false)
-			logger.Error("restore coordination poll failed")
+			logger.Error("restore coordination poll failed", "error", err)
 		}
 		select {
 		case <-ctx.Done():

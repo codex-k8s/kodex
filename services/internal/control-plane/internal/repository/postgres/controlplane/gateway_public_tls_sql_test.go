@@ -23,7 +23,7 @@ func TestGatewayPublicTLSNamedSQLKeepsForwardOnlyStates(t *testing.T) {
 		"previous_generation = applied_generation",
 		"applied_generation = pending_generation",
 		"pending_generation = NULL",
-		"overlap_expires_at",
+		"@overlap_expires_at::timestamptz",
 	} {
 		if !strings.Contains(sqlGatewayPublicTLSConfirm, required) {
 			t.Fatalf("confirm SQL lacks atomic promotion %q", required)
