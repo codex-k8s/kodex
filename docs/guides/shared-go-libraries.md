@@ -131,6 +131,20 @@ Provider-neutral telemetry runtime:
 metric labels. Service-specific metrics находятся в
 `internal/observability/metrics`.
 
+### `oidcidentity`
+
+Общая канонизация стандартных OIDC identity claims:
+
+- канонический UUID сохраняется без изменения семантики;
+- opaque `sub`, `sid` и `jti` детерминированно преобразуются во внутренний UUID;
+- namespace разделяется по точному issuer и виду идентичности;
+- пустые, неограниченные и содержащие недопустимые символы значения
+  отклоняются закрыто.
+
+Модуль не проверяет подпись, audience, scope, roles и lifetime токена. Эти
+проверки остаются в verifier конкретной trust boundary. Namespace UUID и
+алгоритм канонизации считаются persisted contract и не меняются без миграции.
+
 ### `cache`
 
 Общий read-through engine:

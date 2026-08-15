@@ -37,6 +37,12 @@ Keycloak и его PostgreSQL не входят в release-managed dark manifest
 bootstrap-admin и временные owner credentials, а также server-owned
 `organization-id`. Значения не выводятся в лог и не хранятся в Git.
 
+При каждом `apply` скрипт через Keycloak Admin API идемпотентно сверяет и
+обновляет protocol mapper'ы клиента `mattercodex-control-center`. Access token
+обязан содержать стандартный `sub` и `realm_access.roles`; штатные opaque
+значения Keycloak `sid` и `jti` gateway приводит к стабильным внутренним UUID,
+не изменяя внешний OIDC-контракт.
+
 ## Owner и администратор Keycloak
 
 - realm owner создается с username `lepehovsv`, подтвержденным email и
@@ -64,6 +70,7 @@ Google Identity Provider включается отдельно после нас
 - Ready PostgreSQL и Keycloak;
 - exact issuer и JWKS URI;
 - непустой RSA JWKS.
+- exact protocol mapper'ы `sub` и `realm roles` клиента Control Center;
 - exact `/32` egress от `control-api-gateway` к публичному OIDC ingress.
 
 После SSO readback обновленный CA обязан быть сохранен и в

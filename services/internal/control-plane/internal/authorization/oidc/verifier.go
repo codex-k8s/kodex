@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/oidcidentity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	authoritytype "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
@@ -30,6 +31,8 @@ import (
 const (
 	maximumBearerBytes = 16 << 10
 	maximumTokenTTL    = 15 * time.Minute
+	ownerScope         = "mattercodex.owner"
+	ownerRealmRole     = "mattercodex-owner"
 )
 
 // Config фиксирует издателя, аудиторию, TLS и единственного транспортного
@@ -62,8 +65,11 @@ type claims struct {
 	OrganizationID  string `json:"organization_id"`
 	ProjectID       string `json:"project_id"`
 	SessionRevision uint64 `json:"session_revision"`
-	TenantOwner     bool   `json:"mattercodex_owner"`
 	NotBefore       int64  `json:"nbf"`
+	Scope           string `json:"scope"`
+	RealmAccess     struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
 }
 
 // New выполняет обнаружение OIDC через закреплённые CA и SNI до открытия
@@ -214,37 +220,60 @@ func (verifier *Verifier) Authenticate(
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
 	var custom claims
-	if err := token.Claims(&custom); err != nil ||
-		custom.NotBefore <= 0 ||
-		time.Unix(custom.NotBefore, 0).After(now.Add(verifier.config.ClockSkew)) ||
-		time.Unix(custom.NotBefore, 0).Before(
+	if err := token.Claims(&custom); err != nil {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	notBefore := token.IssuedAt
+	if custom.NotBefore > 0 {
+		notBefore = time.Unix(custom.NotBefore, 0)
+	}
+	if notBefore.After(now.Add(verifier.config.ClockSkew)) ||
+		notBefore.Before(
 			token.IssuedAt.Add(-verifier.config.ClockSkew),
 		) ||
-		token.Expiry.Before(time.Unix(custom.NotBefore, 0)) ||
-		value.ValidateID(token.Subject) != nil ||
-		value.ValidateID(custom.JTI) != nil ||
-		value.ValidateID(custom.SessionID) != nil ||
+		token.Expiry.Before(notBefore) ||
 		value.ValidateID(custom.OrganizationID) != nil ||
 		(custom.ProjectID != "" && value.ValidateID(custom.ProjectID) != nil) ||
-		custom.SessionRevision == 0 {
+		custom.SessionRevision == 0 ||
+		!containsWord(custom.Scope, ownerScope) ||
+		!contains(custom.RealmAccess.Roles, ownerRealmRole) {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
+	sessionJTI, tokenIDErr := oidcidentity.TokenID(token.Issuer, custom.JTI)
+	sessionID, sessionErr := oidcidentity.SessionID(token.Issuer, custom.SessionID)
+	if subjectErr != nil || tokenIDErr != nil || sessionErr != nil {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
 	return authoritytype.ApplicationIdentity{
 		ProducerID:           verifier.config.ProducerID,
 		CredentialPurpose:    verifier.config.Purpose,
 		CredentialGeneration: custom.SessionRevision,
-		ActorID:              token.Subject,
+		ActorID:              subject,
 		OrganizationID:       custom.OrganizationID,
 		ProjectID:            custom.ProjectID,
-		SessionJTI:           custom.JTI,
-		SessionID:            custom.SessionID,
+		SessionJTI:           sessionJTI,
+		SessionID:            sessionID,
 		SessionRevision:      custom.SessionRevision,
-		SubjectDigest:        digest("OIDC_SUBJECT:" + token.Subject),
+		SubjectDigest:        digest("OIDC_SUBJECT:" + subject),
 		CredentialDigest:     digest(raw),
-		TenantOwner:          custom.TenantOwner,
+		TenantOwner:          true,
 		CallerWorkload:       verifier.config.ExpectedWorkload,
 		CallerSPIFFEID:       verifier.config.ExpectedCallerSPIFFE,
 	}, nil
+}
+
+func containsWord(words, expected string) bool {
+	return contains(strings.Fields(words), expected)
+}
+
+func contains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func digest(value string) string {

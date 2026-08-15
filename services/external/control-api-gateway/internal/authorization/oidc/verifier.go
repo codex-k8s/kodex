@@ -13,11 +13,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/oidcidentity"
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
 )
 
-const maximumBearerBytes = 2300
+const (
+	maximumBearerBytes = 2300
+	ownerScope         = "mattercodex.owner"
+	ownerRealmRole     = "mattercodex-owner"
+)
 
 type Config struct {
 	Issuer         string
@@ -61,6 +66,10 @@ type claims struct {
 	OrganizationID  string `json:"organization_id"`
 	SessionRevision uint64 `json:"session_revision"`
 	TokenID         string `json:"jti"`
+	Scope           string `json:"scope"`
+	RealmAccess     struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
 }
 
 func New(ctx context.Context, config Config) (*Verifier, error) {
@@ -137,18 +146,40 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return Principal{}, err
 	}
-	if err != nil || uuid.Validate(token.Subject) != nil || token.Expiry.IsZero() {
+	if err != nil || token.Expiry.IsZero() {
 		return Principal{}, errors.New("OIDC bearer is invalid")
 	}
 	var values claims
-	if token.Claims(&values) != nil || uuid.Validate(values.SessionID) != nil || uuid.Validate(values.OrganizationID) != nil ||
-		uuid.Validate(values.TokenID) != nil || values.SessionRevision == 0 {
+	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil ||
+		values.SessionRevision == 0 || !containsWord(values.Scope, ownerScope) ||
+		!contains(values.RealmAccess.Roles, ownerRealmRole) {
+		return Principal{}, errors.New("OIDC session claims are invalid")
+	}
+	subject, subjectErr := oidcidentity.Subject(token.Issuer, token.Subject)
+	sessionID, sessionErr := oidcidentity.SessionID(token.Issuer, values.SessionID)
+	if subjectErr != nil || sessionErr != nil {
+		return Principal{}, errors.New("OIDC session claims are invalid")
+	}
+	if _, tokenIDErr := oidcidentity.TokenID(token.Issuer, values.TokenID); tokenIDErr != nil {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	return Principal{
-		Subject: token.Subject, OrganizationID: values.OrganizationID, SessionID: values.SessionID,
+		Subject: subject, OrganizationID: values.OrganizationID, SessionID: sessionID,
 		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+func containsWord(words, expected string) bool {
+	return contains(strings.Fields(words), expected)
+}
+
+func contains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func (verifier *Verifier) Close() {

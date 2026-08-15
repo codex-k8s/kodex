@@ -12,6 +12,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/oidcidentity v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/google/uuid v1.6.0
@@ -57,6 +58,8 @@ replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../li
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 
 replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+
+replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/go/oidcidentity
 
 replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi => ../../../libs/go/integrationgatewayapi
 
