@@ -56,6 +56,7 @@ func (server *AuthorityServer) ResolveAuthorityProof(
 	proof, err := server.service.Resolve(ctx, authorityservice.ResolveInput{
 		Identity:          identity,
 		OperationID:       request.GetOperationId(),
+		ProjectReference:  request.GetProjectReference(),
 		ResourceReference: request.GetResourceReference(),
 		IdempotencyKey:    request.GetIdempotencyKey(),
 		CorrelationID:     request.GetCorrelationId(),

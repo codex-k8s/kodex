@@ -351,6 +351,14 @@ code {
   background: transparent;
   font-size: 11px;
 }
+.project-select select {
+  width: min(180px, 24vw);
+  max-width: 180px;
+}
+.router-link-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 .content {
   min-width: 0;
   flex: 1;

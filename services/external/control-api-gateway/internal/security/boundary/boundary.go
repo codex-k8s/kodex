@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	SessionCookieName = "__Host-mattercodex-session"
-	CSRFCookieName    = "__Host-mattercodex-csrf"
+	SessionCookieName      = "__Host-mattercodex-session"
+	CSRFCookieName         = "__Host-mattercodex-csrf"
+	ProjectReferenceHeader = "X-MatterCodex-Project-ID"
 )
 
 var (
@@ -104,7 +105,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token")
+			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
 			writer.Header().Add("Vary", "Access-Control-Request-Method")
 			writer.Header().Add("Vary", "Access-Control-Request-Headers")
 			writer.Header().Set("Access-Control-Max-Age", "300")
@@ -183,6 +184,11 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 			return
 		}
+		ctx, err = withProjectReference(ctx, request)
+		if err != nil {
+			writeProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
 		ctx = context.WithValue(ctx, identityContextKey{}, identity)
 		if request.URL.Path == "/api/v1/realtime" {
 			next.ServeHTTP(writer, request.WithContext(ctx))
@@ -200,7 +206,7 @@ func allowedPreflight(request *http.Request) bool {
 	default:
 		return false
 	}
-	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}}
+	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}, "x-mattercodex-project-id": {}}
 	rawHeaders := request.Header.Get("Access-Control-Request-Headers")
 	if rawHeaders == "" {
 		return true
@@ -216,6 +222,38 @@ func allowedPreflight(request *http.Request) bool {
 		}
 	}
 	return true
+}
+
+func withProjectReference(ctx context.Context, request *http.Request) (context.Context, error) {
+	values := request.Header.Values(ProjectReferenceHeader)
+	if len(values) > 1 {
+		return nil, errors.New("multiple project references are not allowed")
+	}
+	headerReference := ""
+	if len(values) == 1 {
+		headerReference = values[0]
+	}
+	queryReference := ""
+	if request.URL.Path == "/api/v1/realtime" {
+		queryValues := request.URL.Query()["projectId"]
+		if len(queryValues) > 1 {
+			return nil, errors.New("multiple realtime project references are not allowed")
+		}
+		if len(queryValues) == 1 {
+			queryReference = queryValues[0]
+		}
+	}
+	if headerReference != "" && queryReference != "" && headerReference != queryReference {
+		return nil, errors.New("project references do not match")
+	}
+	reference := headerReference
+	if reference == "" {
+		reference = queryReference
+	}
+	if reference == "" {
+		return ctx, nil
+	}
+	return controlplaneclient.WithProjectReference(ctx, reference)
 }
 
 func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization string) (oidcauth.Principal, string, error) {

@@ -4,8 +4,8 @@ title: Control API gateway
 type: service
 status: approved
 owner: backend
-version: 1.7.0
-updated: 2026-08-09
+version: 1.7.1
+updated: 2026-08-15
 ---
 
 # Control API gateway
@@ -21,6 +21,14 @@ Gateway не читает PostgreSQL, Redis, NATS или Vault API напрям�
 бизнес-состояние и не принимает `actor`, organization, project, owner или
 tenant из payload. Эти поля разрешает `AuthorityProofResolverService` по
 проверенному OIDC subject и авторитетному состоянию `control-plane`.
+
+Выбранный в Control Center project UUID передаётся только как locator:
+`X-MatterCodex-Project-ID` для HTTP и query `projectId` для WebSocket. Gateway
+не считает locator полномочием и не добавляет его в browser identity. Перед
+каждым project-scoped RPC `AuthorityProofResolverService` повторно разрешает
+проект внутри организации, проверяет actor membership и exact operation
+permission, после чего выпускает короткоживущий internal authorization
+context. Глобальные session/project lifecycle операции locator не принимают.
 
 ## Контракты и codegen
 

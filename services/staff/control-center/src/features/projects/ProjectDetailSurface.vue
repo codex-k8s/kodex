@@ -2,15 +2,15 @@
 import { Pencil, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 
 import { useProjectsStore } from "@/features/projects/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { setProjectReference } from "@/shared/lib/project-scope";
 
 const route = useRoute();
-const router = useRouter();
 const { t } = useI18n();
 const store = useProjectsStore();
 const projectId = computed(() => String(route.params.projectId));
@@ -71,8 +71,10 @@ async function deleteProject(): Promise<void> {
     !window.confirm(t("workspaces.confirmDelete", { name: project.value.name }))
   )
     return;
-  if (await store.remove(project.value))
-    await router.push({ name: "workspaces" });
+  if (await store.remove(project.value)) {
+    setProjectReference(null);
+    window.location.assign("/workspaces");
+  }
 }
 </script>
 

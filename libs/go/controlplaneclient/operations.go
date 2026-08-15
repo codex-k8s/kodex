@@ -269,6 +269,33 @@ func ControlAPIGatewayOperations() map[string]string {
 	}
 }
 
+// ControlAPIGatewayProjectRequiredOperations возвращает операции
+// control-plane, для которых browser-selected project locator обязателен.
+// Глобальные owner-session, project lifecycle, readiness и public TLS
+// операции намеренно исключены.
+func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
+	operations := ControlAPIGatewayOperations()
+	for _, operationID := range []string{
+		"control.owner-session.admit",
+		"control.owner-session.revoke",
+		"control.project.create",
+		"control.project.list",
+		"control.project.update",
+		"control.project.delete",
+		"control.gateway-public-tls.prepare",
+		"control.gateway-public-tls.confirm",
+		"control.gateway-public-tls.check",
+		"control.readiness.check",
+	} {
+		delete(operations, operationID)
+	}
+	result := make(map[string]struct{}, len(operations))
+	for operationID := range operations {
+		result[operationID] = struct{}{}
+	}
+	return result
+}
+
 func OwnerGateDeliveryOperations() map[string]string {
 	return map[string]string{
 		"control.owner-gate-delivery.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,

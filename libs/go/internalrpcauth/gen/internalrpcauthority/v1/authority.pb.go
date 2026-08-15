@@ -1099,8 +1099,12 @@ type ResolveAuthorityProofRequest struct {
 	ResourceReference string `protobuf:"bytes,2,opt,name=resource_reference,json=resourceReference,proto3" json:"resource_reference,omitempty"`
 	IdempotencyKey    string `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	CorrelationId     string `protobuf:"bytes,4,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// project_reference — выбранный вызывающим locator рабочей области. Он не
+	// является authority: resolver обязан повторно проверить принадлежность
+	// project к tenant, actor membership и exact operation permission.
+	ProjectReference string `protobuf:"bytes,5,opt,name=project_reference,json=projectReference,proto3" json:"project_reference,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ResolveAuthorityProofRequest) Reset() {
@@ -1157,6 +1161,13 @@ func (x *ResolveAuthorityProofRequest) GetIdempotencyKey() string {
 func (x *ResolveAuthorityProofRequest) GetCorrelationId() string {
 	if x != nil {
 		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *ResolveAuthorityProofRequest) GetProjectReference() string {
+	if x != nil {
+		return x.ProjectReference
 	}
 	return ""
 }
@@ -4262,12 +4273,13 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x14source_digest_sha256\x18\x04 \x01(\tR\x12sourceDigestSha256\x12(\n" +
 	"\x10key_set_revision\x18\x05 \x01(\x04R\x0ekeySetRevision\x12'\n" +
 	"\x0fpolicy_revision\x18\x06 \x01(\x04R\x0epolicyRevision\x12+\n" +
-	"\x11signer_generation\x18\a \x01(\x04R\x10signerGeneration\"\xc0\x01\n" +
+	"\x11signer_generation\x18\a \x01(\x04R\x10signerGeneration\"\xed\x01\n" +
 	"\x1cResolveAuthorityProofRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12-\n" +
 	"\x12resource_reference\x18\x02 \x01(\tR\x11resourceReference\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x12%\n" +
-	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationId\"\xc6\x02\n" +
+	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationId\x12+\n" +
+	"\x11project_reference\x18\x05 \x01(\tR\x10projectReference\"\xc6\x02\n" +
 	"\x1dResolveAuthorityProofResponse\x12=\n" +
 	"\x1bauthority_proof_compact_jws\x18\x01 \x01(\tR\x18authorityProofCompactJws\x129\n" +
 	"\n" +

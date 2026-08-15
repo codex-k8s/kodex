@@ -21,6 +21,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { csrfToken } from "@/shared/lib/identity";
+import { realtimeProjectURL } from "@/shared/lib/project-scope";
 import { resourceKinds } from "@/shared/lib/resources";
 
 export type RealtimeSnapshot = Omit<
@@ -723,10 +724,10 @@ export class RealtimeClient {
     channels: readonly ProjectionChannel[],
     token: string,
   ): void {
-    const socket = new WebSocket(runtimeConfig().realtimeUrl, [
-      "mattercodex.control.v1",
-      `csrf.${token}`,
-    ]);
+    const socket = new WebSocket(
+      realtimeProjectURL(runtimeConfig().realtimeUrl),
+      ["mattercodex.control.v1", `csrf.${token}`],
+    );
     this.sockets.set(partition, socket);
     const requestId = crypto.randomUUID();
     socket.addEventListener("open", () => {
