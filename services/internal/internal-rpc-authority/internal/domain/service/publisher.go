@@ -230,11 +230,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 		)
 	}
 	effectiveRevision := target.ReadbackIntentRevision*1_000_000_000 + bucket
-	intentID := deterministicUUID(
-		"readback-intent",
-		target.TargetID,
-		strconv.FormatUint(effectiveRevision, 10),
-	)
+	intentID := readbackIntentID(target, effectiveRevision)
 	expiresAt := now.Add(publishedReadbackIntentTTL)
 	intentDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
 		Version                 int    `json:"v"`
@@ -420,6 +416,15 @@ func (publisher *Publisher) publishReadbackMaterial(
 		CredentialVaultVersion: credentialMaterial.Version,
 		PossessionVaultVersion: possession.Version,
 	}, nil
+}
+
+func readbackIntentID(target model.DeliveryTarget, effectiveRevision uint64) string {
+	return deterministicUUID(
+		"readback-intent",
+		target.TargetID,
+		strconv.FormatUint(target.ReadbackSourceRevision, 10),
+		strconv.FormatUint(effectiveRevision, 10),
+	)
 }
 
 func (publisher *Publisher) ensureReadbackPossession(

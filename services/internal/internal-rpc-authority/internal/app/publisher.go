@@ -370,9 +370,18 @@ func RunPublisher(
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
-			_, graphErr := publisherApplication.PublishAuthorityGraph(ctx)
-			_, publishErr := publisherApplication.PublishReadbackMaterials(ctx)
-			readyErr := publisherApplication.Ready(ctx)
+			graphErr, publishErr, readyErr := reconcilePublisher(
+				ctx,
+				func(ctx context.Context) error {
+					_, err := publisherApplication.PublishAuthorityGraph(ctx)
+					return err
+				},
+				func(ctx context.Context) error {
+					_, err := publisherApplication.PublishReadbackMaterials(ctx)
+					return err
+				},
+				publisherApplication.Ready,
+			)
 			if graphErr != nil || publishErr != nil || readyErr != nil {
 				logger.Error(
 					"authority publisher reconciliation failed",
@@ -463,6 +472,20 @@ func RunPublisher(
 	telemetryFinished = true
 	logger.Info("authority publisher stopped")
 	return errors.Join(runtimeErr, shutdownErr)
+}
+
+func reconcilePublisher(
+	ctx context.Context,
+	publishGraph func(context.Context) error,
+	publishReadback func(context.Context) error,
+	ready func(context.Context) error,
+) (graphErr, publishErr, readyErr error) {
+	graphErr = publishGraph(ctx)
+	if graphErr == nil {
+		publishErr = publishReadback(ctx)
+	}
+	readyErr = ready(ctx)
+	return graphErr, publishErr, readyErr
 }
 
 func openPublisherPostgres(
