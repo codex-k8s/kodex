@@ -4,8 +4,8 @@ title: Публичный Control Center direct-production prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-08-12
+version: 1.0.1
+updated: 2026-08-15
 ---
 
 # Публичный Control Center direct-production prototype
@@ -26,7 +26,8 @@ bootstrap. Он не собирает application images и не изменяе�
 
 - exact dark release успешно применён и прошёл readback;
 - `staff-control-center` и `control-api-gateway` имеют Ready replicas;
-- SSO из `RUN-MC-019` доступен на `https://sso.kodex.works`;
+- SSO из `RUN-MC-016` (`docs/runbooks/direct-production-sso.md`) доступен на
+  `https://sso.kodex.works`;
 - `staff-control-center-ingress-client-tls` материализован cert-manager;
 - DNS `control.kodex.works` указывает на production node;
 - `letsencrypt-prod` и `kodex-public` доступны.

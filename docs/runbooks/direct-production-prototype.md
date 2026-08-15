@@ -4,14 +4,15 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.8.0
-updated: 2026-08-14
+version: 1.8.1
+updated: 2026-08-15
 ---
 
 # Direct-production single-node prototype
 
-Публичный SSO описан в `RUN-MC-019`, а owner UI и его TLS/mTLS ingress bridge -
-в `RUN-MC-020` (`docs/runbooks/direct-production-control-center.md`).
+Публичный SSO описан в `RUN-MC-016`
+(`docs/runbooks/direct-production-sso.md`), а owner UI и его TLS/mTLS ingress
+bridge - в `RUN-MC-020` (`docs/runbooks/direct-production-control-center.md`).
 
 ## Назначение
 
