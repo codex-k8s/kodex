@@ -61,6 +61,21 @@ func TestBotOperationRegistryUsesAuthorityPolicyIdentifiers(t *testing.T) {
 	}
 }
 
+func TestOwnerProofOperationsAreProjectScoped(t *testing.T) {
+	t.Parallel()
+
+	proofs := ProofOperations()
+	projectRequired := ProjectRequiredOperations()
+	if len(proofs) != 42 || len(projectRequired) != len(proofs) {
+		t.Fatalf("owner proof profile is incomplete: proofs=%d project=%d", len(proofs), len(projectRequired))
+	}
+	for operationID := range proofs {
+		if _, ok := projectRequired[operationID]; !ok {
+			t.Fatalf("owner operation is not project-scoped: %s", operationID)
+		}
+	}
+}
+
 func TestBareOwnerErrorsAreNormalizedOnlyForExactLegacyProfiles(t *testing.T) {
 	integrationMethod := integrationgatewayv1.IntegrationManagementService_GetProviderConnection_FullMethodName
 	detail := normalizeBareError(RPCSourceIntegration, integrationMethod, status.Error(codes.NotFound, "private provider payload"))

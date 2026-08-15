@@ -35,10 +35,12 @@ service AuthorizationVerifierService {
 // владельца. Его первый вызов не требует internal authorization context:
 // transport interceptor проверяет exact mTLS caller, а application credential
 // поступает только в metadata и разрешается сервером в actor/tenant/project.
+// Request может нести project locator, но не авторитетный project scope.
 service AuthorityProofResolverService {
   // ResolveAuthorityProof возвращает proof только после server-side проверки
   // actor membership и ownership целевого tenant/project. Request не содержит
-  // actor, tenant, project, SPIFFE ID, audience или permission.
+  // actor, tenant, авторитетный project scope, SPIFFE ID, audience или
+  // permission.
   rpc ResolveAuthorityProof(ResolveAuthorityProofRequest) returns (ResolveAuthorityProofResponse);
 
   // CheckReadiness криптографически проверяет фактически обслуживаемые policy,
@@ -212,6 +214,10 @@ message ResolveAuthorityProofRequest {
   string resource_reference = 2;
   string idempotency_key = 3;
   string correlation_id = 4;
+  // project_reference — выбранный вызывающим locator рабочей области. Он не
+  // является authority: resolver обязан повторно проверить принадлежность
+  // project к tenant, actor membership и exact operation permission.
+  string project_reference = 5;
 }
 
 message ResolveAuthorityProofResponse {

@@ -60,6 +60,37 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	}
 }
 
+func TestControlAPIGatewayProjectOperationSetExcludesGlobalOwnerOperations(t *testing.T) {
+	t.Parallel()
+
+	operations := ControlAPIGatewayProjectRequiredOperations()
+	if len(operations) != 77 {
+		t.Fatalf("control API project operation set is incomplete: %d", len(operations))
+	}
+	for _, operation := range []string{
+		"control.resource.list",
+		"control.run.list",
+		"control.runtime-incident.list",
+		"control.diagnostics.get",
+		"control.workspace-backup.list",
+	} {
+		if _, ok := operations[operation]; !ok {
+			t.Fatalf("project-scoped operation is absent: %s", operation)
+		}
+	}
+	for _, operation := range []string{
+		"control.project.create",
+		"control.project.list",
+		"control.project.update",
+		"control.project.delete",
+		"control.owner-session.admit",
+	} {
+		if _, ok := operations[operation]; ok {
+			t.Fatalf("global operation was marked project-scoped: %s", operation)
+		}
+	}
+}
+
 func TestIntegrationGatewayOperationSetContainsOnlyProviderSeam(t *testing.T) {
 	t.Parallel()
 

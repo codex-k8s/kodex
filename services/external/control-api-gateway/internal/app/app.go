@@ -94,6 +94,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile,
 		ApplicationGrantFile: config.ControlPlaneApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
 		DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(),
+		ProofOperations: controlAPIProofOperations(), ProjectRequiredOperations: controlAPIProjectRequiredOperations(),
 		UnaryClientInterceptor: state.telemetry.UnaryClientInterceptor(controlPlaneMethodOperations()),
 	})
 	if err != nil {
@@ -266,6 +267,22 @@ func controlPlaneMethodOperations() map[string]string {
 	result := make(map[string]string)
 	for operation, method := range controlplaneclient.ControlAPIGatewayOperations() {
 		result[method] = operation
+	}
+	return result
+}
+
+func controlAPIProofOperations() map[string]string {
+	result := controlplaneclient.ControlAPIGatewayOperations()
+	for operation, method := range ownerclient.ProofOperations() {
+		result[operation] = method
+	}
+	return result
+}
+
+func controlAPIProjectRequiredOperations() map[string]struct{} {
+	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
+	for operation := range ownerclient.ProjectRequiredOperations() {
+		result[operation] = struct{}{}
 	}
 	return result
 }

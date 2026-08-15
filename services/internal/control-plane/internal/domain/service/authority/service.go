@@ -77,6 +77,7 @@ type Service struct {
 type ResolveInput struct {
 	Identity          authoritytype.ApplicationIdentity
 	OperationID       string
+	ProjectReference  string
 	ResourceReference string
 	IdempotencyKey    string
 	CorrelationID     string
@@ -153,15 +154,21 @@ func (service *Service) Resolve(
 		(input.Identity.BoundContinuationID != "" && !slices.Contains(input.Identity.AllowedOperationIDs, input.OperationID)) {
 		return authoritytype.Proof{}, errs.ErrUnauthenticated
 	}
+	projectID, err := resolveProjectID(
+		operation.ProjectRequired,
+		input.Identity.ProjectID,
+		input.ProjectReference,
+	)
+	if err != nil {
+		return authoritytype.Proof{}, err
+	}
+	input.Identity.ProjectID = projectID
 	if operation.ProjectRequired {
-		if value.ValidateID(input.Identity.ProjectID) != nil {
-			return authoritytype.Proof{}, errs.ErrPermissionDenied
-		}
 		if input.ResourceReference != "" &&
 			value.ValidateID(input.ResourceReference) != nil {
 			return authoritytype.Proof{}, errs.ErrInvalidInput
 		}
-	} else if input.Identity.ProjectID != "" || input.ResourceReference != "" {
+	} else if input.ResourceReference != "" {
 		return authoritytype.Proof{}, errs.ErrPermissionDenied
 	}
 	if operation.TenantOwnerOnly && !input.Identity.TenantOwner {
@@ -429,6 +436,31 @@ func (service *Service) Resolve(
 		},
 	)
 	return result, err
+}
+
+func resolveProjectID(required bool, credentialProjectID, projectReference string) (string, error) {
+	if !required {
+		if credentialProjectID != "" || projectReference != "" {
+			return "", errs.ErrPermissionDenied
+		}
+		return "", nil
+	}
+	if credentialProjectID != "" && value.ValidateID(credentialProjectID) != nil {
+		return "", errs.ErrPermissionDenied
+	}
+	if projectReference != "" && value.ValidateID(projectReference) != nil {
+		return "", errs.ErrInvalidInput
+	}
+	if credentialProjectID != "" && projectReference != "" && credentialProjectID != projectReference {
+		return "", errs.ErrPermissionDenied
+	}
+	if credentialProjectID != "" {
+		return credentialProjectID, nil
+	}
+	if projectReference != "" {
+		return projectReference, nil
+	}
+	return "", errs.ErrPermissionDenied
 }
 
 func credentialMatches(operation Operation, identity authoritytype.ApplicationIdentity) bool {

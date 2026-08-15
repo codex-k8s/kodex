@@ -4,8 +4,8 @@ title: Staff Control Center MatterCodex
 type: frontend-guide
 status: approved
 owner: manager
-version: 2.1.0
-updated: 2026-08-09
+version: 2.1.1
+updated: 2026-08-15
 ---
 
 # Staff Control Center
@@ -50,6 +50,16 @@ status, retryability и correlation ID; downstream error и private evidence н�
 PWA и API имеют один origin. Nginx проксирует `/api/v1/` к
 `control-api-gateway` по TLS с exact SNI и публичной CA. Благодаря этому browser
 передаёт session cookie, а JavaScript читает только host-only CSRF cookie.
+
+После глобального `GET /projects` PWA выбирает доступную рабочую область по её
+имени и сохраняет UUID locator локально. Для project-scoped HTTP запросов он
+передаётся в `X-MatterCodex-Project-ID`, а для WebSocket — в query `projectId`,
+поскольку browser WebSocket API не поддерживает произвольные headers. Locator
+не является authority: gateway передаёт его в proof resolver, а control-plane
+повторно проверяет organization, actor membership и exact permission. Global
+project/session операции locator не используют. Пока рабочая область не
+создана или не выбрана, project-scoped routes и realtime не запускаются;
+создание первой рабочей области остаётся доступным без realtime projection.
 
 Канонический production origin консоли — `https://control.kodex.works/`.
 Интерактивная аутентификация выполняется через Keycloak realm
@@ -196,7 +206,9 @@ Context7 был вызван для Vue, TypeScript, Vite, Pinia, Vue Router, vu
 
 1. В тестовом runtime ConfigMap заменить только публичные URLs и связанные exact
    CSP sources. Пройти OIDC login/logout; убедиться, что bearer отсутствует в
-   `localStorage`, а session cookie недоступна JavaScript.
+   `localStorage`, а session cookie недоступна JavaScript. На пустой БД
+   проверить first-run без project-scoped `500`, создать первую рабочую область
+   и убедиться, что selector показывает её имя без ручного ввода UUID.
 2. На desktop/mobile и light/dark пройти все маршруты в RU/EN. Проверить
    keyboard navigation, focus-visible, modal focus/escape, таблицы и карточки.
 3. Для каждой collection проверить loading/empty/403/error/ready. Отключить сеть,

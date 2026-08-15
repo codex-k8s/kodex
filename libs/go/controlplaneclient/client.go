@@ -27,6 +27,7 @@ const (
 )
 
 type applicationGrantContextKey struct{}
+type projectReferenceContextKey struct{}
 
 // WithApplicationGrant связывает один уже полученный transport bearer с
 // точным RPC. Значение не сохраняется в Client и не попадает в диагностику.
@@ -37,28 +38,41 @@ func WithApplicationGrant(ctx context.Context, grant string) (context.Context, e
 	return context.WithValue(ctx, applicationGrantContextKey{}, grant), nil
 }
 
+// WithProjectReference связывает выбранный project locator с одним запросом.
+// Locator не является authority и повторно разрешается control-plane.
+func WithProjectReference(ctx context.Context, projectReference string) (context.Context, error) {
+	if ctx == nil || uuid.Validate(projectReference) != nil {
+		return nil, errors.New("request project reference is invalid")
+	}
+	return context.WithValue(ctx, projectReferenceContextKey{}, projectReference), nil
+}
+
 type Config struct {
-	Target                 string
-	TLSServerName          string
-	CAFile                 string
-	ClientCertificateFile  string
-	ClientPrivateKeyFile   string
-	ApplicationGrantFile   string
-	ExpectedIssuerUID      uint32
-	ExpectedIssuerGID      uint32
-	DialTimeout            time.Duration
-	Operations             map[string]string
-	UnaryClientInterceptor grpc.UnaryClientInterceptor
+	Target                    string
+	TLSServerName             string
+	CAFile                    string
+	ClientCertificateFile     string
+	ClientPrivateKeyFile      string
+	ApplicationGrantFile      string
+	ExpectedIssuerUID         uint32
+	ExpectedIssuerGID         uint32
+	DialTimeout               time.Duration
+	Operations                map[string]string
+	ProofOperations           map[string]string
+	ProjectRequiredOperations map[string]struct{}
+	UnaryClientInterceptor    grpc.UnaryClientInterceptor
 }
 
 type Client struct {
-	ControlPlane controlplanev1.ControlPlaneServiceClient
-	resolver     internalrpcauthorityv1.AuthorityProofResolverServiceClient
-	issuer       *authorityclient.LocalConnection
-	raw          *grpc.ClientConn
-	protected    *grpc.ClientConn
-	operations   operationSet
-	grantFile    string
+	ControlPlane    controlplanev1.ControlPlaneServiceClient
+	resolver        internalrpcauthorityv1.AuthorityProofResolverServiceClient
+	issuer          *authorityclient.LocalConnection
+	raw             *grpc.ClientConn
+	protected       *grpc.ClientConn
+	operations      operationSet
+	proofOperations operationSet
+	projectRequired map[string]struct{}
+	grantFile       string
 }
 
 type operationSet map[string]string
@@ -79,20 +93,31 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		config.DialTimeout > 5*time.Second || len(config.Operations) == 0 {
 		return nil, errors.New("control-plane client configuration is invalid")
 	}
-	operations := make(operationSet, len(config.Operations))
-	for operationID, fullMethod := range config.Operations {
-		if operationID == "" || fullMethod == "" {
-			return nil, errors.New("control-plane client operation is invalid")
+	operations, err := validateOperations(config.Operations)
+	if err != nil {
+		return nil, err
+	}
+	proofConfig := config.ProofOperations
+	if len(proofConfig) == 0 {
+		proofConfig = config.Operations
+	}
+	proofOperations, err := validateOperations(proofConfig)
+	if err != nil {
+		return nil, err
+	}
+	projectRequired := make(map[string]struct{}, len(config.ProjectRequiredOperations))
+	for operationID := range config.ProjectRequiredOperations {
+		if _, registered := proofConfig[operationID]; !registered {
+			return nil, errors.New("control-plane project operation is not registered")
 		}
-		if _, duplicate := operations[fullMethod]; duplicate {
-			return nil, errors.New("control-plane client operation is duplicated")
-		}
-		operations[fullMethod] = operationID
+		projectRequired[operationID] = struct{}{}
 	}
 	transport, err := transportCredentials(config)
 	if err != nil {
 		return nil, err
 	}
+	// Защищённое соединение использует узкий набор control-plane RPC, а resolver
+	// дополнительно принимает owner RPC interaction и integration gateways.
 	rawOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(transport),
 		grpc.WithDefaultCallOptions(
@@ -118,11 +143,13 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		return nil, err
 	}
 	client := &Client{
-		resolver:   internalrpcauthorityv1.NewAuthorityProofResolverServiceClient(raw),
-		issuer:     issuer,
-		raw:        raw,
-		operations: operations,
-		grantFile:  config.ApplicationGrantFile,
+		resolver:        internalrpcauthorityv1.NewAuthorityProofResolverServiceClient(raw),
+		issuer:          issuer,
+		raw:             raw,
+		operations:      operations,
+		proofOperations: proofOperations,
+		projectRequired: projectRequired,
+		grantFile:       config.ApplicationGrantFile,
 	}
 	interceptors := []grpc.UnaryClientInterceptor{authorityclient.IssuerUnaryClientInterceptor(
 		issuer.Issuer(),
@@ -151,12 +178,26 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	return client, nil
 }
 
+func validateOperations(config map[string]string) (operationSet, error) {
+	operations := make(operationSet, len(config))
+	for operationID, fullMethod := range config {
+		if operationID == "" || fullMethod == "" {
+			return nil, errors.New("control-plane client operation is invalid")
+		}
+		if _, duplicate := operations[fullMethod]; duplicate {
+			return nil, errors.New("control-plane client operation is duplicated")
+		}
+		operations[fullMethod] = operationID
+	}
+	return operations, nil
+}
+
 func (client *Client) AuthorityProof(
 	ctx context.Context,
 	operationID string,
 	fullMethod string,
 ) (string, string, error) {
-	expectedOperation, ok := client.operations[fullMethod]
+	expectedOperation, ok := client.proofOperations[fullMethod]
 	if !ok || expectedOperation != operationID {
 		return "", "", errors.New("control-plane operation is not registered")
 	}
@@ -174,13 +215,17 @@ func (client *Client) AuthorityProof(
 		"authorization",
 		"Bearer "+grant,
 	)
+	request := &internalrpcauthorityv1.ResolveAuthorityProofRequest{
+		OperationId:    operationID,
+		IdempotencyKey: uuid.NewString(),
+		CorrelationId:  correlationID,
+	}
+	if _, required := client.projectRequired[operationID]; required {
+		request.ProjectReference, _ = ctx.Value(projectReferenceContextKey{}).(string)
+	}
 	resolved, err := client.resolver.ResolveAuthorityProof(
 		requestContext,
-		&internalrpcauthorityv1.ResolveAuthorityProofRequest{
-			OperationId:    operationID,
-			IdempotencyKey: uuid.NewString(),
-			CorrelationId:  correlationID,
-		},
+		request,
 	)
 	if err != nil {
 		return "", "", err

@@ -24,48 +24,99 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
+import { useProjectsStore } from "@/features/projects/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { usePwaUpdateStore } from "@/features/pwa-update/store";
 import { useSessionStore } from "@/features/session/store";
 import type { ResourceKind } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { setMutationGuard } from "@/shared/lib/identity";
+import {
+  projectReference,
+  selectedProjectReference,
+  setProjectReference,
+} from "@/shared/lib/project-scope";
 import { resourceKinds } from "@/shared/lib/resources";
 import { subscribeRealtimeDisconnect } from "@/shared/realtime/snapshot-bus";
+import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 
+const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
 const realtime = useRealtimeStore();
 const pwaUpdate = usePwaUpdateStore();
 const session = useSessionStore();
+const projects = useProjectsStore();
 const menuOpen = ref(false);
+const scopeReady = ref(false);
 const searchQuery = ref("");
 const searchKind = ref<ResourceKind | "ALL">("ALL");
 const theme = ref(localStorage.getItem("mattercodex.theme") ?? "system");
 let unsubscribeRealtimeDisconnect: (() => void) | null = null;
 
 const navigation = [
-  { to: "/", label: "nav.overview", icon: LayoutDashboard },
-  { to: "/workspaces", label: "nav.workspaces", icon: BriefcaseBusiness },
-  { to: "/people", label: "nav.people", icon: UserRoundCog },
-  { to: "/instructions", label: "nav.instructions", icon: BookOpenText },
-  { to: "/providers", label: "nav.providers", icon: CloudCog },
-  { to: "/integrations", label: "nav.integrations", icon: PlugZap },
-  { to: "/role-images", label: "nav.roleImages", icon: Boxes },
-  { to: "/automations", label: "nav.automations", icon: Zap },
-  { to: "/runs", label: "nav.runs", icon: Play },
-  { to: "/operations/incidents", label: "nav.incidents", icon: Activity },
-  { to: "/operations/backups", label: "nav.backups", icon: DatabaseBackup },
-  { to: "/operations/audit", label: "nav.audit", icon: ScrollText },
+  { to: "/", label: "nav.overview", icon: LayoutDashboard, project: false },
+  {
+    to: "/workspaces",
+    label: "nav.workspaces",
+    icon: BriefcaseBusiness,
+    project: false,
+  },
+  { to: "/people", label: "nav.people", icon: UserRoundCog, project: true },
+  {
+    to: "/instructions",
+    label: "nav.instructions",
+    icon: BookOpenText,
+    project: true,
+  },
+  { to: "/providers", label: "nav.providers", icon: CloudCog, project: true },
+  {
+    to: "/integrations",
+    label: "nav.integrations",
+    icon: PlugZap,
+    project: true,
+  },
+  { to: "/role-images", label: "nav.roleImages", icon: Boxes, project: true },
+  { to: "/automations", label: "nav.automations", icon: Zap, project: true },
+  { to: "/runs", label: "nav.runs", icon: Play, project: true },
+  {
+    to: "/operations/incidents",
+    label: "nav.incidents",
+    icon: Activity,
+    project: true,
+  },
+  {
+    to: "/operations/backups",
+    label: "nav.backups",
+    icon: DatabaseBackup,
+    project: true,
+  },
+  {
+    to: "/operations/audit",
+    label: "nav.audit",
+    icon: ScrollText,
+    project: true,
+  },
   {
     to: "/operations/configuration",
     label: "nav.configuration",
     icon: GitCompareArrows,
+    project: true,
   },
-  { to: "/operations/diagnostics", label: "nav.diagnostics", icon: Gauge },
+  {
+    to: "/operations/diagnostics",
+    label: "nav.diagnostics",
+    icon: Gauge,
+    project: true,
+  },
 ];
+
+const hasProject = computed(() => selectedProjectReference.value !== null);
+const routeRequiresProject = computed(
+  () => route.name !== "overview" && route.name !== "workspaces",
+);
 
 const themeIcon = computed(() =>
   theme.value === "dark" ? Moon : theme.value === "light" ? Sun : Gauge,
@@ -98,6 +149,7 @@ function setLocale(value: string): void {
 }
 
 async function submitSearch(): Promise<void> {
+  if (!hasProject.value) return;
   const query = searchQuery.value.trim();
   if (query.length < 2) return;
   await router.push({
@@ -107,13 +159,57 @@ async function submitSearch(): Promise<void> {
   menuOpen.value = false;
 }
 
-onMounted(() => {
+async function initializeScope(): Promise<void> {
+  scopeReady.value = false;
+  realtime.stop();
+  await projects.load();
+  if (
+    projects.projects.phase !== "ready" &&
+    projects.projects.phase !== "empty"
+  )
+    return;
+  const available = new Set(projects.projects.data.map((item) => item.id));
+  const routeReference =
+    typeof route.params.projectId === "string" ? route.params.projectId : null;
+  const storedReference = projectReference();
+  const selected =
+    (routeReference && available.has(routeReference) ? routeReference : null) ??
+    (storedReference && available.has(storedReference)
+      ? storedReference
+      : null) ??
+    projects.projects.data[0]?.id ??
+    null;
+  setProjectReference(selected);
+  if (route.name === "workspace" && routeReference !== selected) {
+    await router.replace(
+      selected
+        ? { name: "workspace", params: { projectId: selected } }
+        : { name: "workspaces" },
+    );
+  }
+  scopeReady.value = true;
+  if (selected) realtime.start();
+}
+
+function switchProject(value: string): void {
+  if (!projects.projects.data.some((item) => item.id === value)) return;
+  setProjectReference(value);
+  const target =
+    route.name === "workspace" ? `/workspaces/${value}` : route.fullPath;
+  window.location.assign(target);
+}
+
+function guardNavigation(projectScoped: boolean, event: MouseEvent): void {
+  if (projectScoped && !hasProject.value) event.preventDefault();
+}
+
+onMounted(async () => {
   applyTheme();
-  setMutationGuard(() => realtime.ready);
-  realtime.start();
+  setMutationGuard(() => !hasProject.value || realtime.ready);
   unsubscribeRealtimeDisconnect = subscribeRealtimeDisconnect(
     verifySessionAfterRealtimeClose,
   );
+  await initializeScope();
 });
 onBeforeUnmount(() => {
   unsubscribeRealtimeDisconnect?.();
@@ -146,7 +242,12 @@ onBeforeUnmount(() => {
           v-for="item in navigation"
           :key="item.to"
           :to="item.to"
-          @click="menuOpen = false"
+          :aria-disabled="item.project && !hasProject"
+          :class="{ 'router-link-disabled': item.project && !hasProject }"
+          @click="
+            guardNavigation(item.project, $event);
+            menuOpen = false;
+          "
         >
           <component :is="item.icon" :size="17" aria-hidden="true" />
           <span>{{ $t(item.label) }}</span>
@@ -190,6 +291,25 @@ onBeforeUnmount(() => {
         <span class="environment-chip">{{
           $t("app.environment", { name: runtimeConfig().environment })
         }}</span>
+        <label
+          v-if="projects.projects.data.length"
+          class="compact-select project-select"
+        >
+          <BriefcaseBusiness :size="15" aria-hidden="true" />
+          <span class="sr-only">{{ $t("app.workspace") }}</span>
+          <select
+            :value="selectedProjectReference ?? ''"
+            @change="switchProject(($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="project in projects.projects.data"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </option>
+          </select>
+        </label>
         <form
           class="global-search"
           role="search"
@@ -215,6 +335,7 @@ onBeforeUnmount(() => {
             :placeholder="$t('search.placeholder')"
             minlength="2"
             maxlength="128"
+            :disabled="!hasProject"
           />
         </form>
         <div class="topbar__spacer" />
@@ -227,13 +348,15 @@ onBeforeUnmount(() => {
         >
           <span aria-hidden="true" />
           {{
-            !realtime.online
-              ? $t("app.offline")
-              : !realtime.connected
-                ? $t("app.realtimeOffline")
-                : realtime.replacing
-                  ? $t("app.realtimeReplacing")
-                  : $t("app.realtime")
+            !hasProject
+              ? $t("app.workspaceRequired")
+              : !realtime.online
+                ? $t("app.offline")
+                : !realtime.connected
+                  ? $t("app.realtimeOffline")
+                  : realtime.replacing
+                    ? $t("app.realtimeReplacing")
+                    : $t("app.realtime")
           }}
           <small v-if="realtime.problemCode">{{ realtime.problemCode }}</small>
         </div>
@@ -262,7 +385,7 @@ onBeforeUnmount(() => {
         </label>
       </header>
       <div
-        v-if="!realtime.online"
+        v-if="hasProject && !realtime.online"
         class="connectivity-banner"
         role="status"
         aria-live="polite"
@@ -270,7 +393,7 @@ onBeforeUnmount(() => {
         {{ $t("app.offlineNotice") }}
       </div>
       <div
-        v-else-if="!realtime.connected || realtime.replacing"
+        v-else-if="hasProject && (!realtime.connected || realtime.replacing)"
         class="connectivity-banner connectivity-banner--info"
         role="status"
         aria-live="polite"
@@ -298,7 +421,24 @@ onBeforeUnmount(() => {
       >
         {{ $t("app.updateUnavailable") }}
       </div>
-      <main class="content"><RouterView /></main>
+      <main class="content">
+        <AsyncPanel
+          v-if="!scopeReady"
+          :phase="projects.projects.phase"
+          :problem="projects.projects.problem"
+          @retry="initializeScope"
+        />
+        <div
+          v-else-if="routeRequiresProject && !hasProject"
+          class="state-panel state-panel--quiet"
+        >
+          <p>{{ $t("app.workspaceRequiredNotice") }}</p>
+          <RouterLink class="button button--primary" to="/workspaces">
+            {{ $t("workspaces.create") }}
+          </RouterLink>
+        </div>
+        <RouterView v-else />
+      </main>
     </div>
   </div>
 </template>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, Plus, RefreshCw } from "@lucide/vue";
 import { onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
 
 import { useProjectsStore } from "@/features/projects/store";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
@@ -9,8 +8,8 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { setProjectReference } from "@/shared/lib/project-scope";
 
-const router = useRouter();
 const store = useProjectsStore();
 const modalOpen = ref(false);
 const form = reactive({
@@ -30,7 +29,12 @@ async function submit(): Promise<void> {
   if (!created) return;
   modalOpen.value = false;
   Object.assign(form, { name: "", slug: "", description: "", locale: "ru" });
-  await router.push({ name: "workspace", params: { projectId: created.id } });
+  openProject(created.id);
+}
+
+function openProject(projectId: string): void {
+  setProjectReference(projectId);
+  window.location.assign(`/workspaces/${projectId}`);
 }
 onMounted(store.load);
 </script>
@@ -80,12 +84,13 @@ onMounted(store.load);
               $t("common.version", { version: project.version })
             }}</span>
           </div>
-          <RouterLink
+          <a
             class="button button--secondary"
-            :to="{ name: 'workspace', params: { projectId: project.id } }"
+            :href="`/workspaces/${project.id}`"
+            @click.prevent="openProject(project.id)"
             >{{ $t("workspaces.open")
             }}<ArrowRight :size="15" aria-hidden="true"
-          /></RouterLink>
+          /></a>
         </article>
       </div>
       <div v-if="store.nextPageToken" class="panel__footer">

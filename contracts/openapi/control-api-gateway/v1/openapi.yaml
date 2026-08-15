@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: MatterCodex Control API Gateway
-  version: 1.1.0
+  version: 1.1.1
   description: >-
     Owner API для проектов, управляемой конфигурации и авторитетных проекций
     control-plane, interaction-gateway и integration-gateway. Actor,
@@ -9,6 +9,12 @@ info:
     OIDC-сессии и owner state; request body не является источником полномочий.
 servers:
   - url: https://control-api.mattercodex.local/api/v1
+x-mattercodex-project-locator:
+  transport: HTTP_HEADER
+  name: X-MatterCodex-Project-ID
+  schema: { type: string, format: uuid }
+  authority: false
+  resolution: CONTROL_PLANE_PROJECT_MEMBERSHIP_AND_PERMISSION
 tags:
   - { name: session, description: Защищённая owner-сессия gateway. }
   - { name: projects, description: Проекты в разрешённой owner boundary. }

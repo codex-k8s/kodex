@@ -315,6 +315,31 @@ func integrationOperations() operationSet {
 	}
 }
 
+// ProofOperations возвращает разрешённый resolver-профиль owner RPC.
+func ProofOperations() map[string]string {
+	result := make(map[string]string, len(interactionOperations())+len(integrationOperations()))
+	for method, operationID := range interactionOperations() {
+		result[operationID] = method
+	}
+	for method, operationID := range integrationOperations() {
+		result[operationID] = method
+	}
+	return result
+}
+
+// ProjectRequiredOperations фиксирует, что owner RPC interaction и
+// integration всегда выполняются внутри выбранной рабочей области.
+func ProjectRequiredOperations() map[string]struct{} {
+	result := make(map[string]struct{}, len(interactionOperations())+len(integrationOperations()))
+	for _, operationID := range interactionOperations() {
+		result[operationID] = struct{}{}
+	}
+	for _, operationID := range integrationOperations() {
+		result[operationID] = struct{}{}
+	}
+	return result
+}
+
 // MethodOperations возвращает закрытый telemetry registry full method → operation.
 func MethodOperations() map[string]string {
 	result := make(map[string]string, len(interactionOperations())+len(integrationOperations()))

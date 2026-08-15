@@ -19,6 +19,10 @@ const ru = {
       "Проверка обновления PWA временно недоступна. Приложение продолжает работать в текущей версии.",
     applyUpdate: "Обновить",
     environment: "Контур {name}",
+    workspace: "Рабочая область",
+    workspaceRequired: "Выберите рабочую область",
+    workspaceRequiredNotice:
+      "Создайте или выберите рабочую область, чтобы открыть этот раздел.",
   },
   common: {
     actions: "Действия",
@@ -534,6 +538,10 @@ const en = {
       "PWA update checks are temporarily unavailable. The current application version remains available.",
     applyUpdate: "Update",
     environment: "{name} environment",
+    workspace: "Workspace",
+    workspaceRequired: "Select a workspace",
+    workspaceRequiredNotice:
+      "Create or select a workspace to open this section.",
   },
   common: {
     ...ru.common,

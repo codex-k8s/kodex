@@ -10,7 +10,14 @@ import {
 import { fetchResources } from "@/shared/api/adapters/resources";
 import { fetchProjects } from "@/shared/api/adapters/projects";
 import { createFeatureRuntime } from "@/shared/lib/feature-store";
-import { remoteState, resetRemoteState } from "@/shared/lib/remote";
+import {
+  beginRequest,
+  finishRequest,
+  remoteState,
+  resetRemoteState,
+  type RemoteState,
+} from "@/shared/lib/remote";
+import { projectReference } from "@/shared/lib/project-scope";
 import {
   type OverviewBackup,
   type OverviewDiagnostics,
@@ -32,13 +39,26 @@ export const useOverviewStore = defineStore("overview", () => {
   const backups = reactive(remoteState<OverviewBackup[]>([]));
   const diagnostics = reactive(remoteState<OverviewDiagnostics | null>(null));
   const runtime = createFeatureRuntime();
-  const load = () =>
-    Promise.all([
-      runtime.loadInto(
-        projects,
-        async () => (await fetchProjects()).resources.map(toOverviewResource),
-        (v) => !v.length,
-      ),
+  function markEmpty<T>(state: RemoteState<T>, value: T): void {
+    const request = beginRequest(state);
+    finishRequest(state, request, value, true);
+  }
+  async function load(): Promise<void> {
+    await runtime.loadInto(
+      projects,
+      async () => (await fetchProjects()).resources.map(toOverviewResource),
+      (v) => !v.length,
+    );
+    if (projects.phase !== "ready" && projects.phase !== "empty") return;
+    if (!projectReference()) {
+      markEmpty(runs, []);
+      markEmpty(gates, []);
+      markEmpty(incidents, []);
+      markEmpty(backups, []);
+      markEmpty(diagnostics, null);
+      return;
+    }
+    await Promise.all([
       runtime.loadInto(
         runs,
         async () => (await fetchRuns()).runs.map(toOverviewRun),
@@ -67,7 +87,8 @@ export const useOverviewStore = defineStore("overview", () => {
         async () => toOverviewDiagnostics(await fetchDiagnostics()),
         (v) => v === null,
       ),
-    ]).then(() => undefined);
+    ]);
+  }
   function reset(): void {
     runtime.invalidate();
     resetRemoteState(runs, []);
