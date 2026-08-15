@@ -174,20 +174,22 @@ export function csrfToken(): string {
 function mutationHeaders(
   idempotencyKey: string,
   version?: number,
+  csrfProtected = true,
 ): Record<string, string> {
   const headers: Record<string, string> = {
-    "X-CSRF-Token": csrfToken(),
     "Idempotency-Key": idempotencyKey,
   };
+  if (csrfProtected) headers["X-CSRF-Token"] = csrfToken();
   if (version !== undefined) headers["If-Match"] = etag(version);
   return headers;
 }
 
-export async function executeMutation<T>(
+async function executeTrackedMutation<T>(
   scope: string,
   body: unknown,
   version: number | undefined,
   request: (headers: Record<string, string>) => Promise<GeneratedResponse<T>>,
+  csrfProtected: boolean,
 ): Promise<TrackedMutationReadback<NonNullable<T>>> {
   if (!scope.startsWith("session:") && mutationGuard && !mutationGuard()) {
     throw new AppProblem({
@@ -200,7 +202,7 @@ export async function executeMutation<T>(
   const record = await prepareMutation(scope, body, version);
   try {
     const result = await unwrap(
-      request(mutationHeaders(record.idempotencyKey, version)),
+      request(mutationHeaders(record.idempotencyKey, version, csrfProtected)),
     );
     await finishMutation(record);
     return {
@@ -214,6 +216,29 @@ export async function executeMutation<T>(
       await finishMutation(record);
     throw error;
   }
+}
+
+export function executeMutation<T>(
+  scope: string,
+  body: unknown,
+  version: number | undefined,
+  request: (headers: Record<string, string>) => Promise<GeneratedResponse<T>>,
+): Promise<TrackedMutationReadback<NonNullable<T>>> {
+  return executeTrackedMutation(scope, body, version, request, true);
+}
+
+/** Выполняет единственную bootstrap-мутацию до выдачи session и CSRF cookies. */
+export function executeSessionAdmission<T>(
+  body: unknown,
+  request: (headers: Record<string, string>) => Promise<GeneratedResponse<T>>,
+): Promise<TrackedMutationReadback<NonNullable<T>>> {
+  return executeTrackedMutation(
+    "session:admit",
+    body,
+    undefined,
+    request,
+    false,
+  );
 }
 
 export async function pendingMutationKey(

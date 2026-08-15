@@ -11,7 +11,10 @@ import type { ResourcePage } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap, type ApiReadback } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
-import { executeMutation } from "@/shared/lib/identity";
+import {
+  executeMutation,
+  executeSessionAdmission,
+} from "@/shared/lib/identity";
 
 export async function admitOwnerSession(
   bearer: string,
@@ -24,16 +27,12 @@ export async function admitOwnerSession(
       credentials: "include",
     }),
   );
-  const readback = await executeMutation(
-    "session:admit",
-    { bearer },
-    undefined,
-    (headers) =>
-      createOwnerSession({
-        client: oneUseClient,
-        headers: { "Idempotency-Key": headers["Idempotency-Key"] ?? "" },
-        signal: requestSignal(),
-      }),
+  const readback = await executeSessionAdmission({ bearer }, (headers) =>
+    createOwnerSession({
+      client: oneUseClient,
+      headers: { "Idempotency-Key": headers["Idempotency-Key"] ?? "" },
+      signal: requestSignal(),
+    }),
   );
   if (!readback.etag) throw new Error("Owner session response ETag is missing");
   return readback;
