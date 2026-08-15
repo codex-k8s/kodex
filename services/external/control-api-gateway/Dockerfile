@@ -13,6 +13,7 @@ COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/integrationgatewayapi/ libs/go/integrationgatewayapi/
 COPY libs/go/interactiongatewayapi/ libs/go/interactiongatewayapi/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY services/external/control-api-gateway/ services/external/control-api-gateway/
 

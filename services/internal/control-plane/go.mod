@@ -8,11 +8,12 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0-00010101000000-000000000000
+	github.com/codex-k8s/matter-codex/libs/go/oidcidentity v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/exaring/otelpgx v0.11.1
@@ -110,5 +111,7 @@ replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi => ../..
 replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
+
+replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/go/oidcidentity
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime

@@ -17,6 +17,7 @@ COPY libs/go/integrationgatewayapi/ libs/go/integrationgatewayapi/
 COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
 COPY libs/go/interactiongatewayapi/ libs/go/interactiongatewayapi/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY services/internal/control-plane/ services/internal/control-plane/
 

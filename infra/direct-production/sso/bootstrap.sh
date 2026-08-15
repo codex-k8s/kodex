@@ -89,6 +89,103 @@ update_oidc_ca() {
   fi
 }
 
+keycloak_admin_login() {
+  local secret_json admin_username admin_password token_request token_response
+  secret_json=$(kubectl --context "$context" -n identity get secret keycloak-bootstrap -o json)
+  admin_username=$(jq -er '.data["admin-username"] | @base64d' <<<"$secret_json")
+  admin_password=$(jq -er '.data["admin-password"] | @base64d' <<<"$secret_json")
+  token_request="$temporary_directory/keycloak-admin-token-request"
+  token_response="$temporary_directory/keycloak-admin-token-response"
+  jq -rn --arg username "$admin_username" --arg password "$admin_password" '
+    "client_id=admin-cli&grant_type=password&username=\($username | @uri)&password=\($password | @uri)"
+  ' >"$token_request"
+  unset admin_password secret_json
+  curl --fail --silent --show-error --max-time 10 \
+    --header 'Content-Type: application/x-www-form-urlencoded' \
+    --data-binary "@$token_request" \
+    https://sso.kodex.works/realms/master/protocol/openid-connect/token >"$token_response" ||
+    fail "Keycloak admin authentication failed"
+  keycloak_admin_token=$(jq -er '.access_token | select(type == "string" and length > 0)' "$token_response") ||
+    fail "Keycloak admin token is invalid"
+  printf 'silent\nshow-error\nfail\nconnect-timeout = 5\nmax-time = 15\nheader = "Authorization: Bearer %s"\n' \
+    "$keycloak_admin_token" >"$temporary_directory/keycloak-admin-curl.conf"
+  unset keycloak_admin_token admin_username
+}
+
+keycloak_admin_api() {
+  local method=$1 path=$2 body=${3:-}
+  local arguments=(--config "$temporary_directory/keycloak-admin-curl.conf" --request "$method")
+  if [[ -n "$body" ]]; then
+    arguments+=(--header 'Content-Type: application/json' --data-binary "@$body")
+  fi
+  curl "${arguments[@]}" "https://sso.kodex.works/admin/realms/mattercodex$path"
+}
+
+control_center_client_id() {
+  local clients
+  clients=$(keycloak_admin_api GET '/clients?clientId=mattercodex-control-center') ||
+    fail "read Control Center client"
+  jq -er '
+    select(type == "array" and length == 1) | .[0] |
+    select(.clientId == "mattercodex-control-center") | .id
+  ' <<<"$clients" || fail "Control Center client readback mismatch"
+}
+
+reconcile_control_center_mappers() {
+  local client_id mapper_name desired current mapper_id desired_with_id
+  client_id=$(control_center_client_id)
+  current=$(keycloak_admin_api GET "/clients/$client_id/protocol-mappers/models") ||
+    fail "read Control Center protocol mappers"
+  for mapper_name in sub 'realm roles'; do
+    desired="$temporary_directory/mapper-${mapper_name// /-}.json"
+    jq -e --arg name "$mapper_name" '
+      .clients[] | select(.clientId == "mattercodex-control-center") |
+      .protocolMappers[] | select(.name == $name)
+    ' "$script_directory/mattercodex-realm.json" >"$desired" ||
+      fail "desired $mapper_name mapper is absent"
+    count=$(jq --arg name "$mapper_name" '[.[] | select(.name == $name)] | length' <<<"$current")
+    case "$count" in
+      0)
+        keycloak_admin_api POST "/clients/$client_id/protocol-mappers/models" "$desired" >/dev/null ||
+          fail "create $mapper_name mapper"
+        ;;
+      1)
+        mapper_id=$(jq -er --arg name "$mapper_name" '.[] | select(.name == $name) | .id' <<<"$current")
+        desired_with_id="$temporary_directory/mapper-${mapper_name// /-}-with-id.json"
+        jq --arg id "$mapper_id" '. + {id: $id}' "$desired" >"$desired_with_id"
+        keycloak_admin_api PUT "/clients/$client_id/protocol-mappers/models/$mapper_id" "$desired_with_id" >/dev/null ||
+          fail "update $mapper_name mapper"
+        ;;
+      *) fail "$mapper_name mapper is duplicated" ;;
+    esac
+  done
+}
+
+readback_control_center_mappers() {
+  local client_id mappers
+  client_id=$(control_center_client_id)
+  mappers=$(keycloak_admin_api GET "/clients/$client_id/protocol-mappers/models") ||
+    fail "read Control Center protocol mappers"
+  jq -e '
+    ([.[] | select(
+      .name == "sub" and
+      .protocol == "openid-connect" and
+      .protocolMapper == "oidc-sub-mapper" and
+      .config["access.token.claim"] == "true" and
+      .config["introspection.token.claim"] == "true"
+    )] | length == 1) and
+    ([.[] | select(
+      .name == "realm roles" and
+      .protocol == "openid-connect" and
+      .protocolMapper == "oidc-usermodel-realm-role-mapper" and
+      .config["claim.name"] == "realm_access.roles" and
+      .config["multivalued"] == "true" and
+      .config["access.token.claim"] == "true" and
+      .config["introspection.token.claim"] == "true"
+    )] | length == 1)
+  ' <<<"$mappers" >/dev/null || fail "Control Center protocol mapper readback mismatch"
+}
+
 if [[ "$mode" == apply ]]; then
   kubectl --context "$context" apply --server-side --field-manager=mattercodex-sso-bootstrap \
     -f "$script_directory/namespace.yaml" >/dev/null
@@ -117,10 +214,16 @@ if [[ "$mode" == apply ]]; then
   kubectl --context "$context" -n identity wait --for=condition=Ready certificate/sso-public-tls --timeout=5m >/dev/null
   kubectl --context "$context" -n identity rollout status statefulset/keycloak-postgresql --timeout=5m >/dev/null
   kubectl --context "$context" -n identity rollout status deployment/sso --timeout=8m >/dev/null
+  keycloak_admin_login
+  reconcile_control_center_mappers
   update_oidc_ca
 fi
 
 validate_bootstrap_secret
+if [[ "$mode" == readback ]]; then
+  keycloak_admin_login
+fi
+readback_control_center_mappers
 for policy in control-api-gateway-public-oidc-egress control-plane-public-oidc-egress; do
   [[ "$(kubectl --context "$context" -n mattercodex-system get networkpolicy "$policy" -o jsonpath='{.spec.egress[0].to[0].ipBlock.cidr}')" == "$public_ipv4/32" ]] ||
     fail "$policy OIDC egress readback mismatch"
