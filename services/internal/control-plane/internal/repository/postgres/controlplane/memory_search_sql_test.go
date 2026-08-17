@@ -33,3 +33,14 @@ func TestMemorySearchTreatsEmptyEmbeddingAsAbsentTextParameter(t *testing.T) {
 		t.Fatal("memory search lets PostgreSQL infer the empty embedding parameter as vector")
 	}
 }
+
+func TestMemorySearchKeepsVectorCursorBoolean(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(sqlMemorySearch, "@after_vector_used::boolean") {
+		t.Fatal("memory search does not preserve the boolean cursor parameter type")
+	}
+	if strings.Contains(sqlMemorySearch, "@after_vector_used::integer") {
+		t.Fatal("memory search coerces a boolean bind parameter to PostgreSQL integer")
+	}
+}
