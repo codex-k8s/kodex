@@ -26,7 +26,7 @@ WITH ranked AS (
             )
         END AS text_rank,
         CASE
-            WHEN @query_embedding = ''
+            WHEN NULLIF(@query_embedding::text, '') IS NULL
               OR projection.resource_id IS NULL
               OR projection.resource_version <> resource.version
               OR projection.content_sha256 <> resource.spec ->> 'contentSha256'
@@ -34,7 +34,7 @@ WITH ranked AS (
               OR projection.model_revision <> @model_revision
               OR projection.model_sha256 <> @model_sha256
             THEN NULL
-            ELSE projection.embedding <=> @query_embedding::public.vector
+            ELSE projection.embedding <=> NULLIF(@query_embedding::text, '')::public.vector
         END AS vector_distance
     FROM control_plane.resources AS resource
     LEFT JOIN control_plane.memory_vector_projections AS projection
