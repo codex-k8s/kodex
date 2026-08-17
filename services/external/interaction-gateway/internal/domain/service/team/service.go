@@ -455,6 +455,10 @@ func (service *Service) executeMapping(ctx context.Context,
 		}
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
+	// ReadTeam возвращает авторитетный provider snapshot, но выданный сервером
+	// selector относится к исходному mapping intent и не является полем provider.
+	// Сохраняем его при каждом fresh readback для повторяемого durable retry.
+	freshTeam.Selector = operation.Team.Selector
 	operation.Team = freshTeam
 	if operation.Action != "unlink" {
 		if _, routeErr := service.provider.BuildRuntimeRoutes(ctx, operation.Principal, freshTeam.ProviderTeamID); routeErr != nil {
@@ -579,6 +583,7 @@ func (service *Service) finalizeMapping(ctx context.Context, operation entity.Wo
 		}
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
+	freshTeam.Selector = operation.Team.Selector
 	routes := []entity.MattermostRuntimeRoute(nil)
 	if mapping.State == "BOUND" {
 		routes, err = service.provider.BuildRuntimeRoutes(ctx, operation.Principal, mapping.ProviderTeamID)
