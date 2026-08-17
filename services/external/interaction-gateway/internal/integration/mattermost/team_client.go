@@ -279,9 +279,6 @@ func (client *Client) BuildRuntimeRoutes(ctx context.Context, principal entity.T
 			OwnerDelivery: template.OwnerDelivery, RouteDigestSHA256: routeDigest,
 		})
 	}
-	if len(routes) == 0 {
-		return nil, domainmattermost.ErrTeamConflict
-	}
 	slices.SortFunc(routes, func(left, right entity.MattermostRuntimeRoute) int {
 		return strings.Compare(left.Boundary.ChannelID, right.Boundary.ChannelID)
 	})

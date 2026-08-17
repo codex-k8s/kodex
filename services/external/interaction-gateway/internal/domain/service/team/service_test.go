@@ -507,6 +507,24 @@ func TestBoundRoutePreflightStopsOwnerMutation(t *testing.T) {
 	}
 }
 
+func TestInitialBindAcceptsProjectWithoutChatRoutes(t *testing.T) {
+	team := entity.MattermostTeam{ProviderTeamID: "provider-team-one",
+		Selector: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", DisplayName: "Owner Workspace",
+		Status: enum.MattermostTeamActive, ProviderSnapshotSHA256: digestValues("snapshot"),
+		CreatedAt: time.Now(), UpdatedAt: time.Now(), ObservedAt: time.Now()}
+	repository := &fakeRepository{selectorTeamID: team.ProviderTeamID}
+	provider := &fakeProvider{readTeam: team, emptyRoutes: true}
+	mapping := &fakeMapping{}
+	service := newTestService(t, repository, provider, mapping)
+
+	binding, err := service.Link(context.Background(), testPrincipal,
+		"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+	if err != nil || binding.Mapping.State != "BOUND" || mapping.manageCalls != 1 {
+		t.Fatalf("initial Team bind without Chat routes failed: binding=%#v err=%v manage=%d",
+			binding, err, mapping.manageCalls)
+	}
+}
+
 func newTestService(t *testing.T, repository domainrepo.Repository, provider domainmattermost.TeamClient,
 	mapping MappingClient,
 ) *Service {
@@ -693,16 +711,16 @@ func (repository *fakeRepository) ListRuntimeRoutes(context.Context) ([]entity.M
 	return nil, nil
 }
 
-func (repository *fakeRepository) GetRuntimeAdmission(_ context.Context, principal entity.TeamPrincipal,
-	providerTeamID string,
-) (entity.MattermostRuntimeRoute, error) {
+func (repository *fakeRepository) GetRuntimeAdmission(_ context.Context,
+	_ entity.TeamPrincipal,
+) (entity.MattermostRuntimeAdmission, error) {
 	mapping := repository.mappingOperation.Result
 	if mapping.ID == "" {
-		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+		return entity.MattermostRuntimeAdmission{}, domainrepo.ErrNotFound
 	}
-	return entity.MattermostRuntimeRoute{Principal: principal, MappingID: mapping.ID,
+	return entity.MattermostRuntimeAdmission{MappingID: mapping.ID,
 		MappingVersion: mapping.Version, MappingGeneration: mapping.Generation,
-		MappingDigestSHA256: mappingStateDigest(mapping), ProviderTeamID: providerTeamID}, nil
+		MappingState: mapping.State, MappingDigestSHA256: mappingStateDigest(mapping)}, nil
 }
 
 func (repository *fakeRepository) MarkMappingRepairRequired(_ context.Context, operation entity.WorkspaceMappingOperation, code string) error {
@@ -737,6 +755,7 @@ type fakeProvider struct {
 	readErr       error
 	readCalls     int
 	routeErr      error
+	emptyRoutes   bool
 }
 
 func (*fakeProvider) CheckTeamLifecycle(context.Context) error { return nil }
@@ -796,6 +815,9 @@ func (provider *fakeProvider) BuildRuntimeRoutes(_ context.Context, principal en
 ) ([]entity.MattermostRuntimeRoute, error) {
 	if provider.routeErr != nil {
 		return nil, provider.routeErr
+	}
+	if provider.emptyRoutes {
+		return nil, nil
 	}
 	return []entity.MattermostRuntimeRoute{{TemplateKey: "77777777-7777-4777-8777-777777777777",
 		Principal: principal, ProviderTeamID: providerTeamID, ProviderSnapshotSHA256: provider.readTeam.ProviderSnapshotSHA256,
