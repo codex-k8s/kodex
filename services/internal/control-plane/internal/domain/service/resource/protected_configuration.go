@@ -30,6 +30,14 @@ var protectedConfigurationActions = map[enum.Kind]map[string]struct{}{
 	enum.KindProviderPool:      {"create": {}, "update": {}, "reconcile_git": {}, "archive": {}, "delete": {}},
 }
 
+func protectedConfigurationReadable(kind enum.Kind) bool {
+	if kind == enum.KindWorkspaceBackup {
+		return true
+	}
+	_, allowed := protectedConfigurationActions[kind]
+	return allowed
+}
+
 func protectedConfigurationPermission(kind enum.Kind) string {
 	switch kind {
 	case enum.KindRoleDefinition:
@@ -1890,7 +1898,7 @@ func (service *Service) ListProtectedConfigurations(
 	if err := authorize(principal, permissionRead); err != nil {
 		return nil, err
 	}
-	if _, kindAllowed := protectedConfigurationActions[kind]; !kindAllowed {
+	if !protectedConfigurationReadable(kind) {
 		return nil, errs.ErrInvalidInput
 	}
 	filter := query.ResourceFilter{
