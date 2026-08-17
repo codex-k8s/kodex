@@ -278,7 +278,9 @@ func (repository *Repository) Check(ctx context.Context) error {
 }
 
 func (repository *Repository) read(ctx context.Context, scope domainrepo.Scope, callback func(pgx.Tx) error) error {
-	return repository.withTransaction(ctx, scope, pgx.ReadCommitted, pgx.ReadOnly, callback)
+	// Callback логически остается read-only, но активация подписанного RLS scope
+	// сохраняет transaction-bound context и блокирует активный credential.
+	return repository.withTransaction(ctx, scope, pgx.ReadCommitted, pgx.ReadWrite, callback)
 }
 
 func (repository *Repository) write(ctx context.Context, scope domainrepo.Scope, callback func(pgx.Tx) error) error {

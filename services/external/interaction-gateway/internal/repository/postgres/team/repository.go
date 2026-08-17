@@ -958,6 +958,11 @@ func scanOperation(row rowScanner) (entity.MattermostTeamOperation, bool, error)
 	}
 	operation.State = enum.MattermostTeamOperationState(state)
 	operation.Team.Status = enum.MattermostTeamStatus(status)
+	// Provider state хранит неизменяемый presentation intent в операции.
+	// Восстанавливаем его в проекции Team до передачи create checkpoint
+	// следующей операции привязки workspace.
+	operation.Team.DisplayName = operation.Intent.DisplayName
+	operation.Team.Slug = operation.Intent.Slug
 	operation.Team.ProviderCausalitySHA256 = operation.ProviderCausalitySHA256
 	if operation.EffectStartedAt.Equal(time.Unix(0, 0)) {
 		operation.EffectStartedAt = time.Time{}
