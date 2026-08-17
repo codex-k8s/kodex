@@ -120,9 +120,6 @@ func (service *Service) Diagnostics(
 	if err := authorize(input.Principal, permissionDiagnostics); err != nil {
 		return domainrepo.Diagnostics{}, err
 	}
-	if input.Principal.ProjectID == "" {
-		return domainrepo.Diagnostics{}, errs.ErrPermissionDenied
-	}
 	return service.repository.Diagnostics(ctx, domainrepo.Scope{
 		OrganizationID: input.Principal.OrganizationID,
 		ProjectID:      input.Principal.ProjectID,

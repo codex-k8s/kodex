@@ -7,7 +7,7 @@ func TestControlAPIProofProfileIncludesOwnerRPCProjectScope(t *testing.T) {
 
 	proofs := controlAPIProofOperations()
 	projectRequired := controlAPIProjectRequiredOperations()
-	if len(proofs) != 129 || len(projectRequired) != 119 {
+	if len(proofs) != 129 || len(projectRequired) != 116 {
 		t.Fatalf("control API proof profile is incomplete: proofs=%d project=%d", len(proofs), len(projectRequired))
 	}
 	for operationID := range projectRequired {

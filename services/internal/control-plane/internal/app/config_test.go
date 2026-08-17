@@ -16,8 +16,18 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 30 {
+	if loaded.Revision != 31 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
+	}
+	for _, operationID := range []string{
+		"control.diagnostics.get",
+		"interaction.team.readiness",
+		"integration.management.diagnostics.get",
+	} {
+		operation, ok := loaded.Operations[operationID]
+		if !ok || operation.ProjectRequired {
+			t.Fatalf("global health operation requires project: %s", operationID)
+		}
 	}
 	for _, producerID := range []string{
 		"control-plane.runtime-controller",

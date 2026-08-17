@@ -327,8 +327,8 @@ func ProofOperations() map[string]string {
 	return result
 }
 
-// ProjectRequiredOperations фиксирует, что owner RPC interaction и
-// integration всегда выполняются внутри выбранной рабочей области.
+// ProjectRequiredOperations фиксирует project-scoped owner RPC. Глобальные
+// health/readiness операции используют только проверенные tenant и actor.
 func ProjectRequiredOperations() map[string]struct{} {
 	result := make(map[string]struct{}, len(interactionOperations())+len(integrationOperations()))
 	for _, operationID := range interactionOperations() {
@@ -337,6 +337,8 @@ func ProjectRequiredOperations() map[string]struct{} {
 	for _, operationID := range integrationOperations() {
 		result[operationID] = struct{}{}
 	}
+	delete(result, "interaction.team.readiness")
+	delete(result, "integration.management.diagnostics.get")
 	return result
 }
 

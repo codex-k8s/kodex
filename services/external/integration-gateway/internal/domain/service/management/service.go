@@ -123,6 +123,11 @@ func validScope(scope domainrepo.Scope) bool {
 	return uuid.Validate(scope.TenantID) == nil && uuid.Validate(scope.ProjectID) == nil && uuid.Validate(scope.ActorID) == nil
 }
 
+func validHealthScope(scope domainrepo.Scope) bool {
+	return uuid.Validate(scope.TenantID) == nil && uuid.Validate(scope.ActorID) == nil &&
+		(scope.ProjectID == "" || uuid.Validate(scope.ProjectID) == nil)
+}
+
 func validStableKey(value string) bool {
 	return len(value) <= 96 && stableKeyPattern.MatchString(value)
 }
