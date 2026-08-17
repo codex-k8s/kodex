@@ -19,3 +19,17 @@ func TestMemorySearchTreatsEmptyUUIDFiltersAsAbsent(t *testing.T) {
 		}
 	}
 }
+
+func TestMemorySearchTreatsEmptyEmbeddingAsAbsentTextParameter(t *testing.T) {
+	t.Parallel()
+
+	guard := "NULLIF(@query_embedding::text, '')"
+	if !strings.Contains(sqlMemorySearch, guard+" IS NULL") ||
+		!strings.Contains(sqlMemorySearch, guard+"::public.vector") {
+		t.Fatal("memory search does not guard an empty embedding before the vector cast")
+	}
+	if strings.Contains(sqlMemorySearch, "@query_embedding::public.vector") ||
+		strings.Contains(sqlMemorySearch, "@query_embedding = ''") {
+		t.Fatal("memory search lets PostgreSQL infer the empty embedding parameter as vector")
+	}
+}
