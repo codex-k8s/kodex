@@ -1,4 +1,10 @@
 -- +goose Up
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
+GRANT CREATE ON SCHEMA public TO interaction_gateway_role_controller;
+RESET ROLE;
+SET ROLE interaction_gateway_role_controller;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION interaction_gateway_retire_runtime_identity(requested_generation bigint)
 RETURNS void
@@ -31,6 +37,11 @@ BEGIN
 END
 $function$;
 -- +goose StatementEnd
+
+RESET ROLE;
+SET ROLE interaction_gateway_owner;
+REVOKE CREATE ON SCHEMA public FROM interaction_gateway_role_controller;
+RESET ROLE;
 
 -- +goose Down
 -- Forward-only: повторный retirement не отменяет credential fence и retired identity.
