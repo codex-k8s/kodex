@@ -22,7 +22,7 @@ import type {
 import { runtimeConfig } from "@/shared/config/runtime";
 import { csrfToken } from "@/shared/lib/identity";
 import { realtimeProjectURL } from "@/shared/lib/project-scope";
-import { resourceKinds } from "@/shared/lib/resources";
+import { projectResourceKinds, resourceKinds } from "@/shared/lib/resources";
 
 export type RealtimeSnapshot = Omit<
   SnapshotEnvelope,
@@ -742,7 +742,7 @@ export class RealtimeClient {
         requestId,
         channels: [...channels],
         ...(channels.includes("RESOURCES")
-          ? { resourceKinds: [...resourceKinds] }
+          ? { resourceKinds: [...projectResourceKinds] }
           : {}),
       };
       socket.send(

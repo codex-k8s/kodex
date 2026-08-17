@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -48,6 +49,42 @@ func TestProtectedConfigurationRegistriesAreSpecialized(t *testing.T) {
 				t.Fatalf("generic authority-bearing action %s/%s is present", kind, forbidden)
 			}
 		}
+	}
+}
+
+func TestListProtectedConfigurationsUsesReadPermissionAndOwnerScope(t *testing.T) {
+	t.Parallel()
+
+	actorID := uuid.NewString()
+	foreignActorID := uuid.NewString()
+	organizationID := uuid.NewString()
+	projectID := uuid.NewString()
+	visibleID := uuid.NewString()
+	repository := &ownerPaginationRepository{
+		resources: []entity.Resource{{
+			ID: visibleID, Kind: enum.KindRoleDefinition,
+			OwnerActorID: actorID, Name: "developer",
+		}},
+		resourceActor: map[string]string{visibleID: actorID},
+	}
+	service := &Service{repository: repository}
+
+	resources, err := service.ListProtectedConfigurations(
+		context.Background(),
+		ownerPaginationPrincipal(actorID, organizationID, projectID, permissionRead),
+		enum.KindRoleDefinition, nil, "", 100,
+	)
+	if err != nil || len(resources) != 1 || resources[0].ID != visibleID || repository.lastActor != actorID {
+		t.Fatalf("specialized list must use verified owner read scope: resources=%v actor=%q err=%v", resources, repository.lastActor, err)
+	}
+
+	_, err = service.ListProtectedConfigurations(
+		context.Background(),
+		ownerPaginationPrincipal(foreignActorID, organizationID, projectID, permissionList),
+		enum.KindRoleDefinition, nil, "", 100,
+	)
+	if !errors.Is(err, errs.ErrPermissionDenied) {
+		t.Fatalf("generic list permission must not authorize specialized read: %v", err)
 	}
 }
 

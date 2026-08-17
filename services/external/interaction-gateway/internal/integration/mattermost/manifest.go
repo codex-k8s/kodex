@@ -257,9 +257,28 @@ func (current *index) resolveOwner(principal entity.TeamPrincipal) (ActorBinding
 		}
 		resolved = actor
 	}
-	if resolved.ActorID == "" {
+	if resolved.ActorID != "" {
+		return resolved, nil
+	}
+
+	// Project и OIDC subject являются динамическими owner-domain данными. Их
+	// полномочия уже проверены internal authority context, а immutable manifest
+	// закрепляет только единственного Mattermost-владельца организации. Это
+	// позволяет первому owner создать новый Project без перевыпуска manifest.
+	for _, actor := range current.actors {
+		if actor.OrganizationID != principal.OrganizationID {
+			continue
+		}
+		if resolved.MattermostUserID != "" && resolved.MattermostUserID != actor.MattermostUserID {
+			return ActorBinding{}, errors.New("mattermost organization owner mapping is ambiguous")
+		}
+		resolved = actor
+	}
+	if resolved.MattermostUserID == "" {
 		return ActorBinding{}, errors.New("mattermost owner is outside the server-owned mapping")
 	}
+	resolved.ActorID = principal.ActorID
+	resolved.ProjectID = principal.ProjectID
 	return resolved, nil
 }
 

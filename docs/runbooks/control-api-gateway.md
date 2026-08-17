@@ -155,7 +155,9 @@ WebSocket хранит только connection-local sequence. При reconnect 
 channels, gateway заново читает authoritative state:
 
 - `RUNS` — `ListResources(PROCESS_RUN)`;
-- `RESOURCES` — `ListResources` для каждого из ≤8 закрытых kind;
+- `RESOURCES` — `ListResources` для каждого из не более 32 закрытых
+  project-scoped kind; глобальный `PROJECT` читается только отдельным owner
+  catalog endpoint и в scoped realtime subscription не включается;
 - `INCIDENTS` — все страницы typed `ListRuntimeIncidents`;
 - `CONFIGURATION_CHANGES` — все страницы `ListAuditEvents` с закрытыми
   external action/outcome enums и общим scan cap.

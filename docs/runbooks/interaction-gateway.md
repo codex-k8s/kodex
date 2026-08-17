@@ -89,6 +89,12 @@ updated: 2026-08-09
     direct/owner delivery, catch-up, прямо перед publish и artifact download,
     а также в readiness; environment manifest не содержит current Team
     authority и старый tenant/project snapshot её не заменяет.
+    Runtime identity имеет organization-wide допуск к динамическим Project,
+    но не к другому Organization: management RPC получает точный Project
+    только из проверенного authority context, а inbound/delivery — только из
+    server-owned route scope. Immutable manifest закрепляет единственного
+    Mattermost User владельца Organization; несколько разных owner User
+    считаются неоднозначной конфигурацией и закрыто отклоняются.
 14. Для Agent bot bind/rebind/revoke сверить один PostgreSQL winner по exact
     Agent predecessor сразу для всех конкурирующих actor/action, semantic
     idempotency key и immutable request digest, checkpoint до первого

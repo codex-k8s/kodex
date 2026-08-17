@@ -40,6 +40,13 @@ export const resourceKinds = Object.freeze(
   Object.keys(resourceKindRegistry) as ResourceKind[],
 );
 
+// PROJECT принадлежит global owner catalog. Project-scoped generic ListResources
+// намеренно отклоняет этот kind, поэтому realtime snapshot запрашивает только
+// ресурсы внутри уже выбранного Project.
+export const projectResourceKinds = Object.freeze(
+  resourceKinds.filter((kind) => kind !== "PROJECT"),
+);
+
 export function resourceOwnership(
   resource: Resource,
 ): ConfigurationOwnershipProjection | undefined {

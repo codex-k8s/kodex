@@ -62,6 +62,14 @@ permission, JTI/replay reservation и server-resolved actor/tenant/project.
 Обычный Mattermost bearer, mTLS, opaque Team ref, workspace locator и любое
 поле payload по отдельности полномочий не дают.
 
+Immutable Mattermost manifest закрепляет единственного provider User владельца
+внутри Organization и bootstrap route templates, но не перечисляет будущие
+OIDC subject и Project UUID. Runtime PostgreSQL principal допускает динамический
+Project только внутри закрепленного Organization; точный Project каждого RPC
+по-прежнему приходит из проверенного authority context, а inbound/delivery —
+из server-owned joined route. Неоднозначные provider User одного Organization
+закрыто отклоняются.
+
 | Сценарий | Проектируемый owner endpoint #237 | Internal RPC и permission | Mattermost effect/readback | Control-plane #234, OCC и receipt | Durable результат, event/read path и readiness |
 | --- | --- | --- | --- | --- | --- |
 | Catalog | `GET /workspaces/{workspace}/mattermost/teams` | `ListMattermostTeams`, `interaction.team.catalog.read`; actor/org/project только из verified context | server-resolved Mattermost User; `GetTeamsForUser`, затем для каждой выдаваемой Team `GetTeam` и `GetTeamMember`; page не больше 100 | signed `ListWorkspaceMattermostMappings` подтверждает exact project owner boundary; пустой список оставляет доступным первый bind; mutation отсутствует | bounded safe page: display name, slug, masked status, timestamps и opaque selector; cursor и selector принадлежат серверу, сырые Team ID отсутствуют; authoritative read path — fresh provider readback |

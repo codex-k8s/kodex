@@ -33,12 +33,13 @@ import (
 )
 
 const (
-	protocol         = "mattercodex.control.v1"
-	maximumReadBytes = 16 << 10
-	maximumItems     = 500
-	rpcPageSize      = 100
-	readTimeout      = 10 * time.Second
-	writeTimeout     = 5 * time.Second
+	protocol             = "mattercodex.control.v1"
+	maximumReadBytes     = 16 << 10
+	maximumItems         = 500
+	maximumResourceKinds = 32
+	rpcPageSize          = 100
+	readTimeout          = 10 * time.Second
+	writeTimeout         = 5 * time.Second
 )
 
 var errSnapshotLimit = errors.New("snapshot limit exceeded")
@@ -185,7 +186,7 @@ func readSubscribe(ctx context.Context, connection *websocket.Conn) (SubscribeEn
 	decoder.DisallowUnknownFields()
 	var input SubscribeEnvelope
 	if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF || input.Type != SubscribeMessageTypeSubscribe ||
-		uuid.Validate(input.RequestID) != nil || len(input.Channels) == 0 || len(input.Channels) > 8 || len(input.ResourceKinds) > 8 {
+		uuid.Validate(input.RequestID) != nil || len(input.Channels) == 0 || len(input.Channels) > 8 || len(input.ResourceKinds) > maximumResourceKinds {
 		return SubscribeEnvelope{}, errors.New("subscription payload is invalid")
 	}
 	seenChannels := make(map[ProjectionChannel]struct{}, len(input.Channels))

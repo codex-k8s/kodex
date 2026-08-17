@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -785,8 +784,7 @@ func (repository *Repository) ResolveRuntimeRoute(ctx context.Context, teamID,
 	if err := queryRow(ctx, repository.pool, runtimeRouteScopeSQL, teamID, channelID).Scan(&organizationID, &projectID); err != nil {
 		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
 	}
-	if organizationID != repository.config.OrganizationID ||
-		!slices.Contains(repository.config.AllowedProjectIDs, projectID) {
+	if organizationID != repository.config.OrganizationID || !validUUID(projectID) {
 		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
 	}
 	principal := entity.TeamPrincipal{OrganizationID: organizationID, ProjectID: projectID,
@@ -807,7 +805,7 @@ func (repository *Repository) ResolveRuntimeRoute(ctx context.Context, teamID,
 func (repository *Repository) ResolveRuntimeDelivery(ctx context.Context, projectID, chatID,
 	_ string,
 ) (entity.MattermostRuntimeRoute, error) {
-	if !slices.Contains(repository.config.AllowedProjectIDs, projectID) {
+	if !validUUID(projectID) {
 		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
 	}
 	principal := entity.TeamPrincipal{OrganizationID: repository.config.OrganizationID, ProjectID: projectID,
