@@ -521,7 +521,8 @@ func TestInitialBindAcceptsProjectWithoutChatRoutes(t *testing.T) {
 
 	binding, err := service.Link(context.Background(), testPrincipal,
 		"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "dddddddd-dddd-4ddd-8ddd-dddddddddddd")
-	if err != nil || binding.Mapping.State != "BOUND" || mapping.manageCalls != 1 ||
+	if err != nil || binding.Mapping.State != "BOUND" || mapping.manageCalls != 1 || len(mapping.receipts) != 1 ||
+		mapping.receipts[0].TargetResourceID != testPrincipal.ProjectID ||
 		repository.mappingOperation.Team.Selector != team.Selector {
 		t.Fatalf("initial Team bind without Chat routes failed: binding=%#v err=%v manage=%d",
 			binding, err, mapping.manageCalls)

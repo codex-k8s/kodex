@@ -504,6 +504,10 @@ func (service *Service) executeMapping(ctx context.Context,
 	if err != nil {
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
+	targetResourceID := operation.MappingID
+	if operation.Action == "bind" {
+		targetResourceID = operation.Principal.ProjectID
+	}
 	credential, err := service.receipts.Sign(domaincontrol.ProviderEffectReceipt{
 		FullMethod: controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
 		ActorID:    operation.Principal.ActorID, OrganizationID: operation.Principal.OrganizationID,
@@ -513,7 +517,7 @@ func (service *Service) executeMapping(ctx context.Context,
 		EffectGeneration: operation.EffectGeneration, EffectSHA256: operation.Team.ProviderSnapshotSHA256,
 		ReceiptID: operation.ReceiptID, ReceiptRevision: operation.EffectGeneration,
 		MaskedStatus: strings.ToLower(string(operation.Team.Status)), Eligible: operation.Team.Status == enum.MattermostTeamActive,
-		TargetKind: mappingTargetKind, TargetResourceID: operation.MappingID,
+		TargetKind: mappingTargetKind, TargetResourceID: targetResourceID,
 		TargetStableKey:     "workspace-" + strings.ReplaceAll(operation.Principal.ProjectID, "-", ""),
 		CommandIntentSHA256: intentSHA,
 	})
