@@ -99,18 +99,18 @@ OR (
     NOT @generic_order
     AND (
     NULLIF(@after_id::text, '') IS NULL
-    OR (vector_distance IS NOT NULL)::integer < @after_vector_used::integer
+    OR (vector_distance IS NOT NULL) < @after_vector_used::boolean
     OR (
-        (vector_distance IS NOT NULL)::integer = @after_vector_used::integer
+        (vector_distance IS NOT NULL) = @after_vector_used::boolean
         AND text_rank < @after_text_rank::real
     )
     OR (
-        (vector_distance IS NOT NULL)::integer = @after_vector_used::integer
+        (vector_distance IS NOT NULL) = @after_vector_used::boolean
         AND text_rank = @after_text_rank::real
         AND coalesce(vector_distance, 0) > @after_vector_distance::real
     )
     OR (
-        (vector_distance IS NOT NULL)::integer = @after_vector_used::integer
+        (vector_distance IS NOT NULL) = @after_vector_used::boolean
         AND text_rank = @after_text_rank::real
         AND coalesce(vector_distance, 0) = @after_vector_distance::real
         AND id > NULLIF(@after_id::text, '')::uuid
