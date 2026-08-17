@@ -1105,6 +1105,17 @@ catalog_govulncheck_version="$(awk -F'`' '$0 ~ /^\| `govulncheck` \|/ { print $4
 require_line Makefile $'\t$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))'
 require_line Makefile $'\tenv -u GOFLAGS GOENV=off GOWORK=off go run \'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)\' -mode=source -scan=symbol -show=traces,version ./...'
 
+asyncapi_cli_version="$(awk -F'`' '$0 ~ /^\| `asyncapi` \|/ { print $4 }' "$repo_root/docs/design-guidelines/common/external_dependencies_catalog.md")"
+asyncapi_studio_version="$(awk -F'`' '$0 ~ /^\| `@asyncapi\/studio` \|/ { print $4 }' "$repo_root/docs/design-guidelines/common/external_dependencies_catalog.md")"
+[[ "$asyncapi_cli_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "каталог зависимостей должен закреплять точную версию AsyncAPI CLI"
+[[ "$asyncapi_studio_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "каталог зависимостей должен закреплять точную версию AsyncAPI Studio"
+for dockerfile in services/jobs/agent-runner/Dockerfile deploy/images/agent-runner/Dockerfile; do
+  require_line "$dockerfile" "ARG ASYNCAPI_CLI_VERSION=$asyncapi_cli_version"
+  require_line "$dockerfile" "ARG ASYNCAPI_STUDIO_VERSION=$asyncapi_studio_version"
+  require_count "$dockerfile" '"@asyncapi/cli@${ASYNCAPI_CLI_VERSION}"' 1
+  require_count "$dockerfile" '"@asyncapi/studio@${ASYNCAPI_STUDIO_VERSION}"' 1
+done
+
 go_image="golang:$go_version-alpine"
 trusted_guard_source_base64="$(base64 -w0 "$repo_root/scripts/internal/go-toolchain-guard.go")"
 trusted_guard_build_run="RUN mkdir -p /out /tmp/mattercodex-go-build-cache && printf '%s' '$trusted_guard_source_base64' | base64 -d > /tmp/mattercodex-go-toolchain-guard.go && /usr/bin/env -i PATH=/usr/local/go/bin:/usr/bin:/bin HOME=/tmp GOCACHE=/tmp/mattercodex-go-build-cache GOENV=off GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0 /usr/local/go/bin/go build -trimpath -buildvcs=false -o /out/mattercodex-go-toolchain-guard /tmp/mattercodex-go-toolchain-guard.go && rm -rf /tmp/mattercodex-go-toolchain-guard.go /tmp/mattercodex-go-build-cache"

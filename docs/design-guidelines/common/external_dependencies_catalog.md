@@ -95,6 +95,7 @@
 | `eslint` | `10.5.0` | Agent frontend lint | lint JavaScript/TypeScript |
 | `prettier` | `3.8.4` | Agent formatting | форматирование frontend/docs files |
 | `asyncapi` | `6.0.2` | Agent AsyncAPI/WebSocket codegen | валидация AsyncAPI specs и запуск generators для event/websocket contracts |
+| `@asyncapi/studio` | `1.2.0` | AsyncAPI CLI dependency pin | воспроизводимая установка CLI без выбора несовместимой транзитивной версии Studio |
 | `@asyncapi/generator` | `3.3.0` | Agent AsyncAPI codegen | generator runtime package для AsyncAPI templates |
 | `modelina` | `5.10.1` | Agent AsyncAPI model codegen | генерация TypeScript models для AsyncAPI/WebSocket payloads |
 | `wscat` | `6.1.0` | Agent WebSocket diagnostics | ручная проверка websocket endpoints |

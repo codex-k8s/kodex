@@ -65,6 +65,8 @@ ARG AWS_SDK_CLIENT_CLOUDFRONT_VERSION=3.1110.0
 ARG AWS_SDK_CLIENT_S3_VERSION=3.1110.0
 ARG AWS_SDK_CREDENTIAL_PROVIDER_NODE_VERSION=3.972.79
 ARG ASYNCAPI_CLI_VERSION=6.0.2
+# CLI допускает плавающий Studio; 1.4.0 ссылается на снятый с npm studio-ui.
+ARG ASYNCAPI_STUDIO_VERSION=1.2.0
 ARG ASYNCAPI_GENERATOR_VERSION=3.3.0
 ARG ASYNCAPI_MODELINA_CLI_VERSION=5.10.1
 ARG WSCAT_VERSION=6.1.0
@@ -136,6 +138,7 @@ RUN apk add --no-cache \
     "@aws-sdk/client-s3@${AWS_SDK_CLIENT_S3_VERSION}" \
     "@aws-sdk/credential-provider-node@${AWS_SDK_CREDENTIAL_PROVIDER_NODE_VERSION}" \
     "@asyncapi/cli@${ASYNCAPI_CLI_VERSION}" \
+    "@asyncapi/studio@${ASYNCAPI_STUDIO_VERSION}" \
     "@asyncapi/generator@${ASYNCAPI_GENERATOR_VERSION}" \
     "@asyncapi/modelina-cli@${ASYNCAPI_MODELINA_CLI_VERSION}" \
     "wscat@${WSCAT_VERSION}" \
