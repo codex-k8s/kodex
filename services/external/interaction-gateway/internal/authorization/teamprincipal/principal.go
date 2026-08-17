@@ -21,6 +21,15 @@ const (
 )
 
 func Principal(ctx context.Context, fullMethod, operation, permission string) (entity.TeamPrincipal, error) {
+	return principal(ctx, fullMethod, operation, permission, true)
+}
+
+// ReadinessPrincipal допускает глобальный owner health без выбранного project.
+func ReadinessPrincipal(ctx context.Context, fullMethod, operation, permission string) (entity.TeamPrincipal, error) {
+	return principal(ctx, fullMethod, operation, permission, false)
+}
+
+func principal(ctx context.Context, fullMethod, operation, permission string, projectRequired bool) (entity.TeamPrincipal, error) {
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if !ok || verified.GetContractVersion() != expectedContract || verified.GetAudience() != expectedAudience ||
 		verified.GetCallerWorkloadId() != expectedCaller || verified.GetCallerSpiffeId() != expectedCallerSPIFFE ||
@@ -31,18 +40,30 @@ func Principal(ctx context.Context, fullMethod, operation, permission string) (e
 		return entity.TeamPrincipal{}, errors.New("verified Mattermost team authorization context is invalid")
 	}
 	authority := verified.GetAuthority()
+	return principalFromAuthority(authority, projectRequired)
+}
+
+func principalFromAuthority(authority *internalrpcauthorityv1.CallerAuthority, projectRequired bool) (entity.TeamPrincipal, error) {
 	if authority.GetActorKind() != internalrpcauthorityv1.ActorKind_ACTOR_KIND_HUMAN ||
-		authority.GetActor() == nil || authority.GetTenant() == nil || authority.GetProject() == nil ||
+		authority.GetActor() == nil || authority.GetTenant() == nil ||
 		!validProvenance(authority.GetActor().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION) ||
 		!validProvenance(authority.GetTenant().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION) ||
-		!validProvenance(authority.GetProject().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE) ||
-		!validUUID(authority.GetActor().GetId()) || !validUUID(authority.GetTenant().GetId()) ||
-		!validUUID(authority.GetProject().GetId()) {
+		!validUUID(authority.GetActor().GetId()) || !validUUID(authority.GetTenant().GetId()) {
 		return entity.TeamPrincipal{}, errors.New("verified Mattermost team owner authority is invalid")
+	}
+	projectID := ""
+	if project := authority.GetProject(); project != nil {
+		if !validProvenance(project.GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE) ||
+			!validUUID(project.GetId()) {
+			return entity.TeamPrincipal{}, errors.New("verified Mattermost team project authority is invalid")
+		}
+		projectID = project.GetId()
+	} else if projectRequired {
+		return entity.TeamPrincipal{}, errors.New("verified Mattermost team project authority is absent")
 	}
 	return entity.TeamPrincipal{
 		ActorID: authority.GetActor().GetId(), OrganizationID: authority.GetTenant().GetId(),
-		ProjectID: authority.GetProject().GetId(),
+		ProjectID: projectID,
 	}, nil
 }
 

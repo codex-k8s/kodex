@@ -198,7 +198,7 @@ func (server *Server) GetMattermostTeamProviderReadback(ctx context.Context,
 func (server *Server) CheckReadiness(ctx context.Context,
 	_ *interactiongatewayv1.MattermostTeamServiceCheckReadinessRequest,
 ) (*interactiongatewayv1.MattermostTeamServiceCheckReadinessResponse, error) {
-	if _, err := teamprincipal.Principal(ctx,
+	if _, err := teamprincipal.ReadinessPrincipal(ctx,
 		interactiongatewayv1.MattermostTeamService_CheckReadiness_FullMethodName,
 		readinessOperation, readinessOperation); err != nil {
 		return nil, status.Error(codes.PermissionDenied, "verified Mattermost team readiness context rejected")

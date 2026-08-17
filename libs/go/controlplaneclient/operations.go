@@ -282,6 +282,7 @@ func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 		"control.project.list",
 		"control.project.update",
 		"control.project.delete",
+		"control.diagnostics.get",
 		"control.gateway-public-tls.prepare",
 		"control.gateway-public-tls.confirm",
 		"control.gateway-public-tls.check",

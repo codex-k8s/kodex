@@ -61,16 +61,21 @@ func TestBotOperationRegistryUsesAuthorityPolicyIdentifiers(t *testing.T) {
 	}
 }
 
-func TestOwnerProofOperationsAreProjectScoped(t *testing.T) {
+func TestOwnerProofOperationsKeepOnlyHealthGlobal(t *testing.T) {
 	t.Parallel()
 
 	proofs := ProofOperations()
 	projectRequired := ProjectRequiredOperations()
-	if len(proofs) != 42 || len(projectRequired) != len(proofs) {
+	if len(proofs) != 42 || len(projectRequired) != 40 {
 		t.Fatalf("owner proof profile is incomplete: proofs=%d project=%d", len(proofs), len(projectRequired))
 	}
 	for operationID := range proofs {
-		if _, ok := projectRequired[operationID]; !ok {
+		_, globalHealth := map[string]struct{}{
+			"interaction.team.readiness":             {},
+			"integration.management.diagnostics.get": {},
+		}[operationID]
+		_, projectScoped := projectRequired[operationID]
+		if projectScoped == globalHealth {
 			t.Fatalf("owner operation is not project-scoped: %s", operationID)
 		}
 	}

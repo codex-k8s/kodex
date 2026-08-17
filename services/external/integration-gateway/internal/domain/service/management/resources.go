@@ -573,7 +573,7 @@ func (service *Service) ReconcileGitBinding(ctx context.Context, scope domainrep
 }
 
 func (service *Service) Diagnostics(ctx context.Context, scope domainrepo.Scope) (map[string]string, error) {
-	if !validScope(scope) {
+	if !validHealthScope(scope) {
 		return nil, errsForbidden()
 	}
 	result := map[string]string{

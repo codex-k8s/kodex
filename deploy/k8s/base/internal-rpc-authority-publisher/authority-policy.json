@@ -1600,7 +1600,7 @@
         },
         "operation_id": "interaction.team.readiness",
         "permission": "interaction.team.readiness",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "target_tls_server_name": "interaction-gateway.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -2615,7 +2615,7 @@
         },
         "operation_id": "control.diagnostics.get",
         "permission": "controlplane.diagnostics.read",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -7931,7 +7931,7 @@
         },
         "operation_id": "integration.management.diagnostics.get",
         "permission": "integration.management.read",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
         "target_tls_server_name": "integration-gateway.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -8028,6 +8028,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 30,
+  "policy_revision": 31,
   "v": 1
 }

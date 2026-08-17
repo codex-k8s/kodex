@@ -64,14 +64,13 @@ func TestControlAPIGatewayProjectOperationSetExcludesGlobalOwnerOperations(t *te
 	t.Parallel()
 
 	operations := ControlAPIGatewayProjectRequiredOperations()
-	if len(operations) != 77 {
+	if len(operations) != 76 {
 		t.Fatalf("control API project operation set is incomplete: %d", len(operations))
 	}
 	for _, operation := range []string{
 		"control.resource.list",
 		"control.run.list",
 		"control.runtime-incident.list",
-		"control.diagnostics.get",
 		"control.workspace-backup.list",
 	} {
 		if _, ok := operations[operation]; !ok {
@@ -84,6 +83,7 @@ func TestControlAPIGatewayProjectOperationSetExcludesGlobalOwnerOperations(t *te
 		"control.project.update",
 		"control.project.delete",
 		"control.owner-session.admit",
+		"control.diagnostics.get",
 	} {
 		if _, ok := operations[operation]; ok {
 			t.Fatalf("global operation was marked project-scoped: %s", operation)

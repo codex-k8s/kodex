@@ -72,6 +72,14 @@ func New(service *managementservice.Service) (*Server, error) {
 }
 
 func ownerScope(ctx context.Context, fullMethod string) (domainrepo.Scope, error) {
+	return ownerScopeForMethod(ctx, fullMethod, true)
+}
+
+func ownerHealthScope(ctx context.Context, fullMethod string) (domainrepo.Scope, error) {
+	return ownerScopeForMethod(ctx, fullMethod, false)
+}
+
+func ownerScopeForMethod(ctx context.Context, fullMethod string, projectRequired bool) (domainrepo.Scope, error) {
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	expectedPermission, registered := methodPermissions[fullMethod]
 	if !ok || verified.GetFullMethod() != fullMethod || verified.GetCallerWorkloadId() != callerWorkload ||
@@ -80,11 +88,20 @@ func ownerScope(ctx context.Context, fullMethod string) (domainrepo.Scope, error
 		return domainrepo.Scope{}, status.Error(codes.PermissionDenied, "verified integration management context rejected")
 	}
 	authority := verified.GetAuthority()
-	if authority == nil || authority.GetActor() == nil || authority.GetTenant() == nil || authority.GetProject() == nil ||
-		uuid.Validate(authority.GetActor().GetId()) != nil || uuid.Validate(authority.GetTenant().GetId()) != nil || uuid.Validate(authority.GetProject().GetId()) != nil {
+	if authority == nil || authority.GetActor() == nil || authority.GetTenant() == nil ||
+		uuid.Validate(authority.GetActor().GetId()) != nil || uuid.Validate(authority.GetTenant().GetId()) != nil {
 		return domainrepo.Scope{}, status.Error(codes.PermissionDenied, "verified owner authority is incomplete")
 	}
-	return domainrepo.Scope{TenantID: authority.GetTenant().GetId(), ProjectID: authority.GetProject().GetId(), ActorID: authority.GetActor().GetId()}, nil
+	projectID := ""
+	if project := authority.GetProject(); project != nil {
+		if uuid.Validate(project.GetId()) != nil {
+			return domainrepo.Scope{}, status.Error(codes.PermissionDenied, "verified owner project authority is invalid")
+		}
+		projectID = project.GetId()
+	} else if projectRequired {
+		return domainrepo.Scope{}, status.Error(codes.PermissionDenied, "verified owner project authority is absent")
+	}
+	return domainrepo.Scope{TenantID: authority.GetTenant().GetId(), ProjectID: projectID, ActorID: authority.GetActor().GetId()}, nil
 }
 
 func mapError(err error) error {
@@ -600,7 +617,7 @@ func (server *Server) ReconcileGitSourceBinding(ctx context.Context, request *in
 }
 
 func (server *Server) GetManagementDiagnostics(ctx context.Context, _ *integrationgatewayv1.GetManagementDiagnosticsRequest) (*integrationgatewayv1.GetManagementDiagnosticsResponse, error) {
-	scope, err := ownerScope(ctx, integrationgatewayv1.IntegrationManagementService_GetManagementDiagnostics_FullMethodName)
+	scope, err := ownerHealthScope(ctx, integrationgatewayv1.IntegrationManagementService_GetManagementDiagnostics_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
