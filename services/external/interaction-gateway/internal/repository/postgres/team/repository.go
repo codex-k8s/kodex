@@ -257,7 +257,8 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 				return domainrepo.ErrCreateFenceConflict
 			}
 		}
-		stored, leaseActive, err := scanOperation(queryRow(ctx, tx, operationLockSQL, operation.ID))
+		var leaseActive bool
+		stored, leaseActive, err = scanOperation(queryRow(ctx, tx, operationLockSQL, operation.ID))
 		if err != nil {
 			return err
 		}
@@ -291,6 +292,10 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 	}
 	if err != nil {
 		return entity.MattermostTeamOperation{}, 0, errors.New("begin Mattermost team create")
+	}
+	if stored.ID != operation.ID || stored.Principal != operation.Principal ||
+		stored.Intent.IdempotencyKey != operation.Intent.IdempotencyKey {
+		return entity.MattermostTeamOperation{}, 0, errors.New("Mattermost team create checkpoint is invalid")
 	}
 	return stored, disposition, nil
 }
@@ -471,7 +476,8 @@ func (repository *Repository) BeginMapping(ctx context.Context, operation entity
 		if err != nil {
 			return err
 		}
-		stored, leaseActive, err := scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operation.ID))
+		var leaseActive bool
+		stored, leaseActive, err = scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operation.ID))
 		if err != nil {
 			return err
 		}
@@ -506,6 +512,10 @@ func (repository *Repository) BeginMapping(ctx context.Context, operation entity
 	}
 	if err != nil {
 		return entity.WorkspaceMappingOperation{}, 0, errors.New("begin Workspace Mattermost mapping operation")
+	}
+	if stored.ID != operation.ID || stored.Principal != operation.Principal ||
+		stored.IdempotencyKey != operation.IdempotencyKey || stored.Action != operation.Action {
+		return entity.WorkspaceMappingOperation{}, 0, errors.New("Workspace Mattermost mapping checkpoint is invalid")
 	}
 	return stored, disposition, nil
 }
