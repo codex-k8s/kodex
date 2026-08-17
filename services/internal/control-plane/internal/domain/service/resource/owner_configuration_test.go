@@ -50,6 +50,13 @@ func TestProtectedConfigurationRegistriesAreSpecialized(t *testing.T) {
 			}
 		}
 	}
+	if !protectedConfigurationReadable(enum.KindWorkspaceBackup) {
+		t.Fatal("workspace backup specialized read is absent")
+	}
+	if _, genericMutationAllowed := protectedConfigurationActions[enum.KindWorkspaceBackup]; genericMutationAllowed ||
+		protectedConfigurationPermission(enum.KindWorkspaceBackup) != "" {
+		t.Fatal("workspace backup must not enter generic mutation registry")
+	}
 }
 
 func TestListProtectedConfigurationsUsesReadPermissionAndOwnerScope(t *testing.T) {
@@ -85,6 +92,21 @@ func TestListProtectedConfigurationsUsesReadPermissionAndOwnerScope(t *testing.T
 	)
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("generic list permission must not authorize specialized read: %v", err)
+	}
+
+	backupID := uuid.NewString()
+	repository.resources = []entity.Resource{{
+		ID: backupID, Kind: enum.KindWorkspaceBackup,
+		OwnerActorID: actorID, Name: "workspace backup",
+	}}
+	repository.resourceActor = map[string]string{backupID: actorID}
+	resources, err = service.ListProtectedConfigurations(
+		context.Background(),
+		ownerPaginationPrincipal(actorID, organizationID, projectID, permissionRead),
+		enum.KindWorkspaceBackup, nil, "", 100,
+	)
+	if err != nil || len(resources) != 1 || resources[0].ID != backupID {
+		t.Fatalf("workspace backup specialized read failed: resources=%v err=%v", resources, err)
 	}
 }
 
