@@ -512,14 +512,17 @@ func TestInitialBindAcceptsProjectWithoutChatRoutes(t *testing.T) {
 		Selector: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", DisplayName: "Owner Workspace",
 		Status: enum.MattermostTeamActive, ProviderSnapshotSHA256: digestValues("snapshot"),
 		CreatedAt: time.Now(), UpdatedAt: time.Now(), ObservedAt: time.Now()}
+	providerTeam := team
+	providerTeam.Selector = ""
 	repository := &fakeRepository{selectorTeamID: team.ProviderTeamID}
-	provider := &fakeProvider{readTeam: team, emptyRoutes: true}
+	provider := &fakeProvider{readTeam: providerTeam, emptyRoutes: true}
 	mapping := &fakeMapping{}
 	service := newTestService(t, repository, provider, mapping)
 
 	binding, err := service.Link(context.Background(), testPrincipal,
 		"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "dddddddd-dddd-4ddd-8ddd-dddddddddddd")
-	if err != nil || binding.Mapping.State != "BOUND" || mapping.manageCalls != 1 {
+	if err != nil || binding.Mapping.State != "BOUND" || mapping.manageCalls != 1 ||
+		repository.mappingOperation.Team.Selector != team.Selector {
 		t.Fatalf("initial Team bind without Chat routes failed: binding=%#v err=%v manage=%d",
 			binding, err, mapping.manageCalls)
 	}
