@@ -1,9 +1,4 @@
-WITH removed AS (
-    DELETE FROM control_plane.project_actor_permissions
-    WHERE organization_id = @organization_id::uuid
-      AND project_id = @project_id::uuid
-),
-indexed AS (
+WITH indexed AS MATERIALIZED (
     SELECT
         project.organization_id,
         project.id AS project_id,
@@ -40,6 +35,19 @@ indexed AS (
       AND team.project_id = @project_id::uuid
       AND team.kind = 'TEAM'
       AND team.state = 'ACTIVE'
+),
+removed AS (
+    DELETE FROM control_plane.project_actor_permissions AS current
+    WHERE current.organization_id = @organization_id::uuid
+      AND current.project_id = @project_id::uuid
+      AND NOT EXISTS (
+          SELECT 1
+          FROM indexed AS desired
+          WHERE desired.organization_id = current.organization_id
+            AND desired.project_id = current.project_id
+            AND desired.actor_id = current.actor_id
+            AND desired.permission = current.permission
+      )
 )
 INSERT INTO control_plane.project_actor_permissions (
     organization_id,
@@ -58,3 +66,7 @@ SELECT
     clock_timestamp()
 FROM indexed
 GROUP BY organization_id, project_id, actor_id, permission
+ON CONFLICT (organization_id, project_id, actor_id, permission) DO UPDATE
+SET
+    source_version = excluded.source_version,
+    updated_at = excluded.updated_at
