@@ -46,7 +46,10 @@ WITH ranked AS (
       AND resource.kind = 'MEMORY_RECORD'
       AND resource.state <> 'DELETED'
       AND (cardinality(@states::text[]) = 0 OR resource.state = ANY(@states::text[]))
-      AND (@parent_id = '' OR resource.parent_id = @parent_id::uuid)
+      AND (
+          NULLIF(@parent_id::text, '') IS NULL
+          OR resource.parent_id = NULLIF(@parent_id::text, '')::uuid
+      )
       AND (
           (
               resource.spec ->> 'scope' = 'PROJECT'
@@ -87,12 +90,15 @@ SELECT
 FROM ranked
 WHERE (
     @generic_order
-    AND (@after_id = '' OR id > @after_id::uuid)
+    AND (
+        NULLIF(@after_id::text, '') IS NULL
+        OR id > NULLIF(@after_id::text, '')::uuid
+    )
 )
 OR (
     NOT @generic_order
     AND (
-    @after_id = ''
+    NULLIF(@after_id::text, '') IS NULL
     OR (vector_distance IS NOT NULL)::integer < @after_vector_used::integer
     OR (
         (vector_distance IS NOT NULL)::integer = @after_vector_used::integer
@@ -107,7 +113,7 @@ OR (
         (vector_distance IS NOT NULL)::integer = @after_vector_used::integer
         AND text_rank = @after_text_rank::real
         AND coalesce(vector_distance, 0) = @after_vector_distance::real
-        AND id > @after_id::uuid
+        AND id > NULLIF(@after_id::text, '')::uuid
     ))
 )
 ORDER BY

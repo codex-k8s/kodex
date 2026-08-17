@@ -423,15 +423,25 @@ yq -r '.data."principals.tsv"' deploy/k8s/base/direct-production-foundation/foun
   awk -F '\t' 'NF >= 4 && $1 ~ /^[a-z0-9_]+$/ {print $1}' | LC_ALL=C sort -u >"$principal_names"
 principal_count=$(wc -l <"$principal_names" | tr -d ' ')
 [[ "$principal_count" -eq 28 ]] || fail "PostgreSQL principal registry count is invalid: $principal_count"
+retired_principal_names="$temporary_directory/internal/retired-principals.txt"
+yq -r '.data."retired-principals.txt"' deploy/k8s/base/direct-production-foundation/foundation.yaml 2>/dev/null |
+  awk 'NF == 1 && $1 ~ /^[a-z0-9_]+$/ {print $1}' | LC_ALL=C sort -u >"$retired_principal_names"
 principal_directory="$temporary_directory/internal/principals"
 mkdir -p "$principal_directory"
 principal_secret_json="$temporary_directory/internal/principals.json"
 if [[ -n "$expected_context" ]] && kubectl --context "$expected_context" -n "$namespace" get secret mattercodex-postgresql-principals -o json >"$principal_secret_json" 2>/dev/null; then
   expected=$(jq -Rsc 'split("\n")|map(select(length>0))|sort' "$principal_names")
+  retired=$(jq -Rsc 'split("\n")|map(select(length>0))|sort' "$retired_principal_names")
   actual=$(jq -c '[.data|keys[]]|sort' "$principal_secret_json")
-  [[ "$actual" == "$expected" ]] || fail "PostgreSQL principal password key set mismatch"
+  jq -en --argjson expected "$expected" --argjson retired "$retired" --argjson actual "$actual" \
+    '(($actual - ($expected + $retired | unique)) | length) == 0' >/dev/null ||
+    fail "PostgreSQL principal password key set contains an unknown principal"
   while IFS= read -r principal; do
-    jq -jr --arg key "$principal" '.data[$key]' "$principal_secret_json" | base64 -d >"$principal_directory/$principal"
+    if jq -e --arg key "$principal" '.data[$key] != null' "$principal_secret_json" >/dev/null; then
+      jq -jr --arg key "$principal" '.data[$key]' "$principal_secret_json" | base64 -d >"$principal_directory/$principal"
+    else
+      random_hex_file "$principal_directory/$principal"
+    fi
     grep -Eq '^[a-f0-9]{64}$' "$principal_directory/$principal" || fail "PostgreSQL principal password is invalid"
   done <"$principal_names"
 else
@@ -464,7 +474,7 @@ put_pg integration-gateway-postgres-migrator runtime-current-dsn integration_gat
 put_pg integration-gateway-postgres-migrator runtime-next-dsn integration_gateway_runtime_g2 integration_gateway "$ig_ca" integration_gateway_runtime
 put_pg integration-gateway-postgres-runtime dsn integration_gateway_runtime_g1 integration_gateway "$ig_ca" integration_gateway_runtime
 put_pg interaction-gateway-postgres-migrator dsn interaction_gateway_migrator interaction_gateway "$ix_ca"
-put_pg interaction-gateway-runtime postgres-dsn interaction_gateway_runtime_g1 interaction_gateway "$ix_ca" interaction_gateway_runtime
+put_pg interaction-gateway-runtime postgres-dsn interaction_gateway_runtime_g2 interaction_gateway "$ix_ca" interaction_gateway_runtime
 put_pg runtime-controller-postgres-migration dsn runtime_controller_migrator runtime_controller "$rt_ca"
 put_pg runtime-controller-postgres dsn runtime_controller_runtime_g1 runtime_controller "$rt_ca"
 put_pg runtime-workload-admission-postgres dsn runtime_workload_admission_g1 runtime_controller "$rt_ca"

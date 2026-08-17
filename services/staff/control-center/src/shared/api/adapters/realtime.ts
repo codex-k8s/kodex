@@ -21,7 +21,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { csrfToken } from "@/shared/lib/identity";
-import { realtimeProjectURL } from "@/shared/lib/project-scope";
+import { realtimeURL } from "@/shared/lib/project-scope";
 import { projectResourceKinds, resourceKinds } from "@/shared/lib/resources";
 
 export type RealtimeSnapshot = Omit<
@@ -59,18 +59,27 @@ type ParsedRealtimeEvent =
       retryable: boolean;
     };
 
-export const realtimePartitions: readonly (readonly ProjectionChannel[])[] = [
-  [
-    "RESOURCES",
-    "RUNS",
-    "INCIDENTS",
-    "CONFIGURATION_CHANGES",
-    "WORKSPACE_TEAMS",
-    "PROVIDERS",
-    "INTEGRATIONS",
-    "APPROVALS",
-  ],
-  ["BACKUPS", "HEALTH"],
+type RealtimePartition = {
+  channels: readonly ProjectionChannel[];
+  projectScoped: boolean;
+};
+
+export const realtimePartitions: readonly RealtimePartition[] = [
+  {
+    channels: [
+      "RESOURCES",
+      "RUNS",
+      "INCIDENTS",
+      "CONFIGURATION_CHANGES",
+      "WORKSPACE_TEAMS",
+      "PROVIDERS",
+      "INTEGRATIONS",
+      "APPROVALS",
+    ],
+    projectScoped: true,
+  },
+  { channels: ["BACKUPS"], projectScoped: true },
+  { channels: ["HEALTH"], projectScoped: false },
 ] as const;
 export const realtimeChannels: readonly ProjectionChannel[] = [
   "RESOURCES",
@@ -714,7 +723,13 @@ export class RealtimeClient {
     this.opened.clear();
     this.publish({ type: "generation", generation });
     realtimePartitions.forEach((partition, index) =>
-      this.connectPartition(generation, index, partition, token),
+      this.connectPartition(
+        generation,
+        index,
+        partition.channels,
+        partition.projectScoped,
+        token,
+      ),
     );
   }
 
@@ -722,10 +737,11 @@ export class RealtimeClient {
     generation: number,
     partition: number,
     channels: readonly ProjectionChannel[],
+    projectScoped: boolean,
     token: string,
   ): void {
     const socket = new WebSocket(
-      realtimeProjectURL(runtimeConfig().realtimeUrl),
+      realtimeURL(runtimeConfig().realtimeUrl, projectScoped),
       ["mattercodex.control.v1", `csrf.${token}`],
     );
     this.sockets.set(partition, socket);
