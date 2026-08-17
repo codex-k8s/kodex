@@ -56,5 +56,5 @@ type Repository interface {
 	ResolveRuntimeRoute(context.Context, string, string) (entity.MattermostRuntimeRoute, error)
 	ResolveRuntimeDelivery(context.Context, string, string, string) (entity.MattermostRuntimeRoute, error)
 	ListRuntimeRoutes(context.Context) ([]entity.MattermostRuntimeRoute, error)
-	GetRuntimeAdmission(context.Context, entity.TeamPrincipal, string) (entity.MattermostRuntimeRoute, error)
+	GetRuntimeAdmission(context.Context, entity.TeamPrincipal) (entity.MattermostRuntimeAdmission, error)
 }

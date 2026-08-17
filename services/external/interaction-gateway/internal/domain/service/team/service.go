@@ -103,7 +103,7 @@ func (service *Service) Check(ctx context.Context) error {
 		// До первого bind локальной joined route ещё нет. В этом состоянии
 		// management path должен быть Ready, иначе initial project import не
 		// сможет создать авторитетный mapping в control-plane.
-		admission, admissionErr := service.repository.GetRuntimeAdmission(ctx, binding.Principal, binding.ProviderTeamID)
+		admission, admissionErr := service.repository.GetRuntimeAdmission(ctx, binding.Principal)
 		if errors.Is(admissionErr, domainrepo.ErrNotFound) {
 			continue
 		}
@@ -139,7 +139,7 @@ func (service *Service) Check(ctx context.Context) error {
 		if err := service.repository.ReconcileRuntimeRoutes(ctx, binding.Principal, mapping, routes); err != nil {
 			return errors.New("Workspace Mattermost joined route is not ready")
 		}
-		if admission.ProviderTeamID != mapping.ProviderTeamID || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
+		if admission.MappingState != "BOUND" || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
 			admission.MappingGeneration != mapping.Generation || admission.MappingDigestSHA256 != mappingStateDigest(mapping) {
 			return errors.New("Workspace Mattermost joined route is not ready")
 		}
@@ -372,9 +372,9 @@ func (service *Service) RequireBoundTeam(ctx context.Context, principal entity.T
 	if !exists || mapping.State != "BOUND" || mapping.ProviderTeamID != providerTeamID {
 		return entity.WorkspaceMattermostMapping{}, domainerrs.ErrUnauthorized
 	}
-	admission, err := service.repository.GetRuntimeAdmission(ctx, principal, providerTeamID)
+	admission, err := service.repository.GetRuntimeAdmission(ctx, principal)
 	if err != nil || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
-		admission.MappingGeneration != mapping.Generation || admission.ProviderTeamID != mapping.ProviderTeamID ||
+		admission.MappingGeneration != mapping.Generation || admission.MappingState != "BOUND" ||
 		admission.MappingDigestSHA256 != mappingStateDigest(mapping) {
 		return entity.WorkspaceMattermostMapping{}, domainerrs.ErrUnauthorized
 	}

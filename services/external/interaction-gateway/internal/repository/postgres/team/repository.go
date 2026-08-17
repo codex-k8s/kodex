@@ -656,7 +656,7 @@ func (repository *Repository) ReconcileRuntimeRoutes(ctx context.Context, princi
 func replaceRuntimeRoutes(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal,
 	mapping entity.WorkspaceMattermostMapping, routes []entity.MattermostRuntimeRoute,
 ) error {
-	if mapping.State != "BOUND" || len(routes) == 0 {
+	if mapping.State != "BOUND" {
 		return errors.New("Mattermost joined runtime route input is invalid")
 	}
 	if err := lockRuntimeRouteGeneration(ctx, tx, principal, mapping); err != nil {
@@ -860,21 +860,22 @@ func (repository *Repository) ListRuntimeRoutes(ctx context.Context) ([]entity.M
 	return result, nil
 }
 
-func (repository *Repository) GetRuntimeAdmission(ctx context.Context, principal entity.TeamPrincipal,
-	providerTeamID string,
-) (entity.MattermostRuntimeRoute, error) {
-	var route entity.MattermostRuntimeRoute
+func (repository *Repository) GetRuntimeAdmission(ctx context.Context,
+	principal entity.TeamPrincipal,
+) (entity.MattermostRuntimeAdmission, error) {
+	var admission entity.MattermostRuntimeAdmission
 	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
-		return scanRuntimeRoute(queryRow(ctx, tx, runtimeRouteAdmissionSQL, principal.OrganizationID,
-			principal.ProjectID, principal.ActorID, providerTeamID), &route)
+		return queryRow(ctx, tx, runtimeAdmissionSQL, principal.OrganizationID, principal.ProjectID).
+			Scan(&admission.MappingID, &admission.MappingVersion, &admission.MappingGeneration,
+				&admission.MappingState, &admission.MappingDigestSHA256)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+		return entity.MattermostRuntimeAdmission{}, domainrepo.ErrNotFound
 	}
 	if err != nil {
-		return entity.MattermostRuntimeRoute{}, errors.New("read Mattermost runtime admission")
+		return entity.MattermostRuntimeAdmission{}, errors.New("read Mattermost runtime admission")
 	}
-	return route, nil
+	return admission, nil
 }
 
 func scanRuntimeRoute(row rowScanner, route *entity.MattermostRuntimeRoute) error {

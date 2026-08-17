@@ -60,6 +60,17 @@ type MattermostRuntimeRoute struct {
 	UpdatedAt              time.Time
 }
 
+// MattermostRuntimeAdmission подтверждает актуальный owner mapping независимо
+// от наличия Chat/channel routes. Новый Project сначала связывается с Team и
+// только затем получает routes при создании чатов.
+type MattermostRuntimeAdmission struct {
+	MappingID           string
+	MappingVersion      uint64
+	MappingGeneration   uint64
+	MappingState        string
+	MappingDigestSHA256 string
+}
+
 // WorkspaceMattermostMapping — внутренняя проекция авторитетного mapping.
 // ProviderTeamID никогда не передаётся наружу и заменяется opaque selector-ом.
 type WorkspaceMattermostMapping struct {

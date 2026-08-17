@@ -85,8 +85,8 @@ var (
 	runtimeRouteDeliverySQL string
 	//go:embed sql/mattermost_runtime_route__list.sql
 	runtimeRouteListSQL string
-	//go:embed sql/mattermost_runtime_route__admission.sql
-	runtimeRouteAdmissionSQL string
+	//go:embed sql/mattermost_runtime_checkpoint__admission.sql
+	runtimeAdmissionSQL string
 	//go:embed sql/mattermost_runtime_checkpoint__upsert.sql
 	runtimeCheckpointUpsertSQL string
 )

@@ -21,8 +21,8 @@ var (
 )
 
 var expectedQueries = map[string]string{
+	"mattermost_runtime_checkpoint__admission":    "one",
 	"mattermost_runtime_checkpoint__upsert":       "exec",
-	"mattermost_runtime_route__admission":         "one",
 	"mattermost_runtime_route__delete_project":    "exec",
 	"mattermost_runtime_route__delivery":          "one",
 	"mattermost_runtime_route__insert":            "exec",
