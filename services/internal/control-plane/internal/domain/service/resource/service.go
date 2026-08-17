@@ -578,6 +578,16 @@ func (service *Service) create(
 			if err := tx.Insert(ctx, resource); err != nil {
 				return entity.Resource{}, err
 			}
+			if specializedProject {
+				return resource, service.completeProjectBootstrap(
+					ctx,
+					tx,
+					input.Principal,
+					input.IdempotencyKey,
+					requestHash,
+					resource,
+				)
+			}
 			return resource, service.appendMutationRecords(
 				ctx,
 				tx,

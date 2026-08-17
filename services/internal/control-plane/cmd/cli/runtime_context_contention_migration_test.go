@@ -40,8 +40,8 @@ func TestRuntimeContextContentionMigrationKeepsCleanupBackendLocal(t *testing.T)
 
 func TestRuntimeContextColumnMigrationQualifiesCleanupColumns(t *testing.T) {
 	const migrationVersion int64 = 20260814000300
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match runtime context column migration %d", schema.CurrentVersion, migrationVersion)
+	if schema.CurrentVersion < migrationVersion {
+		t.Fatalf("schema fence %d excludes runtime context column migration %d", schema.CurrentVersion, migrationVersion)
 	}
 	raw, err := migrations.ReadFile("migrations/20260814000300_control_plane_runtime_context_column.sql")
 	if err != nil {

@@ -14,6 +14,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const projectBootstrapReasonCode = "project_bootstrap"
+
+type projectBootstrapScopeTransaction interface {
+	SwitchWorkspaceProject(context.Context, string) error
+	InsertResourceRetentionPolicy(
+		context.Context,
+		domainrepo.ResourceRetentionPolicy,
+		string,
+		string,
+		string,
+		string,
+	) error
+}
+
 // CreateProject — закрытая organization-scoped команда. Она единственная
 // может пройти protected create registry для PROJECT; ID, owner, project scope,
 // начальное состояние и OCC-версия назначаются общей owner transaction.
@@ -33,6 +47,54 @@ func (service *Service) CreateProject(
 		Kind: enum.KindProject, Name: input.Name, Spec: input.Spec,
 		TenantProject: true,
 	}, true)
+}
+
+// completeProjectBootstrap переносит ту же physical transaction из
+// organization scope в назначенный сервером Project scope. Все project-owned
+// строки создаются под обычными RLS-политиками, после чего scope возвращается
+// для сохранения organization-scoped idempotency receipt.
+func (service *Service) completeProjectBootstrap(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	idempotencyKey string,
+	requestHash string,
+	project entity.Resource,
+) error {
+	bootstrap, ok := tx.(projectBootstrapScopeTransaction)
+	if !ok {
+		return errs.ErrInternal
+	}
+	if err := bootstrap.SwitchWorkspaceProject(ctx, project.ID); err != nil {
+		return err
+	}
+	policy := domainrepo.ResourceRetentionPolicy{
+		ID:                      runtimeRetentionPolicyID,
+		Version:                 1,
+		PVCRetentionSeconds:     604800,
+		ArchiveRetentionSeconds: 7776000,
+		EffectiveFrom:           project.CreatedAt,
+	}
+	if err := bootstrap.InsertResourceRetentionPolicy(
+		ctx,
+		policy,
+		principal.ActorID,
+		projectBootstrapReasonCode,
+		hashString(idempotencyKey),
+		requestHash,
+	); err != nil {
+		return err
+	}
+	if err := service.appendMutationRecords(
+		ctx,
+		tx,
+		principal,
+		"create_project",
+		project,
+	); err != nil {
+		return err
+	}
+	return bootstrap.SwitchWorkspaceProject(ctx, "")
 }
 
 func (service *Service) trustedOwnedProject(
