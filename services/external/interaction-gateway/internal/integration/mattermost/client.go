@@ -487,11 +487,14 @@ func (client *Client) resolveRuntimeBoundary(route entity.MattermostRuntimeRoute
 		boundary.IgnoredBot = true
 		return boundary, template, nil
 	}
-	actor, ok := client.index.actors[userID+"\x00"+boundary.OrganizationID+"\x00"+boundary.ProjectID]
-	if !ok {
+	actor, err := client.index.resolveOwner(entity.TeamPrincipal{
+		ActorID: boundary.MappingOwnerActorID, OrganizationID: boundary.OrganizationID,
+		ProjectID: boundary.ProjectID,
+	})
+	if err != nil || actor.MattermostUserID != userID {
 		return boundary, template, errors.New("mattermost actor is outside the joined runtime route")
 	}
-	boundary.ActorID, boundary.MattermostUserID = actor.ActorID, userID
+	boundary.ActorID, boundary.MattermostUserID = boundary.MappingOwnerActorID, userID
 	return boundary, template, nil
 }
 

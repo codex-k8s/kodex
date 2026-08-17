@@ -176,7 +176,7 @@ components:
       title: ResourceKindList
       $id: urn:mattercodex:control-api:ws:ResourceKindList
       type: array
-      maxItems: 8
+      maxItems: 32
       uniqueItems: true
       items: { $ref: '#/components/schemas/ResourceKind' }
     ResourceProjection:

@@ -55,6 +55,16 @@ func TestStrictBoundaryMatchesNamedGeneratedEnums(t *testing.T) {
 	}
 }
 
+func TestProjectResourceSnapshotFitsSubscriptionBound(t *testing.T) {
+	projectScopedKinds := len(wsgenerated.ValuesToResourceKind) - 1
+	if projectScopedKinds > maximumResourceKinds {
+		t.Fatalf("project resource kinds exceed subscription bound: %d > %d", projectScopedKinds, maximumResourceKinds)
+	}
+	if projectScopedKinds <= 8 {
+		t.Fatalf("regression fixture no longer proves the former eight-kind limit: %d", projectScopedKinds)
+	}
+}
+
 func keys[T ~uint](values map[any]T) map[any]struct{} {
 	result := make(map[any]struct{}, len(values))
 	for value := range values {

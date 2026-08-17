@@ -1887,9 +1887,25 @@ func (service *Service) ListProtectedConfigurations(
 	afterID string,
 	limit int,
 ) ([]entity.Resource, error) {
-	return service.List(ctx, ListInput{Principal: principal, Filter: query.ResourceFilter{
-		Kind: kind, States: states, AfterID: afterID, Limit: limit,
-	}})
+	if err := authorize(principal, permissionRead); err != nil {
+		return nil, err
+	}
+	if _, kindAllowed := protectedConfigurationActions[kind]; !kindAllowed {
+		return nil, errs.ErrInvalidInput
+	}
+	filter := query.ResourceFilter{
+		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: kind,
+		States: states, AfterID: afterID, Limit: limit,
+	}
+	if principal.ProjectID == "" || filter.Validate() != nil {
+		return nil, errs.ErrInvalidInput
+	}
+	resources, err := service.repository.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return filterOwnerBoundResources(resources, principal.ActorID), nil
 }
 
 // ListWorkspaceMattermostMappings обслуживает принятый specialized read

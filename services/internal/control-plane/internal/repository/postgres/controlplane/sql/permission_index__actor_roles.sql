@@ -14,4 +14,4 @@ WHERE team.organization_id = @organization_id::uuid
   AND team.kind = 'TEAM'
   AND team.state = 'ACTIVE'
   AND member.actor_id = @actor_id
-ORDER BY role.id
+ORDER BY role.id::text

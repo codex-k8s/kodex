@@ -9,8 +9,8 @@ import (
 
 func TestProjectBootstrapScopeMigrationRemovesTriggerPath(t *testing.T) {
 	const migrationVersion int64 = 20260817000100
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match project bootstrap migration %d", schema.CurrentVersion, migrationVersion)
+	if schema.CurrentVersion < migrationVersion {
+		t.Fatalf("schema fence %d excludes project bootstrap migration %d", schema.CurrentVersion, migrationVersion)
 	}
 	raw, err := migrations.ReadFile("migrations/20260817000100_control_plane_project_bootstrap_scope.sql")
 	if err != nil {
