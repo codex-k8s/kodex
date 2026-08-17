@@ -480,7 +480,7 @@ data:
     integration_gateway_runtime_g1	integration_gateway	integration_gateway_runtime	false
     integration_gateway_runtime_g2	integration_gateway	integration_gateway_runtime	false
     interaction_gateway_migrator	interaction_gateway	interaction_gateway_owner,interaction_gateway_runtime,interaction_gateway_role_controller,pg_signal_backend	true
-    interaction_gateway_runtime_g1	interaction_gateway	interaction_gateway_runtime	false
+    interaction_gateway_runtime_g2	interaction_gateway	interaction_gateway_runtime	false
     runtime_controller_migrator	runtime_controller	runtime_controller_owner	true
     runtime_controller_runtime_g1	runtime_controller		false
     runtime_workload_admission_g1	runtime_controller		false
@@ -525,6 +525,7 @@ data:
     internal_rpc_authority_recovery
     internal_rpc_authority_restore_controller
   retired-principals.txt: |
+    interaction_gateway_runtime_g1
     ira_publisher_g1
     ira_publisher_g2
     ira_readback_attestor_g1
@@ -534,6 +535,7 @@ data:
     integration_gateway_role_controller	integration_gateway_runtime_g1
     integration_gateway_role_controller	integration_gateway_runtime_g2
     interaction_gateway_role_controller	interaction_gateway_runtime_g1
+    interaction_gateway_role_controller	interaction_gateway_runtime_g2
     internal_rpc_authority_migrator	ira_automation_scheduler_issuer_g1
     internal_rpc_authority_migrator	ira_control_api_gateway_issuer_g1
     internal_rpc_authority_migrator	ira_control_api_gateway_issuer_g2

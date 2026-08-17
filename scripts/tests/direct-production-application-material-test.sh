@@ -364,6 +364,13 @@ grep -Eq '^postgresql://[^:]+:[a-f0-9]{64}@control-plane-postgresql-rw\.matterco
     printf 'Generated PostgreSQL DSN semantics are invalid\n' >&2
     exit 1
   }
+jq -er '.[] | select(.kind=="Secret" and .metadata.name=="interaction-gateway-runtime") | .data["postgres-dsn"]' "$material_json" |
+  base64 -d >"$temporary_directory/interaction-postgres-dsn"
+grep -Eq '^postgresql://interaction_gateway_runtime_g2:[a-f0-9]{64}@interaction-gateway-postgresql-rw\.mattercodex-system\.svc\.cluster\.local:5432/interaction_gateway\?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/interaction-gateway/postgres/ca\.pem&options=-c%20role%3Dinteraction_gateway_runtime$' \
+  "$temporary_directory/interaction-postgres-dsn" || {
+    printf 'Generated interaction-gateway PostgreSQL DSN does not use the active generation\n' >&2
+    exit 1
+  }
 for migration_binding in \
   'control-plane-postgres-migration:control_plane_migrator' \
   'integration-gateway-postgres-migrator:integration_gateway_migrator_g1' \
@@ -410,7 +417,7 @@ sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
   exit 1
 }
 [[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
-  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 39 ]] || {
+  .data["admin-memberships.tsv"]' "$foundation_json" | awk -F '\t' 'NF == 2 {count++} END {print count+0}')" == 40 ]] || {
   printf 'PostgreSQL bounded administrator registry is incomplete\n' >&2
   exit 1
 }
@@ -419,6 +426,7 @@ for membership in \
   $'integration_gateway_role_controller\tintegration_gateway_runtime_g1' \
   $'integration_gateway_role_controller\tintegration_gateway_runtime_g2' \
   $'interaction_gateway_role_controller\tinteraction_gateway_runtime_g1' \
+  $'interaction_gateway_role_controller\tinteraction_gateway_runtime_g2' \
   $'internal_rpc_authority_credential_lifecycle_definer\tinternal_rpc_authority_publisher' \
   $'internal_rpc_authority_credential_lifecycle_definer\tinternal_rpc_authority_readback_attestor'; do
   jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
@@ -427,6 +435,11 @@ for membership in \
     exit 1
   }
 done
+[[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
+  .data["retired-principals.txt"]' "$foundation_json" | rg -c '^interaction_gateway_runtime_g1$')" == 1 ]] || {
+  printf 'Previous interaction-gateway PostgreSQL principal is not retired\n' >&2
+  exit 1
+}
 for principal in \
   ira_publisher_g3 ira_publisher_g4 ira_publisher_g5 \
   ira_readback_attestor_g3 ira_readback_attestor_g4 ira_readback_attestor_g5; do

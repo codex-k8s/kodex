@@ -34,10 +34,14 @@ export function isProjectScopedRequest(request: Request): boolean {
   );
 }
 
-export function realtimeProjectURL(raw: string): string {
-  const reference = projectReference();
-  if (!reference) throw new Error("Project reference is unavailable");
+export function realtimeURL(raw: string, projectScoped: boolean): string {
   const url = new URL(raw);
-  url.searchParams.set("projectId", reference);
+  if (projectScoped) {
+    const reference = projectReference();
+    if (!reference) throw new Error("Project reference is unavailable");
+    url.searchParams.set("projectId", reference);
+  } else {
+    url.searchParams.delete("projectId");
+  }
   return url.toString();
 }
