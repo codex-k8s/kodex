@@ -652,6 +652,9 @@ func rpcError(correlationID string, err error) error {
 		code, reason = codes.Unavailable, controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE
 		message, safeCode, retryable = "control-plane dependency unavailable", "UNAVAILABLE", true
 	}
+	if domainSafeCode := errs.SafeCode(err); domainSafeCode != "" {
+		safeCode = domainSafeCode
+	}
 	current := status.New(code, message)
 	withDetail, detailErr := current.WithDetails(&controlplanev1.ErrorDetail{
 		Reason:        reason,

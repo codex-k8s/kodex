@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -706,14 +707,26 @@ func projectWorkspaceMapping(resource *controlplanev1.Resource) (entity.Workspac
 }
 
 func mappingRPCError(err error) error {
+	safeCode := ""
+	if current, ok := status.FromError(err); ok {
+		for _, detail := range current.Details() {
+			controlDetail, valid := detail.(*controlplanev1.ErrorDetail)
+			if valid && strings.HasPrefix(controlDetail.GetCode(), "WORKSPACE_MAPPING_") {
+				safeCode = controlDetail.GetCode()
+				break
+			}
+		}
+	}
+	var mapped error
 	switch status.Code(err) {
 	case codes.NotFound:
-		return domaincontrol.ErrNotFound
+		mapped = domaincontrol.ErrNotFound
 	case codes.InvalidArgument, codes.PermissionDenied, codes.FailedPrecondition, codes.Aborted, codes.AlreadyExists:
-		return domaincontrol.ErrConflict
+		mapped = domaincontrol.ErrConflict
 	default:
-		return domaincontrol.ErrUnavailable
+		mapped = domaincontrol.ErrUnavailable
 	}
+	return domaincontrol.WithSafeCode(mapped, safeCode)
 }
 
 func scanState(resource *controlplanev1.Resource) string {

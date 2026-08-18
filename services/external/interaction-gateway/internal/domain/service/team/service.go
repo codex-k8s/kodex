@@ -538,7 +538,11 @@ func (service *Service) executeMapping(ctx context.Context,
 			if retryErr == nil && mappingTerminal(operation, readback, found) {
 				return service.finalizeMapping(ctx, operation, readback)
 			}
-			if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, "OWNER_STATE_CONFLICT"); saveErr != nil {
+			failureCode := domaincontrol.SafeCode(err)
+			if failureCode == "" {
+				failureCode = "OWNER_STATE_CONFLICT"
+			}
+			if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, failureCode); saveErr != nil {
 				return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
 			}
 			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict

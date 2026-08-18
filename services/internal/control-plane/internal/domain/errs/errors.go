@@ -3,6 +3,37 @@ package errs
 
 import "errors"
 
+type safeCoded interface {
+	SafeCode() string
+}
+
+type safeCodedError struct {
+	cause error
+	code  string
+}
+
+func (err safeCodedError) Error() string    { return err.cause.Error() }
+func (err safeCodedError) Unwrap() error    { return err.cause }
+func (err safeCodedError) SafeCode() string { return err.code }
+
+// WithSafeCode добавляет закрытый диагностический код без изменения типа
+// доменной ошибки и без включения приватных значений в transport response.
+func WithSafeCode(cause error, code string) error {
+	if cause == nil || code == "" {
+		return cause
+	}
+	return safeCodedError{cause: cause, code: code}
+}
+
+// SafeCode возвращает только явно назначенный доменным слоем код.
+func SafeCode(err error) string {
+	var coded safeCoded
+	if errors.As(err, &coded) {
+		return coded.SafeCode()
+	}
+	return ""
+}
+
 var (
 	ErrInvalidInput        = errors.New("invalid control-plane input")
 	ErrUnauthenticated     = errors.New("control-plane authentication required")
