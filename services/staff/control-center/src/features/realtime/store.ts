@@ -3,7 +3,6 @@ import { computed, ref } from "vue";
 
 import {
   RealtimeClient,
-  realtimeChannels,
   type RealtimeEvent,
 } from "@/shared/api/adapters/realtime";
 import type { ProjectionChannel } from "@/shared/api/generated/asyncapi/ProjectionChannel";
@@ -24,7 +23,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
     () => online.value && connected.value && !replacing.value,
   );
   let client: RealtimeClient | null = null;
-  let freshChannels = new Set<ProjectionChannel>();
 
   function publish(event: RealtimeEvent): void {
     if (event.type === "generation") {
@@ -32,7 +30,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
       connected.value = false;
       problemCode.value = null;
       sequences.value = {};
-      freshChannels = new Set();
       replacing.value = true;
       return;
     }
@@ -40,6 +37,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
       if (event.generation !== generation.value) return;
       connected.value = true;
       problemCode.value = null;
+      return;
+    }
+    if (event.type === "ready") {
+      if (event.generation !== generation.value) return;
+      replacing.value = false;
       return;
     }
     if (event.type === "close") {
@@ -63,10 +65,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
       ...sequences.value,
       [event.snapshot.channel]: event.snapshot.sequence,
     };
-    freshChannels.add(event.snapshot.channel);
-    replacing.value = !realtimeChannels.every((channel) =>
-      freshChannels.has(channel),
-    );
     publishRealtimeSnapshot(event.snapshot);
   }
 
@@ -87,7 +85,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
     connected.value = false;
     replacing.value = true;
     sequences.value = {};
-    freshChannels = new Set();
   }
 
   function handleOnline(): void {

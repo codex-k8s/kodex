@@ -46,6 +46,7 @@ export type RealtimeSnapshot = Omit<
 export type RealtimeEvent =
   | { type: "generation"; generation: number }
   | { type: "open"; generation: number }
+  | { type: "ready"; generation: number }
   | { type: "close"; generation: number }
   | { type: "snapshot"; generation: number; snapshot: RealtimeSnapshot }
   | { type: "problem"; code: string; retryable: boolean };
@@ -687,6 +688,8 @@ export class RealtimeClient {
   private stopped = true;
   private attempt = 0;
   private generation = 0;
+  private readyGeneration = 0;
+  private readonly receivedChannels = new Set<ProjectionChannel>();
 
   constructor(private readonly publish: (event: RealtimeEvent) => void) {}
 
@@ -705,6 +708,7 @@ export class RealtimeClient {
       socket.close(1000, "client shutdown");
     this.sockets.clear();
     this.opened.clear();
+    this.receivedChannels.clear();
   }
 
   private connectGeneration(): void {
@@ -721,6 +725,7 @@ export class RealtimeClient {
     }
     const generation = ++this.generation;
     this.opened.clear();
+    this.receivedChannels.clear();
     this.publish({ type: "generation", generation });
     realtimePartitions.forEach((partition, index) =>
       this.connectPartition(
@@ -800,6 +805,16 @@ export class RealtimeClient {
       }
       if (message.type === "snapshot") {
         this.publish({ ...message, generation });
+        this.receivedChannels.add(message.snapshot.channel);
+        if (
+          this.readyGeneration !== generation &&
+          realtimeChannels.every((channel) =>
+            this.receivedChannels.has(channel),
+          )
+        ) {
+          this.readyGeneration = generation;
+          this.publish({ type: "ready", generation });
+        }
         return;
       }
       this.publish({
@@ -826,6 +841,7 @@ export class RealtimeClient {
       socket.close(1000, "realtime generation replaced");
     this.sockets.clear();
     this.opened.clear();
+    this.receivedChannels.clear();
     this.publish({ type: "close", generation });
     this.scheduleReconnect();
   }
