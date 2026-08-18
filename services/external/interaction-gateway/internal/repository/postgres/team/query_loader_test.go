@@ -84,6 +84,22 @@ func TestRecoveryDeadlineUsesPostgreSQLClock(t *testing.T) {
 	}
 }
 
+func TestRecoveryExpiresEveryClaimableState(t *testing.T) {
+	tests := map[string]string{
+		"sql/team_operation__claim_recovery.sql":              "state IN ('PENDING', 'EFFECT_PENDING', 'AMBIGUOUS') AND recovery_deadline <= clock_timestamp()",
+		"sql/workspace_mapping_operation__claim_recovery.sql": "state IN ('PENDING', 'AMBIGUOUS') AND recovery_deadline <= clock_timestamp()",
+	}
+	for path, expected := range tests {
+		raw, err := embeddedTeamSQL.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), expected) {
+			t.Fatalf("expired operation can retain the oldest work scope and starve recovery in %s", path)
+		}
+	}
+}
+
 func TestRuntimeRouteCheckpointSurvivesRouteDeletionAndRejectsRollback(t *testing.T) {
 	lockQuery, err := embeddedTeamSQL.ReadFile("sql/mattermost_runtime_route__lock_project.sql")
 	if err != nil {
