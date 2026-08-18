@@ -940,7 +940,7 @@ func (server *Server) ManageWorkspaceMattermostMapping(
 	}
 	managed, err := server.service.ManageWorkspaceMapping(ctx, resource.ManageWorkspaceMappingInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		Action:    trimEnum(request.GetAction().String(), "WORKSPACE_MATTERMOST_MAPPING_ACTION_"),
+		Action:    workspaceMattermostMappingAction(request.GetAction()),
 		MappingID: request.GetMappingId(), ExpectedVersion: request.GetExpectedVersion(),
 		ExpectedGeneration: request.GetExpectedGeneration(), ProviderReceipt: receipt, Name: request.GetName(),
 	})
@@ -952,6 +952,19 @@ func (server *Server) ManageWorkspaceMattermostMapping(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	return &controlplanev1.ManageWorkspaceMattermostMappingResponse{Mapping: encoded}, nil
+}
+
+func workspaceMattermostMappingAction(action controlplanev1.WorkspaceMattermostMappingAction) string {
+	switch action {
+	case controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND:
+		return "bind"
+	case controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK:
+		return "relink"
+	case controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK:
+		return "unlink"
+	default:
+		return ""
+	}
 }
 
 func (server *Server) GetWorkspaceMattermostMapping(
