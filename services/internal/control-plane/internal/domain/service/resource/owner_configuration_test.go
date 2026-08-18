@@ -582,6 +582,28 @@ func TestWorkspaceMappingIdempotencyIgnoresOneUseProviderProof(t *testing.T) {
 	}
 }
 
+func TestWorkspaceMappingProviderReceiptTargetsExactMutationResource(t *testing.T) {
+	t.Parallel()
+
+	workspaceID := "33333333-3333-4333-8333-333333333333"
+	mappingID := "44444444-4444-4444-8444-444444444444"
+	for _, test := range []struct {
+		action string
+		want   string
+	}{
+		{action: "bind", want: workspaceID},
+		{action: "relink", want: mappingID},
+		{action: "unlink", want: mappingID},
+	} {
+		t.Run(test.action, func(t *testing.T) {
+			input := ManageWorkspaceMappingInput{Action: test.action, MappingID: mappingID}
+			if got := workspaceMappingReceiptTarget(input, workspaceID); got != test.want {
+				t.Fatalf("unexpected receipt target: got %q want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestWorkspaceMappingProviderReceiptSafeCodeIdentifiesRejectedBoundary(t *testing.T) {
 	t.Parallel()
 

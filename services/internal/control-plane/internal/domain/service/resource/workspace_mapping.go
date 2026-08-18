@@ -101,9 +101,10 @@ func (service *Service) ManageWorkspaceMapping(
 			return entity.Resource{}, errs.ErrNotFound
 		}
 		stableTarget := "workspace-" + strings.ReplaceAll(workspace.ID, "-", "")
+		receiptTarget := workspaceMappingReceiptTarget(input, workspace.ID)
 		consumption, replay, replayed, err := reserveProviderCommandReceipt(
 			ctx, tx, protected, input.Principal, input.ProviderReceipt,
-			"workspace_mattermost_mapping", workspace.ID, stableTarget, now,
+			"workspace_mattermost_mapping", receiptTarget, stableTarget, now,
 		)
 		if errors.Is(err, errs.ErrPermissionDenied) {
 			err = errs.WithSafeCode(err, "WORKSPACE_MAPPING_TARGET_BINDING_REJECTED")
@@ -340,7 +341,8 @@ func (service *Service) replayWorkspaceMappingExternalCommand(
 		}
 		stableTarget := "workspace-" + strings.ReplaceAll(spec.WorkspaceID, "-", "")
 		result, replayed, err = replayProviderCommandReceipt(ctx, protected, input.Principal,
-			input.ProviderReceipt, "workspace_mattermost_mapping", spec.WorkspaceID,
+			input.ProviderReceipt, "workspace_mattermost_mapping",
+			workspaceMappingReceiptTarget(input, spec.WorkspaceID),
 			stableTarget, service.now().UTC())
 		if err != nil || !replayed {
 			return err
@@ -353,6 +355,13 @@ func (service *Service) replayWorkspaceMappingExternalCommand(
 		return nil
 	})
 	return result, replayed && err == nil, err
+}
+
+func workspaceMappingReceiptTarget(input ManageWorkspaceMappingInput, workspaceID string) string {
+	if input.Action == "bind" {
+		return workspaceID
+	}
+	return input.MappingID
 }
 
 func validateProviderReceipt(principal value.Principal, receipt value.ProviderEffectReceipt,
