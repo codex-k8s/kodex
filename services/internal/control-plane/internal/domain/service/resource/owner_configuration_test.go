@@ -11,7 +11,6 @@ import (
 
 	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -304,7 +303,7 @@ func TestAgentBotManageReadinessUsesExactApplicationReceiptWithoutMutation(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	input.Principal.AuthorityDigest, err = internalrpcauth.CanonicalJSONSHA256(input.ProviderReceipt)
+	input.Principal.AuthorityDigest, err = providerReceiptAuthorityDigest(input.ProviderReceipt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +330,7 @@ func TestAgentBotManageReadinessUsesExactApplicationReceiptWithoutMutation(t *te
 
 	stale := input
 	stale.ProviderReceipt.CommandIntentSHA256 = strings.Repeat("a", 64)
-	stale.Principal.AuthorityDigest, err = internalrpcauth.CanonicalJSONSHA256(stale.ProviderReceipt)
+	stale.Principal.AuthorityDigest, err = providerReceiptAuthorityDigest(stale.ProviderReceipt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,7 +601,7 @@ func TestWorkspaceMappingProviderReceiptSafeCodeIdentifiesRejectedBoundary(t *te
 		TargetResourceID: "33333333-3333-4333-8333-333333333333",
 		TargetStableKey:  "workspace-33333333333343338333333333333333", CommandIntentSHA256: strings.Repeat("b", 64),
 	}
-	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
+	digest, err := providerReceiptAuthorityDigest(receipt)
 	if err != nil {
 		t.Fatal(err)
 	}

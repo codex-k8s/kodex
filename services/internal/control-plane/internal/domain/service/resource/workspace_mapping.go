@@ -8,7 +8,6 @@ import (
 	"time"
 
 	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -261,7 +260,7 @@ func workspaceMappingProviderReceiptSafeCode(principal value.Principal,
 		receipt.ReceiptRevision != principal.AuthorityRevision:
 		return prefix + "REFERENCE_REJECTED"
 	}
-	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
+	digest, err := providerReceiptAuthorityDigest(receipt)
 	if err != nil || digest != principal.AuthorityDigest {
 		return prefix + "DIGEST_REJECTED"
 	}
@@ -348,7 +347,7 @@ func validateProviderReceipt(principal value.Principal, receipt value.ProviderEf
 		receipt.ReceiptID != principal.AuthorityReference || receipt.ReceiptRevision != principal.AuthorityRevision {
 		return errs.ErrPermissionDenied
 	}
-	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
+	digest, err := providerReceiptAuthorityDigest(receipt)
 	if err != nil || digest != principal.AuthorityDigest {
 		return errs.ErrPermissionDenied
 	}
