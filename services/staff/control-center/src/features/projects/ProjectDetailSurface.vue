@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { useProjectsStore } from "@/features/projects/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -13,6 +14,7 @@ import { setProjectReference } from "@/shared/lib/project-scope";
 const route = useRoute();
 const { t } = useI18n();
 const store = useProjectsStore();
+const realtime = useRealtimeStore();
 const projectId = computed(() => String(route.params.projectId));
 const project = computed(() =>
   store.projects.data.find((item) => item.id === projectId.value),
@@ -71,10 +73,14 @@ async function deleteProject(): Promise<void> {
     !window.confirm(t("workspaces.confirmDelete", { name: project.value.name }))
   )
     return;
-  if (await store.remove(project.value)) {
+  const removal = store.remove(project.value);
+  realtime.stop();
+  if (await removal) {
     setProjectReference(null);
     window.location.assign("/workspaces");
+    return;
   }
+  realtime.start();
 }
 </script>
 
