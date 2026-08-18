@@ -132,6 +132,46 @@ type OperationResolver interface {
 	OperationID(fullMethod string) (string, bool)
 }
 
+// LocalAuthorityError отличает сбой локальной выдачи контекста от ошибки
+// downstream RPC. Внешняя граница может безопасно нормализовать только этот
+// доверенный тип, не принимая произвольный bare gRPC status за доменный ответ.
+type LocalAuthorityError struct {
+	code          codes.Code
+	correlationID string
+}
+
+func (failure *LocalAuthorityError) Error() string {
+	return failure.GRPCStatus().Err().Error()
+}
+
+// GRPCStatus сохраняет классификацию для стандартных gRPC helpers.
+func (failure *LocalAuthorityError) GRPCStatus() *status.Status {
+	message := "authority proof is unavailable"
+	switch failure.code {
+	case codes.Unavailable:
+		message = "authority dependency is unavailable"
+	case codes.DeadlineExceeded:
+		message = "authority dependency deadline exceeded"
+	}
+	return status.New(failure.code, message)
+}
+
+// CorrelationID возвращает идентификатор exact proof request без раскрытия
+// credential или внутренней причины отказа.
+func (failure *LocalAuthorityError) CorrelationID() string {
+	return failure.correlationID
+}
+
+func newLocalAuthorityError(err error, correlationID string) error {
+	code := status.Code(err)
+	switch code {
+	case codes.Unavailable, codes.DeadlineExceeded:
+	default:
+		code = codes.Unauthenticated
+	}
+	return &LocalAuthorityError{code: code, correlationID: correlationID}
+}
+
 // IssuerUnaryClientInterceptor выпускает и добавляет контекст перед downstream RPC.
 func IssuerUnaryClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
@@ -153,7 +193,7 @@ func IssuerUnaryClientInterceptor(
 		}
 		proof, correlationID, err := proofs.AuthorityProof(ctx, operationID, method)
 		if err != nil {
-			return status.Error(codes.Unauthenticated, "authority proof is unavailable")
+			return newLocalAuthorityError(err, correlationID)
 		}
 		issued, err := issuer.IssueAuthorizationContext(
 			ctx,
@@ -164,7 +204,7 @@ func IssuerUnaryClientInterceptor(
 			},
 		)
 		if err != nil {
-			return err
+			return newLocalAuthorityError(err, correlationID)
 		}
 		ctx = metadata.AppendToOutgoingContext(
 			ctx,

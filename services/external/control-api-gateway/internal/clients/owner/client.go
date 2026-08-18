@@ -129,11 +129,10 @@ func dial(ctx context.Context, target, serverName string, config Config, issuer 
 	if err != nil {
 		return nil, err
 	}
-	interceptors := []grpc.UnaryClientInterceptor{authorityclient.IssuerUnaryClientInterceptor(issuer.Issuer(), operations, proofs)}
+	interceptors := []grpc.UnaryClientInterceptor{sourceErrorInterceptor(source), authorityclient.IssuerUnaryClientInterceptor(issuer.Issuer(), operations, proofs)}
 	if config.UnaryClientInterceptor != nil {
 		interceptors = append(interceptors, config.UnaryClientInterceptor)
 	}
-	interceptors = append(interceptors, sourceErrorInterceptor(source))
 	connection, err := grpc.NewClient(target,
 		grpc.WithTransportCredentials(transport),
 		grpc.WithChainUnaryInterceptor(interceptors...),

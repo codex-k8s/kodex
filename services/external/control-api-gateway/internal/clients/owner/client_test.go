@@ -2,6 +2,7 @@ package owner
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -9,11 +10,22 @@ import (
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
 	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
+
+type ownerProofFailure struct{ err error }
+
+func (failure ownerProofFailure) AuthorityProof(
+	context.Context,
+	string,
+	string,
+) (string, string, error) {
+	return "", "bf51b17a-94d2-4f7e-a7f4-1b014fceec0d", failure.err
+}
 
 func TestWaitForReadyObservesTransportStateWithoutBusinessRPC(t *testing.T) {
 	t.Parallel()
@@ -98,5 +110,29 @@ func TestBareOwnerErrorsAreNormalizedOnlyForExactLegacyProfiles(t *testing.T) {
 	}
 	if (&DownstreamError{Source: RPCSourceIntegration, Method: "/unknown.Service/Get", Err: status.Error(codes.NotFound, "private")}).Valid() {
 		t.Fatal("unknown downstream method was accepted")
+	}
+}
+
+func TestOwnerSourceInterceptorNormalizesLocalAuthorityFailure(t *testing.T) {
+	t.Parallel()
+
+	method := integrationgatewayv1.IntegrationManagementService_GetProviderConnection_FullMethodName
+	issuer := authorityclient.IssuerUnaryClientInterceptor(nil, integrationOperations(), ownerProofFailure{
+		err: status.Error(codes.Unavailable, "private resolver failure"),
+	})
+	err := sourceErrorInterceptor(RPCSourceIntegration)(context.Background(), method, nil, nil, nil,
+		func(ctx context.Context, method string, request, reply any, connection *grpc.ClientConn, options ...grpc.CallOption) error {
+			return issuer(ctx, method, request, reply, connection,
+				func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+					t.Fatal("downstream RPC was called")
+					return nil
+				}, options...)
+		},
+	)
+	var downstream *DownstreamError
+	if !errors.As(err, &downstream) || downstream.NormalizedDetail == nil ||
+		downstream.NormalizedDetail.GetReason() != controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE ||
+		downstream.NormalizedDetail.GetCode() != "UNAVAILABLE" || !downstream.NormalizedDetail.GetRetryable() {
+		t.Fatalf("local authority failure was not normalized: %#v", err)
 	}
 }
