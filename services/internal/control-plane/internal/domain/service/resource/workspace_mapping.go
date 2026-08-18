@@ -130,7 +130,8 @@ func (service *Service) ManageWorkspaceMapping(
 						input.Principal.ProjectID, candidate.ID); lockErr != nil {
 						return entity.Resource{}, lockErr
 					}
-					return entity.Resource{}, errs.ErrStateConflict
+					return entity.Resource{}, errs.WithSafeCode(errs.ErrStateConflict,
+						"WORKSPACE_MAPPING_ALREADY_BOUND")
 				}
 			}
 			created, err := entity.New(uuid.NewString(), input.Principal.OrganizationID,
@@ -162,7 +163,8 @@ func (service *Service) ManageWorkspaceMapping(
 		}
 		spec, ok := current.Spec.(entity.WorkspaceMattermostMappingSpec)
 		if !ok || current.Kind != enum.KindWorkspaceMapping || current.OwnerActorID != input.Principal.ActorID {
-			return entity.Resource{}, errs.ErrNotFound
+			return entity.Resource{}, errs.WithSafeCode(errs.ErrNotFound,
+				"WORKSPACE_MAPPING_OWNER_MISMATCH")
 		}
 		if current.Version != input.ExpectedVersion || spec.MappingGeneration != input.ExpectedGeneration {
 			return entity.Resource{}, errs.ErrVersionMismatch
@@ -172,9 +174,14 @@ func (service *Service) ManageWorkspaceMapping(
 			input.ProviderReceipt.EffectGeneration <= spec.ProviderEffectGeneration ||
 			input.ProviderReceipt.WorkspaceID != spec.WorkspaceID || spec.WorkspaceID != workspace.ID ||
 			(input.Action == "unlink" && input.ProviderReceipt.ProviderTeamRef != spec.ProviderTeamRef) {
-			return entity.Resource{}, errs.ErrStateConflict
+			return entity.Resource{}, errs.WithSafeCode(errs.ErrStateConflict,
+				"WORKSPACE_MAPPING_RECEIPT_NOT_FRESH")
 		}
 		if err := lockAndRejectOpenWorkspaceGraph(ctx, tx, input.Principal, spec.WorkspaceID); err != nil {
+			if errors.Is(err, errs.ErrStateConflict) {
+				return entity.Resource{}, errs.WithSafeCode(err,
+					"WORKSPACE_MAPPING_GRAPH_NOT_QUIESCENT")
+			}
 			return entity.Resource{}, err
 		}
 		spec.MappingGeneration++
@@ -187,19 +194,22 @@ func (service *Service) ManageWorkspaceMapping(
 		var updated entity.Resource
 		if input.Action == "relink" {
 			if current.State != enum.StateActive || spec.MappingState != "BOUND" {
-				return entity.Resource{}, errs.ErrStateConflict
+				return entity.Resource{}, errs.WithSafeCode(errs.ErrStateConflict,
+					"WORKSPACE_MAPPING_LIFECYCLE_CONFLICT")
 			}
 			spec.ProviderTeamRef = input.ProviderReceipt.ProviderTeamRef
 			updated, err = current.Update(current.Name, spec, now)
 		} else {
 			if current.State != enum.StateActive || spec.MappingState != "BOUND" {
-				return entity.Resource{}, errs.ErrStateConflict
+				return entity.Resource{}, errs.WithSafeCode(errs.ErrStateConflict,
+					"WORKSPACE_MAPPING_LIFECYCLE_CONFLICT")
 			}
 			spec.MappingState = "UNLINKED"
 			updated, err = current.ReplaceAndTransition(spec, enum.StateArchived, now)
 		}
 		if err != nil {
-			return entity.Resource{}, errs.ErrStateConflict
+			return entity.Resource{}, errs.WithSafeCode(errs.ErrStateConflict,
+				"WORKSPACE_MAPPING_TRANSITION_REJECTED")
 		}
 		if err := tx.Update(ctx, updated, current.Version); err != nil {
 			return entity.Resource{}, err
@@ -226,6 +236,14 @@ func (service *Service) ManageWorkspaceMapping(
 		replay, replayed, replayErr := service.replayWorkspaceMappingExternalCommand(ctx, input)
 		if replayErr != nil || replayed {
 			return replay, replayErr
+		}
+		if errs.SafeCode(mutationErr) == "" {
+			switch {
+			case errors.Is(mutationErr, errs.ErrVersionMismatch):
+				mutationErr = errs.WithSafeCode(mutationErr, "WORKSPACE_MAPPING_OCC_CONFLICT")
+			case errors.Is(mutationErr, errs.ErrStateConflict):
+				mutationErr = errs.WithSafeCode(mutationErr, "WORKSPACE_MAPPING_TRANSACTION_CONFLICT")
+			}
 		}
 	}
 	return result, mutationErr
