@@ -17,13 +17,17 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
 	maximumCredentialBytes     = 16 << 10
 	maximumControlPlaneRPCSize = 9 << 20
+	proofResolutionAttempts    = 3
+	proofResolutionRetryBase   = 25 * time.Millisecond
 )
 
 type applicationGrantContextKey struct{}
@@ -151,11 +155,10 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		projectRequired: projectRequired,
 		grantFile:       config.ApplicationGrantFile,
 	}
-	interceptors := []grpc.UnaryClientInterceptor{authorityclient.IssuerUnaryClientInterceptor(
-		issuer.Issuer(),
-		operations,
-		client,
-	)}
+	interceptors := []grpc.UnaryClientInterceptor{
+		localAuthorityErrorInterceptor(),
+		authorityclient.IssuerUnaryClientInterceptor(issuer.Issuer(), operations, client),
+	}
 	if config.UnaryClientInterceptor != nil {
 		interceptors = append(interceptors, config.UnaryClientInterceptor)
 	}
@@ -223,12 +226,26 @@ func (client *Client) AuthorityProof(
 	if _, required := client.projectRequired[operationID]; required {
 		request.ProjectReference, _ = ctx.Value(projectReferenceContextKey{}).(string)
 	}
-	resolved, err := client.resolver.ResolveAuthorityProof(
-		requestContext,
-		request,
-	)
+	var resolved *internalrpcauthorityv1.ResolveAuthorityProofResponse
+	var err error
+	for attempt := 0; attempt < proofResolutionAttempts; attempt++ {
+		resolved, err = client.resolver.ResolveAuthorityProof(requestContext, request)
+		if err == nil || (status.Code(err) != codes.Unavailable &&
+			status.Code(err) != codes.DeadlineExceeded) {
+			break
+		}
+		if attempt+1 < proofResolutionAttempts {
+			timer := time.NewTimer(proofResolutionRetryBase << attempt)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", correlationID, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
 	if err != nil {
-		return "", "", err
+		return "", correlationID, err
 	}
 	if resolved.GetAuthorityProofCompactJws() == "" ||
 		resolved.GetProofRevision() == 0 ||
@@ -236,6 +253,45 @@ func (client *Client) AuthorityProof(
 		return "", "", errors.New("control-plane authority proof is incomplete")
 	}
 	return resolved.GetAuthorityProofCompactJws(), correlationID, nil
+}
+
+func localAuthorityErrorInterceptor() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, request, reply any, connection *grpc.ClientConn,
+		invoker grpc.UnaryInvoker, options ...grpc.CallOption,
+	) error {
+		err := invoker(ctx, method, request, reply, connection, options...)
+		var failure *authorityclient.LocalAuthorityError
+		if !errors.As(err, &failure) {
+			return err
+		}
+		current := failure.GRPCStatus()
+		reason := controlplanev1.ErrorReason_ERROR_REASON_UNAUTHENTICATED
+		code := "UNAUTHENTICATED"
+		retryable := false
+		message := "control-plane authentication required"
+		if current.Code() == codes.Unavailable || current.Code() == codes.DeadlineExceeded {
+			reason = controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE
+			code = "UNAVAILABLE"
+			retryable = true
+			message = "control-plane authority dependency unavailable"
+			if current.Code() == codes.DeadlineExceeded {
+				code = "DEADLINE_EXCEEDED"
+			}
+		}
+		correlationID := failure.CorrelationID()
+		if uuid.Validate(correlationID) != nil {
+			correlationID = uuid.NewString()
+		}
+		withDetail, detailErr := status.New(current.Code(), message).WithDetails(
+			&controlplanev1.ErrorDetail{
+				Reason: reason, Code: code, CorrelationId: correlationID, Retryable: retryable,
+			},
+		)
+		if detailErr != nil {
+			return status.Error(codes.Internal, "control-plane authority error contract failed")
+		}
+		return withDetail.Err()
+	}
 }
 
 func (client *Client) Check(ctx context.Context) error {

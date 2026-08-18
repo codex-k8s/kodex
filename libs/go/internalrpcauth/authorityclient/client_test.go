@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"math/big"
 	"net/url"
 	"testing"
@@ -24,6 +25,26 @@ import (
 type fakeVerifier struct {
 	response *internalrpcauthorityv1.VerifyAuthorizationContextResponse
 	request  *internalrpcauthorityv1.VerifyAuthorizationContextRequest
+}
+
+type fakeOperationResolver map[string]string
+
+func (resolver fakeOperationResolver) OperationID(fullMethod string) (string, bool) {
+	operation, ok := resolver[fullMethod]
+	return operation, ok
+}
+
+type failingProofProvider struct {
+	err           error
+	correlationID string
+}
+
+func (provider failingProofProvider) AuthorityProof(
+	context.Context,
+	string,
+	string,
+) (string, string, error) {
+	return "", provider.correlationID, provider.err
 }
 
 func (verifier *fakeVerifier) VerifyAuthorizationContext(
@@ -101,6 +122,46 @@ func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T
 		verifier.request.GetDownstreamPeer().GetSpiffeId() !=
 			"spiffe://mattercodex.local/ns/mattercodex-system/sa/caller" {
 		t.Fatalf("verifier request lost exact binding: %+v", verifier.request)
+	}
+}
+
+func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
+	t.Parallel()
+
+	const (
+		method        = "/example.v1.Service/Method"
+		operation     = "example.read"
+		correlationID = "bf51b17a-94d2-4f7e-a7f4-1b014fceec0d"
+	)
+	for _, test := range []struct {
+		name string
+		err  error
+		code codes.Code
+	}{
+		{name: "transient", err: status.Error(codes.Unavailable, "private resolver failure"), code: codes.Unavailable},
+		{name: "deadline", err: status.Error(codes.DeadlineExceeded, "private resolver failure"), code: codes.DeadlineExceeded},
+		{name: "rejected", err: status.Error(codes.PermissionDenied, "private resolver failure"), code: codes.Unauthenticated},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			interceptor := IssuerUnaryClientInterceptor(nil, fakeOperationResolver{method: operation}, failingProofProvider{
+				err: test.err, correlationID: correlationID,
+			})
+			called := false
+			err := interceptor(context.Background(), method, nil, nil, nil,
+				func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+					called = true
+					return nil
+				},
+			)
+			if called {
+				t.Fatal("downstream RPC was called without authority proof")
+			}
+			var failure *LocalAuthorityError
+			if !errors.As(err, &failure) || status.Code(err) != test.code ||
+				failure.CorrelationID() != correlationID {
+				t.Fatalf("local authority failure = %#v, code = %s", err, status.Code(err))
+			}
+		})
 	}
 }
 
