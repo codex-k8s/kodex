@@ -583,6 +583,54 @@ func TestWorkspaceMappingIdempotencyIgnoresOneUseProviderProof(t *testing.T) {
 	}
 }
 
+func TestWorkspaceMappingProviderReceiptSafeCodeIdentifiesRejectedBoundary(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 18, 3, 0, 0, 0, time.UTC)
+	receipt := value.ProviderEffectReceipt{
+		ContractVersion: 1, Issuer: "https://interaction-gateway.example.invalid",
+		Audience: "urn:mattercodex:provider-readback:mattermost", Purpose: "MATTERMOST_PROVIDER_READBACK_RECEIPT",
+		WorkloadID: "interaction-gateway", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		FullMethod: "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping",
+		ActorID:    "11111111-1111-4111-8111-111111111111", OrganizationID: "22222222-2222-4222-8222-222222222222",
+		ProjectID: "33333333-3333-4333-8333-333333333333", WorkspaceID: "33333333-3333-4333-8333-333333333333",
+		ProviderTeamRef: "team-one", ProviderObjectRef: "team-one", Action: "bind",
+		Effect: "workspace_mattermost_mapping", EffectVersion: 7, EffectGeneration: 7,
+		EffectSHA256: strings.Repeat("a", 64), ReceiptID: "44444444-4444-4444-8444-444444444444",
+		ReceiptRevision: 7, IssuedAt: now, NotBefore: now, ExpiresAt: now.Add(time.Minute),
+		MaskedStatus: "active", Eligible: true, TargetKind: "workspace_mattermost_mapping",
+		TargetResourceID: "33333333-3333-4333-8333-333333333333",
+		TargetStableKey:  "workspace-33333333333343338333333333333333", CommandIntentSHA256: strings.Repeat("b", 64),
+	}
+	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := value.Principal{
+		ActorID: receipt.ActorID, OrganizationID: receipt.OrganizationID, ProjectID: receipt.ProjectID,
+		CallerWorkload: receipt.WorkloadID, CallerSPIFFEID: receipt.CallerSPIFFEID,
+		AuthorityReference: receipt.ReceiptID, AuthorityRevision: receipt.ReceiptRevision, AuthorityDigest: digest,
+	}
+
+	changed := receipt
+	changed.Action = "unlink"
+	if got := workspaceMappingProviderReceiptSafeCode(principal, changed, "bind", now); got !=
+		"WORKSPACE_MAPPING_PROVIDER_RECEIPT_ACTION_REJECTED" {
+		t.Fatalf("unexpected action diagnostic: %q", got)
+	}
+	changed = receipt
+	changed.TargetStableKey = ""
+	if got := workspaceMappingProviderReceiptSafeCode(principal, changed, "bind", now); got !=
+		"WORKSPACE_MAPPING_PROVIDER_RECEIPT_VALUE_REJECTED" {
+		t.Fatalf("unexpected value diagnostic: %q", got)
+	}
+	principal.AuthorityDigest = strings.Repeat("c", 64)
+	if got := workspaceMappingProviderReceiptSafeCode(principal, receipt, "bind", now); got !=
+		"WORKSPACE_MAPPING_PROVIDER_RECEIPT_DIGEST_REJECTED" {
+		t.Fatalf("unexpected digest diagnostic: %q", got)
+	}
+}
+
 func TestTargetScheduleDigestPinsPromptAndEverySelection(t *testing.T) {
 	t.Parallel()
 

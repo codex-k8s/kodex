@@ -38,11 +38,14 @@ func (service *Service) ManageWorkspaceMapping(
 		return entity.Resource{}, errs.WithSafeCode(errs.ErrPermissionDenied,
 			"WORKSPACE_MAPPING_PRINCIPAL_BINDING_REJECTED")
 	}
+	now := service.now().UTC()
 	if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
 		"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action,
-		"workspace_mattermost_mapping", "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping", service.now().UTC()); err != nil {
+		"workspace_mattermost_mapping", "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping", now); err != nil {
 		if errors.Is(err, errs.ErrPermissionDenied) {
-			err = errs.WithSafeCode(err, "WORKSPACE_MAPPING_PROVIDER_RECEIPT_REJECTED")
+			err = errs.WithSafeCode(err, workspaceMappingProviderReceiptSafeCode(
+				input.Principal, input.ProviderReceipt, input.Action, now,
+			))
 		}
 		return entity.Resource{}, err
 	}
@@ -227,6 +230,42 @@ func (service *Service) ManageWorkspaceMapping(
 		}
 	}
 	return result, mutationErr
+}
+
+func workspaceMappingProviderReceiptSafeCode(principal value.Principal,
+	receipt value.ProviderEffectReceipt, action string, now time.Time,
+) string {
+	const prefix = "WORKSPACE_MAPPING_PROVIDER_RECEIPT_"
+	switch {
+	case receipt.Validate(now) != nil:
+		return prefix + "VALUE_REJECTED"
+	case receipt.Purpose != "MATTERMOST_PROVIDER_READBACK_RECEIPT":
+		return prefix + "PURPOSE_REJECTED"
+	case receipt.WorkloadID != principal.CallerWorkload:
+		return prefix + "WORKLOAD_REJECTED"
+	case receipt.CallerSPIFFEID != principal.CallerSPIFFEID:
+		return prefix + "SPIFFE_REJECTED"
+	case receipt.FullMethod != "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping":
+		return prefix + "METHOD_REJECTED"
+	case receipt.ActorID != principal.ActorID:
+		return prefix + "ACTOR_REJECTED"
+	case receipt.OrganizationID != principal.OrganizationID:
+		return prefix + "ORGANIZATION_REJECTED"
+	case receipt.ProjectID != principal.ProjectID:
+		return prefix + "PROJECT_REJECTED"
+	case receipt.Action != action:
+		return prefix + "ACTION_REJECTED"
+	case receipt.Effect != "workspace_mattermost_mapping":
+		return prefix + "EFFECT_REJECTED"
+	case receipt.ReceiptID != principal.AuthorityReference ||
+		receipt.ReceiptRevision != principal.AuthorityRevision:
+		return prefix + "REFERENCE_REJECTED"
+	}
+	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
+	if err != nil || digest != principal.AuthorityDigest {
+		return prefix + "DIGEST_REJECTED"
+	}
+	return prefix + "REJECTED"
 }
 
 func workspaceMappingRequestHash(input ManageWorkspaceMappingInput) (string, error) {
