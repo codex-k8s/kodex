@@ -30,10 +30,16 @@ func TestMappingOperationViewMasksProviderAndRawFailure(t *testing.T) {
 	view := MappingOperationView(entity.WorkspaceMappingOperation{
 		ID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Action: "bind",
 		State: "REPAIR_REQUIRED", FailureCode: "private provider: team-id-secret",
-		Team: entity.MattermostTeam{ProviderTeamID: "private-provider-team-id"},
+		Team: entity.MattermostTeam{
+			ProviderTeamID: "private-provider-team-id", Selector: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+			DisplayName: "Owner Workspace", Slug: "owner-workspace", Status: enum.MattermostTeamActive,
+			ProviderSnapshotSHA256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			CreatedAt:              time.Now(), UpdatedAt: time.Now(), ObservedAt: time.Now(),
+		},
 		Result: entity.WorkspaceMattermostMapping{
 			ID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", Version: 1, Generation: 1, State: "BOUND",
 			ProviderTeamID: "private-provider-team-id", ProviderEffectVersion: 1, ProviderEffectGeneration: 1,
+			ProviderObservedAt: time.Now(), UpdatedAt: time.Now(),
 		},
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	})
@@ -44,5 +50,8 @@ func TestMappingOperationViewMasksProviderAndRawFailure(t *testing.T) {
 	if bytes.Contains(raw, []byte("private-provider-team-id")) || bytes.Contains(raw, []byte("team-id-secret")) ||
 		!bytes.Contains(raw, []byte("SAFE_FAILURE")) {
 		t.Fatalf("unsafe mapping operation response: %s", raw)
+	}
+	if view.GetResult().GetTeam().GetSelector() != "cccccccc-cccc-4ccc-8ccc-cccccccccccc" {
+		t.Fatalf("terminal mapping operation omitted safe Team result: %#v", view.GetResult())
 	}
 }

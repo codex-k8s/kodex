@@ -57,8 +57,10 @@ func MappingOperationView(operation entity.WorkspaceMappingOperation) *interacti
 		CreatedAt: timestamp(operation.CreatedAt), UpdatedAt: timestamp(operation.UpdatedAt),
 	}
 	if operation.Result.ID != "" {
-		result.Result = BindingView(entity.WorkspaceMattermostBinding{Mapping: operation.Result})
-		result.Result.Team = nil
+		result.Result = BindingView(entity.WorkspaceMattermostBinding{
+			Mapping: operation.Result,
+			Team:    operation.Team,
+		})
 	}
 	return result
 }
