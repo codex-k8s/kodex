@@ -243,6 +243,10 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 			queryReference = queryValues[0]
 		}
 	}
+	pathReference, err := exactProjectPathReference(request)
+	if err != nil {
+		return nil, err
+	}
 	if headerReference != "" && queryReference != "" && headerReference != queryReference {
 		return nil, errors.New("project references do not match")
 	}
@@ -250,10 +254,35 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 	if reference == "" {
 		reference = queryReference
 	}
+	if reference != "" && pathReference != "" && reference != pathReference {
+		return nil, errors.New("project references do not match")
+	}
+	if reference == "" {
+		reference = pathReference
+	}
 	if reference == "" {
 		return ctx, nil
 	}
 	return controlplaneclient.WithProjectReference(ctx, reference)
+}
+
+func exactProjectPathReference(request *http.Request) (string, error) {
+	if request.Method != http.MethodPut && request.Method != http.MethodDelete {
+		return "", nil
+	}
+	const prefix = "/api/v1/projects/"
+	if !strings.HasPrefix(request.URL.Path, prefix) {
+		return "", nil
+	}
+	reference := strings.TrimPrefix(request.URL.Path, prefix)
+	if reference == "" || strings.Contains(reference, "/") {
+		return "", nil
+	}
+	parsed, err := uuid.Parse(reference)
+	if err != nil || parsed.String() != reference {
+		return "", errors.New("invalid project reference in path")
+	}
+	return reference, nil
 }
 
 func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization string) (oidcauth.Principal, string, error) {

@@ -51,27 +51,39 @@ func TestProjectReferenceBinding(t *testing.T) {
 
 	const projectID = "bf51b17a-94d2-4f7e-a7f4-1b014fceec0d"
 	tests := []struct {
-		name    string
-		path    string
-		header  string
-		wantErr bool
+		name      string
+		method    string
+		path      string
+		header    string
+		wantBound bool
+		wantErr   bool
 	}{
-		{name: "HTTP header", path: "/api/v1/runs", header: projectID},
-		{name: "realtime query", path: "/api/v1/realtime?projectId=" + projectID},
-		{name: "invalid header", path: "/api/v1/runs", header: "invalid", wantErr: true},
-		{name: "mismatched realtime scope", path: "/api/v1/realtime?projectId=" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
+		{name: "HTTP header", method: http.MethodGet, path: "/api/v1/runs", header: projectID, wantBound: true},
+		{name: "realtime query", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, wantBound: true},
+		{name: "exact project update path", method: http.MethodPut, path: "/api/v1/projects/" + projectID, wantBound: true},
+		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
+		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
+		{name: "project collection is unbound", method: http.MethodPost, path: "/api/v1/projects"},
+		{name: "invalid header", method: http.MethodGet, path: "/api/v1/runs", header: "invalid", wantErr: true},
+		{name: "invalid exact project path", method: http.MethodDelete, path: "/api/v1/projects/invalid", wantErr: true},
+		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
+		{name: "mismatched realtime scope", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			request := httptest.NewRequest(http.MethodGet, "https://control.kodex.works"+test.path, nil)
+			request := httptest.NewRequest(test.method, "https://control.kodex.works"+test.path, nil)
 			if test.header != "" {
 				request.Header.Set(ProjectReferenceHeader, test.header)
 			}
-			_, err := withProjectReference(context.Background(), request)
+			base := context.Background()
+			result, err := withProjectReference(base, request)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("withProjectReference() error = %v, wantErr %v", err, test.wantErr)
+			}
+			if err == nil && (result != base) != test.wantBound {
+				t.Fatalf("withProjectReference() bound = %v, want %v", result != base, test.wantBound)
 			}
 		})
 	}
