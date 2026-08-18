@@ -26,8 +26,8 @@ import (
 const (
 	maximumCredentialBytes     = 16 << 10
 	maximumControlPlaneRPCSize = 9 << 20
-	proofResolutionAttempts    = 3
-	proofResolutionRetryBase   = 25 * time.Millisecond
+	proofResolutionAttempts    = 5
+	proofResolutionRetryBase   = 50 * time.Millisecond
 )
 
 type applicationGrantContextKey struct{}
