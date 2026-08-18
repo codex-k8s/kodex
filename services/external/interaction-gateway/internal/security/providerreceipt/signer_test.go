@@ -111,6 +111,7 @@ func TestSignerProducesCanonicalExactBoundReceipt(t *testing.T) {
 		EffectSHA256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		ReceiptID:    "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", ReceiptRevision: 7,
 		MaskedStatus: "active", Eligible: true, TargetKind: "workspace_mattermost_mapping",
+		TargetResourceID:    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
 		TargetStableKey:     "workspace-cccccccccccc4ccc8ccccccccccccccc",
 		CommandIntentSHA256: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 	})

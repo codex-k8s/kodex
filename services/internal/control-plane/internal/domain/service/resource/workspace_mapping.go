@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -26,17 +27,23 @@ func (service *Service) ManageWorkspaceMapping(
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
-		(input.Action != "bind" && input.Action != "relink" && input.Action != "unlink") ||
-		!service.interactionGatewayPrincipal(input.Principal) ||
+		(input.Action != "bind" && input.Action != "relink" && input.Action != "unlink") {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if !service.interactionGatewayPrincipal(input.Principal) ||
 		input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
 		input.Principal.AuthorityReference != input.ProviderReceipt.ReceiptID ||
 		input.Principal.AuthorityRevision != input.ProviderReceipt.ReceiptRevision ||
 		!validSHA256Text(input.Principal.AuthorityDigest) {
-		return entity.Resource{}, errs.ErrPermissionDenied
+		return entity.Resource{}, errs.WithSafeCode(errs.ErrPermissionDenied,
+			"WORKSPACE_MAPPING_PRINCIPAL_BINDING_REJECTED")
 	}
 	if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
 		"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action,
 		"workspace_mattermost_mapping", "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping", service.now().UTC()); err != nil {
+		if errors.Is(err, errs.ErrPermissionDenied) {
+			err = errs.WithSafeCode(err, "WORKSPACE_MAPPING_PROVIDER_RECEIPT_REJECTED")
+		}
 		return entity.Resource{}, err
 	}
 	if input.Action == "bind" {
@@ -61,7 +68,8 @@ func (service *Service) ManageWorkspaceMapping(
 		},
 	)
 	if err != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
-		return entity.Resource{}, errs.ErrPermissionDenied
+		return entity.Resource{}, errs.WithSafeCode(errs.ErrPermissionDenied,
+			"WORKSPACE_MAPPING_COMMAND_INTENT_REJECTED")
 	}
 	// One-use receipt/JTI, policy revision и provider generation относятся к
 	// transport proof конкретной попытки. Durable idempotency связывается только
@@ -95,6 +103,9 @@ func (service *Service) ManageWorkspaceMapping(
 			ctx, tx, protected, input.Principal, input.ProviderReceipt,
 			"workspace_mattermost_mapping", workspace.ID, stableTarget, now,
 		)
+		if errors.Is(err, errs.ErrPermissionDenied) {
+			err = errs.WithSafeCode(err, "WORKSPACE_MAPPING_TARGET_BINDING_REJECTED")
+		}
 		if err != nil || replayed {
 			return replay, err
 		}

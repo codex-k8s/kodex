@@ -16,6 +16,34 @@ var (
 	ErrUnavailable = errors.New("control-plane working path is unavailable")
 )
 
+type safeCodedError struct {
+	cause error
+	code  string
+}
+
+func (err safeCodedError) Error() string    { return err.cause.Error() }
+func (err safeCodedError) Unwrap() error    { return err.cause }
+func (err safeCodedError) SafeCode() string { return err.code }
+
+// WithSafeCode сохраняет закрытую диагностику downstream RPC без изменения
+// семантической ошибки, которую обрабатывает orchestration layer.
+func WithSafeCode(cause error, code string) error {
+	if cause == nil || code == "" {
+		return cause
+	}
+	return safeCodedError{cause: cause, code: code}
+}
+
+// SafeCode возвращает только диагностический код, полученный из доверенного
+// внутреннего ErrorDetail.
+func SafeCode(err error) string {
+	var coded interface{ SafeCode() string }
+	if errors.As(err, &coded) {
+		return coded.SafeCode()
+	}
+	return ""
+}
+
 type Artifact struct {
 	ID         string
 	Version    uint64
