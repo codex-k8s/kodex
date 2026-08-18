@@ -143,7 +143,7 @@ func TestAuthorityProofRetriesTransientResolverFailure(t *testing.T) {
 	if _, correlationID, err := client.AuthorityProof(ctx, operation, method); err != nil || correlationID == "" {
 		t.Fatalf("proof retry failed: correlation=%q err=%v", correlationID, err)
 	}
-	if resolver.calls != proofResolutionAttempts {
+	if resolver.calls != len(resolver.failures)+1 {
 		t.Fatalf("resolver calls = %d", resolver.calls)
 	}
 	for _, key := range resolver.idempotencyKeys[1:] {
