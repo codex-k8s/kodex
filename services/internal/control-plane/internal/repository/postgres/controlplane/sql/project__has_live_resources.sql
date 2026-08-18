@@ -6,4 +6,9 @@ SELECT EXISTS (
       AND project_id = @project_id::uuid
       AND id <> @project_id::uuid
       AND state <> 'DELETED'
+      AND NOT (
+          kind = 'WORKSPACE_MATTERMOST_MAPPING'
+          AND state = 'ARCHIVED'
+          AND spec ->> 'mappingState' = 'UNLINKED'
+      )
 );
