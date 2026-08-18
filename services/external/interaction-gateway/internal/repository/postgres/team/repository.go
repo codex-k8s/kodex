@@ -432,13 +432,18 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 		var scanErr error
 		operation, _, scanErr = scanOperation(queryRow(ctx, tx, operationClaimRecoverySQL,
 			owner, digest(token), interval(lease)))
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			// Claim-запрос также завершает просроченные операции. Фиксируем эту
+			// очистку, даже если новой операции для обработки нет.
+			return nil
+		}
 		return scanErr
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.MattermostTeamOperation{}, false, nil
-	}
 	if err != nil {
 		return entity.MattermostTeamOperation{}, false, errors.New("claim Mattermost team recovery")
+	}
+	if operation.ID == "" {
+		return entity.MattermostTeamOperation{}, false, nil
 	}
 	operation.LeaseToken = token
 	return operation, true, nil
@@ -771,17 +776,22 @@ func (repository *Repository) ClaimMappingRecovery(ctx context.Context, owner st
 	err = repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var operationID string
 		if err := queryRow(ctx, tx, mappingOperationClaimRecoverySQL, owner, digest(token), interval(lease)).Scan(&operationID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				// Claim-запрос также завершает просроченные операции. Фиксируем эту
+				// очистку, даже если новой операции для обработки нет.
+				return nil
+			}
 			return err
 		}
 		var scanErr error
 		operation, _, scanErr = scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operationID))
 		return scanErr
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.WorkspaceMappingOperation{}, false, nil
-	}
 	if err != nil {
 		return entity.WorkspaceMappingOperation{}, false, errors.New("claim Workspace mapping recovery")
+	}
+	if operation.ID == "" {
+		return entity.WorkspaceMappingOperation{}, false, nil
 	}
 	operation.LeaseToken = token
 	return operation, true, nil

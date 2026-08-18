@@ -5,7 +5,7 @@ WITH expired AS (
     SET state = 'REPAIR_REQUIRED', failure_code = 'RECOVERY_TIMEOUT',
         lease_owner = '', lease_token_sha256 = '', lease_expires_at = NULL,
         updated_at = clock_timestamp()
-    WHERE state IN ('EFFECT_PENDING', 'AMBIGUOUS') AND recovery_deadline <= clock_timestamp()
+    WHERE state IN ('PENDING', 'EFFECT_PENDING', 'AMBIGUOUS') AND recovery_deadline <= clock_timestamp()
     RETURNING organization_id, project_id, operation_id
 ), expired_fences AS (
     UPDATE interaction_gateway_team_create_fences AS fence
