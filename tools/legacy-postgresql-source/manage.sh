@@ -636,6 +636,10 @@ restore_template_from_record() {
   jq -cn --slurpfile template "$snapshot" '[{"op":"replace","path":"/spec/template","value":$template[0]}]' > "$patch_file"
   kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
     --type=json --patch-file "$patch_file" >/dev/null
+  # StatefulSet не удаляет уже сломанный pod после возврата PodTemplate к
+  # предыдущей revision, поэтому rollback обязан материализовать predecessor.
+  kubectl delete pod "${statefulset_name}-0" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+    --wait=true --timeout="${max_outage_seconds}s" >/dev/null
   kubectl rollout status statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
     --timeout="${max_outage_seconds}s" >/dev/null
   cleanup_private_temporary_dir
