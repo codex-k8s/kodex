@@ -274,6 +274,24 @@ template_digest() {
     jq -cS '.spec.template' | sha256sum | awk '{print $1}'
 }
 
+template_digest_without_defaulted_init_termination() {
+  kubectl get statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" -o json |
+    jq -cS '
+      .spec.template
+      | (.spec.initContainers // []) |= map(
+          if .terminationMessagePath == "/dev/termination-log" then del(.terminationMessagePath) else . end
+          | if .terminationMessagePolicy == "File" then del(.terminationMessagePolicy) else . end
+        )
+    ' | sha256sum | awk '{print $1}'
+}
+
+template_digest_matches_record() {
+  local record="$1" field="$2" expected observed
+  expected="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" "{.data.${field}}")"
+  observed="$(template_digest)"
+  [ "$observed" = "$expected" ] || [ "$(template_digest_without_defaulted_init_termination)" = "$expected" ]
+}
+
 served_fingerprint() {
   kubectl exec --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "${statefulset_name}-0" --container postgres -- \
     bash -ceu '
@@ -522,11 +540,11 @@ create_activation_configmap() {
     --type=merge --patch '{"immutable":true}' >/dev/null
 }
 
-local_patched_template() {
-  local patch_file="$1" target_file="$2" live_file
-  live_file="${private_temporary_dir}/statefulset-live.json"
-  kubectl get statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" -o json > "$live_file"
-  kubectl patch --local -f "$live_file" --type=strategic --patch-file "$patch_file" -o json | jq -cS '.spec.template' > "$target_file"
+server_patched_template() {
+  local patch_file="$1" target_file="$2"
+  kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+    --type=strategic --patch-file "$patch_file" --dry-run=server -o json |
+    jq -cS '.spec.template' > "$target_file"
 }
 
 record_pending_attempt() {
@@ -539,8 +557,8 @@ record_pending_attempt() {
   pending_template="${private_temporary_dir}/pending-template.json"
   current_template="${private_temporary_dir}/current-template.json"
   kubectl get statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" -o json | jq -cS '.spec.template' > "$predecessor_template"
-  local_patched_template "$pending_patch" "$pending_template"
-  local_patched_template "$current_patch" "$current_template"
+  server_patched_template "$pending_patch" "$pending_template"
+  server_patched_template "$current_patch" "$current_template"
   predecessor_digest="$(sha256sum "$predecessor_template" | awk '{print $1}')"
   pending_digest="$(sha256sum "$pending_template" | awk '{print $1}')"
   current_digest="$(sha256sum "$current_template" | awk '{print $1}')"
@@ -609,7 +627,7 @@ wait_pending_pod() {
 }
 
 record_acceptance() {
-  local attempt="$1" record snapshot digest uid current_revision update_revision fingerprint
+  local attempt="$1" record snapshot digest uid current_revision update_revision fingerprint source_revision
   record="mattermost-postgres-migration-accepted-${attempt}"
   umask 077
   private_temporary_dir="$(mktemp -d /tmp/mattercodex-postgresql-acceptance.XXXXXX)"
@@ -621,11 +639,12 @@ record_acceptance() {
   update_revision="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" '{.status.updateRevision}')"
   [ -n "$current_revision" ] && [ "$current_revision" = "$update_revision" ] || mattercodex_die "applied StatefulSet revision не доказана"
   fingerprint="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "mattermost-postgres-migration-attempt-${attempt}" '{.data.certificate-fingerprint}')"
-  [ "$digest" = "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "mattermost-postgres-migration-attempt-${attempt}" '{.data.current-template-digest}')" ] ||
+  source_revision="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "mattermost-postgres-migration-attempt-${attempt}" '{.data.source-git-revision}')"
+  template_digest_matches_record "mattermost-postgres-migration-attempt-${attempt}" current-template-digest ||
     mattercodex_die "accepted PodTemplate digest не совпадает с pending ledger"
   kubectl create configmap "$record" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
     --from-file=accepted-template.json="$snapshot" --from-literal=attempt="$attempt" --from-literal=state=CURRENT \
-    --from-literal=source-git-revision="$revision" --from-literal=statefulset-uid="$uid" \
+    --from-literal=source-git-revision="$source_revision" --from-literal=statefulset-uid="$uid" \
     --from-literal=applied-revision="$current_revision" --from-literal=pod-template-digest="$digest" \
     --from-literal=served-certificate-fingerprint="$fingerprint" --from-literal=served-state-readback=ok \
     --dry-run=client -o yaml | kubectl create -f - >/dev/null
@@ -678,7 +697,7 @@ rollback_attempt() {
   observed_digest="$(template_digest)"
   predecessor_digest="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" '{.data.predecessor-template-digest}')"
   for field in predecessor-template-digest pending-template-digest current-template-digest; do
-    [ "$observed_digest" = "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" "{.data.${field}}")" ] && allowed=true
+    template_digest_matches_record "$record" "$field" && allowed=true
   done
   [ "$allowed" = true ] || mattercodex_die "current PodTemplate не совпадает с ledger; stale/later rollout rollback отклонён"
   candidate_fingerprint="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" '{.data.certificate-fingerprint}')"
@@ -703,7 +722,7 @@ rollback_attempt() {
 }
 
 reconcile_pending() {
-  local pending acceptance uid digest fingerprint applied_revision
+  local pending acceptance attempt_record uid digest fingerprint applied_revision trust_map
   pending="$(index_value pending-attempt)"
   [ -n "$pending" ] || return 0
   acceptance="mattermost-postgres-migration-accepted-${pending}"
@@ -721,6 +740,36 @@ reconcile_pending() {
       mattercodex_log "crash recovery завершила exact accepted attempt ${pending}"
       return
     fi
+  fi
+  attempt_record="mattermost-postgres-migration-attempt-${pending}"
+  trust_map="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.trust-configmap}')"
+  if [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" '{.metadata.uid}')" = \
+         "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.statefulset-uid}')" ] &&
+     template_digest_matches_record "$attempt_record" current-template-digest &&
+     [ -n "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" '{.status.currentRevision}')" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" '{.status.currentRevision}')" = \
+         "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" '{.status.updateRevision}')" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" \
+         '{.spec.template.metadata.annotations.mattercodex\.dev/legacy-postgresql-rollout-attempt}')" = "$pending" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" \
+         '{.spec.template.metadata.annotations.mattercodex\.dev/legacy-postgresql-source-revision}')" = \
+         "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.source-git-revision}')" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" \
+         '{.spec.template.spec.volumes[?(@.name=="migration-tls-source")].secret.secretName}')" = \
+         "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.runtime-secret}')" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" statefulset "$statefulset_name" \
+         '{.spec.template.spec.volumes[?(@.name=="migration-activation")].configMap.name}')" = "mc-pg-activation-${pending}-c" ] &&
+     [ "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "mc-pg-activation-${pending}-c" '{.data.state}')" = CURRENT ] &&
+     [ "$(served_fingerprint)" = "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.certificate-fingerprint}')" ] &&
+     [ "$(principal_comment)" = "$(lifecycle_comment PENDING "$pending")" ] &&
+     ! kubectl get networkpolicy "$client_ingress" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" >/dev/null 2>&1; then
+    run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map"
+    functional_checks
+    record_acceptance "$pending"
+    promote_principal_current "$pending"
+    mark_attempt_current "$pending"
+    mattercodex_log "crash recovery приняла exact served attempt ${pending} после повторного readback"
+    return
   fi
   rollback_attempt "$pending"
 }
@@ -772,6 +821,8 @@ rollout_source() {
       run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map" &&
       kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
         --type=strategic --patch-file "$current_patch" >/dev/null &&
+      kubectl delete pod "${statefulset_name}-0" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+        --wait=true --timeout="${max_outage_seconds}s" >/dev/null &&
       kubectl rollout status statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
         --timeout="${max_outage_seconds}s" >/dev/null &&
       run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map" &&
