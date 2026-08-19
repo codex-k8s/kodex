@@ -193,6 +193,13 @@ record связывает Git SHA, maintenance window, Certificate generation,
 candidate Secret resourceVersion/fingerprint, CA fingerprint, StatefulSet UID,
 current revision, predecessor attempt и digest трёх PodTemplate. Полный exact
 predecessor PodTemplate хранится независимо от ControllerRevision retention.
+Digest candidate PodTemplate вычисляется через Kubernetes server-side dry-run,
+поэтому учитывает defaults и admission конкретного API server. При переходе из
+`PENDING` в `CURRENT` управляющий скрипт явно пересоздаёт StatefulSet pod: pod с
+закрытой readiness не блокирует OrderedReady rollout. Crash recovery может
+принять уже обслуживаемый `CURRENT` только после повторной проверки immutable
+attempt, StatefulSet UID/revision, runtime Secret, activation marker, served
+certificate, закрытого client ingress, principal state и независимого readback.
 После успеха отдельный immutable acceptance record сохраняет applied revision,
 accepted PodTemplate snapshot/digest и served fingerprint. Crash recovery и
 rollback допускают изменение только при совпадении current attempt,
