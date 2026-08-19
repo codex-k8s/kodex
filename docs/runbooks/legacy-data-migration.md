@@ -4,7 +4,7 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.5.0
+version: 1.6.0
 updated: 2026-08-19
 ---
 
@@ -267,7 +267,18 @@ tools/legacy-configuration-import/run-direct-production.sh \
 
 Скрипт получает live image-policy evidence, создаёт короткоживущий signed
 application grant, рендерит scope `migration`, снимает `suspend` только с
-этого Job и ждёт terminal outcome. Base manifest остаётся suspended. Повтор с
+этого Job и ждёт terminal outcome. Перед запуском Job он проверяет exact
+membership migration principal, открывает ограниченное 30 минутами LOGIN-окно,
+а при любом terminal outcome переводит principal в `NOLOGIN`, завершает его
+сессии и сохраняет capability membership. Это временное закрытие не является
+forward-only retire: `principal-no-login.sql` и `manage.sh rollback` дополнительно
+отзывают membership и для паузы между попытками не используются.
+
+Control-plane сначала принимает и компилирует планы всех проектов. Только если
+каждый `Prepare` завершился успешно, Job начинает `Materialize`. Поэтому ошибка
+любого project plan не оставляет частично перенесённые пользовательские проекты;
+подготовленные immutable intents допускают точный retry с тем же plan ID.
+Base manifest остаётся suspended. Повтор с
 тем же plan ID допустим только при неизменных source root, credential snapshots
 и owner evidence; для изменившегося source используется новый plan ID.
 

@@ -63,8 +63,16 @@ func RoleImageSpecSHA256(input *controlplanev1.RoleImageRecipeInput, policyRevis
 		SourceRef: input.GetSourceRef(), SourceRevision: input.GetSourceRevision(), SourceSHA256: input.GetSourceSha256(),
 		ContextRef: input.GetContextRef(), ContextSHA256: input.GetContextSha256(), BuilderSHA256: input.GetBuilderSha256(),
 		FrontendSHA256: input.GetFrontendSha256(), InstallationBlock: input.GetInstallationBlock(),
-		ToolchainSHA256: input.GetToolchainSha256(), Platforms: make([]roleImagePlatformEvidence, 0, len(input.GetPlatforms())),
-		Packages: make([]roleImagePackageEvidence, 0, len(input.GetPackages())), Tools: make([]roleImageToolEvidence, 0, len(input.GetTools())),
+		ToolchainSHA256: input.GetToolchainSha256(),
+	}
+	if len(input.GetPlatforms()) > 0 {
+		canonical.Platforms = make([]roleImagePlatformEvidence, 0, len(input.GetPlatforms()))
+	}
+	if len(input.GetPackages()) > 0 {
+		canonical.Packages = make([]roleImagePackageEvidence, 0, len(input.GetPackages()))
+	}
+	if len(input.GetTools()) > 0 {
+		canonical.Tools = make([]roleImageToolEvidence, 0, len(input.GetTools()))
 	}
 	for _, item := range input.GetPlatforms() {
 		canonical.Platforms = append(canonical.Platforms, roleImagePlatformEvidence{OS: item.GetOs(), Architecture: item.GetArchitecture(), Variant: item.GetVariant()})

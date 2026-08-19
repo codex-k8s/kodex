@@ -214,14 +214,20 @@ func (state *runtimeState) importConfiguration(ctx context.Context, sourceDSN st
 		Projects: make([]model.ConfigurationImportProject, 0, len(prepared)), Outcome: "committed",
 		ImportedAt: time.Now().UTC().Truncate(time.Microsecond),
 	}
-	for _, item := range prepared {
+	// Все планы сначала проходят server-owned validation/compile. Ни один
+	// пользовательский ресурс не материализуется, пока не приняты все проекты.
+	for index := range prepared {
+		item := &prepared[index]
 		receipt, prepareErr := state.target.Prepare(ctx, item.result.Request)
 		if prepareErr != nil {
 			return fmt.Errorf("prepare project %d configuration: %w", item.projection.LegacyProjectID, prepareErr)
 		}
+		item.result.Report.TargetSHA256 = receipt.GetSemanticSha256()
+		item.result.Report.BackupSHA256 = backupResult.BackupSHA256
+		item.result.Report.ManifestSHA256 = backupResult.ManifestSHA256
+	}
+	for _, item := range prepared {
 		plan := item.result.Report
-		plan.TargetSHA256 = receipt.GetSemanticSha256()
-		plan.BackupSHA256, plan.ManifestSHA256 = backupResult.BackupSHA256, backupResult.ManifestSHA256
 		if _, materializeErr := state.target.Materialize(ctx, plan.PlanID, plan.PlanID,
 			plan.TargetSHA256, uint32(plan.MaterializationCount)); materializeErr != nil {
 			return fmt.Errorf("materialize project %d configuration: %w", item.projection.LegacyProjectID, materializeErr)

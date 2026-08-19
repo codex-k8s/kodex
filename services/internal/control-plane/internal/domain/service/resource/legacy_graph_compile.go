@@ -290,6 +290,10 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 		if err != nil {
 			return compiledLegacyGraph{}, err
 		}
+		credentialSpec, ok := credential.Spec.(entity.CredentialBindingSpec)
+		if !ok || !input.ObservedAt.Equal(credentialSpec.ProviderObservedAt) {
+			return compiledLegacyGraph{}, errs.ErrFailedPrecondition
+		}
 		spec := entity.ProviderConnectionReferenceSpec{
 			StableKey: input.StableKey, Provider: input.Provider, ServerReference: input.ServerReference,
 			ReferenceVersion: input.ReferenceVersion, ReferenceGeneration: input.ReferenceGeneration,
@@ -299,6 +303,9 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 			ObservedAt: input.ObservedAt, ReceiptID: input.ReceiptID, ReceiptVersion: input.ReceiptVersion,
 			ReceiptSHA256: input.ReceiptSHA256, CredentialBindingID: credential.ID,
 			CredentialBindingVersion: credential.Version, CredentialBindingSHA256: credentialSHA,
+		}
+		if err := applyLegacyProviderObservation(&spec, credentialSpec, credentialSHA); err != nil {
+			return compiledLegacyGraph{}, err
 		}
 		if err := add(reference, legacyResource(principal, projectID, "", operation.TargetID,
 			enum.KindProviderReference, input.Name, enum.StateActive, spec, at)); err != nil {
@@ -321,6 +328,10 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 				ProviderConnectionReferenceID: provider.ID, ProviderConnectionStableKey: providerSpec.StableKey,
 				ReferenceVersion: provider.Version, ReferenceSHA256: providerSHA, Weight: binding.Weight,
 				Eligible: providerSpec.Eligible, MaskedStatus: providerSpec.MaskedStatus,
+				ObservedUsage: providerSpec.ObservedUsage, ObservedLimit: providerSpec.ObservedLimit,
+				ObservationRevision: providerSpec.ObservationRevision, ObservedAt: providerSpec.ObservedAt,
+				ObservationExpiresAt: providerSpec.ObservationExpiresAt, ObservationSHA256: providerSpec.ObservationSHA256,
+				WindowDurationSeconds: providerSpec.WindowDurationSeconds, ResetsAt: providerSpec.ResetsAt,
 			})
 		}
 		slices.SortFunc(bindings, func(left, right entity.ProviderPoolBinding) int {
@@ -521,6 +532,40 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 		}
 	}
 	return compiled, nil
+}
+
+func applyLegacyProviderObservation(spec *entity.ProviderConnectionReferenceSpec,
+	credential entity.CredentialBindingSpec, credentialSHA256 string,
+) error {
+	if spec == nil || !credential.ProviderEligible || credential.ProviderObservedLimit == 0 ||
+		credential.ProviderObservationRevision == 0 || credential.ProviderObservedAt.IsZero() ||
+		!validSHA256Text(credentialSHA256) {
+		return errs.ErrFailedPrecondition
+	}
+	const windowDurationSeconds = uint64((24 * time.Hour) / time.Second)
+	resetsAt := credential.ProviderObservedAt.Add(24 * time.Hour)
+	observationExpiresAt := resetsAt
+	observationSHA256, err := canonicalHash(struct {
+		StableKey, CredentialBindingSHA256 string
+		ObservedUsage, ObservedLimit       uint64
+		ObservationRevision                uint64
+		ObservedAt, ResetsAt, ExpiresAt    time.Time
+		WindowDurationSeconds              uint64
+	}{spec.StableKey, credentialSHA256, credential.ProviderObservedUsage,
+		credential.ProviderObservedLimit, credential.ProviderObservationRevision,
+		credential.ProviderObservedAt, resetsAt, observationExpiresAt, windowDurationSeconds})
+	if err != nil {
+		return errs.ErrInternal
+	}
+	spec.ObservedUsage = credential.ProviderObservedUsage
+	spec.ObservedLimit = credential.ProviderObservedLimit
+	spec.ObservationRevision = credential.ProviderObservationRevision
+	spec.ObservedAt = credential.ProviderObservedAt
+	spec.ObservationExpiresAt = observationExpiresAt
+	spec.WindowDurationSeconds = windowDurationSeconds
+	spec.ResetsAt = resetsAt
+	spec.ObservationSHA256 = observationSHA256
+	return nil
 }
 
 func (service *Service) compileLegacyDerivedRuntime(principal value.Principal, projectID string,

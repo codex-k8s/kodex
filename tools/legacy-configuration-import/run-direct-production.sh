@@ -55,8 +55,69 @@ namespace=mattercodex-system
 source_namespace=matter-kodex-prod
 source_postgres=mattermost-postgres-0
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
+source_principal_window_open=false
+close_source_principal_window() {
+  [[ "$source_principal_window_open" == true ]] || return 0
+  "${kube[@]}" -n "$source_namespace" exec -i "$source_postgres" -c postgres -- sh -ceu '
+    exec psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  ' <<'SQL'
+BEGIN;
+SET LOCAL statement_timeout = '15s';
+SET LOCAL lock_timeout = '5s';
+ALTER ROLE matter_codex_migration_g1 NOLOGIN;
+SELECT pg_catalog.pg_terminate_backend(pid)
+FROM pg_catalog.pg_stat_activity
+WHERE usename = 'matter_codex_migration_g1'
+  AND pid <> pg_catalog.pg_backend_pid();
+COMMIT;
+SQL
+  source_principal_window_open=false
+}
+cleanup() {
+  close_source_principal_window || printf 'Legacy configuration import warning: source principal window cleanup failed\n' >&2
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup EXIT
 umask 077
+
+open_source_principal_window() {
+  "${kube[@]}" -n "$source_namespace" exec -i "$source_postgres" -c postgres -- sh -ceu '
+    exec psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  ' <<'SQL'
+BEGIN;
+SET LOCAL statement_timeout = '15s';
+SET LOCAL lock_timeout = '5s';
+DO $preflight$
+DECLARE
+  principal_oid oid;
+  capability_oid oid;
+BEGIN
+  SELECT oid INTO principal_oid FROM pg_catalog.pg_roles WHERE rolname = 'matter_codex_migration_g1';
+  SELECT oid INTO capability_oid FROM pg_catalog.pg_roles WHERE rolname = 'matter_codex_migration';
+  IF principal_oid IS NULL OR capability_oid IS NULL THEN
+    RAISE EXCEPTION 'migration principal or capability role is missing';
+  END IF;
+  IF NOT pg_catalog.pg_has_role('matter_codex_migration_g1', 'matter_codex_migration', 'MEMBER') THEN
+    RAISE EXCEPTION 'migration capability membership is missing';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members AS membership
+    WHERE membership.member = principal_oid
+      AND membership.roleid <> capability_oid
+  ) THEN
+    RAISE EXCEPTION 'migration principal has unexpected memberships';
+  END IF;
+END
+$preflight$;
+SELECT format(
+  'ALTER ROLE matter_codex_migration_g1 LOGIN VALID UNTIL %L',
+  pg_catalog.clock_timestamp() + interval '30 minutes'
+) \gexec
+COMMIT;
+SQL
+  source_principal_window_open=true
+}
 
 credentials_tsv="$temporary_directory/credentials.tsv"
 "${kube[@]}" -n "$source_namespace" exec "$source_postgres" -c postgres -- sh -c '
@@ -215,6 +276,7 @@ yq 'select(.kind != "Job")' "$render" >"$support"
 yq 'select(.kind == "Job")' "$render" >"$job"
 "${kube[@]}" apply -f "$support" >/dev/null
 "${kube[@]}" -n "$namespace" delete job legacy-data-migration --ignore-not-found --wait=true >/dev/null
+open_source_principal_window
 "${kube[@]}" apply -f "$job" >/dev/null
 migration_deadline=$((SECONDS + 7200))
 migration_completed=false
@@ -238,5 +300,6 @@ unset migration_status
   fail "migration Job did not complete before deadline"
 }
 unset migration_completed
+close_source_principal_window
 "${kube[@]}" -n "$namespace" logs job/legacy-data-migration -c migration --tail=200
 printf 'Legacy configuration import completed: plan=%s\n' "$plan_id"
