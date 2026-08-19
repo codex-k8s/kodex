@@ -224,8 +224,8 @@ preflight() {
   postgres_uid="$(kubectl exec --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "${statefulset_name}-0" --container postgres -- id -u postgres 2>/dev/null)"
   [ "$postgres_uid" = 999 ] || mattercodex_die "PostgreSQL runtime UID не соответствует TLS materializer owner"
   kubectl exec --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "${statefulset_name}-0" --container postgres -- \
-    sh -ceu 'command -v bash >/dev/null && command -v openssl >/dev/null' ||
-    mattercodex_die "закреплённый PostgreSQL image не содержит bash/openssl для TLS materializer"
+    sh -ceu 'command -v bash >/dev/null && command -v openssl >/dev/null && command -v timeout >/dev/null' ||
+    mattercodex_die "закреплённый PostgreSQL image не содержит bash/openssl/timeout для TLS materializer/readback"
   actual_database="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" secret "$MATTERCODEX_POSTGRES_SECRET" '{.data.postgres-db}' | base64 -d)"
   [ "$actual_database" = "$MATTERCODEX_POSTGRES_DB" ] || mattercodex_die "source database не совпадает с code-first настройкой"
   unset actual_database

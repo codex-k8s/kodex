@@ -42,16 +42,24 @@ served_file="${scratch_dir}/served.pem"
 served_der="${scratch_dir}/served.der"
 expected_der="${scratch_dir}/expected.der"
 
-openssl s_client \
-  -starttls postgres \
-  -connect "${PGHOST}:${PGPORT}" \
-  -servername "$PGHOST" \
-  -verify_hostname "$PGHOST" \
-  -CAfile "${trust_dir}/ca.pem" \
-  -verify_return_error \
-  -tls1_3 \
-  -showcerts \
-  < /dev/null > "$handshake_file" 2>/dev/null || die "TLS handshake failed"
+handshake_ok=false
+for _ in 1 2 3 4 5 6; do
+  if timeout 5s openssl s_client \
+    -starttls postgres \
+    -connect "${PGHOST}:${PGPORT}" \
+    -servername "$PGHOST" \
+    -verify_hostname "$PGHOST" \
+    -CAfile "${trust_dir}/ca.pem" \
+    -verify_return_error \
+    -tls1_3 \
+    -showcerts \
+    < /dev/null > "$handshake_file" 2>/dev/null; then
+    handshake_ok=true
+    break
+  fi
+  sleep 2
+done
+[ "$handshake_ok" = true ] || die "TLS handshake failed"
 
 awk '
   /-----BEGIN CERTIFICATE-----/ { capture = 1 }
