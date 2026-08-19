@@ -569,7 +569,7 @@ apply_readback_configmap() {
 }
 
 run_readback() {
-  local namespace="$1" trust_map="$2" job_name expected_fingerprint
+  local namespace="$1" trust_map="$2" job_name expected_fingerprint tls_policy
   expected_fingerprint="$(kubectl get configmap "$trust_map" --namespace "$namespace" -o 'go-template={{index .metadata.annotations "mattercodex.dev/server-certificate-sha256"}}')"
   [[ "$expected_fingerprint" =~ ^[a-f0-9]{64}$ ]] || mattercodex_die "trust snapshot не содержит certificate fingerprint"
   export MATTERCODEX_POSTGRES_READBACK_NAMESPACE="$namespace"
@@ -581,7 +581,14 @@ run_readback() {
     return 1
   fi
   kubectl logs --namespace "$namespace" "$job_name" --container readback --tail=1 |
-    grep -qx 'legacy PostgreSQL source readback: ok'
+    grep -qx 'legacy PostgreSQL source readback: ok' || return 1
+  tls_policy="$(admin_query <<'SQL' 2>/dev/null
+SELECT current_setting('ssl') = 'on'
+       AND current_setting('ssl_min_protocol_version') = 'TLSv1.3'
+       AND current_setting('ssl_max_protocol_version') = 'TLSv1.3';
+SQL
+)"
+  [ "$tls_policy" = t ] || mattercodex_die "PostgreSQL TLS policy readback отклонён"
 }
 
 wait_pending_pod() {

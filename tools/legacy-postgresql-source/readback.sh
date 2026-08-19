@@ -90,9 +90,6 @@ SELECT EXISTS (
              AND ssl
              AND version = 'TLSv1.3'
        )
-       AND current_setting('ssl') = 'on'
-       AND current_setting('ssl_min_protocol_version') = 'TLSv1.3'
-       AND current_setting('ssl_max_protocol_version') = 'TLSv1.3'
        AND current_user = session_user
        AND session_user = 'matter_codex_migration_g1'
        AND has_table_privilege(session_user, 'public.matter_codex_legacy_data_cutovers', 'SELECT')
