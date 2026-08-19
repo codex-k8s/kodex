@@ -77,7 +77,8 @@ jq -e '
     (.owner == "publisher" or .owner == "reconciler")) and
   all(.owner_materialized_resources[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
-      .classification == "deterministically_derived" and .keys == $binding.keys))
+      (.classification == "deterministically_derived" or
+       .classification == "cryptographically_generated") and .keys == $binding.keys))
 ' "$policy" >/dev/null || fail "application material policy is invalid"
 values="$temporary_directory/values"
 mkdir -p "$values/Secret" "$values/ConfigMap" "$temporary_directory/internal"
@@ -422,7 +423,7 @@ principal_names="$temporary_directory/internal/principals.txt"
 yq -r '.data."principals.tsv"' deploy/k8s/base/direct-production-foundation/foundation.yaml 2>/dev/null |
   awk -F '\t' 'NF >= 4 && $1 ~ /^[a-z0-9_]+$/ {print $1}' | LC_ALL=C sort -u >"$principal_names"
 principal_count=$(wc -l <"$principal_names" | tr -d ' ')
-[[ "$principal_count" -eq 28 ]] || fail "PostgreSQL principal registry count is invalid: $principal_count"
+[[ "$principal_count" -eq 29 ]] || fail "PostgreSQL principal registry count is invalid: $principal_count"
 retired_principal_names="$temporary_directory/internal/retired-principals.txt"
 yq -r '.data."retired-principals.txt"' deploy/k8s/base/direct-production-foundation/foundation.yaml 2>/dev/null |
   awk 'NF == 1 && $1 ~ /^[a-z0-9_]+$/ {print $1}' | LC_ALL=C sort -u >"$retired_principal_names"
@@ -488,6 +489,7 @@ for mapping in \
   control-api-gateway:ira_control_api_gateway_issuer_g1 \
   integration-gateway:ira_integration_gateway_issuer_g1 \
   interaction-gateway:ira_interaction_gateway_issuer_g1 \
+  legacy-data-migration:ira_legacy_data_migration_issuer_g1 \
   runtime-controller:ira_runtime_controller_issuer_g1; do
   component=${mapping%%:*}; principal=${mapping#*:}
   resource="internal-rpc-authority-$component-issuer-postgresql"
@@ -586,6 +588,7 @@ public_jwk control-plane-application-grants control-plane.integration-provider-r
 public_jwk control-plane-application-grants control-plane.integration-git-reconciliation.public.jwk integration-gateway-git-receipt-signer private.jwk
 public_jwk control-plane-application-grants control-plane.interaction-provider-readback.public.jwk interaction-gateway-runtime provider-readback.private.jwk
 public_jwk control-plane-application-grants control-plane.automation.public.jwk control-plane-readiness-grant-signers automation-scheduler-operation.private.jwk
+public_jwk control-plane-application-grants control-plane.legacy-data-migration.public.jwk control-plane-readiness-grant-signers legacy-data-migration.private.jwk
 for binding in \
   'control-api-gateway:control-plane.control-api-readiness.public.jwk' \
   'automation-scheduler:control-plane.automation-readiness.public.jwk' \
@@ -613,7 +616,7 @@ node "$helper" generate-automation-grant \
 generate_readiness_grant integration-gateway integration-gateway-application-grant readiness.jwt
 generate_readiness_grant interaction-gateway interaction-gateway-application-grant readiness.jwt
 generate_readiness_grant runtime-controller runtime-controller-application-grant application-grant.jws
-for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway runtime-controller; do
+for component in automation-scheduler control-api-gateway integration-gateway interaction-gateway legacy-data-migration runtime-controller; do
   public_jwks "internal-rpc-authority-$component-proof-trust" jwks.json "internal-rpc-authority-$component-issuer-key" private.jwk
 done
 public_jwks internal-rpc-authority-control-plane-resolver-trust jwks.json internal-rpc-authority-control-plane-resolver-key private.jwk

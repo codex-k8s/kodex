@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.4.0
-updated: 2026-08-12
+version: 1.5.0
+updated: 2026-08-19
 ---
 
 # Перенос legacy MatterCodex data
@@ -230,10 +230,51 @@ bot-service. Credential становится `RETIRED`; PKI snapshots и ledger
 transport rollback не является rollback данных и не разрешён вместо forward
 recovery протокола #196.
 
+## Bounded import активной конфигурации direct production
+
+Режим `configuration-import` предназначен для owner-approved переноса
+настроек в уже развёрнутый новый control-plane без переноса legacy runtime
+истории. Он читает всю source inventory в одном repeatable-read snapshot,
+создаёт один зашифрованный backup legacy DB, а затем строит отдельный bounded
+owner plan для каждого проекта. В target переносятся только активные проекты,
+чаты, роли и их bindings, используемые OpenAI/GitHub credentials,
+репозитории, runtime variables, policy revisions, bot identities и schedules.
+Session, turn, process run, callback, memory, artifact и другая runtime history
+не материализуются.
+
+Credential values не входят в plan и report. Owner execution script копирует
+только используемые source Secrets в versioned immutable Kubernetes Secret
+snapshots целевого namespace, вычисляет hash выбранного credential key и
+передаёт control-plane exact `Secret UID:resourceVersion`, content hash и
+immutable reference. Значения не выводятся. Несовпадение существующего
+snapshot, source hash или owner evidence закрыто останавливает запуск.
+
+Для direct-production выполняется только скрипт из exact clean merged
+revision и exact release lock:
+
+```bash
+tools/legacy-configuration-import/run-direct-production.sh \
+  --owner-approved \
+  --revision "$(git rev-parse HEAD)" \
+  --lock /secure/path/release-lock.json \
+  --plan-id '<new-uuid>' \
+  --source-root-reference '<new-uuid>' \
+  --source-root-sha256 '<approved-64-hex-source-root-digest>' \
+  --organization-id '<owner-organization-uuid>' \
+  --owner-actor-id '<owner-actor-uuid>' \
+  --context '<exact-kubernetes-context>'
+```
+
+Скрипт получает live image-policy evidence, создаёт короткоживущий signed
+application grant, рендерит scope `migration`, снимает `suspend` только с
+этого Job и ждёт terminal outcome. Base manifest остаётся suspended. Повтор с
+тем же plan ID допустим только при неизменных source root, credential snapshots
+и owner evidence; для изменившегося source используется новый plan ID.
+
 ## Обязательный внешний gate
 
-Перед **любым исполнением** `dry-run`, `pre-commit`, `commit`, `rollback` или
-`restore-verify` Issue
+Перед **любым исполнением** `dry-run`, `pre-commit`, `commit`, `rollback`,
+`restore-verify` или `configuration-import` Issue
 [#241](https://github.com/codex-k8s/matter-codex/issues/241) должен быть закрыт
 и принят владельцем. Это обязательный prerequisite и для cutover #196, и для
 post-COMMITTED cleanup [#271](https://github.com/codex-k8s/matter-codex/issues/271).

@@ -326,6 +326,49 @@ switch (command) {
     writeFileSync(outputPath, compact, { mode: 0o600 });
     break;
   }
+  case "generate-legacy-migration-grant": {
+    if (args.length !== 8 || !/^[1-9][0-9]*$/.test(args[7])) {
+      fail("generate-legacy-migration-grant requires private JWK, output, organization, actor, source reference, source SHA-256, revision and TTL");
+    }
+    const [privatePath, outputPath, organizationID, actorID, sourceRootReference, sourceRootSHA256, revisionRaw, ttlRaw] = args;
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    if (!uuidPattern.test(organizationID) || !uuidPattern.test(actorID) || !uuidPattern.test(sourceRootReference) ||
+        !/^[a-f0-9]{64}$/.test(sourceRootSHA256)) {
+      fail("legacy migration owner or source identity is invalid");
+    }
+    const revision = Number(revisionRaw);
+    const ttl = Number(ttlRaw);
+    if (!Number.isSafeInteger(revision) || revision < 1 ||
+        !Number.isSafeInteger(ttl) || ttl < 120 || ttl > 300) {
+      fail("legacy migration grant revision or TTL is invalid");
+    }
+    const privateJWK = canonicalPrivateJWK(JSON.parse(readFileSync(privatePath, "utf8")));
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      aud: "urn:mattercodex:legacy-data-migration",
+      caller_spiffe_id: "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+      exp: now + ttl,
+      iat: now,
+      iss: "https://control-plane.mattercodex-system.svc.cluster.local/authority/legacy-data-migration",
+      jti: randomUUID(),
+      nbf: now,
+      organization_id: organizationID,
+      project_id: "",
+      revision,
+      source_root_reference: sourceRootReference,
+      source_root_sha256: sourceRootSHA256,
+      sub: actorID,
+      tenant_owner: true,
+      v: 1,
+      workload_id: "legacy-data-migration",
+    };
+    const compact = signCanonicalES256(payload, {
+      alg: "ES256", crit: ["mcxv"], kid: privateJWK.kid,
+      mcxv: 1, typ: "mattercodex-application-grant+jws",
+    }, privateJWK);
+    writeFileSync(outputPath, compact, { mode: 0o600 });
+    break;
+  }
   case "generate-automation-grant": {
     if (args.length !== 3 || !/^[1-9][0-9]*$/.test(args[2])) {
       fail("generate-automation-grant requires private JWK, output and TTL");

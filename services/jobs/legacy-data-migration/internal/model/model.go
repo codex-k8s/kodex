@@ -92,3 +92,21 @@ type CutoverAudit struct {
 	Outcome               string    `json:"outcome"`
 	RecordedAt            time.Time `json:"recordedAt"`
 }
+
+type ConfigurationImportProject struct {
+	LegacyProjectID int64  `json:"legacyProjectId"`
+	ProjectName     string `json:"projectName"`
+	Plan            Plan   `json:"plan"`
+}
+
+type ConfigurationImport struct {
+	SchemaVersion  string                       `json:"schemaVersion"`
+	PlanID         string                       `json:"planId"`
+	SourceSHA256   string                       `json:"sourceSha256"`
+	BackupSHA256   string                       `json:"backupSha256"`
+	ManifestSHA256 string                       `json:"manifestSha256"`
+	BackupBytes    int64                        `json:"backupBytes"`
+	Projects       []ConfigurationImportProject `json:"projects"`
+	Outcome        string                       `json:"outcome"`
+	ImportedAt     time.Time                    `json:"importedAt"`
+}

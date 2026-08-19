@@ -68,7 +68,8 @@ func (client *Client) Prepare(ctx context.Context,
 	if err := validateMigration(migration, request.GetPlanId(), uint32(len(request.GetOperations())), false); err != nil {
 		return nil, err
 	}
-	if migration.GetState() != controlplanev1.LegacyGraphMigrationState_LEGACY_GRAPH_MIGRATION_STATE_PREPARED ||
+	if migration.GetState() != controlplanev1.LegacyGraphMigrationState_LEGACY_GRAPH_MIGRATION_STATE_PREPARED &&
+		migration.GetState() != controlplanev1.LegacyGraphMigrationState_LEGACY_GRAPH_MIGRATION_STATE_COMMITTED ||
 		migration.GetSourceSnapshotSha256() != request.GetSourceSnapshotSha256() {
 		return nil, errors.New("legacy materializer source snapshot readback mismatch")
 	}

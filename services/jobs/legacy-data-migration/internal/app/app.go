@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/planner"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/repository/postgres"
+	"github.com/google/uuid"
 )
 
 type runtimeState struct {
@@ -157,9 +158,80 @@ func (state *runtimeState) execute(ctx context.Context, sourceDSN string) error 
 		return state.rollback(ctx)
 	case "restore-verify":
 		return state.restoreVerify(ctx)
+	case "configuration-import":
+		return state.importConfiguration(ctx, sourceDSN)
 	default:
 		return errors.New("migration mode is invalid")
 	}
+}
+
+func (state *runtimeState) importConfiguration(ctx context.Context, sourceDSN string) error {
+	snapshot, err := state.source.BeginSourceSnapshot(ctx, true, false)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = snapshot.Tx.Rollback(ctx) }()
+	projects, err := planner.ConfigurationProjects(snapshot.Rows)
+	if err != nil {
+		return err
+	}
+	basePlanID, err := uuid.Parse(state.config.PlanID)
+	if err != nil {
+		return errors.New("configuration import plan identifier is invalid")
+	}
+	type preparedProject struct {
+		projection planner.ConfigurationProjection
+		result     planner.Result
+	}
+	prepared := make([]preparedProject, 0, len(projects))
+	for _, project := range projects {
+		planID := uuid.NewSHA1(basePlanID, []byte(fmt.Sprintf("legacy-project:%d", project.LegacyProjectID))).String()
+		result, buildErr := planner.BuildConfiguration(planID, planID,
+			state.config.SourceRootReference, state.config.SourceRootSHA256,
+			project.Rows, project.SourceSHA256, project.Counts, project.TableSHA256, state.config.OwnerEvidence)
+		if buildErr != nil {
+			return fmt.Errorf("build project %d configuration plan: %w", project.LegacyProjectID, buildErr)
+		}
+		if !result.Report.Ready() {
+			return fmt.Errorf("project %d configuration plan is blocked", project.LegacyProjectID)
+		}
+		prepared = append(prepared, preparedProject{projection: project, result: result})
+	}
+	backupResult, err := backup.Create(ctx, state.config.BackupDirectory, state.config.PlanID, sourceDSN,
+		state.config.SourceTLSServerName, state.config.SourceCAFile, snapshot.ExportedID,
+		state.config.BackupKeyFile, snapshot.SourceSHA256, snapshot.Counts, time.Now(),
+		state.config.MaximumStagingBytes)
+	if err != nil {
+		return err
+	}
+	if err := snapshot.Tx.Commit(ctx); err != nil {
+		return errors.New("close configuration import source snapshot")
+	}
+	report := model.ConfigurationImport{
+		SchemaVersion: "mattercodex.legacy-configuration-import.v1", PlanID: state.config.PlanID,
+		SourceSHA256: snapshot.SourceSHA256, BackupSHA256: backupResult.BackupSHA256,
+		ManifestSHA256: backupResult.ManifestSHA256, BackupBytes: backupResult.BackupBytes,
+		Projects: make([]model.ConfigurationImportProject, 0, len(prepared)), Outcome: "committed",
+		ImportedAt: time.Now().UTC().Truncate(time.Microsecond),
+	}
+	for _, item := range prepared {
+		receipt, prepareErr := state.target.Prepare(ctx, item.result.Request)
+		if prepareErr != nil {
+			return fmt.Errorf("prepare project %d configuration: %w", item.projection.LegacyProjectID, prepareErr)
+		}
+		plan := item.result.Report
+		plan.TargetSHA256 = receipt.GetSemanticSha256()
+		plan.BackupSHA256, plan.ManifestSHA256 = backupResult.BackupSHA256, backupResult.ManifestSHA256
+		if _, materializeErr := state.target.Materialize(ctx, plan.PlanID, plan.PlanID,
+			plan.TargetSHA256, uint32(plan.MaterializationCount)); materializeErr != nil {
+			return fmt.Errorf("materialize project %d configuration: %w", item.projection.LegacyProjectID, materializeErr)
+		}
+		plan.CutoverState = "COMMITTED"
+		report.Projects = append(report.Projects, model.ConfigurationImportProject{
+			LegacyProjectID: item.projection.LegacyProjectID, ProjectName: item.projection.ProjectName, Plan: plan,
+		})
+	}
+	return writeJSONReport(state.config.ReportPath, report)
 }
 
 func (state *runtimeState) restoreVerify(ctx context.Context) error {
