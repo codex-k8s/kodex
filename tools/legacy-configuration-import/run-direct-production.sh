@@ -216,9 +216,27 @@ yq 'select(.kind == "Job")' "$render" >"$job"
 "${kube[@]}" apply -f "$support" >/dev/null
 "${kube[@]}" -n "$namespace" delete job legacy-data-migration --ignore-not-found --wait=true >/dev/null
 "${kube[@]}" apply -f "$job" >/dev/null
-if ! "${kube[@]}" -n "$namespace" wait --for=condition=complete job/legacy-data-migration --timeout=7200s; then
+migration_deadline=$((SECONDS + 7200))
+migration_completed=false
+while ((SECONDS < migration_deadline)); do
+  migration_status=$("${kube[@]}" -n "$namespace" get job legacy-data-migration -o json)
+  if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' \
+    <<<"$migration_status" >/dev/null; then
+    migration_completed=true
+    break
+  fi
+  if jq -e 'any(.status.conditions[]?; .type == "Failed" and .status == "True")' \
+    <<<"$migration_status" >/dev/null; then
+    "${kube[@]}" -n "$namespace" logs job/legacy-data-migration --all-containers --tail=200 >&2 || true
+    fail "migration Job failed"
+  fi
+  sleep 5
+done
+unset migration_status
+[[ "$migration_completed" == true ]] || {
   "${kube[@]}" -n "$namespace" logs job/legacy-data-migration --all-containers --tail=200 >&2 || true
-  fail "migration Job did not complete"
-fi
+  fail "migration Job did not complete before deadline"
+}
+unset migration_completed
 "${kube[@]}" -n "$namespace" logs job/legacy-data-migration -c migration --tail=200
 printf 'Legacy configuration import completed: plan=%s\n' "$plan_id"

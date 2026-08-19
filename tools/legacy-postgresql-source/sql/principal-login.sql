@@ -33,9 +33,11 @@ SELECT format(
     'ALTER ROLE matter_codex_migration_g1 LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 VALID UNTIL %L',
     pg_catalog.clock_timestamp() + interval '5 minutes'
 ) \gexec
-ALTER ROLE matter_codex_migration_g1 SET statement_timeout = '30s';
+-- Полный repeatable-read snapshot и связанный pg_dump выполняются локально в
+-- кластере, но на актуальном объёме уже превышают интерактивные 30 секунд.
+ALTER ROLE matter_codex_migration_g1 SET statement_timeout = '15min';
 ALTER ROLE matter_codex_migration_g1 SET lock_timeout = '5s';
-ALTER ROLE matter_codex_migration_g1 SET idle_session_timeout = '60s';
-ALTER ROLE matter_codex_migration_g1 SET idle_in_transaction_session_timeout = '30s';
+ALTER ROLE matter_codex_migration_g1 SET idle_session_timeout = '10min';
+ALTER ROLE matter_codex_migration_g1 SET idle_in_transaction_session_timeout = '30min';
 SELECT format('COMMENT ON ROLE matter_codex_migration_g1 IS %L', :'lifecycle_comment') \gexec
 COMMIT;
