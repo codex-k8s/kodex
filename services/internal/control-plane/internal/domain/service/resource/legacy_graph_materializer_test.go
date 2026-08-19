@@ -83,6 +83,54 @@ func TestLegacySemanticPlanRejectsClientTargetWithoutMutatingInput(t *testing.T)
 	}
 }
 
+func TestLegacyProviderObservationProducesValidReferenceAndPoolBinding(t *testing.T) {
+	at := time.Date(2026, 8, 19, 15, 0, 0, 0, time.UTC)
+	reference := entity.ProviderConnectionReferenceSpec{
+		StableKey: "openai-main", Provider: "openai", ServerReference: "provider://openai/openai-main",
+		ReferenceVersion: 1, ReferenceGeneration: 1, ReferenceSHA256: legacyTestSHA,
+		MaskedLabel: "OpenAI main", MaskedStatus: "AVAILABLE", Capabilities: []string{"chat"}, Eligible: true,
+		ReceiptID: "11111111-1111-4111-8111-111111111111", ReceiptVersion: 1,
+		ReceiptSHA256: legacyTestSHA, CredentialBindingID: "22222222-2222-4222-8222-222222222222",
+		CredentialBindingVersion: 1, CredentialBindingSHA256: legacyTestOtherSHA,
+	}
+	credential := entity.CredentialBindingSpec{
+		ProviderEligible: true, ProviderObservedUsage: 7, ProviderObservedLimit: 100,
+		ProviderObservationRevision: 3, ProviderObservedAt: at,
+	}
+	if err := applyLegacyProviderObservation(&reference, credential, legacyTestOtherSHA); err != nil {
+		t.Fatalf("apply legacy provider observation: %v", err)
+	}
+	if err := reference.Validate(); err != nil {
+		t.Fatalf("provider reference is invalid: %v", err)
+	}
+	binding := entity.ProviderPoolBinding{
+		ProviderConnectionReferenceID: reference.CredentialBindingID,
+		ProviderConnectionStableKey:   reference.StableKey,
+		ReferenceVersion:              reference.ReferenceVersion,
+		ReferenceSHA256:               reference.ReferenceSHA256,
+		Weight:                        100,
+		Eligible:                      reference.Eligible,
+		MaskedStatus:                  reference.MaskedStatus,
+		ObservedUsage:                 reference.ObservedUsage,
+		ObservedLimit:                 reference.ObservedLimit,
+		ObservationRevision:           reference.ObservationRevision,
+		ObservedAt:                    reference.ObservedAt,
+		ObservationExpiresAt:          reference.ObservationExpiresAt,
+		ObservationSHA256:             reference.ObservationSHA256,
+		WindowDurationSeconds:         reference.WindowDurationSeconds,
+		ResetsAt:                      reference.ResetsAt,
+	}
+	pool := entity.ProviderPoolSpec{
+		StableKey: "manager", Policy: "weighted", PolicyRevision: 1,
+		ObservationMaxAge: 24 * time.Hour, Bindings: []entity.ProviderPoolBinding{binding},
+		EligibilitySnapshotSHA256: legacyTestSHA,
+		Ownership:                 entity.ConfigurationOwnership{ManagedBy: "UI"},
+	}
+	if err := pool.Validate(); err != nil {
+		t.Fatalf("provider pool is invalid: %v", err)
+	}
+}
+
 func TestLegacyLifecycleRejectsClaimedAttemptWithoutLease(t *testing.T) {
 	at := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
 	operations := legacyLineageFixture(at)

@@ -19,12 +19,15 @@ import (
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const schemaVersion = "mattercodex.legacy-data-migration-plan.v1"
+
+const legacyProviderCapability = "chat"
 
 type sourceRow map[string]any
 
@@ -502,7 +505,7 @@ func (builder *ownerBuilder) addCredential(row sourceRow) error {
 		ContentVersion: evidence.ContentVersion, ContentSha256: evidence.ContentSHA256,
 	}
 	if purpose == "provider-account" {
-		input.ProviderCapabilities = []string{"chat.completions"}
+		input.ProviderCapabilities = []string{legacyProviderCapability}
 		input.ObservedLimit = builder.evidence.ProviderObservedLimit
 		input.ObservationRevision = builder.evidence.ProviderObservationRevision
 		input.ObservedAt = timestamppb.New(builder.evidence.ProviderObservedAt)
@@ -528,11 +531,14 @@ func (builder *ownerBuilder) addProvider(row sourceRow) error {
 	builder.providers[name] = ref
 	builder.providerCredentials[name] = credential
 	sha := rowDigest(row)
+	source := builder.source("matter_codex_openai_accounts", "provider", row)
+	source.LocalRef = ref
 	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ProviderReference{ProviderReference: &controlplanev1.LegacyProviderConnectionReferenceOperation{
-		Source: builder.source("matter_codex_openai_accounts", "provider", row), Name: name, StableKey: stable(name), Provider: "openai",
+		Source: source, Name: name, StableKey: stable(name), Provider: "openai",
 		ServerReference: "provider://openai/" + stable(name), ReferenceVersion: sourceRevision(row), ReferenceGeneration: sourceRevision(row), ReferenceSha256: sha,
-		MaskedLabel: name, MaskedStatus: "AVAILABLE", Capabilities: []string{"chat.completions"}, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
-		ReceiptId: "legacy-" + stable(name), ReceiptVersion: sourceRevision(row), ReceiptSha256: sha, CredentialBindingRef: credential,
+		MaskedLabel: name, MaskedStatus: "AVAILABLE", Capabilities: []string{legacyProviderCapability}, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
+		ReceiptId:      uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:legacy-provider-receipt\x00"+source.SourceRef)).String(),
+		ReceiptVersion: sourceRevision(row), ReceiptSha256: sha, CredentialBindingRef: credential,
 	}}}, "matter_codex_openai_accounts")
 	return nil
 }
@@ -593,7 +599,7 @@ func (builder *ownerBuilder) addRoleGraph(row sourceRow) error {
 	poolSource := builder.source("matter_codex_agent_roles", "pool", row)
 	poolSource.LocalRef = poolRef
 	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ProviderPool{ProviderPool: &controlplanev1.LegacyProviderPoolOperation{
-		Source: poolSource, Name: "Provider pool " + name, StableKey: stableKey, Policy: "ordered", PolicyRevision: 1,
+		Source: poolSource, Name: "Provider pool " + name, StableKey: stableKey, Policy: "weighted", PolicyRevision: 1,
 		ObservationMaxAge: durationpb.New(24 * time.Hour), Bindings: []*controlplanev1.LegacyProviderPoolBinding{{ProviderReferenceRef: provider, Weight: 100}},
 	}}}, "matter_codex_agent_roles")
 	recipeSource := builder.source("matter_codex_agent_roles", "recipe", row)
@@ -630,7 +636,8 @@ func (builder *ownerBuilder) addRoleGraph(row sourceRow) error {
 		Source: agentSource, Name: name, StableKey: stableKey, RoleDefinitionRef: roleDefinitionRef, InstructionSetRef: instructionRef,
 		ProviderPoolRef: poolRef, RoleImageRecipeRef: recipeRef, Capabilities: roleCapabilities(row), Enabled: boolean(row, "enabled"),
 		BotIdentityRef: nonempty(text(row, "bot_identity"), "legacy://bot/"+stableKey), BotUsername: stableKey,
-		BotTeamRef: "legacy://team/root", BotMaskedStatus: "AVAILABLE", BotReceiptId: "legacy-" + stableKey,
+		BotTeamRef: "legacy://team/root", BotMaskedStatus: "AVAILABLE",
+		BotReceiptId:      uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:legacy-agent-bot-receipt\x00"+agentSource.SourceRef)).String(),
 		BotReceiptVersion: sourceRevision(row), BotReceiptSha256: rowDigest(row), BotProviderRevision: sourceRevision(row), BotProviderGeneration: sourceRevision(row),
 	}}}, "matter_codex_agent_roles")
 	builder.roles[id] = roleRef

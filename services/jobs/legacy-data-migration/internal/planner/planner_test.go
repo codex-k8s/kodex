@@ -9,6 +9,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
+	"github.com/google/uuid"
 )
 
 func TestCanonicalSourceTableAliasesRemainClosed(t *testing.T) {
@@ -105,7 +106,7 @@ func TestRoleImageSpecSHA256MatchesControlPlaneCanonicalJSON(t *testing.T) {
 		`","sourceRef":"git://github.com/codex-k8s/matter-codex","sourceRevision":"` + strings.Repeat("b", 40) +
 		`","sourceSha256":"` + sha + `","contextRef":"oci://registry.example/input@sha256:` + sha +
 		`","contextSha256":"` + sha + `","builderSha256":"` + sha + `","frontendSha256":"` + sha +
-		`","platforms":[{"os":"linux","architecture":"amd64"}],"packages":[],"tools":[],"installationBlock":"","toolchainSha256":"` + sha +
+		`","platforms":[{"os":"linux","architecture":"amd64"}],"packages":null,"tools":null,"installationBlock":"","toolchainSha256":"` + sha +
 		`"},"PolicyRevision":1,"PolicySHA256":"` + sha + `","RuntimeContractRevision":1,"RuntimeContractSHA256":"` + sha + `"}`
 	if want := digest([]byte(wantJSON)); got != want {
 		t.Fatalf("canonical role image hash = %s, нужно %s", got, want)
@@ -234,10 +235,47 @@ func TestConfigurationProjectsSelectsOnlyActiveProjectGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildConfiguration() error = %v", err)
 	}
+	var credential *controlplanev1.LegacyCredentialBindingOperation
+	var provider *controlplanev1.LegacyProviderConnectionReferenceOperation
+	var pool *controlplanev1.LegacyProviderPoolOperation
+	var agent *controlplanev1.LegacyAgentOperation
 	for _, operation := range result.Request.GetOperations() {
 		if operation.GetSession() != nil || operation.GetTurn() != nil || operation.GetProcessRun() != nil {
 			t.Fatal("configuration plan contains runtime history")
 		}
+		if operation.GetCredentialBinding() != nil && operation.GetCredentialBinding().GetPurpose() == "provider-account" {
+			credential = operation.GetCredentialBinding()
+		}
+		if operation.GetProviderReference() != nil {
+			provider = operation.GetProviderReference()
+		}
+		if operation.GetProviderPool() != nil {
+			pool = operation.GetProviderPool()
+		}
+		if operation.GetAgent() != nil {
+			agent = operation.GetAgent()
+		}
+	}
+	if credential == nil || len(credential.GetProviderCapabilities()) != 1 ||
+		credential.GetProviderCapabilities()[0] != legacyProviderCapability {
+		t.Fatal("provider credential capabilities are not canonical")
+	}
+	if provider == nil || provider.GetSource().GetLocalRef() != "provider-"+provider.GetStableKey() ||
+		len(provider.GetCapabilities()) != 1 || provider.GetCapabilities()[0] != legacyProviderCapability {
+		t.Fatal("provider reference is not resolvable by its canonical local reference")
+	}
+	if _, parseErr := uuid.Parse(provider.GetReceiptId()); parseErr != nil {
+		t.Fatal("provider receipt identifier is not a UUID")
+	}
+	if pool == nil || pool.GetPolicy() != "weighted" || len(pool.GetBindings()) != 1 ||
+		pool.GetBindings()[0].GetProviderReferenceRef() != provider.GetSource().GetLocalRef() {
+		t.Fatal("provider pool is incompatible with the control-plane policy")
+	}
+	if agent == nil {
+		t.Fatal("agent operation is absent")
+	}
+	if _, parseErr := uuid.Parse(agent.GetBotReceiptId()); parseErr != nil {
+		t.Fatal("agent bot receipt identifier is not a UUID")
 	}
 }
 
