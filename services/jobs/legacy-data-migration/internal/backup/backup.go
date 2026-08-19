@@ -223,7 +223,7 @@ func verifyRestore(ctx context.Context, path string, key []byte, maximumPlaintex
 		return authenticatedBackup{}, err
 	}
 	defer proof.close()
-	command := exec.CommandContext(ctx, "pg_restore", "--list", "-")
+	command := exec.CommandContext(ctx, "pg_restore", pgRestoreListArguments()...)
 	command.Stdin = proof.file
 	var list bytes.Buffer
 	command.Stdout = &list
@@ -255,7 +255,7 @@ func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile stri
 	if err := verifyCLITransport(ctx, environment); err != nil {
 		return err
 	}
-	listCommand := exec.CommandContext(ctx, "pg_restore", "--list", "-")
+	listCommand := exec.CommandContext(ctx, "pg_restore", pgRestoreListArguments()...)
 	listCommand.Stdin = proof.file
 	var list bytes.Buffer
 	listCommand.Stdout = &list
@@ -266,8 +266,7 @@ func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile stri
 	if _, err := proof.file.Seek(0, io.SeekStart); err != nil {
 		return errors.New("rewind authenticated restore staging")
 	}
-	command := exec.CommandContext(ctx, "pg_restore", "--exit-on-error", "--single-transaction",
-		"--no-owner", "--no-acl", "--dbname", database, "-")
+	command := exec.CommandContext(ctx, "pg_restore", pgRestoreApplyArguments(database)...)
 	command.Env = environment
 	command.Stdin = proof.file
 	command.Stdout = io.Discard
@@ -650,6 +649,15 @@ func runSubprocess(command *exec.Cmd) error {
 	}
 	command.WaitDelay = 5 * time.Second
 	return command.Run()
+}
+
+func pgRestoreListArguments() []string {
+	// pg_restore читает stdin, только когда filename полностью отсутствует.
+	return []string{"--list"}
+}
+
+func pgRestoreApplyArguments(database string) []string {
+	return []string{"--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "--dbname", database}
 }
 
 func tableArguments() []string {
