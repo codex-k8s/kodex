@@ -48,6 +48,32 @@ func TestProviderAccountNameMatchesOwnerDerivation(t *testing.T) {
 	}
 }
 
+func TestRoleImageSpecSHA256MatchesControlPlaneCanonicalJSON(t *testing.T) {
+	t.Parallel()
+	sha := strings.Repeat("a", 64)
+	input := &controlplanev1.RoleImageRecipeInput{
+		BaseImageReference: "registry.example/agent-runner", BaseImageDigest: "sha256:" + sha,
+		SourceRef: "git://github.com/codex-k8s/matter-codex", SourceRevision: strings.Repeat("b", 40),
+		SourceSha256: sha, ContextRef: "oci://registry.example/input@sha256:" + sha, ContextSha256: sha,
+		BuilderSha256: sha, FrontendSha256: sha,
+		Platforms:         []*controlplanev1.RoleImagePlatform{{Os: "linux", Architecture: "amd64"}},
+		InstallationBlock: "", ToolchainSha256: sha,
+	}
+	got, err := RoleImageSpecSHA256(input, 1, sha, 1, sha)
+	if err != nil {
+		t.Fatalf("RoleImageSpecSHA256() error = %v", err)
+	}
+	wantJSON := `{"Input":{"baseImageReference":"registry.example/agent-runner","baseImageDigest":"sha256:` + sha +
+		`","sourceRef":"git://github.com/codex-k8s/matter-codex","sourceRevision":"` + strings.Repeat("b", 40) +
+		`","sourceSha256":"` + sha + `","contextRef":"oci://registry.example/input@sha256:` + sha +
+		`","contextSha256":"` + sha + `","builderSha256":"` + sha + `","frontendSha256":"` + sha +
+		`","platforms":[{"os":"linux","architecture":"amd64"}],"packages":[],"tools":[],"installationBlock":"","toolchainSha256":"` + sha +
+		`"},"PolicyRevision":1,"PolicySHA256":"` + sha + `","RuntimeContractRevision":1,"RuntimeContractSHA256":"` + sha + `"}`
+	if want := digest([]byte(wantJSON)); got != want {
+		t.Fatalf("canonical role image hash = %s, нужно %s", got, want)
+	}
+}
+
 func TestTypedOperationsAreSortedForOwnerCompiler(t *testing.T) {
 	t.Parallel()
 	builder := ownerBuilder{operations: []*controlplanev1.LegacyGraphOperation{
@@ -129,6 +155,54 @@ func TestBuildMaterializesClosedActiveGraph(t *testing.T) {
 	}
 }
 
+func TestConfigurationProjectsSelectsOnlyActiveProjectGraph(t *testing.T) {
+	t.Parallel()
+	rows := []model.SnapshotRow{
+		testRow(t, "matter_codex_projects", map[string]any{"id": 1, "name": "First", "slug": "first", "github_account_name": "github"}),
+		testRow(t, "matter_codex_projects", map[string]any{"id": 2, "name": "Second", "slug": "second", "github_account_name": "github"}),
+		testRow(t, "matter_codex_chats", map[string]any{"id": 10, "project_id": 1, "name": "Active", "slug": "active", "status": "active"}),
+		testRow(t, "matter_codex_chats", map[string]any{"id": 11, "project_id": 1, "name": "Archived", "slug": "archived", "status": "archived"}),
+		testRow(t, "matter_codex_chats", map[string]any{"id": 20, "project_id": 2, "name": "Active", "slug": "active", "status": "active"}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 100, "project_id": 1, "name": "manager", "openai_account_name": "openai", "github_account_name": "github", "enabled": true}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 101, "project_id": 1, "name": "disabled", "openai_account_name": "openai", "enabled": false}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 200, "project_id": 2, "name": "manager", "openai_account_name": "openai", "github_account_name": "github", "enabled": true}),
+		testRow(t, "matter_codex_chat_participants", map[string]any{"id": 1, "chat_id": 10, "role_id": 100, "enabled": true}),
+		testRow(t, "matter_codex_chat_participants", map[string]any{"id": 2, "chat_id": 20, "role_id": 200, "enabled": true}),
+		testRow(t, "matter_codex_credentials", map[string]any{"id": 1, "name": "openai", "secret_ref": "openai", "status": "authorized"}),
+		testRow(t, "matter_codex_credentials", map[string]any{"id": 2, "name": "github", "secret_ref": "github", "status": "configured"}),
+		testRow(t, "matter_codex_openai_accounts", map[string]any{"id": 1, "name": "openai", "credential_id": 1, "status": "authorized"}),
+		testRow(t, "matter_codex_github_accounts", map[string]any{"id": 2, "name": "github", "credential_id": 2, "secret_ref": "github", "status": "configured"}),
+		testRow(t, "matter_codex_agent_sessions", map[string]any{"id": 1, "project_id": 1, "chat_id": 10, "role_id": 100, "status": "idle"}),
+	}
+	projects, err := ConfigurationProjects(rows)
+	if err != nil {
+		t.Fatalf("ConfigurationProjects() error = %v", err)
+	}
+	if len(projects) != 2 || projects[0].LegacyProjectID != 1 || projects[1].LegacyProjectID != 2 {
+		t.Fatalf("unexpected project split: %#v", projects)
+	}
+	first, _, err := decodeSource(projects[0].Rows, projects[0].Counts)
+	if err != nil {
+		t.Fatalf("decode first project: %v", err)
+	}
+	if len(first["matter_codex_chats"]) != 1 || len(first["matter_codex_agent_roles"]) != 1 ||
+		len(first["matter_codex_agent_sessions"]) != 0 || projects[0].Counts["matter_codex_agent_sessions"] != 0 {
+		t.Fatal("configuration projection retained archived or runtime rows")
+	}
+	result, err := BuildConfiguration("11111111-1111-4111-8111-111111111111",
+		"11111111-1111-4111-8111-111111111111", "legacy-root:actor", digest([]byte("root")),
+		projects[0].Rows, projects[0].SourceSHA256, projects[0].Counts, projects[0].TableSHA256,
+		testEvidence(time.Now().UTC().Add(-time.Minute)))
+	if err != nil {
+		t.Fatalf("BuildConfiguration() error = %v", err)
+	}
+	for _, operation := range result.Request.GetOperations() {
+		if operation.GetSession() != nil || operation.GetTurn() != nil || operation.GetProcessRun() != nil {
+			t.Fatal("configuration plan contains runtime history")
+		}
+	}
+}
+
 func testRow(t *testing.T, table string, value map[string]any) model.SnapshotRow {
 	t.Helper()
 	encoded, err := json.Marshal(value)
@@ -152,5 +226,13 @@ func testEvidence(now time.Time) Evidence {
 		ImageSignatureSHA256: sha, ImagePromotionReadbackSHA256: sha, ImageSBOMSHA256: sha,
 		ImageVulnerabilityEvidenceSHA256: sha, ImageSignatureIdentity: "identity", ImagePromotedAt: now,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: strings.Repeat("b", 64),
+		Credentials: map[int64]CredentialEvidence{
+			1: {SecretRef: "k8s-secret://mattercodex-system/legacy-credential-1",
+				ImmutableSecretRef: "k8s-immutable-secret://mattercodex-system/legacy-credential-1",
+				ContentVersion:     "uid-1:1", ContentSHA256: sha},
+			2: {SecretRef: "k8s-secret://mattercodex-system/legacy-credential-2",
+				ImmutableSecretRef: "k8s-immutable-secret://mattercodex-system/legacy-credential-2",
+				ContentVersion:     "uid-2:1", ContentSHA256: sha},
+		},
 	}
 }

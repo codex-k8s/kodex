@@ -89,6 +89,41 @@
         "ed25519.key"
       ],
       "requirement": "детерминированный private key для подписания handoff, используемого динамическими agent-runner Pod"
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ],
+      "requirement": "выделенный PostgreSQL principal issuer sidecar одноразовой migration Job"
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-issuer-key",
+      "keys": [
+        "private.jwk"
+      ],
+      "requirement": "выделенный ES256 issuer key одноразовой migration Job"
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ],
+      "requirement": "выделенная workload mTLS identity одноразовой migration Job"
+    },
+    {
+      "kind": "Secret",
+      "name": "legacy-data-migration-backup-key",
+      "keys": [
+        "key"
+      ],
+      "requirement": "owner-generated ключ шифрования retained legacy backup"
     }
   ],
   "reusable_bindings": [
@@ -193,6 +228,20 @@
     {
       "kind": "Secret",
       "name": "internal-rpc-authority-interaction-gateway-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-proof-trust",
       "keys": [
         "jwks.json"
       ]
@@ -840,6 +889,57 @@
     {
       "classification": "deterministically_derived",
       "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-issuer-postgresql",
+      "keys": [
+        "dsn",
+        "username"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-issuer-key",
+      "keys": [
+        "private.jwk"
+      ]
+    },
+    {
+      "classification": "deterministically_derived",
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-manifest-trust",
+      "keys": [
+        "bundle.jws"
+      ]
+    },
+    {
+      "classification": "deterministically_derived",
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-proof-trust",
+      "keys": [
+        "jwks.json"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "internal-rpc-authority-legacy-data-migration-workload-tls",
+      "keys": [
+        "ca.crt",
+        "tls.crt",
+        "tls.key"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "legacy-data-migration-backup-key",
+      "keys": [
+        "key"
+      ]
+    },
+    {
+      "classification": "deterministically_derived",
+      "kind": "Secret",
       "name": "internal-rpc-authority-migrator-postgresql",
       "keys": [
         "dsn"
@@ -1338,6 +1438,7 @@
         "control-api-gateway.private.jwk",
         "integration-gateway.private.jwk",
         "interaction-gateway.private.jwk",
+        "legacy-data-migration.private.jwk",
         "runtime-controller.private.jwk"
       ]
     },

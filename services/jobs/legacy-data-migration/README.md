@@ -166,6 +166,7 @@ audit и provenance evidence; missing/drift не позволяет source пе�
 | `commit` | Backup/manifest/source receipt, повторный locked plan, source `FROZEN`, owner `Materialize` + полный verified `Get`, затем source `COMMITTED` | Crash после `FROZEN` повторяет exact owner command; partial target materialization откатывается owner transaction. Target `COMMITTED` replay всегда перечитывает все operation receipts/projections/audit/provenance |
 | `rollback` | Только до owner `COMMITTED`: owner `Abort`, затем source `ABORTED` и снятие fence | После irreversible owner cutover отклоняется. Для нового запуска после abort нужен новый plan ID |
 | `restore-verify` | Аутентифицированный decrypt и `pg_restore --single-transaction` в exact empty isolated DB, затем повторный snapshot/count/SHA readback и durable source proof | Имя DB обязано соответствовать `mattercodex_restore_<12..32 hex>`; непустая DB всегда отклоняется, после crash её пересоздаёт controller |
+| `configuration-import` | Один repeatable-read snapshot и зашифрованный backup всей legacy DB, затем отдельный bounded owner plan для активной конфигурации каждого проекта | Переносятся только активные проекты, чаты, роли, аккаунты, репозитории, runtime variables, policies, bot identities и schedules. Session/turn/process/runtime history не переносится; повтор использует те же deterministic project plan IDs и authoritative readback |
 
 `pre-commit` хранит immutable owner plan и source receipt. `commit` сначала
 фиксирует source fence, затем owner materialization/receipt, затем source

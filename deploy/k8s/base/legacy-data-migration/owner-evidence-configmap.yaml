@@ -22,6 +22,7 @@ data:
         "observationRevision": 0,
         "observedLimit": 0
       },
+      "credentials": {},
       "roleImage": {
         "input": {},
         "generation": 0,

@@ -28,6 +28,17 @@ const schemaVersion = "mattercodex.legacy-data-migration-plan.v1"
 
 type sourceRow map[string]any
 
+// CredentialEvidence фиксирует уже материализованный immutable Kubernetes
+// Secret без раскрытия его содержимого. ContentVersion соответствует exact
+// UID:resourceVersion целевого Secret, поэтому runtime broker сможет доказать,
+// что продолжает работу именно с принятым owner snapshot.
+type CredentialEvidence struct {
+	SecretRef          string
+	ImmutableSecretRef string
+	ContentVersion     string
+	ContentSHA256      string
+}
+
 // Evidence содержит только deploy-owned, несекретное readback-доказательство
 // immutable archive, provider и role image. Business graph всегда выводится
 // из source snapshot; этот контракт не принимает target IDs или DML payload.
@@ -64,6 +75,7 @@ type Evidence struct {
 	ImagePromotedAt                     time.Time
 	AuthorityPolicyRevision             uint64
 	AuthorityPolicySHA256               string
+	Credentials                         map[int64]CredentialEvidence
 }
 
 type Result struct {
@@ -75,13 +87,33 @@ func Build(planID, idempotencyKey, sourceRootReference, sourceRootSHA256 string,
 	projection []model.SnapshotRow, sourceDigest string, counts map[string]uint64,
 	sourceTableDigests map[string]string, evidence Evidence,
 ) (Result, error) {
+	return build(planID, idempotencyKey, sourceRootReference, sourceRootSHA256,
+		projection, sourceDigest, counts, sourceTableDigests, evidence, false)
+}
+
+// BuildConfiguration строит bounded plan только для активной конфигурации
+// одного проекта. Исторические Session/Turn/Process остаются в immutable
+// backup и намеренно не материализуются в новый runtime.
+func BuildConfiguration(planID, idempotencyKey, sourceRootReference, sourceRootSHA256 string,
+	projection []model.SnapshotRow, sourceDigest string, counts map[string]uint64,
+	sourceTableDigests map[string]string, evidence Evidence,
+) (Result, error) {
+	return build(planID, idempotencyKey, sourceRootReference, sourceRootSHA256,
+		projection, sourceDigest, counts, sourceTableDigests, evidence, true)
+}
+
+func build(planID, idempotencyKey, sourceRootReference, sourceRootSHA256 string,
+	projection []model.SnapshotRow, sourceDigest string, counts map[string]uint64,
+	sourceTableDigests map[string]string, evidence Evidence, configurationOnly bool,
+) (Result, error) {
 	rows, _, err := decodeSource(projection, counts)
 	if err != nil || !validSHA(sourceDigest) || !validSHA(sourceRootSHA256) ||
 		!validSourceTableDigests(sourceTableDigests) {
 		return Result{}, errors.New("source inventory evidence is invalid")
 	}
 	builder := ownerBuilder{rows: rows, counts: counts, tableDigests: cloneStrings(sourceTableDigests),
-		evidence: evidence, operations: make([]*controlplanev1.LegacyGraphOperation, 0, 512)}
+		evidence: evidence, operations: make([]*controlplanev1.LegacyGraphOperation, 0, 512),
+		configurationOnly: configurationOnly}
 	if err := builder.build(); err != nil {
 		return Result{}, err
 	}
@@ -128,8 +160,10 @@ type ownerBuilder struct {
 	assignments                                        map[string]string
 	providers, providerCredentials                     map[string]string
 	credentials                                        map[int64]string
+	githubCredentials                                  map[string]string
 	provenanceRefs                                     []string
 	projectID                                          int64
+	configurationOnly                                  bool
 }
 
 func (builder *ownerBuilder) build() error {
@@ -139,6 +173,7 @@ func (builder *ownerBuilder) build() error {
 	builder.processes, builder.assignments = make(map[int64]string), make(map[string]string)
 	builder.providers, builder.providerCredentials = make(map[string]string), make(map[string]string)
 	builder.credentials = make(map[int64]string)
+	builder.githubCredentials = make(map[string]string)
 	if err := validateEvidence(builder.evidence); err != nil {
 		return err
 	}
@@ -181,6 +216,11 @@ func (builder *ownerBuilder) build() error {
 			return err
 		}
 	}
+	for _, row := range builder.rows["matter_codex_repositories"] {
+		if err := builder.addRepositoryWorkspace(row); err != nil {
+			return err
+		}
+	}
 	for _, row := range builder.rows["matter_codex_chat_participants"] {
 		if err := builder.addAssignment(row); err != nil {
 			return err
@@ -190,6 +230,12 @@ func (builder *ownerBuilder) build() error {
 		if err := builder.addSchedule(row); err != nil {
 			return err
 		}
+	}
+	if builder.configurationOnly {
+		if len(builder.roles) == 0 || len(builder.assignments) == 0 {
+			return errors.New("active configuration has no role assignments")
+		}
+		return nil
 	}
 	for _, row := range builder.rows["matter_codex_agent_sessions"] {
 		if err := builder.indexSession(row); err != nil {
@@ -413,33 +459,58 @@ func (builder *ownerBuilder) addChat(row sourceRow) {
 func (builder *ownerBuilder) addCredential(row sourceRow) error {
 	id := number(row, "id")
 	ref := "credential-" + strconv.FormatInt(id, 10)
-	builder.credentials[id] = ref
-	secretRef := text(row, "secret_ref")
-	if secretRef == "" || text(row, "status") != "authorized" {
-		return errors.New("provider credential is not authoritatively eligible")
-	}
-	accountName := ""
+	secretName := text(row, "secret_ref")
+	accountName, purpose, principalPrefix := "", "", ""
 	for _, account := range builder.rows["matter_codex_openai_accounts"] {
 		if number(account, "credential_id") != id {
 			continue
 		}
 		if accountName != "" {
-			return errors.New("provider credential is referenced by multiple accounts")
+			return errors.New("credential is referenced by multiple accounts")
 		}
 		accountName = nonempty(text(account, "name"), strconv.FormatInt(number(account, "id"), 10))
+		purpose, principalPrefix = "provider-account", "provider:"
+	}
+	for _, account := range builder.rows["matter_codex_github_accounts"] {
+		if number(account, "credential_id") != id {
+			continue
+		}
+		if accountName != "" {
+			return errors.New("credential is referenced by multiple accounts")
+		}
+		accountName = nonempty(text(account, "name"), strconv.FormatInt(number(account, "id"), 10))
+		secretName = nonempty(text(account, "secret_ref"), secretName)
+		purpose, principalPrefix = "repository-account", "github:"
 	}
 	if accountName == "" {
-		return errors.New("provider credential has no exact account")
+		return errors.New("credential has no exact account")
 	}
-	sha := rowDigest(row)
-	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_CredentialBinding{CredentialBinding: &controlplanev1.LegacyCredentialBindingOperation{
-		Source: builder.source("matter_codex_credentials", "credential", row), Name: nonempty(text(row, "name"), ref), Purpose: "provider-account",
-		SecretRef: "vault://" + secretRef, ImmutableSecretRef: "vault://" + secretRef + "?version=" + sha,
-		PrincipalRef: "provider:" + stable(accountName), Revision: sourceRevision(row),
-		ProviderCapabilities: []string{"chat.completions"}, ObservedLimit: builder.evidence.ProviderObservedLimit,
-		ObservationRevision: builder.evidence.ProviderObservationRevision, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
-		ContentVersion: sha, ContentSha256: sha,
-	}}}, "matter_codex_credentials")
+	status := text(row, "status")
+	if secretName == "" || purpose == "provider-account" && status != "authorized" ||
+		purpose == "repository-account" && status != "configured" {
+		return errors.New("credential is not authoritatively eligible")
+	}
+	evidence, ok := builder.evidence.Credentials[id]
+	if !ok || evidence.SecretRef == "" || evidence.ImmutableSecretRef == "" ||
+		evidence.ContentVersion == "" || !validSHA(evidence.ContentSHA256) {
+		return errors.New("credential immutable snapshot evidence is missing")
+	}
+	input := &controlplanev1.LegacyCredentialBindingOperation{
+		Source: builder.source("matter_codex_credentials", "credential", row), Name: nonempty(text(row, "name"), ref), Purpose: purpose,
+		SecretRef: evidence.SecretRef, ImmutableSecretRef: evidence.ImmutableSecretRef,
+		PrincipalRef: principalPrefix + stable(accountName), Revision: sourceRevision(row),
+		ContentVersion: evidence.ContentVersion, ContentSha256: evidence.ContentSHA256,
+	}
+	if purpose == "provider-account" {
+		input.ProviderCapabilities = []string{"chat.completions"}
+		input.ObservedLimit = builder.evidence.ProviderObservedLimit
+		input.ObservationRevision = builder.evidence.ProviderObservationRevision
+		input.ObservedAt = timestamppb.New(builder.evidence.ProviderObservedAt)
+	} else {
+		builder.githubCredentials[accountName] = ref
+	}
+	builder.credentials[id] = ref
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_CredentialBinding{CredentialBinding: input}}, "matter_codex_credentials")
 	return nil
 }
 
@@ -463,6 +534,25 @@ func (builder *ownerBuilder) addProvider(row sourceRow) error {
 		MaskedLabel: name, MaskedStatus: "AVAILABLE", Capabilities: []string{"chat.completions"}, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
 		ReceiptId: "legacy-" + stable(name), ReceiptVersion: sourceRevision(row), ReceiptSha256: sha, CredentialBindingRef: credential,
 	}}}, "matter_codex_openai_accounts")
+	return nil
+}
+
+func (builder *ownerBuilder) addRepositoryWorkspace(row sourceRow) error {
+	id := number(row, "id")
+	owner, name := text(row, "owner"), text(row, "name")
+	if id == 0 || owner == "" || name == "" || text(row, "status") != "active" {
+		return errors.New("repository workspace is not authoritatively eligible")
+	}
+	accountName := text(row, "github_account_name")
+	credentialRef := builder.githubCredentials[accountName]
+	if credentialRef == "" {
+		return errors.New("repository workspace credential is missing")
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_RepositoryWorkspace{RepositoryWorkspace: &controlplanev1.LegacyRepositoryWorkspaceOperation{
+		Source: builder.source("matter_codex_repositories", "repository-workspace", row), Name: owner + "/" + name,
+		RepositoryRef: "https://github.com/" + owner + "/" + name, WorkspaceMode: "GIT",
+		DefaultBranch: nonempty(text(row, "default_branch"), "main"), CredentialBindingRef: credentialRef,
+	}}}, "matter_codex_repositories")
 	return nil
 }
 
@@ -997,7 +1087,7 @@ func (builder *ownerBuilder) addProvenanceArtifacts() {
 		"matter_codex_github_accounts", "matter_codex_interaction_capabilities",
 		"matter_codex_mattermost_bot_identities", "matter_codex_policy_revisions",
 		"matter_codex_process_turns", "matter_codex_project_repositories",
-		"matter_codex_project_runtime_variables", "matter_codex_repositories",
+		"matter_codex_project_runtime_variables",
 		"matter_codex_role_capabilities", "matter_codex_role_relationship_policies",
 		"matter_codex_thread_contexts", "matter_codex_chat_repositories",
 	} {

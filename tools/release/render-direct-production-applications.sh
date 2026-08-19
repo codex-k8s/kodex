@@ -2,7 +2,7 @@
 set -euo pipefail
 
 fail() { printf 'Application render failed: %s\n' "$*" >&2; exit 1; }
-usage() { printf 'Usage: %s --lock <path> --output <path> --scope release|bootstrap|interfaces\n' "$0" >&2; }
+usage() { printf 'Usage: %s --lock <path> --output <path> --scope release|bootstrap|interfaces|migration\n' "$0" >&2; }
 
 lock_file=""
 output=""
@@ -17,8 +17,8 @@ while (($# > 0)); do
   esac
 done
 [[ -n "$output" ]] || fail "output path is required"
-case "$scope" in release|bootstrap|interfaces) ;; *) fail "scope must be release, bootstrap or interfaces" ;; esac
-if [[ "$scope" == release ]]; then
+case "$scope" in release|bootstrap|interfaces|migration) ;; *) fail "scope must be release, bootstrap, interfaces or migration" ;; esac
+if [[ "$scope" == release || "$scope" == migration ]]; then
   [[ -r "$lock_file" ]] || fail "release lock is not readable"
 fi
 for command_name in kubectl yq jq; do command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"; done
@@ -30,21 +30,29 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 combined="$temporary_directory/combined.yaml"
 : >"$combined"
 
-components=(
-  control-plane
-  internal-rpc-authority
-  runtime-controller
-  interaction-gateway
-  integration-gateway
-  control-api-gateway
-  staff-control-center
-  automation-scheduler
-  role-image-builder
-  agent-runner
-  egress-gateway
-)
+if [[ "$scope" == migration ]]; then
+  components=(legacy-data-migration)
+else
+  components=(
+    control-plane
+    internal-rpc-authority
+    runtime-controller
+    interaction-gateway
+    integration-gateway
+    control-api-gateway
+    staff-control-center
+    automation-scheduler
+    role-image-builder
+    agent-runner
+    egress-gateway
+  )
+fi
 for component in "${components[@]}"; do
-  kubectl kustomize "$repository_root/deploy/k8s/overlays/production/$component" >>"$combined"
+  component_path="$repository_root/deploy/k8s/overlays/production/$component"
+  if [[ "$scope" == migration ]]; then
+    component_path="$repository_root/deploy/k8s/base/$component"
+  fi
+  kubectl kustomize "$component_path" >>"$combined"
   printf '%s\n' '---' >>"$combined"
 done
 
@@ -58,7 +66,10 @@ SCOPE="$scope" yq eval-all '
       (.kind == "ServiceAccount" or .kind == "Role" or .kind == "RoleBinding" or
        .kind == "ClusterRole" or .kind == "ClusterRoleBinding" or
        .kind == "ValidatingAdmissionPolicy" or .kind == "ValidatingAdmissionPolicyBinding" or
-       .kind == "NetworkPolicy"))
+       .kind == "NetworkPolicy")) or
+    (strenv(SCOPE) == "migration" and
+      (.kind == "ConfigMap" or .kind == "Service" or .kind == "ServiceAccount" or
+       .kind == "PersistentVolumeClaim" or .kind == "NetworkPolicy" or .kind == "Job"))
   ) |
   select((.metadata.name | test("^(runtime-(archive|restore-verifier)|runtime-controller-(archive-workers-s3|s3-security-policy)|runtime-s3-(archive|restore)(-.*)?|runtime-s3-(exchanger|readback)-.*)$")) | not) |
   select(.metadata.name != "agent-runner-handoff-trust") |
@@ -452,6 +463,7 @@ add_prototype_delivery_mount integration-gateway internal-rpc-authority-issuer i
 add_prototype_delivery_mount integration-gateway internal-rpc-authority-verifier internal-rpc-authority-integration-gateway-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount interaction-gateway internal-rpc-authority-issuer internal-rpc-authority-interaction-gateway-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount interaction-gateway internal-rpc-authority-verifier internal-rpc-authority-interaction-gateway-verifier-delivery primary prototype-delivery-verifier
+add_prototype_delivery_mount legacy-data-migration internal-rpc-authority-issuer internal-rpc-authority-legacy-data-migration-issuer-delivery primary prototype-delivery-issuer
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-verifier-delivery primary prototype-delivery-verifier
 add_prototype_delivery_mount control-plane internal-rpc-authority-verifier internal-rpc-authority-control-plane-resolver-delivery resolver prototype-delivery-resolver
 add_prototype_delivery_mount runtime-controller internal-rpc-authority-issuer internal-rpc-authority-runtime-controller-issuer-delivery primary prototype-delivery-issuer
@@ -470,7 +482,7 @@ yq -o=json '.' "$temporary_directory/normalized.yaml" | jq -sc '
   .[]
 ' | yq -p=json -P >"$output"
 
-if [[ "$scope" == release ]]; then
+if [[ "$scope" == release || "$scope" == migration ]]; then
   while IFS=$'\t' read -r component pull_ref; do
     COMPONENT="$component" PULL_REF="$pull_ref" yq -i '
       (.. | select(tag == "!!str")) |= sub(
@@ -491,7 +503,8 @@ if [[ "$scope" == release ]]; then
     (.. | select(tag == "!!str" and . == "0000000000000000000000000000000000000000000000000000000000000000")) = strenv(LOCK_DIGEST)
   ' "$output"
 
-  cat <<EOF >>"$output"
+  if [[ "$scope" == release ]]; then
+    cat <<EOF >>"$output"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -511,10 +524,11 @@ data:
   roleRuntimeContractRevision: "1"
   roleRuntimeContractSHA256: "$lock_digest"
 EOF
+  fi
 
   grep -Eq '^kind: Ingress$' "$output" && fail "application render contains Ingress"
   grep -Eq 'sha256:0{64}' "$output" && fail "application render contains a zero digest"
-  if yq -r '.. | select(has("image")) | .image' "$output" | grep -E 'mattercodex/(control-plane|internal-rpc-authority|runtime-controller|interaction-gateway|integration-gateway|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|role-image-builder|agent-runner)(:|@)' |
+  if yq -r '.. | select(has("image")) | .image' "$output" | grep -E 'mattercodex/(control-plane|internal-rpc-authority|runtime-controller|interaction-gateway|integration-gateway|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|role-image-builder|agent-runner|legacy-data-migration)(:|@)' |
     grep -Fvxf <(jq -r '.images[].pull_ref' "$lock_file") >/dev/null; then
     fail "application render contains an internal image outside the release lock"
   fi

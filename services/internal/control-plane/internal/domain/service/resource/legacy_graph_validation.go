@@ -266,10 +266,29 @@ func validateLegacyGraphPlan(plan entity.LegacyGraphPlan) error {
 		"ARTIFACT", "CREDENTIAL_BINDING", "ROLE_DEFINITION", "INSTRUCTION_SET",
 		"PROVIDER_CONNECTION_REFERENCE", "PROVIDER_POOL", "ROLE_IMAGE_RECIPE",
 		"IMAGE_BUILD", "IMAGE_ARTIFACT", "AGENT", "AGENT_ASSIGNMENT",
-		"RUNTIME_REVISION", "SESSION", "TURN", "TURN_ATTEMPT", "PROCESS_RUN",
 	} {
 		if kindCounts[required] == 0 {
 			return errs.ErrFailedPrecondition
+		}
+	}
+	if materializedTables["matter_codex_repositories"] > 0 && kindCounts["REPOSITORY_WORKSPACE"] == 0 {
+		return errs.ErrFailedPrecondition
+	}
+	runtimeKinds := []string{"RUNTIME_REVISION", "SESSION", "TURN", "TURN_ATTEMPT", "PROCESS_RUN"}
+	runtimePresent := false
+	for _, kind := range runtimeKinds {
+		runtimePresent = runtimePresent || kindCounts[kind] > 0
+	}
+	for _, table := range []string{
+		"matter_codex_agent_sessions", "matter_codex_agent_session_turns", "matter_codex_process_runs",
+	} {
+		runtimePresent = runtimePresent || materializedTables[table] > 0
+	}
+	if runtimePresent {
+		for _, required := range runtimeKinds {
+			if kindCounts[required] == 0 {
+				return errs.ErrFailedPrecondition
+			}
 		}
 	}
 	if err := validateLegacyReferences(plan.Operations, localKinds); err != nil {

@@ -89,7 +89,8 @@ jq -e '
       (($binding.keys - .keys) | length) == 0)) and
   all(.owner_materialized_resources[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
-      .classification == "deterministically_derived" and .keys == $binding.keys)) and
+      (.classification == "deterministically_derived" or
+       .classification == "cryptographically_generated") and .keys == $binding.keys)) and
   all(.publisher_owned_empty_resources[]; . as $binding |
     any($policy.resources[]; .kind == $binding.kind and .name == $binding.name and
       .keys == $binding.keys)) and

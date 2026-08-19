@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,6 +86,14 @@ func loadConfig() (Config, error) {
 	config.OwnerEvidence.ImagePolicySHA256 = config.ImagePolicySHA256
 	config.OwnerEvidence.RuntimeContractRevision = config.RoleRuntimeContractRevision
 	config.OwnerEvidence.RuntimeContractSHA256 = config.RoleRuntimeContractSHA256
+	computedSpecSHA256, err := planner.RoleImageSpecSHA256(config.OwnerEvidence.RoleImage,
+		config.ImagePolicyRevision, config.ImagePolicySHA256,
+		config.RoleRuntimeContractRevision, config.RoleRuntimeContractSHA256)
+	if err != nil || config.OwnerEvidence.RoleImageSpecSHA256 != "" &&
+		config.OwnerEvidence.RoleImageSpecSHA256 != computedSpecSHA256 {
+		return Config{}, errors.New("legacy migration role image specification evidence is invalid")
+	}
+	config.OwnerEvidence.RoleImageSpecSHA256 = computedSpecSHA256
 	if err := config.validate(); err != nil {
 		return Config{}, err
 	}
@@ -93,7 +102,7 @@ func loadConfig() (Config, error) {
 
 func (config Config) validate() error {
 	switch config.Mode {
-	case "dry-run", "pre-commit", "commit", "rollback", "restore-verify":
+	case "dry-run", "pre-commit", "commit", "rollback", "restore-verify", "configuration-import":
 	default:
 		return errors.New("legacy migration mode is invalid")
 	}
@@ -189,6 +198,12 @@ func loadOwnerEvidence(path string) (planner.Evidence, error) {
 			ObservationRevision uint64    `json:"observationRevision"`
 			ObservedLimit       uint64    `json:"observedLimit"`
 		} `json:"provider"`
+		Credentials map[string]struct {
+			SecretRef          string `json:"secretRef"`
+			ImmutableSecretRef string `json:"immutableSecretRef"`
+			ContentVersion     string `json:"contentVersion"`
+			ContentSHA256      string `json:"contentSha256"`
+		} `json:"credentials"`
 		RoleImage struct {
 			Input                          json.RawMessage `json:"input"`
 			Generation                     uint64          `json:"generation"`
@@ -217,6 +232,18 @@ func loadOwnerEvidence(path string) (planner.Evidence, error) {
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(document.RoleImage.Input, input); err != nil {
 		return planner.Evidence{}, errors.New("decode legacy role image evidence")
 	}
+	credentials := make(map[int64]planner.CredentialEvidence, len(document.Credentials))
+	for rawID, evidence := range document.Credentials {
+		id, parseErr := strconv.ParseInt(rawID, 10, 64)
+		if parseErr != nil || id <= 0 || evidence.SecretRef == "" || evidence.ImmutableSecretRef == "" ||
+			evidence.ContentVersion == "" || !validSHA256(evidence.ContentSHA256) {
+			return planner.Evidence{}, errors.New("decode legacy credential snapshot evidence")
+		}
+		credentials[id] = planner.CredentialEvidence{
+			SecretRef: evidence.SecretRef, ImmutableSecretRef: evidence.ImmutableSecretRef,
+			ContentVersion: evidence.ContentVersion, ContentSHA256: evidence.ContentSHA256,
+		}
+	}
 	return planner.Evidence{
 		ArchiveStoragePrefix: document.Archive.StoragePrefix, ArchiveStorageVersion: document.Archive.StorageVersion,
 		ArchiveRetentionRef: document.Archive.RetentionRef, ArchiveScanPolicyRevision: document.Archive.ScanPolicyRevision,
@@ -232,6 +259,7 @@ func loadOwnerEvidence(path string) (planner.Evidence, error) {
 		ImageSignatureSHA256:                document.RoleImage.SignatureSHA256, ImagePromotionReadbackSHA256: document.RoleImage.PromotionReadbackSHA256,
 		ImageSBOMSHA256: document.RoleImage.SBOMSHA256, ImageVulnerabilityEvidenceSHA256: document.RoleImage.VulnerabilityEvidenceSHA256,
 		ImageSignatureIdentity: document.RoleImage.SignatureIdentity, ImagePromotedAt: document.RoleImage.PromotedAt,
+		Credentials: credentials,
 	}, nil
 }
 
