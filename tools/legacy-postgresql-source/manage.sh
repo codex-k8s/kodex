@@ -587,14 +587,25 @@ apply_readback_configmap() {
 }
 
 run_readback() {
-  local namespace="$1" trust_map="$2" job_name expected_fingerprint tls_policy
+  local namespace="$1" trust_map="$2" job_name expected_fingerprint tls_policy deadline succeeded failed
   expected_fingerprint="$(kubectl get configmap "$trust_map" --namespace "$namespace" -o 'go-template={{index .metadata.annotations "mattercodex.dev/server-certificate-sha256"}}')"
   [[ "$expected_fingerprint" =~ ^[a-f0-9]{64}$ ]] || mattercodex_die "trust snapshot не содержит certificate fingerprint"
   export MATTERCODEX_POSTGRES_READBACK_NAMESPACE="$namespace"
   export MATTERCODEX_POSTGRES_READBACK_TRUST_CONFIGMAP="$trust_map"
   render_template "${template_dir}/readback-job.yaml.tpl" "${render_dir}/readback-job.yaml"
   job_name="$(kubectl create -f "${render_dir}/readback-job.yaml" -o name)"
-  if ! kubectl wait --namespace "$namespace" --for=condition=complete --timeout=150s "$job_name" >/dev/null; then
+  deadline=$((SECONDS + 150))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    succeeded="$(kubectl_value "$namespace" job "${job_name#*/}" '{.status.succeeded}' 2>/dev/null || true)"
+    failed="$(kubectl_value "$namespace" job "${job_name#*/}" '{.status.failed}' 2>/dev/null || true)"
+    [ "$succeeded" = 1 ] && break
+    if [[ "$failed" =~ ^[1-9][0-9]*$ ]]; then
+      kubectl logs --namespace "$namespace" "$job_name" --container readback --tail=40 >&2 || true
+      return 1
+    fi
+    sleep 2
+  done
+  if [ "$succeeded" != 1 ]; then
     kubectl logs --namespace "$namespace" "$job_name" --container readback --tail=40 >&2 || true
     return 1
   fi
@@ -763,6 +774,7 @@ reconcile_pending() {
      [ "$(served_fingerprint)" = "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$attempt_record" '{.data.certificate-fingerprint}')" ] &&
      [ "$(principal_comment)" = "$(lifecycle_comment PENDING "$pending")" ] &&
      ! kubectl get networkpolicy "$client_ingress" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" >/dev/null 2>&1; then
+    enable_principal_pending "$pending"
     run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map"
     functional_checks
     record_acceptance "$pending"
