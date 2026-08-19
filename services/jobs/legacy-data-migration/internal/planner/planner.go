@@ -1157,7 +1157,7 @@ func (builder *ownerBuilder) dispositions() ([]*controlplanev1.LegacySourceDispo
 			}
 		case count > 0:
 			kind = controlplanev1.LegacySourceDispositionKind_LEGACY_SOURCE_DISPOSITION_KIND_MATERIALIZE
-			if uint64(len(proofs[table])) != count {
+			if uint64(len(proofs[canonicalSourceTableName(table)])) != count {
 				return nil, "", fmt.Errorf("source table %s is not fully represented by typed operations", table)
 			}
 			builder.mapped[table] = count
