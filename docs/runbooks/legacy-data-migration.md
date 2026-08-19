@@ -200,6 +200,10 @@ Digest candidate PodTemplate вычисляется через Kubernetes server
 принять уже обслуживаемый `CURRENT` только после повторной проверки immutable
 attempt, StatefulSet UID/revision, runtime Secret, activation marker, served
 certificate, закрытого client ingress, principal state и независимого readback.
+Для просроченного bounded `PENDING` тот же exact principal получает новое
+пятиминутное окно только после этих проверок; новый credential и новый attempt
+при этом не создаются. Failed readback Job останавливает recovery сразу, не
+дожидаясь таймаута условия `Complete`.
 После успеха отдельный immutable acceptance record сохраняет applied revision,
 accepted PodTemplate snapshot/digest и served fingerprint. Crash recovery и
 rollback допускают изменение только при совпадении current attempt,
