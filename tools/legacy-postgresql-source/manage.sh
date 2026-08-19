@@ -502,6 +502,18 @@ retire_principal() {
     mattercodex_die "zero live migration sessions не доказано"
 }
 
+drop_unaccepted_initial_credential() {
+  local record="$1" predecessor_attempt
+  predecessor_attempt="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" '{.data.predecessor-attempt}')"
+  [ -z "$predecessor_attempt" ] || return 0
+  kubectl get secret "$credential_secret" --namespace "$MATTERCODEX_POSTGRES_CLIENT_NAMESPACE" >/dev/null 2>&1 &&
+    mattercodex_die "непринятый credential уже опубликован в client namespace; автоматическое удаление запрещено"
+  sed '/^-- name:/d' "${script_dir}/sql/principal-drop-unaccepted.sql" |
+    kubectl exec -i --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "${statefulset_name}-0" --container postgres -- \
+      sh -ceu 'exec psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null
+  kubectl delete secret "$credential_secret" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" --ignore-not-found >/dev/null
+}
+
 create_activation_configmap() {
   local name="$1" state="$2"
   kubectl create configmap "$name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
@@ -675,6 +687,7 @@ rollback_attempt() {
   if [ "$observed_digest" != "$predecessor_digest" ]; then restore_template_from_record "$record"; fi
   [ "$(template_digest)" = "$predecessor_digest" ] || mattercodex_die "exact predecessor PodTemplate не восстановлен"
   functional_checks
+  drop_unaccepted_initial_credential "$record"
   local rv patch
   rv="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$rollout_index" '{.metadata.resourceVersion}')"
   patch="$(jq -cn --arg rv "$rv" '{metadata:{resourceVersion:$rv},data:{"pending-attempt":"","current-attempt":"","current-statefulset-uid":"","current-template-digest":"","current-certificate-fingerprint":""}}')"
