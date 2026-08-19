@@ -25,8 +25,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 # pg_dump и pg_restore имеют ту же PostgreSQL major line, что и authoritative DB.
 FROM docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 AS runtime
 COPY --from=build --chmod=0555 /out/legacy-data-migration /usr/local/bin/legacy-data-migration
-RUN mkdir -p /var/run/mattercodex/legacy-migration-staging && \
-    chown 10001:10001 /var/run/mattercodex/legacy-migration-staging && \
-    chmod 0700 /var/run/mattercodex/legacy-migration-staging
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/legacy-data-migration"]

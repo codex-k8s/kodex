@@ -411,7 +411,6 @@ func (authority *Authority) Verify(
 		claims.SourceDigestSHA256 != authority.policy.SourceDigestSHA256 ||
 		claims.KeySetRevision != authority.policy.KeySetRevision ||
 		claims.PolicyRevision != authority.policy.PolicyRevision ||
-		claims.SignerGeneration != authority.policy.SignerGeneration ||
 		claims.JTI == "" {
 		return model.AuthorizationClaims{}, failure.New(
 			failure.BindingMismatch,

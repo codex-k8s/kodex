@@ -170,7 +170,7 @@ spec:
             # Authenticated plaintext staging существует только как unlinked
             # fd внутри этого pod-private bounded volume.
             - name: TMPDIR
-              value: /var/run/mattercodex/legacy-migration-staging
+              value: /tmp
             - name: LEGACY_DATA_MIGRATION_BACKUP_KEY_FILE
               value: /var/run/secrets/mattercodex/legacy-migration/backup-key
             - name: LEGACY_DATA_MIGRATION_REPORT_PATH
@@ -236,7 +236,7 @@ spec:
             - name: backup
               mountPath: /var/lib/mattercodex/legacy-migration
             - name: authenticated-staging
-              mountPath: /var/run/mattercodex/legacy-migration-staging
+              mountPath: /tmp
       volumes:
         - name: credentials
           csi:
