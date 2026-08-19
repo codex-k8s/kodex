@@ -160,6 +160,14 @@ RESOLVED_AUTHORITY_REVISION="$resolved_authority_revision" yq -i '
       to_yaml
     )
   ) |
+  with(select(.kind == "Deployment" and
+    (.metadata.name == "internal-rpc-authority-publisher" or
+     .metadata.name == "internal-rpc-authority-restore-controller"));
+    .spec.template.metadata.annotations = (
+      (.spec.template.metadata.annotations // {}) +
+      {"mattercodex.dev/authority-source-revision": strenv(RESOLVED_AUTHORITY_REVISION)}
+    )
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
     (.spec.template.spec.containers[] | select(.name == "internal-rpc-authority-verifier") | .env) = (
       ((.spec.template.spec.containers[] | select(.name == "internal-rpc-authority-verifier") | .env) // [] |
@@ -180,6 +188,16 @@ resolver_generation_count=$(yq -o=json eval-all '.' "$render_file" | jq -sc --ar
 ')
 [[ "$resolver_generation_count" == 1 ]] ||
   fail "control-plane resolver proof signer generation was not bound to authority revision"
+authority_revision_rollout_count=$(yq -o=json eval-all '.' "$render_file" | jq -sc --arg revision "$resolved_authority_revision" '
+  [.[] |
+    select(.kind == "Deployment" and
+      (.metadata.name == "internal-rpc-authority-publisher" or
+       .metadata.name == "internal-rpc-authority-restore-controller")) |
+    select(.spec.template.metadata.annotations["mattercodex.dev/authority-source-revision"] == $revision)] |
+  length
+')
+[[ "$authority_revision_rollout_count" == 2 ]] ||
+  fail "authority registry consumers were not bound to authority revision"
 
 workload_contract_file="$temporary_directory/production-workload-contracts.yaml"
 "$workload_contract_renderer" --manifest "$render_file" --output "$workload_contract_file" >/dev/null
