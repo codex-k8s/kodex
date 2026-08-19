@@ -260,9 +260,9 @@ BEGIN
 		FROM pg_catalog.pg_class AS sequence
 		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = sequence.relnamespace
 		JOIN pg_catalog.pg_depend AS dependency ON dependency.objid = sequence.oid
-		JOIN pg_catalog.pg_class AS source_table ON source_table.oid = dependency.refobjid
+		JOIN pg_catalog.pg_class AS owned_table ON owned_table.oid = dependency.refobjid
 		JOIN public.matter_codex_legacy_source_tables() AS inventory
-			ON inventory.table_name = source_table.relname
+			ON inventory.table_name = owned_table.relname
 		WHERE namespace.nspname = 'public'
 			AND sequence.relkind = 'S'
 			AND dependency.deptype IN ('a', 'i')
