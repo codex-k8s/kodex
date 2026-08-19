@@ -185,11 +185,20 @@ render="$temporary_directory/migration.yaml"
   --lock "$lock_file" --output "$render" --scope migration >/dev/null
 OWNER_EVIDENCE="$owner_evidence" PLAN_ID="$plan_id" SOURCE_ROOT_REFERENCE="$source_root_reference" \
 SOURCE_ROOT_SHA256="$source_root_sha256" yq -i '
+  with(select(.kind != null);
+    .metadata.labels = ((.metadata.labels // {}) + {
+      "mattercodex.dev/release-managed": "false",
+      "mattercodex.dev/migration-managed": "true"
+    })) |
   with(select(.kind == "ConfigMap" and .metadata.name == "legacy-data-migration-owner-evidence");
     .data."owner-evidence.json" = load_str(strenv(OWNER_EVIDENCE))) |
   with(select(.kind == "Job" and .metadata.name == "legacy-data-migration");
     .spec.suspend = false |
-    .spec.template.metadata.labels."mattercodex.dev/environment" = "production" |
+    .spec.template.metadata.labels = ((.spec.template.metadata.labels // {}) + {
+      "mattercodex.dev/environment": "production",
+      "mattercodex.dev/release-managed": "false",
+      "mattercodex.dev/migration-managed": "true"
+    }) |
     (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
       select(.name == "LEGACY_DATA_MIGRATION_MODE") | .value) = "configuration-import" |
     (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
