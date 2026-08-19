@@ -32,10 +32,11 @@ spec:
               test "${cert_key_sha}" = "${private_key_sha}"
               actual_san="$(openssl x509 -in "${source_dir}/tls.crt" -noout -ext subjectAltName | tail -n +2 | tr -d '[:space:]')"
               test "${actual_san}" = "DNS:${expected_name}"
-              install -o 999 -g 999 -m 0644 "${source_dir}/tls.crt" "${runtime_dir}/tls.crt"
-              install -o 999 -g 999 -m 0600 "${source_dir}/tls.key" "${runtime_dir}/tls.key"
-              install -o 999 -g 999 -m 0644 "${source_dir}/ca.crt" "${runtime_dir}/ca.crt"
-              install -o 999 -g 999 -m 0600 /var/run/config/mattercodex/postgresql-migration-source/pg_hba.conf "${runtime_dir}/pg_hba.conf"
+              install -m 0644 "${source_dir}/tls.crt" "${runtime_dir}/tls.crt"
+              install -m 0600 "${source_dir}/tls.key" "${runtime_dir}/tls.key"
+              install -m 0644 "${source_dir}/ca.crt" "${runtime_dir}/ca.crt"
+              install -m 0600 /var/run/config/mattercodex/postgresql-migration-source/pg_hba.conf "${runtime_dir}/pg_hba.conf"
+              chown 999:999 "${runtime_dir}/tls.crt" "${runtime_dir}/tls.key" "${runtime_dir}/ca.crt" "${runtime_dir}/pg_hba.conf"
           resources:
             requests:
               cpu: 10m
