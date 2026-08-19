@@ -274,7 +274,7 @@ func (repository *Repository) beginSnapshot(ctx context.Context, export, lock bo
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fail(errors.New("stream source snapshot"))
+		return fail(fmt.Errorf("stream source snapshot: %w", err))
 	}
 	if len(counts) == 0 {
 		return fail(errors.New("source snapshot inventory is empty"))
