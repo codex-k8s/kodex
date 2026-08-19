@@ -104,8 +104,34 @@ configure_repository_variable() {
     fail "repository variable readback mismatch: $variable_name"
 }
 
+configure_environment_variable() {
+  local environment=$1 variable_name=$2 value_file=$3 body value
+  value=$(<"$value_file")
+  body="$temporary_directory/environment-variable-$environment-$variable_name.json"
+  jq -n --arg name "$variable_name" --arg value "$value" '{name:$name,value:$value}' >"$body"
+  if [[ "$mode" == apply ]]; then
+    if gh api "repos/$repository/environments/$environment/variables/$variable_name" \
+      >/dev/null 2>&1; then
+      gh api --method PATCH \
+        "repos/$repository/environments/$environment/variables/$variable_name" \
+        --input "$body" >/dev/null
+    else
+      gh api --method POST "repos/$repository/environments/$environment/variables" \
+        --input "$body" >/dev/null
+    fi
+  fi
+  gh api "repos/$repository/environments/$environment/variables/$variable_name" \
+    >"$temporary_directory/environment-variable-readback-$environment-$variable_name.json"
+  jq -e --arg name "$variable_name" --arg value "$value" \
+    '.name == $name and .value == $value' \
+    "$temporary_directory/environment-variable-readback-$environment-$variable_name.json" \
+    >/dev/null || fail "environment variable readback mismatch: $environment/$variable_name"
+}
+
 if [[ "$mode" == preflight ]]; then
   gh api "repos/$repository/environments" >/dev/null
+  gh api "repos/$repository/environments/production-build/variables?per_page=1" >/dev/null
+  gh api "repos/$repository/environments/production/variables?per_page=1" >/dev/null
   gh api "repos/$repository/actions/runners?per_page=1" >/dev/null
   gh api "repos/$repository/actions/variables?per_page=1" >/dev/null
   printf 'GitHub Actions policy bootstrap preflight completed\n'
@@ -117,6 +143,10 @@ configure_environment production
 configure_repository_variable MATTERCODEX_PRODUCTION_WORKFLOW_SHA "$workflow_sha_file"
 configure_repository_variable MATTERCODEX_BUILD_OWNER_ACTOR_ID "$build_owner_actor_file"
 configure_repository_variable MATTERCODEX_DEPLOY_OWNER_ACTOR_ID "$deploy_owner_actor_file"
+configure_environment_variable production-build MATTERCODEX_PRODUCTION_WORKFLOW_SHA \
+  "$workflow_sha_file"
+configure_environment_variable production MATTERCODEX_PRODUCTION_WORKFLOW_SHA \
+  "$workflow_sha_file"
 if [[ "$mode" == retire-invalid-registration-variable ]]; then
   if gh api "repos/$repository/actions/variables/GH_ARC_TOKEN" \
     >"$temporary_directory/invalid-registration-variable.json" 2>/dev/null; then

@@ -723,6 +723,20 @@ grep -Fq 'repos/$repository/actions/runners?per_page=1' \
   printf 'GitHub policy preflight does not verify repository runner API access\n' >&2
   exit 1
 }
+grep -Fq 'repos/$repository/environments/$environment/variables/$variable_name' \
+  "$repository_root/infra/github/bootstrap-actions-policy.sh" || {
+  printf 'GitHub policy bootstrap does not manage environment variables\n' >&2
+  exit 1
+}
+for environment in production-build production; do
+  grep -Fq \
+    "configure_environment_variable $environment MATTERCODEX_PRODUCTION_WORKFLOW_SHA" \
+    "$repository_root/infra/github/bootstrap-actions-policy.sh" || {
+    printf 'GitHub policy bootstrap does not synchronize %s workflow SHA\n' \
+      "$environment" >&2
+    exit 1
+  }
+done
 for proxy_contract in \
   'build_proxy=http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080' \
   'build-arg:HTTPS_PROXY=$build_proxy' \
