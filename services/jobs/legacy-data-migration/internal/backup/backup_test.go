@@ -179,6 +179,25 @@ func TestDumpAndRestoreInventoryUseExactClosedTableSet(t *testing.T) {
 	}
 }
 
+func TestRestoreArgumentsUseStandardInputWithoutLiteralFilename(t *testing.T) {
+	t.Parallel()
+	list := pgRestoreListArguments()
+	apply := pgRestoreApplyArguments("restore_database")
+	if !slices.Equal(list, []string{"--list"}) {
+		t.Fatalf("pg_restore list arguments = %#v", list)
+	}
+	if !slices.Equal(apply, []string{
+		"--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "--dbname", "restore_database",
+	}) {
+		t.Fatalf("pg_restore apply arguments = %#v", apply)
+	}
+	for _, arguments := range [][]string{list, apply} {
+		if slices.Contains(arguments, "-") {
+			t.Fatalf("pg_restore received a literal stdin filename: %#v", arguments)
+		}
+	}
+}
+
 func encodeTestBackup(t *testing.T, key, plaintext []byte) []byte {
 	t.Helper()
 	derived := sha512.Sum512(key)

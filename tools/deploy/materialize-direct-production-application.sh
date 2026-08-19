@@ -758,8 +758,18 @@ node "$helper" validate-nats-server "$temporary_directory/internal/operator.jwt"
 
 # Fill remaining symmetric values through domain-separated HKDF; unknown interfaces fail closed.
 while IFS=$'\t' read -r kind name key; do
-  has_value "$kind" "$name" "$key" && continue
   path=$(value_path "$kind" "$name" "$key"); mkdir -p "$(dirname -- "$path")"
+  if [[ "$kind/$name/$key" == Secret/legacy-data-migration-backup-key/key ]]; then
+    if has_value "$kind" "$name" "$key"; then
+      canonical="$temporary_directory/legacy-data-migration-backup-key"
+      node "$helper" canonicalize-base64-key "$path" "$canonical"
+      mv "$canonical" "$path"
+    else
+      node "$helper" derive-base64 "$root" "$name/$key" "$path"
+    fi
+    continue
+  fi
+  has_value "$kind" "$name" "$key" && continue
   if runtime_owned_empty_key "$kind" "$name" "$key"; then
     : >"$path"
     continue

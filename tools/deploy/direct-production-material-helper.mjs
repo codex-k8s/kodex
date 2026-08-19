@@ -511,6 +511,28 @@ switch (command) {
     writeFileSync(args[2], value.toString("hex"), { mode: 0o600 });
     break;
   }
+  case "derive-base64": {
+    if (args.length !== 3) fail("derive-base64 requires root, label and output paths");
+    const root = Buffer.from(readFileSync(args[0], "utf8").trim(), "hex");
+    if (root.length !== 32 || args[1].length === 0) fail("HKDF input is invalid");
+    const value = Buffer.from(hkdfSync("sha256", root, Buffer.alloc(0), args[1], 32));
+    writeFileSync(args[2], value.toString("base64"), { mode: 0o600 });
+    break;
+  }
+  case "canonicalize-base64-key": {
+    if (args.length !== 2) fail("canonicalize-base64-key requires input and output paths");
+    const source = readFileSync(args[0], "utf8").trim();
+    let value;
+    if (/^[a-f0-9]{64}$/.test(source)) {
+      value = Buffer.from(source, "hex");
+    } else {
+      value = Buffer.from(source, "base64");
+      if (value.toString("base64") !== source) fail("symmetric key encoding is invalid");
+    }
+    if (value.length !== 32) fail("symmetric key length is invalid");
+    writeFileSync(args[1], value.toString("base64"), { mode: 0o600 });
+    break;
+  }
   case "ed25519-public-hex": {
     if (args.length !== 2) fail("ed25519-public-hex requires seed and output paths");
     const seed = Buffer.from(readFileSync(args[0], "utf8").trim(), "hex");
