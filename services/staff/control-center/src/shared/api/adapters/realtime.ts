@@ -523,7 +523,7 @@ function mapHealth(value: unknown): HealthObservation | null {
     !isRecord(value) ||
     typeof value.source !== "string" ||
     typeof value.component !== "string" ||
-    !isVersion(value.version) ||
+    !isNonNegativeInteger(value.version) ||
     !["CONTROL_PLANE", "INTERACTION_GATEWAY", "INTEGRATION_GATEWAY"].includes(
       value.source,
     ) ||
