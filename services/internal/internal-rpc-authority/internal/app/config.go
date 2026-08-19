@@ -254,6 +254,14 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
 			},
+			"legacy-data-migration": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+				vaultRole:                 "internal-rpc-authority-legacy-data-migration",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-ack",
+			},
 			"runtime-controller": {
 				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
 				vaultRole:                 "internal-rpc-authority-runtime-controller",

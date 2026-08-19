@@ -46,12 +46,12 @@ jq -e '
   .schema_version == 1 and
   .profile == "direct-production single-node prototype" and
   .namespace == "mattercodex-system" and
-  (.resources | length) == 150 and
-  ([.resources[] | select(.kind == "Secret")] | length) == 131 and
+  (.resources | length) == 157 and
+  ([.resources[] | select(.kind == "Secret")] | length) == 138 and
   ([.resources[] | select(.kind == "ConfigMap")] | length) == 19 and
   .counts == {
-    cryptographically_generated:68,
-    deterministically_derived:71,
+    cryptographically_generated:72,
+    deterministically_derived:74,
     safely_reusable_from_existing_binding:2,
     truly_external_credential:9
   } and
@@ -79,7 +79,9 @@ jq -e '
     (.requirement | type == "string" and length > 0) and
     any($policy.resources[];
       .kind == $binding.kind and .name == $binding.name and
-      .classification == "deterministically_derived" and .keys == $binding.keys)) and
+      (.classification == "deterministically_derived" or
+       .classification == "cryptographically_generated") and
+      .keys == $binding.keys)) and
   all(.reusable_bindings[];
     (.source_namespace == "matter-kodex-prod" or
      (.target_kind == "ConfigMap" and .target_name == "mattermost-ca" and
@@ -210,7 +212,7 @@ material="$temporary_directory/application-material.yaml"
 }
 yq -o=json eval-all '.' "$material" | jq -s --slurpfile classification "$classification" -e '
   map(select(.kind != null)) as $resources |
-  ($resources | length) == 151 and
+  ($resources | length) == 158 and
   ([$resources[] | select(.metadata.name != "agent-runner-handoff-trust") |
     [.kind,.metadata.name]] | sort) ==
     ([$classification[0].resources[] | [.kind,.name]] | sort) and
@@ -412,7 +414,7 @@ jq -er '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgre
   .data["reconcile.sh"]' "$foundation_json" >"$temporary_directory/postgresql-principal-reconcile.sh"
 sh -n "$temporary_directory/postgresql-principal-reconcile.sh"
 [[ "$(jq -r '.[] | select(.kind=="ConfigMap" and .metadata.name=="mattercodex-postgresql-principal-bootstrap") |
-  .data["principals.tsv"]' "$foundation_json" | awk -F '\t' 'NF >= 4 {count++} END {print count+0}')" == 28 ]] || {
+  .data["principals.tsv"]' "$foundation_json" | awk -F '\t' 'NF >= 4 {count++} END {print count+0}')" == 29 ]] || {
   printf 'PostgreSQL principal registry is incomplete\n' >&2
   exit 1
 }
@@ -592,22 +594,22 @@ yq -e '.source_revision == 1' "$target_registry" >/dev/null || {
   exit 1
 }
 jq -e '
-  length == 9 and
-  ([.[] | [.workload_id,.role]] | unique | length) == 9 and
+  length == 10 and
+  ([.[] | [.workload_id,.role]] | unique | length) == 10 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | length) == 57 and
+  ][] | select(. != null)] | length) == 64 and
   ([.[] | [
     .auth_private_key.vault_path?,.manifest_trust.vault_path?,
     .authority_proof_trust.vault_path?,.authority_proof_private_key.vault_path?,
     .restore_coordination.role_credential_vault_path,
     .restore_coordination.ack_key_vault_path,
     .readback.credential_vault_path,.readback.possession_key_vault_path
-  ][] | select(. != null)] | unique | length) == 57 and
+  ][] | select(. != null)] | unique | length) == 64 and
   any(.[]; .workload_id == "integration-gateway" and .role == "AUTHORIZATION_VERIFIER" and
     .service_account == "integration-gateway" and
     .database_identity.login_principal == "ira_integration_gateway_verifier_g1" and
@@ -616,6 +618,10 @@ jq -e '
     .service_account == "runtime-controller" and
     .database_identity.login_principal == "ira_runtime_controller_issuer_g1" and
     .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/auth-private") and
+  any(.[]; .workload_id == "legacy-data-migration" and .role == "AUTHORIZATION_ISSUER" and
+    .service_account == "legacy-data-migration" and
+    .database_identity.login_principal == "ira_legacy_data_migration_issuer_g1" and
+    .auth_private_key.vault_path == "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/auth-private") and
   (any(.[]; .workload_id == "runtime-s3-restore-exchanger" or
     .workload_id == "role-image-builder" or
     .workload_id == "image-admission" or
@@ -643,7 +649,7 @@ jq -r '.[] | . as $target |
 yq -o=json 'select(.kind == "Role" and .metadata.name == "internal-rpc-authority-publisher")' \
   "$application_bootstrap" | jq -e '
     .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:.rules[0].resourceNames,verbs:["get","update"]}] and
-    (.rules[0].resourceNames | length) == 28
+    (.rules[0].resourceNames | length) == 32
   ' >/dev/null || {
   printf 'Publisher RBAC contains a forbidden resource or verb\n' >&2
   exit 1

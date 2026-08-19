@@ -39,6 +39,10 @@ rules:
       - internal-rpc-authority-interaction-gateway-manifest-trust
       - internal-rpc-authority-interaction-gateway-proof-trust
       - internal-rpc-authority-interaction-gateway-verifier-delivery
+      - internal-rpc-authority-legacy-data-migration-issuer-delivery
+      - internal-rpc-authority-legacy-data-migration-issuer-key
+      - internal-rpc-authority-legacy-data-migration-manifest-trust
+      - internal-rpc-authority-legacy-data-migration-proof-trust
       - internal-rpc-authority-role-image-builder-issuer-delivery
       - internal-rpc-authority-role-image-builder-issuer-key
       - internal-rpc-authority-role-image-builder-manifest-trust

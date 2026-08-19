@@ -190,12 +190,14 @@ SOURCE_ROOT_SHA256="$source_root_sha256" yq -i '
   with(select(.kind == "Job" and .metadata.name == "legacy-data-migration");
     .spec.suspend = false |
     .spec.template.metadata.labels."mattercodex.dev/environment" = "production" |
-    (.spec.template.spec.containers[] | select(.name == "migration")).env |= map(
-      if .name == "LEGACY_DATA_MIGRATION_MODE" then .value = "configuration-import"
-      elif .name == "LEGACY_DATA_MIGRATION_PLAN_ID" then .value = strenv(PLAN_ID)
-      elif .name == "LEGACY_DATA_MIGRATION_SOURCE_ROOT_REFERENCE" then .value = strenv(SOURCE_ROOT_REFERENCE)
-      elif .name == "LEGACY_DATA_MIGRATION_SOURCE_ROOT_SHA256" then .value = strenv(SOURCE_ROOT_SHA256)
-      else . end))
+    (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
+      select(.name == "LEGACY_DATA_MIGRATION_MODE") | .value) = "configuration-import" |
+    (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
+      select(.name == "LEGACY_DATA_MIGRATION_PLAN_ID") | .value) = strenv(PLAN_ID) |
+    (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
+      select(.name == "LEGACY_DATA_MIGRATION_SOURCE_ROOT_REFERENCE") | .value) = strenv(SOURCE_ROOT_REFERENCE) |
+    (.spec.template.spec.containers[] | select(.name == "migration") | .env[] |
+      select(.name == "LEGACY_DATA_MIGRATION_SOURCE_ROOT_SHA256") | .value) = strenv(SOURCE_ROOT_SHA256))
 ' "$render"
 
 support="$temporary_directory/support.yaml"

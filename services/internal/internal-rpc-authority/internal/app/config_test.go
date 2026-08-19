@@ -105,6 +105,17 @@ func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
 			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/restore-ack",
 		},
 		{
+			name:                      "legacy data migration issuer",
+			mode:                      ModeIssuer,
+			workloadID:                "legacy-data-migration",
+			spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+			vaultRole:                 "internal-rpc-authority-legacy-data-migration",
+			readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-credential",
+			readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-possession",
+			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-credential",
+			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-ack",
+		},
+		{
 			name:                      "runtime controller issuer",
 			mode:                      ModeIssuer,
 			workloadID:                "runtime-controller",
