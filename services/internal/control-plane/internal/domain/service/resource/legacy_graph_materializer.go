@@ -185,8 +185,9 @@ func (service *Service) PrepareLegacyGraphMigration(
 				return err
 			}
 		}
-		result = legacyMigrationRecordResult(record)
-		return nil
+		var readErr error
+		result, readErr = legacyMigrationResult(ctx, tx, migrationTx, record, false)
+		return readErr
 	})
 	return result, err
 }
