@@ -67,4 +67,4 @@ bash scripts/remote/bootstrap-mattermost-bot.sh --env-file .env
 
 ## LICENSE
 
-Распространяется под MIT
+Распространяется под AGPL & Коммерческой лицензией
