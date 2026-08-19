@@ -754,25 +754,24 @@ rollout_source() {
   mark_attempt_pending "$attempt"
 
   if ! (
-    set -e
-    kubectl apply -f "${render_dir}/runtime.yaml" >/dev/null
-    apply_readback_configmap "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE"
-    ensure_source_credential
-    kubectl delete networkpolicy "$client_ingress" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" --ignore-not-found >/dev/null
-    enable_principal_pending "$attempt"
-    kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
-      --type=strategic --patch-file "$pending_patch" >/dev/null
-    wait_pending_pod "$attempt"
-    run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map"
-    kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
-      --type=strategic --patch-file "$current_patch" >/dev/null
-    kubectl rollout status statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
-      --timeout="${max_outage_seconds}s" >/dev/null
-    run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map"
-    functional_checks
-    record_acceptance "$attempt"
-    promote_principal_current "$attempt"
-    mark_attempt_current "$attempt"
+    kubectl apply -f "${render_dir}/runtime.yaml" >/dev/null &&
+      apply_readback_configmap "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" &&
+      ensure_source_credential &&
+      kubectl delete networkpolicy "$client_ingress" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" --ignore-not-found >/dev/null &&
+      enable_principal_pending "$attempt" &&
+      kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+        --type=strategic --patch-file "$pending_patch" >/dev/null &&
+      wait_pending_pod "$attempt" &&
+      run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map" &&
+      kubectl patch statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+        --type=strategic --patch-file "$current_patch" >/dev/null &&
+      kubectl rollout status statefulset "$statefulset_name" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" \
+        --timeout="${max_outage_seconds}s" >/dev/null &&
+      run_readback "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" "$trust_map" &&
+      functional_checks &&
+      record_acceptance "$attempt" &&
+      promote_principal_current "$attempt" &&
+      mark_attempt_current "$attempt"
   ); then
     rollback_attempt "$attempt"
     mattercodex_die "rollout attempt ${attempt} не принята и откатана"
