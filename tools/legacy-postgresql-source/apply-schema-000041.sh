@@ -23,7 +23,7 @@ private_temporary_dir=""
 
 cleanup() {
   [ -n "$private_temporary_dir" ] || return 0
-  case "$private_temporary_dir" in /tmp/mattercodex-schema-000041-*) ;; *) mattercodex_die "отказ очищать неожиданный temporary path" ;; esac
+  case "$private_temporary_dir" in /tmp/mattercodex-schema-000041.*) ;; *) mattercodex_die "отказ очищать неожиданный temporary path" ;; esac
   find "$private_temporary_dir" -type f -delete
   rmdir "$private_temporary_dir"
   private_temporary_dir=""
