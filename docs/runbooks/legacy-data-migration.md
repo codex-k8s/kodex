@@ -122,8 +122,11 @@ durable `PENDING|CURRENT|RETIRED`, Secret UID/resourceVersion и rollout attempt
 timeouts. Только после двух TLS/served-certificate/ACL readback и post-checks
 состояние атомарно становится `CURRENT` с unlimited validity. Crash/retry
 обнаруживает non-CURRENT, выполняет `NOLOGIN`, revoke membership, bounded
-session termination и exact rollback. `RETIRED` generation `g1` не
-воскрешается.
+session termination и exact rollback. Если initial generation не была принята
+и её Secret отсутствует в client namespace, rollback после доказательства zero
+sessions удаляет этот principal и source Secret; следующий owner-approved
+attempt создаёт новый пароль и новый Secret UID. Принятая либо опубликованная
+`RETIRED` generation `g1` не воскрешается.
 
 Capability-role даёт `SELECT` только на закрытый source inventory,
 `SELECT|INSERT|UPDATE` на
