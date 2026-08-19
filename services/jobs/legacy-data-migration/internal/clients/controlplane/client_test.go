@@ -19,6 +19,21 @@ func TestValidateMigrationRequiresCompleteCommittedOperationReadback(t *testing.
 	}
 }
 
+func TestValidateMigrationRequiresCompletePreparedOperationReadback(t *testing.T) {
+	t.Parallel()
+	migration := committedMigration()
+	migration.State = controlplanev1.LegacyGraphMigrationState_LEGACY_GRAPH_MIGRATION_STATE_PREPARED
+	if err := validateMigration(migration, "plan-1", 2, false); err != nil {
+		t.Fatalf("полный readback PREPARED отклонён: %v", err)
+	}
+
+	migration.OperationReceipts = migration.OperationReceipts[:1]
+
+	if err := validateMigration(migration, "plan-1", 2, false); err == nil {
+		t.Fatal("неполный readback PREPARED должен закрыто блокировать импорт")
+	}
+}
+
 func TestValidateMigrationRejectsDuplicateCommittedOrdinal(t *testing.T) {
 	t.Parallel()
 	migration := committedMigration()
