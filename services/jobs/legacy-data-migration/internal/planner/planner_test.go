@@ -28,6 +28,44 @@ func TestCanonicalSourceTableAliasesRemainClosed(t *testing.T) {
 	}
 }
 
+func TestDispositionsMatchTypedProofsByCanonicalAlias(t *testing.T) {
+	t.Parallel()
+	const table = "matter_codex_cluster_admin_bot_bindings"
+	counts := make(map[string]uint64, len(inventory.Tables))
+	digests := make(map[string]string, len(inventory.Tables))
+	for _, candidate := range inventory.Tables {
+		counts[candidate] = 0
+		digests[candidate] = digest([]byte("table:" + candidate))
+	}
+	counts[table] = 1
+	source := &controlplanev1.LegacyOperationSource{
+		SourceTable: sourceTable(table), SourceRef: table + "/1",
+		SourceRevision: 1, SourceSha256: digest([]byte("row")), LocalRef: "binding-1",
+	}
+	builder := ownerBuilder{
+		counts: counts, tableDigests: digests, rows: map[string][]sourceRow{},
+		operations: []*controlplanev1.LegacyGraphOperation{{
+			Operation: &controlplanev1.LegacyGraphOperation_Artifact{
+				Artifact: &controlplanev1.LegacyArtifactOperation{Source: source},
+			},
+		}},
+		mapped: make(map[string]uint64), archived: make(map[string]uint64),
+	}
+	dispositions, _, err := builder.dispositions()
+	if err != nil {
+		t.Fatalf("dispositions() отклонил typed proof для alias: %v", err)
+	}
+	for _, disposition := range dispositions {
+		if disposition.GetSourceTable() == sourceTable(table) {
+			if disposition.GetDisposition() != controlplanev1.LegacySourceDispositionKind_LEGACY_SOURCE_DISPOSITION_KIND_MATERIALIZE {
+				t.Fatalf("alias disposition = %s", disposition.GetDisposition())
+			}
+			return
+		}
+	}
+	t.Fatal("alias disposition отсутствует")
+}
+
 func TestValidateTerminalRowsFailsClosed(t *testing.T) {
 	t.Parallel()
 	if err := validateTerminalRows("matter_codex_work_claims", []sourceRow{{"status": "completed"}}); err != nil {
