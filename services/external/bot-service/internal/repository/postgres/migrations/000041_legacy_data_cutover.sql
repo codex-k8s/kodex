@@ -224,6 +224,9 @@ BEGIN
 			AND class.relkind IN ('r', 'p')
 			AND NOT class.relispartition
 			AND class.relname LIKE 'matter_codex_%'
+			-- Metadata прежнего мигратора не содержит предметных данных и не
+			-- входит в snapshot/backup/cutover graph.
+			AND class.relname <> 'matter_codex_schema_migrations'
 			AND class.relname <> 'matter_codex_legacy_data_cutovers'
 		 EXCEPT SELECT table_name FROM public.matter_codex_legacy_source_tables())
 		UNION ALL
