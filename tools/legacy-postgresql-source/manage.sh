@@ -590,7 +590,8 @@ wait_pending_pod() {
 }
 
 record_acceptance() {
-  local attempt="$1" record="mattermost-postgres-migration-accepted-${attempt}" snapshot digest uid current_revision update_revision fingerprint
+  local attempt="$1" record snapshot digest uid current_revision update_revision fingerprint
+  record="mattermost-postgres-migration-accepted-${attempt}"
   umask 077
   private_temporary_dir="$(mktemp -d /tmp/mattercodex-postgresql-acceptance.XXXXXX)"
   snapshot="${private_temporary_dir}/accepted-template.json"
@@ -615,7 +616,8 @@ record_acceptance() {
 }
 
 mark_attempt_current() {
-  local attempt="$1" record="mattermost-postgres-migration-accepted-${attempt}" patch rv
+  local attempt="$1" record patch rv
+  record="mattermost-postgres-migration-accepted-${attempt}"
   rv="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$rollout_index" '{.metadata.resourceVersion}')"
   patch="$(jq -cn --arg rv "$rv" --arg attempt "$attempt" \
     --arg uid "$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" '{.data.statefulset-uid}')" \
@@ -646,8 +648,9 @@ restore_template_from_record() {
 }
 
 rollback_attempt() {
-  local attempt="$1" record="mattermost-postgres-migration-attempt-${attempt}" uid expected_uid observed_digest allowed=false predecessor_digest
+  local attempt="$1" record uid expected_uid observed_digest allowed=false predecessor_digest
   local candidate_fingerprint predecessor_fingerprint expected_fingerprint
+  record="mattermost-postgres-migration-attempt-${attempt}"
   kubectl get configmap "$record" --namespace "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" >/dev/null ||
     mattercodex_die "immutable rollback ledger не найден"
   expected_uid="$(kubectl_value "$MATTERCODEX_LEGACY_POSTGRES_NAMESPACE" configmap "$record" '{.data.statefulset-uid}')"
