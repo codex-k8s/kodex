@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -41,5 +42,14 @@ func TestSerializationFailureClassificationIsExact(t *testing.T) {
 	}
 	if isSerializationFailure(errors.New("temporary failure")) {
 		t.Fatal("untyped failure was classified for retry")
+	}
+}
+
+func TestReadbackConsumeUsesReadCommittedIsolation(t *testing.T) {
+	t.Parallel()
+
+	options := readbackConsumeTransactionOptions()
+	if options.IsoLevel != pgx.ReadCommitted {
+		t.Fatalf("unexpected readback consume isolation level: %q", options.IsoLevel)
 	}
 }
