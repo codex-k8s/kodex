@@ -82,8 +82,8 @@ func (server *Server) ListAgents(writer http.ResponseWriter, request *http.Reque
 		}
 		result.Agents = append(result.Agents, value)
 	}
-	if len(response.GetAgents()) != len(response.GetProjections()) {
-		server.writeInternal(writer, request.Context(), errors.New("agent projection page is incomplete"))
+	if len(response.GetAgents()) != 0 {
+		server.writeInternal(writer, request.Context(), errors.New("agent projection page contains legacy resources"))
 		return
 	}
 	result.NextPageToken = optionalString(response.GetNextPageToken())
@@ -105,8 +105,8 @@ func (server *Server) ListAgentHistory(writer http.ResponseWriter, request *http
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	if len(response.GetEntries()) != len(response.GetProjections()) {
-		server.writeInternal(writer, request.Context(), errors.New("agent history projection is incomplete"))
+	if len(response.GetEntries()) != 0 {
+		server.writeInternal(writer, request.Context(), errors.New("agent history projection contains legacy resources"))
 		return
 	}
 	result := generated.AgentHistoryPage{Entries: make([]generated.AgentHistoryEntry, 0, len(response.GetProjections()))}

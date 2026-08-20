@@ -99,3 +99,40 @@ func TestConfigurationDiffReturnsBoundedRedactedChanges(t *testing.T) {
 		t.Fatalf("typed configuration diff is absent: status=%d body=%s", writer.Code, writer.Body.String())
 	}
 }
+
+type agentProjectionControl struct{ ControlPlane }
+
+func (*agentProjectionControl) ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error) {
+	digest := strings.Repeat("a", 64)
+	return &controlplanev1.ListAgentsResponse{Projections: []*controlplanev1.AgentOwnerProjection{{
+		AgentRef: "agent-safe", DisplayName: "Developer", StableKey: "developer", Version: 2,
+		State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Enabled: true,
+		BotIdentity: &controlplanev1.AgentBotIdentityProjection{
+			Status: controlplanev1.AgentBotIdentityStatus_AGENT_BOT_IDENTITY_STATUS_UNBOUND,
+		},
+		RuntimeSelection: &controlplanev1.AgentRuntimeSelectionProjection{
+			SelectionKey: "developer-default", DisplayName: "Developer default",
+			RoleDefinitionVersion: 1, RoleDefinitionSha256: digest,
+			RuntimeProfileVersion: 1, RuntimeProfileSha256: digest,
+			Status: controlplanev1.OwnerProjectionStatus_OWNER_PROJECTION_STATUS_PRESENT,
+		},
+		InstructionSelection: &controlplanev1.OwnerSafeSelection{
+			Status: controlplanev1.OwnerProjectionStatus_OWNER_PROJECTION_STATUS_UNAVAILABLE,
+		},
+		ProviderPoolSelection: &controlplanev1.OwnerSafeSelection{
+			Status: controlplanev1.OwnerProjectionStatus_OWNER_PROJECTION_STATUS_UNAVAILABLE,
+		},
+	}}}, nil
+}
+
+func TestListAgentsAcceptsSafeProjectionWithoutLegacyResource(t *testing.T) {
+	server := &Server{control: &agentProjectionControl{}}
+	writer := httptest.NewRecorder()
+	server.ListAgents(writer, httptest.NewRequest(http.MethodGet, "/agents", nil), generated.ListAgentsParams{})
+	if writer.Code != http.StatusOK || !strings.Contains(writer.Body.String(), `"agentRef":"agent-safe"`) {
+		t.Fatalf("safe projection page was rejected: status=%d body=%s", writer.Code, writer.Body.String())
+	}
+	if strings.Contains(writer.Body.String(), `"spec"`) {
+		t.Fatalf("legacy private resource escaped: %s", writer.Body.String())
+	}
+}
