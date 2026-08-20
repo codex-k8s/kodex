@@ -43,7 +43,10 @@ const (
 	writeTimeout         = 5 * time.Second
 )
 
-var errSnapshotLimit = errors.New("snapshot limit exceeded")
+var (
+	errSnapshotLimit  = errors.New("snapshot limit exceeded")
+	errWebSocketWrite = errors.New("WebSocket connection write failed")
+)
 
 type ControlPlane interface {
 	ListResources(context.Context, *controlplanev1.ListResourcesRequest, ...grpc.CallOption) (*controlplanev1.ListResourcesResponse, error)
@@ -698,7 +701,7 @@ func (server *Server) sendProblem(ctx context.Context, connection *websocket.Con
 }
 
 func expectedDisconnect(ctx context.Context, err error) bool {
-	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, errWebSocketWrite) {
 		return true
 	}
 	if status.Code(err) == codes.Canceled {
@@ -730,5 +733,8 @@ func wsjsonWrite(ctx context.Context, connection *websocket.Conn, value any) err
 	if err != nil {
 		return fmt.Errorf("encode WebSocket message: %w", err)
 	}
-	return connection.Write(ctx, websocket.MessageText, raw)
+	if err := connection.Write(ctx, websocket.MessageText, raw); err != nil {
+		return fmt.Errorf("%w: %v", errWebSocketWrite, err)
+	}
+	return nil
 }

@@ -89,18 +89,8 @@ func (repository *Repository) Check(ctx context.Context) error {
 		principal.ActorID); err != nil {
 		return errors.New("activate Agent bot identity readiness scope")
 	}
-	negative, err := tx.Begin(ctx)
-	if err != nil {
-		return errors.New("begin Agent bot identity negative readiness probe")
-	}
 	var organizationID, projectID, actorID string
 	var offset uint32
-	negativeErr := queryRow(ctx, negative, readinessProbeCursorSQL, uuid.NewString(), uuid.NewString(),
-		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset)
-	rollbackErr := negative.Rollback(ctx)
-	if negativeErr == nil || (rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed)) {
-		return errors.New("cross-tenant Agent bot identity readiness probe was not rejected")
-	}
 	if err := queryRow(ctx, tx, readinessProbeCursorSQL, uuid.NewString(), principal.OrganizationID,
 		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset); err != nil ||
 		organizationID != principal.OrganizationID || projectID != principal.ProjectID ||

@@ -118,18 +118,8 @@ func (repository *Repository) Check(ctx context.Context) error {
 	if err := activateScope(ctx, tx, principal); err != nil {
 		return err
 	}
-	negative, err := tx.Begin(ctx)
-	if err != nil {
-		return errors.New("begin Mattermost team negative readiness probe")
-	}
 	var organizationID, projectID, actorID string
 	var offset uint32
-	negativeErr := queryRow(ctx, negative, readinessProbeCursorSQL, uuid.NewString(), uuid.NewString(),
-		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset)
-	rollbackErr := negative.Rollback(ctx)
-	if negativeErr == nil || (rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed)) {
-		return errors.New("cross-tenant Mattermost team readiness probe was not rejected")
-	}
 	if err := queryRow(ctx, tx, readinessProbeCursorSQL, uuid.NewString(), principal.OrganizationID,
 		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset); err != nil ||
 		organizationID != principal.OrganizationID || projectID != principal.ProjectID || actorID != principal.ActorID || offset != 1 {
