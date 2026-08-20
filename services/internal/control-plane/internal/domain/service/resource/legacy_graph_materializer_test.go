@@ -189,6 +189,17 @@ func TestLegacyEvidenceFailureCodeIdentifiesFirstFailedPredicate(t *testing.T) {
 	}
 }
 
+func TestLegacyStageErrorPreservesDomainTypeAndExistingSafeCode(t *testing.T) {
+	staged := legacyStageError(errs.ErrInternal, "LEGACY_VERIFIED_RECEIPTS_READ")
+	if !errors.Is(staged, errs.ErrInternal) || errs.SafeCode(staged) != "LEGACY_VERIFIED_RECEIPTS_READ" {
+		t.Fatalf("unexpected staged error: %v (%s)", staged, errs.SafeCode(staged))
+	}
+	existing := errs.WithSafeCode(errs.ErrDataLoss, "LEGACY_MATERIALIZE_CHAT_3")
+	if got := legacyStageError(existing, "LEGACY_PLAN_COMPILE"); errs.SafeCode(got) != "LEGACY_MATERIALIZE_CHAT_3" {
+		t.Fatalf("existing safe code was replaced: %s", errs.SafeCode(got))
+	}
+}
+
 func TestLegacyDriftFailureCodeIdentifiesProjectionOrdinal(t *testing.T) {
 	drift := []entity.LegacyGraphDrift{{Ordinal: 17, Predicate: "target projection does not match committed receipt"}}
 	if code := legacyDriftFailureCode(drift); code != "LEGACY_DRIFT_TARGET_PROJECTION_17" {
