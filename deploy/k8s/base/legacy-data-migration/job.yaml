@@ -164,7 +164,7 @@ spec:
             - name: LEGACY_DATA_MIGRATION_TRUSTED_ROLE_BASE_DIGEST
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
             - name: LEGACY_DATA_MIGRATION_CONTROL_PLANE_RPC_DEADLINE
-              value: 10s
+              value: 30s
             - name: LEGACY_DATA_MIGRATION_BACKUP_DIRECTORY
               value: /var/lib/mattercodex/legacy-migration/backups
             # Authenticated plaintext staging существует только как unlinked

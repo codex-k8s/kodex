@@ -52,6 +52,18 @@ type Repository struct {
 	config Config
 }
 
+type unavailableRepositoryError struct {
+	cause error
+}
+
+func (err unavailableRepositoryError) Error() string {
+	return errs.ErrUnavailable.Error()
+}
+
+func (err unavailableRepositoryError) Unwrap() []error {
+	return []error{errs.ErrUnavailable, err.cause}
+}
+
 type transaction struct {
 	tx             pgx.Tx
 	repository     *Repository
@@ -170,11 +182,10 @@ func (repository *Repository) Transact(
 			projectID:      scope.ProjectID,
 			actorID:        scope.ActorID,
 		}
-		if err := repository.setScope(ctx, tx, scope); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
+		err = repository.setScope(ctx, tx, scope)
+		if err == nil {
+			err = callback(wrapped)
 		}
-		err = callback(wrapped)
 		if err == nil {
 			err = tx.Commit(ctx)
 		} else {
@@ -4534,7 +4545,7 @@ func mapError(err error) error {
 		case "23505", "23503", "23514":
 			return errs.ErrStateConflict
 		case "40001", "40P01", "53300", "57P01", "57P02", "57P03":
-			return errs.ErrUnavailable
+			return unavailableRepositoryError{cause: err}
 		}
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
