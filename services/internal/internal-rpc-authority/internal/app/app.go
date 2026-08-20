@@ -546,6 +546,7 @@ func runSnapshotReload(
 			loaded.Policy.PolicyRevision == current.PolicyRevision &&
 			loaded.Policy.SignerGeneration == current.SignerGeneration {
 			probeCtx, probeCancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+			previousReadbackRefresh := lastReadbackRefresh
 			lastReadbackRefresh, err = maintainServedSnapshot(
 				probeCtx,
 				authorityApplication,
@@ -557,6 +558,10 @@ func runSnapshotReload(
 				authorityApplication.SetAvailable(true)
 				readiness.Set(true, "ready")
 				metrics.SetReady(true)
+				if lastReadbackRefresh.Equal(previousReadbackRefresh) &&
+					time.Since(previousReadbackRefresh) >= snapshotReadbackRefreshInterval {
+					logger.Warn("served snapshot readback refresh deferred; current receipt remains valid")
+				}
 			} else {
 				authorityApplication.SetAvailable(false)
 				readiness.Set(false, "served-snapshot-readback-failed")
@@ -600,13 +605,26 @@ func maintainServedSnapshot(
 	lastRefresh time.Time,
 	now time.Time,
 ) (time.Time, error) {
+	servedStateChecked := false
+	var servedStateErr error
 	if now.Sub(lastRefresh) < snapshotReadbackRefreshInterval {
-		if err := runtime.ServedStateReady(ctx); err == nil {
+		servedStateChecked = true
+		servedStateErr = runtime.ServedStateReady(ctx)
+		if servedStateErr == nil {
 			return lastRefresh, nil
 		}
 	}
 	if err := runtime.ActivateSnapshot(ctx); err != nil {
-		return lastRefresh, fmt.Errorf("refresh served snapshot readback: %w", err)
+		if !servedStateChecked {
+			servedStateErr = runtime.ServedStateReady(ctx)
+		}
+		if servedStateErr == nil {
+			return lastRefresh, nil
+		}
+		return lastRefresh, errors.Join(
+			fmt.Errorf("refresh served snapshot readback: %w", err),
+			fmt.Errorf("validate current served snapshot readback: %w", servedStateErr),
+		)
 	}
 	return now, nil
 }
