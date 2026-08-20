@@ -34,6 +34,17 @@ func SafeCode(err error) string {
 	return ""
 }
 
+// IsDomain сообщает adapter-слою, что ошибка уже прошла доменную
+// классификацию и не должна быть заменена общей ошибкой зависимости.
+func IsDomain(err error) bool {
+	for _, target := range domainErrors {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
+}
+
 var (
 	ErrInvalidInput        = errors.New("invalid control-plane input")
 	ErrUnauthenticated     = errors.New("control-plane authentication required")
@@ -48,3 +59,18 @@ var (
 	ErrUnavailable         = errors.New("control-plane dependency unavailable")
 	ErrInternal            = errors.New("control-plane internal error")
 )
+
+var domainErrors = []error{
+	ErrInvalidInput,
+	ErrUnauthenticated,
+	ErrPermissionDenied,
+	ErrNotFound,
+	ErrStateConflict,
+	ErrIdempotencyConflict,
+	ErrAborted,
+	ErrVersionMismatch,
+	ErrFailedPrecondition,
+	ErrDataLoss,
+	ErrUnavailable,
+	ErrInternal,
+}

@@ -4522,20 +4522,8 @@ func mapError(err error) error {
 	if err == nil {
 		return nil
 	}
-	for _, domainError := range []error{
-		errs.ErrInvalidInput,
-		errs.ErrUnauthenticated,
-		errs.ErrPermissionDenied,
-		errs.ErrNotFound,
-		errs.ErrStateConflict,
-		errs.ErrIdempotencyConflict,
-		errs.ErrVersionMismatch,
-		errs.ErrUnavailable,
-		errs.ErrInternal,
-	} {
-		if errors.Is(err, domainError) {
-			return err
-		}
+	if errs.IsDomain(err) {
+		return err
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrNotFound

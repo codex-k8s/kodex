@@ -45,6 +45,8 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+# shellcheck source=owner-evidence.sh
+source "$script_directory/owner-evidence.sh"
 [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$revision" ]] || fail "checkout does not match approved revision"
 [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=no)" ]] || fail "tracked checkout must be clean"
 [[ "$(jq -r .source_sha "$lock_file")" == "$revision" ]] || fail "release lock source SHA mismatch"
@@ -198,6 +200,7 @@ image_digest=${trusted_base_digest#sha256:}
    "$image_digest" =~ ^[a-f0-9]{64}$ ]] || fail "image admission policy evidence is invalid"
 source_revision_sha256=$(printf '%s' "$revision" | sha256sum | awk '{print $1}')
 promoted_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+candidate_owner_evidence="$temporary_directory/owner-evidence-candidate.json"
 owner_evidence="$temporary_directory/owner-evidence.json"
 jq -n --slurpfile credentials "$credential_evidence" \
   --arg source_revision "$revision" --arg source_sha "$source_revision_sha256" \
@@ -223,7 +226,20 @@ jq -n --slurpfile credentials "$credential_evidence" \
       admissionReceiptSha256:$source_sha,admissionReceiptManifestDigest:("sha256:"+$digest),
       signatureSha256:$source_sha,promotionReadbackSha256:$source_sha,sbomSha256:$source_sha,
       vulnerabilityEvidenceSha256:$source_sha,signatureIdentity:"legacy-migration-owner",promotedAt:$promoted_at}
-  }' >"$owner_evidence"
+  }' >"$candidate_owner_evidence"
+
+live_owner_evidence_configmap="$temporary_directory/live-owner-evidence-configmap.json"
+if ! "${kube[@]}" -n "$namespace" get configmap legacy-data-migration-owner-evidence \
+  -o json >"$live_owner_evidence_configmap" 2>/dev/null; then
+  : >"$live_owner_evidence_configmap"
+fi
+if ! evidence_selection=$(select_legacy_owner_evidence "$candidate_owner_evidence" \
+  "$live_owner_evidence_configmap" "$owner_evidence" "$plan_id" "$source_root_reference" \
+  "$source_root_sha256" "$revision"); then
+  fail "persisted owner evidence differs from the exact retry tuple"
+fi
+printf 'Legacy configuration import owner evidence: %s\n' "$evidence_selection"
+owner_evidence_sha256=$(sha256sum "$owner_evidence" | awk '{print $1}')
 
 helper="$repository_root/tools/deploy/direct-production-material-helper.mjs"
 signer="$temporary_directory/migration-signer.jwk"
@@ -244,14 +260,22 @@ node "$helper" generate-legacy-migration-grant "$signer" "$grant" "$organization
 render="$temporary_directory/migration.yaml"
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --lock "$lock_file" --output "$render" --scope migration >/dev/null
-OWNER_EVIDENCE="$owner_evidence" PLAN_ID="$plan_id" SOURCE_ROOT_REFERENCE="$source_root_reference" \
-SOURCE_ROOT_SHA256="$source_root_sha256" yq -i '
+OWNER_EVIDENCE="$owner_evidence" OWNER_EVIDENCE_SHA256="$owner_evidence_sha256" \
+PLAN_ID="$plan_id" SOURCE_ROOT_REFERENCE="$source_root_reference" \
+SOURCE_ROOT_SHA256="$source_root_sha256" RELEASE_REVISION="$revision" yq -i '
   with(select(.kind != null);
     .metadata.labels = ((.metadata.labels // {}) + {
       "mattercodex.dev/release-managed": "false",
       "mattercodex.dev/migration-managed": "true"
     })) |
   with(select(.kind == "ConfigMap" and .metadata.name == "legacy-data-migration-owner-evidence");
+    .metadata.annotations = ((.metadata.annotations // {}) + {
+      "mattercodex.dev/legacy-plan-id": strenv(PLAN_ID),
+      "mattercodex.dev/legacy-source-root-reference": strenv(SOURCE_ROOT_REFERENCE),
+      "mattercodex.dev/legacy-source-root-sha256": strenv(SOURCE_ROOT_SHA256),
+      "mattercodex.dev/legacy-release-revision": strenv(RELEASE_REVISION),
+      "mattercodex.dev/legacy-owner-evidence-sha256": strenv(OWNER_EVIDENCE_SHA256)
+    }) |
     .data."owner-evidence.json" = load_str(strenv(OWNER_EVIDENCE))) |
   with(select(.kind == "Job" and .metadata.name == "legacy-data-migration");
     .spec.suspend = false |
