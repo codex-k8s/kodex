@@ -1307,8 +1307,8 @@ func (server *Server) ListIncidents(writer http.ResponseWriter, request *http.Re
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	if len(response.GetIncidents()) != len(response.GetProjections()) {
-		server.writeInternal(writer, request.Context(), errors.New("incident projection page is incomplete"))
+	if len(response.GetIncidents()) != 0 {
+		server.writeInternal(writer, request.Context(), errors.New("incident projection page contains legacy resources"))
 		return
 	}
 	incidents := make([]generated.IncidentView, 0, len(response.GetProjections()))

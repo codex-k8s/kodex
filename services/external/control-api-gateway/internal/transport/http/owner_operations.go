@@ -373,7 +373,7 @@ func (server *Server) ListRunTimeline(writer http.ResponseWriter, request *http.
 	}
 	run, castErr := castRunView(response.GetRun())
 	next, nextErr := castRunNextActions(response.GetNextActions())
-	if castErr != nil || nextErr != nil || run.RunRef != string(runRef) || len(response.GetEvents()) != len(response.GetProjections()) {
+	if castErr != nil || nextErr != nil || run.RunRef != string(runRef) || len(response.GetEvents()) != 0 {
 		server.writeInternal(writer, request.Context(), errors.New("run timeline readback is invalid"))
 		return
 	}
@@ -434,8 +434,8 @@ func (server *Server) ListRunArtifacts(writer http.ResponseWriter, request *http
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	if len(response.GetArtifacts()) != len(response.GetProjections()) {
-		server.writeInternal(writer, request.Context(), errors.New("run artifact projection page is incomplete"))
+	if len(response.GetArtifacts()) != 0 {
+		server.writeInternal(writer, request.Context(), errors.New("run artifact projection page contains legacy resources"))
 		return
 	}
 	next, nextErr := castRunNextActions(response.GetNextActions())
@@ -654,8 +654,8 @@ func (server *Server) ListWorkspaceRestores(writer http.ResponseWriter, request 
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	if len(response.GetRestores()) != len(response.GetProjections()) {
-		server.writeInternal(writer, request.Context(), errors.New("workspace restore projection page is incomplete"))
+	if len(response.GetRestores()) != 0 {
+		server.writeInternal(writer, request.Context(), errors.New("workspace restore projection page contains legacy resources"))
 		return
 	}
 	result := generated.WorkspaceRestorePage{Restores: make([]generated.WorkspaceRestoreView, 0, len(response.GetProjections())), NextPageToken: optionalString(response.GetNextPageToken())}
