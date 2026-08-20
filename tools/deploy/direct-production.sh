@@ -330,6 +330,25 @@ wait_rollouts() {
   done < <(MANIFEST_KIND="$manifest_kind" yq eval-all -r 'select(.kind == strenv(MANIFEST_KIND)) | .metadata.name' "$render_file")
 }
 
+release_workloads_ready() {
+  kubectl --context "$expected_context" -n mattercodex-system \
+    get statefulset,deployment -l mattercodex.dev/release-managed=true -o json |
+    jq -e 'all(.items[];
+      (.status.observedGeneration >= .metadata.generation) and
+      ((.status.readyReplicas // 0) == (.spec.replicas // 1)) and
+      ((.status.availableReplicas // 0) == (.spec.replicas // 1)))' >/dev/null
+}
+
+wait_release_workloads_ready() {
+  for _ in $(seq 1 60); do
+    if release_workloads_ready; then
+      return 0
+    fi
+    sleep 5
+  done
+  return 1
+}
+
 run_job() {
   local name=$1 manifest="$temporary_directory/job-$name.yaml"
   NAME="$name" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(NAME))' "$render_file" >"$manifest"
@@ -413,11 +432,7 @@ actual_resources=$(kubectl --context "$expected_context" -n mattercodex-system \
   jq -Sc '[.items[] | [.kind,.metadata.name]] | sort')
 [[ "$actual_resources" == "$expected_resources" ]] || fail "release-managed resource set mismatch"
 
-kubectl --context "$expected_context" -n mattercodex-system get statefulset,deployment -l mattercodex.dev/release-managed=true -o json |
-  jq -e 'all(.items[];
-    (.status.observedGeneration >= .metadata.generation) and
-    ((.status.readyReplicas // 0) == (.spec.replicas // 1)) and
-    ((.status.availableReplicas // 0) == (.spec.replicas // 1)))' >/dev/null ||
+wait_release_workloads_ready ||
   fail "a release-managed workload is not Ready and Available"
 kubectl --context "$expected_context" -n mattercodex-system get job -l mattercodex.dev/release-managed=true -o json |
   jq -e 'all(.items[]; any(.status.conditions[]?; .type == "Complete" and .status == "True"))' >/dev/null ||
