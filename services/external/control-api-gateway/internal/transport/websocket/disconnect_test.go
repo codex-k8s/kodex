@@ -3,6 +3,7 @@ package websockettransport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/coder/websocket"
@@ -23,6 +24,7 @@ func TestExpectedDisconnect(t *testing.T) {
 		{name: "request context cancelled", ctx: cancelledContext, err: errors.New("publish failed"), want: true},
 		{name: "context cancellation", ctx: context.Background(), err: context.Canceled, want: true},
 		{name: "gRPC cancellation", ctx: context.Background(), err: status.Error(codes.Canceled, "caller cancelled"), want: true},
+		{name: "connection write", ctx: context.Background(), err: fmt.Errorf("%w: connection closed", errWebSocketWrite), want: true},
 		{name: "normal close", ctx: context.Background(), err: websocket.CloseError{Code: websocket.StatusNormalClosure}, want: true},
 		{name: "client going away", ctx: context.Background(), err: websocket.CloseError{Code: websocket.StatusGoingAway}, want: true},
 		{name: "upstream unavailable", ctx: context.Background(), err: status.Error(codes.Unavailable, "upstream unavailable"), want: false},

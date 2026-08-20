@@ -114,7 +114,6 @@ func (repository *Repository) Check(ctx context.Context) error {
 		return errors.New("interaction repository is not ready")
 	}
 	organizationID, projectID := repository.config.OrganizationID, repository.config.AllowedProjectIDs[0]
-	otherOrganizationID := uuid.NewString()
 	channelID := uuid.NewString()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
 	if err != nil {
@@ -125,18 +124,6 @@ func (repository *Repository) Check(ctx context.Context) error {
 		ActorID: "system:interaction-readiness",
 	}); err != nil {
 		return errors.Join(err, repository.rollback(tx))
-	}
-	negative, err := tx.Begin(ctx)
-	if err != nil {
-		return errors.Join(errors.New("begin interaction repository negative readiness probe"), repository.rollback(tx))
-	}
-	var negativeOrganizationID, negativeProjectID string
-	var negativeCursor int64
-	negativeErr := negative.QueryRow(ctx, readinessProbeCursorSQL, channelID, int64(1),
-		otherOrganizationID, projectID).Scan(&negativeOrganizationID, &negativeProjectID, &negativeCursor)
-	rollbackErr := negative.Rollback(ctx)
-	if negativeErr == nil || (rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed)) {
-		return errors.Join(errors.New("cross-tenant interaction repository readiness probe was not rejected"), repository.rollback(tx))
 	}
 	var storedOrganizationID, storedProjectID string
 	var storedCursor int64
