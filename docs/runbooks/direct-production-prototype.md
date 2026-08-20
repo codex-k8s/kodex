@@ -4,8 +4,8 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.8.1
-updated: 2026-08-15
+version: 1.8.2
+updated: 2026-08-20
 ---
 
 # Direct-production single-node prototype
@@ -267,10 +267,12 @@ Direct-production render задаёт только сочетание
 
 В prototype publisher выполняет только `get` и `update` заранее созданных exact
 Secret из закрытого target registry и подтверждает `resourceVersion`, semantic
-version, canonical digest и полный readback. Direct-production registry revision
-7 содержит 12 точных target tuple и 78 уникальных logical path. Publisher Role
-выводится из registry и содержит ровно 40 `resourceNames`; иные verbs и
-`list|watch|create|delete|patch` отсутствуют. Wave A активирует два
+version, canonical digest и полный readback. Direct-production registry содержит
+только постоянные runtime target. Завершённая одноразовая
+`legacy-data-migration` исключена из routine rotation и возвращается только
+отдельной owner-approved migration wave по `RUN-MC-014`. Publisher Role
+выводится из registry; иные verbs и `list|watch|create|delete|patch`
+отсутствуют. Wave A активирует два
 profile-selected target с отдельными identity и Secret:
 
 - `verifier/integration-gateway` — четыре verifier-документа в

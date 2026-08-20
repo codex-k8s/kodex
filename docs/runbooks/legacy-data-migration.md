@@ -4,7 +4,7 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.7.0
+version: 1.8.0
 updated: 2026-08-20
 ---
 
@@ -13,6 +13,22 @@ updated: 2026-08-20
 Runbook относится к `services/jobs/legacy-data-migration` и
 `deploy/k8s/base/legacy-data-migration`. Он описывает code-first protocol, но
 не разрешает deploy, backup, restore или migration.
+
+## Authority lifecycle одноразовой job
+
+`legacy-data-migration` не входит в steady-state target registry
+`internal-rpc-authority-publisher`: завершённая одноразовая Job не может быть
+обязательным участником каждой последующей ротации. После состояния
+`COMMITTED` routine publisher не имеет доступа к её delivery Secrets и не ждёт
+её served-state readback.
+
+Новый запуск migration требует отдельной owner-approved волны. До сборки exact
+release эта волна обязана code-first вернуть issuer target и соответствующие
+publisher `resourceNames`, повысить authority registry revision, развернуть Job
+в том же release lifecycle и доказать promotion по полному exact target set.
+Добавлять target вручную в live ConfigMap, засчитывать recovery Job вместо
+штатной migration Job или ослаблять условие `PROMOTED` запрещено. После нового
+`COMMITTED` отдельный PR снова отзывает target и publisher-доступ.
 
 ## Подготовка legacy PostgreSQL source по #241
 
