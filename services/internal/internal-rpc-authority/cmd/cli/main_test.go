@@ -39,3 +39,28 @@ func TestReadbackContentionMigrationUsesScopedAdvisoryLock(t *testing.T) {
 		}
 	}
 }
+
+func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(
+		"migrations/20260820000300_internal_rpc_authority_peer_scoped_readback.sql",
+	)
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"challenge_peer_spiffe_id text",
+		"WHERE peer_spiffe_id = challenge_peer_spiffe_id",
+		"AND idempotency_key = p_idempotency_key",
+		"challenge_peer_spiffe_id || ':' || p_idempotency_key::text",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("migration is missing peer-scoped invariant %q", required)
+		}
+	}
+	if strings.Contains(text, "WHERE idempotency_key = p_idempotency_key") {
+		t.Fatal("migration restored an unscoped idempotency lookup")
+	}
+}
