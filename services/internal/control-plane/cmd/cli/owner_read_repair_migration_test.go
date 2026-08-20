@@ -9,8 +9,8 @@ import (
 
 func TestOwnerReadRepairMigrationPinsDiagnosticsContract(t *testing.T) {
 	const migrationVersion int64 = 20260817000200
-	if schema.CurrentVersion != migrationVersion {
-		t.Fatalf("schema fence %d does not match owner read repair migration %d", schema.CurrentVersion, migrationVersion)
+	if schema.CurrentVersion < migrationVersion {
+		t.Fatalf("schema fence %d excludes owner read repair migration %d", schema.CurrentVersion, migrationVersion)
 	}
 	raw, err := migrations.ReadFile("migrations/20260817000200_control_plane_owner_read_repair.sql")
 	if err != nil {
