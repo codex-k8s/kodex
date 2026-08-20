@@ -453,7 +453,7 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 
 func (repository *Repository) AdvanceProviderGeneration(ctx context.Context, principal entity.TeamPrincipal) (uint64, error) {
 	var generation uint64
-	err := repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+	err := repository.withScopeRetry(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		return queryRow(ctx, tx, providerWatermarkAdvanceSQL, principal.OrganizationID, principal.ProjectID).Scan(&generation)
 	})
 	if err != nil || generation == 0 {
