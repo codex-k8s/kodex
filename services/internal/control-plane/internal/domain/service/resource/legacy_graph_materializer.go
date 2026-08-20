@@ -260,25 +260,32 @@ func (service *Service) MaterializeLegacyGraphMigration(
 			plan.SourceRootReference != planRecord.SourceRootReference ||
 			plan.SourceRootSHA256 != planRecord.SourceRootSHA256 ||
 			plan.SourceSnapshotSHA256 != planRecord.SourceSnapshotSHA256 {
-			return errs.ErrDataLoss
+			return errs.WithSafeCode(errs.ErrDataLoss, "LEGACY_PLAN_PAYLOAD")
 		}
 		receipts, err := migrationTx.ListLegacyOperationReceipts(ctx, plan.PlanID)
-		if err != nil || len(receipts) != len(plan.Operations) {
-			return errs.ErrDataLoss
+		if err != nil {
+			return legacyStageError(err, "LEGACY_PLAN_RECEIPTS_READ")
+		}
+		if len(receipts) != len(plan.Operations) {
+			return errs.WithSafeCode(errs.ErrDataLoss, "LEGACY_PLAN_RECEIPTS_CARDINALITY")
 		}
 		dispositions, err := migrationTx.ListLegacySourceDispositions(ctx, plan.PlanID)
-		if err != nil || validatePersistedLegacyPlan(planRecord, plan, dispositions, receipts) != nil {
-			return errs.ErrDataLoss
+		if err != nil {
+			return legacyStageError(err, "LEGACY_PLAN_DISPOSITIONS_READ")
+		}
+		if err := validatePersistedLegacyPlan(planRecord, plan, dispositions, receipts); err != nil {
+			return legacyStageError(err, "LEGACY_PLAN_INTEGRITY")
 		}
 		compiled, err := service.compileLegacyGraph(input.Principal, plan)
 		if err != nil {
-			return err
+			return legacyStageError(err, "LEGACY_PLAN_COMPILE")
 		}
 		for index, operation := range plan.Operations {
 			receipt := receipts[index]
 			if receipt.Ordinal != uint32(index+1) || receipt.TargetID != operation.TargetID ||
 				receipt.TargetVersion != 0 || receipt.MaterializedAt != (time.Time{}) {
-				return errs.ErrDataLoss
+				return errs.WithSafeCode(errs.ErrDataLoss,
+					fmt.Sprintf("LEGACY_RECEIPT_PRESTATE_%s_%d", receipt.OperationKind, receipt.Ordinal))
 			}
 			materialized, materializeErr := service.materializeLegacyOperation(
 				ctx, tx, migrationTx, input.Principal, plan, operation, compiled, receipt,
@@ -295,13 +302,17 @@ func (service *Service) MaterializeLegacyGraphMigration(
 			}
 		}
 		verified, err := migrationTx.ListLegacyOperationReceipts(ctx, plan.PlanID)
-		if err != nil || len(verified) != len(plan.Operations) {
-			return errs.ErrDataLoss
+		if err != nil {
+			return legacyStageError(err, "LEGACY_VERIFIED_RECEIPTS_READ")
+		}
+		if len(verified) != len(plan.Operations) {
+			return errs.WithSafeCode(errs.ErrDataLoss, "LEGACY_VERIFIED_RECEIPTS_CARDINALITY")
 		}
 		for _, receipt := range verified {
 			evidence, verifyErr := migrationTx.VerifyLegacyOperationEvidence(ctx, receipt)
 			if verifyErr != nil {
-				return verifyErr
+				return legacyStageError(verifyErr,
+					fmt.Sprintf("LEGACY_EVIDENCE_READ_%s_%d", receipt.TargetKind, receipt.Ordinal))
 			}
 			if !evidence.Valid() {
 				return errs.WithSafeCode(errs.ErrDataLoss, legacyEvidenceFailureCode(receipt, evidence))
@@ -606,6 +617,13 @@ func legacyEvidenceFailureCode(receipt domainrepo.LegacyOperationRecord,
 		predicate = "TARGET"
 	}
 	return fmt.Sprintf("LEGACY_EVIDENCE_%s_%s_%d", predicate, receipt.TargetKind, receipt.Ordinal)
+}
+
+func legacyStageError(err error, code string) error {
+	if err == nil || errs.SafeCode(err) != "" {
+		return err
+	}
+	return errs.WithSafeCode(err, code)
 }
 
 func legacyDriftFailureCode(drift []entity.LegacyGraphDrift) string {
