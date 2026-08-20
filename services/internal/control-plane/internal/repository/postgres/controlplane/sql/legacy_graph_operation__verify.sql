@@ -21,10 +21,7 @@ WITH receipt AS (
               AND audit.occurred_at = receipt.materialized_at
         ) AS audit_ok,
         cardinality(receipt.event_ids) = CASE
-            WHEN receipt.target_kind IN (
-                'PROJECT', 'TEAM', 'CHAT', 'CREDENTIAL_BINDING',
-                'REPOSITORY_WORKSPACE', 'RUNTIME_REVISION', 'SESSION', 'TURN'
-            ) THEN 1 ELSE 0 END
+            WHEN @event_required::boolean THEN 1 ELSE 0 END
         AND NOT EXISTS (
             SELECT 1 FROM unnest(receipt.event_ids, receipt.event_sequences)
                 AS expected(event_id, event_sequence)
@@ -35,7 +32,7 @@ WITH receipt AS (
                   AND event.aggregate_type = receipt.target_kind
                   AND event.aggregate_version = receipt.target_version
                   AND event.event_sequence = expected.event_sequence
-                  AND event.event_name = 'control_plane.runtime_configuration_changed'
+                  AND event.event_name = @event_name
                   AND event.organization_id = plan.organization_id
                   AND event.project_id = plan.project_id
                   AND event.correlation_id = (
