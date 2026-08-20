@@ -306,7 +306,7 @@ onBeforeUnmount(() => {
               :key="project.id"
               :value="project.id"
             >
-              {{ project.name }}
+              {{ project.name }} · {{ project.slug }}
             </option>
           </select>
         </label>

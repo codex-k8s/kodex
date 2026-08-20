@@ -260,6 +260,8 @@ const ru = {
     confirmRevoke: "Отозвать аккаунт «{name}»?",
     confirmReauthorize: "Начать повторную авторизацию «{name}»?",
     tooManyMembers: "Пул может содержать не более 64 аккаунтов.",
+    importedReadonly:
+      "Перенесено из прежней конфигурации; управление доступно после переподключения аккаунта.",
     gitOwned:
       "Пул управляется Git или источник недоступен. Редактирование закрыто.",
   },
@@ -782,6 +784,8 @@ const en = {
     confirmRevoke: "Revoke account “{name}”?",
     confirmReauthorize: "Start reauthorization for “{name}”?",
     tooManyMembers: "A pool can contain at most 64 accounts.",
+    importedReadonly:
+      "Imported from the previous configuration; management becomes available after reconnecting the account.",
     gitOwned:
       "The pool is Git-managed or its source is unavailable. Editing is disabled.",
   },

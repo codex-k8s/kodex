@@ -29,6 +29,7 @@ import (
 	httpgenerated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -147,6 +148,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	}
 	sequence := uint64(0)
 	if err := server.publish(ctx, connection, subscribe, &sequence); err != nil {
+		if expectedDisconnect(ctx, err) {
+			return
+		}
 		server.sendProblem(ctx, connection, subscribe.RequestID, err)
 		return
 	}
@@ -161,6 +165,9 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			return
 		case <-ticker.C:
 			if err := server.publish(ctx, connection, subscribe, &sequence); err != nil {
+				if expectedDisconnect(ctx, err) {
+					return
+				}
 				server.sendProblem(ctx, connection, subscribe.RequestID, err)
 				return
 			}
@@ -688,6 +695,17 @@ func (server *Server) sendProblem(ctx context.Context, connection *websocket.Con
 	defer cancel()
 	_ = wsjsonWrite(writeContext, connection, ProblemEnvelope{Type: ProblemMessageTypeProblem, RequestID: requestID, Code: code, Retryable: retryable})
 	_ = connection.Close(websocket.StatusInternalError, "projection unavailable")
+}
+
+func expectedDisconnect(ctx context.Context, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+		return true
+	}
+	if status.Code(err) == codes.Canceled {
+		return true
+	}
+	closeStatus := websocket.CloseStatus(err)
+	return closeStatus == websocket.StatusNormalClosure || closeStatus == websocket.StatusGoingAway
 }
 
 func websocketCSRF(request *http.Request) (string, bool) {

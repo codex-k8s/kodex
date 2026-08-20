@@ -289,7 +289,7 @@ onMounted(store.loadProviders);
                   </td>
                   <td><StatusBadge :state="item.state" /></td>
                   <td>
-                    <div class="data-table__actions">
+                    <div v-if="item.operational" class="data-table__actions">
                       <button
                         class="button button--text"
                         type="button"
@@ -309,6 +309,9 @@ onMounted(store.loadProviders);
                         }}
                       </button>
                     </div>
+                    <span v-else class="text-muted">{{
+                      $t("providers.importedReadonly")
+                    }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -354,14 +357,12 @@ onMounted(store.loadProviders);
                 </div>
                 <div>
                   <dt>{{ $t("providers.members") }}</dt>
-                  <dd>{{ item.members.length }}</dd>
+                  <dd>{{ item.memberCount }}</dd>
                 </div>
                 <div>
                   <dt>{{ $t("providers.eligible") }}</dt>
                   <dd>
-                    {{
-                      item.members.filter((member) => member.eligible).length
-                    }}
+                    {{ item.eligibleMemberCount }}
                   </dd>
                 </div>
                 <div v-if="item.ownership">
@@ -374,7 +375,7 @@ onMounted(store.loadProviders);
                   </dd>
                 </div>
               </dl>
-              <div class="button-row">
+              <div v-if="item.operational" class="button-row">
                 <button
                   class="button button--text"
                   type="button"
@@ -404,6 +405,9 @@ onMounted(store.loadProviders);
                   {{ $t("common.delete") }}
                 </button>
               </div>
+              <p v-else class="text-muted">
+                {{ $t("providers.importedReadonly") }}
+              </p>
             </article>
           </div></AsyncPanel
         >

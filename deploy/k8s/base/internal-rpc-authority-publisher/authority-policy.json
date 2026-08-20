@@ -5615,7 +5615,7 @@
           "shared_fs_gid": 29000
         },
         "operation_id": "control.agent.list",
-        "permission": "controlplane.resource.read",
+        "permission": "controlplane.resource.list",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -6485,7 +6485,7 @@
           "shared_fs_gid": 29000
         },
         "operation_id": "control.workspace-restore.list",
-        "permission": "controlplane.resource.read",
+        "permission": "controlplane.resource.list",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
