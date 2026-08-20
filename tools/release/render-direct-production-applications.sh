@@ -78,6 +78,8 @@ SCOPE="$scope" yq eval-all '
 
 # Direct-production prototype заменяет Vault CSI mounts на материализованные
 # владельцем Kubernetes Secrets, сохраняя имена и пути файлов интерфейса.
+# Локальный node registry доступен без pull-аутентификации, поэтому профиль не
+# наследует production-only ссылку ServiceAccount на registry credential.
 # Field path передаётся через окружение: literal single quotes внутри shell-
 # quoted yq program иначе теряются при разборе Bash.
 profile_field_path="metadata.labels['mattercodex.dev/profile']"
@@ -86,6 +88,11 @@ PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
   with(select(.metadata.namespace != null); .metadata.namespace = "mattercodex-system") |
   .metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
   .metadata.labels."mattercodex.dev/release-managed" = "true" |
+  with(select(.kind == "ServiceAccount");
+    .imagePullSecrets = ((.imagePullSecrets // []) |
+      map(select(.name != "mattercodex-image-pull"))) |
+    with(select(.imagePullSecrets == []); del(.imagePullSecrets))
+  ) |
   with(select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job");
     .spec.template.metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
     .spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
