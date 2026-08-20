@@ -56,6 +56,37 @@ func TestMaintainServedSnapshotRefreshesBeforeReceiptExpiry(t *testing.T) {
 	}
 }
 
+func TestMaintainServedSnapshotKeepsValidReceiptAfterTransientRefreshFailure(t *testing.T) {
+	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
+	lastRefresh := now.Add(-snapshotReadbackRefreshInterval)
+	stub := &snapshotMaintenanceStub{activationErr: errors.New("readback unavailable")}
+
+	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, lastRefresh, now)
+	if err != nil {
+		t.Fatalf("maintain served snapshot: %v", err)
+	}
+	if refreshedAt != lastRefresh || stub.readyCalls != 1 || stub.activations != 1 {
+		t.Fatalf("unexpected deferred refresh result: refreshed=%s ready_calls=%d activations=%d", refreshedAt, stub.readyCalls, stub.activations)
+	}
+}
+
+func TestMaintainServedSnapshotRejectsExpiredReceiptAfterRefreshFailure(t *testing.T) {
+	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
+	lastRefresh := now.Add(-snapshotReadbackRefreshInterval)
+	stub := &snapshotMaintenanceStub{
+		readyErr:      errors.New("receipt expired"),
+		activationErr: errors.New("readback unavailable"),
+	}
+
+	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, lastRefresh, now)
+	if err == nil {
+		t.Fatal("expired receipt was accepted after failed refresh")
+	}
+	if refreshedAt != lastRefresh || stub.readyCalls != 1 || stub.activations != 1 {
+		t.Fatalf("unexpected rejected refresh result: refreshed=%s ready_calls=%d activations=%d", refreshedAt, stub.readyCalls, stub.activations)
+	}
+}
+
 func TestMaintainServedSnapshotRecoversRejectedReadbackImmediately(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
 	stub := &snapshotMaintenanceStub{readyErr: errors.New("receipt expired")}
