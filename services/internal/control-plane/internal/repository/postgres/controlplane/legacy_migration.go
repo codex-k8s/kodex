@@ -345,14 +345,14 @@ func (wrapped *transaction) GetLegacyCustomOperationProjection(
 func (wrapped *transaction) VerifyLegacyOperationEvidence(
 	ctx context.Context,
 	operation domainrepo.LegacyOperationRecord,
-) (bool, error) {
+) (domainrepo.LegacyOperationEvidence, error) {
 	eventName, eventRequired := event.EventNameForKind(enum.Kind(operation.TargetKind))
-	var valid bool
+	var evidence domainrepo.LegacyOperationEvidence
 	if err := wrapped.tx.QueryRow(ctx, sqlLegacyGraphOperationVerify, pgx.StrictNamedArgs{
 		"plan_id": operation.PlanID, "ordinal": operation.Ordinal,
 		"event_required": eventRequired, "event_name": eventName,
-	}).Scan(&valid); err != nil {
-		return false, mapError(err)
+	}).Scan(&evidence.Audit, &evidence.Events, &evidence.Provenance, &evidence.Target); err != nil {
+		return domainrepo.LegacyOperationEvidence{}, mapError(err)
 	}
-	return valid, nil
+	return evidence, nil
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -283,6 +284,10 @@ func (service *Service) MaterializeLegacyGraphMigration(
 				ctx, tx, migrationTx, input.Principal, plan, operation, compiled, receipt,
 			)
 			if materializeErr != nil {
+				if errors.Is(materializeErr, errs.ErrDataLoss) && errs.SafeCode(materializeErr) == "" {
+					materializeErr = errs.WithSafeCode(materializeErr,
+						fmt.Sprintf("LEGACY_MATERIALIZE_%s_%d", receipt.OperationKind, receipt.Ordinal))
+				}
 				return materializeErr
 			}
 			if materialized.TargetKind == string(enum.KindProject) && materialized.TargetID != planRecord.ProjectID {
@@ -294,12 +299,12 @@ func (service *Service) MaterializeLegacyGraphMigration(
 			return errs.ErrDataLoss
 		}
 		for _, receipt := range verified {
-			ok, verifyErr := migrationTx.VerifyLegacyOperationEvidence(ctx, receipt)
+			evidence, verifyErr := migrationTx.VerifyLegacyOperationEvidence(ctx, receipt)
 			if verifyErr != nil {
 				return verifyErr
 			}
-			if !ok {
-				return errs.ErrDataLoss
+			if !evidence.Valid() {
+				return errs.WithSafeCode(errs.ErrDataLoss, legacyEvidenceFailureCode(receipt, evidence))
 			}
 		}
 		now, err := tx.CurrentTime(ctx)
@@ -315,7 +320,7 @@ func (service *Service) MaterializeLegacyGraphMigration(
 			return err
 		}
 		if verifiedResult.VerificationState != entity.LegacyVerificationOK || len(verifiedResult.Drift) != 0 {
-			return errs.ErrDataLoss
+			return errs.WithSafeCode(errs.ErrDataLoss, legacyDriftFailureCode(verifiedResult.Drift))
 		}
 		if err := migrationTx.SetLegacyGraphPlanTerminal(ctx, plan.PlanID, entity.LegacyMigrationCommitted,
 			entity.LegacyVerificationOK, now); err != nil {
@@ -487,11 +492,11 @@ func legacyMigrationResult(ctx context.Context, tx domainrepo.Transaction,
 					})
 				}
 			}
-			ok, verifyErr := migrationTx.VerifyLegacyOperationEvidence(ctx, receipt)
+			evidence, verifyErr := migrationTx.VerifyLegacyOperationEvidence(ctx, receipt)
 			if verifyErr != nil {
 				return entity.LegacyGraphMigration{}, verifyErr
 			}
-			if !ok {
+			if !evidence.Valid() {
 				result.VerificationState = entity.LegacyVerificationDrift
 				if len(result.Drift) < 32 {
 					result.Drift = append(result.Drift, entity.LegacyGraphDrift{
@@ -584,6 +589,52 @@ func legacyMigrationResult(ctx context.Context, tx domainrepo.Transaction,
 		}
 	}
 	return result, nil
+}
+
+func legacyEvidenceFailureCode(receipt domainrepo.LegacyOperationRecord,
+	evidence domainrepo.LegacyOperationEvidence,
+) string {
+	predicate := "UNKNOWN"
+	switch {
+	case !evidence.Audit:
+		predicate = "AUDIT"
+	case !evidence.Events:
+		predicate = "EVENTS"
+	case !evidence.Provenance:
+		predicate = "PROVENANCE"
+	case !evidence.Target:
+		predicate = "TARGET"
+	}
+	return fmt.Sprintf("LEGACY_EVIDENCE_%s_%s_%d", predicate, receipt.TargetKind, receipt.Ordinal)
+}
+
+func legacyDriftFailureCode(drift []entity.LegacyGraphDrift) string {
+	if len(drift) == 0 {
+		return "LEGACY_DRIFT_UNKNOWN"
+	}
+	predicate := "UNKNOWN"
+	switch drift[0].Predicate {
+	case "persisted plan does not match immutable receipts":
+		predicate = "PLAN"
+	case "provenance projection does not match committed receipt":
+		predicate = "PROVENANCE_PROJECTION"
+	case "operation evidence does not match committed receipt":
+		predicate = "OPERATION_EVIDENCE"
+	case "custom target projection does not match committed receipt":
+		predicate = "CUSTOM_PROJECTION"
+	case "target projection does not match committed receipt":
+		predicate = "TARGET_PROJECTION"
+	case "protected history does not match committed receipt":
+		predicate = "PROTECTED_HISTORY"
+	case "runtime component projection is drifted":
+		predicate = "RUNTIME_COMPONENTS"
+	case "operation receipt cardinality mismatch":
+		predicate = "RECEIPT_CARDINALITY"
+	}
+	if drift[0].Ordinal == 0 {
+		return "LEGACY_DRIFT_" + predicate
+	}
+	return fmt.Sprintf("LEGACY_DRIFT_%s_%d", predicate, drift[0].Ordinal)
 }
 
 func validatePersistedLegacyPlan(record domainrepo.LegacyGraphPlanRecord, plan entity.LegacyGraphPlan,

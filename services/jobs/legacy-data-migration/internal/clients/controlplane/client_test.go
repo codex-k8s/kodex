@@ -1,10 +1,32 @@
 package controlplane
 
 import (
+	"strings"
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+func TestLegacyRPCDiagnosticExposesOnlyBoundedTrustedCode(t *testing.T) {
+	current := status.New(codes.DataLoss, "control-plane stored data is corrupt")
+	withDetail, err := current.WithDetails(&controlplanev1.ErrorDetail{Code: "LEGACY_EVIDENCE_EVENTS_CHAT_3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := legacyRPCDiagnostic(withDetail.Err())
+	if diagnostic == nil || !strings.Contains(diagnostic.Error(), "LEGACY_EVIDENCE_EVENTS_CHAT_3") {
+		t.Fatalf("trusted safe code is absent: %v", diagnostic)
+	}
+	unsafe, err := current.WithDetails(&controlplanev1.ErrorDetail{Code: "LEGACY_secret-value"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diagnostic = legacyRPCDiagnostic(unsafe.Err()); strings.Contains(diagnostic.Error(), "LEGACY_secret-value") {
+		t.Fatal("unbounded diagnostic code was exposed")
+	}
+}
 
 func TestValidateMigrationRequiresCompleteCommittedOperationReadback(t *testing.T) {
 	t.Parallel()

@@ -126,5 +126,5 @@ WITH receipt AS (
     FROM receipt
     JOIN plan ON plan.plan_id = receipt.plan_id
 )
-SELECT audit_ok AND events_ok AND provenance_ok AND target_ok
+SELECT audit_ok, events_ok, provenance_ok, target_ok
 FROM evidence

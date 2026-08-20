@@ -181,6 +181,21 @@ func TestLegacyCallbackReceiptUsesLifecycleState(t *testing.T) {
 	}
 }
 
+func TestLegacyEvidenceFailureCodeIdentifiesFirstFailedPredicate(t *testing.T) {
+	receipt := domainrepo.LegacyOperationRecord{TargetKind: "AGENT", Ordinal: 42}
+	evidence := domainrepo.LegacyOperationEvidence{Audit: true, Events: true, Target: true}
+	if code := legacyEvidenceFailureCode(receipt, evidence); code != "LEGACY_EVIDENCE_PROVENANCE_AGENT_42" {
+		t.Fatalf("unexpected safe evidence code: %s", code)
+	}
+}
+
+func TestLegacyDriftFailureCodeIdentifiesProjectionOrdinal(t *testing.T) {
+	drift := []entity.LegacyGraphDrift{{Ordinal: 17, Predicate: "target projection does not match committed receipt"}}
+	if code := legacyDriftFailureCode(drift); code != "LEGACY_DRIFT_TARGET_PROJECTION_17" {
+		t.Fatalf("unexpected safe drift code: %s", code)
+	}
+}
+
 func TestPersistedLegacyOperationIntentDetectsExactReplayDrift(t *testing.T) {
 	operation := entity.LegacyGraphOperation{
 		TargetID: "11111111-1111-4111-8111-111111111111",
