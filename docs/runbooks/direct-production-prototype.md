@@ -4,8 +4,8 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.8.2
-updated: 2026-08-20
+version: 1.8.3
+updated: 2026-08-21
 ---
 
 # Direct-production single-node prototype
@@ -30,12 +30,14 @@ Legacy Mattermost, PostgreSQL, bot-service, Kaniko и registry в
 `matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000`, а workloads
 используют node pull endpoint `localhost:5001` только с digest.
 
-Namespace `mattercodex-system` сохраняет суммарные requests не выше `8 CPU` и
-`16Gi` memory. Отдельная quota `limits.memory=96Gi` является admission
-headroom для одновременных `maxSurge` pod во время rolling update на owner
-single-node с 126 GiB RAM; она не резервирует эту память и не заменяет контроль
-node pressure. Значение оставляет около 30 GiB физического ceiling вне
-application namespace для Kubernetes, legacy-контура и CI.
+Namespace `mattercodex-system` сохраняет суммарные requests не выше `16 CPU` и
+`16Gi` memory. CPU quota оставляет headroom для одновременных `maxSurge` pod:
+steady-state requests не должны занимать больше половины доступных 32 CPU узла.
+Отдельная quota `limits.memory=96Gi` является memory admission headroom во
+время rolling update на owner single-node с 126 GiB RAM; она не резервирует
+эту память и не заменяет контроль node pressure. Профиль оставляет физический
+и scheduler-запас вне application namespace для Kubernetes, Mattermost, CI и
+agent workloads.
 
 Exact release lock также содержит compatibility image `bot-service` той же Git
 revision. Dark deploy не применяет этот образ к legacy Deployment. Он
