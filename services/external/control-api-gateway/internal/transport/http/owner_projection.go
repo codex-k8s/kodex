@@ -394,7 +394,7 @@ func castWorkspaceRestoreView(input *controlplanev1.WorkspaceRestoreOwnerProject
 }
 
 func castBotIdentity(input *interactiongatewayv1.AgentMattermostBotIdentityView) (generated.AgentBotIdentity, error) {
-	if input == nil || input.GetSelector() == "" || input.GetUsername() == "" || input.GetDisplayName() == "" || input.GetProviderVersion() == 0 || input.GetProviderGeneration() == 0 || !validSHA256(input.GetProviderSnapshotSha256()) {
+	if input == nil || input.GetSelector() == "" || input.GetUsername() == "" || input.GetDisplayName() == "" || input.GetProviderVersion() == 0 || !validSHA256(input.GetProviderSnapshotSha256()) {
 		return generated.AgentBotIdentity{}, errors.New("agent bot identity projection is incomplete")
 	}
 	status, err1 := castClosedEnum(input.GetStatus().String(), "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_", generated.AgentBotIdentityStatus.Valid)
@@ -407,7 +407,7 @@ func castBotIdentity(input *interactiongatewayv1.AgentMattermostBotIdentityView)
 }
 
 func castBotBinding(input *interactiongatewayv1.AgentMattermostBotIdentityBindingView) (generated.AgentBotIdentityBinding, error) {
-	if input == nil || input.GetAgentRef() == "" || input.GetAgentVersion() == 0 || !validSHA256(input.GetReceiptSha256()) {
+	if input == nil || input.GetAgentRef() == "" || input.GetAgentVersion() == 0 || input.GetIdentity() == nil || input.GetIdentity().GetProviderGeneration() == 0 || !validSHA256(input.GetReceiptSha256()) {
 		return generated.AgentBotIdentityBinding{}, errors.New("agent bot identity binding is incomplete")
 	}
 	identity, err1 := castBotIdentity(input.GetIdentity())

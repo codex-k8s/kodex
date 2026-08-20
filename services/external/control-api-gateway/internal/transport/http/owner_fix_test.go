@@ -309,6 +309,25 @@ func TestBotProjectionOmitsProviderObjectAndRequestDigests(t *testing.T) {
 	}
 }
 
+func TestBotCatalogAcceptsUnboundIdentityButBindingRequiresGeneration(t *testing.T) {
+	now := timestamppb.Now()
+	identity := &interactiongatewayv1.AgentMattermostBotIdentityView{
+		Selector: "bot-selector", Username: "agent-bot", DisplayName: "Agent bot",
+		Status:          interactiongatewayv1.AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE,
+		ProviderVersion: 2, ProviderSnapshotSha256: strings.Repeat("a", 64), ObservedAt: now, UpdatedAt: now,
+	}
+	projected, err := castBotIdentity(identity)
+	if err != nil || projected.ProviderGeneration != 0 {
+		t.Fatalf("unbound catalog identity was rejected: projection=%#v err=%v", projected, err)
+	}
+	if _, err = castBotBinding(&interactiongatewayv1.AgentMattermostBotIdentityBindingView{
+		AgentRef: "agent-safe", AgentVersion: 1, Identity: identity,
+		ReceiptSha256: strings.Repeat("b", 64), UpdatedAt: now,
+	}); err == nil {
+		t.Fatal("bound identity accepted zero provider generation")
+	}
+}
+
 func TestBotCommandActionsAcceptOnlyAuthoritativeSelectors(t *testing.T) {
 	username, display, selector := "agent-bot", "Agent bot", "catalog-selector"
 	generation := int64(3)
