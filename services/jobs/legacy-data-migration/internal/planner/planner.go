@@ -164,6 +164,8 @@ type ownerBuilder struct {
 	providers, providerCredentials                     map[string]string
 	credentials                                        map[int64]string
 	githubCredentials                                  map[string]string
+	promptArtifactsBySHA                               map[string]string
+	promptArtifactRefs                                 map[int64]string
 	provenanceRefs                                     []string
 	projectID                                          int64
 	configurationOnly                                  bool
@@ -177,6 +179,8 @@ func (builder *ownerBuilder) build() error {
 	builder.providers, builder.providerCredentials = make(map[string]string), make(map[string]string)
 	builder.credentials = make(map[int64]string)
 	builder.githubCredentials = make(map[string]string)
+	builder.promptArtifactsBySHA = make(map[string]string)
+	builder.promptArtifactRefs = make(map[int64]string)
 	if err := validateEvidence(builder.evidence); err != nil {
 		return err
 	}
@@ -413,6 +417,7 @@ func (builder *ownerBuilder) addTeam(row sourceRow) {
 
 func (builder *ownerBuilder) addRolePrerequisites(row sourceRow) {
 	id := number(row, "id")
+	idText := strconv.FormatInt(id, 10)
 	base := "role-" + strconv.FormatInt(id, 10)
 	content := nonempty(text(row, "prompt_template"), text(row, "description"))
 	if content == "" {
@@ -420,9 +425,15 @@ func (builder *ownerBuilder) addRolePrerequisites(row sourceRow) {
 	}
 	contentSHA := digest([]byte(content))
 	artifactSource := builder.source("matter_codex_agent_roles", "artifact-prompt", row)
-	artifactSource.LocalRef = "artifact-prompt-" + strconv.FormatInt(id, 10)
-	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(artifactSource,
-		"Prompt "+nonempty(text(row, "name"), base), "instruction", "INPUT", contentSHA, uint64(len(content)))}}, "matter_codex_agent_roles")
+	artifactSource.LocalRef = "artifact-prompt-" + idText
+	canonicalArtifactRef, exists := builder.promptArtifactsBySHA[contentSHA]
+	if !exists {
+		canonicalArtifactRef = artifactSource.LocalRef
+		builder.promptArtifactsBySHA[contentSHA] = canonicalArtifactRef
+		builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(artifactSource,
+			"Prompt "+nonempty(text(row, "name"), base), "instruction", "INPUT", contentSHA, uint64(len(content)))}}, "matter_codex_agent_roles")
+	}
+	builder.promptArtifactRefs[id] = canonicalArtifactRef
 	configSource := builder.source("matter_codex_agent_roles", "artifact-role-config", row)
 	configSource.LocalRef = "artifact-role-config-" + strconv.FormatInt(id, 10)
 	builder.provenanceRefs = append(builder.provenanceRefs, configSource.LocalRef)
@@ -576,7 +587,10 @@ func (builder *ownerBuilder) addRoleGraph(row sourceRow) error {
 	instructionRef := "instruction-" + idText
 	poolRef := "pool-" + idText
 	roleDefinitionRef := "role-definition-" + idText
-	artifactRef := "artifact-prompt-" + idText
+	artifactRef := builder.promptArtifactRefs[id]
+	if artifactRef == "" {
+		return errors.New("role prompt artifact reference is missing")
+	}
 	roleImage := proto.Clone(builder.evidence.RoleImage).(*controlplanev1.RoleImageRecipeInput)
 	buildRef := "image-build-" + idText
 	imageRef := "image-artifact-" + idText
@@ -732,7 +746,7 @@ func (builder *ownerBuilder) addRuntime(row sourceRow) error {
 		ChatRef: chat, AgentRef: role, AssignmentRef: assignment, RoleDefinitionRef: "role-definition-" + roleText,
 		InstructionSetRef: "instruction-" + roleText, ProviderPoolRef: "pool-" + roleText, ProviderCredentialRef: credentialRef,
 		RoleImageRecipeRef: "recipe-" + roleText, ImageBuildRef: "image-build-" + roleText, ImageArtifactRef: "image-artifact-" + roleText,
-		PromptArtifactRef: "artifact-prompt-" + roleText, ImageReference: builder.evidence.ImageArtifactPromotedReference,
+		PromptArtifactRef: builder.promptArtifactRefs[roleID], ImageReference: builder.evidence.ImageArtifactPromotedReference,
 		ProviderAccountName: stable(providerName), CodexModel: "gpt-5",
 		CodexSandbox:        nonempty(roleField(builder.rows["matter_codex_agent_roles"], roleID, "sandbox_mode"), "danger-full-access"),
 		CodexApprovalPolicy: "never", AuthorityPolicyRevision: builder.evidence.AuthorityPolicyRevision,
