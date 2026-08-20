@@ -16,6 +16,7 @@ import (
 	domainrepo "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/repository/team"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/txretry"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -163,7 +164,8 @@ func (repository *Repository) SaveCatalogPage(ctx context.Context, principal ent
 ) ([]entity.MattermostTeam, string, error) {
 	result := make([]entity.MattermostTeam, len(teams))
 	nextCursor := ""
-	err := repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+	err := repository.withScopeRetry(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		nextCursor = ""
 		for index, team := range teams {
 			stored, err := upsertSelector(ctx, tx, principal, team, ttl)
 			if err != nil {
@@ -207,7 +209,7 @@ func (repository *Repository) RefreshSelector(ctx context.Context, principal ent
 	team entity.MattermostTeam, ttl time.Duration,
 ) (entity.MattermostTeam, error) {
 	var stored entity.MattermostTeam
-	err := repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+	err := repository.withScopeRetry(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var err error
 		stored, err = upsertSelector(ctx, tx, principal, team, ttl)
 		return err
@@ -923,6 +925,14 @@ func (repository *Repository) withScope(ctx context.Context, principal entity.Te
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (repository *Repository) withScopeRetry(ctx context.Context, principal entity.TeamPrincipal,
+	access pgx.TxAccessMode, run func(pgx.Tx) error,
+) error {
+	return txretry.Run(ctx, func() error {
+		return repository.withScope(ctx, principal, access, run)
+	})
 }
 
 func activateScope(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal) error {
