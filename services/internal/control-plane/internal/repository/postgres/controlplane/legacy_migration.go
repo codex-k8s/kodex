@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/jackc/pgx/v5"
@@ -345,9 +346,11 @@ func (wrapped *transaction) VerifyLegacyOperationEvidence(
 	ctx context.Context,
 	operation domainrepo.LegacyOperationRecord,
 ) (bool, error) {
+	eventName, eventRequired := event.EventNameForKind(enum.Kind(operation.TargetKind))
 	var valid bool
 	if err := wrapped.tx.QueryRow(ctx, sqlLegacyGraphOperationVerify, pgx.StrictNamedArgs{
 		"plan_id": operation.PlanID, "ordinal": operation.Ordinal,
+		"event_required": eventRequired, "event_name": eventName,
 	}).Scan(&valid); err != nil {
 		return false, mapError(err)
 	}
