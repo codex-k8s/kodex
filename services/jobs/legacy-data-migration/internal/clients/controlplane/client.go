@@ -4,6 +4,8 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -43,6 +45,33 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	return &Client{shared: client, rpcDeadline: config.RPCDeadline}, nil
 }
 
+func legacyRPCDiagnostic(err error) error {
+	if err == nil {
+		return nil
+	}
+	for _, candidate := range status.Convert(err).Details() {
+		detail, ok := candidate.(*controlplanev1.ErrorDetail)
+		if !ok {
+			continue
+		}
+		code := detail.GetCode()
+		if !strings.HasPrefix(code, "LEGACY_") || len(code) > 160 {
+			continue
+		}
+		valid := true
+		for _, symbol := range code {
+			if symbol != '_' && (symbol < 'A' || symbol > 'Z') && (symbol < '0' || symbol > '9') {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return fmt.Errorf("legacy materializer RPC failed (%s): %w", code, err)
+		}
+	}
+	return err
+}
+
 func (client *Client) Check(ctx context.Context) error {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
@@ -62,7 +91,7 @@ func (client *Client) Prepare(ctx context.Context,
 		return callErr
 	})
 	if err != nil {
-		return nil, err
+		return nil, legacyRPCDiagnostic(err)
 	}
 	migration := response.GetMigration()
 	if err := validateMigration(migration, request.GetPlanId(), uint32(len(request.GetOperations())), false); err != nil {
@@ -89,7 +118,7 @@ func (client *Client) Materialize(ctx context.Context, idempotencyKey, planID,
 		return callErr
 	})
 	if err != nil {
-		return nil, err
+		return nil, legacyRPCDiagnostic(err)
 	}
 	if err := validateMigration(response.GetMigration(), planID, expectedOperations, true); err != nil {
 		return nil, err
@@ -108,7 +137,7 @@ func (client *Client) ReadCommitted(ctx context.Context, planID, semanticSHA256 
 		return callErr
 	})
 	if err != nil {
-		return nil, err
+		return nil, legacyRPCDiagnostic(err)
 	}
 	migration := response.GetMigration()
 	if err := validateMigration(migration, planID, expectedOperations, true); err != nil ||
@@ -134,7 +163,7 @@ func (client *Client) Abort(ctx context.Context, idempotencyKey, planID, semanti
 		return errors.New("legacy materializer cannot abort a committed plan")
 	}
 	if err != nil {
-		return err
+		return legacyRPCDiagnostic(err)
 	}
 	migration := response.GetMigration()
 	if err := validateMigration(migration, planID, expectedOperations, false); err != nil ||

@@ -1022,6 +1022,16 @@ type LegacyOperationRecord struct {
 	MaterializedAt                                               time.Time
 }
 
+// LegacyOperationEvidence сохраняет раздельный readback каждого независимого
+// доказательства, чтобы доменный слой не терял безопасную причину DataLoss.
+type LegacyOperationEvidence struct {
+	Audit, Events, Provenance, Target bool
+}
+
+func (evidence LegacyOperationEvidence) Valid() bool {
+	return evidence.Audit && evidence.Events && evidence.Provenance && evidence.Target
+}
+
 type LegacyProvenanceRecord struct {
 	PlanID, TargetID, TargetKind, SourceTable, SourceRef, SourceSHA256                  string
 	RootActorID, RootSessionID, RootTurnID, RuntimeRevisionID                           string
@@ -1059,5 +1069,5 @@ type LegacyGraphMigrationTransaction interface {
 	SaveLegacyCallbackDelivery(context.Context, LegacyCallbackDelivery) error
 	SaveLegacyTurnAttempt(context.Context, TurnAttempt, string, uint64) error
 	GetLegacyCustomOperationProjection(context.Context, string, uint32) (string, error)
-	VerifyLegacyOperationEvidence(context.Context, LegacyOperationRecord) (bool, error)
+	VerifyLegacyOperationEvidence(context.Context, LegacyOperationRecord) (LegacyOperationEvidence, error)
 }
