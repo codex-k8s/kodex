@@ -9,7 +9,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
@@ -282,8 +281,7 @@ func (service *Service) MaterializeLegacyGraphMigration(
 		}
 		for index, operation := range plan.Operations {
 			receipt := receipts[index]
-			if receipt.Ordinal != uint32(index+1) || receipt.TargetID != operation.TargetID ||
-				receipt.TargetVersion != 0 || receipt.MaterializedAt != (time.Time{}) {
+			if !legacyReceiptPrepared(receipt, operation, index) {
 				return errs.WithSafeCode(errs.ErrDataLoss,
 					fmt.Sprintf("LEGACY_RECEIPT_PRESTATE_%s_%d", receipt.OperationKind, receipt.Ordinal))
 			}
@@ -624,6 +622,13 @@ func legacyStageError(err error, code string) error {
 		return err
 	}
 	return errs.WithSafeCode(err, code)
+}
+
+func legacyReceiptPrepared(receipt domainrepo.LegacyOperationRecord,
+	operation entity.LegacyGraphOperation, index int,
+) bool {
+	return receipt.Ordinal == uint32(index+1) && receipt.TargetID == operation.TargetID &&
+		receipt.TargetVersion == 0 && receipt.MaterializedAt.IsZero()
 }
 
 func legacyDriftFailureCode(drift []entity.LegacyGraphDrift) string {

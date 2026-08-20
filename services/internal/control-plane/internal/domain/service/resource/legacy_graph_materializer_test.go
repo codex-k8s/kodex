@@ -200,6 +200,20 @@ func TestLegacyStageErrorPreservesDomainTypeAndExistingSafeCode(t *testing.T) {
 	}
 }
 
+func TestLegacyReceiptPreparedAcceptsPostgreSQLUTCZeroTime(t *testing.T) {
+	operation := entity.LegacyGraphOperation{TargetID: "11111111-1111-4111-8111-111111111111"}
+	receipt := domainrepo.LegacyOperationRecord{
+		Ordinal: 1, TargetID: operation.TargetID,
+		MaterializedAt: time.Date(1, time.January, 1, 0, 0, 0, 0, time.FixedZone("postgres-utc", 0)),
+	}
+	if receipt.MaterializedAt == (time.Time{}) {
+		t.Fatal("test fixture must preserve the PostgreSQL UTC location difference")
+	}
+	if !legacyReceiptPrepared(receipt, operation, 0) {
+		t.Fatal("zero instant with PostgreSQL UTC location was rejected")
+	}
+}
+
 func TestLegacyDriftFailureCodeIdentifiesProjectionOrdinal(t *testing.T) {
 	drift := []entity.LegacyGraphDrift{{Ordinal: 17, Predicate: "target projection does not match committed receipt"}}
 	if code := legacyDriftFailureCode(drift); code != "LEGACY_DRIFT_TARGET_PROJECTION_17" {
