@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.6.0
-updated: 2026-08-19
+version: 1.7.0
+updated: 2026-08-20
 ---
 
 # Перенос legacy MatterCodex data
@@ -280,7 +280,13 @@ Control-plane сначала принимает и компилирует пла
 подготовленные immutable intents допускают точный retry с тем же plan ID.
 Base manifest остаётся suspended. Повтор с
 тем же plan ID допустим только при неизменных source root, credential snapshots
-и owner evidence; для изменившегося source используется новый plan ID.
+и owner evidence; для изменившегося source используется новый plan ID. Скрипт
+связывает сохранённый owner evidence с exact tuple `plan ID + source root +
+release revision` в служебном ConfigMap. При точном retry он сохраняет исходные
+`scannedAt`, `observedAt` и `promotedAt`, но повторно сверяет все остальные
+credential, image-policy и admission evidence. Несовпадение нетемпорального
+evidence для того же tuple закрыто останавливает запуск; менять plan ID, чтобы
+обойти такой drift без нового owner решения, запрещено.
 
 ## Обязательный внешний gate
 
