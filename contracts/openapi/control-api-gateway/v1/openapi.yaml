@@ -1883,7 +1883,11 @@ components:
         displayName: { type: string, minLength: 1, maxLength: 160 }
         status: { $ref: '#/components/schemas/AgentBotIdentityStatus' }
         providerVersion: { type: integer, format: int64, minimum: 1 }
-        providerGeneration: { type: integer, format: int64, minimum: 1 }
+        providerGeneration:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Ноль означает доступную provider identity из каталога, которая еще не привязана к Agent.
         providerSnapshotSha256: { $ref: '#/components/schemas/Sha256' }
         observedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
