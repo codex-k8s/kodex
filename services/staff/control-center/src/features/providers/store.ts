@@ -29,6 +29,8 @@ import {
   toProviderCatalogModel,
   toProviderConfigurationSourceModel,
   toProviderConnectionModel,
+  toImportedProviderConnectionModel,
+  toImportedProviderPoolModel,
   toProviderPoolModel,
 } from "./model";
 
@@ -53,8 +55,19 @@ export const useProvidersStore = defineStore("providers", () => {
       ),
       runtime.loadInto(
         connections,
-        async () =>
-          (await fetchConnections()).connections.map(toProviderConnectionModel),
+        async () => {
+          const [views, resources] = await Promise.all([
+            fetchConnections(),
+            fetchResources("PROVIDER_CONNECTION_REFERENCE"),
+          ]);
+          const operational = views.connections.map(toProviderConnectionModel);
+          const stableKeys = new Set(operational.map((item) => item.stableKey));
+          const imported = resources.resources
+            .map(toImportedProviderConnectionModel)
+            .filter((item): item is ProviderConnectionModel => item !== null)
+            .filter((item) => !stableKeys.has(item.stableKey));
+          return [...operational, ...imported];
+        },
         (items) => items.length === 0,
       ),
       runtime.loadInto(
@@ -67,9 +80,15 @@ export const useProvidersStore = defineStore("providers", () => {
           const byID = new Map(
             resources.resources.map((resource) => [resource.id, resource]),
           );
-          return views.pools.map((item) =>
+          const operational = views.pools.map((item) =>
             toProviderPoolModel(item, byID.get(item.poolRef)),
           );
+          const stableKeys = new Set(operational.map((item) => item.stableKey));
+          const imported = resources.resources
+            .map(toImportedProviderPoolModel)
+            .filter((item): item is ProviderPoolModel => item !== null)
+            .filter((item) => !stableKeys.has(item.stableKey));
+          return [...operational, ...imported];
         },
         (items) => items.length === 0,
       ),
@@ -182,8 +201,13 @@ export const useProvidersStore = defineStore("providers", () => {
     items: Parameters<typeof toProviderConnectionModel>[0][],
   ): void {
     invalidate(connections);
-    connections.data = items.map(toProviderConnectionModel);
-    connections.phase = items.length ? "ready" : "empty";
+    const operational = items.map(toProviderConnectionModel);
+    const stableKeys = new Set(operational.map((item) => item.stableKey));
+    const imported = connections.data.filter(
+      (item) => !item.operational && !stableKeys.has(item.stableKey),
+    );
+    connections.data = [...operational, ...imported];
+    connections.phase = connections.data.length ? "ready" : "empty";
   }
   subscribeRealtimeSnapshot("PROVIDERS", (snapshot) =>
     replaceConnections(snapshot.items.providerConnections ?? []),

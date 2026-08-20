@@ -33,6 +33,7 @@ export interface ProviderConnectionModel {
   maskedAccount: string;
   capabilities: string[];
   capacity: { usage: number; limit: number } | null;
+  operational: boolean;
 }
 
 export interface ProviderPoolModel {
@@ -55,6 +56,9 @@ export interface ProviderPoolModel {
     revision: number;
     drift: string;
   } | null;
+  operational: boolean;
+  memberCount: number;
+  eligibleMemberCount: number;
 }
 
 export interface ProviderConfigurationSourceModel {
@@ -100,7 +104,31 @@ export const toProviderConnectionModel = (
   capacity: value.capacity
     ? { usage: value.capacity.usage, limit: value.capacity.limit }
     : null,
+  operational: true,
 });
+
+export const toImportedProviderConnectionModel = (
+  resource: Resource,
+): ProviderConnectionModel | null => {
+  const value = resource.spec.providerConnectionReference;
+  if (!value) return null;
+  return {
+    connectionRef: resource.id,
+    stableKey: value.stableKey,
+    displayName: resource.name,
+    version: resource.version,
+    generation: value.referenceVersion,
+    state: value.maskedStatus,
+    maskedLabel: value.maskedLabel,
+    maskedAccount: value.provider,
+    capabilities: [...value.capabilities],
+    capacity:
+      value.observedLimit > 0
+        ? { usage: value.observedUsage, limit: value.observedLimit }
+        : null,
+    operational: false,
+  };
+};
 
 export const toProviderPoolModel = (
   value: ProviderPoolView,
@@ -129,6 +157,34 @@ export const toProviderPoolModel = (
           drift: source.drift,
         }
       : null,
+    operational: true,
+    memberCount: value.members.length,
+    eligibleMemberCount: value.members.filter((item) => item.eligible).length,
+  };
+};
+
+export const toImportedProviderPoolModel = (
+  resource: Resource,
+): ProviderPoolModel | null => {
+  const value = resource.spec.providerPool;
+  if (!value) return null;
+  return {
+    poolRef: resource.id,
+    stableKey: value.stableKey,
+    displayName: resource.name,
+    policy: value.policy,
+    version: resource.version,
+    state: resource.state,
+    members: [],
+    ownership: {
+      managedBy: value.ownership.managedBy,
+      source: value.ownership.source,
+      revision: value.ownership.revision,
+      drift: value.ownership.drift,
+    },
+    operational: false,
+    memberCount: value.totalMembers,
+    eligibleMemberCount: value.eligibleMembers,
   };
 };
 

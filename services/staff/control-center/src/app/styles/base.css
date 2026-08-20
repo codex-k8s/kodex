@@ -559,7 +559,9 @@ code {
 }
 
 .data-table-wrap {
+  max-width: 100%;
   overflow-x: auto;
+  contain: layout paint;
 }
 .data-table {
   width: 100%;
@@ -604,6 +606,10 @@ code {
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.text-muted {
+  color: var(--text-muted);
   font-size: 11px;
 }
 .badge {
