@@ -279,6 +279,61 @@ func TestConfigurationProjectsSelectsOnlyActiveProjectGraph(t *testing.T) {
 	}
 }
 
+func TestConfigurationPlanReusesIdenticalPromptArtifact(t *testing.T) {
+	t.Parallel()
+	rows := []model.SnapshotRow{
+		testRow(t, "matter_codex_projects", map[string]any{"id": 1, "name": "Project", "slug": "project"}),
+		testRow(t, "matter_codex_chats", map[string]any{"id": 1, "project_id": 1, "name": "Chat", "slug": "chat", "status": "active"}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 1, "project_id": 1, "name": "developer", "openai_account_name": "openai", "prompt_template": "Shared instruction", "enabled": true}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 2, "project_id": 1, "name": "reviewer", "openai_account_name": "openai", "prompt_template": "Shared instruction", "enabled": true}),
+		testRow(t, "matter_codex_agent_roles", map[string]any{"id": 3, "project_id": 1, "name": "security", "openai_account_name": "openai", "prompt_template": "Distinct instruction", "enabled": true}),
+		testRow(t, "matter_codex_chat_participants", map[string]any{"id": 1, "chat_id": 1, "role_id": 1, "enabled": true}),
+		testRow(t, "matter_codex_chat_participants", map[string]any{"id": 2, "chat_id": 1, "role_id": 2, "enabled": true}),
+		testRow(t, "matter_codex_chat_participants", map[string]any{"id": 3, "chat_id": 1, "role_id": 3, "enabled": true}),
+		testRow(t, "matter_codex_credentials", map[string]any{"id": 1, "name": "openai", "secret_ref": "openai", "status": "authorized"}),
+		testRow(t, "matter_codex_openai_accounts", map[string]any{"id": 1, "name": "openai", "credential_id": 1, "status": "authorized"}),
+	}
+	counts := make(map[string]uint64, len(inventory.Tables))
+	tableDigests := make(map[string]string, len(inventory.Tables))
+	for _, table := range inventory.Tables {
+		counts[table] = 0
+		tableDigests[table] = digest([]byte("table:" + table))
+	}
+	for _, row := range rows {
+		counts[row.Table]++
+	}
+	result, err := BuildConfiguration(
+		"11111111-1111-4111-8111-111111111111",
+		"22222222-2222-4222-8222-222222222222",
+		"33333333-3333-4333-8333-333333333333",
+		digest([]byte("root")), rows, digest([]byte("source")), counts,
+		tableDigests, testEvidence(time.Now().UTC().Add(-time.Minute)),
+	)
+	if err != nil {
+		t.Fatalf("BuildConfiguration() error = %v", err)
+	}
+	promptArtifacts := make(map[string]string)
+	instructionArtifacts := make(map[string]string)
+	for _, operation := range result.Request.GetOperations() {
+		if artifact := operation.GetArtifact(); artifact != nil && artifact.GetArtifactKind() == "instruction" {
+			promptArtifacts[artifact.GetSource().GetLocalRef()] = artifact.GetSha256()
+		}
+		if instruction := operation.GetInstructionSet(); instruction != nil {
+			instructionArtifacts[instruction.GetSource().GetLocalRef()] = instruction.GetContentArtifactRef()
+		}
+	}
+	if len(promptArtifacts) != 2 {
+		t.Fatalf("prompt artifact count = %d, нужно 2", len(promptArtifacts))
+	}
+	if instructionArtifacts["instruction-1"] == "" ||
+		instructionArtifacts["instruction-1"] != instructionArtifacts["instruction-2"] {
+		t.Fatal("одинаковые prompt не используют канонический Artifact")
+	}
+	if instructionArtifacts["instruction-3"] == instructionArtifacts["instruction-1"] {
+		t.Fatal("разные prompt ошибочно объединены в один Artifact")
+	}
+}
+
 func testRow(t *testing.T, table string, value map[string]any) model.SnapshotRow {
 	t.Helper()
 	encoded, err := json.Marshal(value)
