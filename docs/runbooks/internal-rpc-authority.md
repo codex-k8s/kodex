@@ -4,8 +4,8 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.1.4
-updated: 2026-07-30
+version: 1.1.5
+updated: 2026-08-20
 ---
 
 # Диагностика и восстановление internal-rpc-authority
@@ -142,6 +142,14 @@ publisher обязан дать корректную цепочку predecessor/
 к роли фоновый обработчик после срока хранения: issuer не имеет `DELETE` к
 резервированиям verifier, verifier не имеет `DELETE` к резервированиям issuer.
 Запасной путь в памяти/`emptyDir` запрещён.
+
+Потребление readback challenge работает в `READ COMMITTED`: SQL-функция до
+проверки receipt берёт transaction-scoped advisory lock по idempotency key, а
+затем блокирует точные строки challenge и intent через `FOR UPDATE`. Поток
+`40001` на `authority_readback_attestation_receipts` при одновременном запуске
+разных workload означает возврат `SERIALIZABLE` predicate contention. Такой
+отказ устраняется восстановлением адресных блокировок и уровня изоляции, а не
+увеличением startup probe или ослаблением replay/readback-проверок.
 
 ### Reconciler не готов
 

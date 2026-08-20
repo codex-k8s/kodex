@@ -146,9 +146,10 @@ func (repository *Repository) consumeReadbackChallengeOnce(
 	ctx context.Context,
 	command domainrepository.ConsumeReadbackChallengeCommand,
 ) (model.ReadbackReceipt, error) {
-	transaction, err := repository.pool.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel: pgx.Serializable,
-	})
+	transaction, err := repository.pool.BeginTx(
+		ctx,
+		readbackConsumeTransactionOptions(),
+	)
 	if err != nil {
 		return model.ReadbackReceipt{}, fmt.Errorf("begin readback consume transaction: %w", err)
 	}
@@ -233,6 +234,12 @@ func (repository *Repository) consumeReadbackChallengeOnce(
 		return model.ReadbackReceipt{}, fmt.Errorf("commit readback consume transaction: %w", err)
 	}
 	return receipt, nil
+}
+
+func readbackConsumeTransactionOptions() pgx.TxOptions {
+	// SQL-функция адресно блокирует idempotency key, challenge и intent.
+	// SERIALIZABLE здесь связывает независимые startup readback через SSI.
+	return pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
 }
 
 func isSerializationFailure(err error) bool {
