@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_complete_root_run :exec
+-- name: commands_resolvegate_complete_root_run :exec
 UPDATE control_plane.runs
 SET state='SUCCEEDED',
     finished_at=clock_timestamp(),

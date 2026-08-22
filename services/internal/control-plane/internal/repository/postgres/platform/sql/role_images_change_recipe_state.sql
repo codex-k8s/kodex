@@ -1,4 +1,4 @@
--- name: platform__role_images_change_recipe_state :exec
+-- name: role_images_change_recipe_state :exec
 UPDATE control_plane.role_image_recipes
 SET state = $3,
     generation = CASE WHEN $3 = 'ACTIVE' THEN generation + 1 ELSE generation END,

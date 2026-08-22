@@ -1,4 +1,4 @@
--- name: platform__repository_select_default_provider_account :one
+-- name: repository_select_default_provider_account :one
 SELECT id::text
 FROM control_plane.provider_accounts
 WHERE organization_id = $1::uuid

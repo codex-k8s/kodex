@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_requeue_predecessor_node :exec
+-- name: commands_resolvegate_requeue_predecessor_node :exec
 UPDATE control_plane.run_nodes
 SET state='QUEUED',
     turn_id=$2::uuid,

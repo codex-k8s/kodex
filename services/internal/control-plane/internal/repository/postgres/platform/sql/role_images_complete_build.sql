@@ -1,4 +1,4 @@
--- name: platform__role_images_complete_build :one
+-- name: role_images_complete_build :one
 UPDATE control_plane.image_builds
 SET stage = 'COMPLETED',
     progress_percent = 100,

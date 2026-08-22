@@ -1,4 +1,4 @@
--- name: platform__role_images_claim_promotion :one
+-- name: role_images_claim_promotion :one
 UPDATE control_plane.image_artifacts
 SET promotion_state = 'CLAIMED',
     promotion_claimant_workload = $4,

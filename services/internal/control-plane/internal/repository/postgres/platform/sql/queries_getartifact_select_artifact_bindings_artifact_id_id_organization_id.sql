@@ -1,4 +1,4 @@
--- name: platform__queries_getartifact_select_artifact_bindings_artifact_id_id_organization_id :one
+-- name: queries_getartifact_select_artifact_bindings_artifact_id_id_organization_id :one
 SELECT ar.ref,p.ref,COALESCE(r.ref,''),COALESCE(s.ref,''),COALESCE(n.ref,''),ar.file_name,ar.media_type,ar.digest,ar.scan_state,ar.preview_state,
        ar.source,
        ar.size_bytes,ar.revision,ar.version,ar.created_at,

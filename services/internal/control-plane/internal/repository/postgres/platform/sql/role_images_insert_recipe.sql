@@ -1,4 +1,4 @@
--- name: platform__role_images_insert_recipe :one
+-- name: role_images_insert_recipe :one
 INSERT INTO control_plane.role_image_recipes
     (ref, organization_id, project_id, role_definition_id, name, state, specification,
      generation, spec_sha256, policy_revision, policy_sha256,

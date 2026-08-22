@@ -1,4 +1,4 @@
--- name: platform__role_images_update_recipe :exec
+-- name: role_images_update_recipe :exec
 UPDATE control_plane.role_image_recipes
 SET name = $3,
     specification = $4,

@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_select_owner_gates_organization_id_ref_state :one
+-- name: commands_resolvegate_select_owner_gates_organization_id_ref_state :one
 SELECT g.id::text,
        g.node_id::text,
        g.root_run_id::text,

@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_insert_change_request_turn :one
+-- name: commands_resolvegate_insert_change_request_turn :one
 INSERT INTO control_plane.session_turns(
     ref,organization_id,session_id,run_id,turn_number,actor_kind,actor_ref,content,artifact_refs,state
 )

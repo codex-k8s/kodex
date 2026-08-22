@@ -1,4 +1,4 @@
--- name: platform__commands_emitrunevent_select_run_delta :one
+-- name: commands_emitrunevent_select_run_delta :one
 SELECT root.ref,
        root.state,
        root.result_summary,

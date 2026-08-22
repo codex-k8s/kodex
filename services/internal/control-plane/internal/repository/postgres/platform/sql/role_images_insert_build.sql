@@ -1,4 +1,4 @@
--- name: platform__role_images_insert_build :one
+-- name: role_images_insert_build :one
 INSERT INTO control_plane.image_builds
     (ref, organization_id, project_id, recipe_id, recipe_version, recipe_generation,
      specification, spec_sha256, immutable_build_sha256, attempt, maximum_attempts, stage)

@@ -1,2 +1,2 @@
--- name: platform__configuration_changeintegrationgrant_insert_integration_grants_ref_connection_id_target_kind :one
+-- name: configuration_changeintegrationgrant_insert_integration_grants_ref_connection_id_target_kind :one
 INSERT INTO control_plane.integration_grants(ref,organization_id,connection_id,capability_key,target_kind,target_ref,enabled,approval_policy,created_by) VALUES($1,$2::uuid,$3::uuid,$4,$5,$6,true,$7,$8::uuid) ON CONFLICT(connection_id,capability_key,target_kind,target_ref) DO UPDATE SET enabled=true,version=control_plane.integration_grants.version+1,updated_at=clock_timestamp() RETURNING ref

@@ -1,4 +1,4 @@
--- name: platform__role_images_list_builds :many
+-- name: role_images_list_builds :many
 SELECT build.ref, recipe.ref, build.spec_sha256, build.stage, build.staging_reference,
        build.manifest_digest, build.provenance_sha256, build.immutable_build_sha256,
        build.safe_error_code, build.diagnostic_code, build.diagnostic_summary,

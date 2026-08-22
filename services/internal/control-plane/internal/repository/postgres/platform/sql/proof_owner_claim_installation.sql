@@ -1,4 +1,4 @@
--- name: platform__proof_owner_claim_installation :exec
+-- name: proof_owner_claim_installation :exec
 WITH claim AS (
     UPDATE control_plane.owner_claim_contracts
     SET state = 'CLAIMED', subject_id = $2::uuid, claimed_at = clock_timestamp(), version = version + 1

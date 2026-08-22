@@ -1,4 +1,4 @@
--- name: platform__role_images_find_promoted_artifact :one
+-- name: role_images_find_promoted_artifact :one
 SELECT artifact.id::text, artifact.ref
 FROM control_plane.image_artifacts artifact
 WHERE artifact.organization_id = $1::uuid

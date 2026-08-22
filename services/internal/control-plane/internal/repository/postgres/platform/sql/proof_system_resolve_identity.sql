@@ -1,4 +1,4 @@
--- name: platform__proof_system_resolve_identity :one
+-- name: proof_system_resolve_identity :one
 SELECT s.id::text, o.id::text, s.updated_at, o.version
 FROM control_plane.subjects s
 JOIN control_plane.organizations o ON o.id = s.organization_id

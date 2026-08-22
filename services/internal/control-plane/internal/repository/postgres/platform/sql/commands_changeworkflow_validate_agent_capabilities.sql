@@ -1,4 +1,4 @@
--- name: platform__commands_changeworkflow_validate_agent_capabilities :one
+-- name: commands_changeworkflow_validate_agent_capabilities :one
 SELECT EXISTS (
     SELECT 1
     FROM control_plane.agents a

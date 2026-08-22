@@ -1,4 +1,4 @@
--- name: platform__role_images_fail_build :one
+-- name: role_images_fail_build :one
 UPDATE control_plane.image_builds
 SET stage = CASE WHEN attempt >= maximum_attempts THEN 'DEAD_LETTER' ELSE 'FAILED' END,
     safe_error_code = $4,

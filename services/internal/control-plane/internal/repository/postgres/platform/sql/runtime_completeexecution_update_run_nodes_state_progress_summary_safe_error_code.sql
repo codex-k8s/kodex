@@ -1,2 +1,2 @@
--- name: platform__runtime_completeexecution_update_run_nodes_state_progress_summary_safe_error_code :one
+-- name: runtime_completeexecution_update_run_nodes_state_progress_summary_safe_error_code :one
 UPDATE control_plane.run_nodes SET state=$2,progress_summary=$3,safe_error_code=$4,safe_error_message=$5,finished_at=clock_timestamp(),next_actions=CASE WHEN $2='FAILED' THEN ARRAY['OPEN','RETRY'] ELSE ARRAY['OPEN'] END,version=version+1 WHERE id=$1::uuid RETURNING human_gate_after,COALESCE(turn_id::text,'')

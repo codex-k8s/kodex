@@ -1,4 +1,4 @@
--- name: platform__runtime_claimexecution_select_claimable_agent_executions :many
+-- name: runtime_claimexecution_select_claimable_agent_executions :many
 SELECT n.id::text,
        n.ref,
        n.run_id::text,

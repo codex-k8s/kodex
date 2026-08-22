@@ -1,4 +1,4 @@
--- name: platform__role_images_lock_artifact :one
+-- name: role_images_lock_artifact :one
 SELECT artifact.id::text, artifact.ref, recipe.ref, artifact.spec_sha256, build.ref,
        artifact.staging_reference, artifact.manifest_digest,
        artifact.immutable_build_sha256, artifact.provenance_sha256,

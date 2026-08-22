@@ -1,4 +1,4 @@
--- name: platform__role_images_list_recipes :many
+-- name: role_images_list_recipes :many
 SELECT recipe.ref, project.ref, role.ref, recipe.name, recipe.state, recipe.specification,
        recipe.generation, recipe.spec_sha256, recipe.policy_revision, recipe.policy_sha256,
        recipe.role_runtime_contract_revision, recipe.role_runtime_contract_sha256,

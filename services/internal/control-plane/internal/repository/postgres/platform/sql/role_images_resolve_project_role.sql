@@ -1,4 +1,4 @@
--- name: platform__role_images_resolve_project_role :one
+-- name: role_images_resolve_project_role :one
 SELECT project.id::text, role.id::text
 FROM control_plane.projects project
 JOIN control_plane.role_definitions role

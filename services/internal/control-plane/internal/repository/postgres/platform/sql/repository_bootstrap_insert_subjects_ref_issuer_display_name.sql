@@ -1,4 +1,4 @@
--- name: platform__repository_bootstrap_insert_subjects_ref_issuer_display_name :one
+-- name: repository_bootstrap_insert_subjects_ref_issuer_display_name :one
 INSERT INTO control_plane.subjects
 		(ref,organization_id,issuer,external_subject_digest,display_name,email_masked)
 		VALUES ('sys_platform',$1::uuid,'mattercodex-system',$2,'MatterCodex','') RETURNING id::text

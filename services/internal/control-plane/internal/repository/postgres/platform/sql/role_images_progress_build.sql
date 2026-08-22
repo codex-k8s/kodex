@@ -1,4 +1,4 @@
--- name: platform__role_images_progress_build :one
+-- name: role_images_progress_build :one
 UPDATE control_plane.image_builds
 SET stage = $4,
     progress_percent = $5,

@@ -1,2 +1,2 @@
--- name: platform__configuration_changeconnection_select_integration_definitions_stable_key_enabled :one
+-- name: configuration_changeconnection_select_integration_definitions_stable_key_enabled :one
 SELECT configuration_schema FROM control_plane.integration_definitions WHERE stable_key=$1 AND enabled

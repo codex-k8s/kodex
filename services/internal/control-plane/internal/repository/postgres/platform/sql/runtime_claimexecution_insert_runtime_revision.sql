@@ -1,4 +1,4 @@
--- name: platform__runtime_claimexecution_insert_runtime_revision :one
+-- name: runtime_claimexecution_insert_runtime_revision :one
 INSERT INTO control_plane.runtime_revisions (
     ref,
     organization_id,

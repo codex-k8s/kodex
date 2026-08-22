@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_update_root_node_state :one
+-- name: commands_resolvegate_update_root_node_state :one
 UPDATE control_plane.run_nodes
 SET state = $2,
     finished_at = clock_timestamp(),

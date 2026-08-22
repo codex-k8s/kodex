@@ -1,4 +1,4 @@
--- name: platform__role_images_cancel_open_builds :exec
+-- name: role_images_cancel_open_builds :exec
 UPDATE control_plane.image_builds
 SET stage = 'CANCELLED',
     safe_error_code = 'IMAGE_BUILD_SUPERSEDED',

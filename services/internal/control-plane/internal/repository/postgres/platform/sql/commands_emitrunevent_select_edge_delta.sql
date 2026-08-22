@@ -1,4 +1,4 @@
--- name: platform__commands_emitrunevent_select_edge_delta :one
+-- name: commands_emitrunevent_select_edge_delta :one
 SELECT edge.ref,
        root.ref,
        source.ref,

@@ -1,4 +1,4 @@
--- name: platform__commands_changerun_update_owner_gates_state_decision_decision_comment :many
+-- name: commands_changerun_update_owner_gates_state_decision_decision_comment :many
 UPDATE control_plane.owner_gates gate
 SET state = 'CANCELLED',
     decision = 'CANCEL',

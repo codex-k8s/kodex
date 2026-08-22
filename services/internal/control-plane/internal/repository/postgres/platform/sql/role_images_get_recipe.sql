@@ -1,4 +1,4 @@
--- name: platform__role_images_get_recipe :one
+-- name: role_images_get_recipe :one
 SELECT recipe.id::text, recipe.ref, project.ref, role.ref, recipe.name, recipe.state,
        recipe.specification, recipe.generation, recipe.spec_sha256,
        recipe.policy_revision, recipe.policy_sha256,

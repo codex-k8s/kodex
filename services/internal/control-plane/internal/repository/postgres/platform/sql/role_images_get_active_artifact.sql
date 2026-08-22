@@ -1,4 +1,4 @@
--- name: platform__role_images_get_active_artifact :one
+-- name: role_images_get_active_artifact :one
 SELECT artifact.ref, recipe.ref, artifact.spec_sha256, build.ref, artifact.staging_reference,
        artifact.manifest_digest, artifact.immutable_build_sha256, artifact.provenance_sha256,
        artifact.specification, artifact.policy_sha256, artifact.sbom_sha256,

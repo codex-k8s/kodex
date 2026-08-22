@@ -1,4 +1,4 @@
--- name: platform__role_images_renew_build :one
+-- name: role_images_renew_build :one
 UPDATE control_plane.image_builds
 SET lease_token_sha256 = $4,
     lease_expires_at = $5,

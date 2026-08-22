@@ -1,2 +1,2 @@
--- name: platform__commands_insertagentnode_insert_run_nodes_ref_root_run_id_parent_node_id :one
+-- name: commands_insertagentnode_insert_run_nodes_ref_root_run_id_parent_node_id :one
 INSERT INTO control_plane.run_nodes(ref,organization_id,root_run_id,run_id,parent_node_id,type,state,display_name,role,agent_id,turn_id,input_summary,next_actions) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'AGENT_EXECUTION','QUEUED',$6,$7,$8::uuid,$9::uuid,$10,ARRAY['OPEN','CANCEL']) RETURNING id::text

@@ -1,4 +1,4 @@
--- name: platform__role_images_activate_artifact :exec
+-- name: role_images_activate_artifact :exec
 UPDATE control_plane.role_image_recipes
 SET active_image_artifact_id = $3::uuid,
     version = version + 1,

@@ -1,4 +1,4 @@
--- name: platform__commands_createagent_select_role_definitions_organization_id_project_id_ref :one
+-- name: commands_createagent_select_role_definitions_organization_id_project_id_ref :one
 SELECT id::text, ref, name
 FROM control_plane.role_definitions
 WHERE organization_id = $1::uuid

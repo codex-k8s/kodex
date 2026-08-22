@@ -1,4 +1,4 @@
--- name: platform__role_images_lock_recipe :one
+-- name: role_images_lock_recipe :one
 SELECT recipe.id::text, recipe.project_id::text, project.ref, recipe.role_definition_id::text,
        role.ref, recipe.name, recipe.state, recipe.specification, recipe.generation,
        recipe.spec_sha256, recipe.policy_revision, recipe.policy_sha256,

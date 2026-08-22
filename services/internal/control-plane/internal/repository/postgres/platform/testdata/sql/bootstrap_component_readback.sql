@@ -1,4 +1,4 @@
--- name: platform__bootstrap_component_readback :one
+-- name: bootstrap_component_readback :one
 SELECT
     (SELECT count(*) FROM control_plane.organizations) AS organization_count,
     (SELECT count(*) FROM control_plane.owner_claim_contracts

@@ -1,2 +1,2 @@
--- name: platform__runtime_completeexecution_insert_session_turns_ref_session_id_turn_number :exec
+-- name: runtime_completeexecution_insert_session_turns_ref_session_id_turn_number :exec
 INSERT INTO control_plane.session_turns(ref,organization_id,session_id,run_id,turn_number,actor_kind,actor_ref,content,artifact_refs,state,completed_at) SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,'SYSTEM_ASSISTANT',a.ref,$6,$7,$8,clock_timestamp() FROM control_plane.agents a WHERE a.organization_id=$2::uuid AND a.system_key='system-assistant'

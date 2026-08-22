@@ -1,4 +1,4 @@
--- name: platform__bootstrap_component_replace_session_provider_account :exec
+-- name: bootstrap_component_replace_session_provider_account :exec
 WITH candidate AS (
     INSERT INTO control_plane.provider_accounts
         (ref, organization_id, definition_key, stable_key, name, state, enabled, created_by)

@@ -1,4 +1,4 @@
--- name: platform__role_images_authorize_promotion :one
+-- name: role_images_authorize_promotion :one
 UPDATE control_plane.image_artifacts
 SET promotion_state = 'AUTHORIZED',
     promotion_authorization_token_sha256 = $4,

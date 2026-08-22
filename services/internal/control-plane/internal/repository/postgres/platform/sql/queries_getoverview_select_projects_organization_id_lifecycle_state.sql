@@ -1,4 +1,4 @@
--- name: platform__queries_getoverview_select_projects_organization_id_lifecycle_state :one
+-- name: queries_getoverview_select_projects_organization_id_lifecycle_state :one
 SELECT
 		(SELECT count(*) FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.lifecycle='ACTIVE'),
 		(SELECT count(*) FROM control_plane.agents a WHERE a.organization_id=$1::uuid AND a.system_key IS NULL AND a.state<>'ARCHIVED'),

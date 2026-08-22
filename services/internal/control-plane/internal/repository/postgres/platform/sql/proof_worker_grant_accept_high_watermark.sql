@@ -1,4 +1,4 @@
--- name: platform__proof_worker_grant_accept_high_watermark :one
+-- name: proof_worker_grant_accept_high_watermark :one
 WITH advanced AS (
     INSERT INTO control_plane.worker_grant_high_watermarks
         (workload_id, revision, issued_at, expires_at)

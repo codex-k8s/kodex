@@ -9,10 +9,13 @@ GRPC_GO_PLUGIN_REVISION := 1
 ASYNCAPI ?= asyncapi
 CONTROL_API_GATEWAY_ASYNCAPI_VERSION := @asyncapi/cli/6.0.2
 
-.PHONY: check-go-toolchain check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-authority-policy-codegen test-control-plane-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-authority-policy-codegen test-control-plane-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
+
+check-sql-boundary: check-go-toolchain
+	@env -u GOFLAGS GOENV=off GOWORK=off go run ./tools/check-sql-boundary
 
 check-proto-toolchain:
 	@BUF_VERSION='$(BUF_VERSION)' \
@@ -34,7 +37,7 @@ test-authority-policy-codegen:
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
-test-go: test-go-toolchain-contract
+test-go: test-go-toolchain-contract check-sql-boundary
 	@./scripts/test-go-modules.sh
 
 test-go-all:

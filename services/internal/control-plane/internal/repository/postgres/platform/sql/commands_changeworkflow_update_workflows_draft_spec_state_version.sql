@@ -1,4 +1,4 @@
--- name: platform__commands_changeworkflow_update_workflows_draft_spec_state_version :exec
+-- name: commands_changeworkflow_update_workflows_draft_spec_state_version :exec
 UPDATE control_plane.workflows
 SET name=$2,
     purpose=$3,

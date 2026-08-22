@@ -1,4 +1,4 @@
--- name: platform__repository_bootstrap_activate_provider_credential_revision :exec
+-- name: repository_bootstrap_activate_provider_credential_revision :exec
 UPDATE control_plane.provider_accounts
 SET current_credential_revision_id = $2::uuid,
     state = 'AUTHORIZED',

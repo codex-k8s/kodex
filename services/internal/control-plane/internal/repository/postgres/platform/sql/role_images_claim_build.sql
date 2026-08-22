@@ -1,4 +1,4 @@
--- name: platform__role_images_claim_build :one
+-- name: role_images_claim_build :one
 UPDATE control_plane.image_builds
 SET attempt = $4,
     stage = 'MATERIALIZATION',

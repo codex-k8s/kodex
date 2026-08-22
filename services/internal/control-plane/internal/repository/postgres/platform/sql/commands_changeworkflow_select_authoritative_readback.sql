@@ -1,4 +1,4 @@
--- name: platform__commands_changeworkflow_select_authoritative_readback :one
+-- name: commands_changeworkflow_select_authoritative_readback :one
 SELECT w.ref,
        p.ref,
        w.name,

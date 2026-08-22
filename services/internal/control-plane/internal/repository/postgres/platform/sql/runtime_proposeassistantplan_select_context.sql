@@ -1,4 +1,4 @@
--- name: platform__runtime_proposeassistantplan_select_context :one
+-- name: runtime_proposeassistantplan_select_context :one
 SELECT conversation.id::text,
        conversation.ref,
        conversation.version,

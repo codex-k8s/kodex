@@ -1,2 +1,2 @@
--- name: platform__workers_claimintegrationinvocations_select_integration_invocations_organization_id_state :many
+-- name: workers_claimintegrationinvocations_select_integration_invocations_organization_id_state :many
 SELECT i.id::text,i.ref,i.generation,c.ref,c.definition_key,c.credential_materialization_ref,c.public_configuration,i.capability_key,i.bounded_input FROM control_plane.integration_invocations i JOIN control_plane.integration_connections c ON c.id=i.connection_id WHERE i.organization_id=$1::uuid AND i.state='READY' AND c.enabled AND c.state='CONNECTED' ORDER BY i.created_at FOR UPDATE OF i SKIP LOCKED LIMIT $2

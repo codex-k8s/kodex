@@ -1,4 +1,4 @@
--- name: platform__queries_attachconnection_select_integration_grants_organization_id_connection_id_ref :many
+-- name: queries_attachconnection_select_integration_grants_organization_id_connection_id_ref :many
 SELECT g.ref,g.capability_key,g.target_kind,g.target_ref,COALESCE(a.name,w.name,g.target_ref),g.enabled,g.approval_policy,g.version
 FROM control_plane.integration_grants g
 LEFT JOIN control_plane.agents a ON g.target_kind='AGENT' AND a.ref=g.target_ref AND a.organization_id=g.organization_id

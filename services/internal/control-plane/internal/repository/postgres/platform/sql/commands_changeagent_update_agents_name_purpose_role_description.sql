@@ -1,4 +1,4 @@
--- name: platform__commands_changeagent_update_agents_name_purpose_role_description :one
+-- name: commands_changeagent_update_agents_name_purpose_role_description :one
 UPDATE control_plane.agents a
 SET name = $4,
     purpose = $5,

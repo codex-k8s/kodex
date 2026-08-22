@@ -1,4 +1,4 @@
--- name: platform__proof_owner_update_subject_profile :exec
+-- name: proof_owner_update_subject_profile :exec
 UPDATE control_plane.subjects
 SET display_name = $3,
     email_masked = $4,

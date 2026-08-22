@@ -1,4 +1,4 @@
--- name: platform__runtime_completeexecution_update_run_nodes_state_finished_at_version :one
+-- name: runtime_completeexecution_update_run_nodes_state_finished_at_version :one
 UPDATE control_plane.run_nodes
 SET state = $2,
     finished_at = clock_timestamp(),

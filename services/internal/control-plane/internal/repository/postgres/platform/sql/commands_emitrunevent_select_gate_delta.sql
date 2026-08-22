@@ -1,4 +1,4 @@
--- name: platform__commands_emitrunevent_select_gate_delta :one
+-- name: commands_emitrunevent_select_gate_delta :one
 SELECT gate.ref,
        project.ref,
        root.ref,

@@ -1,4 +1,4 @@
--- name: platform__role_images_complete_promotion :one
+-- name: role_images_complete_promotion :one
 UPDATE control_plane.image_artifacts
 SET promotion_state = 'PROMOTED',
     promoted_reference = $4,

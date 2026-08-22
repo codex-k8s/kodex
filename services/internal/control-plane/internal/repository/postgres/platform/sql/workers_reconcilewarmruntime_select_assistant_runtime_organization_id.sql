@@ -1,4 +1,4 @@
--- name: platform__workers_reconcilewarmruntime_select_assistant_runtime_organization_id :one
+-- name: workers_reconcilewarmruntime_select_assistant_runtime_organization_id :one
 SELECT a.ref,
        ar.stable_key,
        a.name,

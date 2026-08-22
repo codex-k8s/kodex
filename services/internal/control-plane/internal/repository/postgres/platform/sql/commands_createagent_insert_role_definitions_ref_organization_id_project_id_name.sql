@@ -1,4 +1,4 @@
--- name: platform__commands_createagent_insert_role_definitions_ref_organization_id_project_id_name :one
+-- name: commands_createagent_insert_role_definitions_ref_organization_id_project_id_name :one
 INSERT INTO control_plane.role_definitions
     (ref, organization_id, project_id, name, role_type, description, default_policies, created_by)
 VALUES

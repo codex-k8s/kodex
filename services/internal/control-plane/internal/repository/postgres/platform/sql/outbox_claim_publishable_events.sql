@@ -1,4 +1,4 @@
--- name: platform__outbox_claim_publishable_events :many
+-- name: outbox_claim_publishable_events :many
 WITH candidates AS (
 		SELECT e.id FROM control_plane.outbox_events e
 		WHERE ((e.state='PENDING' AND e.available_at<=clock_timestamp()) OR (e.state='CLAIMED' AND e.lease_expires_at<clock_timestamp()))

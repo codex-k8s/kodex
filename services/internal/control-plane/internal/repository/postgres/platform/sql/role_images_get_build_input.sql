@@ -1,4 +1,4 @@
--- name: platform__role_images_get_build_input :one
+-- name: role_images_get_build_input :one
 SELECT recipe.ref, build.recipe_version, build.recipe_generation, build.spec_sha256,
        build.specification, build.immutable_build_sha256,
        recipe.policy_revision, recipe.policy_sha256,

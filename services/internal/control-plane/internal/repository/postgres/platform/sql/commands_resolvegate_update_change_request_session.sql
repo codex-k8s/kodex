@@ -1,4 +1,4 @@
--- name: platform__commands_resolvegate_update_change_request_session :exec
+-- name: commands_resolvegate_update_change_request_session :exec
 UPDATE control_plane.sessions
 SET next_turn_number=next_turn_number+1,
     version=version+1,

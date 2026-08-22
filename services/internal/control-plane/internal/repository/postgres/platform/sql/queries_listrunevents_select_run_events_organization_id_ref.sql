@@ -1,4 +1,4 @@
--- name: platform__queries_listrunevents_select_run_events_organization_id_ref :many
+-- name: queries_listrunevents_select_run_events_organization_id_ref :many
 SELECT event.ref,
        root.ref,
        event.sequence,

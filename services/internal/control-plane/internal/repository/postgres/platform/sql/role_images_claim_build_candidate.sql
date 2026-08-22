@@ -1,4 +1,4 @@
--- name: platform__role_images_claim_build_candidate :one
+-- name: role_images_claim_build_candidate :one
 SELECT build.id::text, build.ref, build.version, build.attempt, build.maximum_attempts,
        build.fence, build.recipe_id::text, build.stage
 FROM control_plane.image_builds build

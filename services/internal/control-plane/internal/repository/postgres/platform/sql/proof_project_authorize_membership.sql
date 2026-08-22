@@ -1,4 +1,4 @@
--- name: platform__proof_project_authorize_membership :one
+-- name: proof_project_authorize_membership :one
 SELECT p.id::text, p.version
 FROM control_plane.projects p
 WHERE p.ref = $1 AND p.organization_id = $2::uuid AND p.lifecycle = 'ACTIVE'

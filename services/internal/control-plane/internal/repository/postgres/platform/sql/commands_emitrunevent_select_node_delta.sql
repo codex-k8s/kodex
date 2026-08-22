@@ -1,4 +1,4 @@
--- name: platform__commands_emitrunevent_select_node_delta :one
+-- name: commands_emitrunevent_select_node_delta :one
 SELECT node.ref,
        run.ref,
        COALESCE(parent.ref, ''),

@@ -1,4 +1,4 @@
--- name: platform__role_images_lock_build :one
+-- name: role_images_lock_build :one
 SELECT build.id::text, build.ref, recipe.ref, build.spec_sha256, build.stage,
        build.staging_reference, build.manifest_digest, build.provenance_sha256,
        build.immutable_build_sha256, build.safe_error_code, build.diagnostic_code,

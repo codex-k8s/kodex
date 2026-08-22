@@ -1,4 +1,4 @@
--- name: platform__runtime_delivercallback_select_runs_organization_id_ref :one
+-- name: runtime_delivercallback_select_runs_organization_id_ref :one
 SELECT child.id::text,
        child.root_run_id::text,
        child.project_id::text,

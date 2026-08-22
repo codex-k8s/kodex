@@ -1,4 +1,4 @@
--- name: platform__repository_bootstrap_insert_role_definitions_ref_stable_key_name :one
+-- name: repository_bootstrap_insert_role_definitions_ref_stable_key_name :one
 INSERT INTO control_plane.role_definitions
     (ref, organization_id, stable_key, name, role_type, description, default_policies, created_by)
 VALUES

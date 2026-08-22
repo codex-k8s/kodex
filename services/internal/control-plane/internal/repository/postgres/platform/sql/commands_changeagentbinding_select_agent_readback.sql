@@ -1,4 +1,4 @@
--- name: platform__commands_changeagentbinding_select_agent_readback :one
+-- name: commands_changeagentbinding_select_agent_readback :one
 SELECT a.ref, p.ref, role.ref, role.name, a.name, a.purpose,
        a.role_description, a.avatar_url, a.state, a.enabled, a.version,
        a.runtime_key, runtime.name, runtime.provider, runtime.model,

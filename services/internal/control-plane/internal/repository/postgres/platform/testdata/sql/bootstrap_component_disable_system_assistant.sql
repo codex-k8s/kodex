@@ -1,4 +1,4 @@
--- name: platform__bootstrap_component_disable_system_assistant :exec
+-- name: bootstrap_component_disable_system_assistant :exec
 UPDATE control_plane.agents
 SET enabled = false,
     state = 'DISABLED',

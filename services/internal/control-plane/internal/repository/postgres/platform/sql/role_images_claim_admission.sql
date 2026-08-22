@@ -1,4 +1,4 @@
--- name: platform__role_images_claim_admission :one
+-- name: role_images_claim_admission :one
 UPDATE control_plane.image_artifacts
 SET admission_state = 'CLAIMED',
     admission_claimant_workload = $4,

@@ -1,4 +1,4 @@
--- name: platform__role_images_insert_artifact :one
+-- name: role_images_insert_artifact :one
 INSERT INTO control_plane.image_artifacts
     (ref, organization_id, project_id, recipe_id, recipe_version, recipe_generation,
      spec_sha256, build_id, build_version, build_attempt, specification,

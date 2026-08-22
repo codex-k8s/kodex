@@ -1,4 +1,4 @@
--- name: platform__commands_emitrunevent_select_artifact_delta :one
+-- name: commands_emitrunevent_select_artifact_delta :one
 SELECT artifact.ref,
        project.ref,
        COALESCE(run.ref, ''),

@@ -1,4 +1,4 @@
--- name: platform__role_images_claim_promotion_candidate :one
+-- name: role_images_claim_promotion_candidate :one
 SELECT artifact.id::text, artifact.ref, artifact.version, artifact.promotion_fence
 FROM control_plane.image_artifacts artifact
 WHERE artifact.organization_id = $1::uuid

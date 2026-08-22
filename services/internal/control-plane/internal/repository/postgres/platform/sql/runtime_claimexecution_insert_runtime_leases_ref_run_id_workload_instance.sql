@@ -1,4 +1,4 @@
--- name: platform__runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance :exec
+-- name: runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance :exec
 INSERT INTO control_plane.runtime_leases(
     ref,
     organization_id,

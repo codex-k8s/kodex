@@ -1,4 +1,4 @@
--- name: platform__repository_resolvescope_select_memberships_organization_id_subject_id_active :one
+-- name: repository_resolvescope_select_memberships_organization_id_subject_id_active :one
 SELECT organization.id::text,
        organization.ref,
        subject.id::text,

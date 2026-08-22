@@ -24,17 +24,17 @@ import (
 )
 
 var (
-	//go:embed sql/bootstrap_component_readback.sql
+	//go:embed testdata/sql/bootstrap_component_readback.sql
 	bootstrapComponentReadbackQuery string
-	//go:embed sql/bootstrap_component_disable_system_assistant.sql
+	//go:embed testdata/sql/bootstrap_component_disable_system_assistant.sql
 	bootstrapComponentDisableSystemAssistantQuery string
-	//go:embed sql/bootstrap_component_delete_system_assistant.sql
+	//go:embed testdata/sql/bootstrap_component_delete_system_assistant.sql
 	bootstrapComponentDeleteSystemAssistantQuery string
-	//go:embed sql/bootstrap_component_replace_core_prompt.sql
+	//go:embed testdata/sql/bootstrap_component_replace_core_prompt.sql
 	bootstrapComponentReplaceCorePromptQuery string
-	//go:embed sql/bootstrap_component_replace_session_provider_account.sql
+	//go:embed testdata/sql/bootstrap_component_replace_session_provider_account.sql
 	bootstrapComponentReplaceSessionProviderAccountQuery string
-	//go:embed sql/bootstrap_component_connect_integration.sql
+	//go:embed testdata/sql/bootstrap_component_connect_integration.sql
 	bootstrapComponentConnectIntegrationQuery string
 )
 

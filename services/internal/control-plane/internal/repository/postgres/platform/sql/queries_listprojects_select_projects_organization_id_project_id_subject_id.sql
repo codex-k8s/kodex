@@ -1,4 +1,4 @@
--- name: platform__queries_listprojects_select_projects_organization_id_project_id_subject_id :many
+-- name: queries_listprojects_select_projects_organization_id_project_id_subject_id :many
 SELECT p.id,
        p.ref,
        p.name,

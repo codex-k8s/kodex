@@ -1,4 +1,4 @@
--- name: platform__artifacts_changeartifactbinding_select_agents_organization_id_project_id_ref :one
+-- name: artifacts_changeartifactbinding_select_agents_organization_id_project_id_ref :one
 SELECT id::text
 FROM control_plane.agents
 WHERE organization_id=$1::uuid

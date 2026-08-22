@@ -1,4 +1,4 @@
--- name: platform__runtime_claimexecution_expire_stale_leases :exec
+-- name: runtime_claimexecution_expire_stale_leases :exec
 WITH expired AS (
 		UPDATE control_plane.runtime_leases
 		SET state='EXPIRED',updated_at=clock_timestamp()

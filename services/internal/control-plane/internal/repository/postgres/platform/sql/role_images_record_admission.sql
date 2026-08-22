@@ -1,4 +1,4 @@
--- name: platform__role_images_record_admission :one
+-- name: role_images_record_admission :one
 UPDATE control_plane.image_artifacts
 SET admission_state = $4,
     sbom_sha256 = $5,
