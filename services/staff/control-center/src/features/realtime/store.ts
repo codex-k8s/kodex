@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { onScopeDispose, reactive } from "vue";
+import { onScopeDispose, reactive, ref } from "vue";
 
 import type {
   RunEvent,
@@ -56,6 +56,62 @@ interface ProblemWire {
   retryable: boolean;
 }
 
+type PlatformKind =
+  | "PROJECT"
+  | "AGENT"
+  | "ARTIFACT"
+  | "INSTRUCTIONS"
+  | "WORKFLOW"
+  | "SCHEDULE"
+  | "INTEGRATION_CONNECTION"
+  | "INTEGRATION_GRANT"
+  | "MEMBERSHIP"
+  | "SYSTEM_ASSISTANT"
+  | "ROLE_IMAGE_RECIPE";
+
+interface PlatformInvalidatedWire {
+  type: "PLATFORM_INVALIDATED";
+  sequence: number;
+  eventName: string;
+  kind: PlatformKind;
+}
+
+const platformKinds = new Set<PlatformKind>([
+  "PROJECT",
+  "AGENT",
+  "ARTIFACT",
+  "INSTRUCTIONS",
+  "WORKFLOW",
+  "SCHEDULE",
+  "INTEGRATION_CONNECTION",
+  "INTEGRATION_GRANT",
+  "MEMBERSHIP",
+  "SYSTEM_ASSISTANT",
+  "ROLE_IMAGE_RECIPE",
+]);
+
+export type PlatformSequenceOutcome =
+  | "applied"
+  | "duplicate"
+  | "gap"
+  | "invalid";
+
+export function reducePlatformSequence(
+  current: number,
+  incoming: number,
+): PlatformSequenceOutcome {
+  if (
+    !Number.isSafeInteger(current) ||
+    current < 0 ||
+    !Number.isSafeInteger(incoming) ||
+    incoming < 1
+  )
+    return "invalid";
+  if (incoming <= current) return "duplicate";
+  if (incoming !== current + 1) return "gap";
+  return "applied";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -102,9 +158,22 @@ function streamURL(runRef: string): string {
   return url.toString();
 }
 
+function platformStreamURL(): string {
+  const url = new URL(runtimeConfig().realtimeUrl);
+  url.pathname = `${url.pathname.replace(/\/$/, "")}/platform/stream`;
+  url.protocol = "wss:";
+  return url.toString();
+}
+
 export const useRealtimeStore = defineStore("realtime", () => {
   const state = reactive<Record<string, ConnectionState>>({});
+  const platformState = reactive<ConnectionState>({
+    state: "offline",
+    attempt: 0,
+  });
+  const platformSequence = ref(0);
   const active = new Map<string, ActiveStream>();
+  let activePlatform: ActiveStream | undefined;
   const platform = usePlatformStore();
 
   function scheduleReconnect(runRef: string, stream: ActiveStream): void {
@@ -247,8 +316,201 @@ export const useRealtimeStore = defineStore("realtime", () => {
     Reflect.deleteProperty(state, runRef);
   }
 
+  function schedulePlatformReconnect(stream: ActiveStream): void {
+    if (stream.stopped) return;
+    if (stream.timer !== undefined) window.clearTimeout(stream.timer);
+    const attempt = platformState.attempt + 1;
+    Object.assign(platformState, { state: "offline", attempt });
+    const delay = Math.min(10_000, 500 * 2 ** Math.min(attempt, 5));
+    stream.timer = window.setTimeout(() => connectPlatform(stream), delay);
+  }
+
+  function connectPlatform(stream: ActiveStream): void {
+    if (stream.stopped) return;
+    if (
+      stream.socket &&
+      (stream.socket.readyState === WebSocket.CONNECTING ||
+        stream.socket.readyState === WebSocket.OPEN)
+    )
+      return;
+    if (!navigator.onLine) {
+      schedulePlatformReconnect(stream);
+      return;
+    }
+    const previousAttempt = platformState.attempt;
+    Object.assign(platformState, {
+      state: "connecting",
+      attempt: previousAttempt,
+      problemCode: undefined,
+    });
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(platformStreamURL(), [
+        "mattercodex.platform.v1",
+        `csrf.${csrfToken()}`,
+      ]);
+    } catch {
+      schedulePlatformReconnect(stream);
+      return;
+    }
+    stream.socket = socket;
+    let processing = Promise.resolve();
+    socket.addEventListener("open", () => {
+      if (stream.socket !== socket || stream.stopped) return;
+      socket.send(
+        JSON.stringify({
+          type: "RESUME",
+          requestRef: crypto.randomUUID().replaceAll("-", ""),
+          afterSequence: platformSequence.value,
+        }),
+      );
+      Object.assign(platformState, {
+        state: "recovering",
+        attempt: previousAttempt,
+      });
+    });
+    socket.addEventListener("message", (message) => {
+      if (stream.socket !== socket || stream.stopped) return;
+      if (typeof message.data !== "string" || message.data.length > 65_536)
+        return;
+      let envelope: unknown;
+      try {
+        envelope = JSON.parse(message.data);
+      } catch {
+        socket.close(1002, "INVALID_JSON");
+        return;
+      }
+      processing = processing
+        .then(async () => {
+          if (
+            stream.socket !== socket ||
+            stream.stopped ||
+            !isRecord(envelope) ||
+            typeof envelope.type !== "string"
+          )
+            return;
+          if (envelope.type === "PLATFORM_RESYNC_REQUIRED") {
+            if (
+              !Number.isSafeInteger(envelope.currentSequence) ||
+              Number(envelope.currentSequence) < 0 ||
+              envelope.reason !== "AUTHORITATIVE_READ_REQUIRED"
+            ) {
+              socket.close(1002, "INVALID_RESYNC");
+              return;
+            }
+            Object.assign(platformState, {
+              state: "recovering",
+              attempt: previousAttempt,
+            });
+            await platform.reloadPlatformState();
+            if (stream.socket === socket && !stream.stopped)
+              platformSequence.value = Number(envelope.currentSequence);
+            return;
+          }
+          if (envelope.type === "PLATFORM_INVALIDATED") {
+            if (
+              !Number.isSafeInteger(envelope.sequence) ||
+              Number(envelope.sequence) < 1 ||
+              typeof envelope.eventName !== "string" ||
+              typeof envelope.kind !== "string" ||
+              !platformKinds.has(envelope.kind as PlatformKind)
+            ) {
+              socket.close(1002, "INVALID_PLATFORM_EVENT");
+              return;
+            }
+            const invalidation = envelope as unknown as PlatformInvalidatedWire;
+            const outcome = reducePlatformSequence(
+              platformSequence.value,
+              invalidation.sequence,
+            );
+            if (outcome === "duplicate") return;
+            if (outcome !== "applied") {
+              socket.close(1012, "GAP_DETECTED");
+              return;
+            }
+            await platform.reloadPlatformKind(invalidation.kind);
+            if (stream.socket === socket && !stream.stopped)
+              platformSequence.value = invalidation.sequence;
+            return;
+          }
+          if (envelope.type === "PLATFORM_STREAM_READY") {
+            if (
+              !Number.isSafeInteger(envelope.latestSequence) ||
+              Number(envelope.latestSequence) !== platformSequence.value
+            ) {
+              socket.close(1012, "READY_SEQUENCE_MISMATCH");
+              return;
+            }
+            Object.assign(platformState, {
+              state: "live",
+              attempt: 0,
+              problemCode: undefined,
+            });
+            return;
+          }
+          if (envelope.type === "PLATFORM_HEARTBEAT") {
+            if (
+              !Number.isSafeInteger(envelope.latestSequence) ||
+              Number(envelope.latestSequence) !== platformSequence.value ||
+              typeof envelope.serverTime !== "string"
+            ) {
+              socket.close(1012, "HEARTBEAT_SEQUENCE_MISMATCH");
+              return;
+            }
+            Object.assign(platformState, {
+              state: "live",
+              attempt: 0,
+              lastHeartbeat: envelope.serverTime,
+              problemCode: undefined,
+            });
+          }
+        })
+        .catch(() => {
+          if (stream.socket !== socket || stream.stopped) return;
+          Object.assign(platformState, {
+            state: "recovering",
+            attempt: previousAttempt,
+            problemCode: "AUTHORITATIVE_RELOAD_FAILED",
+          });
+          socket.close(1012, "AUTHORITATIVE_RELOAD_FAILED");
+        });
+    });
+    socket.addEventListener("close", () => {
+      if (stream.socket !== socket) return;
+      stream.socket = undefined;
+      schedulePlatformReconnect(stream);
+    });
+    socket.addEventListener("error", () => {
+      if (stream.socket === socket) socket.close();
+    });
+  }
+
+  function openPlatform(): void {
+    closePlatform();
+    const stream: ActiveStream = { stopped: false };
+    activePlatform = stream;
+    connectPlatform(stream);
+  }
+
+  function closePlatform(): void {
+    const stream = activePlatform;
+    if (!stream) return;
+    stream.stopped = true;
+    if (stream.timer !== undefined) window.clearTimeout(stream.timer);
+    stream.socket?.close(1000, "SHELL_CLOSED");
+    activePlatform = undefined;
+    platformSequence.value = 0;
+    Object.assign(platformState, {
+      state: "offline",
+      attempt: 0,
+      lastHeartbeat: undefined,
+      problemCode: undefined,
+    });
+  }
+
   function closeAll(): void {
     for (const runRef of [...active.keys()]) closeRun(runRef);
+    closePlatform();
   }
 
   function handleOnline(): void {
@@ -259,6 +521,13 @@ export const useRealtimeStore = defineStore("realtime", () => {
       }
       connect(runRef, stream);
     }
+    if (activePlatform) {
+      if (activePlatform.timer !== undefined) {
+        window.clearTimeout(activePlatform.timer);
+        activePlatform.timer = undefined;
+      }
+      connectPlatform(activePlatform);
+    }
   }
 
   window.addEventListener("online", handleOnline);
@@ -267,5 +536,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
     closeAll();
   });
 
-  return { state, openRun, closeRun, closeAll };
+  return {
+    state,
+    platformState,
+    platformSequence,
+    openRun,
+    closeRun,
+    openPlatform,
+    closePlatform,
+    closeAll,
+  };
 });

@@ -84,7 +84,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	api.AttachRealtime(realtime)
+	api.AttachRealtime(http.HandlerFunc(realtime.ServeRunHTTP), http.HandlerFunc(realtime.ServePlatformHTTP))
 	readiness := serviceruntime.NewReadiness()
 	public := &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, api.Handler())), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	technicalMux := http.NewServeMux()

@@ -134,6 +134,32 @@ INTEGRATION_CONNECTION_UPDATED:
   other: Integration connection updated
 INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
+INTEGRATION_CONNECTION_TEST_COMPLETED:
+  other: Connection test completed
+INTEGRATION_TEST_SUCCEEDED:
+  other: Connection is working
+INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
+  other: Credentials have not been configured yet
+INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Credentials are configured and masked
+INTEGRATION_CREDENTIAL_INVALID:
+  other: Credentials are unavailable or rejected
+INTEGRATION_UNAVAILABLE:
+  other: The external system is temporarily unavailable
+INTEGRATION_AUTH_REJECTED:
+  other: The external system rejected the credentials
+INTEGRATION_CREDENTIAL_UNAVAILABLE:
+  other: Protected credentials have not been materialized
+INTEGRATION_CONFIGURATION_INVALID:
+  other: Connection settings failed safe validation
+INTEGRATION_REQUEST_REJECTED:
+  other: The external system rejected the request
+INTEGRATION_CAPABILITY_UNSUPPORTED:
+  other: This capability is not supported by the adapter
+INTEGRATION_RESPONSE_INVALID:
+  other: The external system returned an unsupported response
+INTEGRATION_RATE_LIMITED:
+  other: The external system temporarily limited request frequency
 NEW_ASSISTANT_CONVERSATION:
   other: New conversation
 ASSISTANT_CONVERSATION_CREATED:
@@ -219,7 +245,7 @@ INTEGRATION_CATEGORY_INFRASTRUCTURE:
 INTEGRATION_CATEGORY_COMMUNICATIONS:
   other: Communications
 INTEGRATION_GITHUB_DESCRIPTION:
-  other: Repositories, issues, and pull requests
+  other: Typed read access to allowed repositories
 INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
   other: Read repository
 INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
@@ -229,7 +255,7 @@ INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
 INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
   other: Create and update pull requests
 INTEGRATION_KUBERNETES_DESCRIPTION:
-  other: Observe and perform limited workload operations
+  other: Typed observation of allowed workloads
 INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
   other: Observe workloads
 INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
@@ -252,3 +278,35 @@ INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
   other: Human Gate decisions
 INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
   other: Accept the first valid decision
+INTEGRATION_FIELD_GITHUB_OWNER_LABEL:
+  other: Repository owner
+INTEGRATION_FIELD_GITHUB_OWNER_HELP:
+  other: GitHub organization or user without a URL
+INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER:
+  other: example-org
+INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL:
+  other: Repository
+INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP:
+  other: Allowed repository name without its owner
+INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER:
+  other: customer-knowledge
+INTEGRATION_FIELD_SERVER_URL_LABEL:
+  other: Kubernetes API address
+INTEGRATION_FIELD_SERVER_URL_HELP:
+  other: Exact HTTPS address of the allowed API server
+INTEGRATION_FIELD_NAMESPACES_LABEL:
+  other: Allowed namespaces
+INTEGRATION_FIELD_NAMESPACES_HELP:
+  other: Separate namespaces with commas; all others are rejected
+INTEGRATION_FIELD_BASE_URL_LABEL:
+  other: Mattermost address
+INTEGRATION_FIELD_BASE_URL_HELP:
+  other: Exact HTTPS address of the Mattermost server
+INTEGRATION_FIELD_TEAM_LABEL:
+  other: Team
+INTEGRATION_FIELD_TEAM_HELP:
+  other: Team system name for notifications and result mirroring
+INTEGRATION_FIELD_CHANNEL_LABEL:
+  other: Channel
+INTEGRATION_FIELD_CHANNEL_HELP:
+  other: Channel system name without an internal ID

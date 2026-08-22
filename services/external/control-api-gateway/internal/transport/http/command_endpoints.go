@@ -473,7 +473,7 @@ func (server *Server) CreateIntegrationConnection(w http.ResponseWriter, r *http
 		}
 	}
 	public, _ := structpb.NewStruct(config)
-	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name, CredentialMaterializationRef: stringValue(body.CredentialMaterializationRef), PublicConfiguration: public})
+	response, err := server.control.Command.CreateIntegrationConnection(r.Context(), &controlplanev1.CreateIntegrationConnectionRequest{Mutation: m, DefinitionKey: body.DefinitionKey, Name: body.Name, PublicConfiguration: public})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

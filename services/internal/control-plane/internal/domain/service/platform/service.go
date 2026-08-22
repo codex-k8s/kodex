@@ -65,6 +65,13 @@ func (service *Service) GetBootstrapState(ctx context.Context, p value.Principal
 	}
 	return service.repository.GetBootstrapState(ctx, p)
 }
+func (service *Service) GetPlatformEventCursor(ctx context.Context, p value.Principal) (string, int64, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return "", 0, err
+	}
+	return service.repository.GetPlatformEventCursor(ctx, p)
+}
 func (service *Service) GetOverview(ctx context.Context, p value.Principal, projectRef string) (repository.Overview, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

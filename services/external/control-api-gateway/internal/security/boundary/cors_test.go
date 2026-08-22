@@ -87,3 +87,23 @@ func TestProjectReferenceBinding(t *testing.T) {
 		})
 	}
 }
+
+func TestRealtimePathClassification(t *testing.T) {
+	for _, path := range []string{
+		"/api/v1/runs/run_12345678/stream",
+		"/api/v1/platform/stream",
+	} {
+		if !isRealtimePath(path) {
+			t.Fatalf("realtime path was not classified: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"/api/v1/runs",
+		"/api/v1/platform/stream/extra",
+		"/api/v1/platform",
+	} {
+		if isRealtimePath(path) {
+			t.Fatalf("ordinary HTTP path was classified as realtime: %s", path)
+		}
+	}
+}

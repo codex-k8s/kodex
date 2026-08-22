@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import { useSessionStore } from "@/features/session/store";
 import { selectProjectRef } from "@/shared/project-context";
 import {
@@ -16,11 +17,13 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
+const realtime = useRealtimeStore();
 const session = useSessionStore();
 const { locale, t } = useI18n();
 const mobileOpen = ref(false);
 const online = ref(navigator.onLine);
 const search = ref("");
+let disposed = false;
 
 const projectRef = computed(() => {
   const value = route.params.projectRef;
@@ -122,11 +125,16 @@ onMounted(() => {
     platform.loadProjects(),
     platform.loadGates(),
     platform.loadBootstrap(),
-  ]);
+  ]).finally(() => {
+    if (!disposed) realtime.openPlatform();
+  });
 });
 onBeforeUnmount(() => {
+  disposed = true;
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
+  realtime.closePlatform();
+  platform.clearOwnerState();
 });
 </script>
 

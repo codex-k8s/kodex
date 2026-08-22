@@ -1275,7 +1275,7 @@ components:
       format: date-time
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS]
     Problem:
       type: object
       additionalProperties: false
@@ -1988,10 +1988,21 @@ components:
         description: { type: string, maxLength: 500 }
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalRequired: { type: boolean }
+    IntegrationConfigurationField:
+      type: object
+      additionalProperties: false
+      required: [key, label, help, valueType, required]
+      properties:
+        key: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        label: { type: string, maxLength: 160 }
+        help: { type: string, maxLength: 500 }
+        valueType: { type: string, enum: [TEXT, URL, STRING_LIST] }
+        required: { type: boolean }
+        placeholder: { type: string, maxLength: 300 }
     IntegrationDefinition:
       type: object
       additionalProperties: false
-      required: [key, name, description, category, builtIn, available, capabilities]
+      required: [key, name, description, category, builtIn, available, capabilities, configurationFields]
       properties:
         key: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
@@ -2000,16 +2011,18 @@ components:
         builtIn: { type: boolean }
         available: { type: boolean }
         capabilities: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IntegrationCapability' } }
+        configurationFields: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
     IntegrationGrant:
       type: object
       additionalProperties: false
-      required: [ref, version, capabilityKey, enabled]
+      required: [ref, version, capabilityKey, targetName, enabled]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         capabilityKey: { type: string, maxLength: 100 }
         agentRef: { $ref: '#/components/schemas/OpaqueRef' }
         workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
+        targetName: { type: string, maxLength: 160 }
         enabled: { type: boolean }
     IntegrationConnection:
       type: object
@@ -2020,7 +2033,7 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         definitionKey: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
-        state: { type: string, enum: [NOT_CONNECTED, CONNECTING, CONNECTED, UNAVAILABLE, DISABLED] }
+        state: { type: string, enum: [NOT_CONNECTED, TESTING, CONNECTED, DEGRADED, DISABLED] }
         credentialsConfigured: { type: boolean }
         credentialsHint: { type: string, maxLength: 160 }
         lastTestedAt: { $ref: '#/components/schemas/Timestamp' }
@@ -2035,8 +2048,7 @@ components:
       properties:
         definitionKey: { type: string, minLength: 1, maxLength: 100 }
         name: { type: string, minLength: 1, maxLength: 160 }
-        credentialMaterializationRef: { $ref: '#/components/schemas/OpaqueRef' }
-        publicConfiguration: { type: object, maxProperties: 50, additionalProperties: { type: string, maxLength: 500 } }
+        publicConfiguration: { type: object, maxProperties: 50, additionalProperties: true }
     IntegrationConnectionCommand:
       type: object
       additionalProperties: false

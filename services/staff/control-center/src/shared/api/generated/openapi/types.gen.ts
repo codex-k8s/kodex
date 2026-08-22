@@ -8,7 +8,7 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS';
 
 export type Problem = {
     type: string;
@@ -605,6 +605,15 @@ export type IntegrationCapability = {
     approvalRequired: boolean;
 };
 
+export type IntegrationConfigurationField = {
+    key: string;
+    label: string;
+    help: string;
+    valueType: 'TEXT' | 'URL' | 'STRING_LIST';
+    required: boolean;
+    placeholder?: string;
+};
+
 export type IntegrationDefinition = {
     key: string;
     name: string;
@@ -613,6 +622,7 @@ export type IntegrationDefinition = {
     builtIn: boolean;
     available: boolean;
     capabilities: Array<IntegrationCapability>;
+    configurationFields: Array<IntegrationConfigurationField>;
 };
 
 export type IntegrationGrant = {
@@ -621,6 +631,7 @@ export type IntegrationGrant = {
     capabilityKey: string;
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
+    targetName: string;
     enabled: boolean;
 };
 
@@ -629,7 +640,7 @@ export type IntegrationConnection = {
     version: number;
     definitionKey: string;
     name: string;
-    state: 'NOT_CONNECTED' | 'CONNECTING' | 'CONNECTED' | 'UNAVAILABLE' | 'DISABLED';
+    state: 'NOT_CONNECTED' | 'TESTING' | 'CONNECTED' | 'DEGRADED' | 'DISABLED';
     credentialsConfigured: boolean;
     credentialsHint: string;
     lastTestedAt?: Timestamp;
@@ -642,9 +653,8 @@ export type IntegrationConnection = {
 export type IntegrationConnectionInput = {
     definitionKey: string;
     name: string;
-    credentialMaterializationRef?: OpaqueRef;
     publicConfiguration?: {
-        [key: string]: string;
+        [key: string]: unknown;
     };
 };
 

@@ -1013,6 +1013,8 @@ func platformEventKind(eventName string) string {
 		return "MEMBERSHIP"
 	case "SYSTEM_ASSISTANT_CHANGED":
 		return "SYSTEM_ASSISTANT"
+	case "ROLE_IMAGE_RECIPE_CHANGED":
+		return "ROLE_IMAGE_RECIPE"
 	default:
 		return "SYSTEM_ASSISTANT"
 	}

@@ -19,6 +19,18 @@ func (server *Server) GetBootstrapState(ctx context.Context, _ *controlplanev1.G
 	return &controlplanev1.GetBootstrapStateResponse{State: castBootstrap(result)}, nil
 }
 
+func (server *Server) GetPlatformEventCursor(ctx context.Context, _ *controlplanev1.GetPlatformEventCursorRequest) (*controlplanev1.GetPlatformEventCursorResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetPlatformEventCursor_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	organizationRef, sequence, err := server.service.GetPlatformEventCursor(ctx, p)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetPlatformEventCursorResponse{OrganizationRef: organizationRef, CurrentSequence: sequence}, nil
+}
+
 func (server *Server) GetOverview(ctx context.Context, request *controlplanev1.GetOverviewRequest) (*controlplanev1.GetOverviewResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetOverview_FullMethodName)
 	if err != nil {

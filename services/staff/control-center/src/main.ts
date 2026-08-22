@@ -7,6 +7,7 @@ import { router } from "@/app/router";
 import "@/app/styles/base.css";
 import { useSessionStore } from "@/features/session/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { usePlatformStore } from "@/features/platform/store";
 import { configureApiClient } from "@/shared/api/client";
 import { setUnauthorizedHandler } from "@/shared/api/problem";
 import { loadRuntimeConfig } from "@/shared/config/runtime";
@@ -24,6 +25,7 @@ async function bootstrap(): Promise<void> {
   setUnauthorizedHandler(() => {
     session.invalidate();
     useRealtimeStore(pinia).closeAll();
+    usePlatformStore(pinia).clearOwnerState();
   });
   app.mount("#app");
   if ("serviceWorker" in navigator && import.meta.env.PROD) {

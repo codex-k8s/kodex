@@ -172,7 +172,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	switch request.DefinitionKey {
 	case "github":
 		_, err := adapter.call(ctx, request, http.MethodGet, "https://api.github.com/user", nil, nil)
-		return "INTEGRATION_TEST_SUCCEEDED", err
+		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 	case "kubernetes":
 		base, err := adapter.configuredBaseURL(request, "server_url")
 		if err != nil {
@@ -183,14 +183,14 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 			return "", err
 		}
 		_, err = adapter.call(ctx, request, http.MethodGet, base+"/version", nil, roots)
-		return "INTEGRATION_TEST_SUCCEEDED", err
+		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 	case "mattermost":
 		base, err := adapter.configuredBaseURL(request, "base_url")
 		if err != nil {
 			return "", err
 		}
 		_, err = adapter.call(ctx, request, http.MethodGet, base+"/api/v4/system/ping", nil, nil)
-		return "INTEGRATION_TEST_SUCCEEDED", err
+		return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 	default:
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}

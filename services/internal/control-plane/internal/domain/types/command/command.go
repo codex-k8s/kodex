@@ -110,9 +110,9 @@ type ScheduleInput struct {
 	Enabled                                                                                    bool
 }
 type ConnectionInput struct {
-	Ref, DefinitionKey, Name, CredentialMaterializationRef string
-	PublicConfiguration                                    map[string]any
-	Enabled                                                bool
+	Ref, DefinitionKey, Name string
+	PublicConfiguration      map[string]any
+	Enabled                  bool
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string

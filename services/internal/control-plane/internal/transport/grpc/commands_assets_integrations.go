@@ -133,7 +133,7 @@ func (server *Server) SetScheduleEnabled(ctx context.Context, request *controlpl
 }
 
 func (server *Server) CreateIntegrationConnection(ctx context.Context, request *controlplanev1.CreateIntegrationConnectionRequest) (*controlplanev1.CreateIntegrationConnectionResponse, error) {
-	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), CredentialMaterializationRef: request.GetCredentialMaterializationRef(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
+	payload := command.ConnectionInput{DefinitionKey: request.GetDefinitionKey(), Name: request.GetName(), PublicConfiguration: asMap(request.GetPublicConfiguration()), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName, command.CreateConnection, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

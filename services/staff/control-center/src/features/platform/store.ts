@@ -15,6 +15,7 @@ import {
   commandSchedule,
   commandWorkflow,
   changeArtifactBinding,
+  changeIntegrationGrant,
   changeProjectMembership,
   completeOnboarding,
   createAgent,
@@ -79,6 +80,7 @@ import type {
   IntegrationConnection,
   IntegrationConnectionCommand,
   IntegrationConnectionInput,
+  IntegrationGrantInput,
   IntegrationDefinition,
   Membership,
   MembershipInput,
@@ -119,6 +121,7 @@ import {
   reduceRunEvent,
   type RunEventOutcome,
 } from "@/features/platform/run-reducer";
+import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 type QueryKey =
   | "bootstrap"
@@ -1136,11 +1139,24 @@ export const usePlatformStore = defineStore("platform", () => {
     return result.data;
   }
 
+  async function readConnection(
+    connectionRef: string,
+  ): Promise<IntegrationConnection> {
+    const readback = await unwrap(
+      getIntegrationConnection({
+        path: { connectionRef },
+        signal: requestSignal(),
+      }),
+    );
+    connections[readback.data.ref] = readback.data;
+    return readback.data;
+  }
+
   async function changeConnection(
     connection: IntegrationConnection,
     action: IntegrationConnectionCommand["action"],
   ): Promise<IntegrationConnection> {
-    const result = await mutate(
+    await mutate(
       (headers) =>
         commandIntegrationConnection({
           path: { connectionRef: connection.ref },
@@ -1150,8 +1166,24 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       connection.version,
     );
-    connections[result.data.ref] = result.data;
-    return result.data;
+    return readConnection(connection.ref);
+  }
+
+  async function changeConnectionGrant(
+    connection: IntegrationConnection,
+    input: IntegrationGrantInput,
+  ): Promise<IntegrationConnection> {
+    await mutate(
+      (headers) =>
+        changeIntegrationGrant({
+          path: { connectionRef: connection.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      connection.version,
+    );
+    return readConnection(connection.ref);
   }
 
   async function newConversation(
@@ -1227,6 +1259,125 @@ export const usePlatformStore = defineStore("platform", () => {
 
   function applyRunEvent(event: RunEvent): RunEventOutcome {
     return reduceRunEvent({ runs, graphs, events, gates, artifacts }, event);
+  }
+
+  async function reloadPlatformKind(kind: string): Promise<void> {
+    const projectRef = selectedProjectRef();
+    const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [];
+    const add = (key: QueryKey, run: () => Promise<void>): void => {
+      if (!operations.some((operation) => operation.key === key))
+        operations.push({ key, run });
+    };
+    switch (kind) {
+      case "PROJECT":
+        add("projects", loadProjects);
+        add("overview", () => loadOverview(projectRef));
+        if (projectRef) add("project", () => loadProject(projectRef));
+        break;
+      case "AGENT":
+      case "INSTRUCTIONS":
+        if (projectRef) add("agents", () => loadAgents(projectRef));
+        add("overview", () => loadOverview(projectRef));
+        break;
+      case "WORKFLOW":
+        if (projectRef) add("workflows", () => loadWorkflows(projectRef));
+        break;
+      case "ARTIFACT":
+        if (projectRef) add("artifacts", () => loadArtifacts(projectRef));
+        add("overview", () => loadOverview(projectRef));
+        break;
+      case "SCHEDULE":
+        if (projectRef) add("schedules", () => loadSchedules(projectRef));
+        break;
+      case "INTEGRATION_CONNECTION":
+      case "INTEGRATION_GRANT":
+        add("integrations", loadIntegrations);
+        break;
+      case "MEMBERSHIP":
+        add("projects", loadProjects);
+        if (projectRef) add("members", () => loadMembers(projectRef));
+        break;
+      case "SYSTEM_ASSISTANT":
+        add("bootstrap", loadBootstrap);
+        add("assistant", loadAssistant);
+        break;
+      case "ROLE_IMAGE_RECIPE":
+        if (projectRef)
+          add("roleImages", () => loadRoleImageRecipes(projectRef));
+        break;
+      default:
+        throw new Error("Unknown platform invalidation kind");
+    }
+    await Promise.all(operations.map((operation) => operation.run()));
+    if (operations.some((operation) => problems[operation.key]))
+      throw new Error("Authoritative platform reload failed");
+  }
+
+  async function reloadPlatformState(): Promise<void> {
+    const projectRef = selectedProjectRef();
+    const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
+      { key: "bootstrap", run: loadBootstrap },
+      { key: "projects", run: loadProjects },
+      { key: "overview", run: () => loadOverview(projectRef) },
+      { key: "runs", run: () => loadRuns(projectRef) },
+      { key: "gates", run: () => loadGates(projectRef) },
+      { key: "integrations", run: loadIntegrations },
+      { key: "assistant", run: loadAssistant },
+    ];
+    if (projectRef) {
+      operations.push(
+        { key: "project", run: () => loadProject(projectRef) },
+        { key: "agents", run: () => loadAgents(projectRef) },
+        { key: "workflows", run: () => loadWorkflows(projectRef) },
+        { key: "artifacts", run: () => loadArtifacts(projectRef) },
+        { key: "schedules", run: () => loadSchedules(projectRef) },
+        {
+          key: "roleImages",
+          run: () => loadRoleImageRecipes(projectRef),
+        },
+      );
+    }
+    await Promise.all(operations.map((operation) => operation.run()));
+    if (operations.some((operation) => problems[operation.key]))
+      throw new Error("Authoritative platform resync failed");
+  }
+
+  function clearOwnerState(): void {
+    generation.clear();
+    for (const target of [
+      runtimes,
+      projects,
+      agents,
+      roleEnvironments,
+      roleImageRecipes,
+      roleImageBuilds,
+      workflows,
+      runs,
+      graphs,
+      events,
+      gates,
+      artifacts,
+      schedules,
+      definitions,
+      connections,
+      memberships,
+      membershipCandidates,
+      conversations,
+    ]) {
+      for (const key of Object.keys(target))
+        Reflect.deleteProperty(target, key);
+    }
+    for (const key of Object.keys(loading))
+      Reflect.deleteProperty(loading, key);
+    for (const key of Object.keys(problems))
+      Reflect.deleteProperty(problems, key);
+    bootstrap.value = undefined;
+    overview.value = undefined;
+    administration.value = undefined;
+    capabilities.value = [];
+    assistant.value = undefined;
+    auditEvents.value = [];
+    selectProjectRef(undefined);
   }
 
   const projectList = computed(() => Object.values(projects));
@@ -1311,11 +1462,15 @@ export const usePlatformStore = defineStore("platform", () => {
     changeSchedule,
     connectIntegration,
     changeConnection,
+    changeConnectionGrant,
     newConversation,
     sendAssistantTurn,
     applyPlan,
     updateAssistantInstructions,
     applyRunSnapshot,
     applyRunEvent,
+    reloadPlatformKind,
+    reloadPlatformState,
+    clearOwnerState,
   };
 });

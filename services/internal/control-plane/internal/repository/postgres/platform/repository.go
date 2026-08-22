@@ -218,15 +218,44 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	definitions := []struct {
 		key, name, description, category string
 		capabilities                     []entity.IntegrationCapability
+		fields                           []entity.IntegrationConfigurationField
 	}{
-		{"github", "GitHub", "i18n:INTEGRATION_GITHUB_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_DEVELOPMENT", []entity.IntegrationCapability{{Key: "github.repository.read", Name: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_NAME", Description: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION", Risk: "LOW"}, {Key: "github.pull_request.write", Name: "i18n:INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME", Description: "i18n:INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION", Risk: "HIGH"}}},
-		{"kubernetes", "Kubernetes", "i18n:INTEGRATION_KUBERNETES_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_INFRASTRUCTURE", []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME", Description: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION", Risk: "MEDIUM"}}},
-		{"mattermost", "Mattermost", "i18n:INTEGRATION_MATTERMOST_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_COMMUNICATIONS", []entity.IntegrationCapability{{Key: "mattermost.inbound", Name: "i18n:INTEGRATION_MATTERMOST_INBOUND_NAME", Description: "i18n:INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION", Risk: "MEDIUM"}, {Key: "mattermost.notifications", Name: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION", Risk: "LOW"}, {Key: "mattermost.result_mirror", Name: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME", Description: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION", Risk: "LOW"}, {Key: "mattermost.gate_decisions", Name: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION", Risk: "HIGH"}}},
+		{
+			key: "github", name: "GitHub", description: "i18n:INTEGRATION_GITHUB_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_DEVELOPMENT",
+			capabilities: []entity.IntegrationCapability{{Key: "github.repository.read", Name: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_NAME", Description: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION", Risk: "READ"}},
+			fields: []entity.IntegrationConfigurationField{
+				{Key: "owner", Label: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER"},
+				{Key: "repository", Label: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL", Help: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP", ValueType: "TEXT", Required: true, Placeholder: "i18n:INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER"},
+			},
+		},
+		{
+			key: "kubernetes", name: "Kubernetes", description: "i18n:INTEGRATION_KUBERNETES_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_INFRASTRUCTURE",
+			capabilities: []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME", Description: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION", Risk: "SENSITIVE"}},
+			fields: []entity.IntegrationConfigurationField{
+				{Key: "server_url", Label: "i18n:INTEGRATION_FIELD_SERVER_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_SERVER_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://api.example.test"},
+				{Key: "allowed_namespaces", Label: "i18n:INTEGRATION_FIELD_NAMESPACES_LABEL", Help: "i18n:INTEGRATION_FIELD_NAMESPACES_HELP", ValueType: "STRING_LIST", Required: true, Placeholder: "sales, support"},
+			},
+		},
+		{
+			key: "mattermost", name: "Mattermost", description: "i18n:INTEGRATION_MATTERMOST_DESCRIPTION", category: "i18n:INTEGRATION_CATEGORY_COMMUNICATIONS",
+			capabilities: []entity.IntegrationCapability{
+				{Key: "mattermost.inbound", Name: "i18n:INTEGRATION_MATTERMOST_INBOUND_NAME", Description: "i18n:INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION", Risk: "READ"},
+				{Key: "mattermost.notifications", Name: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION", Risk: "WRITE"},
+				{Key: "mattermost.result_mirror", Name: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME", Description: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION", Risk: "WRITE"},
+				{Key: "mattermost.gate_decisions", Name: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION", Risk: "SENSITIVE"},
+			},
+			fields: []entity.IntegrationConfigurationField{
+				{Key: "base_url", Label: "i18n:INTEGRATION_FIELD_BASE_URL_LABEL", Help: "i18n:INTEGRATION_FIELD_BASE_URL_HELP", ValueType: "URL", Required: true, Placeholder: "https://chat.example.test"},
+				{Key: "team_name", Label: "i18n:INTEGRATION_FIELD_TEAM_LABEL", Help: "i18n:INTEGRATION_FIELD_TEAM_HELP", ValueType: "TEXT", Required: true, Placeholder: "operations"},
+				{Key: "channel_name", Label: "i18n:INTEGRATION_FIELD_CHANNEL_LABEL", Help: "i18n:INTEGRATION_FIELD_CHANNEL_HELP", ValueType: "TEXT", Required: true, Placeholder: "ai-employees"},
+			},
+		},
 	}
 	for _, definition := range definitions {
 		capabilityJSON, _ := json.Marshal(definition.capabilities)
+		configurationJSON, _ := json.Marshal(definition.fields)
 		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
-			definition.key, definition.name, definition.description, definition.category, capabilityJSON); err != nil {
+			definition.key, definition.name, definition.description, definition.category, capabilityJSON, configurationJSON); err != nil {
 			return errors.New("seed integration definition")
 		}
 	}

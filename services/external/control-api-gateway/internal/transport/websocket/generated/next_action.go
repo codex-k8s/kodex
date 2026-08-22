@@ -21,6 +21,7 @@ const (
   NextActionBind
   NextActionTest
   NextActionRevoke
+  NextActionManageGrants
   NextActionApplyPlan
   NextActionRecover
 )
@@ -33,7 +34,7 @@ func (op NextAction) Value() any {
 	return NextActionValues[op]
 }
 
-var NextActionValues = []any{"OPEN","EDIT","ARCHIVE","ENABLE","DISABLE","VALIDATE","PUBLISH","ROLLBACK","LAUNCH","ADD_TURN","CANCEL","RETRY","RESOLVE_GATE","DOWNLOAD","BIND","TEST","REVOKE","APPLY_PLAN","RECOVER"}
+var NextActionValues = []any{"OPEN","EDIT","ARCHIVE","ENABLE","DISABLE","VALIDATE","PUBLISH","ROLLBACK","LAUNCH","ADD_TURN","CANCEL","RETRY","RESOLVE_GATE","DOWNLOAD","BIND","TEST","REVOKE","MANAGE_GRANTS","APPLY_PLAN","RECOVER"}
 var ValuesToNextAction = map[any]NextAction{
   NextActionValues[NextActionOpen]: NextActionOpen,
   NextActionValues[NextActionEdit]: NextActionEdit,
@@ -52,6 +53,7 @@ var ValuesToNextAction = map[any]NextAction{
   NextActionValues[NextActionBind]: NextActionBind,
   NextActionValues[NextActionTest]: NextActionTest,
   NextActionValues[NextActionRevoke]: NextActionRevoke,
+  NextActionValues[NextActionManageGrants]: NextActionManageGrants,
   NextActionValues[NextActionApplyPlan]: NextActionApplyPlan,
   NextActionValues[NextActionRecover]: NextActionRecover,
 }

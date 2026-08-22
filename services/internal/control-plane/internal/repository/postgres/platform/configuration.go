@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -84,18 +85,39 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if input.Kind == command.CreateConnection {
-		if strings.TrimSpace(payload.CredentialMaterializationRef) == "" {
+		payload.Name = strings.TrimSpace(payload.Name)
+		if payload.Name == "" || len(payload.Name) > 160 {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		var schema []byte
+		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectIntegrationDefinitionsStableKeyEnabled, payload.DefinitionKey).Scan(&schema); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		var fields []entity.IntegrationConfigurationField
+		if json.Unmarshal(schema, &fields) != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		configuration, valid := validateIntegrationConfiguration(fields, payload.PublicConfiguration)
+		if !valid {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("int")
+		credentialRef := "icr_" + ref
 		var item entity.IntegrationConnection
 		var config []byte
-		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState, ref, scope.organizationID, payload.Name, payload.CredentialMaterializationRef, asJSON(payload.PublicConfiguration), scope.actorID, payload.DefinitionKey).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState, ref, scope.organizationID, payload.Name, credentialRef, asJSON(configuration), scope.actorID, payload.DefinitionKey).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
-		_ = json.Unmarshal(config, &item.PublicConfiguration)
-		item.NextActions = []string{"OPEN", "TEST", "DISABLE"}
+		if json.Unmarshal(config, &item.PublicConfiguration) != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		item, err = readConnection(ctx, tx, scope, ref)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: ref, summary: "i18n:INTEGRATION_CONNECTION_CREATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
@@ -132,38 +154,60 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			_, _ = tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionTestsStateLeaseRefFenceDigest, payload.Ref)
 		}
 	}
-	item.NextActions = []string{"OPEN"}
-	if item.State != "TESTING" {
-		item.NextActions = append(item.NextActions, "TEST")
+	item, err := readConnection(ctx, tx, scope, item.Ref)
+	if err != nil {
+		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationGrantInput)
-	if !ok || payload.ConnectionRef == "" || payload.CapabilityKey == "" {
+	if !ok || payload.ConnectionRef == "" || payload.CapabilityKey == "" || input.Mutation.ExpectedVersion == nil || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	targetType, targetRef := "AGENT", payload.AgentRef
-	if targetRef == "" {
+	if payload.WorkflowRef != "" {
 		targetType, targetRef = "WORKFLOW", payload.WorkflowRef
 	}
-	if targetRef == "" {
-		return commandOutcome{}, errs.ErrInvalid
-	}
-	var connectionID, definitionKey string
-	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationConnectionsOrganizationIdRefEnabled, scope.organizationID, payload.ConnectionRef).Scan(&connectionID, &definitionKey); err != nil {
+	var connectionID, definitionKey, connectionState string
+	var connectionEnabled bool
+	var connectionVersion int64
+	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationConnectionsOrganizationIdRefEnabled, scope.organizationID, payload.ConnectionRef).Scan(&connectionID, &definitionKey, &connectionEnabled, &connectionState, &connectionVersion); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if connectionVersion != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	if payload.Enabled && (!connectionEnabled || connectionState != "CONNECTED") {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	var projectID, projectRef, targetName string
+	targetQuery := queryConfigurationChangeintegrationgrantSelectAgentOrganizationIdRef
+	if targetType == "WORKFLOW" {
+		targetQuery = queryConfigurationChangeintegrationgrantSelectWorkflowOrganizationIdRef
+	}
+	if err := tx.QueryRow(ctx, targetQuery, scope.organizationID, targetRef).Scan(&projectID, &projectRef, &targetName); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var capabilities []byte
 	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantSelectIntegrationDefinitionsStableKey, definitionKey).Scan(&capabilities); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var catalog []entity.IntegrationCapability
-	_ = json.Unmarshal(capabilities, &catalog)
+	if json.Unmarshal(capabilities, &catalog) != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	valid := false
-	risk := "LOW"
+	risk := "READ"
 	for _, capability := range catalog {
+		if !contains([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, capability.Risk) {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		if capability.Key == payload.CapabilityKey {
 			valid = true
 			risk = capability.Risk
@@ -185,14 +229,98 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 			return commandOutcome{}, errs.ErrNotFound
 		}
 	}
-	connection := entity.IntegrationConnection{Ref: payload.ConnectionRef}
-	return commandOutcome{result: command.Result{Connection: &connection}, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "i18n:INTEGRATION_GRANT_UPDATED", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
+	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if tag.RowsAffected() != 1 {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	connection, err := readConnection(ctx, tx, scope, payload.ConnectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	return commandOutcome{result: command.Result{Connection: &connection}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "i18n:INTEGRATION_GRANT_UPDATED", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
 }
 func approvalPolicy(risk string) string {
-	if risk == "HIGH" {
+	if risk == "SENSITIVE" || risk == "DESTRUCTIVE" {
 		return "OWNER_EACH_EFFECT"
 	}
-	return "OWNER_FOR_HIGH_RISK"
+	if risk == "WRITE" {
+		return "OWNER_FOR_HIGH_RISK"
+	}
+	return "NONE"
+}
+
+func validateIntegrationConfiguration(fields []entity.IntegrationConfigurationField, input map[string]any) (map[string]any, bool) {
+	if len(fields) > 50 || len(input) > len(fields) {
+		return nil, false
+	}
+	allowed := make(map[string]entity.IntegrationConfigurationField, len(fields))
+	for _, field := range fields {
+		if field.Key == "" || len(field.Key) > 64 {
+			return nil, false
+		}
+		allowed[field.Key] = field
+	}
+	for key := range input {
+		if _, ok := allowed[key]; !ok {
+			return nil, false
+		}
+	}
+	normalized := make(map[string]any, len(fields))
+	for _, field := range fields {
+		raw, present := input[field.Key]
+		if !present {
+			if field.Required {
+				return nil, false
+			}
+			continue
+		}
+		switch field.ValueType {
+		case "TEXT":
+			value, ok := raw.(string)
+			value = strings.TrimSpace(value)
+			if !ok || value == "" || len(value) > 500 {
+				return nil, false
+			}
+			normalized[field.Key] = value
+		case "URL":
+			value, ok := raw.(string)
+			value = strings.TrimSpace(value)
+			parsed, err := url.Parse(value)
+			if !ok || err != nil || len(value) > 2048 || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" && parsed.Path != "/" {
+				return nil, false
+			}
+			normalized[field.Key] = strings.TrimSuffix(value, "/")
+		case "STRING_LIST":
+			values, ok := raw.([]any)
+			if !ok || len(values) == 0 || len(values) > 64 {
+				return nil, false
+			}
+			clean := make([]string, 0, len(values))
+			seen := make(map[string]struct{}, len(values))
+			for _, item := range values {
+				value, ok := item.(string)
+				value = strings.TrimSpace(value)
+				if !ok || value == "" || len(value) > 100 {
+					return nil, false
+				}
+				if _, duplicate := seen[value]; duplicate {
+					continue
+				}
+				seen[value] = struct{}{}
+				clean = append(clean, value)
+			}
+			if len(clean) == 0 {
+				return nil, false
+			}
+			normalized[field.Key] = clean
+		default:
+			return nil, false
+		}
+	}
+	return normalized, true
 }
 
 func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

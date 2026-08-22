@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	PlatformQueryService_GetBootstrapState_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetPlatformEventCursor_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
 	PlatformQueryService_GetOverview_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOverview"
 	PlatformQueryService_ListPlatformCapabilities_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
 	PlatformQueryService_ListRuntimeSelections_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
@@ -52,6 +53,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
 	GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error)
+	GetPlatformEventCursor(ctx context.Context, in *GetPlatformEventCursorRequest, opts ...grpc.CallOption) (*GetPlatformEventCursorResponse, error)
 	GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error)
@@ -91,6 +93,16 @@ func (c *platformQueryServiceClient) GetBootstrapState(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetBootstrapStateResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_GetBootstrapState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetPlatformEventCursor(ctx context.Context, in *GetPlatformEventCursorRequest, opts ...grpc.CallOption) (*GetPlatformEventCursorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlatformEventCursorResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetPlatformEventCursor_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +364,7 @@ func (c *platformQueryServiceClient) ListAuditEvents(ctx context.Context, in *Li
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
 	GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error)
+	GetPlatformEventCursor(context.Context, *GetPlatformEventCursorRequest) (*GetPlatformEventCursorResponse, error)
 	GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error)
@@ -389,6 +402,9 @@ type UnimplementedPlatformQueryServiceServer struct{}
 
 func (UnimplementedPlatformQueryServiceServer) GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBootstrapState not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetPlatformEventCursor(context.Context, *GetPlatformEventCursorRequest) (*GetPlatformEventCursorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlatformEventCursor not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOverview not implemented")
@@ -500,6 +516,24 @@ func _PlatformQueryService_GetBootstrapState_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).GetBootstrapState(ctx, req.(*GetBootstrapStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetPlatformEventCursor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlatformEventCursorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetPlatformEventCursor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetPlatformEventCursor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetPlatformEventCursor(ctx, req.(*GetPlatformEventCursorRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -964,6 +998,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBootstrapState",
 			Handler:    _PlatformQueryService_GetBootstrapState_Handler,
+		},
+		{
+			MethodName: "GetPlatformEventCursor",
+			Handler:    _PlatformQueryService_GetPlatformEventCursor_Handler,
 		},
 		{
 			MethodName: "GetOverview",

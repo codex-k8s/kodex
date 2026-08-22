@@ -1,13 +1,14 @@
 asyncapi: 3.0.0
 info:
-  title: MatterCodex resumable run stream
-  version: 2.0.0
+  title: MatterCodex resumable owner streams
+  version: 2.1.0
   description: |
-    Защищённый owner-scoped WebSocket поток конкретного запуска. После
-    авторизации gateway читает актуальный snapshot у control-plane, затем
-    пересылает упорядоченные NATS-события. Gateway не владеет event store и
-    восстанавливает пропуски авторитетным ListRunEvents. Доставка как минимум
-    один раз; reducer клиента применяет только непрерывную новую sequence.
+    Защищённые owner-scoped WebSocket потоки запуска и общей конфигурации.
+    Run stream восстанавливает упорядоченные deltas через авторитетный
+    control-plane event store. Platform stream передаёт только безопасные
+    invalidation-сигналы без project/aggregate refs; после разрыва клиент
+    перечитывает доступные ему bounded read models через owner HTTP API.
+    Gateway получает live-сигналы из NATS и не становится владельцем состояния.
 defaultContentType: application/json
 servers:
   owner:
@@ -16,9 +17,9 @@ servers:
     protocol: wss
     security: [{ $ref: '#/components/securitySchemes/OwnerSession' }]
     x-origin-policy: EXACT_HTTPS_ALLOWLIST
-    x-required-subprotocols:
-      - mattercodex.run.v1
-      - csrf.<csrf-token>
+    x-channel-subprotocols:
+      runStream: [mattercodex.run.v1, csrf.<csrf-token>]
+      platformStream: [mattercodex.platform.v1, csrf.<csrf-token>]
 channels:
   runStream:
     address: /runs/{runRef}/stream
@@ -32,6 +33,15 @@ channels:
       ready: { $ref: '#/components/messages/Ready' }
       resync: { $ref: '#/components/messages/Resync' }
       heartbeat: { $ref: '#/components/messages/Heartbeat' }
+      problem: { $ref: '#/components/messages/Problem' }
+  platformStream:
+    address: /platform/stream
+    messages:
+      resume: { $ref: '#/components/messages/Resume' }
+      invalidated: { $ref: '#/components/messages/PlatformInvalidated' }
+      ready: { $ref: '#/components/messages/PlatformReady' }
+      resync: { $ref: '#/components/messages/PlatformResync' }
+      heartbeat: { $ref: '#/components/messages/PlatformHeartbeat' }
       problem: { $ref: '#/components/messages/Problem' }
 operations:
   resumeRunStream:
@@ -74,6 +84,39 @@ operations:
         - raw stdout or stderr
         - arbitrary tool payloads
         - file bodies
+  resumePlatformStream:
+    action: receive
+    channel: { $ref: '#/channels/platformStream' }
+    messages: [{ $ref: '#/channels/platformStream/messages/resume' }]
+    summary: Продолжить после последней применённой org sequence.
+    x-authority: VERIFIED_OWNER_SESSION_AND_CONTROL_PLANE_ORGANIZATION_ELIGIBILITY
+    x-rate-limit: OWNER_SCOPED
+  publishPlatformStream:
+    action: send
+    channel: { $ref: '#/channels/platformStream' }
+    messages:
+      - { $ref: '#/channels/platformStream/messages/invalidated' }
+      - { $ref: '#/channels/platformStream/messages/ready' }
+      - { $ref: '#/channels/platformStream/messages/resync' }
+      - { $ref: '#/channels/platformStream/messages/heartbeat' }
+      - { $ref: '#/channels/platformStream/messages/problem' }
+    summary: Передать ordered invalidation без раскрытия чужих project metadata.
+    x-source:
+      cursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
+      live: NATS_JETSTREAM_CONTROL_PLANE_PLATFORM_EVENTS
+      state: OWNER_HTTP_API_AUTHORITATIVE_READS
+    x-delivery:
+      mode: AT_LEAST_ONCE
+      orderingKey: organizationRef
+      sequenceField: sequence
+      duplicate: CLIENT_IGNORES_SEQUENCE_NOT_GREATER_THAN_APPLIED
+      gap: SERVER_CLOSES_AND_CLIENT_RELOADS_AUTHORIZED_BOUNDED_READ_MODELS
+      reconnect: CLIENT_SENDS_LAST_APPLIED_SEQUENCE
+      overflow: CLOSE_1013_BACKPRESSURE
+      maximumFrameBytes: 65536
+    x-redaction:
+      forwarded: [eventName, kind, sequence]
+      forbidden: [organizationRef, projectRef, aggregateRef, safeSummary, secret values, arbitrary event data]
 components:
   securitySchemes:
     OwnerSession:
@@ -109,6 +152,22 @@ components:
       name: problem
       contentType: application/problem+json
       payload: { $ref: '#/components/schemas/ProblemEnvelope' }
+    PlatformInvalidated:
+      name: platform_invalidated
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/PlatformInvalidatedEnvelope' }
+    PlatformReady:
+      name: platform_stream_ready
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/PlatformReadyEnvelope' }
+    PlatformResync:
+      name: platform_resync_required
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/PlatformResyncEnvelope' }
+    PlatformHeartbeat:
+      name: platform_heartbeat
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/PlatformHeartbeatEnvelope' }
   schemas:
     OpaqueRef:
       type: string
@@ -183,6 +242,47 @@ components:
         code: { $ref: '#/components/schemas/ProblemCode' }
         title: { type: string, maxLength: 200 }
         retryable: { type: boolean }
+    PlatformInvalidatedEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, sequence, eventName, kind]
+      properties:
+        type: { type: string, const: PLATFORM_INVALIDATED }
+        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        eventName: { $ref: '#/components/schemas/PlatformEventName' }
+        kind: { $ref: '#/components/schemas/PlatformResourceKind' }
+    PlatformReadyEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, latestSequence]
+      properties:
+        type: { type: string, const: PLATFORM_STREAM_READY }
+        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
+        latestSequence: { type: integer, format: int64, minimum: 0 }
+    PlatformResyncEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, currentSequence, reason]
+      properties:
+        type: { type: string, const: PLATFORM_RESYNC_REQUIRED }
+        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
+        currentSequence: { type: integer, format: int64, minimum: 0 }
+        reason: { type: string, const: AUTHORITATIVE_READ_REQUIRED }
+    PlatformHeartbeatEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, serverTime, latestSequence]
+      properties:
+        type: { type: string, const: PLATFORM_HEARTBEAT }
+        serverTime: { $ref: '#/components/schemas/Timestamp' }
+        latestSequence: { type: integer, format: int64, minimum: 0 }
+    PlatformEventName:
+      type: string
+      enum: [PROJECT_CHANGED, AGENT_CHANGED, ARTIFACT_CHANGED, INSTRUCTIONS_PUBLISHED, WORKFLOW_CHANGED, SCHEDULE_CHANGED, INTEGRATION_CONNECTION_CHANGED, INTEGRATION_GRANT_CHANGED, MEMBERSHIP_CHANGED, SYSTEM_ASSISTANT_CHANGED, ROLE_IMAGE_RECIPE_CHANGED]
+    PlatformResourceKind:
+      type: string
+      enum: [PROJECT, AGENT, ARTIFACT, INSTRUCTIONS, WORKFLOW, SCHEDULE, INTEGRATION_CONNECTION, INTEGRATION_GRANT, MEMBERSHIP, SYSTEM_ASSISTANT, ROLE_IMAGE_RECIPE]
     ResyncReason:
       type: string
       enum: [RETENTION_EXPIRED, GAP_DETECTED, PROJECTION_RECOVERED]
@@ -253,7 +353,7 @@ components:
       enum: [QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED]
     NextAction:
       type: string
-      enum: [OPEN, EDIT, ARCHIVE, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER]
+      enum: [OPEN, EDIT, ARCHIVE, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, MANAGE_GRANTS, APPLY_PLAN, RECOVER]
     RunEdge:
       type: object
       additionalProperties: false

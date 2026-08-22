@@ -298,21 +298,26 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	nextTest, nextConnection, credentials := "SUCCEEDED", "CONNECTED", "CONFIGURED"
+	summary := "i18n:INTEGRATION_TEST_SUCCEEDED"
 	if !payload.Success {
 		nextTest, nextConnection = "FAILED", "DEGRADED"
+		summary = "i18n:" + payload.SafeErrorCode
 		if payload.SafeErrorCode == "INTEGRATION_AUTH_REJECTED" || payload.SafeErrorCode == "INTEGRATION_CREDENTIAL_UNAVAILABLE" {
 			credentials = "INVALID"
 		}
 	}
-	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionTestsStateResultSummarySafeErrorCode, testID, nextTest, truncate(payload.ResultSummary, 1000), payload.SafeErrorCode); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionTestsStateResultSummarySafeErrorCode, testID, nextTest, summary, payload.SafeErrorCode); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var item entity.IntegrationConnection
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionsStateMaskedCredentialsStateLastTestSummary, connectionID, nextConnection, credentials, truncate(payload.ResultSummary, 1000)).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionsStateMaskedCredentialsStateLastTestSummary, connectionID, nextConnection, credentials, summary).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	item.NextActions = []string{"OPEN", "TEST"}
-	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: connectionRef, summary: "Integration connection test completed", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+	item, err := readConnection(ctx, tx, scope, connectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_COMPLETED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 
 func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, principal value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {

@@ -38,6 +38,18 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	return state, nil
 }
 
+func (repository *Repository) GetPlatformEventCursor(ctx context.Context, principal value.Principal) (string, int64, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return "", 0, err
+	}
+	var sequence int64
+	if err := repository.pool.QueryRow(ctx, queryQueriesGetplatformeventcursorSelectInstallationPlatformSequence).Scan(&sequence); err != nil {
+		return "", 0, errs.ErrUnavailable
+	}
+	return scope.organizationRef, sequence, nil
+}
+
 func (repository *Repository) GetOverview(ctx context.Context, principal value.Principal, projectRef string) (platformrepo.Overview, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -693,8 +705,9 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled, &capabilities, &schema); err != nil {
 			return nil, errs.ErrUnavailable
 		}
-		_ = json.Unmarshal(capabilities, &item.Capabilities)
-		_ = json.Unmarshal(schema, &item.ConfigurationSchema)
+		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
+			return nil, errs.ErrUnavailable
+		}
 		result = append(result, item)
 	}
 	return result, rows.Err()
@@ -709,13 +722,20 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 		return nil, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
+	manageConnection, manageGrants, err := connectionAuthority(ctx, repository.pool, scope)
+	if err != nil {
+		return nil, "", err
+	}
 	var result []entity.IntegrationConnection
 	for rows.Next() {
 		item, scanErr := scanConnection(rows)
 		if scanErr != nil {
 			return nil, "", scanErr
 		}
-		_ = repository.attachConnection(ctx, scope, &item)
+		if err := attachConnection(ctx, repository.pool, scope, &item); err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		item.NextActions = connectionActions(item, manageConnection, manageGrants)
 		result = append(result, item)
 	}
 	return result, "", rows.Err()
@@ -730,18 +750,54 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 		}
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
-	_ = json.Unmarshal(configuration, &item.PublicConfiguration)
-	_ = json.Unmarshal(capabilities, &item.Capabilities)
-	item.NextActions = []string{"OPEN", "TEST"}
-	if item.Enabled {
-		item.NextActions = append(item.NextActions, "DISABLE")
-	} else {
-		item.NextActions = append(item.NextActions, "ENABLE")
+	if json.Unmarshal(configuration, &item.PublicConfiguration) != nil || json.Unmarshal(capabilities, &item.Capabilities) != nil {
+		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
+	item.NextActions = []string{"OPEN"}
 	return item, nil
 }
-func (repository *Repository) attachConnection(ctx context.Context, scope scope, item *entity.IntegrationConnection) error {
-	rows, err := repository.pool.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref)
+
+type connectionQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func connectionActions(item entity.IntegrationConnection, manageConnection, manageGrants bool) []string {
+	actions := []string{"OPEN"}
+	if !manageConnection && !manageGrants {
+		return actions
+	}
+	if !item.Enabled {
+		if manageConnection {
+			return append(actions, "ENABLE")
+		}
+		return actions
+	}
+	if manageConnection && item.State != "TESTING" {
+		actions = append(actions, "TEST")
+	}
+	if manageConnection {
+		actions = append(actions, "DISABLE")
+	}
+	if manageGrants && item.State == "CONNECTED" {
+		actions = append(actions, "MANAGE_GRANTS")
+	}
+	return actions
+}
+
+func connectionAuthority(ctx context.Context, querier connectionQuerier, scope scope) (bool, bool, error) {
+	if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
+		return true, true, nil
+	}
+	var manageGrants bool
+	if err := querier.QueryRow(ctx, queryQueriesConnectionauthoritySelectMembershipsOrganizationIdSubjectId, scope.organizationID, scope.actorID).Scan(&manageGrants); err != nil {
+		return false, false, errs.ErrUnavailable
+	}
+	return false, manageGrants, nil
+}
+
+func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
+	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.role, scope.actorID)
 	if err != nil {
 		return err
 	}
@@ -755,19 +811,29 @@ func (repository *Repository) attachConnection(ctx context.Context, scope scope,
 	}
 	return rows.Err()
 }
+
+func readConnection(ctx context.Context, querier connectionQuerier, scope scope, ref string) (entity.IntegrationConnection, error) {
+	item, err := scanConnection(querier.QueryRow(ctx, queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef, scope.organizationID, ref))
+	if err != nil {
+		return entity.IntegrationConnection{}, err
+	}
+	if err := attachConnection(ctx, querier, scope, &item); err != nil {
+		return entity.IntegrationConnection{}, errs.ErrUnavailable
+	}
+	manageConnection, manageGrants, err := connectionAuthority(ctx, querier, scope)
+	if err != nil {
+		return entity.IntegrationConnection{}, err
+	}
+	item.NextActions = connectionActions(item, manageConnection, manageGrants)
+	return item, nil
+}
+
 func (repository *Repository) GetIntegrationConnection(ctx context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
-	item, err := scanConnection(repository.pool.QueryRow(ctx, queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef, scope.organizationID, ref))
-	if err != nil {
-		return entity.IntegrationConnection{}, err
-	}
-	if err := repository.attachConnection(ctx, scope, &item); err != nil {
-		return entity.IntegrationConnection{}, errs.ErrUnavailable
-	}
-	return item, nil
+	return readConnection(ctx, repository.pool, scope, ref)
 }
 
 func (repository *Repository) getAssistant(ctx context.Context, scope scope) (entity.SystemAssistant, error) {

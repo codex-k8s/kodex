@@ -34,6 +34,8 @@ var (
 	bootstrapComponentReplaceCorePromptQuery string
 	//go:embed sql/bootstrap_component_replace_session_provider_account.sql
 	bootstrapComponentReplaceSessionProviderAccountQuery string
+	//go:embed sql/bootstrap_component_connect_integration.sql
+	bootstrapComponentConnectIntegrationQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -107,6 +109,98 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
 		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
 	})
+	t.Run("integration configuration and grants", func(t *testing.T) {
+		testIntegrationConfigurationAndGrants(t, ctx, repository, pool)
+	})
+}
+
+func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct integration service: %v", err)
+	}
+	definitions, err := service.ListIntegrationDefinitions(ctx, owner, "")
+	if err != nil || len(definitions) != 3 {
+		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
+	}
+	for _, definition := range definitions {
+		if len(definition.ConfigurationFields) == 0 {
+			t.Fatalf("definition %s has no typed configuration fields", definition.Key)
+		}
+		for _, capability := range definition.Capabilities {
+			if !contains([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, capability.Risk) {
+				t.Fatalf("definition %s exposes unsupported risk %s", definition.Key, capability.Risk)
+			}
+		}
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-invalid-configuration"},
+		Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Unsafe connection", PublicConfiguration: map[string]any{"owner": "example", "repository": "knowledge", "token": "must-not-enter-browser-contract"}},
+	}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("unknown or secret-like public configuration field accepted: %v", err)
+	}
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-github-create"},
+		Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Customer knowledge", PublicConfiguration: map[string]any{"owner": "example-org", "repository": "customer-knowledge"}},
+	})
+	if err != nil || created.Connection == nil || created.Connection.MaskedCredentialsState != "NOT_CONFIGURED" || created.Connection.State != "NOT_CONNECTED" || len(created.Connection.Capabilities) != 1 {
+		t.Fatalf("create integration connection: connection=%#v err=%v", created.Connection, err)
+	}
+	project, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-project-create"},
+		Payload: command.ProjectInput{Name: "Sales enablement", Purpose: "Prepare customer knowledge", Language: "en"},
+	})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create integration project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "integration-agent-create", "Sales knowledge curator")
+	var connectedVersion int64
+	if err := pool.QueryRow(ctx, bootstrapComponentConnectIntegrationQuery, created.Connection.Ref).Scan(&connectedVersion); err != nil {
+		t.Fatalf("materialize tested integration fixture: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-stale", ExpectedVersion: &created.Connection.Version},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.repository.read", AgentRef: agent.Ref, Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("stale integration connection version accepted: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-two-targets", ExpectedVersion: &connectedVersion},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.repository.read", AgentRef: agent.Ref, WorkflowRef: "wfl_forged", Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("grant with two targets accepted: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-unknown-target", ExpectedVersion: &connectedVersion},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.repository.read", AgentRef: "agt_foreign", Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("unknown integration target accepted: %v", err)
+	}
+	granted, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-create", ExpectedVersion: &connectedVersion},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.repository.read", AgentRef: agent.Ref, Enabled: true},
+	})
+	if err != nil || granted.Connection == nil || granted.Connection.Version != connectedVersion+1 || len(granted.Connection.Grants) != 1 || granted.Connection.Grants[0].TargetName != agent.Name || !granted.Connection.Grants[0].Enabled {
+		t.Fatalf("create authoritative integration grant: connection=%#v err=%v", granted.Connection, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-unknown-capability", ExpectedVersion: &granted.Connection.Version},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.admin", AgentRef: agent.Ref, Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("unknown integration capability accepted: %v", err)
+	}
+	revoked, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-grant-revoke", ExpectedVersion: &granted.Connection.Version},
+		Payload: command.IntegrationGrantInput{ConnectionRef: created.Connection.Ref, CapabilityKey: "github.repository.read", AgentRef: agent.Ref, Enabled: false},
+	})
+	if err != nil || revoked.Connection == nil || len(revoked.Connection.Grants) != 1 || revoked.Connection.Grants[0].Enabled {
+		t.Fatalf("revoke integration grant: connection=%#v err=%v", revoked.Connection, err)
+	}
 }
 
 func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repository *Repository) {

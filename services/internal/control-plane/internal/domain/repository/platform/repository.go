@@ -86,6 +86,7 @@ type Repository interface {
 	NextAuthorityProofRevision(context.Context) (uint64, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	GetBootstrapState(context.Context, value.Principal) (BootstrapState, error)
+	GetPlatformEventCursor(context.Context, value.Principal) (string, int64, error)
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)

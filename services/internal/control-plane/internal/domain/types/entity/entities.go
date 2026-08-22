@@ -171,11 +171,20 @@ type Schedule struct {
 
 type IntegrationCapability struct{ Key, Name, Description, Risk string }
 
+type IntegrationConfigurationField struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Help        string `json:"help"`
+	ValueType   string `json:"valueType"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Required    bool   `json:"required"`
+}
+
 type IntegrationDefinition struct {
 	Key, Name, Description, Category string
 	Optional, Enabled                bool
 	Capabilities                     []IntegrationCapability
-	ConfigurationSchema              map[string]any
+	ConfigurationFields              []IntegrationConfigurationField
 }
 
 type IntegrationGrant struct {

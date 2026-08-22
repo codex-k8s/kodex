@@ -1,0 +1,2 @@
+-- name: platform__queries_getplatformeventcursor_select_installation_platform_sequence :one
+SELECT platform_sequence FROM control_plane.installation WHERE singleton

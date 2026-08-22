@@ -143,13 +143,20 @@ const (
 	WRITE       IntegrationCapabilityRisk = "WRITE"
 )
 
+// Defines values for IntegrationConfigurationFieldValueType.
+const (
+	STRINGLIST IntegrationConfigurationFieldValueType = "STRING_LIST"
+	TEXT       IntegrationConfigurationFieldValueType = "TEXT"
+	URL        IntegrationConfigurationFieldValueType = "URL"
+)
+
 // Defines values for IntegrationConnectionState.
 const (
 	CONNECTED    IntegrationConnectionState = "CONNECTED"
-	CONNECTING   IntegrationConnectionState = "CONNECTING"
+	DEGRADED     IntegrationConnectionState = "DEGRADED"
 	DISABLED     IntegrationConnectionState = "DISABLED"
 	NOTCONNECTED IntegrationConnectionState = "NOT_CONNECTED"
-	UNAVAILABLE  IntegrationConnectionState = "UNAVAILABLE"
+	TESTING      IntegrationConnectionState = "TESTING"
 )
 
 // Defines values for IntegrationConnectionCommandAction.
@@ -226,6 +233,7 @@ const (
 	NextActionENABLE             NextAction = "ENABLE"
 	NextActionLAUNCH             NextAction = "LAUNCH"
 	NextActionMANAGECAPABILITIES NextAction = "MANAGE_CAPABILITIES"
+	NextActionMANAGEGRANTS       NextAction = "MANAGE_GRANTS"
 	NextActionMANAGEINTEGRATIONS NextAction = "MANAGE_INTEGRATIONS"
 	NextActionMANAGEMEMBERS      NextAction = "MANAGE_MEMBERS"
 	NextActionOPEN               NextAction = "OPEN"
@@ -829,6 +837,19 @@ type IntegrationCapability struct {
 // IntegrationCapabilityRisk defines model for IntegrationCapability.Risk.
 type IntegrationCapabilityRisk string
 
+// IntegrationConfigurationField defines model for IntegrationConfigurationField.
+type IntegrationConfigurationField struct {
+	Help        string                                 `json:"help"`
+	Key         string                                 `json:"key"`
+	Label       string                                 `json:"label"`
+	Placeholder *string                                `json:"placeholder,omitempty"`
+	Required    bool                                   `json:"required"`
+	ValueType   IntegrationConfigurationFieldValueType `json:"valueType"`
+}
+
+// IntegrationConfigurationFieldValueType defines model for IntegrationConfigurationField.ValueType.
+type IntegrationConfigurationFieldValueType string
+
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
 	Capabilities          []IntegrationCapability    `json:"capabilities"`
@@ -858,21 +879,21 @@ type IntegrationConnectionCommandAction string
 
 // IntegrationConnectionInput defines model for IntegrationConnectionInput.
 type IntegrationConnectionInput struct {
-	CredentialMaterializationRef *OpaqueRef         `json:"credentialMaterializationRef,omitempty"`
-	DefinitionKey                string             `json:"definitionKey"`
-	Name                         string             `json:"name"`
-	PublicConfiguration          *map[string]string `json:"publicConfiguration,omitempty"`
+	DefinitionKey       string                  `json:"definitionKey"`
+	Name                string                  `json:"name"`
+	PublicConfiguration *map[string]interface{} `json:"publicConfiguration,omitempty"`
 }
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Available    bool                    `json:"available"`
-	BuiltIn      bool                    `json:"builtIn"`
-	Capabilities []IntegrationCapability `json:"capabilities"`
-	Category     string                  `json:"category"`
-	Description  string                  `json:"description"`
-	Key          string                  `json:"key"`
-	Name         string                  `json:"name"`
+	Available           bool                            `json:"available"`
+	BuiltIn             bool                            `json:"builtIn"`
+	Capabilities        []IntegrationCapability         `json:"capabilities"`
+	Category            string                          `json:"category"`
+	ConfigurationFields []IntegrationConfigurationField `json:"configurationFields"`
+	Description         string                          `json:"description"`
+	Key                 string                          `json:"key"`
+	Name                string                          `json:"name"`
 }
 
 // IntegrationGrant defines model for IntegrationGrant.
@@ -881,6 +902,7 @@ type IntegrationGrant struct {
 	CapabilityKey string     `json:"capabilityKey"`
 	Enabled       bool       `json:"enabled"`
 	Ref           OpaqueRef  `json:"ref"`
+	TargetName    string     `json:"targetName"`
 	Version       int64      `json:"version"`
 	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
 }

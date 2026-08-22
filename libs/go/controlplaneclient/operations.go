@@ -6,6 +6,7 @@ import controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.query.bootstrap.get":                 controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName,
+		"platform.query.event-cursor.get":              controlplanev1.PlatformQueryService_GetPlatformEventCursor_FullMethodName,
 		"platform.query.overview.get":                  controlplanev1.PlatformQueryService_GetOverview_FullMethodName,
 		"platform.query.capabilities.list":             controlplanev1.PlatformQueryService_ListPlatformCapabilities_FullMethodName,
 		"platform.query.runtimes.list":                 controlplanev1.PlatformQueryService_ListRuntimeSelections_FullMethodName,

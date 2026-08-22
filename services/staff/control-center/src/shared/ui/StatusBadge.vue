@@ -17,12 +17,17 @@ const tone = computed(() => {
       "SUCCEEDED",
       "PUBLISHED",
       "CONNECTED",
+      "AVAILABLE",
       "CLEAN",
       "APPROVED",
     ].includes(props.state)
   )
     return "success";
-  if (["FAILED", "REJECTED", "QUARANTINED", "EXPIRED"].includes(props.state))
+  if (
+    ["FAILED", "REJECTED", "REVOKED", "QUARANTINED", "EXPIRED"].includes(
+      props.state,
+    )
+  )
     return "danger";
   if (
     [
@@ -32,6 +37,7 @@ const tone = computed(() => {
       "NEEDS_ATTENTION",
       "CANCELLING",
       "RECOVERING",
+      "DEGRADED",
     ].includes(props.state)
   )
     return "warning";

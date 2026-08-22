@@ -52,6 +52,10 @@ type busEnvelope struct {
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	server.ServeRunHTTP(writer, request)
+}
+
+func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Request) {
 	localize := func(messageID string) string { return messageID }
 	if localized, ok := writer.(interface{ Localize(string) string }); ok {
 		localize = localized.Localize
@@ -66,7 +70,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		httptransport.WriteLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		return
 	}
-	protocols, csrfOK := requestedProtocols(request)
+	protocols, csrfOK := requestedProtocols(request, "mattercodex.run.v1")
 	if !csrfOK || !boundary.VerifyCSRFToken(identity, protocols.csrf) {
 		httptransport.WriteLocalProblem(writer, http.StatusForbidden, "CSRF_REJECTED", false)
 		return
@@ -192,13 +196,13 @@ func (server *Server) writeResync(ctx context.Context, connection *websocket.Con
 
 type protocolSelection struct{ csrf string }
 
-func requestedProtocols(request *http.Request) (protocolSelection, bool) {
+func requestedProtocols(request *http.Request, baseProtocol string) (protocolSelection, bool) {
 	var result protocolSelection
 	foundBase := false
 	for _, header := range request.Header.Values("Sec-WebSocket-Protocol") {
 		for _, raw := range strings.Split(header, ",") {
 			value := strings.TrimSpace(raw)
-			if value == "mattercodex.run.v1" {
+			if value == baseProtocol {
 				foundBase = true
 			}
 			if strings.HasPrefix(value, "csrf.") && len(value) > 5 {

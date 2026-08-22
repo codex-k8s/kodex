@@ -134,6 +134,32 @@ INTEGRATION_CONNECTION_UPDATED:
   other: Подключение интеграции обновлено
 INTEGRATION_GRANT_UPDATED:
   other: Разрешение интеграции обновлено
+INTEGRATION_CONNECTION_TEST_COMPLETED:
+  other: Проверка подключения завершена
+INTEGRATION_TEST_SUCCEEDED:
+  other: Подключение работает
+INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
+  other: Учётные данные ещё не настроены
+INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Учётные данные настроены и скрыты
+INTEGRATION_CREDENTIAL_INVALID:
+  other: Учётные данные недоступны или отклонены
+INTEGRATION_UNAVAILABLE:
+  other: Внешняя система временно недоступна
+INTEGRATION_AUTH_REJECTED:
+  other: Внешняя система отклонила учётные данные
+INTEGRATION_CREDENTIAL_UNAVAILABLE:
+  other: Защищённые учётные данные не материализованы
+INTEGRATION_CONFIGURATION_INVALID:
+  other: Настройки подключения не прошли безопасную проверку
+INTEGRATION_REQUEST_REJECTED:
+  other: Внешняя система отклонила запрос
+INTEGRATION_CAPABILITY_UNSUPPORTED:
+  other: Возможность не поддерживается этим адаптером
+INTEGRATION_RESPONSE_INVALID:
+  other: Внешняя система вернула неподдерживаемый ответ
+INTEGRATION_RATE_LIMITED:
+  other: Внешняя система временно ограничила частоту запросов
 NEW_ASSISTANT_CONVERSATION:
   other: Новый разговор
 ASSISTANT_CONVERSATION_CREATED:
@@ -219,7 +245,7 @@ INTEGRATION_CATEGORY_INFRASTRUCTURE:
 INTEGRATION_CATEGORY_COMMUNICATIONS:
   other: Коммуникации
 INTEGRATION_GITHUB_DESCRIPTION:
-  other: Репозитории, issues и pull requests
+  other: Типизированное чтение разрешённых репозиториев
 INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
   other: Чтение репозитория
 INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
@@ -229,7 +255,7 @@ INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
 INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
   other: Создавать и изменять pull requests
 INTEGRATION_KUBERNETES_DESCRIPTION:
-  other: Наблюдение и ограниченные операции с workloads
+  other: Типизированное наблюдение за разрешёнными workloads
 INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
   other: Наблюдение за workloads
 INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
@@ -252,3 +278,35 @@ INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
   other: Решения Human Gate
 INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
   other: Принимать первое действительное решение
+INTEGRATION_FIELD_GITHUB_OWNER_LABEL:
+  other: Владелец репозитория
+INTEGRATION_FIELD_GITHUB_OWNER_HELP:
+  other: Организация или пользователь GitHub без URL
+INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER:
+  other: example-org
+INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL:
+  other: Репозиторий
+INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP:
+  other: Название разрешённого репозитория без владельца
+INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER:
+  other: customer-knowledge
+INTEGRATION_FIELD_SERVER_URL_LABEL:
+  other: Адрес Kubernetes API
+INTEGRATION_FIELD_SERVER_URL_HELP:
+  other: Точный HTTPS-адрес разрешённого API server
+INTEGRATION_FIELD_NAMESPACES_LABEL:
+  other: Разрешённые namespaces
+INTEGRATION_FIELD_NAMESPACES_HELP:
+  other: Перечислите namespaces через запятую; другие будут отклонены
+INTEGRATION_FIELD_BASE_URL_LABEL:
+  other: Адрес Mattermost
+INTEGRATION_FIELD_BASE_URL_HELP:
+  other: Точный HTTPS-адрес сервера Mattermost
+INTEGRATION_FIELD_TEAM_LABEL:
+  other: Team
+INTEGRATION_FIELD_TEAM_HELP:
+  other: Системное имя Team для уведомлений и зеркала результатов
+INTEGRATION_FIELD_CHANNEL_LABEL:
+  other: Канал
+INTEGRATION_FIELD_CHANNEL_HELP:
+  other: Системное имя канала без внутреннего ID

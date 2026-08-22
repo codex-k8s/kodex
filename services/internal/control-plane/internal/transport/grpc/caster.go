@@ -149,7 +149,7 @@ func castRuntime(value entity.RuntimeSelection) *controlplanev1.RuntimeSelection
 	return &controlplanev1.RuntimeSelection{Ref: value.Ref, Name: value.Name, Revision: value.RuntimeRevision, Ready: value.Ready, Provider: value.Provider, Model: value.Model}
 }
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
-	return &controlplanev1.IntegrationCapability{Key: value.Key, Name: value.Name, Description: value.Description, Risk: value.Risk, ApprovalRequired: value.Risk == "HIGH"}
+	return &controlplanev1.IntegrationCapability{Key: value.Key, Name: value.Name, Description: value.Description, Risk: value.Risk, ApprovalRequired: value.Risk == "SENSITIVE" || value.Risk == "DESTRUCTIVE"}
 }
 func castInstruction(value *entity.InstructionVersion) *controlplanev1.InstructionVersion {
 	if value == nil {
@@ -267,10 +267,13 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}
+	for _, field := range value.ConfigurationFields {
+		result.ConfigurationFields = append(result.ConfigurationFields, &controlplanev1.IntegrationConfigurationField{Key: field.Key, Label: field.Label, Help: field.Help, ValueType: field.ValueType, Required: field.Required, Placeholder: field.Placeholder})
+	}
 	return result
 }
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
-	grant := &controlplanev1.IntegrationGrant{Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, Enabled: value.Enabled}
+	grant := &controlplanev1.IntegrationGrant{Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled}
 	if value.TargetType == "AGENT" {
 		grant.AgentRef = value.TargetRef
 	} else {
@@ -279,7 +282,13 @@ func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	return grant
 }
 func castConnection(value entity.IntegrationConnection) *controlplanev1.IntegrationConnection {
-	result := &controlplanev1.IntegrationConnection{Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name, State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED", CredentialsHint: value.MaskedCredentialsState, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary, NextActions: nextActions(value.NextActions)}
+	credentialsHint := "i18n:INTEGRATION_CREDENTIAL_NOT_CONFIGURED"
+	if value.MaskedCredentialsState == "CONFIGURED" {
+		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_CONFIGURED"
+	} else if value.MaskedCredentialsState == "INVALID" {
+		credentialsHint = "i18n:INTEGRATION_CREDENTIAL_INVALID"
+	}
+	result := &controlplanev1.IntegrationConnection{Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name, State: connectionState(value.State), CredentialsConfigured: value.MaskedCredentialsState == "CONFIGURED", CredentialsHint: credentialsHint, LastTestedAt: optionalTimestamp(value.LastTestedAt), LastTestOutcome: value.LastTestSummary, NextActions: nextActions(value.NextActions)}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
 	}

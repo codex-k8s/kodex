@@ -2,11 +2,40 @@ package websockettransport
 
 import (
 	"context"
+	"net/http/httptest"
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/grpc"
 )
+
+func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
+	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/platform/stream", nil)
+	request.Header.Add("Sec-WebSocket-Protocol", "mattercodex.platform.v1, csrf.token-value")
+	selection, ok := requestedProtocols(request, platformSubprotocol)
+	if !ok || selection.csrf != "token-value" {
+		t.Fatalf("valid protocol selection rejected: ok=%t csrf=%q", ok, selection.csrf)
+	}
+	request.Header.Add("Sec-WebSocket-Protocol", "csrf.second-token")
+	if _, ok := requestedProtocols(request, platformSubprotocol); ok {
+		t.Fatal("duplicate CSRF subprotocol was accepted")
+	}
+}
+
+func TestDecodePlatformSignalRedactsPayloadAndRejectsMismatch(t *testing.T) {
+	payload := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"INTEGRATION_CONNECTION_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"icon_example001","aggregateVersion":2,"sequence":8,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"INTEGRATION_CONNECTION","safeSummary":"i18n:INTEGRATION_CONNECTION_TEST_COMPLETED"}}`)
+	signal, ok := decodePlatformSignal(payload, "org_example0001")
+	if !ok || signal.Sequence != 8 || signal.EventName != "INTEGRATION_CONNECTION_CHANGED" || signal.Kind != "INTEGRATION_CONNECTION" {
+		t.Fatalf("valid signal rejected: ok=%t signal=%+v", ok, signal)
+	}
+	if _, ok := decodePlatformSignal(payload, "org_foreign0001"); ok {
+		t.Fatal("foreign organization signal was accepted")
+	}
+	tampered := []byte(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"AGENT_CHANGED","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","aggregateRef":"agt_example0001","aggregateVersion":2,"sequence":9,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"PROJECT","safeSummary":"i18n:AGENT_UPDATED"}}`)
+	if _, ok := decodePlatformSignal(tampered, "org_example0001"); ok {
+		t.Fatal("event name and kind mismatch was accepted")
+	}
+}
 
 type catchUpQueryClient struct {
 	controlplanev1.PlatformQueryServiceClient
