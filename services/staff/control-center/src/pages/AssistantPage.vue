@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { selectedConversation } from "@/features/platform/assistant-selection";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -13,7 +14,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const { t } = useI18n();
-const selectedRef = ref<string>();
+const selectedRef = ref<string | null>();
 const message = ref("");
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -29,9 +30,7 @@ const conversationList = computed(() =>
   ),
 );
 const conversation = computed(() =>
-  selectedRef.value
-    ? platform.conversations[selectedRef.value]
-    : conversationList.value[0],
+  selectedConversation(conversationList.value, selectedRef.value),
 );
 
 async function ensureConversation(): Promise<string> {
@@ -98,7 +97,7 @@ onMounted(() => void platform.loadAssistant());
           <button
             class="button button--primary"
             type="button"
-            @click="selectedRef = undefined"
+            @click="selectedRef = null"
           >
             {{ $t("assistant.newConversation") }}
           </button>
