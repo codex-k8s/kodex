@@ -140,7 +140,7 @@ func castMembership(value entity.Membership) *controlplanev1.Membership {
 	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions)}
 }
 func castProject(value entity.Project) *controlplanev1.Project {
-	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
 }
 func castCapability(value entity.IntegrationCapability) *controlplanev1.PlatformCapability {
 	return &controlplanev1.PlatformCapability{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Risk, AvailableWithoutIntegration: strings.HasPrefix(value.Key, "platform.")}
@@ -345,7 +345,7 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor)}
+	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), NextActions: nextActions(value.NextActions)}
 }
 
 func castOverview(value repository.Overview) *controlplanev1.Overview {

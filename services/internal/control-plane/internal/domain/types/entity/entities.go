@@ -6,6 +6,8 @@ import "time"
 type Project struct {
 	Ref, Name, Purpose, Language, Lifecycle string
 	Version                                 int64
+	AgentCount, WorkflowCount               int32
+	ActiveRunCount, PendingGateCount        int32
 	CreatedAt, UpdatedAt                    time.Time
 	NextActions                             []string
 }

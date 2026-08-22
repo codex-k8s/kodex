@@ -69,7 +69,7 @@ async function load() {
     ]);
 }
 async function command(action: "CANCEL" | "RETRY") {
-  if (!run.value) return;
+  if (!run.value?.nextActions.includes(action)) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -83,7 +83,8 @@ async function command(action: "CANCEL" | "RETRY") {
   }
 }
 async function continueRun() {
-  if (!run.value || !turn.value.trim()) return;
+  if (!run.value?.nextActions.includes("ADD_TURN") || !turn.value.trim())
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -104,6 +105,11 @@ async function decide(
   gate: OwnerGate,
   decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES" | "CANCEL",
 ) {
+  if (
+    !gate.nextActions.includes("RESOLVE_GATE") ||
+    !gate.allowedDecisions.includes(decision)
+  )
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -228,7 +234,10 @@ onBeforeUnmount(() => {
           /></label>
           <div class="gate-actions">
             <button
-              v-if="gate.allowedDecisions.includes('APPROVE')"
+              v-if="
+                gate.nextActions.includes('RESOLVE_GATE') &&
+                gate.allowedDecisions.includes('APPROVE')
+              "
               class="button button--primary"
               type="button"
               :disabled="busy"
@@ -236,7 +245,10 @@ onBeforeUnmount(() => {
             >
               {{ $t("common.approve") }}</button
             ><button
-              v-if="gate.allowedDecisions.includes('REQUEST_CHANGES')"
+              v-if="
+                gate.nextActions.includes('RESOLVE_GATE') &&
+                gate.allowedDecisions.includes('REQUEST_CHANGES')
+              "
               class="button"
               type="button"
               :disabled="busy"
@@ -244,7 +256,10 @@ onBeforeUnmount(() => {
             >
               {{ $t("common.requestChanges") }}</button
             ><button
-              v-if="gate.allowedDecisions.includes('REJECT')"
+              v-if="
+                gate.nextActions.includes('RESOLVE_GATE') &&
+                gate.allowedDecisions.includes('REJECT')
+              "
               class="button button--danger"
               type="button"
               :disabled="busy"

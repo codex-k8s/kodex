@@ -541,8 +541,10 @@ const (
 	NextActionARCHIVE            NextAction = "ARCHIVE"
 	NextActionBIND               NextAction = "BIND"
 	NextActionCANCEL             NextAction = "CANCEL"
+	NextActionCOMPLETEONBOARDING NextAction = "COMPLETE_ONBOARDING"
 	NextActionCREATEAGENT        NextAction = "CREATE_AGENT"
 	NextActionCREATECONNECTION   NextAction = "CREATE_CONNECTION"
+	NextActionCREATECONVERSATION NextAction = "CREATE_CONVERSATION"
 	NextActionCREATEPROJECT      NextAction = "CREATE_PROJECT"
 	NextActionCREATERUN          NextAction = "CREATE_RUN"
 	NextActionCREATESCHEDULE     NextAction = "CREATE_SCHEDULE"
@@ -584,9 +586,13 @@ func (e NextAction) Valid() bool {
 		return true
 	case NextActionCANCEL:
 		return true
+	case NextActionCOMPLETEONBOARDING:
+		return true
 	case NextActionCREATEAGENT:
 		return true
 	case NextActionCREATECONNECTION:
+		return true
+	case NextActionCREATECONVERSATION:
 		return true
 	case NextActionCREATEPROJECT:
 		return true
@@ -1927,6 +1933,7 @@ type BootstrapState struct {
 	Assistant          SystemAssistant `json:"assistant"`
 	CurrentUser        UserSummary     `json:"currentUser"`
 	Initialized        bool            `json:"initialized"`
+	NextActions        []NextAction    `json:"nextActions"`
 	OnboardingComplete bool            `json:"onboardingComplete"`
 	WebOnlyReady       bool            `json:"webOnlyReady"`
 }

@@ -202,6 +202,8 @@ enum NextAction {
   NEXT_ACTION_MANAGE_GRANTS = 28;
   NEXT_ACTION_CREATE_PROJECT = 29;
   NEXT_ACTION_CREATE_CONNECTION = 30;
+  NEXT_ACTION_CREATE_CONVERSATION = 31;
+  NEXT_ACTION_COMPLETE_ONBOARDING = 32;
 }
 
 enum EntityLifecycle {
@@ -874,6 +876,7 @@ message BootstrapState {
   bool web_only_ready = 3;
   SystemAssistant assistant = 4;
   UserSummary current_user = 5;
+  repeated NextAction next_actions = 6;
 }
 
 message Overview {

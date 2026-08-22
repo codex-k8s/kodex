@@ -8,7 +8,7 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING';
 
 export type Problem = {
     type: string;
@@ -58,6 +58,7 @@ export type BootstrapState = {
     webOnlyReady: boolean;
     assistant: SystemAssistant;
     currentUser: UserSummary;
+    nextActions: Array<NextAction>;
 };
 
 export type Project = {

@@ -32,9 +32,16 @@ const conversationList = computed(() =>
 const conversation = computed(() =>
   selectedConversation(conversationList.value, selectedRef.value),
 );
+const canCreateConversation = computed(() =>
+  platform.assistant?.nextActions.includes("CREATE_CONVERSATION"),
+);
+const canSend = computed(() =>
+  platform.assistant?.nextActions.includes("ADD_TURN"),
+);
 
-async function ensureConversation(): Promise<string> {
+async function ensureConversation(): Promise<string | undefined> {
   if (conversation.value) return conversation.value.ref;
+  if (!canCreateConversation.value) return undefined;
   const created = await platform.newConversation(
     t("assistant.newConversation"),
     projectRef.value,
@@ -45,11 +52,12 @@ async function ensureConversation(): Promise<string> {
 
 async function send(): Promise<void> {
   const content = message.value.trim();
-  if (!content) return;
+  if (!content || !canSend.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
     const ref = await ensureConversation();
+    if (!ref) return;
     const updated = await platform.sendAssistantTurn(ref, content);
     selectedRef.value = updated.ref;
     message.value = "";
@@ -95,6 +103,7 @@ onMounted(() => void platform.loadAssistant());
       <div class="assistant-workspace">
         <aside class="conversation-list">
           <button
+            v-if="canCreateConversation"
             class="button button--primary"
             type="button"
             @click="selectedRef = null"
@@ -175,8 +184,10 @@ onMounted(() => void platform.loadAssistant());
               v-model="message"
               :placeholder="$t('assistant.message')"
               maxlength="8000"
+              :disabled="!canSend"
               @keydown.ctrl.enter="send"
             /><button
+              v-if="canSend"
               class="button button--primary"
               type="submit"
               :disabled="busy || !message.trim()"

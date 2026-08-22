@@ -11,6 +11,18 @@ const platform = usePlatformStore();
 const route = useRoute();
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
+const canCreateAgent = computed(() =>
+  project.value?.nextActions.includes("CREATE_AGENT"),
+);
+const canCreateWorkflow = computed(() =>
+  project.value?.nextActions.includes("CREATE_WORKFLOW"),
+);
+const canCreateRun = computed(() =>
+  project.value?.nextActions.includes("CREATE_RUN"),
+);
+const hasQuickActions = computed(
+  () => canCreateAgent.value || canCreateWorkflow.value || canCreateRun.value,
+);
 const projectRuns = computed(() =>
   platform.runList.filter((run) => run.projectRef === projectRef.value),
 );
@@ -32,7 +44,7 @@ onMounted(() => void load());
     :subtitle="project?.purpose ?? $t('project.subtitle')"
     :eyebrow="$t('app.project')"
   >
-    <template #actions
+    <template v-if="canCreateRun" #actions
       ><RouterLink
         class="button button--primary"
         :to="`/projects/${projectRef}/runs/new`"
@@ -62,17 +74,21 @@ onMounted(() => void load());
           ><strong>{{ project?.pendingGateCount ?? 0 }}</strong>
         </article>
       </section>
-      <section class="quick-actions panel">
+      <section v-if="hasQuickActions" class="quick-actions panel">
         <h2>{{ $t("project.quickActions") }}</h2>
         <div>
-          <RouterLink class="button" :to="`/projects/${projectRef}/agents`">{{
-            $t("project.createAgent")
-          }}</RouterLink
+          <RouterLink
+            v-if="canCreateAgent"
+            class="button"
+            :to="`/projects/${projectRef}/agents`"
+            >{{ $t("project.createAgent") }}</RouterLink
           ><RouterLink
+            v-if="canCreateWorkflow"
             class="button"
             :to="`/projects/${projectRef}/workflows`"
             >{{ $t("project.createWorkflow") }}</RouterLink
           ><RouterLink
+            v-if="canCreateRun"
             class="button button--primary"
             :to="`/projects/${projectRef}/runs/new`"
             >{{ $t("runs.new") }}</RouterLink

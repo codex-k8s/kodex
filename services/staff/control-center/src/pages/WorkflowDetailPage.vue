@@ -14,6 +14,10 @@ const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
 const workflowRef = computed(() => String(route.params.workflowRef));
 const workflow = computed(() => platform.workflows[workflowRef.value]);
+const canEdit = computed(() => workflow.value?.nextActions.includes("EDIT"));
+const canLaunch = computed(() =>
+  workflow.value?.nextActions.includes("LAUNCH"),
+);
 const agentList = computed(() =>
   Object.values(platform.agents).filter(
     (i) => i.projectRef === projectRef.value && !i.system,
@@ -32,6 +36,7 @@ const form = reactive({
   steps: [] as WorkflowStepInput[],
 });
 function addStep() {
+  if (!canEdit.value) return;
   form.steps.push({
     position: form.steps.length + 1,
     name: "",
@@ -47,6 +52,7 @@ function addStep() {
   });
 }
 function removeStep(index: number) {
+  if (!canEdit.value) return;
   form.steps.splice(index, 1);
   form.steps.forEach((step, position) => {
     step.position = position + 1;
@@ -82,7 +88,7 @@ async function load() {
   }
 }
 async function save() {
-  if (!workflow.value) return;
+  if (!workflow.value || !canEdit.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -94,7 +100,7 @@ async function save() {
   }
 }
 async function command(action: "VALIDATE" | "PUBLISH" | "ARCHIVE") {
-  if (!workflow.value) return;
+  if (!workflow.value?.nextActions.includes(action)) return;
   busy.value = true;
   try {
     await platform.changeWorkflow(workflow.value, action);
@@ -106,7 +112,7 @@ async function command(action: "VALIDATE" | "PUBLISH" | "ARCHIVE") {
   }
 }
 async function launch() {
-  if (!workflow.value || !task.value.trim()) return;
+  if (!workflow.value || !canLaunch.value || !task.value.trim()) return;
   busy.value = true;
   try {
     const run = await platform.launch({
@@ -152,7 +158,8 @@ onMounted(() => void load());
       :problem="platform.problems.workflow"
       @retry="load"
       ><div v-if="workflow" class="workflow-layout">
-        <section class="workflow-editor">
+        <fieldset class="workflow-editor" :disabled="!canEdit">
+          <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
           <div class="panel form-grid">
             <label class="field"
               ><span>{{ $t("common.name") }}</span
@@ -185,7 +192,12 @@ onMounted(() => void load());
           </div>
           <div class="section-header">
             <h2>{{ $t("workflows.steps") }}</h2>
-            <button class="button" type="button" @click="addStep">
+            <button
+              v-if="canEdit"
+              class="button"
+              type="button"
+              @click="addStep"
+            >
               {{ $t("common.create") }}
             </button>
           </div>
@@ -224,6 +236,7 @@ onMounted(() => void load());
               >
             </div>
             <button
+              v-if="canEdit"
               class="icon-button"
               type="button"
               :aria-label="$t('common.delete')"
@@ -233,15 +246,16 @@ onMounted(() => void load());
             </button>
           </article>
           <ProblemNotice v-if="problem" :problem="problem" compact /><button
+            v-if="canEdit"
             class="button button--primary"
             type="button"
-            :disabled="busy || !workflow.nextActions.includes('EDIT')"
+            :disabled="busy"
             @click="save"
           >
             {{ $t("common.save") }}
           </button>
-        </section>
-        <aside class="panel launch-panel">
+        </fieldset>
+        <aside v-if="canLaunch" class="panel launch-panel">
           <h2>{{ $t("runs.new") }}</h2>
           <label class="field"
             ><span>{{ $t("runs.task") }}</span
@@ -249,9 +263,7 @@ onMounted(() => void load());
           ><button
             class="button button--primary"
             type="button"
-            :disabled="
-              busy || !task.trim() || !workflow.nextActions.includes('LAUNCH')
-            "
+            :disabled="busy || !task.trim()"
             @click="launch"
           >
             {{ $t("common.launch") }}
@@ -270,6 +282,10 @@ onMounted(() => void load());
 .workflow-editor {
   display: grid;
   gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .workflow-step {
   position: relative;

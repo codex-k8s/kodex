@@ -16,7 +16,11 @@ SELECT p.id,
              AND membership.project_id=p.id
              AND membership.subject_id=$3::uuid
              AND membership.active
-       ), '{}'::text[])
+       ), '{}'::text[]),
+       (SELECT count(*)::integer FROM control_plane.agents agent WHERE agent.project_id=p.id AND agent.state<>'ARCHIVED'),
+       (SELECT count(*)::integer FROM control_plane.workflows workflow WHERE workflow.project_id=p.id AND workflow.state<>'ARCHIVED'),
+       (SELECT count(*)::integer FROM control_plane.runs execution WHERE execution.project_id=p.id AND execution.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')),
+       (SELECT count(*)::integer FROM control_plane.owner_gates gate WHERE gate.project_id=p.id AND gate.state='OPEN')
 FROM control_plane.projects p
 WHERE p.organization_id=$1::uuid
   AND p.lifecycle<>'ARCHIVED'

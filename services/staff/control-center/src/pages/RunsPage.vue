@@ -12,6 +12,12 @@ const projectRef = computed(() =>
     ? route.params.projectRef
     : undefined,
 );
+const project = computed(() =>
+  projectRef.value ? platform.projects[projectRef.value] : undefined,
+);
+const canCreateRun = computed(() =>
+  project.value?.nextActions.includes("CREATE_RUN"),
+);
 const filter = ref<"ALL" | "ACTIVE" | "TERMINAL">("ALL");
 const list = computed(() =>
   platform.runList
@@ -27,13 +33,19 @@ const list = computed(() =>
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
 );
-onMounted(() => void platform.loadRuns(projectRef.value));
+onMounted(
+  () =>
+    void Promise.all([
+      platform.loadRuns(projectRef.value),
+      ...(projectRef.value ? [platform.loadProject(projectRef.value)] : []),
+    ]),
+);
 </script>
 <template>
   <PageFrame :title="$t('runs.title')" :subtitle="$t('runs.subtitle')"
     ><template #actions
       ><RouterLink
-        v-if="projectRef"
+        v-if="projectRef && canCreateRun"
         class="button button--primary"
         :to="`/projects/${projectRef}/runs/new`"
         >{{ $t("runs.new") }}</RouterLink

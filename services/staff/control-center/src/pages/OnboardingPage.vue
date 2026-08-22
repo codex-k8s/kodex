@@ -16,8 +16,12 @@ const problem = ref<AppProblem>();
 const assistantReady = computed(
   () => platform.bootstrap?.assistant.runtimeState === "READY",
 );
+const canFinish = computed(() =>
+  platform.bootstrap?.nextActions.includes("COMPLETE_ONBOARDING"),
+);
 
 async function finish(): Promise<void> {
+  if (!canFinish.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -72,6 +76,7 @@ onMounted(async () => {
             >{{ $t("onboarding.startAssistant") }}</RouterLink
           >
           <button
+            v-if="canFinish"
             class="button button--secondary button--large"
             type="button"
             :disabled="busy || !assistantReady"

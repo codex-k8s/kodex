@@ -18,6 +18,7 @@ type BootstrapState struct {
 	Assistant                         entity.SystemAssistant
 	ProjectCount                      int32
 	Actor                             entity.User
+	NextActions                       []string
 }
 
 type Overview struct {

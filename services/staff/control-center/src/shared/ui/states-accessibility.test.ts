@@ -136,7 +136,7 @@ describe("authoritative UI states and accessibility", () => {
       ownerInstructions: "",
       runtimeState: "READY",
       readinessSummary: "Готов принимать задания",
-      nextActions: ["OPEN"],
+      nextActions: ["OPEN", "CREATE_CONVERSATION", "ADD_TURN", "EDIT"],
     };
     const app = createSSRApp(AssistantPage);
     app.use(pinia);
@@ -155,6 +155,8 @@ describe("authoritative UI states and accessibility", () => {
     expect(html).toContain("Системный и неудаляемый");
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("Новый диалог");
+    expect(html).toContain("Отправить помощнику");
     expect(html).not.toMatch(/Удалить|Архивировать|Отключить/);
   });
 });

@@ -21,6 +21,11 @@ async function decide(
   gate: OwnerGate,
   decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES" | "CANCEL",
 ): Promise<void> {
+  if (
+    !gate.nextActions.includes("RESOLVE_GATE") ||
+    !gate.allowedDecisions.includes(decision)
+  )
+    return;
   busyRef.value = gate.ref;
   problem.value = undefined;
   try {

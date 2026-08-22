@@ -23,6 +23,7 @@ const runtimes = computed(() =>
 const canManageCapabilities = computed(() =>
   agent.value?.nextActions.includes("MANAGE_CAPABILITIES"),
 );
+const canEdit = computed(() => agent.value?.nextActions.includes("EDIT"));
 const capabilityCatalog = computed(() => {
   const values = [...platform.capabilities].sort(
     (left, right) =>
@@ -115,7 +116,7 @@ async function load() {
 }
 
 async function saveProfile(): Promise<void> {
-  if (!agent.value) return;
+  if (!agent.value || !canEdit.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -165,6 +166,7 @@ async function toggleCapability(key: string): Promise<void> {
 async function prepareRoleEnvironment() {
   if (
     !agent.value?.roleDefinitionRef ||
+    !canEdit.value ||
     !selectedEnvironment.value ||
     !platform.roleEnvironments[selectedEnvironment.value]?.available
   )
@@ -194,7 +196,7 @@ async function prepareRoleEnvironment() {
 }
 
 async function changeRoleEnvironment(action: "ARCHIVE" | "RESTORE") {
-  if (!roleImageRecipe.value) return;
+  if (!roleImageRecipe.value?.nextActions.includes(action)) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -210,7 +212,7 @@ async function changeRoleEnvironment(action: "ARCHIVE" | "RESTORE") {
   }
 }
 async function saveInstructions() {
-  if (!agent.value) return;
+  if (!agent.value?.nextActions.includes("EDIT")) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -222,7 +224,7 @@ async function saveInstructions() {
   }
 }
 async function instructionAction(action: "VALIDATE" | "PUBLISH" | "ROLLBACK") {
-  if (!agent.value) return;
+  if (!agent.value?.nextActions.includes(action)) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -234,7 +236,8 @@ async function instructionAction(action: "VALIDATE" | "PUBLISH" | "ROLLBACK") {
   }
 }
 async function launch() {
-  if (!agent.value || !task.value.trim()) return;
+  if (!agent.value?.nextActions.includes("LAUNCH") || !task.value.trim())
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -253,7 +256,12 @@ async function launch() {
   }
 }
 async function toggle() {
-  if (!agent.value) return;
+  if (
+    !agent.value?.nextActions.includes(
+      agent.value.enabled ? "DISABLE" : "ENABLE",
+    )
+  )
+    return;
   busy.value = true;
   try {
     await platform.changeAgent(agent.value, {
@@ -415,26 +423,33 @@ onMounted(() => void load());
                 "
               />
             </div>
-            <textarea v-model="instructions" maxlength="65536" />
+            <textarea
+              v-model="instructions"
+              maxlength="65536"
+              :readonly="!canEdit"
+            />
             <div class="inline-actions">
               <button
+                v-if="agent.nextActions.includes('EDIT')"
                 class="button"
                 type="button"
-                :disabled="busy || !agent.nextActions.includes('EDIT')"
+                :disabled="busy"
                 @click="saveInstructions"
               >
                 {{ $t("common.save") }}</button
               ><button
+                v-if="agent.nextActions.includes('VALIDATE')"
                 class="button"
                 type="button"
-                :disabled="busy || !agent.nextActions.includes('VALIDATE')"
+                :disabled="busy"
                 @click="instructionAction('VALIDATE')"
               >
                 {{ $t("agents.validate") }}</button
               ><button
+                v-if="agent.nextActions.includes('PUBLISH')"
                 class="button button--primary"
                 type="button"
-                :disabled="busy || !agent.nextActions.includes('PUBLISH')"
+                :disabled="busy"
                 @click="instructionAction('PUBLISH')"
               >
                 {{ $t("agents.publish") }}
@@ -455,7 +470,7 @@ onMounted(() => void load());
             </div>
             <fieldset
               class="environment-options"
-              :disabled="busy || !agent.roleDefinitionRef"
+              :disabled="busy || !agent.roleDefinitionRef || !canEdit"
             >
               <legend class="sr-only">
                 {{ $t("roleEnvironments.choose") }}
@@ -513,6 +528,7 @@ onMounted(() => void load());
             </p>
             <div class="inline-actions">
               <button
+                v-if="canEdit"
                 class="button button--primary"
                 type="button"
                 :disabled="
@@ -572,7 +588,10 @@ onMounted(() => void load());
           <ProblemNotice v-if="problem" :problem="problem" compact />
         </section>
         <aside class="detail-side">
-          <section class="panel launch-panel">
+          <section
+            v-if="agent.nextActions.includes('LAUNCH')"
+            class="panel launch-panel"
+          >
             <h2>{{ $t("runs.new") }}</h2>
             <label class="field"
               ><span>{{ $t("runs.task") }}</span
@@ -580,9 +599,7 @@ onMounted(() => void load());
             ><button
               class="button button--primary"
               type="button"
-              :disabled="
-                busy || !task.trim() || !agent.nextActions.includes('LAUNCH')
-              "
+              :disabled="busy || !task.trim()"
               @click="launch"
             >
               {{ $t("common.launch") }}

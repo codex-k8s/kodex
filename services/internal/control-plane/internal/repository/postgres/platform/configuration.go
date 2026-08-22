@@ -561,5 +561,6 @@ func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, sco
 	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
 	item.System = true
 	item.Deletable = false
+	item.NextActions = assistantActions(scope.role, item.Ready)
 	return item, nil
 }

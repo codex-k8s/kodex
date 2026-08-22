@@ -581,6 +581,24 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 	if sharedRuns[0].Ref != sharedRuns[1].Ref {
 		t.Fatalf("same idempotency scope created different runs: %s %s", sharedRuns[0].Ref, sharedRuns[1].Ref)
 	}
+	projectReadback, err := service.GetProject(ctx, owner, first.Project.Ref)
+	if err != nil || projectReadback.AgentCount != 1 || projectReadback.WorkflowCount != 0 || projectReadback.ActiveRunCount != 1 || projectReadback.PendingGateCount != 0 {
+		t.Fatalf("project counters after run creation: project=%#v err=%v", projectReadback, err)
+	}
+	projects, _, actions, err := service.ListProjects(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	if err != nil || !contains(actions, "CREATE_PROJECT") {
+		t.Fatalf("list project counters: actions=%v err=%v", actions, err)
+	}
+	var listed *entity.Project
+	for index := range projects {
+		if projects[index].Ref == first.Project.Ref {
+			listed = &projects[index]
+			break
+		}
+	}
+	if listed == nil || listed.AgentCount != 1 || listed.ActiveRunCount != 1 {
+		t.Fatalf("listed project counters: project=%#v", listed)
+	}
 	sharedVersion := sharedRuns[0].Version
 	if cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "concurrent-same-intent-cancel", ExpectedVersion: &sharedVersion},

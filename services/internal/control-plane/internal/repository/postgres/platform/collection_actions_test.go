@@ -26,3 +26,25 @@ func TestCollectionCreateActions(t *testing.T) {
 		})
 	}
 }
+
+func TestAssistantActions(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, role string
+		ready      bool
+		want       []string
+	}{
+		{name: "ready owner", role: "OWNER", ready: true, want: []string{"OPEN", "CREATE_CONVERSATION", "ADD_TURN", "EDIT"}},
+		{name: "recovering owner", role: "OWNER", want: []string{"OPEN", "EDIT", "RECOVER"}},
+		{name: "ready member", role: "MEMBER", ready: true, want: []string{"OPEN", "CREATE_CONVERSATION", "ADD_TURN"}},
+		{name: "recovering member", role: "MEMBER", want: []string{"OPEN"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := assistantActions(test.role, test.ready); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("assistantActions(%q, %t)=%v, want %v", test.role, test.ready, got, test.want)
+			}
+		})
+	}
+}

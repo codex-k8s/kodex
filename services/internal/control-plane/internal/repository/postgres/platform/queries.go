@@ -35,6 +35,9 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	state.OrganizationRef = scope.organizationRef
 	state.Assistant = assistant
 	state.Actor = entity.User{Ref: scope.actorRef, DisplayName: scope.actorName, Active: true}
+	if !state.OnboardingCompleted && (scope.role == "OWNER" || scope.role == "ADMINISTRATOR") {
+		state.NextActions = []string{"COMPLETE_ONBOARDING"}
+	}
 	return state, nil
 }
 
@@ -141,7 +144,7 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 		var item entity.Project
 		var projectID string
 		var permissions []string
-		if err := rows.Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt, &permissions); err != nil {
+		if err := rows.Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt, &permissions, &item.AgentCount, &item.WorkflowCount, &item.ActiveRunCount, &item.PendingGateCount); err != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}
 		if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
@@ -162,7 +165,7 @@ func (repository *Repository) GetProject(ctx context.Context, principal value.Pr
 	var item entity.Project
 	var projectID string
 	err = repository.pool.QueryRow(ctx, queryQueriesGetprojectSelectProjectsOrganizationIdRefProjectId,
-		scope.organizationID, ref, scope.role, scope.actorID).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		scope.organizationID, ref, scope.role, scope.actorID).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt, &item.AgentCount, &item.WorkflowCount, &item.ActiveRunCount, &item.PendingGateCount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Project{}, errs.ErrNotFound
 	}
@@ -899,6 +902,21 @@ func collectionCreateActions(role, action string) []string {
 	}
 	return []string{}
 }
+
+func assistantActions(role string, ready bool) []string {
+	actions := []string{"OPEN"}
+	if ready {
+		actions = append(actions, "CREATE_CONVERSATION", "ADD_TURN")
+	}
+	if role == "OWNER" || role == "ADMINISTRATOR" {
+		actions = append(actions, "EDIT")
+		if !ready {
+			actions = append(actions, "RECOVER")
+		}
+	}
+	return actions
+}
+
 func (repository *Repository) ListIntegrationConnections(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.IntegrationConnection, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -1034,10 +1052,7 @@ func (repository *Repository) getAssistant(ctx context.Context, scope scope) (en
 	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
 	item.System = true
 	item.Deletable = false
-	item.NextActions = []string{"OPEN"}
-	if !item.Ready {
-		item.NextActions = append(item.NextActions, "RECOVER")
-	}
+	item.NextActions = assistantActions(scope.role, item.Ready)
 	return item, nil
 }
 func (repository *Repository) GetSystemAssistant(ctx context.Context, principal value.Principal) (entity.SystemAssistant, error) {
