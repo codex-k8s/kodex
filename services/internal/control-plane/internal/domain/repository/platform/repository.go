@@ -66,9 +66,17 @@ type ProofAuthority struct {
 	ProjectVersion                     uint64
 }
 
+type WorkerGrantInput struct {
+	WorkloadID string
+	Revision   uint64
+	IssuedAt   time.Time
+	ExpiresAt  time.Time
+}
+
 type Repository interface {
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
+	AcceptWorkerGrant(context.Context, WorkerGrantInput) error
 	NextAuthorityProofRevision(context.Context) (uint64, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	GetBootstrapState(context.Context, value.Principal) (BootstrapState, error)

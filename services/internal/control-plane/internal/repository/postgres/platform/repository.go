@@ -271,6 +271,24 @@ func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (u
 	return revision, nil
 }
 
+func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platformrepo.WorkerGrantInput) error {
+	if input.WorkloadID == "" || input.Revision == 0 || input.Revision > 9007199254740991 ||
+		input.IssuedAt.IsZero() || !input.ExpiresAt.After(input.IssuedAt) {
+		return errs.ErrForbidden
+	}
+	var accepted uint64
+	if err := repository.pool.QueryRow(ctx, queryAcceptWorkerGrantHighWatermark,
+		input.WorkloadID, input.Revision, input.IssuedAt.UTC(), input.ExpiresAt.UTC()).Scan(&accepted); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrForbidden
+	} else if err != nil {
+		return errs.ErrUnavailable
+	}
+	if accepted != input.Revision {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
 func (repository *Repository) resolveScope(ctx context.Context, principal value.Principal) (scope, error) {
 	var result scope
 	err := repository.pool.QueryRow(ctx, queryRepositoryResolvescope1, principal.ActorID, principal.AuthorityTenant).Scan(

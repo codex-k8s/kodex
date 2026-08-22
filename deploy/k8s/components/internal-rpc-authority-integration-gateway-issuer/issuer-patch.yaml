@@ -172,7 +172,32 @@ spec:
             - name: internal-rpc-authority-sentry-dsn
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
               readOnly: true
+        - name: platform-worker-grant-agent
+          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
+          env:
+            - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: integration-gateway}
+            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /var/run/secrets/mattercodex/integration-gateway/application-grant/application-grant.jws}
+          ports: [{name: grant-metrics, containerPort: 9093, protocol: TCP}]
+          startupProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: grant-metrics}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 48Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29004
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
       volumes:
+        - name: platform-worker-grant-signer
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-platform-worker-grant-signer}}
         - name: internal-rpc-authority-sockets
           emptyDir:
             sizeLimit: 32Mi

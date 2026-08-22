@@ -51,6 +51,8 @@ var (
 	queryRepositoryResolveProofAuthorityProject1 string
 	//go:embed sql/proof_next_revision.sql
 	queryRepositoryNextProofRevision1 string
+	//go:embed sql/proof_worker_grant_accept_high_watermark.sql
+	queryAcceptWorkerGrantHighWatermark string
 	//go:embed sql/repository_resolvescope_1.sql
 	queryRepositoryResolvescope1 string
 )

@@ -36,6 +36,10 @@ func (service *Service) ResolveProofAuthority(ctx context.Context, input reposit
 	return service.repository.ResolveProofAuthority(ctx, input)
 }
 
+func (service *Service) AcceptWorkerGrant(ctx context.Context, input repository.WorkerGrantInput) error {
+	return service.repository.AcceptWorkerGrant(ctx, input)
+}
+
 func (service *Service) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {
 	return service.repository.NextAuthorityProofRevision(ctx)
 }

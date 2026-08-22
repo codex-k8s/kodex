@@ -56,7 +56,7 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("подписать тестовый grant: %v", err)
 	}
-	if err := service.verifyWorkerGrant(compact, producer); err != nil {
+	if _, err := service.verifyWorkerGrant(compact, producer); err != nil {
 		t.Fatalf("корректный worker grant отклонён: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("подписать grant с неверной аудиторией: %v", err)
 	}
-	if err := service.verifyWorkerGrant(compact, producer); err == nil {
+	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
 		t.Fatal("worker grant с неверной аудиторией был принят")
 	}
 }

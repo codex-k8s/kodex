@@ -131,11 +131,7 @@ spec:
             name: mattercodex-internal-ca
             defaultMode: 0440
         - name: application-grant
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: automation-scheduler-application-grant
+          emptyDir: {sizeLimit: 1Mi}
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

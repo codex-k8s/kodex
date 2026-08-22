@@ -47,6 +47,15 @@ CREATE TABLE control_plane.owner_claim_contracts (
            (state = 'CLAIMED' AND subject_id IS NOT NULL AND claimed_at IS NOT NULL))
 );
 
+CREATE TABLE control_plane.worker_grant_high_watermarks (
+    workload_id text PRIMARY KEY CHECK (workload_id IN ('automation-scheduler', 'integration-gateway', 'runtime-controller')),
+    revision bigint NOT NULL CHECK (revision > 0),
+    issued_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK (expires_at > issued_at)
+);
+
 CREATE TABLE control_plane.memberships (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),

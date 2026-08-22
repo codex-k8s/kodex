@@ -30,6 +30,7 @@ const (
 
 type AuthorityOwner interface {
 	ResolveProofAuthority(context.Context, platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error)
+	AcceptWorkerGrant(context.Context, platformrepo.WorkerGrantInput) error
 	NextAuthorityProofRevision(context.Context) (uint64, error)
 	Ready(context.Context) error
 }
@@ -314,7 +315,14 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		principal.ExternalActorID, principal.ExternalTenantID = verified.Subject, verified.OrganizationID
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
 	} else {
-		if err := service.verifyWorkerGrant(credential, producer); err != nil {
+		grant, err := service.verifyWorkerGrant(credential, producer)
+		if err != nil {
+			return ResolveResult{}, err
+		}
+		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{
+			WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision,
+			IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
+		}); err != nil {
 			return ResolveResult{}, err
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "mattercodex-system-subject", "mattercodex-installation"
@@ -358,25 +366,25 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	return ResolveResult{CompactJWS: compact, DigestSHA256: hex.EncodeToString(proofDigest[:]), ExpiresAt: expiresAt, ProofRevision: revision, PolicyRevision: service.policy.PolicyRevision, SignerGeneration: service.signerGeneration}, nil
 }
 
-func (service *Service) verifyWorkerGrant(compact string, producer proofProducer) error {
+func (service *Service) verifyWorkerGrant(compact string, producer proofProducer) (workerGrantClaims, error) {
 	key, ok := service.workerKeys[producer.CallerWorkloadID]
 	if !ok {
-		return errors.New("worker grant trust is unavailable")
+		return workerGrantClaims{}, errors.New("worker grant trust is unavailable")
 	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(compact, key, internalrpcauth.ProtectedHeaderExpectation{Type: workerGrantType, KeyID: key.KeyID})
 	if err != nil {
-		return errors.New("worker application grant is rejected")
+		return workerGrantClaims{}, errors.New("worker application grant is rejected")
 	}
 	var claims workerGrantClaims
 	if err := internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &claims); err != nil {
-		return errors.New("worker application grant claims are rejected")
+		return workerGrantClaims{}, errors.New("worker application grant claims are rejected")
 	}
 	now := service.now().UTC().Truncate(time.Second)
 	if err := internalrpcauth.ValidateTimes(now, time.Unix(claims.IssuedAt, 0), time.Unix(claims.NotBefore, 0), time.Unix(claims.ExpiresAt, 0), workerGrantTTL, 5*time.Second); err != nil ||
 		claims.Version != 1 || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
-		return errors.New("worker application grant binding is rejected")
+		return workerGrantClaims{}, errors.New("worker application grant binding is rejected")
 	}
-	return nil
+	return claims, nil
 }
 
 func (service *Service) RefreshOIDC(ctx context.Context) error { return service.oidc.Refresh(ctx) }

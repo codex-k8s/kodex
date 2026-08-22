@@ -68,7 +68,7 @@ spec:
         - name: control-plane-ca
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: application-grant
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: runtime-controller-application-grant}}
+          emptyDir: {sizeLimit: 1Mi}
         - name: provider-credential
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: runtime-controller-provider-credential}}
         - name: tmp

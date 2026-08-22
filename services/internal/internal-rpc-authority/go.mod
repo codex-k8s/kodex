@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
 	github.com/exaring/otelpgx v0.11.1
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
 	go.yaml.in/yaml/v2 v2.4.2
@@ -25,7 +26,6 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

@@ -37,6 +37,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/internal-rpc-authority-issuer \
     ./cmd/internal-rpc-authority-issuer \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/internal-rpc-authority-platform-worker-grant-agent \
+    ./cmd/internal-rpc-authority-platform-worker-grant-agent \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/internal-rpc-authority-verifier \
     ./cmd/internal-rpc-authority-verifier \
