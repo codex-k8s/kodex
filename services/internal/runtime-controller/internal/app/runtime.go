@@ -148,7 +148,13 @@ func (runtime *runtime) execute(ctx context.Context, execution *controlplanev1.C
 	for _, target := range revision.GetDelegationTargets() {
 		providerInput.DelegationTargets = append(providerInput.DelegationTargets, provider.DelegationTarget{Ref: target.GetRef(), Name: target.GetName(), Purpose: target.GetPurpose(), RoleDescription: target.GetRoleDescription()})
 	}
+	for _, grant := range revision.GetIntegrationGrants() {
+		providerInput.IntegrationGrants = append(providerInput.IntegrationGrants, provider.IntegrationGrant{Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(), ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(), CapabilityName: grant.GetCapabilityName(), Description: grant.GetCapabilityDescription(), Risk: grant.GetRisk()})
+	}
 	result, err := runtime.provider.Execute(executionContext, providerInput, func(toolContext context.Context, call provider.ToolCall) (string, error) {
+		if call.CapabilityKey != "" {
+			return runtime.invokeIntegration(toolContext, execution, call)
+		}
 		return runtime.delegate(toolContext, execution, call)
 	})
 	if err != nil {
@@ -159,6 +165,55 @@ func (runtime *runtime) execute(ctx context.Context, execution *controlplanev1.C
 	digest := sha256.Sum256(body)
 	artifact := &controlplanev1.CompletedArtifactInput{FileName: "result.md", MediaType: "text/markdown", SizeBytes: int64(len(body)), Content: body, Sha256: hex.EncodeToString(digest[:])}
 	runtime.complete(executionContext, execution, true, result.Text, "", []*controlplanev1.CompletedArtifactInput{artifact})
+}
+
+func (runtime *runtime) invokeIntegration(ctx context.Context, execution *controlplanev1.ClaimedExecution, call provider.ToolCall) (string, error) {
+	allowed := false
+	for _, grant := range execution.GetRevision().GetIntegrationGrants() {
+		if grant.GetConnectionRef() == call.ConnectionRef && grant.GetCapabilityKey() == call.CapabilityKey && grant.GetEnabled() && grant.GetRisk() != "HIGH" {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", errors.New("integration capability is not allowed")
+	}
+	boundedInput, err := structpb.NewStruct(call.Input)
+	if err != nil {
+		return "", errors.New("encode integration input")
+	}
+	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+	response, err := runtime.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{
+		RunRef: execution.GetRun().GetRef(), NodeRef: execution.GetNode().GetRef(), ConnectionRef: call.ConnectionRef, CapabilityKey: call.CapabilityKey,
+		BoundedInput: boundedInput, IdempotencyKey: stableIdempotencyKey(execution.GetLease().GetRef(), call.CallID),
+	})
+	cancel()
+	if err != nil || response.GetInvocationRef() == "" {
+		return "", errors.New("resolve integration invocation")
+	}
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		readContext, readCancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+		state, readErr := runtime.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: response.GetInvocationRef()})
+		readCancel()
+		if readErr != nil {
+			return "", errors.New("read integration invocation")
+		}
+		switch state.GetState() {
+		case "SUCCEEDED":
+			encoded, _ := json.Marshal(map[string]any{"ok": true, "result": state.GetResultSummary()})
+			return string(encoded), nil
+		case "FAILED", "CANCELLED":
+			encoded, _ := json.Marshal(map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()})
+			return string(encoded), nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (runtime *runtime) renewLease(ctx context.Context, cancelExecution context.CancelFunc, lease *controlplanev1.WorkLease, done chan<- error) {

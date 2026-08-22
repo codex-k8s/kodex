@@ -135,6 +135,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.reportWarmRuntime(ctx, tx, scope, input)
 	case command.MaterializeOccurrence, command.CompleteOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
+	case command.CompleteConnectionTest:
+		return repository.completeIntegrationConnectionTest(ctx, tx, scope, input)
 	case command.CompleteIntegrationInvocation:
 		return repository.completeIntegrationInvocation(ctx, tx, scope, input)
 	default:

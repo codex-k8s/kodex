@@ -17,6 +17,10 @@ var (
 	queryConfigurationChangeconnection3 string
 	//go:embed sql/configuration_changeconnection_4.sql
 	queryConfigurationChangeconnection4 string
+	//go:embed sql/configuration_changeconnection_5.sql
+	queryConfigurationChangeconnection5 string
+	//go:embed sql/configuration_changeconnection_6.sql
+	queryConfigurationChangeconnection6 string
 	//go:embed sql/configuration_changeintegrationgrant_1.sql
 	queryConfigurationChangeintegrationgrant1 string
 	//go:embed sql/configuration_changeintegrationgrant_2.sql

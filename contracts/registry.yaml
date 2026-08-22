@@ -12,12 +12,6 @@ packages:
     source: contracts/openapi/interaction-gateway/v1/openapi.yaml
     consumers:
       - interaction-gateway
-  - id: integration-gateway-api-v1
-    format: openapi
-    owner: integration-gateway
-    source: contracts/openapi/integration-gateway/v1/openapi.yaml
-    consumers:
-      - integration-gateway
   - id: control-api-gateway-api-v1
     format: openapi
     owner: control-api-gateway
@@ -34,15 +28,6 @@ packages:
       go: services/external/control-api-gateway/internal/transport/websocket/generated
     consumers:
       - control-api-gateway
-  - id: integration-gateway-internal-v1
-    format: proto
-    owner: integration-gateway
-    source: contracts/proto/integrationgateway/v1
-    generated:
-      go: libs/go/integrationgatewayapi/gen/integrationgateway/v1
-    consumers:
-      - integration-gateway
-      - agent-runner
   - id: interaction-gateway-internal-v1
     format: proto
     owner: interaction-gateway

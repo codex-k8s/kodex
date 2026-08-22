@@ -69,8 +69,6 @@ replace github.com/codex-k8s/matter-codex/libs/go/i18n => ../../../libs/go/i18n
 
 replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/go/oidcidentity
 
-replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi => ../../../libs/go/integrationgatewayapi
-
 replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability

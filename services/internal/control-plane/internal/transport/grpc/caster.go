@@ -113,6 +113,12 @@ func scanState(value string) controlplanev1.ArtifactScanState {
 	return controlplanev1.ArtifactScanState(raw)
 }
 func connectionState(value string) controlplanev1.ConnectionState {
+	if value == "TESTING" {
+		value = "CONNECTING"
+	}
+	if value == "DEGRADED" {
+		value = "UNAVAILABLE"
+	}
 	raw := controlplanev1.ConnectionState_value["CONNECTION_STATE_"+value]
 	return controlplanev1.ConnectionState(raw)
 }

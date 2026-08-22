@@ -437,7 +437,7 @@ CREATE TABLE control_plane.integration_connections (
     organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
     definition_key text NOT NULL REFERENCES control_plane.integration_definitions(stable_key),
     name text NOT NULL,
-    state text NOT NULL CHECK (state IN ('NOT_CONNECTED', 'CONNECTED', 'DEGRADED', 'DISABLED')),
+    state text NOT NULL CHECK (state IN ('NOT_CONNECTED', 'TESTING', 'CONNECTED', 'DEGRADED', 'DISABLED')),
     enabled boolean NOT NULL DEFAULT true,
     credential_materialization_ref text NOT NULL,
     masked_credentials_state text NOT NULL CHECK (masked_credentials_state IN ('NOT_CONFIGURED', 'CONFIGURED', 'INVALID')),
@@ -450,6 +450,33 @@ CREATE TABLE control_plane.integration_connections (
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (organization_id, name)
 );
+
+CREATE TABLE control_plane.integration_connection_tests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    connection_id uuid NOT NULL REFERENCES control_plane.integration_connections(id),
+    state text NOT NULL CHECK (state IN ('DUE', 'CLAIMED', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
+    lease_ref text UNIQUE,
+    fence_digest text,
+    generation bigint NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    workload_instance text,
+    lease_expires_at timestamptz,
+    result_summary text NOT NULL DEFAULT '',
+    safe_error_code text NOT NULL DEFAULT '',
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    completed_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((state = 'CLAIMED' AND lease_ref IS NOT NULL AND fence_digest IS NOT NULL AND workload_instance IS NOT NULL AND lease_expires_at IS NOT NULL) OR
+           (state <> 'CLAIMED' AND lease_ref IS NULL AND fence_digest IS NULL AND workload_instance IS NULL AND lease_expires_at IS NULL))
+);
+
+CREATE UNIQUE INDEX integration_connection_tests_active_idx
+    ON control_plane.integration_connection_tests(connection_id)
+    WHERE state IN ('DUE', 'CLAIMED');
 
 CREATE TABLE control_plane.integration_grants (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -548,15 +575,24 @@ CREATE TABLE control_plane.integration_invocations (
     grant_id uuid NOT NULL REFERENCES control_plane.integration_grants(id),
     capability_key text NOT NULL,
     operation text NOT NULL,
+    idempotency_key text NOT NULL,
+    intent_digest text NOT NULL CHECK (intent_digest ~ '^[a-f0-9]{64}$'),
     input_digest text NOT NULL CHECK (input_digest ~ '^[a-f0-9]{64}$'),
     bounded_input jsonb NOT NULL,
-    effect_fence_digest text NOT NULL CHECK (effect_fence_digest ~ '^[a-f0-9]{64}$'),
+    effect_fence_digest text CHECK (effect_fence_digest IS NULL OR effect_fence_digest ~ '^[a-f0-9]{64}$'),
+    lease_ref text UNIQUE,
+    generation bigint NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    workload_instance text,
+    lease_expires_at timestamptz,
     state text NOT NULL CHECK (state IN ('READY', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
     result_summary text NOT NULL DEFAULT '',
     safe_error_code text NOT NULL DEFAULT '',
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (node_id, idempotency_key),
+    CHECK ((state = 'RUNNING' AND lease_ref IS NOT NULL AND effect_fence_digest IS NOT NULL AND workload_instance IS NOT NULL AND lease_expires_at IS NOT NULL) OR
+           (state <> 'RUNNING' AND lease_ref IS NULL AND effect_fence_digest IS NULL AND workload_instance IS NULL AND lease_expires_at IS NULL))
 );
 
 CREATE TABLE control_plane.runtime_leases (

@@ -4,20 +4,17 @@ metadata:
   name: integration-gateway
   labels:
     app.kubernetes.io/name: integration-gateway
+    app.kubernetes.io/component: integration-worker
 spec:
   selector:
     app.kubernetes.io/name: integration-gateway
-    app.kubernetes.io/component: external-gateway
+    app.kubernetes.io/component: integration-worker
   ports:
-    - name: https
-      port: 8443
-      targetPort: https
-      protocol: TCP
-    - name: result-grpc
-      port: 9443
-      targetPort: result-grpc
-      protocol: TCP
     - name: metrics
       port: 9090
       targetPort: metrics
+      protocol: TCP
+    - name: auth-metrics
+      port: 9091
+      targetPort: auth-metrics
       protocol: TCP

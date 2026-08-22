@@ -19,7 +19,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		return errs.ErrForbidden
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
 		command.DelegateExecution, command.DeliverCallback, command.ReportWarmRuntime, command.MaterializeOccurrence,
-		command.CompleteOccurrence, command.CompleteIntegrationInvocation:
+		command.CompleteOccurrence, command.CompleteConnectionTest, command.CompleteIntegrationInvocation:
 		return nil
 	}
 	projectID, permission, err := repository.commandProjectPermission(ctx, tx, scope, input)

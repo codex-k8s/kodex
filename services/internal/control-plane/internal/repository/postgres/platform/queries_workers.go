@@ -27,10 +27,30 @@ var (
 	queryWorkersChangeoccurrence6 string
 	//go:embed sql/workers_mustscheduleref_1.sql
 	queryWorkersMustscheduleref1 string
+	//go:embed sql/workers_claimintegrationtests_1.sql
+	queryWorkersClaimintegrationtests1 string
+	//go:embed sql/workers_claimintegrationtests_2.sql
+	queryWorkersClaimintegrationtests2 string
+	//go:embed sql/workers_claimintegrationtests_3.sql
+	queryWorkersClaimintegrationtests3 string
+	//go:embed sql/workers_completeintegrationtest_1.sql
+	queryWorkersCompleteintegrationtest1 string
+	//go:embed sql/workers_completeintegrationtest_2.sql
+	queryWorkersCompleteintegrationtest2 string
+	//go:embed sql/workers_completeintegrationtest_3.sql
+	queryWorkersCompleteintegrationtest3 string
 	//go:embed sql/workers_resolveintegrationinvocation_1.sql
 	queryWorkersResolveintegrationinvocation1 string
 	//go:embed sql/workers_resolveintegrationinvocation_2.sql
 	queryWorkersResolveintegrationinvocation2 string
+	//go:embed sql/workers_claimintegrationinvocations_1.sql
+	queryWorkersClaimintegrationinvocations1 string
+	//go:embed sql/workers_claimintegrationinvocations_2.sql
+	queryWorkersClaimintegrationinvocations2 string
+	//go:embed sql/workers_claimintegrationinvocations_3.sql
+	queryWorkersClaimintegrationinvocations3 string
+	//go:embed sql/workers_getintegrationinvocation_1.sql
+	queryWorkersGetintegrationinvocation1 string
 	//go:embed sql/workers_completeintegrationinvocation_1.sql
 	queryWorkersCompleteintegrationinvocation1 string
 	//go:embed sql/workers_completeintegrationinvocation_2.sql

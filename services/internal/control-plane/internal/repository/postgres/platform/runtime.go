@@ -52,8 +52,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef, sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision, provider, model, instructionRef, instructionDigest, instructions, turnRef, stableKey, callbackEdgeRef string
 		var attempt int32
 		var capabilities, knowledge []string
-		var rawInput, rawDelegationTargets, rawSessionContext []byte
-		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID, &projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey, &runtimeRevision, &provider, &model, &instructionRef, &instructionDigest, &instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef, &stableKey, &rawDelegationTargets, &callbackEdgeRef, &rawSessionContext); err != nil {
+		var rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext []byte
+		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID, &projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey, &runtimeRevision, &provider, &model, &instructionRef, &instructionDigest, &instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef, &stableKey, &rawIntegrationGrants, &rawDelegationTargets, &callbackEdgeRef, &rawSessionContext); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		fence, err := newRef("fnc")
@@ -82,11 +82,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		_ = jsonUnmarshal(rawInput, &inputMap)
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
+		var integrationGrants []map[string]string
+		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
-		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{runtimeRevision, provider, model, hex.EncodeToString(resolvedInstructionsDigest[:]), strings.Join(capabilities, ",")}, "\x00")))
-		items = append(items, map[string]any{"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef, "turnRef": turnRef, "attempt": attempt, "task": task, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt, "agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey, "runtimeRevision": runtimeRevision, "runtimeProvider": provider, "runtimeModel": model, "instructionRef": instructionRef, "instructionDigest": instructionDigest, "instructions": instructions, "capabilities": capabilities, "knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets, "callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext, "input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]), "revisionDigest": hex.EncodeToString(revisionDigest[:]), "eventRef": event.Ref})
+		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{runtimeRevision, provider, model, hex.EncodeToString(resolvedInstructionsDigest[:]), strings.Join(capabilities, ","), string(rawIntegrationGrants)}, "\x00")))
+		items = append(items, map[string]any{"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef, "turnRef": turnRef, "attempt": attempt, "task": task, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt, "agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey, "runtimeRevision": runtimeRevision, "runtimeProvider": provider, "runtimeModel": model, "instructionRef": instructionRef, "instructionDigest": instructionDigest, "instructions": instructions, "capabilities": capabilities, "integrationGrants": integrationGrants, "knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets, "callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext, "input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]), "revisionDigest": hex.EncodeToString(revisionDigest[:]), "eventRef": event.Ref})
 		if firstRunRef == "" {
 			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 		}

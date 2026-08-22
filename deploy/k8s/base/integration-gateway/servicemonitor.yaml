@@ -8,46 +8,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: integration-gateway
-  namespaceSelector:
-    matchNames: [mattercodex-system]
+      app.kubernetes.io/component: integration-worker
   endpoints:
     - port: metrics
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s
----
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: integration-gateway-internal-rpc-authority-issuer
-  labels:
-    app.kubernetes.io/name: internal-rpc-authority
-    app.kubernetes.io/component: issuer
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: integration-gateway
-      mattercodex.dev/internal-rpc-authority-issuer: enabled
-  podMetricsEndpoints:
     - port: auth-metrics
-      path: /metrics
-      interval: 30s
-      scrapeTimeout: 5s
----
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: integration-gateway-internal-rpc-authority-verifier
-  labels:
-    app.kubernetes.io/name: internal-rpc-authority
-    app.kubernetes.io/component: verifier
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: integration-gateway
-      mattercodex.dev/internal-rpc-authority-verifier: enabled
-  podMetricsEndpoints:
-    - port: verifier-metrics
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s

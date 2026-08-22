@@ -78,19 +78,15 @@ func ControlAPIGatewayOperations() map[string]string {
 
 func RuntimeOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime.execution.claim":       controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
-		"platform.runtime.execution.renew":       controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName,
-		"platform.runtime.execution.progress":    controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
-		"platform.runtime.execution.complete":    controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
-		"platform.runtime.execution.delegate":    controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
-		"platform.runtime.callback.deliver":      controlplanev1.RuntimeWorkService_DeliverCallback_FullMethodName,
-		"platform.runtime.warm.reconcile":        controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
-		"platform.runtime.warm.report":           controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName,
-		"platform.runtime.schedules.claim":       controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName,
-		"platform.runtime.schedules.materialize": controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName,
-		"platform.runtime.schedules.complete":    controlplanev1.RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName,
-		"platform.runtime.integration.resolve":   controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
-		"platform.runtime.integration.complete":  controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+		"platform.runtime.execution.claim":     controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
+		"platform.runtime.execution.renew":     controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName,
+		"platform.runtime.execution.progress":  controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
+		"platform.runtime.execution.complete":  controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
+		"platform.runtime.execution.delegate":  controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
+		"platform.runtime.warm.reconcile":      controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
+		"platform.runtime.warm.report":         controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName,
+		"platform.runtime.integration.resolve": controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
+		"platform.runtime.integration.get":     controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName,
 	}
 }
 
@@ -103,7 +99,14 @@ func AutomationSchedulerOperations() map[string]string {
 	}
 }
 
-func InteractionGatewayOperations() map[string]string                 { return RuntimeOperations() }
-func IntegrationGatewayOperations() map[string]string                 { return RuntimeOperations() }
-func IntegrationGatewayManagementOperations() map[string]string       { return RuntimeOperations() }
+func IntegrationGatewayOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime.integration-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
+		"platform.runtime.integration-tests.complete": controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
+		"platform.runtime.integrations.claim":         controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.runtime.integrations.complete":      controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+	}
+}
+
+func InteractionGatewayOperations() map[string]string                 { return map[string]string{} }
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} { return map[string]struct{}{} }

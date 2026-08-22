@@ -48,10 +48,29 @@ func TestDecodeToolCallRejectsUnknownFields(t *testing.T) {
 	_, err := decodeToolCall(responseapi.ResponseFunctionToolCall{
 		Name: "delegate_agent", CallID: "call_1",
 		Arguments: `{"target_agent_ref":"agt_support","task":"reply","authority":"owner"}`,
-	})
+	}, nil)
 	var safe *SafeError
 	if !errors.As(err, &safe) || safe.Code != "PROVIDER_TOOL_INVALID" {
 		t.Fatalf("decodeToolCall() error = %v", err)
+	}
+}
+
+func TestDecodeIntegrationToolUsesServerBinding(t *testing.T) {
+	t.Parallel()
+	call, err := decodeToolCall(responseapi.ResponseFunctionToolCall{Name: "integration_1", CallID: "call_2", Arguments: `{"message":"Готово"}`}, map[string]IntegrationGrant{"integration_1": {ConnectionRef: "int_notify", CapabilityKey: "mattermost.notifications"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if call.ConnectionRef != "int_notify" || call.CapabilityKey != "mattermost.notifications" || call.Input["message"] != "Готово" {
+		t.Fatalf("decodeToolCall() = %#v", call)
+	}
+}
+
+func TestHighRiskIntegrationIsNotExposedAsTool(t *testing.T) {
+	t.Parallel()
+	tools, bindings := integrationToolSet([]IntegrationGrant{{ConnectionRef: "int_github", CapabilityKey: "github.pull_request.write", Risk: "HIGH"}})
+	if len(tools) != 0 || len(bindings) != 0 {
+		t.Fatalf("integrationToolSet() exposed a high-risk capability")
 	}
 }
 

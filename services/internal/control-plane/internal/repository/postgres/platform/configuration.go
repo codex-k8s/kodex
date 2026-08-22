@@ -102,12 +102,17 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	}
 	var item entity.IntegrationConnection
 	if input.Kind == command.TestConnection {
-		err := tx.QueryRow(ctx, queryConfigurationChangeconnection2, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
+		var connectionID string
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnection2, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		testRef, _ := newRef("tst")
+		if _, err := tx.Exec(ctx, queryConfigurationChangeconnection5, testRef, scope.organizationID, connectionID, scope.actorID); err != nil {
+			return commandOutcome{}, mapWriteError(err)
 		}
 	} else {
 		state := "DISABLED"
@@ -123,9 +128,13 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		}
 		if !payload.Enabled {
 			_, _ = tx.Exec(ctx, queryConfigurationChangeconnection4, payload.Ref)
+			_, _ = tx.Exec(ctx, queryConfigurationChangeconnection6, payload.Ref)
 		}
 	}
-	item.NextActions = []string{"OPEN", "TEST"}
+	item.NextActions = []string{"OPEN"}
+	if item.State != "TESTING" {
+		item.NextActions = append(item.NextActions, "TEST")
+	}
 	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "Подключение интеграции обновлено", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 

@@ -58,6 +58,7 @@ const (
 	ReportWarmRuntime             Kind = "REPORT_WARM_RUNTIME"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
 	CompleteOccurrence            Kind = "COMPLETE_SCHEDULE_OCCURRENCE"
+	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
 )
 
@@ -153,8 +154,14 @@ type OccurrenceInput struct {
 	Generation                              int64
 }
 type IntegrationInvocationInput struct {
-	InvocationRef, EffectFence, ResultSummary, SafeErrorCode string
-	Success                                                  bool
+	InvocationRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string
+	Generation                                                   int64
+	Success                                                      bool
+}
+type IntegrationConnectionTestInput struct {
+	TestRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string
+	Generation                                             int64
+	Success                                                bool
 }
 
 type Result struct {

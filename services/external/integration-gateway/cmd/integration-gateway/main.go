@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -13,11 +14,11 @@ import (
 var version = "dev"
 
 func main() {
-	root := context.Background()
-	lifecycle, stop := signal.NotifyContext(root, syscall.SIGINT, syscall.SIGTERM)
+	lifecycle, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if err := app.Run(lifecycle, root, version); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "integration-gateway failed: %v\n", err)
+	err := app.Run(lifecycle, context.Background(), version)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_, _ = fmt.Fprintln(os.Stderr, "integration-gateway stopped with an error")
 		os.Exit(1)
 	}
 }

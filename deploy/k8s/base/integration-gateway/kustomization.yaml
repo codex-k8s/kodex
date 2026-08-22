@@ -2,61 +2,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: mattercodex-system
 resources:
-  - ../vault-ca-delivery
-  - ../image-supply-chain
-  - serviceaccount.yaml
-  - runtime-adapter-rbac.yaml
+  - configmap.yaml
   - deployment.yaml
+  - serviceaccount.yaml
   - service.yaml
   - poddisruptionbudget.yaml
-  - migration-job.yaml
-  - postgresql.yaml
-  - egress-proxy.yaml
-  - networkpolicy.yaml
-  - vault-secret-provider-classes.yaml
-  - vault-resources.yaml
   - servicemonitor.yaml
+  - networkpolicy.yaml
+  - issuer-networkpolicy.yaml
   - prometheusrule.yaml
   - dashboard.yaml
-transformers:
-  - bundle-cluster-scope-transformer.yaml
-configMapGenerator:
-  - name: integration-gateway-runtime
-    literals:
-      - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_NAME=integration_gateway_runtime_g1
-      - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=1
-      - INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=integration-gateway-db-context-g1
-      - INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_UID=29002
-      - INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_GID=29000
-      - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_PROXY_URL=http://egress-gateway.mattercodex-system.svc.cluster.local:8080
-      - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_NO_PROXY=localhost,127.0.0.1,::1,.svc,.svc.cluster.local
-      - INTEGRATION_GATEWAY_VAULT_ADDRESS=https://vault.mattercodex-system.svc.cluster.local:8200
-      - INTEGRATION_GATEWAY_VAULT_TLS_SERVER_NAME=vault.mattercodex-system.svc.cluster.local
-      - INTEGRATION_GATEWAY_VAULT_CA_FILE=/var/run/config/mattercodex/integration-gateway/vault/ca.pem
-      - INTEGRATION_GATEWAY_VAULT_ROLE=integration-gateway
-      - INTEGRATION_GATEWAY_VAULT_AUTH_MOUNT=kubernetes
-      - INTEGRATION_GATEWAY_VAULT_KV_MOUNT=kv
-      - INTEGRATION_GATEWAY_VAULT_CREDENTIAL_PATH_PREFIX=mattercodex/integration-gateway/provider-credentials
-      - INTEGRATION_GATEWAY_VAULT_GIT_CREDENTIAL_PATH_PREFIX=mattercodex/integration-gateway/git-credentials
-      - INTEGRATION_GATEWAY_VAULT_SERVICE_ACCOUNT_TOKEN_FILE=/var/run/secrets/tokens/vault/token
-  - name: integration-gateway-db-principals
-    literals:
-      - INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=integration-gateway-db-context-g1
-      - INTEGRATION_GATEWAY_POSTGRES_CURRENT_GENERATION=1
-      - INTEGRATION_GATEWAY_POSTGRES_CURRENT_NOT_BEFORE=2026-08-03T00:00:00Z
-      - INTEGRATION_GATEWAY_POSTGRES_CURRENT_NOT_AFTER=2026-11-03T00:00:00Z
-      - INTEGRATION_GATEWAY_POSTGRES_NEXT_GENERATION=2
-      - INTEGRATION_GATEWAY_POSTGRES_NEXT_NOT_BEFORE=2026-10-20T00:00:00Z
-      - INTEGRATION_GATEWAY_POSTGRES_NEXT_NOT_AFTER=2027-02-03T00:00:00Z
-  - name: integration-gateway-definitions
-    files:
-      - health.yaml=definitions/health.yaml
-  - name: integration-gateway-provider-catalog
-    files:
-      - catalog.json=provider-catalog/catalog.json
-  - name: integration-gateway-git-sources
-    files:
-      - catalog.json=git-sources/catalog.json
-      - integration-observer-role.json=git-sources/integration-observer-role.json
-generatorOptions:
-  disableNameSuffixHash: true
+  - vault-secret-provider-classes.yaml
+components:
+  - ../../components/internal-rpc-authority-integration-gateway-issuer

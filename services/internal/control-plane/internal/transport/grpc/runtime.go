@@ -69,6 +69,11 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	for _, key := range mapStrings(values, "capabilities") {
 		result.Capabilities = append(result.Capabilities, &controlplanev1.PlatformCapability{Key: key, Name: key})
 	}
+	if grants, ok := values["integrationGrants"].([]map[string]string); ok {
+		for _, grant := range grants {
+			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"], ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"], CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"], Risk: grant["risk"], Enabled: true})
+		}
+	}
 	if targets, ok := values["delegationTargets"].([]map[string]string); ok {
 		for _, target := range targets {
 			result.DelegationTargets = append(result.DelegationTargets, &controlplanev1.DelegationTarget{Ref: target["ref"], Name: target["name"], Purpose: target["purpose"], RoleDescription: target["roleDescription"]})
@@ -230,21 +235,76 @@ func (server *Server) CompleteScheduleOccurrence(ctx context.Context, request *c
 	return &controlplanev1.CompleteScheduleOccurrenceResponse{Schedule: castSchedule(*result.Schedule)}, nil
 }
 
+func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, err := server.service.ClaimIntegrationConnectionTests(ctx, p, request.GetWorkloadInstance(), request.GetLimit())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ClaimIntegrationConnectionTestsResponse{}
+	for _, item := range items {
+		configuration, _ := item["configuration"].(map[string]any)
+		response.Claims = append(response.Claims, &controlplanev1.IntegrationConnectionTestClaim{TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"), DefinitionKey: mapString(item, "definitionKey"), CredentialMaterializationRef: mapString(item, "credentialRef"), PublicConfiguration: structure(configuration), Lease: castLease(item)})
+	}
+	return response, nil
+}
+
+func (server *Server) CompleteIntegrationConnectionTest(ctx context.Context, request *controlplanev1.CompleteIntegrationConnectionTestRequest) (*controlplanev1.CompleteIntegrationConnectionTestResponse, error) {
+	payload := command.IntegrationConnectionTestInput{TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName, command.CompleteConnectionTest, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.CompleteIntegrationConnectionTestResponse{Connection: castConnection(*result.Connection)}, nil
+}
+
 func (server *Server) ResolveIntegrationInvocation(ctx context.Context, request *controlplanev1.ResolveIntegrationInvocationRequest) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
-	result, err := server.service.ResolveIntegrationInvocation(ctx, p, map[string]string{"run_ref": request.GetRunRef(), "node_ref": request.GetNodeRef(), "connection_ref": request.GetConnectionRef(), "capability_key": request.GetCapabilityKey(), "input_digest": request.GetInputDigest()})
+	result, err := server.service.ResolveIntegrationInvocation(ctx, p, map[string]string{"run_ref": request.GetRunRef(), "node_ref": request.GetNodeRef(), "connection_ref": request.GetConnectionRef(), "capability_key": request.GetCapabilityKey(), "idempotency_key": request.GetIdempotencyKey()}, asMap(request.GetBoundedInput()))
 	if err != nil {
 		return nil, transportError(err)
 	}
-	bounded, _ := result["boundedInput"].(map[string]any)
-	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: mapString(result, "invocationRef"), GrantRef: mapString(result, "grantRef"), Operation: mapString(result, "operation"), BoundedInput: structure(bounded), EffectFence: mapString(result, "effectFence")}, nil
+	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: mapString(result, "invocationRef"), GrantRef: mapString(result, "grantRef"), Operation: mapString(result, "operation")}, nil
+}
+
+func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *controlplanev1.ClaimIntegrationInvocationsRequest) (*controlplanev1.ClaimIntegrationInvocationsResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, err := server.service.ClaimIntegrationInvocations(ctx, p, request.GetWorkloadInstance(), request.GetLimit())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ClaimIntegrationInvocationsResponse{}
+	for _, item := range items {
+		configuration, _ := item["configuration"].(map[string]any)
+		boundedInput, _ := item["boundedInput"].(map[string]any)
+		response.Claims = append(response.Claims, &controlplanev1.IntegrationInvocationClaim{InvocationRef: mapString(item, "invocationRef"), DefinitionKey: mapString(item, "definitionKey"), ConnectionRef: mapString(item, "connectionRef"), CredentialMaterializationRef: mapString(item, "credentialRef"), CapabilityKey: mapString(item, "capabilityKey"), PublicConfiguration: structure(configuration), BoundedInput: structure(boundedInput), Lease: castLease(item)})
+	}
+	return response, nil
+}
+
+func (server *Server) GetIntegrationInvocation(ctx context.Context, request *controlplanev1.GetIntegrationInvocationRequest) (*controlplanev1.GetIntegrationInvocationResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_GetIntegrationInvocation_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.GetIntegrationInvocation(ctx, p, request.GetInvocationRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetIntegrationInvocationResponse{State: mapString(result, "state"), ResultSummary: mapString(result, "resultSummary"), SafeErrorCode: mapString(result, "safeErrorCode")}, nil
 }
 
 func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
-	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), EffectFence: request.GetEffectFence(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName, command.CompleteIntegrationInvocation, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

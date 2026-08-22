@@ -6,69 +6,29 @@ metadata:
     app.kubernetes.io/name: integration-gateway
 spec:
   groups:
-    - name: integration-gateway.availability
+    - name: integration-gateway
       rules:
-        - alert: IntegrationGatewayUnavailable
-          expr: absent(up{service="integration-gateway"}) or sum(up{service="integration-gateway"}) < 1
+        - alert: AutomationSchedulerCycleFailures
+          expr: increase(mattercodex_integration_gateway_cycles_total{outcome="error"}[10m]) > 2
           for: 5m
-          labels: {severity: critical}
+          labels:
+            severity: warning
           annotations:
-            summary: Integration gateway недоступен
-            description: Prometheus не видит доступной реплики gateway.
+            summary: Automation scheduler reconciliation is failing
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayNotReady
-          expr: absent(mattercodex_integration_gateway_readiness{ready="true"}) or sum(mattercodex_integration_gateway_readiness{ready="true"}) < 1
-          for: 5m
-          labels: {severity: warning}
-          annotations:
-            summary: Integration gateway не проходит readiness
-            description: Проверить PostgreSQL, control-plane и локальный authority issuer.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayContinuationFailures
-          expr: sum(rate(mattercodex_integration_gateway_worker_cycles_total{worker="continuation",outcome="failure"}[5m])) > 0.1
-          for: 5m
-          labels: {severity: critical}
-          annotations:
-            summary: Не синхронизируется integration continuation
-            description: Durable effect не подтверждается control-plane; provider path остаётся закрыт.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayManagementFailures
-          expr: sum(rate(mattercodex_integration_gateway_worker_cycles_total{worker="management",outcome="failure"}[5m])) > 0.1
-          for: 5m
-          labels: {severity: critical}
-          annotations:
-            summary: Не завершаются owner management effects integration gateway
-            description: Проверить fenced lease и safe status Vault, Codex, Git и control-plane без чтения credential или payload.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayProviderFailures
-          expr: sum(rate(mattercodex_integration_gateway_invocations_total{outcome="failure"}[5m])) > 0.1
+        - alert: AutomationSchedulerClaimBacklog
+          expr: mattercodex_integration_gateway_tracked_claims > 200
           for: 10m
-          labels: {severity: warning}
+          labels:
+            severity: warning
           annotations:
-            summary: Растёт число provider failure outcomes
-            description: Проверить bounded provider proxy, credential binding и terminal continuation delivery.
+            summary: Automation scheduler transient claim tracking is near its bound
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayUnknownOutcomes
-          expr: sum(rate(mattercodex_integration_gateway_invocations_total{outcome="unknown"}[5m])) > 0
-          for: 2m
-          labels: {severity: critical}
-          annotations:
-            summary: Обнаружен неопределённый результат integration invocation
-            description: Повтор внешнего действия закрыт; требуется сверить provider receipt и durable result перед repair.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayEgressProxyUnavailable
-          expr: kube_deployment_status_replicas_available{namespace="mattercodex-system",deployment="integration-egress-proxy"} < 1
+        - alert: AutomationSchedulerProtectedPathUnavailable
+          expr: mattercodex_integration_gateway_readiness{ready="false"} == 1
           for: 5m
-          labels: {severity: critical}
+          labels:
+            severity: critical
           annotations:
-            summary: Egress proxy integration gateway недоступен
-            description: Exact mTLS provider path закрыт до восстановления proxy readiness.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayPostgresqlUnavailable
-          expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"integration-gateway-postgresql-.*"}) < 2
-          for: 5m
-          labels: {severity: critical}
-          annotations:
-            summary: PostgreSQL integration gateway потерял кворум готовности
-            description: Новые invocation и lifecycle effects остаются закрыты до восстановления CNPG read path.
+            summary: Automation scheduler protected control-plane path is unavailable
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md

@@ -303,17 +303,47 @@ func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal
 	}
 	return service.repository.ClaimDueSchedules(ctx, p, instance, limit)
 }
-func (service *Service) ResolveIntegrationInvocation(ctx context.Context, p value.Principal, input map[string]string) (map[string]any, error) {
+func (service *Service) ClaimIntegrationConnectionTests(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"run_ref", "node_ref", "connection_ref", "capability_key", "input_digest"} {
+	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
+		return nil, errs.ErrInvalid
+	}
+	return service.repository.ClaimIntegrationConnectionTests(ctx, p, instance, limit)
+}
+func (service *Service) ResolveIntegrationInvocation(ctx context.Context, p value.Principal, input map[string]string, boundedInput map[string]any) (map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"run_ref", "node_ref", "connection_ref", "capability_key", "idempotency_key"} {
 		if strings.TrimSpace(input[key]) == "" {
 			return nil, errs.ErrInvalid
 		}
 	}
-	return service.repository.ResolveIntegrationInvocation(ctx, p, input)
+	return service.repository.ResolveIntegrationInvocation(ctx, p, input, boundedInput)
+}
+func (service *Service) ClaimIntegrationInvocations(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
+		return nil, errs.ErrInvalid
+	}
+	return service.repository.ClaimIntegrationInvocations(ctx, p, instance, limit)
+}
+func (service *Service) GetIntegrationInvocation(ctx context.Context, p value.Principal, ref string) (map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(ref) == "" {
+		return nil, errs.ErrInvalid
+	}
+	return service.repository.GetIntegrationInvocation(ctx, p, ref)
 }
 
 func knownCommand(kind command.Kind) bool {
@@ -333,7 +363,7 @@ func knownCommand(kind command.Kind) bool {
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
 		command.DelegateExecution, command.DeliverCallback, command.ReportWarmRuntime,
-		command.MaterializeOccurrence, command.CompleteOccurrence,
+		command.MaterializeOccurrence, command.CompleteOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation:
 		return true
 	default:

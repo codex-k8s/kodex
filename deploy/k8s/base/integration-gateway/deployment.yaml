@@ -4,28 +4,24 @@ metadata:
   name: integration-gateway
   labels:
     app.kubernetes.io/name: integration-gateway
-    app.kubernetes.io/component: external-gateway
+    app.kubernetes.io/component: integration-worker
 spec:
-  replicas: 3
+  replicas: 2
   revisionHistoryLimit: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 0
-      maxSurge: 2
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: integration-gateway
-      app.kubernetes.io/component: external-gateway
+      app.kubernetes.io/component: integration-worker
   template:
     metadata:
       labels:
         app.kubernetes.io/name: integration-gateway
-        app.kubernetes.io/component: external-gateway
-        mattercodex.dev/internal-rpc-authority-issuer: enabled
-        mattercodex.dev/internal-rpc-authority-verifier: enabled
-      annotations:
-        kubectl.kubernetes.io/default-container: integration-gateway
+        app.kubernetes.io/component: integration-worker
     spec:
       serviceAccountName: integration-gateway
       automountServiceAccountToken: false
@@ -33,26 +29,8 @@ spec:
       terminationGracePeriodSeconds: 35
       securityContext:
         runAsNonRoot: true
-        fsGroup: 29000
-        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      initContainers:
-        - name: internal-rpc-authority-socket-init
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command:
-            - /usr/local/bin/internal-rpc-authority-socket-init
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 29000
-            runAsGroup: 29000
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: authority-sockets
-              mountPath: /run/mattercodex
       containers:
         - name: integration-gateway
           image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/integration-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -64,11 +42,19 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
-            - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
-              value: /run/mattercodex/internal-rpc-authority/issuer.sock
-            - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
-              value: issuer,verifier
+                  fieldPath: "metadata.labels['mattercodex.dev/environment']"
+            - name: INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY
+              value: /var/run/secrets/mattercodex/integration-connections
+            - name: INTEGRATION_GATEWAY_INSTANCE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: INTEGRATION_GATEWAY_CONTROL_PLANE_CA_FILE
+              value: /var/run/config/mattercodex/integration-gateway/control-plane/ca.pem
+            - name: INTEGRATION_GATEWAY_CONTROL_PLANE_CERTIFICATE_FILE
+              value: /var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.crt
+            - name: INTEGRATION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE
+              value: /var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.key
+            - name: INTEGRATION_GATEWAY_APPLICATION_GRANT_FILE
+              value: /var/run/secrets/mattercodex/integration-gateway/application-grant/application-grant.jws
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
@@ -82,36 +68,37 @@ spec:
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
           ports:
-            - name: https
-              containerPort: 8443
-            - name: result-grpc
-              containerPort: 9443
             - name: metrics
               containerPort: 9090
-          startupProbe:
+              protocol: TCP
+          startupProbe: &technicalProbe
             httpGet:
-              path: /readyz
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 30
           readinessProbe:
+            <<: *technicalProbe
             httpGet:
               path: /readyz
               port: metrics
-            timeoutSeconds: 2
             periodSeconds: 5
             failureThreshold: 2
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 10
             failureThreshold: 3
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 512Mi}
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "2"
+              memory: 256Mi
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -119,260 +106,51 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
-              drop: ["ALL"]
+              drop: [ALL]
           volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex, readOnly: true}
-            - {name: server-tls, mountPath: /var/run/secrets/mattercodex/integration-gateway/workload-tls, readOnly: true}
-            - {name: client-ca, mountPath: /var/run/config/mattercodex/integration-gateway/client-ca, readOnly: true}
-            - {name: postgres-runtime, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-runtime, readOnly: true}
-            - {name: postgres-context, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-context, readOnly: true}
-            - {name: postgres-ca, mountPath: /var/run/config/mattercodex/integration-gateway/postgres, readOnly: true}
-            - {name: definitions, mountPath: /var/run/config/mattercodex/integration-gateway/definitions, readOnly: true}
-            - {name: provider-catalog, mountPath: /var/run/config/mattercodex/integration-gateway/provider-catalog, readOnly: true}
-            - {name: git-sources, mountPath: /var/run/config/mattercodex/integration-gateway/git-sources, readOnly: true}
-            - {name: credentials, mountPath: /var/run/secrets/mattercodex/integration-gateway/credentials, readOnly: true}
-            - {name: payload-keyset, mountPath: /var/run/secrets/mattercodex/integration-gateway/payload-keyset, readOnly: true}
-            - {name: control-plane-client, mountPath: /var/run/secrets/mattercodex/integration-gateway/control-plane-client, readOnly: true}
-            - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/integration-gateway/control-plane, readOnly: true}
-            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant, readOnly: true}
-            - {name: provider-receipt-signer, mountPath: /var/run/secrets/mattercodex/integration-gateway/provider-receipt, readOnly: true}
-            - {name: git-receipt-signer, mountPath: /var/run/secrets/mattercodex/integration-gateway/git-receipt, readOnly: true}
-            - {name: vault-ca, mountPath: /var/run/config/mattercodex/integration-gateway/vault, readOnly: true}
-            - {name: vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
-            - {name: provider-proxy-ca, mountPath: /var/run/config/mattercodex/integration-gateway/provider-proxy, readOnly: true}
-            - {name: oidc-ca, mountPath: /var/run/config/mattercodex/integration-gateway/oidc, readOnly: true}
-            - {name: observability-ca, mountPath: /var/run/config/mattercodex/integration-gateway/observability, readOnly: true}
-            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/integration-gateway/observability, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
-            - {name: management-runtime, mountPath: /var/lib/mattercodex/integration-gateway}
-        - name: internal-rpc-authority-issuer
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command: [/usr/local/bin/internal-rpc-authority-issuer]
-          env:
-            - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: integration-gateway}
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem}
-            - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: internal-rpc-authority-integration-gateway}
-            - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
-            - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
-            - {name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT, value: 60s}
-            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
-            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
-            - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
-            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
-              valueFrom:
-                secretKeyRef:
-                  name: internal-rpc-authority-integration-gateway-issuer-postgresql
-                  key: username
-            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
-            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
-            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
-            - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
-          ports:
-            - {name: auth-metrics, containerPort: 9091}
-          readinessProbe:
-            httpGet: {path: /readyz, port: auth-metrics}
-            timeoutSeconds: 3
-            periodSeconds: 5
-          startupProbe:
-            httpGet: {path: /livez, port: auth-metrics}
-            timeoutSeconds: 2
-            periodSeconds: 2
-            failureThreshold: 60
-          livenessProbe:
-            httpGet: {path: /livez, port: auth-metrics}
-            timeoutSeconds: 2
-            periodSeconds: 10
-          resources:
-            requests: {cpu: 25m, memory: 32Mi}
-            limits: {cpu: 250m, memory: 128Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 29001
-            runAsGroup: 29000
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex}
-            - {name: authority-snapshot, mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot, readOnly: true}
-            - {name: authority-manifest-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust, readOnly: true}
-            - {name: authority-proof-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
-            - {name: authority-issuer-key, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer, readOnly: true}
-            - {name: authority-workload-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls, readOnly: true}
-            - {name: authority-readback-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback, readOnly: true}
-            - {name: authority-vault-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault, readOnly: true}
-            - {name: authority-vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
-            - {name: authority-restore-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore, readOnly: true}
-            - {name: authority-restore-certificate, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
-            - {name: authority-restore-role-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust, readOnly: true}
-            - {name: authority-postgres, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres, readOnly: true}
-            - {name: authority-postgres-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
-            - {name: authority-observability-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-            - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
-        - name: internal-rpc-authority-verifier
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command: [/usr/local/bin/internal-rpc-authority-verifier]
-          env:
-            - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: integration-gateway}
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem}
-            - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: internal-rpc-authority-integration-gateway}
-            - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
-            - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9092"}
-            - {name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT, value: 60s}
-            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
-            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
-            - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
-            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
-              valueFrom:
-                secretKeyRef:
-                  name: internal-rpc-authority-integration-gateway-verifier-postgresql
-                  key: username
-            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
-            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
-            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
-            - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
-          ports:
-            - {name: verify-metrics, containerPort: 9092}
-          readinessProbe:
-            httpGet: {path: /readyz, port: verify-metrics}
-            timeoutSeconds: 3
-            periodSeconds: 5
-          startupProbe:
-            httpGet: {path: /livez, port: verify-metrics}
-            timeoutSeconds: 2
-            periodSeconds: 2
-            failureThreshold: 60
-          livenessProbe:
-            httpGet: {path: /livez, port: verify-metrics}
-            timeoutSeconds: 2
-            periodSeconds: 10
-          resources:
-            requests: {cpu: 25m, memory: 32Mi}
-            limits: {cpu: 250m, memory: 128Mi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 29002
-            runAsGroup: 29000
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex}
-            - {name: authority-snapshot, mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot, readOnly: true}
-            - {name: authority-manifest-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust, readOnly: true}
-            - {name: authority-proof-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
-            - {name: authority-workload-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls, readOnly: true}
-            - {name: authority-readback-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback, readOnly: true}
-            - {name: authority-vault-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault, readOnly: true}
-            - {name: authority-vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
-            - {name: authority-restore-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore, readOnly: true}
-            - {name: authority-restore-certificate, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
-            - {name: authority-restore-role-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust, readOnly: true}
-            - {name: authority-verifier-postgres, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres, readOnly: true}
-            - {name: authority-postgres-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
-            - {name: authority-observability-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-            - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+            - name: workload-tls
+              mountPath: /var/run/secrets/mattercodex/integration-gateway/workload-tls
+              readOnly: true
+            - name: control-plane-ca
+              mountPath: /var/run/config/mattercodex/integration-gateway/control-plane
+              readOnly: true
+            - name: application-grant
+              mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant
+              readOnly: true
+            - name: otel-ca
+              mountPath: /var/run/config/mattercodex/integration-gateway/observability
+              readOnly: true
+            - name: integration-credentials
+              mountPath: /var/run/secrets/mattercodex/integration-connections
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/integration-gateway/observability
+              readOnly: true
       volumes:
-        - {name: authority-sockets, emptyDir: {sizeLimit: 32Mi}}
-        - name: server-tls
-          secret: {secretName: internal-rpc-authority-integration-gateway-workload-tls, defaultMode: 0440}
-        - name: client-ca
-          configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
-        - name: postgres-runtime
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-postgres-runtime}}
-        - name: postgres-context
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-postgres-context}}
-        - name: postgres-ca
-          secret: {secretName: integration-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}
-        - name: definitions
-          configMap: {name: integration-gateway-definitions, defaultMode: 0440}
-        - name: provider-catalog
-          configMap: {name: integration-gateway-provider-catalog, defaultMode: 0440}
-        - name: git-sources
-          configMap: {name: integration-gateway-git-sources, defaultMode: 0440}
-        - name: credentials
-          secret: {secretName: integration-gateway-provider-health-credential, defaultMode: 0440}
-        - name: payload-keyset
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-payload-keyset}}
-        - name: control-plane-client
-          secret: {secretName: internal-rpc-authority-integration-gateway-workload-tls, defaultMode: 0440}
+        - name: workload-tls
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-workload-tls
+            defaultMode: 0440
         - name: control-plane-ca
-          configMap: {name: mattercodex-internal-ca, defaultMode: 0440}
+          configMap:
+            name: mattercodex-internal-ca
+            defaultMode: 0440
         - name: application-grant
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-application-grant}}
-        - name: provider-receipt-signer
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-provider-receipt-signer}}
-        - name: git-receipt-signer
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-git-receipt-signer}}
-        - name: vault-ca
-          secret: {secretName: integration-gateway-vault-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}
-        - name: vault-token
-          projected:
-            defaultMode: 0400
-            sources:
-              - serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}
-        - name: provider-proxy-ca
-          configMap: {name: integration-egress-proxy-ca, defaultMode: 0440}
-        - name: oidc-ca
-          configMap: {name: mattercodex-oidc-ca, defaultMode: 0440}
-        - name: observability-ca
-          configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: integration-gateway-application-grant
+        - name: otel-ca
+          configMap:
+            name: mattercodex-otel-ca
+            defaultMode: 0440
+        - name: integration-credentials
+          secret:
+            secretName: mattercodex-integration-credentials
+            optional: true
+            defaultMode: 0440
         - name: sentry-dsn
-          secret: {secretName: mattercodex-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}
-        - name: authority-snapshot
-          secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}
-        - name: authority-manifest-trust
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-integration-gateway-manifest-trust}}
-        - name: authority-proof-trust
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-integration-gateway-proof-trust}}
-        - name: authority-issuer-key
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-integration-gateway-issuer-key}}
-        - name: authority-workload-tls
-          secret: {secretName: internal-rpc-authority-integration-gateway-workload-tls, defaultMode: 0440}
-        - name: authority-readback-ca
-          configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}
-        - name: authority-vault-ca
-          configMap: {name: internal-rpc-authority-vault-ca, defaultMode: 0440}
-        - name: authority-vault-token
-          projected:
-            defaultMode: 0400
-            sources:
-              - serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}
-        - name: authority-restore-ca
-          configMap: {name: internal-rpc-authority-restore-controller-ca, defaultMode: 0440}
-        - name: authority-restore-certificate
-          secret: {secretName: internal-rpc-authority-restore-controller-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}]}
-        - name: authority-restore-role-trust
-          secret: {secretName: internal-rpc-authority-restore-role-trust, defaultMode: 0440, items: [{key: restore-role-trust.jws, path: restore-role-trust.jws}]}
-        - name: authority-postgres
-          secret: {secretName: internal-rpc-authority-integration-gateway-issuer-postgresql, defaultMode: 0440, items: [{key: dsn, path: dsn}]}
-        - name: authority-verifier-postgres
-          secret: {secretName: internal-rpc-authority-integration-gateway-verifier-postgresql, defaultMode: 0440, items: [{key: dsn, path: dsn}]}
-        - name: authority-postgres-ca
-          configMap: {name: internal-rpc-authority-postgresql-ca, defaultMode: 0440}
-        - name: authority-observability-ca
-          configMap: {name: internal-rpc-authority-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}
-        - name: authority-sentry-dsn
-          secret: {secretName: internal-rpc-authority-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}
-        - {name: tmp, emptyDir: {sizeLimit: 16Mi}}
-        - {name: management-runtime, emptyDir: {sizeLimit: 64Mi}}
+          secret:
+            secretName: mattercodex-sentry
+            defaultMode: 0440

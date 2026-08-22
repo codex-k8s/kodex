@@ -81,6 +81,9 @@ type Repository interface {
 	Execute(context.Context, command.Command) (command.Result, error)
 	ReconcileWarmRuntime(context.Context, value.Principal, string) (entity.SystemAssistant, map[string]any, bool, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
-	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string) (map[string]any, error)
+	ClaimIntegrationConnectionTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
+	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)
+	ClaimIntegrationInvocations(context.Context, value.Principal, string, int32) ([]map[string]any, error)
+	GetIntegrationInvocation(context.Context, value.Principal, string) (map[string]any, error)
 	Ready(context.Context) error
 }

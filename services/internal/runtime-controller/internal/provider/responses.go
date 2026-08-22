@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,17 +39,29 @@ var promptFiles embed.FS
 
 type Message struct{ Role, Content string }
 type DelegationTarget struct{ Ref, Name, Purpose, RoleDescription string }
+type IntegrationGrant struct {
+	Ref            string `json:"grant_ref"`
+	ConnectionRef  string `json:"connection_ref"`
+	DefinitionKey  string `json:"definition_key"`
+	ConnectionName string `json:"connection_name"`
+	CapabilityKey  string `json:"capability_key"`
+	CapabilityName string `json:"capability_name"`
+	Description    string `json:"description"`
+	Risk           string `json:"risk"`
+}
 
 type Request struct {
 	IdempotencyKey, Model, Instructions, Task string
 	InputJSON                                 json.RawMessage
 	SessionContext                            []Message
 	DelegationTargets                         []DelegationTarget
+	IntegrationGrants                         []IntegrationGrant
 	AllowDelegation                           bool
 }
 
 type ToolCall struct {
-	Name, CallID, TargetAgentRef, Task string
+	Name, CallID, TargetAgentRef, Task, ConnectionRef, CapabilityKey string
+	Input                                                            map[string]any
 }
 
 type ToolHandler func(context.Context, ToolCall) (string, error)
@@ -121,6 +134,7 @@ func (adapter *Responses) Execute(ctx context.Context, input Request, handler To
 		return Result{}, err
 	}
 	requestInput := responseapi.ResponseNewParamsInputUnion{OfString: openai.String(prompt)}
+	integrationTools, integrationBindings := integrationToolSet(input.IntegrationGrants)
 	var result Result
 	for round := 0; round < maximumToolRounds; round++ {
 		parameters := responseapi.ResponseNewParams{
@@ -135,6 +149,7 @@ func (adapter *Responses) Execute(ctx context.Context, input Request, handler To
 		if input.AllowDelegation && len(input.DelegationTargets) > 0 {
 			parameters.Tools = []responseapi.ToolUnionParam{{OfFunction: delegationTool(input.DelegationTargets)}}
 		}
+		parameters.Tools = append(parameters.Tools, integrationTools...)
 		response, createErr := client.Responses.New(ctx, parameters, option.WithHeader("Idempotency-Key", input.IdempotencyKey+"-"+roundKey(round)))
 		if createErr != nil {
 			return Result{}, providerError(createErr)
@@ -145,7 +160,7 @@ func (adapter *Responses) Execute(ctx context.Context, input Request, handler To
 		result.ResponseRef = response.ID
 		result.InputTokens += response.Usage.InputTokens
 		result.OutputTokens += response.Usage.OutputTokens
-		nextInput, calls, decodeErr := continuationInput(response.Output)
+		nextInput, calls, decodeErr := continuationInput(response.Output, integrationBindings)
 		if decodeErr != nil {
 			return Result{}, decodeErr
 		}
@@ -168,7 +183,7 @@ func (adapter *Responses) Execute(ctx context.Context, input Request, handler To
 	return Result{}, &SafeError{Code: "PROVIDER_TOOL_LIMIT"}
 }
 
-func continuationInput(items []responseapi.ResponseOutputItemUnion) ([]responseapi.ResponseInputItemUnionParam, []ToolCall, error) {
+func continuationInput(items []responseapi.ResponseOutputItemUnion, integrationBindings map[string]IntegrationGrant) ([]responseapi.ResponseInputItemUnionParam, []ToolCall, error) {
 	result := make([]responseapi.ResponseInputItemUnionParam, 0, len(items))
 	calls := make([]ToolCall, 0, len(items))
 	for _, item := range items {
@@ -178,7 +193,7 @@ func continuationInput(items []responseapi.ResponseOutputItemUnion) ([]responsea
 			result = append(result, responseapi.ResponseInputItemUnionParam{OfReasoning: &value})
 		case "function_call":
 			value := item.AsFunctionCall()
-			call, err := decodeToolCall(value)
+			call, err := decodeToolCall(value, integrationBindings)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -209,7 +224,8 @@ func buildPrompt(input Request) (string, error) {
 		Input            json.RawMessage    `json:"input"`
 		PreviousMessages []Message          `json:"previous_messages,omitempty"`
 		AvailableAgents  []DelegationTarget `json:"available_agents,omitempty"`
-	}{Task: strings.TrimSpace(input.Task), Input: boundedInput, PreviousMessages: input.SessionContext}
+		Integrations     []IntegrationGrant `json:"available_integrations,omitempty"`
+	}{Task: strings.TrimSpace(input.Task), Input: boundedInput, PreviousMessages: input.SessionContext, Integrations: input.IntegrationGrants}
 	if input.AllowDelegation {
 		payload.AvailableAgents = input.DelegationTargets
 	}
@@ -246,8 +262,18 @@ func delegationTool(targets []DelegationTarget) *responseapi.FunctionToolParam {
 	}
 }
 
-func decodeToolCall(item responseapi.ResponseFunctionToolCall) (ToolCall, error) {
-	if item.Name != "delegate_agent" || item.CallID == "" || len(item.Arguments) > 16<<10 {
+func decodeToolCall(item responseapi.ResponseFunctionToolCall, integrationBindings map[string]IntegrationGrant) (ToolCall, error) {
+	if item.CallID == "" || len(item.Arguments) > 16<<10 {
+		return ToolCall{}, &SafeError{Code: "PROVIDER_TOOL_INVALID"}
+	}
+	if grant, ok := integrationBindings[item.Name]; ok {
+		input, err := decodeIntegrationInput(grant.CapabilityKey, item.Arguments)
+		if err != nil {
+			return ToolCall{}, err
+		}
+		return ToolCall{Name: item.Name, CallID: item.CallID, ConnectionRef: grant.ConnectionRef, CapabilityKey: grant.CapabilityKey, Input: input}, nil
+	}
+	if item.Name != "delegate_agent" {
 		return ToolCall{}, &SafeError{Code: "PROVIDER_TOOL_INVALID"}
 	}
 	var arguments struct {
@@ -260,6 +286,87 @@ func decodeToolCall(item responseapi.ResponseFunctionToolCall) (ToolCall, error)
 		return ToolCall{}, &SafeError{Code: "PROVIDER_TOOL_INVALID"}
 	}
 	return ToolCall{Name: item.Name, CallID: item.CallID, TargetAgentRef: arguments.TargetAgentRef, Task: strings.TrimSpace(arguments.Task)}, nil
+}
+
+func integrationToolSet(grants []IntegrationGrant) ([]responseapi.ToolUnionParam, map[string]IntegrationGrant) {
+	tools := make([]responseapi.ToolUnionParam, 0, len(grants))
+	bindings := make(map[string]IntegrationGrant, len(grants))
+	for index, grant := range grants {
+		parameters := integrationParameters(grant.CapabilityKey)
+		if parameters == nil || grant.ConnectionRef == "" || grant.Risk == "HIGH" {
+			continue
+		}
+		name := "integration_" + strconv.Itoa(index+1)
+		description := strings.TrimSpace(grant.Description)
+		if description == "" {
+			description = strings.TrimSpace(grant.CapabilityName)
+		}
+		tool := &responseapi.FunctionToolParam{Name: name, Description: openai.String(description), Strict: openai.Bool(true), Parameters: parameters}
+		tools = append(tools, responseapi.ToolUnionParam{OfFunction: tool})
+		bindings[name] = grant
+	}
+	return tools, bindings
+}
+
+func integrationParameters(capability string) map[string]any {
+	switch capability {
+	case "github.repository.read":
+		return objectSchema(map[string]any{"path": map[string]any{"type": "string", "maxLength": 1024}, "ref": map[string]any{"type": "string", "maxLength": 128}}, []string{"path", "ref"})
+	case "kubernetes.workload.read":
+		return objectSchema(map[string]any{"resource": map[string]any{"type": "string", "enum": []string{"pods", "deployments", "statefulsets", "jobs"}}, "namespace": map[string]any{"type": "string", "minLength": 1, "maxLength": 63}, "name": map[string]any{"type": "string", "minLength": 1, "maxLength": 253}}, []string{"resource", "namespace", "name"})
+	case "mattermost.notifications", "mattermost.result_mirror":
+		return objectSchema(map[string]any{"message": map[string]any{"type": "string", "minLength": 1, "maxLength": 4000}}, []string{"message"})
+	default:
+		return nil
+	}
+}
+
+func objectSchema(properties map[string]any, required []string) map[string]any {
+	return map[string]any{"type": "object", "additionalProperties": false, "properties": properties, "required": required}
+}
+
+func decodeIntegrationInput(capability, raw string) (map[string]any, error) {
+	var input map[string]any
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF || !validIntegrationInput(capability, input) {
+		return nil, &SafeError{Code: "PROVIDER_TOOL_INVALID"}
+	}
+	return input, nil
+}
+
+func validIntegrationInput(capability string, input map[string]any) bool {
+	encoded, err := json.Marshal(input)
+	if err != nil || len(encoded) > 16<<10 {
+		return false
+	}
+	switch capability {
+	case "github.repository.read":
+		return exactStringInput(input, map[string]int{"path": 1024, "ref": 128})
+	case "kubernetes.workload.read":
+		if !exactStringInput(input, map[string]int{"resource": 32, "namespace": 63, "name": 253}) {
+			return false
+		}
+		resource, _ := input["resource"].(string)
+		return resource == "pods" || resource == "deployments" || resource == "statefulsets" || resource == "jobs"
+	case "mattermost.notifications", "mattermost.result_mirror":
+		return exactStringInput(input, map[string]int{"message": 4000})
+	default:
+		return false
+	}
+}
+
+func exactStringInput(input map[string]any, fields map[string]int) bool {
+	if len(input) != len(fields) {
+		return false
+	}
+	for key, maximum := range fields {
+		value, ok := input[key].(string)
+		if !ok || strings.TrimSpace(value) == "" || len(value) > maximum {
+			return false
+		}
+	}
+	return true
 }
 
 func (adapter *Responses) authorizedClient() (openai.Client, error) {

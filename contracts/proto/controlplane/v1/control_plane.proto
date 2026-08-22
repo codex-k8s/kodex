@@ -100,7 +100,11 @@ service RuntimeWorkService {
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
   rpc MaterializeScheduleOccurrence(MaterializeScheduleOccurrenceRequest) returns (MaterializeScheduleOccurrenceResponse);
   rpc CompleteScheduleOccurrence(CompleteScheduleOccurrenceRequest) returns (CompleteScheduleOccurrenceResponse);
+  rpc ClaimIntegrationConnectionTests(ClaimIntegrationConnectionTestsRequest) returns (ClaimIntegrationConnectionTestsResponse);
+  rpc CompleteIntegrationConnectionTest(CompleteIntegrationConnectionTestRequest) returns (CompleteIntegrationConnectionTestResponse);
   rpc ResolveIntegrationInvocation(ResolveIntegrationInvocationRequest) returns (ResolveIntegrationInvocationResponse);
+  rpc ClaimIntegrationInvocations(ClaimIntegrationInvocationsRequest) returns (ClaimIntegrationInvocationsResponse);
+  rpc GetIntegrationInvocation(GetIntegrationInvocationRequest) returns (GetIntegrationInvocationResponse);
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
 
@@ -636,6 +640,11 @@ message IntegrationGrant {
   string workflow_ref = 6;
   bool enabled = 7;
   google.protobuf.Timestamp created_at = 8;
+  string definition_key = 9;
+  string connection_name = 10;
+  string capability_name = 11;
+  string capability_description = 12;
+  string risk = 13;
 }
 
 message IntegrationConnection {
@@ -1002,7 +1011,34 @@ message MaterializeScheduleOccurrenceResponse { Run run = 1; Schedule schedule =
 message CompleteScheduleOccurrenceRequest { MutationContext mutation = 1; string occurrence_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; string outcome = 6; }
 message CompleteScheduleOccurrenceResponse { Schedule schedule = 1; }
 
-message ResolveIntegrationInvocationRequest { string run_ref = 1; string node_ref = 2; string connection_ref = 3; string capability_key = 4; string input_digest = 5; }
-message ResolveIntegrationInvocationResponse { string invocation_ref = 1; string grant_ref = 2; string operation = 3; google.protobuf.Struct bounded_input = 4; string effect_fence = 5; }
-message CompleteIntegrationInvocationRequest { MutationContext mutation = 1; string invocation_ref = 2; string effect_fence = 3; bool success = 4; string result_summary = 5; string safe_error_code = 6; }
+message IntegrationConnectionTestClaim {
+  string test_ref = 1;
+  string connection_ref = 2;
+  string definition_key = 3;
+  string credential_materialization_ref = 4;
+  google.protobuf.Struct public_configuration = 5;
+  WorkLease lease = 6;
+}
+message ClaimIntegrationConnectionTestsRequest { string workload_instance = 1; int32 limit = 2; }
+message ClaimIntegrationConnectionTestsResponse { repeated IntegrationConnectionTestClaim claims = 1; }
+message CompleteIntegrationConnectionTestRequest { MutationContext mutation = 1; string test_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; bool success = 6; string result_summary = 7; string safe_error_code = 8; }
+message CompleteIntegrationConnectionTestResponse { IntegrationConnection connection = 1; }
+
+message ResolveIntegrationInvocationRequest { string run_ref = 1; string node_ref = 2; string connection_ref = 3; string capability_key = 4; google.protobuf.Struct bounded_input = 5; string idempotency_key = 6; }
+message ResolveIntegrationInvocationResponse { string invocation_ref = 1; string grant_ref = 2; string operation = 3; }
+message IntegrationInvocationClaim {
+  string invocation_ref = 1;
+  string definition_key = 2;
+  string connection_ref = 3;
+  string credential_materialization_ref = 4;
+  string capability_key = 5;
+  google.protobuf.Struct public_configuration = 6;
+  google.protobuf.Struct bounded_input = 7;
+  WorkLease lease = 8;
+}
+message ClaimIntegrationInvocationsRequest { string workload_instance = 1; int32 limit = 2; }
+message ClaimIntegrationInvocationsResponse { repeated IntegrationInvocationClaim claims = 1; }
+message GetIntegrationInvocationRequest { string invocation_ref = 1; }
+message GetIntegrationInvocationResponse { string state = 1; string result_summary = 2; string safe_error_code = 3; }
+message CompleteIntegrationInvocationRequest { MutationContext mutation = 1; string invocation_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; bool success = 6; string result_summary = 7; string safe_error_code = 8; }
 message CompleteIntegrationInvocationResponse { Run run = 1; RunGraph graph = 2; }
