@@ -1,9 +1,7 @@
 import { client } from "@/shared/api/generated/openapi/client.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
-import {
-  isProjectScopedRequest,
-  projectReference,
-} from "@/shared/lib/project-scope";
+import { currentLocale } from "@/shared/locale";
+import { selectedProjectRef } from "@/shared/project-context";
 
 const projectReferenceHeader = "X-MatterCodex-Project-ID";
 let projectInterceptorConfigured = false;
@@ -15,11 +13,20 @@ export function configureApiClient(): void {
   });
   if (projectInterceptorConfigured) return;
   client.interceptors.request.use((request) => {
-    const reference = projectReference();
-    if (!reference || !isProjectScopedRequest(request)) return request;
-    const headers = new Headers(request.headers);
-    headers.set(projectReferenceHeader, reference);
-    return new Request(request, { headers });
+    const localizedHeaders = new Headers(request.headers);
+    localizedHeaders.set("Accept-Language", currentLocale());
+    const match = new URL(request.url).pathname.match(
+      /^\/api\/v1\/projects\/([^/]+)/,
+    );
+    const reference = selectedProjectRef();
+    if (
+      !reference ||
+      !match ||
+      decodeURIComponent(match[1] ?? "") !== reference
+    )
+      return new Request(request, { headers: localizedHeaders });
+    localizedHeaders.set(projectReferenceHeader, reference);
+    return new Request(request, { headers: localizedHeaders });
   });
   projectInterceptorConfigured = true;
 }

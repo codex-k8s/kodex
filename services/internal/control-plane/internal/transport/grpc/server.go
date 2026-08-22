@@ -111,8 +111,12 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 	for _, item := range input.GetInputFields() {
 		result.Inputs = append(result.Inputs, entity.WorkflowInputField{Key: item.GetKey(), Label: item.GetLabel(), Type: item.GetValueType(), Help: item.GetDescription(), Required: item.GetRequired()})
 	}
-	for _, item := range input.GetSteps() {
-		result.Steps = append(result.Steps, entity.WorkflowStep{Key: item.GetRef(), Name: item.GetName(), AgentRef: item.GetAgentRef(), Instructions: item.GetPurpose(), HumanGateAfter: item.GetHumanGate()})
+	for index, item := range input.GetSteps() {
+		stepKey := item.GetRef()
+		if stepKey == "" {
+			stepKey = fmt.Sprintf("step-%d", index+1)
+		}
+		result.Steps = append(result.Steps, entity.WorkflowStep{Key: stepKey, Name: item.GetName(), AgentRef: item.GetAgentRef(), Instructions: item.GetPurpose(), HumanGateAfter: item.GetHumanGate()})
 		result.AgentRefs = append(result.AgentRefs, item.GetAgentRef())
 		for _, decision := range item.GetGateDecisions() {
 			result.GateDecisions = append(result.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))

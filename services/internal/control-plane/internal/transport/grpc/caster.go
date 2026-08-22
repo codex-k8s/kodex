@@ -156,7 +156,7 @@ func castAgent(value entity.Agent) *controlplanev1.Agent {
 	}
 	return &controlplanev1.Agent{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Purpose: value.Purpose, RoleDescription: value.RoleDescription, AvatarUrl: value.AvatarURL, State: agentState(value.State), Enabled: value.Enabled, System: value.System, Runtime: &controlplanev1.RuntimeSelection{Ref: value.RuntimeKey, Name: value.RuntimeName, Revision: value.RuntimeRevision, Ready: value.State == "READY"}, PublishedInstructions: castInstruction(value.PublishedInstructions), DraftInstructions: castInstruction(value.DraftInstructions), Capabilities: capabilities, IntegrationGrantRefs: value.IntegrationGrantRefs, KnowledgeArtifactRefs: value.KnowledgeArtifactRefs, UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
 }
-func castWorkflowVersion(value *entity.WorkflowVersion, state string) *controlplanev1.WorkflowVersion {
+func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentRef string) *controlplanev1.WorkflowVersion {
 	if value == nil {
 		return nil
 	}
@@ -168,10 +168,10 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state string) *controlpl
 	for index, step := range value.Steps {
 		steps = append(steps, &controlplanev1.WorkflowStep{Ref: step.Key, Position: int32(index + 1), Name: step.Name, Purpose: step.Instructions, AgentRef: step.AgentRef, TimeoutSeconds: int32(value.TimeoutSeconds), HumanGate: step.HumanGateAfter, GateDecisions: gateDecisions(value.GateDecisions)})
 	}
-	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
+	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }
 func castWorkflow(value entity.Workflow) *controlplanev1.Workflow {
-	return &controlplanev1.Workflow{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Purpose: value.Purpose, State: workflowState(value.State), PublishedVersion: castWorkflowVersion(value.Published, "PUBLISHED"), DraftVersion: castWorkflowVersion(value.Draft, value.State), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Workflow{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Purpose: value.Purpose, State: workflowState(value.State), PublishedVersion: castWorkflowVersion(value.Published, "PUBLISHED", value.CoordinatorAgentRef), DraftVersion: castWorkflowVersion(value.Draft, value.State, value.CoordinatorAgentRef), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
 }
 func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
 	target := &controlplanev1.RunTarget{DisplayName: value.Name}

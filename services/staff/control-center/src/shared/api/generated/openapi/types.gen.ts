@@ -143,7 +143,10 @@ export type AgentInput = {
     purpose: string;
     roleDescription: string;
     avatarUrl?: string;
-    runtimeRef: OpaqueRef;
+    /**
+     * Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
+     */
+    runtimeRef?: OpaqueRef;
     initialInstructions?: string;
 };
 
@@ -179,6 +182,20 @@ export type WorkflowStep = {
     requiredCapabilityKeys: Array<string>;
 };
 
+export type WorkflowStepInput = {
+    position: number;
+    name: string;
+    purpose: string;
+    agentRef: OpaqueRef;
+    parallel: boolean;
+    parallelGroup: number;
+    timeoutSeconds: number;
+    expectedResult: string;
+    humanGate: boolean;
+    gateDecisions: Array<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL'>;
+    requiredCapabilityKeys: Array<string>;
+};
+
 export type Workflow = {
     ref: OpaqueRef;
     version: number;
@@ -201,7 +218,7 @@ export type WorkflowInput = {
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
-    steps?: Array<WorkflowStep>;
+    steps?: Array<WorkflowStepInput>;
     maxConcurrency?: number;
     timeoutSeconds?: number;
     completionCriteria?: string;
@@ -644,6 +661,64 @@ export type Query = string;
 export type PageSize = number;
 
 export type PageToken = string;
+
+export type DeleteOwnerSessionData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session';
+};
+
+export type DeleteOwnerSessionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteOwnerSessionError = DeleteOwnerSessionErrors[keyof DeleteOwnerSessionErrors];
+
+export type DeleteOwnerSessionResponses = {
+    /**
+     * Защищённая browser-сессия завершена
+     */
+    204: void;
+};
+
+export type DeleteOwnerSessionResponse = DeleteOwnerSessionResponses[keyof DeleteOwnerSessionResponses];
+
+export type CreateOwnerSessionData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session';
+};
+
+export type CreateOwnerSessionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateOwnerSessionError = CreateOwnerSessionErrors[keyof CreateOwnerSessionErrors];
+
+export type CreateOwnerSessionResponses = {
+    /**
+     * Защищённая browser-сессия создана
+     */
+    204: void;
+};
+
+export type CreateOwnerSessionResponse = CreateOwnerSessionResponses[keyof CreateOwnerSessionResponses];
 
 export type GetBootstrapStateData = {
     body?: never;

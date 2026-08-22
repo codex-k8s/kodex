@@ -3,27 +3,44 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
 const props = defineProps<{ state: string }>();
-const i18n = useI18n();
+const translator = useI18n();
 const label = computed(() =>
-  i18n.te(`states.${props.state}`)
-    ? i18n.t(`states.${props.state}`)
+  translator.te(`states.${props.state}`)
+    ? translator.t(`states.${props.state}`)
     : props.state,
 );
 const tone = computed(() => {
-  if (/FAILED|ERROR|UNAVAILABLE|DELETED|DEAD_LETTER/.test(props.state))
-    return "danger";
-  if (/WAIT|PENDING|QUEUED|BLOCKED|CLAIMED|RESTORING/.test(props.state))
-    return "warning";
   if (
-    /ACTIVE|READY|AVAILABLE|SUCCEEDED|COMPLETED|RESTORED|UI|ui/.test(
-      props.state,
-    )
+    [
+      "READY",
+      "ACTIVE",
+      "SUCCEEDED",
+      "PUBLISHED",
+      "CONNECTED",
+      "CLEAN",
+      "APPROVED",
+    ].includes(props.state)
   )
     return "success";
+  if (["FAILED", "REJECTED", "QUARANTINED", "EXPIRED"].includes(props.state))
+    return "danger";
+  if (
+    [
+      "WAITING",
+      "WAITING_HUMAN",
+      "OPEN",
+      "NEEDS_ATTENTION",
+      "CANCELLING",
+      "RECOVERING",
+    ].includes(props.state)
+  )
+    return "warning";
   return "neutral";
 });
 </script>
 
 <template>
-  <span class="badge" :class="`badge--${tone}`">{{ label }}</span>
+  <span class="status-badge" :class="`status-badge--${tone}`">
+    <span class="status-badge__dot" aria-hidden="true" />{{ label }}
+  </span>
 </template>

@@ -6,15 +6,22 @@ import {
 } from "oidc-client-ts";
 import { computed, ref } from "vue";
 
+import { requestSignal } from "@/shared/api/client";
 import {
-  admitOwnerSession,
-  probeOwnerSession,
-  revokeOwnerSession,
-} from "@/shared/api/adapters/session";
+  createClient,
+  createConfig,
+} from "@/shared/api/generated/openapi/client";
+import {
+  createOwnerSession,
+  deleteOwnerSession,
+  getBootstrapState,
+} from "@/shared/api/generated/openapi/sdk.gen";
+import { csrfToken, etag, idempotencyKey } from "@/shared/api/mutation";
 import {
   asProblem,
   resetUnauthorizedNotification,
   type AppProblem,
+  unwrap,
 } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
 
@@ -25,16 +32,7 @@ export type SessionPhase =
   | "forbidden"
   | "error";
 
-const sessionEtagStorageKey = "mattercodex.owner-session-etag";
-
-function storedSessionEtag(): string | null {
-  return window.localStorage.getItem(sessionEtagStorageKey);
-}
-
-function persistSessionEtag(value: string | null): void {
-  if (value) window.localStorage.setItem(sessionEtagStorageKey, value);
-  else window.localStorage.removeItem(sessionEtagStorageKey);
-}
+const sessionRevisionKey = "mattercodex.session.revision";
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
@@ -55,44 +53,36 @@ function oidcManager(): UserManager {
 
 export const useSessionStore = defineStore("session", () => {
   const phase = ref<SessionPhase>("checking");
-  const problem = ref<AppProblem | null>(null);
-  const sessionEtag = ref<string | null>(storedSessionEtag());
-  const canRetryAdmission = ref(false);
-  let requestGeneration = 0;
-  let pendingAdmission:
-    | { accessToken: string; manager: UserManager }
-    | undefined;
+  const problem = ref<AppProblem>();
+  const revision = ref<number>(
+    Number.parseInt(window.sessionStorage.getItem(sessionRevisionKey) ?? "0"),
+  );
+  let generation = 0;
+
   const canLogout = computed(
-    () => phase.value === "authenticated" && sessionEtag.value !== null,
+    () => phase.value === "authenticated" && revision.value > 0,
   );
 
-  function invalidate(): void {
-    requestGeneration += 1;
-    pendingAdmission = undefined;
-    canRetryAdmission.value = false;
-    sessionEtag.value = null;
-    persistSessionEtag(null);
-    problem.value = null;
+  function setUnauthenticated(): void {
+    generation += 1;
+    revision.value = 0;
+    window.sessionStorage.removeItem(sessionRevisionKey);
     phase.value = "unauthenticated";
   }
 
   async function probe(): Promise<void> {
-    const generation = ++requestGeneration;
+    const current = ++generation;
     phase.value = "checking";
-    problem.value = null;
+    problem.value = undefined;
     try {
-      await probeOwnerSession();
-      if (generation !== requestGeneration) return;
+      await unwrap(getBootstrapState({ signal: requestSignal() }));
+      if (current !== generation) return;
       phase.value = "authenticated";
       resetUnauthorizedNotification();
     } catch (error) {
-      if (generation !== requestGeneration) return;
+      if (current !== generation) return;
       const normalized = asProblem(error);
       problem.value = normalized;
-      if (normalized.kind === "unauthorized") {
-        sessionEtag.value = null;
-        persistSessionEtag(null);
-      }
       phase.value =
         normalized.kind === "unauthorized"
           ? "unauthenticated"
@@ -102,101 +92,74 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
-  async function verify(): Promise<void> {
-    if (phase.value !== "authenticated") return;
-    const generation = ++requestGeneration;
-    try {
-      await probeOwnerSession();
-      if (generation === requestGeneration) resetUnauthorizedNotification();
-    } catch (error) {
-      if (generation !== requestGeneration) return;
-      const normalized = asProblem(error);
-      if (normalized.kind === "unauthorized") invalidate();
-    }
-  }
-
   async function beginLogin(): Promise<void> {
-    requestGeneration += 1;
-    pendingAdmission = undefined;
-    canRetryAdmission.value = false;
-    problem.value = null;
     await oidcManager().signinRedirect();
   }
 
   async function completeLogin(): Promise<void> {
-    const generation = ++requestGeneration;
+    const current = ++generation;
     phase.value = "checking";
-    problem.value = null;
-    const manager = pendingAdmission?.manager ?? oidcManager();
+    problem.value = undefined;
+    const manager = oidcManager();
     try {
-      if (!pendingAdmission) {
-        const user = await manager.signinRedirectCallback();
-        if (!user.access_token) throw new Error("OIDC bearer is unavailable");
-        pendingAdmission = { accessToken: user.access_token, manager };
-      }
-      const readback = await admitOwnerSession(pendingAdmission.accessToken);
-      await manager.removeUser().catch(() => undefined);
-      if (generation !== requestGeneration) return;
-      pendingAdmission = undefined;
-      canRetryAdmission.value = false;
-      sessionEtag.value = readback.etag ?? null;
-      persistSessionEtag(sessionEtag.value);
+      const user = await manager.signinRedirectCallback();
+      if (!user.access_token) throw new Error("OIDC bearer is unavailable");
+      const oneUseClient = createClient(
+        createConfig({
+          auth: () => user.access_token,
+          baseUrl: runtimeConfig().apiBaseUrl,
+          credentials: "include",
+        }),
+      );
+      const response = await unwrap(
+        createOwnerSession({
+          client: oneUseClient,
+          headers: { "Idempotency-Key": idempotencyKey() },
+          signal: requestSignal(),
+        }),
+      );
+      const parsedRevision = Number.parseInt(
+        response.etag?.replaceAll('"', "") ?? "0",
+      );
+      if (!Number.isSafeInteger(parsedRevision) || parsedRevision < 1)
+        throw new Error("Owner session revision is unavailable");
+      await manager.removeUser();
+      if (current !== generation) return;
+      revision.value = parsedRevision;
+      window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
       phase.value = "authenticated";
       resetUnauthorizedNotification();
     } catch (error) {
-      if (generation !== requestGeneration) return;
-      const normalized = asProblem(error);
-      problem.value = normalized;
+      if (current !== generation) return;
+      problem.value = asProblem(error);
       phase.value = "error";
-      canRetryAdmission.value = Boolean(
-        pendingAdmission && normalized.retryable,
-      );
-      if (!canRetryAdmission.value) {
-        pendingAdmission = undefined;
-        await manager.removeUser().catch(() => undefined);
-      }
       throw error;
     }
   }
 
   async function logout(): Promise<void> {
-    if (!sessionEtag.value) return;
-    const generation = ++requestGeneration;
-    phase.value = "checking";
-    problem.value = null;
-    try {
-      await revokeOwnerSession(sessionEtag.value);
-      if (generation !== requestGeneration) return;
-      sessionEtag.value = null;
-      persistSessionEtag(null);
-      phase.value = "unauthenticated";
-    } catch (error) {
-      if (generation !== requestGeneration) return;
-      const normalized = asProblem(error);
-      problem.value = normalized;
-      phase.value =
-        normalized.kind === "unauthorized"
-          ? "unauthenticated"
-          : normalized.kind === "forbidden"
-            ? "forbidden"
-            : "error";
-      if (normalized.kind === "unauthorized") {
-        sessionEtag.value = null;
-        persistSessionEtag(null);
-      }
-    }
+    if (revision.value < 1) return;
+    await unwrap(
+      deleteOwnerSession({
+        headers: {
+          "Idempotency-Key": idempotencyKey(),
+          "X-CSRF-Token": csrfToken(),
+          "If-Match": etag(revision.value),
+        },
+        signal: requestSignal(),
+      }),
+    );
+    setUnauthenticated();
   }
 
   return {
     phase,
     problem,
     canLogout,
-    canRetryAdmission,
     probe,
-    verify,
     beginLogin,
     completeLogin,
     logout,
-    invalidate,
+    invalidate: setUnauthenticated,
   };
 });

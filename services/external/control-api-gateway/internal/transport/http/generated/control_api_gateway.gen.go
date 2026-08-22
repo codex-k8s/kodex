@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	OidcBearerScopes    = "oidcBearer.Scopes"
 	SessionCookieScopes = "sessionCookie.Scopes"
 )
 
@@ -463,6 +464,14 @@ const (
 	WorkflowStepGateDecisionsREQUESTCHANGES WorkflowStepGateDecisions = "REQUEST_CHANGES"
 )
 
+// Defines values for WorkflowStepInputGateDecisions.
+const (
+	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	REJECT         WorkflowStepInputGateDecisions = "REJECT"
+	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+)
+
 // Defines values for CommandSystemAssistantJSONBodyAction.
 const (
 	RECOVER CommandSystemAssistantJSONBodyAction = "RECOVER"
@@ -521,12 +530,14 @@ type AgentCommandAction string
 
 // AgentInput defines model for AgentInput.
 type AgentInput struct {
-	AvatarUrl           *string   `json:"avatarUrl,omitempty"`
-	InitialInstructions *string   `json:"initialInstructions,omitempty"`
-	Name                string    `json:"name"`
-	Purpose             string    `json:"purpose"`
-	RoleDescription     string    `json:"roleDescription"`
-	RuntimeRef          OpaqueRef `json:"runtimeRef"`
+	AvatarUrl           *string `json:"avatarUrl,omitempty"`
+	InitialInstructions *string `json:"initialInstructions,omitempty"`
+	Name                string  `json:"name"`
+	Purpose             string  `json:"purpose"`
+	RoleDescription     string  `json:"roleDescription"`
+
+	// RuntimeRef Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
+	RuntimeRef *OpaqueRef `json:"runtimeRef,omitempty"`
 }
 
 // AgentPage defines model for AgentPage.
@@ -1236,13 +1247,13 @@ type WorkflowCommandAction string
 
 // WorkflowInput defines model for WorkflowInput.
 type WorkflowInput struct {
-	CompletionCriteria  *string         `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef OpaqueRef       `json:"coordinatorAgentRef"`
-	MaxConcurrency      *int            `json:"maxConcurrency,omitempty"`
-	Name                string          `json:"name"`
-	Purpose             string          `json:"purpose"`
-	Steps               *[]WorkflowStep `json:"steps,omitempty"`
-	TimeoutSeconds      *int            `json:"timeoutSeconds,omitempty"`
+	CompletionCriteria  *string              `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef OpaqueRef            `json:"coordinatorAgentRef"`
+	MaxConcurrency      *int                 `json:"maxConcurrency,omitempty"`
+	Name                string               `json:"name"`
+	Purpose             string               `json:"purpose"`
+	Steps               *[]WorkflowStepInput `json:"steps,omitempty"`
+	TimeoutSeconds      *int                 `json:"timeoutSeconds,omitempty"`
 }
 
 // WorkflowPage defines model for WorkflowPage.
@@ -1269,6 +1280,24 @@ type WorkflowStep struct {
 
 // WorkflowStepGateDecisions defines model for WorkflowStep.GateDecisions.
 type WorkflowStepGateDecisions string
+
+// WorkflowStepInput defines model for WorkflowStepInput.
+type WorkflowStepInput struct {
+	AgentRef               OpaqueRef                        `json:"agentRef"`
+	ExpectedResult         string                           `json:"expectedResult"`
+	GateDecisions          []WorkflowStepInputGateDecisions `json:"gateDecisions"`
+	HumanGate              bool                             `json:"humanGate"`
+	Name                   string                           `json:"name"`
+	Parallel               bool                             `json:"parallel"`
+	ParallelGroup          int                              `json:"parallelGroup"`
+	Position               int                              `json:"position"`
+	Purpose                string                           `json:"purpose"`
+	RequiredCapabilityKeys []string                         `json:"requiredCapabilityKeys"`
+	TimeoutSeconds         int                              `json:"timeoutSeconds"`
+}
+
+// WorkflowStepInputGateDecisions defines model for WorkflowStepInput.GateDecisions.
+type WorkflowStepInputGateDecisions string
 
 // AgentRef defines model for AgentRef.
 type AgentRef = OpaqueRef
@@ -1596,6 +1625,18 @@ type CommandScheduleParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DeleteOwnerSessionParams defines parameters for DeleteOwnerSession.
+type DeleteOwnerSessionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// CreateOwnerSessionParams defines parameters for CreateOwnerSession.
+type CreateOwnerSessionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
 // AddSessionTurnParams defines parameters for AddSessionTurn.
 type AddSessionTurnParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -1879,6 +1920,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/schedules/{scheduleRef}/commands)
 	CommandSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params CommandScheduleParams)
+
+	// (DELETE /api/v1/session)
+	DeleteOwnerSession(w http.ResponseWriter, r *http.Request, params DeleteOwnerSessionParams)
+
+	// (POST /api/v1/session)
+	CreateOwnerSession(w http.ResponseWriter, r *http.Request, params CreateOwnerSessionParams)
 
 	// (POST /api/v1/sessions/{sessionRef}/turns)
 	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
@@ -5321,6 +5368,152 @@ func (siw *ServerInterfaceWrapper) CommandSchedule(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteOwnerSession operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOwnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOwnerSession(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOwnerSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateOwnerSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OidcBearerScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOwnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOwnerSession(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AddSessionTurn operation middleware
 func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http.Request) {
 
@@ -6027,6 +6220,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/schedules/{scheduleRef}/commands", wrapper.CommandSchedule)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/session", wrapper.DeleteOwnerSession)
+	m.HandleFunc("POST "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)

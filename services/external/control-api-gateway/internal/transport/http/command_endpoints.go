@@ -100,7 +100,7 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: body.RuntimeRef, InitialInstructions: stringValue(body.InitialInstructions)})
+	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -116,7 +116,7 @@ func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref ge
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: body.RuntimeRef})
+	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -218,7 +218,7 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	}
 	if body.Steps != nil {
 		for _, step := range *body.Steps {
-			current := &controlplanev1.WorkflowStep{Ref: step.Ref, Position: int32(step.Position), Name: step.Name, Purpose: step.Purpose, AgentRef: stringValue(step.AgentRef), Parallel: step.Parallel, ParallelGroup: int32(step.ParallelGroup), TimeoutSeconds: int32(step.TimeoutSeconds), ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGate, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
+			current := &controlplanev1.WorkflowStep{Position: int32(step.Position), Name: step.Name, Purpose: step.Purpose, AgentRef: step.AgentRef, Parallel: step.Parallel, ParallelGroup: int32(step.ParallelGroup), TimeoutSeconds: int32(step.TimeoutSeconds), ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGate, RequiredCapabilityKeys: step.RequiredCapabilityKeys}
 			for _, decision := range step.GateDecisions {
 				current.GateDecisions = append(current.GateDecisions, gateDecision(string(decision)))
 			}

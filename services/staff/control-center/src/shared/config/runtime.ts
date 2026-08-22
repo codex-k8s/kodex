@@ -107,10 +107,7 @@ function parseConfig(value: unknown): RuntimeConfig {
     throw new Error("Runtime config request timeout is invalid");
   }
   const origin = browserOrigin();
-  const apiBaseUrl = sameOriginUrl(
-    requiredString(value, "apiBaseUrl"),
-    origin,
-  );
+  const apiBaseUrl = sameOriginUrl(requiredString(value, "apiBaseUrl"), origin);
   const realtimeUrl = sameOriginUrl(
     requiredString(value, "realtimeUrl"),
     origin,

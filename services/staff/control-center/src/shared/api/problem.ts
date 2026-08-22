@@ -14,6 +14,8 @@ export class AppProblem extends Error {
   readonly correlationId?: string;
   readonly retryable: boolean;
   readonly kind: ProblemKind;
+  readonly title?: string;
+  readonly detail?: string;
 
   constructor(value: {
     status: number;
@@ -21,6 +23,8 @@ export class AppProblem extends Error {
     correlationId?: string;
     retryable: boolean;
     kind: ProblemKind;
+    title?: string;
+    detail?: string;
   }) {
     super(value.code);
     this.name = "AppProblem";
@@ -29,6 +33,8 @@ export class AppProblem extends Error {
     this.correlationId = value.correlationId;
     this.retryable = value.retryable;
     this.kind = value.kind;
+    this.title = value.title;
+    this.detail = value.detail;
   }
 }
 
@@ -76,6 +82,15 @@ function isProblem(value: unknown): value is Problem {
   );
 }
 
+function isRetryable(value: unknown): value is { retryable: boolean } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "retryable" in value &&
+    typeof value.retryable === "boolean"
+  );
+}
+
 export function normalizeProblem(
   value: unknown,
   response?: Response,
@@ -90,10 +105,17 @@ export function normalizeProblem(
     isProblem(value) && typeof value.correlationId === "string"
       ? value.correlationId
       : undefined;
-  const retryable =
-    isProblem(value) && typeof value.retryable === "boolean"
-      ? value.retryable
-      : status === 0 || status === 429 || status >= 500;
+  const title =
+    isProblem(value) && typeof value.title === "string"
+      ? value.title
+      : undefined;
+  const detail =
+    isProblem(value) && typeof value.detail === "string"
+      ? value.detail
+      : undefined;
+  const retryable = isRetryable(value)
+    ? value.retryable
+    : status === 0 || status === 429 || status >= 500;
   const kind: ProblemKind =
     status === 401
       ? "unauthorized"
@@ -106,11 +128,15 @@ export function normalizeProblem(
             : status === 0 || status === 429 || status >= 500
               ? "unavailable"
               : "unknown";
-  return new AppProblem(
-    correlationId === undefined
-      ? { status, code, retryable, kind }
-      : { status, code, correlationId, retryable, kind },
-  );
+  return new AppProblem({
+    status,
+    code,
+    retryable,
+    kind,
+    ...(correlationId ? { correlationId } : {}),
+    ...(title ? { title } : {}),
+    ...(detail ? { detail } : {}),
+  });
 }
 
 export interface ApiReadback<T> {

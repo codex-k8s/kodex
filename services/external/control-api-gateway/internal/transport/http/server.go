@@ -42,8 +42,6 @@ func (server *Server) AttachRealtime(handler http.Handler) { server.realtime = h
 
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/session", server.createSession)
-	mux.HandleFunc("DELETE /api/v1/session", server.deleteSession)
 	if server.realtime != nil {
 		mux.Handle("GET /api/v1/runs/{runRef}/stream", server.realtime)
 	}
@@ -72,7 +70,7 @@ func (server *Server) localizationMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (server *Server) createSession(writer http.ResponseWriter, request *http.Request) {
+func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *http.Request, _ generated.CreateOwnerSessionParams) {
 	principal, bearer, ok := boundary.VerifiedAuthorizationFromContext(request.Context())
 	if !ok {
 		writeLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
@@ -98,7 +96,12 @@ func (server *Server) createSession(writer http.ResponseWriter, request *http.Re
 	writer.WriteHeader(http.StatusNoContent)
 }
 
-func (server *Server) deleteSession(writer http.ResponseWriter, _ *http.Request) {
+func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *http.Request, parameters generated.DeleteOwnerSessionParams) {
+	identity, ok := boundary.IdentityFromContext(request.Context())
+	if !ok || string(parameters.IfMatch) != fmt.Sprintf("\"%d\"", identity.SessionRevision) {
+		writeLocalProblem(writer, http.StatusPreconditionFailed, "STALE_VERSION", false)
+		return
+	}
 	for _, item := range []struct {
 		name     string
 		httpOnly bool

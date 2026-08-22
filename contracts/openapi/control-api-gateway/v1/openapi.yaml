@@ -12,6 +12,7 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Session
   - name: Bootstrap
   - name: Projects
   - name: Agents
@@ -25,6 +26,27 @@ tags:
   - name: Administration
 
 paths:
+  /api/v1/session:
+    post:
+      tags: [Session]
+      operationId: createOwnerSession
+      security: [{ oidcBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204':
+          description: Защищённая browser-сессия создана
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Session]
+      operationId: deleteOwnerSession
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '204': { description: Защищённая browser-сессия завершена }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/bootstrap:
     get:
       tags: [Bootstrap]
@@ -963,6 +985,10 @@ paths:
 
 components:
   securitySchemes:
+    oidcBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
     sessionCookie:
       type: apiKey
       in: cookie
@@ -1250,13 +1276,15 @@ components:
     AgentInput:
       type: object
       additionalProperties: false
-      required: [name, purpose, roleDescription, runtimeRef]
+      required: [name, purpose, roleDescription]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         roleDescription: { type: string, minLength: 1, maxLength: 1000 }
         avatarUrl: { type: string, maxLength: 500 }
-        runtimeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runtimeRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
         initialInstructions: { type: string, maxLength: 65536 }
     AgentCommand:
       type: object
@@ -1298,6 +1326,22 @@ components:
         humanGate: { type: boolean }
         gateDecisions: { type: array, uniqueItems: true, items: { type: string, enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL] } }
         requiredCapabilityKeys: { type: array, maxItems: 50, items: { type: string, maxLength: 80 } }
+    WorkflowStepInput:
+      type: object
+      additionalProperties: false
+      required: [position, name, purpose, agentRef, parallel, parallelGroup, timeoutSeconds, expectedResult, humanGate, gateDecisions, requiredCapabilityKeys]
+      properties:
+        position: { type: integer, minimum: 1, maximum: 200 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        purpose: { type: string, minLength: 1, maxLength: 1000 }
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        parallel: { type: boolean }
+        parallelGroup: { type: integer, minimum: 0, maximum: 50 }
+        timeoutSeconds: { type: integer, minimum: 1, maximum: 86400 }
+        expectedResult: { type: string, maxLength: 1000 }
+        humanGate: { type: boolean }
+        gateDecisions: { type: array, uniqueItems: true, maxItems: 4, items: { type: string, enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL] } }
+        requiredCapabilityKeys: { type: array, maxItems: 50, items: { type: string, maxLength: 80 } }
     Workflow:
       type: object
       additionalProperties: false
@@ -1326,7 +1370,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: '#/components/schemas/OpaqueRef' }
-        steps: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/WorkflowStep' } }
+        steps: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/WorkflowStepInput' } }
         maxConcurrency: { type: integer, minimum: 1, maximum: 100, default: 1 }
         timeoutSeconds: { type: integer, minimum: 1, maximum: 604800, default: 7200 }
         completionCriteria: { type: string, maxLength: 2000 }

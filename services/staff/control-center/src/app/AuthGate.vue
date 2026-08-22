@@ -1,49 +1,29 @@
 <script setup lang="ts">
-import { LogIn, RefreshCw, ShieldCheck } from "@lucide/vue";
-
 import { useSessionStore } from "@/features/session/store";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const session = useSessionStore();
 </script>
 
 <template>
   <main class="auth-gate">
-    <section class="auth-gate__panel">
+    <section class="auth-card">
       <div class="brand-mark" aria-hidden="true">M</div>
-      <ShieldCheck :size="34" aria-hidden="true" />
       <h1>{{ $t("auth.title") }}</h1>
       <p>{{ $t("auth.description") }}</p>
-      <div
-        v-if="session.phase === 'checking'"
-        class="auth-gate__status"
-        role="status"
-      >
+      <p v-if="session.phase === 'checking'" role="status">
         {{ $t("auth.checking") }}
-      </div>
-      <template v-else-if="session.phase === 'unauthenticated'">
-        <button
-          class="button button--primary"
-          type="button"
-          @click="session.beginLogin"
-        >
-          <LogIn :size="17" aria-hidden="true" />{{ $t("auth.signIn") }}
-        </button>
-      </template>
+      </p>
+      <button
+        v-else-if="session.phase === 'unauthenticated'"
+        class="button button--primary button--large"
+        type="button"
+        @click="session.beginLogin"
+      >
+        {{ $t("auth.signIn") }}
+      </button>
       <template v-else>
-        <div class="notice notice--danger" role="alert">
-          {{
-            session.phase === "forbidden"
-              ? $t("common.forbidden")
-              : $t("common.error")
-          }}
-        </div>
-        <button
-          class="button button--secondary"
-          type="button"
-          @click="session.probe"
-        >
-          <RefreshCw :size="16" aria-hidden="true" />{{ $t("common.retry") }}
-        </button>
+        <ProblemNotice :problem="session.problem" @retry="session.probe" />
       </template>
     </section>
   </main>
