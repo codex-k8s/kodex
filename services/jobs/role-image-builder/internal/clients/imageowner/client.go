@@ -103,38 +103,37 @@ func (client *Client) Check(ctx context.Context) error {
 func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.ControlPlane.ClaimImageAdmission(callCtx,
+	response, err := client.shared.RoleImages.ClaimImageAdmission(callCtx,
 		&controlplanev1.ClaimImageAdmissionRequest{IdempotencyKey: key})
 	if err != nil {
 		return Claim{}, err
 	}
-	resource := response.GetImageArtifact()
-	spec := resource.GetSpec().GetImageArtifact()
-	if resource == nil || spec == nil || resource.GetVersion() == 0 || response.GetClaimToken() == "" ||
-		response.GetFence() == 0 || response.GetClaimExpiresAt() == nil || len(spec.GetPlatforms()) == 0 {
+	artifact := response.GetImageArtifact()
+	if artifact == nil || artifact.GetVersion() == 0 || response.GetClaimToken() == "" ||
+		response.GetFence() == 0 || response.GetClaimExpiresAt() == nil || len(artifact.GetPlatforms()) == 0 {
 		return Claim{}, errors.New("image admission claim is incomplete")
 	}
-	platforms := make([]string, 0, len(spec.GetPlatforms()))
-	for _, platform := range spec.GetPlatforms() {
+	platforms := make([]string, 0, len(artifact.GetPlatforms()))
+	for _, platform := range artifact.GetPlatforms() {
 		value := platform.GetOs() + "/" + platform.GetArchitecture()
 		if platform.GetVariant() != "" {
 			value += "/" + platform.GetVariant()
 		}
 		platforms = append(platforms, value)
 	}
-	return Claim{ArtifactID: resource.GetId(), Version: resource.GetVersion(), Fence: response.GetFence(),
+	return Claim{ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(), Fence: response.GetFence(),
 		ClaimToken: response.GetClaimToken(), ExpiresAt: response.GetClaimExpiresAt().AsTime(),
-		RecipeID: spec.GetRecipeId(), RecipeVersion: spec.GetRecipeVersion(), RecipeGeneration: spec.GetRecipeGeneration(),
-		SpecSHA256: spec.GetSpecSha256(), BuildID: spec.GetBuildId(), BuildVersion: spec.GetBuildVersion(),
-		BuildAttempt: spec.GetBuildAttempt(), StagingReference: spec.GetStagingReference(),
-		ManifestDigest: spec.GetManifestDigest(), ImmutableBuildSHA256: spec.GetImmutableBuildSha256(),
-		ProvenanceSHA256: spec.GetProvenanceSha256(), PolicyRevision: spec.GetPolicyRevision(),
-		PolicySHA256: spec.GetPolicySha256(), BaseImageDigest: spec.GetBaseImageDigest(),
-		SourceSHA256: spec.GetSourceSha256(), ContextSHA256: spec.GetContextSha256(),
-		BuilderSHA256: spec.GetBuilderSha256(), FrontendSHA256: spec.GetFrontendSha256(),
-		ToolchainSHA256: spec.GetToolchainSha256(), Platforms: platforms,
-		RoleRuntimeContractRevision: spec.GetRoleRuntimeContractRevision(),
-		RoleRuntimeContractSHA256:   spec.GetRoleRuntimeContractSha256()}, nil
+		RecipeID: artifact.GetRecipeRef(), RecipeVersion: artifact.GetRecipeVersion(), RecipeGeneration: artifact.GetRecipeGeneration(),
+		SpecSHA256: artifact.GetSpecSha256(), BuildID: artifact.GetBuildRef(), BuildVersion: artifact.GetBuildVersion(),
+		BuildAttempt: artifact.GetBuildAttempt(), StagingReference: artifact.GetStagingReference(),
+		ManifestDigest: artifact.GetManifestDigest(), ImmutableBuildSHA256: artifact.GetImmutableBuildSha256(),
+		ProvenanceSHA256: artifact.GetProvenanceSha256(), PolicyRevision: artifact.GetPolicyRevision(),
+		PolicySHA256: artifact.GetPolicySha256(), BaseImageDigest: artifact.GetBaseImageDigest(),
+		SourceSHA256: artifact.GetSourceSha256(), ContextSHA256: artifact.GetContextSha256(),
+		BuilderSHA256: artifact.GetBuilderSha256(), FrontendSHA256: artifact.GetFrontendSha256(),
+		ToolchainSHA256: artifact.GetToolchainSha256(), Platforms: platforms,
+		RoleRuntimeContractRevision: artifact.GetRoleRuntimeContractRevision(),
+		RoleRuntimeContractSHA256:   artifact.GetRoleRuntimeContractSha256()}, nil
 }
 
 func (client *Client) Record(ctx context.Context, key string, claim Claim, evidence AdmissionEvidence) error {
@@ -144,8 +143,8 @@ func (client *Client) Record(ctx context.Context, key string, claim Claim, evide
 	}
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.ControlPlane.RecordImageAdmission(callCtx, &controlplanev1.RecordImageAdmissionRequest{
-		IdempotencyKey: key, ImageArtifactId: claim.ArtifactID, ExpectedVersion: claim.Version,
+	response, err := client.shared.RoleImages.RecordImageAdmission(callCtx, &controlplanev1.RecordImageAdmissionRequest{
+		IdempotencyKey: key, ImageArtifactRef: claim.ArtifactID, ExpectedVersion: claim.Version,
 		ExpectedFence: claim.Fence, ClaimToken: claim.ClaimToken, ManifestDigest: claim.ManifestDigest,
 		ImmutableBuildSha256: claim.ImmutableBuildSHA256, ProvenanceSha256: claim.ProvenanceSHA256,
 		SbomSha256: evidence.SBOMSHA256, VulnerabilityEvidenceSha256: evidence.VulnerabilityEvidenceSHA256,
@@ -167,32 +166,31 @@ func (client *Client) Record(ctx context.Context, key string, claim Claim, evide
 func (client *Client) ClaimPromotion(ctx context.Context, key string) (Promotion, error) {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.ControlPlane.ClaimImagePromotion(callCtx,
+	response, err := client.shared.RoleImages.ClaimImagePromotion(callCtx,
 		&controlplanev1.ClaimImagePromotionRequest{IdempotencyKey: key})
 	if err != nil {
 		return Promotion{}, err
 	}
 	artifact := response.GetImageArtifact()
-	spec := artifact.GetSpec().GetImageArtifact()
-	if artifact == nil || spec == nil || artifact.GetId() == "" || artifact.GetVersion() == 0 || response.GetPromotionClaim() == "" ||
+	if artifact == nil || artifact.GetRef() == "" || artifact.GetVersion() == 0 || response.GetPromotionClaim() == "" ||
 		response.GetFence() == 0 || response.GetAuthorityGeneration() == 0 || response.GetClaimExpiresAt() == nil ||
-		spec.GetStagingReference() == "" || spec.GetManifestDigest() == "" || spec.GetAdmissionRevision() == 0 ||
-		spec.GetAdmissionReceiptSha256() == "" || spec.GetAdmissionReceiptOciManifestDigest() == "" {
+		artifact.GetStagingReference() == "" || artifact.GetManifestDigest() == "" || artifact.GetAdmissionRevision() == 0 ||
+		artifact.GetAdmissionReceiptSha256() == "" || artifact.GetAdmissionReceiptOciManifestDigest() == "" {
 		return Promotion{}, errors.New("image promotion claim is incomplete")
 	}
-	return Promotion{ArtifactID: artifact.GetId(), Version: artifact.GetVersion(),
+	return Promotion{ArtifactID: artifact.GetRef(), Version: artifact.GetVersion(),
 		Claim: response.GetPromotionClaim(), Fence: response.GetFence(),
-		ExpiresAt: response.GetClaimExpiresAt().AsTime(), StagingReference: spec.GetStagingReference(),
-		ManifestDigest: spec.GetManifestDigest(), AdmissionRevision: spec.GetAdmissionRevision(),
-		AdmissionReceiptSHA256:            spec.GetAdmissionReceiptSha256(),
-		AdmissionReceiptOCIManifestDigest: spec.GetAdmissionReceiptOciManifestDigest()}, nil
+		ExpiresAt: response.GetClaimExpiresAt().AsTime(), StagingReference: artifact.GetStagingReference(),
+		ManifestDigest: artifact.GetManifestDigest(), AdmissionRevision: artifact.GetAdmissionRevision(),
+		AdmissionReceiptSHA256:            artifact.GetAdmissionReceiptSha256(),
+		AdmissionReceiptOCIManifestDigest: artifact.GetAdmissionReceiptOciManifestDigest()}, nil
 }
 
 func (client *Client) Complete(ctx context.Context, key string, promotion Promotion) error {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.ControlPlane.CompleteImagePromotion(callCtx, &controlplanev1.CompleteImagePromotionRequest{
-		IdempotencyKey: key, ImageArtifactId: promotion.ArtifactID, ExpectedVersion: promotion.Version,
+	response, err := client.shared.RoleImages.CompleteImagePromotion(callCtx, &controlplanev1.CompleteImagePromotionRequest{
+		IdempotencyKey: key, ImageArtifactRef: promotion.ArtifactID, ExpectedVersion: promotion.Version,
 		AuthorizationToken: promotion.AuthorizationToken, PromotedReference: promotion.PromotedReference,
 		ManifestDigest: promotion.ManifestDigest, PromotionReadbackSha256: promotion.ReadbackSHA256,
 	})
@@ -208,9 +206,9 @@ func (client *Client) Complete(ctx context.Context, key string, promotion Promot
 func (client *Client) AuthorizePromotion(ctx context.Context, key string, promotion *Promotion) error {
 	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
 	defer cancel()
-	response, err := client.shared.ControlPlane.AuthorizeImagePromotion(callCtx,
+	response, err := client.shared.RoleImages.AuthorizeImagePromotion(callCtx,
 		&controlplanev1.AuthorizeImagePromotionRequest{IdempotencyKey: key,
-			ImageArtifactId: promotion.ArtifactID, ExpectedVersion: promotion.Version,
+			ImageArtifactRef: promotion.ArtifactID, ExpectedVersion: promotion.Version,
 			PromotionClaim: promotion.Claim, ManifestDigest: promotion.ManifestDigest})
 	if err != nil {
 		return err

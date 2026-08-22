@@ -76,8 +76,8 @@ type MembershipInput struct {
 	Active                                   bool
 }
 type AgentInput struct {
-	Ref, ProjectRef, Name, Purpose, RoleDescription, AvatarURL, RuntimeRef, Instructions string
-	Enabled                                                                              bool
+	Ref, ProjectRef, RoleDefinitionRef, Name, Purpose, RoleDescription, AvatarURL, RuntimeRef, Instructions string
+	Enabled                                                                                                 bool
 }
 type AgentBindingInput struct {
 	AgentRef, BindingRef string

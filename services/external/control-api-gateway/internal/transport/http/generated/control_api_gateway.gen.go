@@ -513,6 +513,8 @@ type Agent struct {
 	PublishedInstructions *InstructionVersion  `json:"publishedInstructions,omitempty"`
 	Purpose               string               `json:"purpose"`
 	Ref                   OpaqueRef            `json:"ref"`
+	RoleDefinitionName    *string              `json:"roleDefinitionName,omitempty"`
+	RoleDefinitionRef     *OpaqueRef           `json:"roleDefinitionRef,omitempty"`
 	RoleDescription       string               `json:"roleDescription"`
 	RuntimeName           *string              `json:"runtimeName,omitempty"`
 	State                 AgentState           `json:"state"`
@@ -541,7 +543,10 @@ type AgentInput struct {
 	InitialInstructions *string `json:"initialInstructions,omitempty"`
 	Name                string  `json:"name"`
 	Purpose             string  `json:"purpose"`
-	RoleDescription     string  `json:"roleDescription"`
+
+	// RoleDefinitionRef Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
+	RoleDefinitionRef *OpaqueRef `json:"roleDefinitionRef,omitempty"`
+	RoleDescription   string     `json:"roleDescription"`
 
 	// RuntimeRef Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
 	RuntimeRef *OpaqueRef `json:"runtimeRef,omitempty"`

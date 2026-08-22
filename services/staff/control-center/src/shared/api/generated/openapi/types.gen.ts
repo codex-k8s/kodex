@@ -120,6 +120,8 @@ export type Agent = {
     ref: OpaqueRef;
     version: number;
     projectRef: OpaqueRef;
+    roleDefinitionRef?: OpaqueRef;
+    roleDefinitionName?: string;
     name: string;
     purpose: string;
     roleDescription: string;
@@ -142,6 +144,10 @@ export type AgentInput = {
     name: string;
     purpose: string;
     roleDescription: string;
+    /**
+     * Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
+     */
+    roleDefinitionRef?: OpaqueRef;
     avatarUrl?: string;
     /**
      * Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default

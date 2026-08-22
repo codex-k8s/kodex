@@ -48,7 +48,10 @@ CREATE TABLE control_plane.owner_claim_contracts (
 );
 
 CREATE TABLE control_plane.worker_grant_high_watermarks (
-    workload_id text PRIMARY KEY CHECK (workload_id IN ('automation-scheduler', 'integration-gateway', 'runtime-controller')),
+    workload_id text PRIMARY KEY CHECK (workload_id IN (
+        'automation-scheduler', 'integration-gateway', 'runtime-controller',
+        'role-image-builder', 'image-admission', 'image-promotion'
+    )),
     revision bigint NOT NULL CHECK (revision > 0),
     issued_at timestamptz NOT NULL,
     expires_at timestamptz NOT NULL,
@@ -117,11 +120,31 @@ CREATE TABLE control_plane.runtime_profiles (
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
 );
 
+CREATE TABLE control_plane.role_definitions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    stable_key text,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    role_type text NOT NULL CHECK (char_length(role_type) BETWEEN 1 AND 96),
+    description text NOT NULL DEFAULT '' CHECK (char_length(description) <= 4000),
+    default_policies jsonb NOT NULL DEFAULT '{}'::jsonb,
+    lifecycle text NOT NULL DEFAULT 'ACTIVE' CHECK (lifecycle IN ('ACTIVE', 'ARCHIVED')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, stable_key),
+    UNIQUE NULLS NOT DISTINCT (organization_id, project_id, name)
+);
+
 CREATE TABLE control_plane.agents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
     organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
     project_id uuid REFERENCES control_plane.projects(id),
+    role_definition_id uuid NOT NULL REFERENCES control_plane.role_definitions(id),
     system_key text,
     name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
     purpose text NOT NULL DEFAULT '' CHECK (char_length(purpose) <= 2000),
@@ -141,6 +164,130 @@ CREATE TABLE control_plane.agents (
     CHECK ((system_key IS NULL AND project_id IS NOT NULL) OR
            (system_key = 'system-assistant' AND project_id IS NULL AND enabled AND state <> 'ARCHIVED'))
 );
+
+CREATE TABLE control_plane.role_image_recipes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^imgrec_[A-Za-z0-9_-]{8,89}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    role_definition_id uuid NOT NULL REFERENCES control_plane.role_definitions(id),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    state text NOT NULL CHECK (state IN ('ACTIVE', 'ARCHIVED')),
+    specification jsonb NOT NULL,
+    generation bigint NOT NULL CHECK (generation > 0),
+    spec_sha256 text NOT NULL CHECK (spec_sha256 ~ '^[a-f0-9]{64}$'),
+    policy_revision bigint NOT NULL CHECK (policy_revision > 0),
+    policy_sha256 text NOT NULL CHECK (policy_sha256 ~ '^[a-f0-9]{64}$'),
+    role_runtime_contract_revision bigint NOT NULL CHECK (role_runtime_contract_revision > 0),
+    role_runtime_contract_sha256 text NOT NULL CHECK (role_runtime_contract_sha256 ~ '^[a-f0-9]{64}$'),
+    active_image_artifact_id uuid,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (role_definition_id, name)
+);
+
+CREATE TABLE control_plane.image_builds (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^imgbld_[A-Za-z0-9_-]{8,89}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    recipe_id uuid NOT NULL REFERENCES control_plane.role_image_recipes(id),
+    recipe_version bigint NOT NULL CHECK (recipe_version > 0),
+    recipe_generation bigint NOT NULL CHECK (recipe_generation > 0),
+    specification jsonb NOT NULL,
+    spec_sha256 text NOT NULL CHECK (spec_sha256 ~ '^[a-f0-9]{64}$'),
+    immutable_build_sha256 text NOT NULL CHECK (immutable_build_sha256 ~ '^[a-f0-9]{64}$'),
+    attempt integer NOT NULL CHECK (attempt BETWEEN 1 AND 10),
+    maximum_attempts integer NOT NULL CHECK (maximum_attempts BETWEEN 1 AND 10),
+    stage text NOT NULL CHECK (stage IN ('QUEUED', 'MATERIALIZATION', 'CONTEXT_VALIDATION', 'BASE_PULL', 'SOLVING', 'INSTALLATION', 'TRUSTED_RUNTIME_FINALIZATION', 'STAGING_PUSH', 'PROVENANCE', 'COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED', 'DEAD_LETTER')),
+    progress_percent integer NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+    claimant_workload text,
+    authority_generation bigint NOT NULL DEFAULT 0 CHECK (authority_generation >= 0),
+    fence bigint NOT NULL DEFAULT 0 CHECK (fence >= 0),
+    lease_token_sha256 text CHECK (lease_token_sha256 IS NULL OR lease_token_sha256 ~ '^[a-f0-9]{64}$'),
+    lease_expires_at timestamptz,
+    staging_reference text NOT NULL DEFAULT '',
+    manifest_digest text NOT NULL DEFAULT '' CHECK (manifest_digest = '' OR manifest_digest ~ '^sha256:[a-f0-9]{64}$'),
+    provenance_sha256 text NOT NULL DEFAULT '' CHECK (provenance_sha256 = '' OR provenance_sha256 ~ '^[a-f0-9]{64}$'),
+    safe_error_code text NOT NULL DEFAULT '',
+    diagnostic_code text NOT NULL DEFAULT '',
+    diagnostic_summary text NOT NULL DEFAULT '' CHECK (char_length(diagnostic_summary) <= 256),
+    available_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((claimant_workload IS NULL AND lease_token_sha256 IS NULL AND lease_expires_at IS NULL) OR
+           (claimant_workload IS NOT NULL AND authority_generation > 0 AND fence > 0 AND lease_token_sha256 IS NOT NULL AND lease_expires_at IS NOT NULL))
+);
+
+CREATE INDEX image_builds_claimable
+    ON control_plane.image_builds (available_at, created_at)
+    WHERE stage IN ('QUEUED', 'FAILED', 'EXPIRED');
+
+CREATE TABLE control_plane.image_artifacts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^imgart_[A-Za-z0-9_-]{8,89}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    recipe_id uuid NOT NULL REFERENCES control_plane.role_image_recipes(id),
+    recipe_version bigint NOT NULL CHECK (recipe_version > 0),
+    recipe_generation bigint NOT NULL CHECK (recipe_generation > 0),
+    spec_sha256 text NOT NULL CHECK (spec_sha256 ~ '^[a-f0-9]{64}$'),
+    build_id uuid NOT NULL UNIQUE REFERENCES control_plane.image_builds(id),
+    build_version bigint NOT NULL CHECK (build_version > 0),
+    build_attempt integer NOT NULL CHECK (build_attempt BETWEEN 1 AND 10),
+    specification jsonb NOT NULL,
+    policy_revision bigint NOT NULL CHECK (policy_revision > 0),
+    policy_sha256 text NOT NULL CHECK (policy_sha256 ~ '^[a-f0-9]{64}$'),
+    role_runtime_contract_revision bigint NOT NULL CHECK (role_runtime_contract_revision > 0),
+    role_runtime_contract_sha256 text NOT NULL CHECK (role_runtime_contract_sha256 ~ '^[a-f0-9]{64}$'),
+    staging_reference text NOT NULL,
+    manifest_digest text NOT NULL CHECK (manifest_digest ~ '^sha256:[a-f0-9]{64}$'),
+    immutable_build_sha256 text NOT NULL CHECK (immutable_build_sha256 ~ '^[a-f0-9]{64}$'),
+    provenance_sha256 text NOT NULL CHECK (provenance_sha256 ~ '^[a-f0-9]{64}$'),
+    admission_state text NOT NULL DEFAULT 'PENDING' CHECK (admission_state IN ('PENDING', 'CLAIMED', 'ACCEPTED', 'REJECTED')),
+    admission_claimant_workload text,
+    admission_authority_generation bigint NOT NULL DEFAULT 0 CHECK (admission_authority_generation >= 0),
+    admission_fence bigint NOT NULL DEFAULT 0 CHECK (admission_fence >= 0),
+    admission_claim_token_sha256 text CHECK (admission_claim_token_sha256 IS NULL OR admission_claim_token_sha256 ~ '^[a-f0-9]{64}$'),
+    admission_claim_expires_at timestamptz,
+    sbom_sha256 text NOT NULL DEFAULT '',
+    vulnerability_evidence_sha256 text NOT NULL DEFAULT '',
+    admission_verdict text NOT NULL DEFAULT '' CHECK (admission_verdict IN ('', 'ACCEPTED', 'REJECTED')),
+    signature_identity text NOT NULL DEFAULT '',
+    signature_sha256 text NOT NULL DEFAULT '',
+    admission_revision bigint NOT NULL DEFAULT 0 CHECK (admission_revision >= 0),
+    admission_receipt_sha256 text NOT NULL DEFAULT '',
+    admission_receipt_oci_manifest_digest text NOT NULL DEFAULT '',
+    promotion_state text NOT NULL DEFAULT 'PENDING' CHECK (promotion_state IN ('PENDING', 'CLAIMED', 'AUTHORIZED', 'PROMOTED', 'REJECTED')),
+    promotion_claimant_workload text,
+    promotion_authority_generation bigint NOT NULL DEFAULT 0 CHECK (promotion_authority_generation >= 0),
+    promotion_fence bigint NOT NULL DEFAULT 0 CHECK (promotion_fence >= 0),
+    promotion_claim_token_sha256 text CHECK (promotion_claim_token_sha256 IS NULL OR promotion_claim_token_sha256 ~ '^[a-f0-9]{64}$'),
+    promotion_claim_expires_at timestamptz,
+    promotion_authorization_token_sha256 text CHECK (promotion_authorization_token_sha256 IS NULL OR promotion_authorization_token_sha256 ~ '^[a-f0-9]{64}$'),
+    promotion_authorization_expires_at timestamptz,
+    promoted_reference text NOT NULL DEFAULT '',
+    promotion_readback_sha256 text NOT NULL DEFAULT '',
+    promoted_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+ALTER TABLE control_plane.role_image_recipes
+    ADD CONSTRAINT role_image_recipes_active_artifact_fk
+    FOREIGN KEY (active_image_artifact_id) REFERENCES control_plane.image_artifacts(id);
+
+CREATE INDEX image_artifacts_admission_claimable
+    ON control_plane.image_artifacts (created_at)
+    WHERE admission_state IN ('PENDING', 'CLAIMED');
+
+CREATE INDEX image_artifacts_promotion_claimable
+    ON control_plane.image_artifacts (created_at)
+    WHERE admission_state = 'ACCEPTED' AND promotion_state IN ('PENDING', 'CLAIMED');
 
 CREATE TABLE control_plane.instruction_versions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

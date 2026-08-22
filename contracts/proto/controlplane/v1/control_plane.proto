@@ -2,10 +2,10 @@ syntax = "proto3";
 
 package controlplane.v1;
 
-option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
-
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
 // Control-plane является единственным владельцем web-first предметной модели.
 // Actor, organization и permissions поступают только из проверенного transport
@@ -412,6 +412,8 @@ message Agent {
   string current_activity = 17;
   google.protobuf.Timestamp updated_at = 18;
   repeated NextAction next_actions = 19;
+  string role_definition_ref = 20;
+  string role_definition_name = 21;
 }
 
 message WorkflowInputField {
@@ -794,153 +796,599 @@ message AdministrationState {
 }
 
 message GetBootstrapStateRequest {}
-message GetBootstrapStateResponse { BootstrapState state = 1; }
-message GetOverviewRequest { string project_ref = 1; }
-message GetOverviewResponse { Overview overview = 1; }
+message GetBootstrapStateResponse {
+  BootstrapState state = 1;
+}
+message GetOverviewRequest {
+  string project_ref = 1;
+}
+message GetOverviewResponse {
+  Overview overview = 1;
+}
 message ListPlatformCapabilitiesRequest {}
-message ListPlatformCapabilitiesResponse { repeated PlatformCapability capabilities = 1; }
+message ListPlatformCapabilitiesResponse {
+  repeated PlatformCapability capabilities = 1;
+}
 
-message ListProjectsRequest { PageRequest page = 1; string query = 2; }
-message ListProjectsResponse { repeated Project projects = 1; PageInfo page = 2; }
-message GetProjectRequest { string project_ref = 1; }
-message GetProjectResponse { Project project = 1; }
-message CreateProjectRequest { MutationContext mutation = 1; string name = 2; string purpose = 3; string language = 4; }
-message CreateProjectResponse { Project project = 1; }
-message UpdateProjectRequest { MutationContext mutation = 1; string project_ref = 2; string name = 3; string purpose = 4; string language = 5; }
-message UpdateProjectResponse { Project project = 1; }
+message ListProjectsRequest {
+  PageRequest page = 1;
+  string query = 2;
+}
+message ListProjectsResponse {
+  repeated Project projects = 1;
+  PageInfo page = 2;
+}
+message GetProjectRequest {
+  string project_ref = 1;
+}
+message GetProjectResponse {
+  Project project = 1;
+}
+message CreateProjectRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string purpose = 3;
+  string language = 4;
+}
+message CreateProjectResponse {
+  Project project = 1;
+}
+message UpdateProjectRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string language = 5;
+}
+message UpdateProjectResponse {
+  Project project = 1;
+}
 
-message ListProjectMembershipsRequest { string project_ref = 1; PageRequest page = 2; }
-message ListProjectMembershipsResponse { repeated Membership memberships = 1; PageInfo page = 2; }
-message AddProjectMembershipRequest { MutationContext mutation = 1; string project_ref = 2; string user_ref = 3; PlatformRole role = 4; repeated ProjectPermission permissions = 5; }
-message AddProjectMembershipResponse { Membership membership = 1; }
-message ChangeProjectMembershipRequest { MutationContext mutation = 1; string project_ref = 2; string membership_ref = 3; PlatformRole role = 4; repeated ProjectPermission permissions = 5; bool active = 6; }
-message ChangeProjectMembershipResponse { Membership membership = 1; }
-message RemoveProjectMembershipRequest { MutationContext mutation = 1; string project_ref = 2; string membership_ref = 3; }
-message RemoveProjectMembershipResponse { Membership membership = 1; }
+message ListProjectMembershipsRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+}
+message ListProjectMembershipsResponse {
+  repeated Membership memberships = 1;
+  PageInfo page = 2;
+}
+message AddProjectMembershipRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string user_ref = 3;
+  PlatformRole role = 4;
+  repeated ProjectPermission permissions = 5;
+}
+message AddProjectMembershipResponse {
+  Membership membership = 1;
+}
+message ChangeProjectMembershipRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string membership_ref = 3;
+  PlatformRole role = 4;
+  repeated ProjectPermission permissions = 5;
+  bool active = 6;
+}
+message ChangeProjectMembershipResponse {
+  Membership membership = 1;
+}
+message RemoveProjectMembershipRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string membership_ref = 3;
+}
+message RemoveProjectMembershipResponse {
+  Membership membership = 1;
+}
 
-message ListAgentsRequest { string project_ref = 1; PageRequest page = 2; string query = 3; AgentState state = 4; }
-message ListAgentsResponse { repeated Agent agents = 1; PageInfo page = 2; }
-message GetAgentRequest { string agent_ref = 1; }
-message GetAgentResponse { Agent agent = 1; }
-message CreateAgentRequest { MutationContext mutation = 1; string project_ref = 2; string name = 3; string purpose = 4; string role_description = 5; string avatar_url = 6; string runtime_ref = 7; string initial_instructions = 8; }
-message CreateAgentResponse { Agent agent = 1; }
-message UpdateAgentRequest { MutationContext mutation = 1; string agent_ref = 2; string name = 3; string purpose = 4; string role_description = 5; string avatar_url = 6; string runtime_ref = 7; }
-message UpdateAgentResponse { Agent agent = 1; }
-message SetAgentEnabledRequest { MutationContext mutation = 1; string agent_ref = 2; bool enabled = 3; }
-message SetAgentEnabledResponse { Agent agent = 1; }
-message ArchiveAgentRequest { MutationContext mutation = 1; string agent_ref = 2; }
-message ArchiveAgentResponse { Agent agent = 1; }
-message CreateInstructionDraftRequest { MutationContext mutation = 1; string agent_ref = 2; string content = 3; }
-message CreateInstructionDraftResponse { Agent agent = 1; }
-message ValidateInstructionDraftRequest { MutationContext mutation = 1; string agent_ref = 2; }
-message ValidateInstructionDraftResponse { Agent agent = 1; }
-message PublishInstructionDraftRequest { MutationContext mutation = 1; string agent_ref = 2; }
-message PublishInstructionDraftResponse { Agent agent = 1; }
-message RollbackInstructionsRequest { MutationContext mutation = 1; string agent_ref = 2; string published_instruction_ref = 3; }
-message RollbackInstructionsResponse { Agent agent = 1; }
-message ChangeAgentCapabilityRequest { MutationContext mutation = 1; string agent_ref = 2; string capability_key = 3; bool enabled = 4; }
-message ChangeAgentCapabilityResponse { Agent agent = 1; }
-message ChangeAgentIntegrationGrantRequest { MutationContext mutation = 1; string agent_ref = 2; string grant_ref = 3; bool enabled = 4; }
-message ChangeAgentIntegrationGrantResponse { Agent agent = 1; }
-message ChangeAgentKnowledgeBindingRequest { MutationContext mutation = 1; string agent_ref = 2; string artifact_ref = 3; bool enabled = 4; }
-message ChangeAgentKnowledgeBindingResponse { Agent agent = 1; }
+message ListAgentsRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  string query = 3;
+  AgentState state = 4;
+}
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  PageInfo page = 2;
+}
+message GetAgentRequest {
+  string agent_ref = 1;
+}
+message GetAgentResponse {
+  Agent agent = 1;
+}
+message CreateAgentRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string role_description = 5;
+  string avatar_url = 6;
+  string runtime_ref = 7;
+  string initial_instructions = 8;
+  string role_definition_ref = 9;
+}
+message CreateAgentResponse {
+  Agent agent = 1;
+}
+message UpdateAgentRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string role_description = 5;
+  string avatar_url = 6;
+  string runtime_ref = 7;
+  string role_definition_ref = 8;
+}
+message UpdateAgentResponse {
+  Agent agent = 1;
+}
+message SetAgentEnabledRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  bool enabled = 3;
+}
+message SetAgentEnabledResponse {
+  Agent agent = 1;
+}
+message ArchiveAgentRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message ArchiveAgentResponse {
+  Agent agent = 1;
+}
+message CreateInstructionDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string content = 3;
+}
+message CreateInstructionDraftResponse {
+  Agent agent = 1;
+}
+message ValidateInstructionDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message ValidateInstructionDraftResponse {
+  Agent agent = 1;
+}
+message PublishInstructionDraftRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+}
+message PublishInstructionDraftResponse {
+  Agent agent = 1;
+}
+message RollbackInstructionsRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string published_instruction_ref = 3;
+}
+message RollbackInstructionsResponse {
+  Agent agent = 1;
+}
+message ChangeAgentCapabilityRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string capability_key = 3;
+  bool enabled = 4;
+}
+message ChangeAgentCapabilityResponse {
+  Agent agent = 1;
+}
+message ChangeAgentIntegrationGrantRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string grant_ref = 3;
+  bool enabled = 4;
+}
+message ChangeAgentIntegrationGrantResponse {
+  Agent agent = 1;
+}
+message ChangeAgentKnowledgeBindingRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string artifact_ref = 3;
+  bool enabled = 4;
+}
+message ChangeAgentKnowledgeBindingResponse {
+  Agent agent = 1;
+}
 
-message ListWorkflowsRequest { string project_ref = 1; PageRequest page = 2; string query = 3; WorkflowState state = 4; }
-message ListWorkflowsResponse { repeated Workflow workflows = 1; PageInfo page = 2; }
-message GetWorkflowRequest { string workflow_ref = 1; }
-message GetWorkflowResponse { Workflow workflow = 1; }
-message CreateWorkflowRequest { MutationContext mutation = 1; string project_ref = 2; string name = 3; string purpose = 4; string coordinator_agent_ref = 5; }
-message CreateWorkflowResponse { Workflow workflow = 1; }
-message UpdateWorkflowDraftRequest { MutationContext mutation = 1; string workflow_ref = 2; WorkflowVersion draft = 3; }
-message UpdateWorkflowDraftResponse { Workflow workflow = 1; }
-message ValidateWorkflowDraftRequest { MutationContext mutation = 1; string workflow_ref = 2; }
-message ValidateWorkflowDraftResponse { Workflow workflow = 1; }
-message PublishWorkflowDraftRequest { MutationContext mutation = 1; string workflow_ref = 2; }
-message PublishWorkflowDraftResponse { Workflow workflow = 1; }
-message ArchiveWorkflowRequest { MutationContext mutation = 1; string workflow_ref = 2; }
-message ArchiveWorkflowResponse { Workflow workflow = 1; }
+message ListWorkflowsRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  string query = 3;
+  WorkflowState state = 4;
+}
+message ListWorkflowsResponse {
+  repeated Workflow workflows = 1;
+  PageInfo page = 2;
+}
+message GetWorkflowRequest {
+  string workflow_ref = 1;
+}
+message GetWorkflowResponse {
+  Workflow workflow = 1;
+}
+message CreateWorkflowRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  string purpose = 4;
+  string coordinator_agent_ref = 5;
+}
+message CreateWorkflowResponse {
+  Workflow workflow = 1;
+}
+message UpdateWorkflowDraftRequest {
+  MutationContext mutation = 1;
+  string workflow_ref = 2;
+  WorkflowVersion draft = 3;
+}
+message UpdateWorkflowDraftResponse {
+  Workflow workflow = 1;
+}
+message ValidateWorkflowDraftRequest {
+  MutationContext mutation = 1;
+  string workflow_ref = 2;
+}
+message ValidateWorkflowDraftResponse {
+  Workflow workflow = 1;
+}
+message PublishWorkflowDraftRequest {
+  MutationContext mutation = 1;
+  string workflow_ref = 2;
+}
+message PublishWorkflowDraftResponse {
+  Workflow workflow = 1;
+}
+message ArchiveWorkflowRequest {
+  MutationContext mutation = 1;
+  string workflow_ref = 2;
+}
+message ArchiveWorkflowResponse {
+  Workflow workflow = 1;
+}
 
-message ListRunsRequest { string project_ref = 1; PageRequest page = 2; repeated RunState states = 3; string query = 4; }
-message ListRunsResponse { repeated Run runs = 1; PageInfo page = 2; }
-message GetRunRequest { string run_ref = 1; }
-message GetRunResponse { Run run = 1; }
-message GetRunGraphRequest { string run_ref = 1; }
-message GetRunGraphResponse { Run run = 1; RunGraph graph = 2; }
-message ListRunEventsRequest { string run_ref = 1; int64 after_sequence = 2; int32 limit = 3; }
-message ListRunEventsResponse { repeated RunEvent events = 1; int64 current_sequence = 2; bool complete = 3; }
-message LaunchRunRequest { MutationContext mutation = 1; string project_ref = 2; RunTarget target = 3; string title = 4; string task = 5; google.protobuf.Struct input = 6; repeated string artifact_refs = 7; string session_ref = 8; RunSource source = 9; }
-message LaunchRunResponse { Run run = 1; RunGraph graph = 2; }
-message AddSessionTurnRequest { MutationContext mutation = 1; string session_ref = 2; string run_ref = 3; string node_ref = 4; string task = 5; repeated string artifact_refs = 6; }
-message AddSessionTurnResponse { Run run = 1; RunGraph graph = 2; }
-message CancelRunRequest { MutationContext mutation = 1; string run_ref = 2; string reason = 3; }
-message CancelRunResponse { Run run = 1; RunGraph graph = 2; }
-message RetryRunRequest { MutationContext mutation = 1; string run_ref = 2; string reason = 3; }
-message RetryRunResponse { Run run = 1; RunGraph graph = 2; }
+message ListRunsRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  repeated RunState states = 3;
+  string query = 4;
+}
+message ListRunsResponse {
+  repeated Run runs = 1;
+  PageInfo page = 2;
+}
+message GetRunRequest {
+  string run_ref = 1;
+}
+message GetRunResponse {
+  Run run = 1;
+}
+message GetRunGraphRequest {
+  string run_ref = 1;
+}
+message GetRunGraphResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
+message ListRunEventsRequest {
+  string run_ref = 1;
+  int64 after_sequence = 2;
+  int32 limit = 3;
+}
+message ListRunEventsResponse {
+  repeated RunEvent events = 1;
+  int64 current_sequence = 2;
+  bool complete = 3;
+}
+message LaunchRunRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  RunTarget target = 3;
+  string title = 4;
+  string task = 5;
+  google.protobuf.Struct input = 6;
+  repeated string artifact_refs = 7;
+  string session_ref = 8;
+  RunSource source = 9;
+}
+message LaunchRunResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
+message AddSessionTurnRequest {
+  MutationContext mutation = 1;
+  string session_ref = 2;
+  string run_ref = 3;
+  string node_ref = 4;
+  string task = 5;
+  repeated string artifact_refs = 6;
+}
+message AddSessionTurnResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
+message CancelRunRequest {
+  MutationContext mutation = 1;
+  string run_ref = 2;
+  string reason = 3;
+}
+message CancelRunResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
+message RetryRunRequest {
+  MutationContext mutation = 1;
+  string run_ref = 2;
+  string reason = 3;
+}
+message RetryRunResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
 
-message ListOwnerGatesRequest { string project_ref = 1; PageRequest page = 2; OwnerGateState state = 3; }
-message ListOwnerGatesResponse { repeated OwnerGate gates = 1; PageInfo page = 2; }
-message GetOwnerGateRequest { string gate_ref = 1; }
-message GetOwnerGateResponse { OwnerGate gate = 1; }
-message ResolveOwnerGateRequest { MutationContext mutation = 1; string gate_ref = 2; OwnerGateDecision decision = 3; string comment = 4; }
-message ResolveOwnerGateResponse { OwnerGate gate = 1; Run run = 2; RunGraph graph = 3; }
+message ListOwnerGatesRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  OwnerGateState state = 3;
+}
+message ListOwnerGatesResponse {
+  repeated OwnerGate gates = 1;
+  PageInfo page = 2;
+}
+message GetOwnerGateRequest {
+  string gate_ref = 1;
+}
+message GetOwnerGateResponse {
+  OwnerGate gate = 1;
+}
+message ResolveOwnerGateRequest {
+  MutationContext mutation = 1;
+  string gate_ref = 2;
+  OwnerGateDecision decision = 3;
+  string comment = 4;
+}
+message ResolveOwnerGateResponse {
+  OwnerGate gate = 1;
+  Run run = 2;
+  RunGraph graph = 3;
+}
 
-message ListArtifactsRequest { string project_ref = 1; string run_ref = 2; PageRequest page = 3; string query = 4; }
-message ListArtifactsResponse { repeated Artifact artifacts = 1; PageInfo page = 2; }
-message GetArtifactRequest { string artifact_ref = 1; }
-message GetArtifactResponse { Artifact artifact = 1; }
-message UploadArtifactMetadata { MutationContext mutation = 1; string project_ref = 2; string run_ref = 3; string file_name = 4; string media_type = 5; int64 size_bytes = 6; }
-message UploadArtifactRequest { oneof part { UploadArtifactMetadata metadata = 1; bytes chunk = 2; } }
-message UploadArtifactResponse { Artifact artifact = 1; }
-message DownloadArtifactRequest { string artifact_ref = 1; }
-message DownloadArtifactResponse { bytes data = 1; string file_name = 2; string media_type = 3; int64 size_bytes = 4; }
-message ChangeArtifactBindingRequest { MutationContext mutation = 1; string artifact_ref = 2; string agent_ref = 3; bool enabled = 4; }
-message ChangeArtifactBindingResponse { Artifact artifact = 1; }
+message ListArtifactsRequest {
+  string project_ref = 1;
+  string run_ref = 2;
+  PageRequest page = 3;
+  string query = 4;
+}
+message ListArtifactsResponse {
+  repeated Artifact artifacts = 1;
+  PageInfo page = 2;
+}
+message GetArtifactRequest {
+  string artifact_ref = 1;
+}
+message GetArtifactResponse {
+  Artifact artifact = 1;
+}
+message UploadArtifactMetadata {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string run_ref = 3;
+  string file_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+}
+message UploadArtifactRequest {
+  oneof part {
+    UploadArtifactMetadata metadata = 1;
+    bytes chunk = 2;
+  }
+}
+message UploadArtifactResponse {
+  Artifact artifact = 1;
+}
+message DownloadArtifactRequest {
+  string artifact_ref = 1;
+}
+message DownloadArtifactResponse {
+  bytes data = 1;
+  string file_name = 2;
+  string media_type = 3;
+  int64 size_bytes = 4;
+}
+message ChangeArtifactBindingRequest {
+  MutationContext mutation = 1;
+  string artifact_ref = 2;
+  string agent_ref = 3;
+  bool enabled = 4;
+}
+message ChangeArtifactBindingResponse {
+  Artifact artifact = 1;
+}
 
-message ListSchedulesRequest { string project_ref = 1; PageRequest page = 2; }
-message ListSchedulesResponse { repeated Schedule schedules = 1; PageInfo page = 2; }
-message CreateScheduleRequest { MutationContext mutation = 1; string project_ref = 2; string name = 3; RunTarget target = 4; string preset = 5; string cron_expression = 6; string timezone = 7; google.protobuf.Struct input = 8; string session_policy = 9; string notification_policy = 10; }
-message CreateScheduleResponse { Schedule schedule = 1; }
-message UpdateScheduleRequest { MutationContext mutation = 1; string schedule_ref = 2; string name = 3; RunTarget target = 4; string preset = 5; string cron_expression = 6; string timezone = 7; google.protobuf.Struct input = 8; string session_policy = 9; string notification_policy = 10; }
-message UpdateScheduleResponse { Schedule schedule = 1; }
-message SetScheduleEnabledRequest { MutationContext mutation = 1; string schedule_ref = 2; bool enabled = 3; }
-message SetScheduleEnabledResponse { Schedule schedule = 1; }
+message ListSchedulesRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+}
+message ListSchedulesResponse {
+  repeated Schedule schedules = 1;
+  PageInfo page = 2;
+}
+message CreateScheduleRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  RunTarget target = 4;
+  string preset = 5;
+  string cron_expression = 6;
+  string timezone = 7;
+  google.protobuf.Struct input = 8;
+  string session_policy = 9;
+  string notification_policy = 10;
+}
+message CreateScheduleResponse {
+  Schedule schedule = 1;
+}
+message UpdateScheduleRequest {
+  MutationContext mutation = 1;
+  string schedule_ref = 2;
+  string name = 3;
+  RunTarget target = 4;
+  string preset = 5;
+  string cron_expression = 6;
+  string timezone = 7;
+  google.protobuf.Struct input = 8;
+  string session_policy = 9;
+  string notification_policy = 10;
+}
+message UpdateScheduleResponse {
+  Schedule schedule = 1;
+}
+message SetScheduleEnabledRequest {
+  MutationContext mutation = 1;
+  string schedule_ref = 2;
+  bool enabled = 3;
+}
+message SetScheduleEnabledResponse {
+  Schedule schedule = 1;
+}
 
-message ListIntegrationDefinitionsRequest { string category = 1; }
-message ListIntegrationDefinitionsResponse { repeated IntegrationDefinition definitions = 1; }
-message ListIntegrationConnectionsRequest { PageRequest page = 1; string definition_key = 2; }
-message ListIntegrationConnectionsResponse { repeated IntegrationConnection connections = 1; PageInfo page = 2; }
-message GetIntegrationConnectionRequest { string connection_ref = 1; }
-message GetIntegrationConnectionResponse { IntegrationConnection connection = 1; }
-message CreateIntegrationConnectionRequest { MutationContext mutation = 1; string definition_key = 2; string name = 3; string credential_materialization_ref = 4; google.protobuf.Struct public_configuration = 5; }
-message CreateIntegrationConnectionResponse { IntegrationConnection connection = 1; }
-message TestIntegrationConnectionRequest { MutationContext mutation = 1; string connection_ref = 2; }
-message TestIntegrationConnectionResponse { IntegrationConnection connection = 1; }
-message SetIntegrationConnectionEnabledRequest { MutationContext mutation = 1; string connection_ref = 2; bool enabled = 3; }
-message SetIntegrationConnectionEnabledResponse { IntegrationConnection connection = 1; }
-message ChangeIntegrationGrantRequest { MutationContext mutation = 1; string connection_ref = 2; string capability_key = 3; string agent_ref = 4; string workflow_ref = 5; bool enabled = 6; }
-message ChangeIntegrationGrantResponse { IntegrationConnection connection = 1; }
+message ListIntegrationDefinitionsRequest {
+  string category = 1;
+}
+message ListIntegrationDefinitionsResponse {
+  repeated IntegrationDefinition definitions = 1;
+}
+message ListIntegrationConnectionsRequest {
+  PageRequest page = 1;
+  string definition_key = 2;
+}
+message ListIntegrationConnectionsResponse {
+  repeated IntegrationConnection connections = 1;
+  PageInfo page = 2;
+}
+message GetIntegrationConnectionRequest {
+  string connection_ref = 1;
+}
+message GetIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message CreateIntegrationConnectionRequest {
+  MutationContext mutation = 1;
+  string definition_key = 2;
+  string name = 3;
+  string credential_materialization_ref = 4;
+  google.protobuf.Struct public_configuration = 5;
+}
+message CreateIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message TestIntegrationConnectionRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+}
+message TestIntegrationConnectionResponse {
+  IntegrationConnection connection = 1;
+}
+message SetIntegrationConnectionEnabledRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  bool enabled = 3;
+}
+message SetIntegrationConnectionEnabledResponse {
+  IntegrationConnection connection = 1;
+}
+message ChangeIntegrationGrantRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string capability_key = 3;
+  string agent_ref = 4;
+  string workflow_ref = 5;
+  bool enabled = 6;
+}
+message ChangeIntegrationGrantResponse {
+  IntegrationConnection connection = 1;
+}
 
 message GetSystemAssistantRequest {}
-message GetSystemAssistantResponse { SystemAssistant assistant = 1; }
-message ListAssistantConversationsRequest { PageRequest page = 1; string project_ref = 2; }
-message ListAssistantConversationsResponse { repeated AssistantConversation conversations = 1; PageInfo page = 2; }
-message CreateAssistantConversationRequest { MutationContext mutation = 1; string title = 2; string project_ref = 3; }
-message CreateAssistantConversationResponse { AssistantConversation conversation = 1; }
-message AddAssistantTurnRequest { MutationContext mutation = 1; string conversation_ref = 2; string content = 3; repeated string artifact_refs = 4; }
-message AddAssistantTurnResponse { AssistantConversation conversation = 1; SystemAssistant assistant = 2; }
-message ApplyAssistantPlanRequest { MutationContext mutation = 1; string plan_ref = 2; }
-message ApplyAssistantPlanResponse { AssistantConversation conversation = 1; AssistantPlan plan = 2; repeated string created_resource_refs = 3; }
-message UpdateAssistantOwnerInstructionsRequest { MutationContext mutation = 1; string instructions = 2; }
-message UpdateAssistantOwnerInstructionsResponse { SystemAssistant assistant = 1; }
-message RecoverSystemAssistantRequest { MutationContext mutation = 1; }
-message RecoverSystemAssistantResponse { SystemAssistant assistant = 1; }
+message GetSystemAssistantResponse {
+  SystemAssistant assistant = 1;
+}
+message ListAssistantConversationsRequest {
+  PageRequest page = 1;
+  string project_ref = 2;
+}
+message ListAssistantConversationsResponse {
+  repeated AssistantConversation conversations = 1;
+  PageInfo page = 2;
+}
+message CreateAssistantConversationRequest {
+  MutationContext mutation = 1;
+  string title = 2;
+  string project_ref = 3;
+}
+message CreateAssistantConversationResponse {
+  AssistantConversation conversation = 1;
+}
+message AddAssistantTurnRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+  string content = 3;
+  repeated string artifact_refs = 4;
+}
+message AddAssistantTurnResponse {
+  AssistantConversation conversation = 1;
+  SystemAssistant assistant = 2;
+}
+message ApplyAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string plan_ref = 2;
+}
+message ApplyAssistantPlanResponse {
+  AssistantConversation conversation = 1;
+  AssistantPlan plan = 2;
+  repeated string created_resource_refs = 3;
+}
+message UpdateAssistantOwnerInstructionsRequest {
+  MutationContext mutation = 1;
+  string instructions = 2;
+}
+message UpdateAssistantOwnerInstructionsResponse {
+  SystemAssistant assistant = 1;
+}
+message RecoverSystemAssistantRequest {
+  MutationContext mutation = 1;
+}
+message RecoverSystemAssistantResponse {
+  SystemAssistant assistant = 1;
+}
 
-message CompleteOnboardingRequest { MutationContext mutation = 1; }
-message CompleteOnboardingResponse { BootstrapState state = 1; }
+message CompleteOnboardingRequest {
+  MutationContext mutation = 1;
+}
+message CompleteOnboardingResponse {
+  BootstrapState state = 1;
+}
 message GetAdministrationRequest {}
-message GetAdministrationResponse { AdministrationState state = 1; }
-message ListAuditEventsRequest { string project_ref = 1; PageRequest page = 2; string action = 3; string outcome = 4; }
-message ListAuditEventsResponse { repeated AuditEvent events = 1; PageInfo page = 2; }
+message GetAdministrationResponse {
+  AdministrationState state = 1;
+}
+message ListAuditEventsRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  string action = 3;
+  string outcome = 4;
+}
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  PageInfo page = 2;
+}
 
 message RuntimeRevisionSnapshot {
   string ref = 1;
@@ -963,6 +1411,13 @@ message RuntimeRevisionSnapshot {
   string callback_edge_ref = 18;
   repeated SessionContextMessage session_context = 19;
   google.protobuf.Struct bounded_input = 20;
+  string role_definition_ref = 21;
+  string role_image_recipe_ref = 22;
+  string role_image_artifact_ref = 23;
+  string image_reference = 24;
+  string image_manifest_digest = 25;
+  uint64 role_runtime_contract_revision = 26;
+  string role_runtime_contract_sha256 = 27;
 }
 
 message DelegationTarget {
@@ -984,13 +1439,39 @@ message WorkLease {
   google.protobuf.Timestamp expires_at = 4;
 }
 
-message ClaimExecutionRequest { string workload_instance = 1; int32 limit = 2; }
-message ClaimedExecution { Run run = 1; RunNode node = 2; RuntimeRevisionSnapshot revision = 3; WorkLease lease = 4; string task = 5; }
-message ClaimExecutionResponse { repeated ClaimedExecution executions = 1; }
-message RenewExecutionRequest { string lease_ref = 1; string fence = 2; int64 generation = 3; }
-message RenewExecutionResponse { WorkLease lease = 1; }
-message ReportExecutionProgressRequest { string lease_ref = 1; string fence = 2; int64 generation = 3; string progress = 4; }
-message ReportExecutionProgressResponse { Run run = 1; RunNode node = 2; RunEvent event = 3; }
+message ClaimExecutionRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimedExecution {
+  Run run = 1;
+  RunNode node = 2;
+  RuntimeRevisionSnapshot revision = 3;
+  WorkLease lease = 4;
+  string task = 5;
+}
+message ClaimExecutionResponse {
+  repeated ClaimedExecution executions = 1;
+}
+message RenewExecutionRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+}
+message RenewExecutionResponse {
+  WorkLease lease = 1;
+}
+message ReportExecutionProgressRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string progress = 4;
+}
+message ReportExecutionProgressResponse {
+  Run run = 1;
+  RunNode node = 2;
+  RunEvent event = 3;
+}
 message CompletedArtifactInput {
   string file_name = 1;
   string media_type = 2;
@@ -998,25 +1479,99 @@ message CompletedArtifactInput {
   bytes content = 4;
   string sha256 = 5;
 }
-message CompleteExecutionRequest { MutationContext mutation = 1; string lease_ref = 2; string fence = 3; int64 generation = 4; bool success = 5; string result_summary = 6; string safe_error_code = 7; repeated CompletedArtifactInput artifacts = 8; }
-message CompleteExecutionResponse { Run run = 1; RunGraph graph = 2; }
-message DelegateExecutionRequest { MutationContext mutation = 1; string lease_ref = 2; string fence = 3; int64 generation = 4; string target_agent_ref = 5; string task = 6; google.protobuf.Struct input = 7; }
-message DelegateExecutionResponse { Run child_run = 1; RunGraph root_graph = 2; string callback_edge_ref = 3; }
-message DeliverCallbackRequest { MutationContext mutation = 1; string child_run_ref = 2; string callback_edge_ref = 3; }
-message DeliverCallbackResponse { Run parent_run = 1; RunGraph root_graph = 2; bool duplicate = 3; }
+message CompleteExecutionRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  bool success = 5;
+  string result_summary = 6;
+  string safe_error_code = 7;
+  repeated CompletedArtifactInput artifacts = 8;
+}
+message CompleteExecutionResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}
+message DelegateExecutionRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string target_agent_ref = 5;
+  string task = 6;
+  google.protobuf.Struct input = 7;
+}
+message DelegateExecutionResponse {
+  Run child_run = 1;
+  RunGraph root_graph = 2;
+  string callback_edge_ref = 3;
+}
+message DeliverCallbackRequest {
+  MutationContext mutation = 1;
+  string child_run_ref = 2;
+  string callback_edge_ref = 3;
+}
+message DeliverCallbackResponse {
+  Run parent_run = 1;
+  RunGraph root_graph = 2;
+  bool duplicate = 3;
+}
 
-message ReconcileWarmRuntimeRequest { string workload_instance = 1; }
-message ReconcileWarmRuntimeResponse { SystemAssistant assistant = 1; RuntimeRevisionSnapshot desired_revision = 2; bool materialization_required = 3; }
-message ReportWarmRuntimeRequest { MutationContext mutation = 1; string workload_instance = 2; string runtime_revision = 3; AssistantRuntimeState state = 4; string safe_error_code = 5; }
-message ReportWarmRuntimeResponse { SystemAssistant assistant = 1; }
+message ReconcileWarmRuntimeRequest {
+  string workload_instance = 1;
+}
+message ReconcileWarmRuntimeResponse {
+  SystemAssistant assistant = 1;
+  RuntimeRevisionSnapshot desired_revision = 2;
+  bool materialization_required = 3;
+}
+message ReportWarmRuntimeRequest {
+  MutationContext mutation = 1;
+  string workload_instance = 2;
+  string runtime_revision = 3;
+  AssistantRuntimeState state = 4;
+  string safe_error_code = 5;
+}
+message ReportWarmRuntimeResponse {
+  SystemAssistant assistant = 1;
+}
 
-message ScheduleClaim { Schedule schedule = 1; string occurrence_ref = 2; WorkLease lease = 3; google.protobuf.Timestamp scheduled_for = 4; }
-message ClaimDueSchedulesRequest { string workload_instance = 1; int32 limit = 2; }
-message ClaimDueSchedulesResponse { repeated ScheduleClaim claims = 1; }
-message MaterializeScheduleOccurrenceRequest { MutationContext mutation = 1; string occurrence_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; }
-message MaterializeScheduleOccurrenceResponse { Run run = 1; Schedule schedule = 2; }
-message CompleteScheduleOccurrenceRequest { MutationContext mutation = 1; string occurrence_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; string outcome = 6; }
-message CompleteScheduleOccurrenceResponse { Schedule schedule = 1; }
+message ScheduleClaim {
+  Schedule schedule = 1;
+  string occurrence_ref = 2;
+  WorkLease lease = 3;
+  google.protobuf.Timestamp scheduled_for = 4;
+}
+message ClaimDueSchedulesRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimDueSchedulesResponse {
+  repeated ScheduleClaim claims = 1;
+}
+message MaterializeScheduleOccurrenceRequest {
+  MutationContext mutation = 1;
+  string occurrence_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+}
+message MaterializeScheduleOccurrenceResponse {
+  Run run = 1;
+  Schedule schedule = 2;
+}
+message CompleteScheduleOccurrenceRequest {
+  MutationContext mutation = 1;
+  string occurrence_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string outcome = 6;
+}
+message CompleteScheduleOccurrenceResponse {
+  Schedule schedule = 1;
+}
 
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
@@ -1026,13 +1581,40 @@ message IntegrationConnectionTestClaim {
   google.protobuf.Struct public_configuration = 5;
   WorkLease lease = 6;
 }
-message ClaimIntegrationConnectionTestsRequest { string workload_instance = 1; int32 limit = 2; }
-message ClaimIntegrationConnectionTestsResponse { repeated IntegrationConnectionTestClaim claims = 1; }
-message CompleteIntegrationConnectionTestRequest { MutationContext mutation = 1; string test_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; bool success = 6; string result_summary = 7; string safe_error_code = 8; }
-message CompleteIntegrationConnectionTestResponse { IntegrationConnection connection = 1; }
+message ClaimIntegrationConnectionTestsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimIntegrationConnectionTestsResponse {
+  repeated IntegrationConnectionTestClaim claims = 1;
+}
+message CompleteIntegrationConnectionTestRequest {
+  MutationContext mutation = 1;
+  string test_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  bool success = 6;
+  string result_summary = 7;
+  string safe_error_code = 8;
+}
+message CompleteIntegrationConnectionTestResponse {
+  IntegrationConnection connection = 1;
+}
 
-message ResolveIntegrationInvocationRequest { string run_ref = 1; string node_ref = 2; string connection_ref = 3; string capability_key = 4; google.protobuf.Struct bounded_input = 5; string idempotency_key = 6; }
-message ResolveIntegrationInvocationResponse { string invocation_ref = 1; string grant_ref = 2; string operation = 3; }
+message ResolveIntegrationInvocationRequest {
+  string run_ref = 1;
+  string node_ref = 2;
+  string connection_ref = 3;
+  string capability_key = 4;
+  google.protobuf.Struct bounded_input = 5;
+  string idempotency_key = 6;
+}
+message ResolveIntegrationInvocationResponse {
+  string invocation_ref = 1;
+  string grant_ref = 2;
+  string operation = 3;
+}
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
   string definition_key = 2;
@@ -1043,9 +1625,32 @@ message IntegrationInvocationClaim {
   google.protobuf.Struct bounded_input = 7;
   WorkLease lease = 8;
 }
-message ClaimIntegrationInvocationsRequest { string workload_instance = 1; int32 limit = 2; }
-message ClaimIntegrationInvocationsResponse { repeated IntegrationInvocationClaim claims = 1; }
-message GetIntegrationInvocationRequest { string invocation_ref = 1; }
-message GetIntegrationInvocationResponse { string state = 1; string result_summary = 2; string safe_error_code = 3; }
-message CompleteIntegrationInvocationRequest { MutationContext mutation = 1; string invocation_ref = 2; string lease_ref = 3; string fence = 4; int64 generation = 5; bool success = 6; string result_summary = 7; string safe_error_code = 8; }
-message CompleteIntegrationInvocationResponse { Run run = 1; RunGraph graph = 2; }
+message ClaimIntegrationInvocationsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimIntegrationInvocationsResponse {
+  repeated IntegrationInvocationClaim claims = 1;
+}
+message GetIntegrationInvocationRequest {
+  string invocation_ref = 1;
+}
+message GetIntegrationInvocationResponse {
+  string state = 1;
+  string result_summary = 2;
+  string safe_error_code = 3;
+}
+message CompleteIntegrationInvocationRequest {
+  MutationContext mutation = 1;
+  string invocation_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  bool success = 6;
+  string result_summary = 7;
+  string safe_error_code = 8;
+}
+message CompleteIntegrationInvocationResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+}

@@ -68,7 +68,7 @@ func (server *Server) RemoveProjectMembership(ctx context.Context, request *cont
 }
 
 func (server *Server) CreateAgent(ctx context.Context, request *controlplanev1.CreateAgentRequest) (*controlplanev1.CreateAgentResponse, error) {
-	payload := command.AgentInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Purpose: request.GetPurpose(), RoleDescription: request.GetRoleDescription(), AvatarURL: request.GetAvatarUrl(), RuntimeRef: request.GetRuntimeRef(), Instructions: request.GetInitialInstructions(), Enabled: true}
+	payload := command.AgentInput{ProjectRef: request.GetProjectRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(), Purpose: request.GetPurpose(), RoleDescription: request.GetRoleDescription(), AvatarURL: request.GetAvatarUrl(), RuntimeRef: request.GetRuntimeRef(), Instructions: request.GetInitialInstructions(), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateAgent_FullMethodName, command.CreateAgent, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (server *Server) CreateAgent(ctx context.Context, request *controlplanev1.C
 }
 
 func (server *Server) UpdateAgent(ctx context.Context, request *controlplanev1.UpdateAgentRequest) (*controlplanev1.UpdateAgentResponse, error) {
-	payload := command.AgentInput{Ref: request.GetAgentRef(), Name: request.GetName(), Purpose: request.GetPurpose(), RoleDescription: request.GetRoleDescription(), AvatarURL: request.GetAvatarUrl(), RuntimeRef: request.GetRuntimeRef()}
+	payload := command.AgentInput{Ref: request.GetAgentRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(), Purpose: request.GetPurpose(), RoleDescription: request.GetRoleDescription(), AvatarURL: request.GetAvatarUrl(), RuntimeRef: request.GetRuntimeRef()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_UpdateAgent_FullMethodName, command.UpdateAgent, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

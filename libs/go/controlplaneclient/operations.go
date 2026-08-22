@@ -29,6 +29,9 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.integration-connections.get":   controlplanev1.PlatformQueryService_GetIntegrationConnection_FullMethodName,
 		"platform.query.administration.get":            controlplanev1.PlatformQueryService_GetAdministration_FullMethodName,
 		"platform.query.audit.list":                    controlplanev1.PlatformQueryService_ListAuditEvents_FullMethodName,
+		"platform.role-images.recipes.list":            controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName,
+		"platform.role-images.recipes.get":             controlplanev1.RoleImageService_GetRoleImageRecipe_FullMethodName,
+		"platform.role-images.recipes.manage":          controlplanev1.RoleImageService_ManageRoleImageRecipe_FullMethodName,
 		"platform.command.onboarding.complete":         controlplanev1.PlatformCommandService_CompleteOnboarding_FullMethodName,
 		"platform.command.projects.create":             controlplanev1.PlatformCommandService_CreateProject_FullMethodName,
 		"platform.command.projects.update":             controlplanev1.PlatformCommandService_UpdateProject_FullMethodName,
@@ -90,6 +93,37 @@ func RuntimeOperations() map[string]string {
 	}
 }
 
+// RoleImageBuilderOperations возвращает только операции fenced lifecycle
+// сборки образа роли. Admission и promotion принадлежат отдельным workload.
+func RoleImageBuilderOperations() map[string]string {
+	return map[string]string{
+		"platform.role-images.builds.claim":    controlplanev1.RoleImageService_ClaimImageBuild_FullMethodName,
+		"platform.role-images.builds.renew":    controlplanev1.RoleImageService_RenewImageBuild_FullMethodName,
+		"platform.role-images.builds.progress": controlplanev1.RoleImageService_ReportImageBuildProgress_FullMethodName,
+		"platform.role-images.builds.complete": controlplanev1.RoleImageService_CompleteImageBuild_FullMethodName,
+		"platform.role-images.builds.fail":     controlplanev1.RoleImageService_FailImageBuild_FullMethodName,
+	}
+}
+
+// ImageAdmissionOperations изолирует проверку supply-chain evidence от
+// builder и promotion workload.
+func ImageAdmissionOperations() map[string]string {
+	return map[string]string{
+		"platform.role-images.admission.claim":  controlplanev1.RoleImageService_ClaimImageAdmission_FullMethodName,
+		"platform.role-images.admission.record": controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName,
+	}
+}
+
+// ImagePromotionOperations разрешает только одноразовый перенос уже
+// допущенного immutable image artifact в promoted registry.
+func ImagePromotionOperations() map[string]string {
+	return map[string]string{
+		"platform.role-images.promotion.claim":     controlplanev1.RoleImageService_ClaimImagePromotion_FullMethodName,
+		"platform.role-images.promotion.authorize": controlplanev1.RoleImageService_AuthorizeImagePromotion_FullMethodName,
+		"platform.role-images.promotion.complete":  controlplanev1.RoleImageService_CompleteImagePromotion_FullMethodName,
+	}
+}
+
 // AutomationSchedulerOperations возвращает минимальный профиль job, которая
 // только материализует server-owned due occurrences.
 func AutomationSchedulerOperations() map[string]string {
@@ -130,5 +164,7 @@ func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 		"platform.command.workflows.create":   {},
 		"platform.command.artifacts.upload":   {},
 		"platform.command.schedules.create":   {},
+		"platform.role-images.recipes.list":   {},
+		"platform.role-images.recipes.manage": {},
 	}
 }

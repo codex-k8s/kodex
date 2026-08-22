@@ -286,6 +286,9 @@ message VerifiedAuthorizationContext {
   uint64 key_set_revision = 19;
   uint64 policy_revision = 20;
   uint64 signer_generation = 21;
+  // Ревизия проверенной application credential caller: session revision для
+  // человека либо grant revision для service workload. Caller её не задаёт.
+  uint64 caller_credential_revision = 22;
 }
 
 message AuthorizationIssuerServiceCheckReadinessRequest {}

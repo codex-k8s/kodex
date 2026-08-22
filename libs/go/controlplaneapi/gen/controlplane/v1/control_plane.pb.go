@@ -2037,6 +2037,8 @@ type Agent struct {
 	CurrentActivity       string                 `protobuf:"bytes,17,opt,name=current_activity,json=currentActivity,proto3" json:"current_activity,omitempty"`
 	UpdatedAt             *timestamppb.Timestamp `protobuf:"bytes,18,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	NextActions           []NextAction           `protobuf:"varint,19,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
+	RoleDefinitionRef     string                 `protobuf:"bytes,20,opt,name=role_definition_ref,json=roleDefinitionRef,proto3" json:"role_definition_ref,omitempty"`
+	RoleDefinitionName    string                 `protobuf:"bytes,21,opt,name=role_definition_name,json=roleDefinitionName,proto3" json:"role_definition_name,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -2202,6 +2204,20 @@ func (x *Agent) GetNextActions() []NextAction {
 		return x.NextActions
 	}
 	return nil
+}
+
+func (x *Agent) GetRoleDefinitionRef() string {
+	if x != nil {
+		return x.RoleDefinitionRef
+	}
+	return ""
+}
+
+func (x *Agent) GetRoleDefinitionName() string {
+	if x != nil {
+		return x.RoleDefinitionName
+	}
+	return ""
 }
 
 type WorkflowInputField struct {
@@ -6840,6 +6856,7 @@ type CreateAgentRequest struct {
 	AvatarUrl           string                 `protobuf:"bytes,6,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
 	RuntimeRef          string                 `protobuf:"bytes,7,opt,name=runtime_ref,json=runtimeRef,proto3" json:"runtime_ref,omitempty"`
 	InitialInstructions string                 `protobuf:"bytes,8,opt,name=initial_instructions,json=initialInstructions,proto3" json:"initial_instructions,omitempty"`
+	RoleDefinitionRef   string                 `protobuf:"bytes,9,opt,name=role_definition_ref,json=roleDefinitionRef,proto3" json:"role_definition_ref,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -6930,6 +6947,13 @@ func (x *CreateAgentRequest) GetInitialInstructions() string {
 	return ""
 }
 
+func (x *CreateAgentRequest) GetRoleDefinitionRef() string {
+	if x != nil {
+		return x.RoleDefinitionRef
+	}
+	return ""
+}
+
 type CreateAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Agent         *Agent                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
@@ -6975,16 +6999,17 @@ func (x *CreateAgentResponse) GetAgent() *Agent {
 }
 
 type UpdateAgentRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Mutation        *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	AgentRef        string                 `protobuf:"bytes,2,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
-	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Purpose         string                 `protobuf:"bytes,4,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	RoleDescription string                 `protobuf:"bytes,5,opt,name=role_description,json=roleDescription,proto3" json:"role_description,omitempty"`
-	AvatarUrl       string                 `protobuf:"bytes,6,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
-	RuntimeRef      string                 `protobuf:"bytes,7,opt,name=runtime_ref,json=runtimeRef,proto3" json:"runtime_ref,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Mutation          *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	AgentRef          string                 `protobuf:"bytes,2,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	Name              string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Purpose           string                 `protobuf:"bytes,4,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	RoleDescription   string                 `protobuf:"bytes,5,opt,name=role_description,json=roleDescription,proto3" json:"role_description,omitempty"`
+	AvatarUrl         string                 `protobuf:"bytes,6,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	RuntimeRef        string                 `protobuf:"bytes,7,opt,name=runtime_ref,json=runtimeRef,proto3" json:"runtime_ref,omitempty"`
+	RoleDefinitionRef string                 `protobuf:"bytes,8,opt,name=role_definition_ref,json=roleDefinitionRef,proto3" json:"role_definition_ref,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *UpdateAgentRequest) Reset() {
@@ -7062,6 +7087,13 @@ func (x *UpdateAgentRequest) GetAvatarUrl() string {
 func (x *UpdateAgentRequest) GetRuntimeRef() string {
 	if x != nil {
 		return x.RuntimeRef
+	}
+	return ""
+}
+
+func (x *UpdateAgentRequest) GetRoleDefinitionRef() string {
+	if x != nil {
+		return x.RoleDefinitionRef
 	}
 	return ""
 }
@@ -12929,29 +12961,36 @@ func (x *ListAuditEventsResponse) GetPage() *PageInfo {
 }
 
 type RuntimeRevisionSnapshot struct {
-	state             protoimpl.MessageState   `protogen:"open.v1"`
-	Ref               string                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version           int64                    `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	RunRef            string                   `protobuf:"bytes,3,opt,name=run_ref,json=runRef,proto3" json:"run_ref,omitempty"`
-	NodeRef           string                   `protobuf:"bytes,4,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
-	SessionRef        string                   `protobuf:"bytes,5,opt,name=session_ref,json=sessionRef,proto3" json:"session_ref,omitempty"`
-	TurnRef           string                   `protobuf:"bytes,6,opt,name=turn_ref,json=turnRef,proto3" json:"turn_ref,omitempty"`
-	Attempt           int32                    `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	AgentRef          string                   `protobuf:"bytes,8,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
-	Instructions      string                   `protobuf:"bytes,9,opt,name=instructions,proto3" json:"instructions,omitempty"`
-	Runtime           *RuntimeSelection        `protobuf:"bytes,10,opt,name=runtime,proto3" json:"runtime,omitempty"`
-	Capabilities      []*PlatformCapability    `protobuf:"bytes,11,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	IntegrationGrants []*IntegrationGrant      `protobuf:"bytes,12,rep,name=integration_grants,json=integrationGrants,proto3" json:"integration_grants,omitempty"`
-	Artifacts         []*Artifact              `protobuf:"bytes,13,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	InputDigest       string                   `protobuf:"bytes,14,opt,name=input_digest,json=inputDigest,proto3" json:"input_digest,omitempty"`
-	RevisionDigest    string                   `protobuf:"bytes,15,opt,name=revision_digest,json=revisionDigest,proto3" json:"revision_digest,omitempty"`
-	SystemAssistant   bool                     `protobuf:"varint,16,opt,name=system_assistant,json=systemAssistant,proto3" json:"system_assistant,omitempty"`
-	DelegationTargets []*DelegationTarget      `protobuf:"bytes,17,rep,name=delegation_targets,json=delegationTargets,proto3" json:"delegation_targets,omitempty"`
-	CallbackEdgeRef   string                   `protobuf:"bytes,18,opt,name=callback_edge_ref,json=callbackEdgeRef,proto3" json:"callback_edge_ref,omitempty"`
-	SessionContext    []*SessionContextMessage `protobuf:"bytes,19,rep,name=session_context,json=sessionContext,proto3" json:"session_context,omitempty"`
-	BoundedInput      *structpb.Struct         `protobuf:"bytes,20,opt,name=bounded_input,json=boundedInput,proto3" json:"bounded_input,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                       protoimpl.MessageState   `protogen:"open.v1"`
+	Ref                         string                   `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version                     int64                    `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	RunRef                      string                   `protobuf:"bytes,3,opt,name=run_ref,json=runRef,proto3" json:"run_ref,omitempty"`
+	NodeRef                     string                   `protobuf:"bytes,4,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	SessionRef                  string                   `protobuf:"bytes,5,opt,name=session_ref,json=sessionRef,proto3" json:"session_ref,omitempty"`
+	TurnRef                     string                   `protobuf:"bytes,6,opt,name=turn_ref,json=turnRef,proto3" json:"turn_ref,omitempty"`
+	Attempt                     int32                    `protobuf:"varint,7,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	AgentRef                    string                   `protobuf:"bytes,8,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	Instructions                string                   `protobuf:"bytes,9,opt,name=instructions,proto3" json:"instructions,omitempty"`
+	Runtime                     *RuntimeSelection        `protobuf:"bytes,10,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Capabilities                []*PlatformCapability    `protobuf:"bytes,11,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	IntegrationGrants           []*IntegrationGrant      `protobuf:"bytes,12,rep,name=integration_grants,json=integrationGrants,proto3" json:"integration_grants,omitempty"`
+	Artifacts                   []*Artifact              `protobuf:"bytes,13,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	InputDigest                 string                   `protobuf:"bytes,14,opt,name=input_digest,json=inputDigest,proto3" json:"input_digest,omitempty"`
+	RevisionDigest              string                   `protobuf:"bytes,15,opt,name=revision_digest,json=revisionDigest,proto3" json:"revision_digest,omitempty"`
+	SystemAssistant             bool                     `protobuf:"varint,16,opt,name=system_assistant,json=systemAssistant,proto3" json:"system_assistant,omitempty"`
+	DelegationTargets           []*DelegationTarget      `protobuf:"bytes,17,rep,name=delegation_targets,json=delegationTargets,proto3" json:"delegation_targets,omitempty"`
+	CallbackEdgeRef             string                   `protobuf:"bytes,18,opt,name=callback_edge_ref,json=callbackEdgeRef,proto3" json:"callback_edge_ref,omitempty"`
+	SessionContext              []*SessionContextMessage `protobuf:"bytes,19,rep,name=session_context,json=sessionContext,proto3" json:"session_context,omitempty"`
+	BoundedInput                *structpb.Struct         `protobuf:"bytes,20,opt,name=bounded_input,json=boundedInput,proto3" json:"bounded_input,omitempty"`
+	RoleDefinitionRef           string                   `protobuf:"bytes,21,opt,name=role_definition_ref,json=roleDefinitionRef,proto3" json:"role_definition_ref,omitempty"`
+	RoleImageRecipeRef          string                   `protobuf:"bytes,22,opt,name=role_image_recipe_ref,json=roleImageRecipeRef,proto3" json:"role_image_recipe_ref,omitempty"`
+	RoleImageArtifactRef        string                   `protobuf:"bytes,23,opt,name=role_image_artifact_ref,json=roleImageArtifactRef,proto3" json:"role_image_artifact_ref,omitempty"`
+	ImageReference              string                   `protobuf:"bytes,24,opt,name=image_reference,json=imageReference,proto3" json:"image_reference,omitempty"`
+	ImageManifestDigest         string                   `protobuf:"bytes,25,opt,name=image_manifest_digest,json=imageManifestDigest,proto3" json:"image_manifest_digest,omitempty"`
+	RoleRuntimeContractRevision uint64                   `protobuf:"varint,26,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
+	RoleRuntimeContractSha256   string                   `protobuf:"bytes,27,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RuntimeRevisionSnapshot) Reset() {
@@ -13122,6 +13161,55 @@ func (x *RuntimeRevisionSnapshot) GetBoundedInput() *structpb.Struct {
 		return x.BoundedInput
 	}
 	return nil
+}
+
+func (x *RuntimeRevisionSnapshot) GetRoleDefinitionRef() string {
+	if x != nil {
+		return x.RoleDefinitionRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetRoleImageRecipeRef() string {
+	if x != nil {
+		return x.RoleImageRecipeRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetRoleImageArtifactRef() string {
+	if x != nil {
+		return x.RoleImageArtifactRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetImageReference() string {
+	if x != nil {
+		return x.ImageReference
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetImageManifestDigest() string {
+	if x != nil {
+		return x.ImageManifestDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetRoleRuntimeContractRevision() uint64 {
+	if x != nil {
+		return x.RoleRuntimeContractRevision
+	}
+	return 0
+}
+
+func (x *RuntimeRevisionSnapshot) GetRoleRuntimeContractSha256() string {
+	if x != nil {
+		return x.RoleRuntimeContractSha256
+	}
+	return ""
 }
 
 type DelegationTarget struct {
@@ -15853,7 +15941,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"changed_by\x18\a \x01(\v2\x1c.controlplane.v1.UserSummaryR\tchangedBy\x129\n" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12=\n" +
-	"\fpublished_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vpublishedAt\"\xfb\x06\n" +
+	"\fpublished_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vpublishedAt\"\xdd\a\n" +
 	"\x05Agent\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
@@ -15877,7 +15965,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10current_activity\x18\x11 \x01(\tR\x0fcurrentActivity\x129\n" +
 	"\n" +
 	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12>\n" +
-	"\fnext_actions\x18\x13 \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\"\xb3\x01\n" +
+	"\fnext_actions\x18\x13 \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x12.\n" +
+	"\x13role_definition_ref\x18\x14 \x01(\tR\x11roleDefinitionRef\x120\n" +
+	"\x14role_definition_name\x18\x15 \x01(\tR\x12roleDefinitionName\"\xb3\x01\n" +
 	"\x12WorkflowInputField\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12 \n" +
@@ -16347,7 +16437,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0fGetAgentRequest\x12\x1b\n" +
 	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\"@\n" +
 	"\x10GetAgentResponse\x12,\n" +
-	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\xbf\x02\n" +
+	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\xef\x02\n" +
 	"\x12CreateAgentRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
 	"\vproject_ref\x18\x02 \x01(\tR\n" +
@@ -16359,9 +16449,10 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"avatar_url\x18\x06 \x01(\tR\tavatarUrl\x12\x1f\n" +
 	"\vruntime_ref\x18\a \x01(\tR\n" +
 	"runtimeRef\x121\n" +
-	"\x14initial_instructions\x18\b \x01(\tR\x13initialInstructions\"C\n" +
+	"\x14initial_instructions\x18\b \x01(\tR\x13initialInstructions\x12.\n" +
+	"\x13role_definition_ref\x18\t \x01(\tR\x11roleDefinitionRef\"C\n" +
 	"\x13CreateAgentResponse\x12,\n" +
-	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\x88\x02\n" +
+	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\xb8\x02\n" +
 	"\x12UpdateAgentRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1b\n" +
 	"\tagent_ref\x18\x02 \x01(\tR\bagentRef\x12\x12\n" +
@@ -16371,7 +16462,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"avatar_url\x18\x06 \x01(\tR\tavatarUrl\x12\x1f\n" +
 	"\vruntime_ref\x18\a \x01(\tR\n" +
-	"runtimeRef\"C\n" +
+	"runtimeRef\x12.\n" +
+	"\x13role_definition_ref\x18\b \x01(\tR\x11roleDefinitionRef\"C\n" +
 	"\x13UpdateAgentResponse\x12,\n" +
 	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\x8d\x01\n" +
 	"\x16SetAgentEnabledRequest\x12<\n" +
@@ -16753,7 +16845,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aoutcome\x18\x04 \x01(\tR\aoutcome\"}\n" +
 	"\x17ListAuditEventsResponse\x123\n" +
 	"\x06events\x18\x01 \x03(\v2\x1b.controlplane.v1.AuditEventR\x06events\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xa5\a\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xa2\n" +
+	"\n" +
 	"\x17RuntimeRevisionSnapshot\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
@@ -16776,7 +16869,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12delegation_targets\x18\x11 \x03(\v2!.controlplane.v1.DelegationTargetR\x11delegationTargets\x12*\n" +
 	"\x11callback_edge_ref\x18\x12 \x01(\tR\x0fcallbackEdgeRef\x12O\n" +
 	"\x0fsession_context\x18\x13 \x03(\v2&.controlplane.v1.SessionContextMessageR\x0esessionContext\x12<\n" +
-	"\rbounded_input\x18\x14 \x01(\v2\x17.google.protobuf.StructR\fboundedInput\"}\n" +
+	"\rbounded_input\x18\x14 \x01(\v2\x17.google.protobuf.StructR\fboundedInput\x12.\n" +
+	"\x13role_definition_ref\x18\x15 \x01(\tR\x11roleDefinitionRef\x121\n" +
+	"\x15role_image_recipe_ref\x18\x16 \x01(\tR\x12roleImageRecipeRef\x125\n" +
+	"\x17role_image_artifact_ref\x18\x17 \x01(\tR\x14roleImageArtifactRef\x12'\n" +
+	"\x0fimage_reference\x18\x18 \x01(\tR\x0eimageReference\x122\n" +
+	"\x15image_manifest_digest\x18\x19 \x01(\tR\x13imageManifestDigest\x12C\n" +
+	"\x1erole_runtime_contract_revision\x18\x1a \x01(\x04R\x1broleRuntimeContractRevision\x12?\n" +
+	"\x1crole_runtime_contract_sha256\x18\x1b \x01(\tR\x19roleRuntimeContractSha256\"}\n" +
 	"\x10DelegationTarget\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +

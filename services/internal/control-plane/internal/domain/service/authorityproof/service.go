@@ -170,6 +170,7 @@ type proofClaims struct {
 	Authority                    authority `json:"authority"`
 	ProofRevision                uint64    `json:"proof_revision"`
 	SignerGeneration             uint64    `json:"signer_generation"`
+	CallerCredentialRevision     uint64    `json:"caller_credential_revision"`
 	JTI                          string    `json:"jti"`
 	IssuedAt                     int64     `json:"iat"`
 	NotBefore                    int64     `json:"nbf"`
@@ -306,6 +307,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	actorSource := "DOMAIN_STATE"
 	actorReference := ""
 	actorRevision := uint64(1)
+	callerCredentialRevision := uint64(1)
 	credentialDigest := sha256.Sum256([]byte(credential))
 	if producer.CallerWorkloadID == "control-api-gateway" {
 		verified, err := service.oidc.VerifyToken(ctx, credential)
@@ -314,6 +316,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = verified.Subject, verified.OrganizationID
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
+		callerCredentialRevision = verified.SessionRevision
 	} else {
 		grant, err := service.verifyWorkerGrant(credential, producer)
 		if err != nil {
@@ -326,6 +329,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 			return ResolveResult{}, err
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "mattercodex-system-subject", "mattercodex-installation"
+		callerCredentialRevision = grant.Revision
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
 	if err != nil {
@@ -355,7 +359,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		Version: 1, Issuer: producer.AuthorityProofIssuer, Audience: producer.AuthorityProofAudience,
 		Caller:      workload{WorkloadID: producer.CallerWorkloadID, SPIFFEID: producer.CallerSPIFFEID},
 		OperationID: input.OperationID, AuthorizationContextAudience: binding.Audience, Authority: proofAuthority,
-		ProofRevision: revision, SignerGeneration: service.signerGeneration, JTI: uuid.NewString(),
+		ProofRevision: revision, SignerGeneration: service.signerGeneration, CallerCredentialRevision: callerCredentialRevision, JTI: uuid.NewString(),
 		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(),
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: proofType, KeyID: service.signer.KeyID})

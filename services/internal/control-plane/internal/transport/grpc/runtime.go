@@ -61,6 +61,13 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		agentRef = mapString(values, "assistantRef")
 	}
 	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevision"), Version: 1, RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
+	result.RoleImageRecipeRef = mapString(values, "roleImageRecipeRef")
+	result.RoleImageArtifactRef = mapString(values, "roleImageArtifactRef")
+	result.ImageReference = mapString(values, "imageReference")
+	result.ImageManifestDigest = mapString(values, "imageManifestDigest")
+	result.RoleRuntimeContractRevision = uint64(mapInt64(values, "roleRuntimeContractRevision"))
+	result.RoleRuntimeContractSha256 = mapString(values, "roleRuntimeContractSHA256")
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {
 		profileRevision = mapString(values, "runtimeRevision")

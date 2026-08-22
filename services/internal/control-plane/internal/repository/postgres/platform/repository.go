@@ -32,6 +32,19 @@ type Repository struct {
 	pool                   *pgxpool.Pool
 	defaultRuntimeProvider string
 	defaultRuntimeModel    string
+	roleImages             RoleImageConfig
+}
+
+// RoleImageConfig связывает supply-chain lifecycle с точной policy, runtime ABI
+// и secret, которым control-plane детерминированно подписывает fenced claims.
+type RoleImageConfig struct {
+	PolicyRevision, RoleRuntimeContractRevision uint64
+	PolicySHA256, RoleRuntimeContractSHA256      string
+	BuildLeaseDuration, AdmissionClaimTTL        time.Duration
+	PromotionClaimTTL                            time.Duration
+	MaximumAttempts                              uint32
+	StagingRepository, PromotedRepository        string
+	LeaseSigningKey                              []byte
 }
 
 func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string) (*Repository, error) {
@@ -39,6 +52,19 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string)
 		return nil, errors.New("PostgreSQL pool is required")
 	}
 	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel}, nil
+}
+
+func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
+	if config.PolicyRevision == 0 || config.RoleRuntimeContractRevision == 0 ||
+		len(config.PolicySHA256) != 64 || len(config.RoleRuntimeContractSHA256) != 64 ||
+		config.BuildLeaseDuration < 30*time.Second || config.AdmissionClaimTTL < time.Minute ||
+		config.PromotionClaimTTL < time.Minute || config.MaximumAttempts < 1 || config.MaximumAttempts > 10 ||
+		config.StagingRepository == "" || config.PromotedRepository == "" || len(config.LeaseSigningKey) < 32 {
+		return errors.New("role image configuration is invalid")
+	}
+	config.LeaseSigningKey = append([]byte(nil), config.LeaseSigningKey...)
+	repository.roleImages = config
+	return nil
 }
 
 func (repository *Repository) Ready(ctx context.Context) error {
@@ -105,6 +131,15 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
 		return errors.New("seed runtime profile")
 	}
+	roleRef, err := newRef("role")
+	if err != nil {
+		return err
+	}
+	var systemRoleID string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertRoleDefinitionsRefStableKeyName,
+		roleRef, organizationID, systemSubjectID).Scan(&systemRoleID); err != nil {
+		return errors.New("seed system assistant role definition")
+	}
 	definitions := []struct {
 		key, name, description, category string
 		capabilities                     []entity.IntegrationCapability
@@ -126,7 +161,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	}
 	var agentID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
-		agentRef, organizationID, defaultRuntimeKey).Scan(&agentID); err != nil {
+		agentRef, organizationID, systemRoleID, defaultRuntimeKey).Scan(&agentID); err != nil {
 		return errors.New("create system assistant")
 	}
 	promptRef, err := newRef("ins")

@@ -65,7 +65,7 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	var response *controlplanev1.ClaimImageBuildResponse
 	err := client.call(ctx, func(callCtx context.Context) error {
 		var callErr error
-		response, callErr = client.shared.ControlPlane.ClaimImageBuild(callCtx,
+		response, callErr = client.shared.RoleImages.ClaimImageBuild(callCtx,
 			&controlplanev1.ClaimImageBuildRequest{IdempotencyKey: key})
 		return callErr
 	})
@@ -75,16 +75,15 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	if err != nil {
 		return Claim{}, err
 	}
-	resource, input := response.GetImageBuild(), response.GetInput()
-	build := resource.GetSpec().GetImageBuild()
-	if resource == nil || input == nil || build == nil || resource.GetId() == "" || resource.GetVersion() == 0 ||
+	build, input := response.GetImageBuild(), response.GetInput()
+	if build == nil || input == nil || build.GetRef() == "" || build.GetVersion() == 0 ||
 		build.GetAttempt() == 0 || response.GetFence() == 0 || response.GetLeaseToken() == "" ||
-		response.GetLeaseExpiresAt() == nil || input.GetRecipeId() != build.GetRecipeId() ||
+		response.GetLeaseExpiresAt() == nil || input.GetRecipeRef() != build.GetRecipeRef() ||
 		input.GetRecipeVersion() != build.GetRecipeVersion() || input.GetRecipeGeneration() != build.GetRecipeGeneration() ||
 		input.GetSpecSha256() != build.GetSpecSha256() || input.GetImmutableBuildSha256() != build.GetImmutableBuildSha256() {
 		return Claim{}, errors.New("claimed image build tuple is incomplete")
 	}
-	return Claim{BuildID: resource.GetId(), Version: resource.GetVersion(), Attempt: build.GetAttempt(),
+	return Claim{BuildID: build.GetRef(), Version: build.GetVersion(), Attempt: build.GetAttempt(),
 		Fence: response.GetFence(), LeaseToken: response.GetLeaseToken(),
 		LeaseExpiresAt: response.GetLeaseExpiresAt().AsTime(), Input: input}, nil
 }
@@ -93,8 +92,8 @@ func (client *Client) Report(ctx context.Context, claim *Claim, key string, stag
 	var response *controlplanev1.ReportImageBuildProgressResponse
 	err := client.call(ctx, func(callCtx context.Context) error {
 		var callErr error
-		response, callErr = client.shared.ControlPlane.ReportImageBuildProgress(callCtx, &controlplanev1.ReportImageBuildProgressRequest{
-			IdempotencyKey: key, ImageBuildId: claim.BuildID, ExpectedVersion: claim.Version,
+		response, callErr = client.shared.RoleImages.ReportImageBuildProgress(callCtx, &controlplanev1.ReportImageBuildProgressRequest{
+			IdempotencyKey: key, ImageBuildRef: claim.BuildID, ExpectedVersion: claim.Version,
 			ExpectedAttempt: claim.Attempt, ExpectedFence: claim.Fence, LeaseToken: claim.LeaseToken,
 			Stage: stage, ProgressPercent: percent,
 		})
@@ -114,8 +113,8 @@ func (client *Client) Renew(ctx context.Context, claim *Claim, key string) error
 	var response *controlplanev1.RenewImageBuildResponse
 	err := client.call(ctx, func(callCtx context.Context) error {
 		var callErr error
-		response, callErr = client.shared.ControlPlane.RenewImageBuild(callCtx, &controlplanev1.RenewImageBuildRequest{
-			IdempotencyKey: key, ImageBuildId: claim.BuildID, ExpectedVersion: claim.Version,
+		response, callErr = client.shared.RoleImages.RenewImageBuild(callCtx, &controlplanev1.RenewImageBuildRequest{
+			IdempotencyKey: key, ImageBuildRef: claim.BuildID, ExpectedVersion: claim.Version,
 			ExpectedAttempt: claim.Attempt, ExpectedFence: claim.Fence, LeaseToken: claim.LeaseToken,
 		})
 		return callErr
@@ -136,8 +135,8 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string, evi
 	var response *controlplanev1.CompleteImageBuildResponse
 	err := client.call(ctx, func(callCtx context.Context) error {
 		var callErr error
-		response, callErr = client.shared.ControlPlane.CompleteImageBuild(callCtx, &controlplanev1.CompleteImageBuildRequest{
-			IdempotencyKey: key, ImageBuildId: claim.BuildID, ExpectedVersion: claim.Version,
+		response, callErr = client.shared.RoleImages.CompleteImageBuild(callCtx, &controlplanev1.CompleteImageBuildRequest{
+			IdempotencyKey: key, ImageBuildRef: claim.BuildID, ExpectedVersion: claim.Version,
 			ExpectedAttempt: claim.Attempt, ExpectedFence: claim.Fence, LeaseToken: claim.LeaseToken,
 			StagingReference: evidence.StagingReference, ManifestDigest: evidence.ManifestDigest,
 			ProvenanceSha256: evidence.ProvenanceSHA256, ImmutableBuildSha256: evidence.ImmutableBuildSHA256,
@@ -155,8 +154,8 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string, evi
 
 func (client *Client) Fail(ctx context.Context, claim Claim, key, errorCode, diagnosticCode, diagnosticSummary string) error {
 	return client.call(ctx, func(callCtx context.Context) error {
-		_, callErr := client.shared.ControlPlane.FailImageBuild(callCtx, &controlplanev1.FailImageBuildRequest{
-			IdempotencyKey: key, ImageBuildId: claim.BuildID, ExpectedVersion: claim.Version,
+		_, callErr := client.shared.RoleImages.FailImageBuild(callCtx, &controlplanev1.FailImageBuildRequest{
+			IdempotencyKey: key, ImageBuildRef: claim.BuildID, ExpectedVersion: claim.Version,
 			ExpectedAttempt: claim.Attempt, ExpectedFence: claim.Fence, LeaseToken: claim.LeaseToken, ErrorCode: errorCode,
 			DiagnosticCode: diagnosticCode, DiagnosticSummary: diagnosticSummary,
 		})

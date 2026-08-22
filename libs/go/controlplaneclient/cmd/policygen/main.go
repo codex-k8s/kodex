@@ -114,6 +114,9 @@ func main() {
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
 		worker("automation-scheduler", "control-plane.automation", controlplaneclient.AutomationSchedulerOperations()),
 		worker("integration-gateway", "control-plane.integration-gateway", controlplaneclient.IntegrationGatewayOperations()),
+		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
+		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
+		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 	}
 	value := document{Version: 1, PolicyRevision: 32, Policy: policy{
 		TrustDomain: "mattercodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,

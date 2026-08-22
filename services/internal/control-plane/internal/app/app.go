@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/roleimage"
 	platformrepository "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/platform"
 	platformgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,12 +52,30 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
+	leaseSigningKey, err := readBoundedFile(config.LeaseSigningKeyFile)
+	if err != nil {
+		return fmt.Errorf("read role image lease signing key: %w", err)
+	}
+	if err := repository.ConfigureRoleImages(platformrepository.RoleImageConfig{
+		PolicyRevision: config.ImagePolicyRevision, PolicySHA256: config.ImagePolicySHA256,
+		RoleRuntimeContractRevision: config.RoleRuntimeContractRevision, RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256,
+		BuildLeaseDuration: config.ImageBuildLeaseDuration, AdmissionClaimTTL: config.ImageAdmissionClaimTTL,
+		PromotionClaimTTL: config.ImagePromotionClaimTTL, MaximumAttempts: config.ImageMaximumAttempts,
+		StagingRepository: config.StagingImageRepository, PromotedRepository: config.PromotedImageRepository,
+		LeaseSigningKey: leaseSigningKey,
+	}); err != nil {
+		return fmt.Errorf("configure role image lifecycle: %w", err)
+	}
 	service, err := platformservice.New(repository)
 	if err != nil {
 		return fmt.Errorf("construct platform service: %w", err)
 	}
 	if err := service.Bootstrap(startup); err != nil {
 		return fmt.Errorf("bootstrap platform: %w", err)
+	}
+	roleImageService, err := roleimageservice.New(repository)
+	if err != nil {
+		return fmt.Errorf("construct role image service: %w", err)
 	}
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
@@ -65,6 +84,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			"automation-scheduler": config.AutomationGrantTrustFile,
 			"integration-gateway":  config.IntegrationGrantTrustFile,
 			"runtime-controller":   config.RuntimeGrantTrustFile,
+			"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
+			"image-admission":      config.ImageAdmissionGrantTrustFile,
+			"image-promotion":      config.ImagePromotionGrantTrustFile,
 		},
 		OIDC: oidcverifier.Config{
 			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
@@ -108,6 +130,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct authority proof transport: %w", err)
 	}
+	roleImageTransport, err := platformgrpc.NewRoleImageServer(roleImageService)
+	if err != nil {
+		return fmt.Errorf("construct role image transport: %w", err)
+	}
 	tlsConfig, err := loadServerTLS(config)
 	if err != nil {
 		return err
@@ -135,6 +161,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {

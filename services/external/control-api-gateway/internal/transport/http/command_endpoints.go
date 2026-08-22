@@ -100,7 +100,7 @@ func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projec
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
+	response, err := server.control.Command.CreateAgent(r.Context(), &controlplanev1.CreateAgentRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef), InitialInstructions: stringValue(body.InitialInstructions)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -116,7 +116,7 @@ func (server *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ref ge
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef)})
+	response, err := server.control.Command.UpdateAgent(r.Context(), &controlplanev1.UpdateAgentRequest{Mutation: m, AgentRef: ref, Name: body.Name, Purpose: body.Purpose, RoleDescription: body.RoleDescription, RoleDefinitionRef: stringValue(body.RoleDefinitionRef), AvatarUrl: stringValue(body.AvatarUrl), RuntimeRef: stringValue(body.RuntimeRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

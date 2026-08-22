@@ -8,12 +8,13 @@ import (
 
 // Principal выводится только из проверенного internal authorization context.
 type Principal struct {
-	ActorID         string
-	AuthorityTenant string
-	Permission      string
-	CorrelationRef  string
-	CallerWorkload  string
-	ProjectRef      string
+	ActorID            string
+	AuthorityTenant    string
+	Permission         string
+	CorrelationRef     string
+	CallerWorkload     string
+	ProjectRef         string
+	CredentialRevision uint64
 }
 
 func (principal Principal) Validate() error {
@@ -21,7 +22,8 @@ func (principal Principal) Validate() error {
 		strings.TrimSpace(principal.AuthorityTenant) == "" ||
 		strings.TrimSpace(principal.Permission) == "" ||
 		strings.TrimSpace(principal.CorrelationRef) == "" ||
-		strings.TrimSpace(principal.CallerWorkload) == "" {
+		strings.TrimSpace(principal.CallerWorkload) == "" ||
+		principal.CredentialRevision == 0 {
 		return errors.New("principal is incomplete")
 	}
 	return nil

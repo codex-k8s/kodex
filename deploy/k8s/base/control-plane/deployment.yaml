@@ -110,6 +110,12 @@ spec:
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
+            - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
+            - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
           ports:
             - name: grpc
               containerPort: 8443

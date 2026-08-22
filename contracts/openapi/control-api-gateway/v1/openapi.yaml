@@ -1257,6 +1257,8 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleDefinitionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleDefinitionName: { type: string, maxLength: 160 }
         name: { type: string, maxLength: 120 }
         purpose: { type: string, maxLength: 1000 }
         roleDescription: { type: string, maxLength: 1000 }
@@ -1281,6 +1283,9 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         roleDescription: { type: string, minLength: 1, maxLength: 1000 }
+        roleDefinitionRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
         avatarUrl: { type: string, maxLength: 500 }
         runtimeRef:
           allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]

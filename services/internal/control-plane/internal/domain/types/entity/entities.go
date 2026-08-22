@@ -37,14 +37,15 @@ type RuntimeSelection struct {
 }
 
 type Agent struct {
-	Ref, ProjectRef, SystemKey, Name, Purpose, RoleDescription, AvatarURL string
-	State, RuntimeKey, RuntimeName, Provider, Model, RuntimeRevision      string
-	Enabled, System                                                       bool
-	Version                                                               int64
-	Capabilities, IntegrationGrantRefs, KnowledgeArtifactRefs             []string
-	DraftInstructions, PublishedInstructions                              *InstructionVersion
-	CreatedAt, UpdatedAt                                                  time.Time
-	NextActions                                                           []string
+	Ref, ProjectRef, RoleDefinitionRef, RoleDefinitionName, SystemKey string
+	Name, Purpose, RoleDescription, AvatarURL                         string
+	State, RuntimeKey, RuntimeName, Provider, Model, RuntimeRevision  string
+	Enabled, System                                                   bool
+	Version                                                           int64
+	Capabilities, IntegrationGrantRefs, KnowledgeArtifactRefs         []string
+	DraftInstructions, PublishedInstructions                          *InstructionVersion
+	CreatedAt, UpdatedAt                                              time.Time
+	NextActions                                                       []string
 }
 
 type WorkflowInputField struct {

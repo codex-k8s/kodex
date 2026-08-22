@@ -28,11 +28,12 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		return value.Principal{}, errors.New("verified authorization context is invalid")
 	}
 	principal := value.Principal{
-		ActorID:         strings.TrimSpace(verified.GetAuthority().GetActor().GetId()),
-		AuthorityTenant: strings.TrimSpace(verified.GetAuthority().GetTenant().GetId()),
-		Permission:      verified.GetPermission(),
-		CorrelationRef:  verified.GetJti(),
-		CallerWorkload:  verified.GetCallerWorkloadId(),
+		ActorID:            strings.TrimSpace(verified.GetAuthority().GetActor().GetId()),
+		AuthorityTenant:    strings.TrimSpace(verified.GetAuthority().GetTenant().GetId()),
+		Permission:         verified.GetPermission(),
+		CorrelationRef:     verified.GetJti(),
+		CallerWorkload:     verified.GetCallerWorkloadId(),
+		CredentialRevision: verified.GetCallerCredentialRevision(),
 	}
 	if verified.GetAuthority().GetProject() != nil {
 		principal.ProjectRef = verified.GetAuthority().GetProject().GetId()

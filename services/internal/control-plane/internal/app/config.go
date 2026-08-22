@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -13,49 +14,66 @@ import (
 )
 
 type Config struct {
-	GRPCListen                string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
-	TechnicalListen           string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
-	ServerCertificateFile     string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
-	ServerPrivateKeyFile      string        `env:"CONTROL_PLANE_TLS_PRIVATE_KEY_FILE"`
-	ClientCAFile              string        `env:"CONTROL_PLANE_TLS_CLIENT_CA_FILE"`
-	PostgresDSNFile           string        `env:"CONTROL_PLANE_POSTGRES_DSN_FILE"`
-	PostgresCAFile            string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
-	PostgresTLSServerName     string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
-	PostgresMaxConnections    int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
-	NATSURL                   string        `env:"CONTROL_PLANE_NATS_URL"`
-	NATSTLSServerName         string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
-	NATSCAFile                string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
-	NATSCredentialsFile       string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
-	NATSStream                string        `env:"CONTROL_PLANE_NATS_STREAM"`
-	NATSReplicas              int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
-	NATSMaxBytes              int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
-	InstanceID                string        `env:"POD_UID"`
-	DefaultRuntimeProvider    string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
-	DefaultRuntimeModel       string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
-	AuthorityVerifierSocket   string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
-	AuthorityVerifierUID      uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
-	AuthorityVerifierGID      uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
-	AuthorityPolicyFile       string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
-	ProofSignerFile           string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
-	ProofSignerTrustFile      string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
-	AutomationGrantTrustFile  string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
-	IntegrationGrantTrustFile string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
-	RuntimeGrantTrustFile     string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
-	OIDCIssuer                string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
-	OIDCAudience              string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
-	OIDCJWKSURL               string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
-	OIDCConnectAddress        string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
-	OIDCTLSServerName         string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
-	OIDCCAFile                string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
-	OIDCRefreshInterval       time.Duration `env:"CONTROL_PLANE_OIDC_REFRESH_INTERVAL"`
-	StartupTimeout            time.Duration `env:"CONTROL_PLANE_STARTUP_TIMEOUT"`
-	ReadinessTimeout          time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
-	ReadinessInterval         time.Duration `env:"CONTROL_PLANE_READINESS_INTERVAL"`
-	ShutdownTimeout           time.Duration `env:"CONTROL_PLANE_SHUTDOWN_TIMEOUT"`
-	RelayPollInterval         time.Duration `env:"CONTROL_PLANE_RELAY_POLL_INTERVAL"`
-	RelayLeaseDuration        time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
-	RelayPublishTimeout       time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
-	RelayFinalizeTimeout      time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
+	GRPCListen                     string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
+	TechnicalListen                string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
+	ServerCertificateFile          string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
+	ServerPrivateKeyFile           string        `env:"CONTROL_PLANE_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile                   string        `env:"CONTROL_PLANE_TLS_CLIENT_CA_FILE"`
+	PostgresDSNFile                string        `env:"CONTROL_PLANE_POSTGRES_DSN_FILE"`
+	PostgresCAFile                 string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
+	PostgresTLSServerName          string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
+	PostgresMaxConnections         int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
+	NATSURL                        string        `env:"CONTROL_PLANE_NATS_URL"`
+	NATSTLSServerName              string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
+	NATSCAFile                     string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
+	NATSCredentialsFile            string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
+	NATSStream                     string        `env:"CONTROL_PLANE_NATS_STREAM"`
+	NATSReplicas                   int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
+	NATSMaxBytes                   int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
+	InstanceID                     string        `env:"POD_UID"`
+	DefaultRuntimeProvider         string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
+	DefaultRuntimeModel            string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
+	AuthorityVerifierSocket        string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
+	AuthorityVerifierUID           uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
+	AuthorityVerifierGID           uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
+	AuthorityPolicyFile            string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
+	ProofSignerFile                string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
+	ProofSignerTrustFile           string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
+	AutomationGrantTrustFile       string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
+	IntegrationGrantTrustFile      string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
+	RuntimeGrantTrustFile          string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
+	RoleImageBuilderGrantTrustFile string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
+	ImageAdmissionGrantTrustFile   string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
+	ImagePromotionGrantTrustFile   string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
+	LeaseSigningKeyFile            string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
+	ImagePolicyRevision            uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
+	ImagePolicySHA256              string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
+	ImageBuildLeaseDuration        time.Duration `env:"CONTROL_PLANE_IMAGE_BUILD_LEASE_DURATION"`
+	ImageAdmissionClaimTTL         time.Duration `env:"CONTROL_PLANE_IMAGE_ADMISSION_CLAIM_TTL"`
+	ImagePromotionClaimTTL         time.Duration `env:"CONTROL_PLANE_IMAGE_PROMOTION_CLAIM_TTL"`
+	ImageMaximumAttempts           uint32        `env:"CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS"`
+	StagingImageRepository         string        `env:"CONTROL_PLANE_STAGING_IMAGE_REPOSITORY"`
+	PromotedImageRepository        string        `env:"CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY"`
+	RoleImageInputRepository       string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
+	TrustedRoleBaseRepository      string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
+	TrustedRoleBaseDigest          string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
+	RoleRuntimeContractRevision    uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256      string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
+	OIDCIssuer                     string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
+	OIDCAudience                   string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
+	OIDCJWKSURL                    string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
+	OIDCConnectAddress             string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
+	OIDCTLSServerName              string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
+	OIDCCAFile                     string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
+	OIDCRefreshInterval            time.Duration `env:"CONTROL_PLANE_OIDC_REFRESH_INTERVAL"`
+	StartupTimeout                 time.Duration `env:"CONTROL_PLANE_STARTUP_TIMEOUT"`
+	ReadinessTimeout               time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
+	ReadinessInterval              time.Duration `env:"CONTROL_PLANE_READINESS_INTERVAL"`
+	ShutdownTimeout                time.Duration `env:"CONTROL_PLANE_SHUTDOWN_TIMEOUT"`
+	RelayPollInterval              time.Duration `env:"CONTROL_PLANE_RELAY_POLL_INTERVAL"`
+	RelayLeaseDuration             time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
+	RelayPublishTimeout            time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
+	RelayFinalizeTimeout           time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
 }
 
 func loadConfig() (Config, error) {
@@ -79,13 +97,21 @@ func loadConfig() (Config, error) {
 		DefaultRuntimeModel:     "gpt-5",
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
-		AuthorityPolicyFile:       "/var/run/config/mattercodex/control-plane/authority/policy.json",
-		ProofSignerFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk",
-		ProofSignerTrustFile:      "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
-		AutomationGrantTrustFile:  "/var/run/config/mattercodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
-		IntegrationGrantTrustFile: "/var/run/config/mattercodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
-		RuntimeGrantTrustFile:     "/var/run/config/mattercodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
-		OIDCAudience:              "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
+		AuthorityPolicyFile:            "/var/run/config/mattercodex/control-plane/authority/policy.json",
+		ProofSignerFile:                "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk",
+		ProofSignerTrustFile:           "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
+		AutomationGrantTrustFile:       "/var/run/config/mattercodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
+		IntegrationGrantTrustFile:      "/var/run/config/mattercodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
+		RuntimeGrantTrustFile:          "/var/run/config/mattercodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
+		RoleImageBuilderGrantTrustFile: "/var/run/config/mattercodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk",
+		ImageAdmissionGrantTrustFile:   "/var/run/config/mattercodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
+		ImagePromotionGrantTrustFile:   "/var/run/config/mattercodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
+		LeaseSigningKeyFile:            "/var/run/secrets/mattercodex/control-plane/lease-signing/key",
+		ImageBuildLeaseDuration:        5 * time.Minute,
+		ImageAdmissionClaimTTL:         30 * time.Minute,
+		ImagePromotionClaimTTL:         15 * time.Minute,
+		ImageMaximumAttempts:           3,
+		OIDCAudience:                   "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		OIDCRefreshInterval: 30 * time.Second,
 		StartupTimeout:      20 * time.Second, ReadinessTimeout: 2 * time.Second,
 		ReadinessInterval: 2 * time.Second, ShutdownTimeout: 10 * time.Second,
@@ -107,7 +133,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -118,6 +144,14 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
+		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
+		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
+		config.ImageAdmissionClaimTTL < time.Minute || config.ImageAdmissionClaimTTL > time.Hour ||
+		config.ImagePromotionClaimTTL < time.Minute || config.ImagePromotionClaimTTL > time.Hour ||
+		config.ImageMaximumAttempts < 1 || config.ImageMaximumAttempts > 10 ||
+		!validImageRepository(config.StagingImageRepository) || !validImageRepository(config.PromotedImageRepository) ||
+		!validImageRepository(config.RoleImageInputRepository) || !validImageRepository(config.TrustedRoleBaseRepository) ||
+		!validManifestDigest(config.TrustedRoleBaseDigest) || config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
 		config.OIDCRefreshInterval < 10*time.Second || config.OIDCRefreshInterval > time.Minute ||
@@ -141,6 +175,26 @@ func (config Config) validate() error {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validManifestDigest(value string) bool {
+	return len(value) == 71 && value[:7] == "sha256:" && validSHA256(value[7:])
+}
+
+func validImageRepository(value string) bool {
+	return value != "" && len(value) <= 500 && !strings.ContainsAny(value, "@ \t\r\n") && strings.Contains(value, "/")
 }
 
 func validRuntimeIdentifier(value string) bool {

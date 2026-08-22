@@ -67,8 +67,6 @@ replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../li
 
 replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth => ../../../libs/go/integrationgatewayauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
-
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/go/oidcidentity

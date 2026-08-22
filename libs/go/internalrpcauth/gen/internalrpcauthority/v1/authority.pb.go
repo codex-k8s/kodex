@@ -1571,8 +1571,11 @@ type VerifiedAuthorizationContext struct {
 	KeySetRevision     uint64 `protobuf:"varint,19,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
 	PolicyRevision     uint64 `protobuf:"varint,20,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
 	SignerGeneration   uint64 `protobuf:"varint,21,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Ревизия проверенной application credential caller: session revision для
+	// человека либо grant revision для service workload. Caller её не задаёт.
+	CallerCredentialRevision uint64 `protobuf:"varint,22,opt,name=caller_credential_revision,json=callerCredentialRevision,proto3" json:"caller_credential_revision,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *VerifiedAuthorizationContext) Reset() {
@@ -1748,6 +1751,13 @@ func (x *VerifiedAuthorizationContext) GetPolicyRevision() uint64 {
 func (x *VerifiedAuthorizationContext) GetSignerGeneration() uint64 {
 	if x != nil {
 		return x.SignerGeneration
+	}
+	return 0
+}
+
+func (x *VerifiedAuthorizationContext) GetCallerCredentialRevision() uint64 {
+	if x != nil {
+		return x.CallerCredentialRevision
 	}
 	return 0
 }
@@ -4306,7 +4316,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x0fdownstream_peer\x18\x03 \x01(\v20.internalrpcauthority.v1.DownstreamTransportPeerR\x0edownstreamPeer\x12%\n" +
 	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationId\"u\n" +
 	"\"VerifyAuthorizationContextResponse\x12O\n" +
-	"\acontext\x18\x01 \x01(\v25.internalrpcauthority.v1.VerifiedAuthorizationContextR\acontext\"\x8f\a\n" +
+	"\acontext\x18\x01 \x01(\v25.internalrpcauthority.v1.VerifiedAuthorizationContextR\acontext\"\xcd\a\n" +
 	"\x1cVerifiedAuthorizationContext\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\rR\x0fcontractVersion\x12\x16\n" +
 	"\x06issuer\x18\x02 \x01(\tR\x06issuer\x12\x1a\n" +
@@ -4334,7 +4344,8 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x14source_digest_sha256\x18\x12 \x01(\tR\x12sourceDigestSha256\x12(\n" +
 	"\x10key_set_revision\x18\x13 \x01(\x04R\x0ekeySetRevision\x12'\n" +
 	"\x0fpolicy_revision\x18\x14 \x01(\x04R\x0epolicyRevision\x12+\n" +
-	"\x11signer_generation\x18\x15 \x01(\x04R\x10signerGeneration\"1\n" +
+	"\x11signer_generation\x18\x15 \x01(\x04R\x10signerGeneration\x12<\n" +
+	"\x1acaller_credential_revision\x18\x16 \x01(\x04R\x18callerCredentialRevision\"1\n" +
 	"/AuthorizationIssuerServiceCheckReadinessRequest\"\xa7\x02\n" +
 	"0AuthorizationIssuerServiceCheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x12'\n" +
