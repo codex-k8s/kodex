@@ -51,6 +51,8 @@ var (
 	queryFindInstallationOwnerSubject string
 	//go:embed sql/proof_owner_create_subject.sql
 	queryCreateInstallationOwnerSubject string
+	//go:embed sql/proof_owner_update_subject_profile.sql
+	queryUpdateOIDCSubjectProfile string
 	//go:embed sql/proof_owner_create_membership.sql
 	queryCreateInstallationOwnerMembership string
 	//go:embed sql/proof_owner_claim_installation.sql

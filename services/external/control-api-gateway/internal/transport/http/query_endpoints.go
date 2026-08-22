@@ -63,6 +63,18 @@ func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Requ
 	}
 	writeMessage(w, http.StatusOK, response, "", "memberships")
 }
+func (server *Server) ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListProjectMembershipCandidatesParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
+	response, err := server.control.Query.ListProjectMembershipCandidates(r.Context(), &controlplanev1.ListProjectMembershipCandidatesRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "users")
+}
 func (server *Server) ListAgents(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListAgentsParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {

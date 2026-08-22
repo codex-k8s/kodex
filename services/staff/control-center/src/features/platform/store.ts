@@ -46,6 +46,7 @@ import {
   listIntegrationDefinitions,
   listOwnerGates,
   listPlatformCapabilities,
+  listProjectMembershipCandidates,
   listProjectMemberships,
   listProjects,
   listRoleEnvironments,
@@ -100,6 +101,7 @@ import type {
   ScheduleInput,
   SystemAssistant,
   TurnInput,
+  UserSummary,
   Workflow,
   WorkflowCommand,
   WorkflowInput,
@@ -135,6 +137,7 @@ type QueryKey =
   | "integrations"
   | "assistant"
   | "members"
+  | "memberCandidates"
   | "administration"
   | "audit";
 
@@ -177,6 +180,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const definitions = reactive<Record<string, IntegrationDefinition>>({});
   const connections = reactive<Record<string, IntegrationConnection>>({});
   const memberships = reactive<Record<string, Membership>>({});
+  const membershipCandidates = reactive<Record<string, UserSummary>>({});
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
@@ -221,6 +225,14 @@ export const usePlatformStore = defineStore("platform", () => {
         continue;
       target[value.ref] = value;
     }
+  }
+
+  function replace<T extends { ref: string }>(
+    target: Record<string, T>,
+    values: T[],
+  ): void {
+    for (const ref of Object.keys(target)) Reflect.deleteProperty(target, ref);
+    upsert(target, values);
   }
 
   async function loadBootstrap(): Promise<void> {
@@ -648,7 +660,27 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(memberships, values),
+      (values) => replace(memberships, values),
+    );
+  }
+
+  async function loadMembershipCandidates(
+    projectRef: string,
+    search = "",
+  ): Promise<void> {
+    await query(
+      "memberCandidates",
+      async () =>
+        (
+          await unwrap(
+            listProjectMembershipCandidates({
+              path: { projectRef },
+              query: { query: search, pageSize: 100 },
+              signal: requestSignal(),
+            }),
+          )
+        ).data.items,
+      (values) => replace(membershipCandidates, values),
     );
   }
 
@@ -1193,6 +1225,7 @@ export const usePlatformStore = defineStore("platform", () => {
     definitions,
     connections,
     memberships,
+    membershipCandidates,
     conversations,
     assistant,
     auditEvents,
@@ -1224,6 +1257,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadConnection,
     loadAssistant,
     loadMembers,
+    loadMembershipCandidates,
     saveMembership,
     revokeMembership,
     loadAdministration,

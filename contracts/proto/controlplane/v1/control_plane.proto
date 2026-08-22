@@ -18,6 +18,7 @@ service PlatformQueryService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjectMemberships(ListProjectMembershipsRequest) returns (ListProjectMembershipsResponse);
+  rpc ListProjectMembershipCandidates(ListProjectMembershipCandidatesRequest) returns (ListProjectMembershipCandidatesResponse);
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
   rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
   rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
@@ -902,6 +903,15 @@ message ListProjectMembershipsRequest {
 }
 message ListProjectMembershipsResponse {
   repeated Membership memberships = 1;
+  PageInfo page = 2;
+}
+message ListProjectMembershipCandidatesRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+  string query = 3;
+}
+message ListProjectMembershipCandidatesResponse {
+  repeated UserSummary users = 1;
   PageInfo page = 2;
 }
 message AddProjectMembershipRequest {

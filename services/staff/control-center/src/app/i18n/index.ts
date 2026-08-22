@@ -373,6 +373,10 @@ const ru = {
     chooseProjectText:
       "Внутренние идентификаторы вводить не нужно — выберите Проект из доступного списка.",
     emptyTitle: "В Проекте нет доступных участий",
+    chooseMember: "Выберите пользователя",
+    noCandidates: "Нет пользователей для добавления",
+    noCandidatesText:
+      "Пользователь должен один раз войти через SSO. До назначения доступа платформа покажет ему безопасный отказ, после чего он появится в этом списке.",
     edit: "Изменить доступ",
     revoke: "Отозвать доступ",
     roles: {
@@ -894,6 +898,10 @@ const en = {
     chooseProjectText:
       "No internal identifiers are needed — choose a Project from the available list.",
     emptyTitle: "No accessible memberships in this Project",
+    chooseMember: "Choose a user",
+    noCandidates: "No users can be added yet",
+    noCandidatesText:
+      "A user must sign in through SSO once. The platform denies access safely until a membership is assigned, then the user appears in this list.",
     edit: "Change access",
     revoke: "Revoke access",
     roles: {

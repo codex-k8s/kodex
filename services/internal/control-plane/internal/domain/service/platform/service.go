@@ -100,6 +100,13 @@ func (service *Service) ListMemberships(ctx context.Context, p value.Principal, 
 	}
 	return service.repository.ListMemberships(ctx, p, filter)
 }
+func (service *Service) ListMembershipCandidates(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.User, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListMembershipCandidates(ctx, p, filter)
+}
 func (service *Service) ListAgents(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

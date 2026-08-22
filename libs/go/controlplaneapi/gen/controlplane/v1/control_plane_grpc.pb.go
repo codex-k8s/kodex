@@ -19,30 +19,31 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformQueryService_GetBootstrapState_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
-	PlatformQueryService_GetOverview_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetOverview"
-	PlatformQueryService_ListPlatformCapabilities_FullMethodName   = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
-	PlatformQueryService_ListProjects_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListProjects"
-	PlatformQueryService_GetProject_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetProject"
-	PlatformQueryService_ListProjectMemberships_FullMethodName     = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
-	PlatformQueryService_ListAgents_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListAgents"
-	PlatformQueryService_GetAgent_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetAgent"
-	PlatformQueryService_ListWorkflows_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListWorkflows"
-	PlatformQueryService_GetWorkflow_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetWorkflow"
-	PlatformQueryService_ListRuns_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListRuns"
-	PlatformQueryService_GetRun_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetRun"
-	PlatformQueryService_GetRunGraph_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRunGraph"
-	PlatformQueryService_ListRunEvents_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListRunEvents"
-	PlatformQueryService_ListOwnerGates_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
-	PlatformQueryService_GetOwnerGate_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
-	PlatformQueryService_ListArtifacts_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListArtifacts"
-	PlatformQueryService_GetArtifact_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetArtifact"
-	PlatformQueryService_ListSchedules_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListSchedules"
-	PlatformQueryService_ListIntegrationDefinitions_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
-	PlatformQueryService_ListIntegrationConnections_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
-	PlatformQueryService_GetIntegrationConnection_FullMethodName   = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
-	PlatformQueryService_GetAdministration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetAdministration"
-	PlatformQueryService_ListAuditEvents_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
+	PlatformQueryService_GetBootstrapState_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetOverview_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOverview"
+	PlatformQueryService_ListPlatformCapabilities_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListProjects_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_GetProject_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetProject"
+	PlatformQueryService_ListProjectMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
+	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
+	PlatformQueryService_ListAgents_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListAgents"
+	PlatformQueryService_GetAgent_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListWorkflows_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListWorkflows"
+	PlatformQueryService_GetWorkflow_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetWorkflow"
+	PlatformQueryService_ListRuns_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ListRuns"
+	PlatformQueryService_GetRun_FullMethodName                          = "/controlplane.v1.PlatformQueryService/GetRun"
+	PlatformQueryService_GetRunGraph_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetRunGraph"
+	PlatformQueryService_ListRunEvents_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListRunEvents"
+	PlatformQueryService_ListOwnerGates_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_GetOwnerGate_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
+	PlatformQueryService_ListArtifacts_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListArtifacts"
+	PlatformQueryService_GetArtifact_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_ListSchedules_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_ListIntegrationDefinitions_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
+	PlatformQueryService_ListIntegrationConnections_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
+	PlatformQueryService_GetIntegrationConnection_FullMethodName        = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetAdministration_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetAdministration"
+	PlatformQueryService_ListAuditEvents_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -55,6 +56,7 @@ type PlatformQueryServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjectMemberships(ctx context.Context, in *ListProjectMembershipsRequest, opts ...grpc.CallOption) (*ListProjectMembershipsResponse, error)
+	ListProjectMembershipCandidates(ctx context.Context, in *ListProjectMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
 	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error)
 	ListWorkflows(ctx context.Context, in *ListWorkflowsRequest, opts ...grpc.CallOption) (*ListWorkflowsResponse, error)
@@ -137,6 +139,16 @@ func (c *platformQueryServiceClient) ListProjectMemberships(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProjectMembershipsResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_ListProjectMemberships_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListProjectMembershipCandidates(ctx context.Context, in *ListProjectMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListProjectMembershipCandidatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListProjectMembershipCandidatesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListProjectMembershipCandidates_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +345,7 @@ type PlatformQueryServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error)
+	ListProjectMembershipCandidates(context.Context, *ListProjectMembershipCandidatesRequest) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
 	GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error)
 	ListWorkflows(context.Context, *ListWorkflowsRequest) (*ListWorkflowsResponse, error)
@@ -378,6 +391,9 @@ func (UnimplementedPlatformQueryServiceServer) GetProject(context.Context, *GetP
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjectMemberships not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListProjectMembershipCandidates(context.Context, *ListProjectMembershipCandidatesRequest) (*ListProjectMembershipCandidatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProjectMembershipCandidates not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAgents not implemented")
@@ -558,6 +574,24 @@ func _PlatformQueryService_ListProjectMemberships_Handler(srv interface{}, ctx c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).ListProjectMemberships(ctx, req.(*ListProjectMembershipsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListProjectMembershipCandidates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProjectMembershipCandidatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListProjectMembershipCandidates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListProjectMembershipCandidates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListProjectMembershipCandidates(ctx, req.(*ListProjectMembershipCandidatesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -916,6 +950,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListProjectMemberships",
 			Handler:    _PlatformQueryService_ListProjectMemberships_Handler,
+		},
+		{
+			MethodName: "ListProjectMembershipCandidates",
+			Handler:    _PlatformQueryService_ListProjectMembershipCandidates_Handler,
 		},
 		{
 			MethodName: "ListAgents",

@@ -215,6 +215,9 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 	case command.AddMembership:
 		ref, _ := newRef("mem")
 		err := tx.QueryRow(ctx, queryCommandsChangemembershipInsertMembershipsRefProjectIdRole, ref, scope.organizationID, projectID, payload.UserRef, payload.Role, payload.Permissions).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}

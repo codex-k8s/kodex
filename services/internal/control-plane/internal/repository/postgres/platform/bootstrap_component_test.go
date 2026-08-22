@@ -89,6 +89,9 @@ func TestBootstrapComponent(t *testing.T) {
 		})
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("OIDC candidate receives project membership without internal identifiers", func(t *testing.T) {
+		testProjectMembershipCandidate(t, ctx, repository)
+	})
 	t.Run("system assistant proposes and applies typed plan", func(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
@@ -104,6 +107,82 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
 		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
 	})
+}
+
+func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	ownerInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Installation owner", ExternalEmailHint: "o***@example.test",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, ownerInput, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct membership service: %v", err)
+	}
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-project-create"},
+		Payload: command.ProjectInput{Name: "Access validation", Purpose: "Validate member onboarding", Language: "en"},
+	})
+	if err != nil || created.Project == nil {
+		t.Fatalf("create membership project: project=%#v err=%v", created.Project, err)
+	}
+	projectRef := created.Project.Ref
+	candidateInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000003", ExternalTenantID: ownerInput.ExternalTenantID,
+		ExternalDisplayName: "Alex Morgan", ExternalEmailHint: "a***@example.test",
+		CallerWorkload: "control-api-gateway", Operation: "platform.query.membership-candidates.list", ProjectRef: projectRef,
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("unknown OIDC subject received authority before membership: %v", err)
+	}
+	candidates, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
+	if err != nil || len(candidates) != 1 || candidates[0].DisplayName != candidateInput.ExternalDisplayName || candidates[0].EmailMasked != candidateInput.ExternalEmailHint {
+		t.Fatalf("list membership candidate: candidates=%#v err=%v", candidates, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.AddMembership, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-system-subject-rejected"},
+		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: "sys_platform", Role: "OPERATOR", Permissions: []string{"VIEW"}, Active: true},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("system subject accepted as project member: %v", err)
+	}
+	added, err := service.Execute(ctx, command.Command{
+		Kind: command.AddMembership, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-candidate-add"},
+		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: candidates[0].Ref, Role: "OPERATOR", Permissions: []string{"VIEW", "MANAGE_MEMBERS"}, Active: true},
+	})
+	if err != nil || added.Membership == nil || !added.Membership.Active {
+		t.Fatalf("add project membership: membership=%#v err=%v", added.Membership, err)
+	}
+	candidateAuthority, err := repository.ResolveProofAuthority(ctx, candidateInput)
+	if err != nil {
+		t.Fatalf("resolve candidate after membership: %v", err)
+	}
+	candidate := value.Principal{
+		ActorID: candidateAuthority.ActorID, AuthorityTenant: candidateAuthority.OrganizationID,
+		Permission: candidateInput.Operation, CorrelationRef: "membership-candidate-component",
+		CallerWorkload: "control-api-gateway", ProjectRef: projectRef, CredentialRevision: 1,
+	}
+	memberships, _, err := service.ListMemberships(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || len(memberships) != 2 {
+		t.Fatalf("member cannot use granted project permission: memberships=%d err=%v", len(memberships), err)
+	}
+	remaining, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("assigned member remained a candidate: candidates=%#v err=%v", remaining, err)
+	}
+	foreign, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-foreign-project"},
+		Payload: command.ProjectInput{Name: "Foreign access validation", Purpose: "Validate project isolation", Language: "en"},
+	})
+	if err != nil || foreign.Project == nil {
+		t.Fatalf("create foreign project: project=%#v err=%v", foreign.Project, err)
+	}
+	foreignInput := candidateInput
+	foreignInput.ProjectRef = foreign.Project.Ref
+	if _, err := repository.ResolveProofAuthority(ctx, foreignInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("candidate received foreign project authority: %v", err)
+	}
 }
 
 func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repository *Repository) {

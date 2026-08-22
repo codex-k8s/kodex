@@ -64,6 +64,8 @@ DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Default model account
 INSTALLATION_OWNER_NAME:
   other: Installation owner
+OIDC_USER_NAME:
+  other: User
 SYSTEM_ASSISTANT_COMMAND:
   other: System assistant command
 RUN_COORDINATION_ROLE:

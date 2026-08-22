@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
@@ -314,6 +315,13 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if uuid.Validate(input.ExternalActorID) != nil || uuid.Validate(input.ExternalTenantID) != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	displayName := strings.TrimSpace(input.ExternalDisplayName)
+	if displayName == "" {
+		displayName = "i18n:OIDC_USER_NAME"
+	}
+	if utf8.RuneCountInString(displayName) > 160 || len(input.ExternalEmailHint) > 200 || strings.TrimSpace(input.ExternalEmailHint) != input.ExternalEmailHint || strings.ContainsAny(displayName+input.ExternalEmailHint, "\r\n\x00") {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
@@ -332,35 +340,43 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	actorDigest := sha256.Sum256([]byte(input.ExternalTenantID + "\x00" + input.ExternalActorID))
 	err = tx.QueryRow(ctx, queryFindInstallationOwnerSubject, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if claimState != "PENDING_CLAIM" {
-			return platformrepo.ProofAuthority{}, errs.ErrForbidden
-		}
 		actorRef, refErr := newRef("usr")
 		if refErr != nil {
 			return platformrepo.ProofAuthority{}, refErr
 		}
 		if err := tx.QueryRow(ctx, queryCreateInstallationOwnerSubject,
-			actorRef, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID); err != nil {
+			actorRef, authority.OrganizationID, hex.EncodeToString(actorDigest[:]), displayName, input.ExternalEmailHint).Scan(&authority.ActorID); err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
-		membershipRef, refErr := newRef("mem")
-		if refErr != nil {
-			return platformrepo.ProofAuthority{}, refErr
+		if claimState == "PENDING_CLAIM" {
+			membershipRef, refErr := newRef("mem")
+			if refErr != nil {
+				return platformrepo.ProofAuthority{}, refErr
+			}
+			if _, err := tx.Exec(ctx, queryCreateInstallationOwnerMembership,
+				membershipRef, authority.OrganizationID, authority.ActorID, allPermissions()); err != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
+				authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
+				return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+			}
+			authority.OrganizationVersion++
 		}
-		if _, err := tx.Exec(ctx, queryCreateInstallationOwnerMembership,
-			membershipRef, authority.OrganizationID, authority.ActorID, allPermissions()); err != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
-			authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
-			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-		}
-		authority.OrganizationVersion++
 	} else if err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 	}
+	if _, err := tx.Exec(ctx, queryUpdateOIDCSubjectProfile, authority.OrganizationID, authority.ActorID, displayName, input.ExternalEmailHint); err != nil {
+		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+	}
 	var active bool
-	if err := tx.QueryRow(ctx, queryCheckInstallationOwnerMembership, authority.OrganizationID, authority.ActorID).Scan(&active); err != nil || !active {
+	if err := tx.QueryRow(ctx, queryCheckInstallationOwnerMembership, authority.OrganizationID, authority.ActorID).Scan(&active); err != nil {
+		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
+	}
+	if !active {
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return platformrepo.ProofAuthority{}, errs.ErrConflict
+		}
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	if input.ProjectRef != "" {

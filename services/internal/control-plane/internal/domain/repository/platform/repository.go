@@ -55,11 +55,13 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
-	ExternalActorID  string
-	ExternalTenantID string
-	CallerWorkload   string
-	Operation        string
-	ProjectRef       string
+	ExternalActorID     string
+	ExternalTenantID    string
+	ExternalDisplayName string
+	ExternalEmailHint   string
+	CallerWorkload      string
+	Operation           string
+	ProjectRef          string
 }
 
 // ProofAuthority — внутренние UUID, которые допускаются wire-контрактом
@@ -89,6 +91,7 @@ type Repository interface {
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
+	ListMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)
 	ListAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)
 	GetAgent(context.Context, value.Principal, string) (entity.Agent, error)
 	ListWorkflows(context.Context, value.Principal, query.Filter) ([]entity.Workflow, string, error)

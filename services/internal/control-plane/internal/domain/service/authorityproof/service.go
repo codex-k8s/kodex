@@ -315,6 +315,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 			return ResolveResult{}, errors.New("OIDC application credential is rejected")
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = verified.Subject, verified.OrganizationID
+		principal.ExternalDisplayName, principal.ExternalEmailHint = verified.DisplayName, verified.EmailHint
 		actorKind, actorSource, actorReference, actorRevision = "HUMAN", "OIDC_SESSION", verified.SessionID, verified.SessionRevision
 		callerCredentialRevision = verified.SessionRevision
 	} else {

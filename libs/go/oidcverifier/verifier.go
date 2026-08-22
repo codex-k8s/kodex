@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/libs/go/oidcidentity"
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
@@ -19,9 +21,12 @@ import (
 )
 
 const (
-	maximumBearerBytes = 2300
-	ownerScope         = "mattercodex.owner"
-	ownerRealmRole     = "mattercodex-owner"
+	maximumBearerBytes  = 2300
+	maximumDisplayRunes = 160
+	maximumEmailBytes   = 254
+	ownerScope          = "mattercodex.owner"
+	ownerRealmRole      = "mattercodex-owner"
+	unknownUserName     = "i18n:OIDC_USER_NAME"
 )
 
 type Config struct {
@@ -38,6 +43,8 @@ type Principal struct {
 	Subject         string
 	OrganizationID  string
 	SessionID       string
+	DisplayName     string
+	EmailHint       string
 	SessionRevision uint64
 	ExpiresAt       time.Time
 }
@@ -69,6 +76,10 @@ type claims struct {
 	SessionRevision uint64 `json:"session_revision"`
 	TokenID         string `json:"jti"`
 	Scope           string `json:"scope"`
+	Name            string `json:"name"`
+	PreferredName   string `json:"preferred_username"`
+	Email           string `json:"email"`
+	EmailVerified   bool   `json:"email_verified"`
 	RealmAccess     struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -173,8 +184,83 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	}
 	return Principal{
 		Subject: subject, OrganizationID: values.OrganizationID, SessionID: sessionID,
+		DisplayName: safeDisplayName(values.Name, values.PreferredName), EmailHint: maskedVerifiedEmail(values.Email, values.EmailVerified),
 		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+func safeDisplayName(name, preferredName string) string {
+	for _, candidate := range []string{name, preferredName} {
+		var normalized strings.Builder
+		spacePending := false
+		for _, character := range strings.TrimSpace(candidate) {
+			if unicode.IsSpace(character) {
+				spacePending = normalized.Len() > 0
+				continue
+			}
+			if !unicode.IsGraphic(character) || unicode.IsControl(character) || unicode.Is(unicode.Cf, character) {
+				continue
+			}
+			if spacePending {
+				normalized.WriteByte(' ')
+				spacePending = false
+			}
+			normalized.WriteRune(character)
+		}
+		value := normalized.String()
+		if value == "" {
+			continue
+		}
+		if utf8.RuneCountInString(value) > maximumDisplayRunes {
+			value = string([]rune(value)[:maximumDisplayRunes])
+		}
+		return value
+	}
+	return unknownUserName
+}
+
+func maskedVerifiedEmail(email string, verified bool) string {
+	if !verified || email == "" || len(email) > maximumEmailBytes || strings.TrimSpace(email) != email || strings.ContainsAny(email, "\r\n\t ") {
+		return ""
+	}
+	separator := strings.LastIndexByte(email, '@')
+	if separator < 1 || separator != strings.IndexByte(email, '@') || separator == len(email)-1 {
+		return ""
+	}
+	local, domain := email[:separator], strings.ToLower(email[separator+1:])
+	if !validEmailDomain(domain) {
+		return ""
+	}
+	first, _ := utf8.DecodeRuneInString(local)
+	if first == utf8.RuneError || !unicode.IsGraphic(first) || unicode.IsControl(first) {
+		return ""
+	}
+	masked := string(first) + "***@" + domain
+	if len(masked) > 200 {
+		return ""
+	}
+	return masked
+}
+
+func validEmailDomain(domain string) bool {
+	if strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") || !strings.ContainsRune(domain, '.') {
+		return false
+	}
+	for _, label := range strings.Split(domain, ".") {
+		if label == "" || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for _, character := range label {
+			if character < 'a' || character > 'z' {
+				if character < '0' || character > '9' {
+					if character != '-' {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
 }
 
 // Refresh обновляет JWKS независимо от request/readiness path. При кратком

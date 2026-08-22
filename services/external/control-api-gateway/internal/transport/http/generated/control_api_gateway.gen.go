@@ -1806,6 +1806,13 @@ type ChangeProjectMembershipParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListProjectMembershipCandidatesParams defines parameters for ListProjectMembershipCandidates.
+type ListProjectMembershipCandidatesParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListRoleImageRecipesParams defines parameters for ListRoleImageRecipes.
 type ListRoleImageRecipesParams struct {
 	RoleDefinitionRef *RoleDefinitionRefQuery `form:"roleDefinitionRef,omitempty" json:"roleDefinitionRef,omitempty"`
@@ -2161,6 +2168,9 @@ type ServerInterface interface {
 
 	// (PATCH /api/v1/projects/{projectRef}/members/{membershipRef})
 	ChangeProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, membershipRef MembershipRef, params ChangeProjectMembershipParams)
+
+	// (GET /api/v1/projects/{projectRef}/membership-candidates)
+	ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListProjectMembershipCandidatesParams)
 
 	// (GET /api/v1/projects/{projectRef}/role-image-recipes)
 	ListRoleImageRecipes(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListRoleImageRecipesParams)
@@ -4871,6 +4881,64 @@ func (siw *ServerInterfaceWrapper) ChangeProjectMembership(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// ListProjectMembershipCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProjectMembershipCandidatesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "query", r.URL.Query(), &params.Query)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageSize", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageToken", r.URL.Query(), &params.PageToken)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjectMembershipCandidates(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoleImageRecipes operation middleware
 func (siw *ServerInterfaceWrapper) ListRoleImageRecipes(w http.ResponseWriter, r *http.Request) {
 
@@ -6949,6 +7017,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.ChangeProjectMembership)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/membership-candidates", wrapper.ListProjectMembershipCandidates)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.ListRoleImageRecipes)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)

@@ -91,6 +91,22 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	return response, nil
 }
 
+func (server *Server) ListProjectMembershipCandidates(ctx context.Context, request *controlplanev1.ListProjectMembershipCandidatesRequest) (*controlplanev1.ListProjectMembershipCandidatesResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjectMembershipCandidates_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListMembershipCandidates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListProjectMembershipCandidatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Users = append(response.Users, castUser(item))
+	}
+	return response, nil
+}
+
 func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.ListAgentsRequest) (*controlplanev1.ListAgentsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListAgents_FullMethodName)
 	if err != nil {

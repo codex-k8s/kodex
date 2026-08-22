@@ -25,7 +25,13 @@ const projectRef = computed(() =>
       : "",
 );
 const list = computed(() => Object.values(platform.memberships));
+const candidates = computed(() => Object.values(platform.membershipCandidates));
+const project = computed(() => platform.projects[projectRef.value]);
+const canAdd = computed(
+  () => project.value?.nextActions.includes("MANAGE_MEMBERS") ?? false,
+);
 const selected = ref<Membership>();
+const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const form = reactive<MembershipInput>({
@@ -67,6 +73,26 @@ function edit(membership: Membership): void {
     active: membership.active,
   });
   problem.value = undefined;
+  dialog.value = true;
+}
+
+function add(): void {
+  selected.value = undefined;
+  Object.assign(form, {
+    userRef: "",
+    platformRole: "MEMBER",
+    permissions: ["VIEW"],
+    active: true,
+  });
+  problem.value = undefined;
+  dialog.value = true;
+  void platform.loadMembershipCandidates(projectRef.value);
+}
+
+function closeDialog(): void {
+  dialog.value = false;
+  selected.value = undefined;
+  problem.value = undefined;
 }
 
 function togglePermission(
@@ -78,7 +104,7 @@ function togglePermission(
 }
 
 async function submit(): Promise<void> {
-  if (!selected.value || !projectRef.value) return;
+  if (!projectRef.value || !form.userRef) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -87,7 +113,8 @@ async function submit(): Promise<void> {
       { ...form, permissions: [...form.permissions] },
       selected.value,
     );
-    selected.value = undefined;
+    await platform.loadMembers(projectRef.value);
+    closeDialog();
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -101,6 +128,7 @@ async function revoke(membership: Membership): Promise<void> {
   problem.value = undefined;
   try {
     await platform.revokeMembership(projectRef.value, membership);
+    await platform.loadMembers(projectRef.value);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -120,6 +148,16 @@ onMounted(() => void platform.loadProjects());
 
 <template>
   <PageFrame :title="$t('access.title')" :subtitle="$t('access.subtitle')">
+    <template #actions>
+      <button
+        v-if="projectRef && canAdd"
+        class="button button--primary"
+        type="button"
+        @click="add"
+      >
+        {{ $t("access.add") }}
+      </button>
+    </template>
     <section v-if="!route.params.projectRef" class="panel project-choice">
       <label class="field"
         ><span>{{ $t("access.project") }}</span
@@ -183,17 +221,42 @@ onMounted(() => void platform.loadProjects());
       <h2>{{ $t("access.chooseProject") }}</h2>
       <p>{{ $t("access.chooseProjectText") }}</p>
     </section>
-    <ProblemNotice v-if="problem && !selected" :problem="problem" compact />
+    <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
     <ModalDialog
-      v-if="selected"
-      :title="$t('access.edit')"
+      v-if="dialog"
+      :title="$t(selected ? 'access.edit' : 'access.add')"
       :busy="busy"
-      @close="selected = undefined"
+      @close="closeDialog"
       ><form id="membership-form" class="form-grid" @submit.prevent="submit">
-        <div class="field field--wide">
+        <div v-if="selected" class="field field--wide">
           <span>{{ $t("access.member") }}</span
           ><strong>{{ selected.user.displayName }}</strong>
         </div>
+        <AsyncState
+          v-else
+          class="field--wide candidate-state"
+          :loading="platform.loading.memberCandidates"
+          :problem="platform.problems.memberCandidates"
+          :empty="candidates.length === 0"
+          :empty-title="$t('access.noCandidates')"
+          :empty-text="$t('access.noCandidatesText')"
+          @retry="platform.loadMembershipCandidates(projectRef)"
+        >
+          <label class="field field--wide"
+            ><span>{{ $t("access.member") }}</span
+            ><select v-model="form.userRef" required autofocus>
+              <option value="" disabled>{{ $t("access.chooseMember") }}</option>
+              <option
+                v-for="candidate in candidates"
+                :key="candidate.ref"
+                :value="candidate.ref"
+              >
+                {{ candidate.displayName
+                }}{{ candidate.emailHint ? ` · ${candidate.emailHint}` : "" }}
+              </option>
+            </select></label
+          >
+        </AsyncState>
         <label class="field field--wide"
           ><span>{{ $t("access.role") }}</span
           ><select v-model="form.platformRole">
@@ -228,7 +291,7 @@ onMounted(() => void platform.loadProjects());
           class="button"
           type="button"
           :disabled="busy"
-          @click="selected = undefined"
+          @click="closeDialog"
         >
           {{ $t("common.cancel") }}</button
         ><button
@@ -237,7 +300,7 @@ onMounted(() => void platform.loadProjects());
           type="submit"
           :disabled="busy"
         >
-          {{ $t("common.save") }}
+          {{ $t(selected ? "common.save" : "access.add") }}
         </button></template
       ></ModalDialog
     >
@@ -248,6 +311,9 @@ onMounted(() => void platform.loadProjects());
 .project-choice {
   max-width: 520px;
   margin-bottom: 18px;
+}
+.candidate-state {
+  min-height: 92px;
 }
 .permission-grid {
   display: grid;

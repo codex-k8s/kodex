@@ -1128,6 +1128,40 @@ export type AddProjectMembershipResponses = {
 
 export type AddProjectMembershipResponse = AddProjectMembershipResponses[keyof AddProjectMembershipResponses];
 
+export type ListProjectMembershipCandidatesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/membership-candidates';
+};
+
+export type ListProjectMembershipCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListProjectMembershipCandidatesError = ListProjectMembershipCandidatesErrors[keyof ListProjectMembershipCandidatesErrors];
+
+export type ListProjectMembershipCandidatesResponses = {
+    /**
+     * Пользователи, которых можно добавить в Проект
+     */
+    200: {
+        items: Array<UserSummary>;
+        nextPageToken?: string;
+    };
+};
+
+export type ListProjectMembershipCandidatesResponse = ListProjectMembershipCandidatesResponses[keyof ListProjectMembershipCandidatesResponses];
+
 export type RemoveProjectMembershipData = {
     body?: never;
     headers: {

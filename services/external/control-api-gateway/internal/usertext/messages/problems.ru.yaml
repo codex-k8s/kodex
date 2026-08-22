@@ -64,6 +64,8 @@ DEFAULT_PROVIDER_ACCOUNT_NAME:
   other: Основная учётная запись модели
 INSTALLATION_OWNER_NAME:
   other: Владелец установки
+OIDC_USER_NAME:
+  other: Пользователь
 SYSTEM_ASSISTANT_COMMAND:
   other: Команда системному помощнику
 RUN_COORDINATION_ROLE:

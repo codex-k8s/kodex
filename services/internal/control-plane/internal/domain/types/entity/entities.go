@@ -19,6 +19,7 @@ type Membership struct {
 	Ref, ProjectRef, Role string
 	User                  User
 	Permissions           []string
+	NextActions           []string
 	Active                bool
 	Version               int64
 }

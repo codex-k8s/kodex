@@ -181,6 +181,32 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
+		item.NextActions = []string{"EDIT"}
+		if item.Active && item.User.Ref != scope.actorRef {
+			item.NextActions = append(item.NextActions, "REVOKE")
+		}
+		result = append(result, item)
+	}
+	return result, "", rows.Err()
+}
+
+func (repository *Repository) ListMembershipCandidates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.User, string, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, "", err
+	}
+	rows, err := repository.pool.Query(ctx, queryQueriesListmembershipcandidatesSelectSubjectsOrganizationIdProjectRef,
+		scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
+	if err != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	defer rows.Close()
+	var result []entity.User
+	for rows.Next() {
+		var item entity.User
+		if err := rows.Scan(&item.Ref, &item.DisplayName, &item.EmailMasked, &item.Active); err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
 		result = append(result, item)
 	}
 	return result, "", rows.Err()
