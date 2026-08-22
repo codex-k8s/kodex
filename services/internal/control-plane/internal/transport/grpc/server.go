@@ -102,25 +102,49 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 		return nil
 	}
 	result := &entity.WorkflowVersion{
-		Ref:                input.GetRef(),
-		VersionNumber:      input.GetRevision(),
-		Concurrency:        input.GetMaxConcurrency(),
-		TimeoutSeconds:     int64(input.GetTimeoutSeconds()),
-		CompletionCriteria: input.GetCompletionCriteria(),
+		Ref:                 input.GetRef(),
+		Name:                input.GetName(),
+		Purpose:             input.GetPurpose(),
+		CoordinatorAgentRef: input.GetCoordinatorAgentRef(),
+		VersionNumber:       input.GetRevision(),
+		Concurrency:         input.GetMaxConcurrency(),
+		TimeoutSeconds:      int64(input.GetTimeoutSeconds()),
+		CompletionCriteria:  input.GetCompletionCriteria(),
 	}
 	for _, item := range input.GetInputFields() {
 		result.Inputs = append(result.Inputs, entity.WorkflowInputField{Key: item.GetKey(), Label: item.GetLabel(), Type: item.GetValueType(), Help: item.GetDescription(), Required: item.GetRequired()})
 	}
+	parallelGroupDependencies := map[int32][]string{}
+	frontier := []string{}
 	for index, item := range input.GetSteps() {
 		stepKey := item.GetRef()
 		if stepKey == "" {
-			stepKey = fmt.Sprintf("step-%d", index+1)
+			stepKey = fmt.Sprintf("step-%03d", index+1)
 		}
-		result.Steps = append(result.Steps, entity.WorkflowStep{Key: stepKey, Name: item.GetName(), AgentRef: item.GetAgentRef(), Instructions: item.GetPurpose(), HumanGateAfter: item.GetHumanGate()})
-		result.AgentRefs = append(result.AgentRefs, item.GetAgentRef())
+		dependencies := append([]string(nil), frontier...)
+		if item.GetParallel() {
+			if groupDependencies, exists := parallelGroupDependencies[item.GetParallelGroup()]; exists {
+				dependencies = append([]string(nil), groupDependencies...)
+			} else {
+				parallelGroupDependencies[item.GetParallelGroup()] = append([]string(nil), frontier...)
+				frontier = nil
+			}
+			frontier = append(frontier, stepKey)
+		} else {
+			parallelGroupDependencies = map[int32][]string{}
+			frontier = []string{stepKey}
+		}
+		step := entity.WorkflowStep{
+			Key: stepKey, Position: item.GetPosition(), Name: item.GetName(), AgentRef: item.GetAgentRef(),
+			Instructions: item.GetPurpose(), Parallel: item.GetParallel(), ParallelGroup: item.GetParallelGroup(),
+			TimeoutSeconds: item.GetTimeoutSeconds(), ExpectedResult: item.GetExpectedResult(), HumanGateAfter: item.GetHumanGate(),
+			DependsOn: dependencies, RequiredCapabilityKeys: append([]string(nil), item.GetRequiredCapabilityKeys()...),
+		}
 		for _, decision := range item.GetGateDecisions() {
-			result.GateDecisions = append(result.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))
+			step.GateDecisions = append(step.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))
 		}
+		result.Steps = append(result.Steps, step)
+		result.AgentRefs = append(result.AgentRefs, item.GetAgentRef())
 	}
 	return result
 }

@@ -9,6 +9,10 @@ const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
+const project = computed(() => platform.projects[projectRef.value]);
+const canLaunch = computed(() =>
+  project.value?.nextActions.includes("CREATE_RUN"),
+);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const form = reactive({
@@ -47,12 +51,13 @@ onMounted(
       platform.loadAgents(projectRef.value),
       platform.loadWorkflows(projectRef.value),
       platform.loadArtifacts(projectRef.value),
+      platform.loadProject(projectRef.value),
     ]),
 );
 </script>
 <template>
   <PageFrame :title="$t('runs.new')" :subtitle="$t('runs.subtitle')"
-    ><form class="new-run-layout" @submit.prevent="submit">
+    ><form v-if="canLaunch" class="new-run-layout" @submit.prevent="submit">
       <section class="panel form-grid">
         <label class="field"
           ><span>{{ $t("runs.targetType") }}</span
@@ -102,7 +107,11 @@ onMounted(
           </button>
         </div>
       </section>
-    </form></PageFrame
+    </form>
+    <section v-else class="empty-state" role="status">
+      <h2>{{ $t("common.forbidden") }}</h2>
+      <p>{{ $t("common.forbiddenText") }}</p>
+    </section></PageFrame
   >
 </template>
 <style scoped>

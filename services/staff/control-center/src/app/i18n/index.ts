@@ -56,6 +56,8 @@ const ru = {
     empty: "Здесь пока ничего нет",
     error: "Не удалось получить данные",
     forbidden: "Недостаточно прав",
+    forbiddenText:
+      "У вашей роли нет разрешения на это действие в выбранном проекте.",
     conflict: "Состояние уже изменилось. Показано актуальное решение.",
     unavailable: "Функция временно недоступна",
     name: "Название",
@@ -438,6 +440,8 @@ const en = {
     empty: "Nothing here yet",
     error: "Could not load data",
     forbidden: "Insufficient permissions",
+    forbiddenText:
+      "Your role does not allow this action in the selected project.",
     conflict: "State has already changed. Current decision is shown.",
     unavailable: "Temporarily unavailable",
     name: "Name",

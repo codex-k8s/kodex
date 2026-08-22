@@ -65,10 +65,14 @@ var (
 	queryCommandsChangeagentbindingEnableIntegrationGrant string
 	//go:embed sql/commands_changeagentbinding_revoke_integration_grant.sql
 	queryCommandsChangeagentbindingRevokeIntegrationGrant string
-	//go:embed sql/commands_changeagentbinding_append_agent_binding.sql
-	queryCommandsChangeagentbindingAppendAgentBinding string
-	//go:embed sql/commands_changeagentbinding_remove_agent_binding.sql
-	queryCommandsChangeagentbindingRemoveAgentBinding string
+	//go:embed sql/commands_changeagentbinding_append_capability.sql
+	queryCommandsChangeagentbindingAppendCapability string
+	//go:embed sql/commands_changeagentbinding_remove_capability.sql
+	queryCommandsChangeagentbindingRemoveCapability string
+	//go:embed sql/commands_changeagentbinding_append_knowledge_artifact.sql
+	queryCommandsChangeagentbindingAppendKnowledgeArtifact string
+	//go:embed sql/commands_changeagentbinding_remove_knowledge_artifact.sql
+	queryCommandsChangeagentbindingRemoveKnowledgeArtifact string
 	//go:embed sql/commands_changeagentbinding_update_agents_version_updated_at.sql
 	queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt string
 	//go:embed sql/commands_changeworkflow_insert_workflows_ref_project_id_purpose.sql
@@ -89,6 +93,10 @@ var (
 	queryCommandsChangeworkflowUpdateWorkflowsPublishedSpecPublishedVersionState string
 	//go:embed sql/commands_changeworkflow_archive_workflow.sql
 	queryCommandsChangeworkflowArchiveWorkflow string
+	//go:embed sql/commands_changeworkflow_select_authoritative_readback.sql
+	queryCommandsChangeworkflowSelectAuthoritativeReadback string
+	//go:embed sql/commands_changeworkflow_validate_agent_capabilities.sql
+	queryCommandsChangeworkflowValidateAgentCapabilities string
 	//go:embed sql/commands_launchrun_select_agents_organization_id_project_id_ref.sql
 	queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef string
 	//go:embed sql/commands_launchrun_select_workflows_organization_id_project_id_ref.sql

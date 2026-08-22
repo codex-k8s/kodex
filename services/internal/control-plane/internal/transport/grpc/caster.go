@@ -166,7 +166,20 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 	}
 	steps := make([]*controlplanev1.WorkflowStep, 0, len(value.Steps))
 	for index, step := range value.Steps {
-		steps = append(steps, &controlplanev1.WorkflowStep{Ref: step.Key, Position: int32(index + 1), Name: step.Name, Purpose: step.Instructions, AgentRef: step.AgentRef, TimeoutSeconds: int32(value.TimeoutSeconds), HumanGate: step.HumanGateAfter, GateDecisions: gateDecisions(value.GateDecisions)})
+		position := step.Position
+		if position == 0 {
+			position = int32(index + 1)
+		}
+		timeoutSeconds := step.TimeoutSeconds
+		if timeoutSeconds == 0 {
+			timeoutSeconds = int32(value.TimeoutSeconds)
+		}
+		steps = append(steps, &controlplanev1.WorkflowStep{
+			Ref: step.Key, Position: position, Name: step.Name, Purpose: step.Instructions, AgentRef: step.AgentRef,
+			Parallel: step.Parallel, ParallelGroup: step.ParallelGroup, TimeoutSeconds: timeoutSeconds,
+			ExpectedResult: step.ExpectedResult, HumanGate: step.HumanGateAfter,
+			GateDecisions: gateDecisions(step.GateDecisions), RequiredCapabilityKeys: append([]string(nil), step.RequiredCapabilityKeys...),
+		})
 	}
 	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }

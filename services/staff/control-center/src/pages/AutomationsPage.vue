@@ -13,6 +13,10 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const projectRef = computed(() => String(route.params.projectRef));
+const project = computed(() => platform.projects[projectRef.value]);
+const canCreate = computed(() =>
+  project.value?.nextActions.includes("CREATE_SCHEDULE"),
+);
 const list = computed(() =>
   Object.values(platform.schedules).filter(
     (item) => item.projectRef === projectRef.value,
@@ -90,6 +94,7 @@ onMounted(
       platform.loadSchedules(projectRef.value),
       platform.loadAgents(projectRef.value),
       platform.loadWorkflows(projectRef.value),
+      platform.loadProject(projectRef.value),
     ]),
 );
 </script>
@@ -101,6 +106,7 @@ onMounted(
   >
     <template #actions
       ><button
+        v-if="canCreate"
         class="button button--primary"
         type="button"
         :disabled="agents.length + workflows.length === 0"
@@ -120,6 +126,7 @@ onMounted(
     >
       <template #empty-action
         ><button
+          v-if="canCreate"
           class="button button--primary"
           type="button"
           :disabled="agents.length + workflows.length === 0"

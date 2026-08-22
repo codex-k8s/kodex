@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -422,10 +421,6 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	if current != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	column := "capabilities"
-	if input.Kind == command.ChangeAgentKnowledge {
-		column = "knowledge_artifact_refs"
-	}
 	if input.Kind == command.ChangeAgentGrant {
 		if payload.Enabled {
 			tag, err := tx.Exec(ctx, queryCommandsChangeagentbindingEnableIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
@@ -435,16 +430,28 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 		} else {
 			_, _ = tx.Exec(ctx, queryCommandsChangeagentbindingRevokeIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
 		}
-	} else if payload.Enabled {
-		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbindingAppendAgentBinding, column, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
+	} else if input.Kind == command.ChangeAgentCapability && payload.Enabled {
+		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingAppendCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	} else if input.Kind == command.ChangeAgentCapability {
+		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingRemoveCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	} else if input.Kind == command.ChangeAgentKnowledge && payload.Enabled {
+		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingAppendKnowledgeArtifact, scope.organizationID, payload.AgentRef, payload.BindingRef)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	} else if input.Kind == command.ChangeAgentKnowledge {
+		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingRemoveKnowledgeArtifact, scope.organizationID, payload.AgentRef, payload.BindingRef)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else {
-		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbindingRemoveAgentBinding, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
-		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
+		return commandOutcome{}, errs.ErrInvalid
 	}
 	if _, err := tx.Exec(ctx, queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt, scope.organizationID, payload.AgentRef); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -464,9 +471,12 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		ref, _ := newRef("wfl")
-		draft := entity.WorkflowVersion{Ref: "draft", VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, ResultSchema: map[string]any{}}
+		draft := entity.WorkflowVersion{Ref: "draft", Name: payload.Name, Purpose: payload.Purpose, CoordinatorAgentRef: payload.CoordinatorAgentRef, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, ResultSchema: map[string]any{}}
 		if payload.Draft != nil {
 			draft = *payload.Draft
+			if !validWorkflowVersion(draft) {
+				return commandOutcome{}, errs.ErrInvalid
+			}
 		}
 		var item entity.Workflow
 		raw := asJSON(draft)
@@ -493,12 +503,15 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 	}
 	switch input.Kind {
 	case command.UpdateWorkflow:
-		if payload.Draft == nil {
+		if payload.Draft == nil || !validWorkflowVersion(*payload.Draft) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		_, err := tx.Exec(ctx, queryCommandsChangeworkflowUpdateWorkflowsDraftSpecStateVersion, workflowID, asJSON(payload.Draft))
+		tag, err := tx.Exec(ctx, queryCommandsChangeworkflowUpdateWorkflowsDraftSpecStateVersion, workflowID, payload.Draft.Name, payload.Draft.Purpose, payload.Draft.CoordinatorAgentRef, asJSON(payload.Draft))
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrInvalid
 		}
 	case command.ValidateWorkflow:
 		var raw []byte
@@ -506,9 +519,24 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		var draft entity.WorkflowVersion
-		_ = json.Unmarshal(raw, &draft)
-		if draft.Concurrency < 1 || draft.TimeoutSeconds < 1 || len(draft.Steps) == 0 {
+		if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		var coordinatorEligible bool
+		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowValidateAgentCapabilities, scope.organizationID, projectID, draft.CoordinatorAgentRef, []string{}).Scan(&coordinatorEligible); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !coordinatorEligible {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		for _, step := range draft.Steps {
+			var eligible bool
+			if err := tx.QueryRow(ctx, queryCommandsChangeworkflowValidateAgentCapabilities, scope.organizationID, projectID, step.AgentRef, step.RequiredCapabilityKeys).Scan(&eligible); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if !eligible {
+				return commandOutcome{}, errs.ErrInvalid
+			}
 		}
 		_, err := tx.Exec(ctx, queryCommandsChangeworkflowMarkWorkflowValid, workflowID)
 		if err != nil {
@@ -522,6 +550,10 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		var next int32
 		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowSelectDraftForPublish, workflowID).Scan(&raw, &next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		var draft entity.WorkflowVersion
+		if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
+			return commandOutcome{}, errs.ErrConflict
 		}
 		digest := sha256.Sum256(raw)
 		versionRef, _ := newRef("wfv")
@@ -537,8 +569,59 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrConflict
 		}
 	}
-	workflow := entity.Workflow{Ref: payload.Ref, ProjectRef: projectRef, Version: version + 1}
+	workflow, readErr := scanWorkflow(tx.QueryRow(ctx, queryCommandsChangeworkflowSelectAuthoritativeReadback, scope.organizationID, payload.Ref))
+	if readErr != nil {
+		return commandOutcome{}, readErr
+	}
 	return commandOutcome{result: command.Result{Workflow: &workflow}, projectID: projectID, projectRef: projectRef, resourceKind: "WORKFLOW", resourceRef: payload.Ref, summary: "Workflow обновлён", platformEvent: "WORKFLOW_CHANGED"}, nil
+}
+
+func validWorkflowVersion(version entity.WorkflowVersion) bool {
+	if strings.TrimSpace(version.Name) == "" || len(version.Name) > 160 || len(version.Purpose) > 2000 || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Steps) < 1 || len(version.Steps) > 200 {
+		return false
+	}
+	knownSteps := make(map[string]struct{}, len(version.Steps))
+	for index, step := range version.Steps {
+		if step.Key == "" || len(step.Key) > 96 || step.Position != int32(index+1) || strings.TrimSpace(step.Name) == "" || len(step.Name) > 160 || strings.TrimSpace(step.AgentRef) == "" || strings.TrimSpace(step.Instructions) == "" || len(step.Instructions) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 24*60*60 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || len(step.ExpectedResult) > 1000 || len(step.GateDecisions) > 4 || len(step.RequiredCapabilityKeys) > 50 {
+			return false
+		}
+		if _, duplicate := knownSteps[step.Key]; duplicate {
+			return false
+		}
+		for _, dependency := range step.DependsOn {
+			if _, exists := knownSteps[dependency]; !exists {
+				return false
+			}
+		}
+		for _, decision := range step.GateDecisions {
+			if !contains([]string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}, decision) {
+				return false
+			}
+		}
+		if step.HumanGateAfter && len(step.GateDecisions) == 0 {
+			return false
+		}
+		for _, capability := range step.RequiredCapabilityKeys {
+			if !validCapabilityKey(capability) {
+				return false
+			}
+		}
+		knownSteps[step.Key] = struct{}{}
+	}
+	return true
+}
+
+func validCapabilityKey(value string) bool {
+	if value == "" || len(value) > 80 || strings.TrimSpace(value) != value {
+		return false
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '.' || character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -559,6 +642,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	var targetName string
 	var workflowSpec []byte
+	runConcurrency := int32(1)
 	switch payload.Target.Type {
 	case "AGENT":
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
@@ -568,6 +652,11 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName, &workflowSpec); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		var version entity.WorkflowVersion
+		if json.Unmarshal(workflowSpec, &version) != nil || !validWorkflowVersion(version) {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		runConcurrency = version.Concurrency
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -588,7 +677,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	rawInput := asJSON(payload.Input)
 	var runID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, payload.ArtifactRefs, scope.actorID).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, payload.ArtifactRefs, scope.actorID, runConcurrency).Scan(&runID); err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
@@ -613,7 +702,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 	} else {
 		var version entity.WorkflowVersion
-		if json.Unmarshal(workflowSpec, &version) != nil {
+		if json.Unmarshal(workflowSpec, &version) != nil || !validWorkflowVersion(version) {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		nodeIDs := map[string]string{}

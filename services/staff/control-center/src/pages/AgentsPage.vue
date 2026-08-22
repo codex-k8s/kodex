@@ -14,6 +14,10 @@ const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
+const project = computed(() => platform.projects[projectRef.value]);
+const canCreate = computed(() =>
+  project.value?.nextActions.includes("CREATE_AGENT"),
+);
 const list = computed(() =>
   Object.values(platform.agents).filter(
     (item) => item.projectRef === projectRef.value && !item.system,
@@ -42,13 +46,20 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
-onMounted(() => void platform.loadAgents(projectRef.value));
+onMounted(
+  () =>
+    void Promise.all([
+      platform.loadProject(projectRef.value),
+      platform.loadAgents(projectRef.value),
+    ]),
+);
 </script>
 
 <template>
   <PageFrame :title="$t('agents.title')" :subtitle="$t('agents.subtitle')">
     <template #actions
       ><button
+        v-if="canCreate"
         class="button button--primary"
         type="button"
         @click="dialog = true"
@@ -65,6 +76,7 @@ onMounted(() => void platform.loadAgents(projectRef.value));
     >
       <template #empty-action
         ><button
+          v-if="canCreate"
           class="button button--primary"
           type="button"
           @click="dialog = true"

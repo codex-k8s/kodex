@@ -12,6 +12,10 @@ const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
+const project = computed(() => platform.projects[projectRef.value]);
+const canCreate = computed(() =>
+  project.value?.nextActions.includes("CREATE_WORKFLOW"),
+);
 const list = computed(() =>
   Object.values(platform.workflows).filter(
     (i) => i.projectRef === projectRef.value,
@@ -46,6 +50,7 @@ onMounted(
     void Promise.all([
       platform.loadWorkflows(projectRef.value),
       platform.loadAgents(projectRef.value),
+      platform.loadProject(projectRef.value),
     ]),
 );
 </script>
@@ -53,6 +58,7 @@ onMounted(
   <PageFrame :title="$t('workflows.title')" :subtitle="$t('workflows.subtitle')"
     ><template #actions
       ><button
+        v-if="canCreate"
         class="button button--primary"
         type="button"
         :disabled="!agentList.length"
@@ -68,6 +74,7 @@ onMounted(
       @retry="platform.loadWorkflows(projectRef)"
       ><template #empty-action
         ><button
+          v-if="canCreate"
           class="button button--primary"
           type="button"
           :disabled="!agentList.length"

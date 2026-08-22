@@ -106,10 +106,15 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	var result []entity.Project
 	for rows.Next() {
 		var item entity.Project
-		if err := rows.Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var projectID string
+		var permissions []string
+		if err := rows.Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt, &permissions); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
-		item.NextActions = []string{"OPEN", "EDIT"}
+		if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
+			permissions = allPermissions()
+		}
+		item.NextActions = projectActions(permissions)
 		result = append(result, item)
 	}
 	return result, "", rows.Err()
@@ -121,16 +126,43 @@ func (repository *Repository) GetProject(ctx context.Context, principal value.Pr
 		return entity.Project{}, err
 	}
 	var item entity.Project
+	var projectID string
 	err = repository.pool.QueryRow(ctx, queryQueriesGetprojectSelectProjectsOrganizationIdRefProjectId,
-		scope.organizationID, ref, scope.role, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		scope.organizationID, ref, scope.role, scope.actorID).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Project{}, errs.ErrNotFound
 	}
 	if err != nil {
 		return entity.Project{}, errs.ErrUnavailable
 	}
-	item.NextActions = []string{"OPEN", "EDIT"}
+	permissions := allPermissions()
+	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+		if err := repository.pool.QueryRow(ctx, queryListProjectPermissions, scope.organizationID, projectID, scope.actorID).Scan(&permissions); err != nil {
+			return entity.Project{}, errs.ErrUnavailable
+		}
+	}
+	item.NextActions = projectActions(permissions)
 	return item, nil
+}
+
+func projectActions(permissions []string) []string {
+	actions := []string{"OPEN"}
+	mappings := []struct{ permission, action string }{
+		{"MANAGE", "EDIT"},
+		{"MANAGE_AGENTS", "CREATE_AGENT"},
+		{"MANAGE_WORKFLOWS", "CREATE_WORKFLOW"},
+		{"LAUNCH_RUNS", "CREATE_RUN"},
+		{"MANAGE_SCHEDULES", "CREATE_SCHEDULE"},
+		{"MANAGE_INTEGRATIONS", "MANAGE_INTEGRATIONS"},
+		{"MANAGE_MEMBERS", "MANAGE_MEMBERS"},
+		{"MANAGE_ARTIFACTS", "UPLOAD_ARTIFACT"},
+	}
+	for _, mapping := range mappings {
+		if contains(permissions, mapping.permission) {
+			actions = append(actions, mapping.action)
+		}
+	}
+	return actions
 }
 
 func (repository *Repository) ListMemberships(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
@@ -292,10 +324,14 @@ func scanWorkflow(row rowScanner) (entity.Workflow, error) {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	item.Draft = &entity.WorkflowVersion{}
-	_ = json.Unmarshal(draft, item.Draft)
+	if err := json.Unmarshal(draft, item.Draft); err != nil || !validWorkflowVersion(*item.Draft) {
+		return entity.Workflow{}, errs.ErrUnavailable
+	}
 	if len(published) > 0 {
 		item.Published = &entity.WorkflowVersion{}
-		_ = json.Unmarshal(published, item.Published)
+		if err := json.Unmarshal(published, item.Published); err != nil || !validWorkflowVersion(*item.Published) {
+			return entity.Workflow{}, errs.ErrUnavailable
+		}
 		item.Published.VersionNumber = publishedVersion
 	}
 	item.NextActions = []string{"OPEN", "EDIT"}

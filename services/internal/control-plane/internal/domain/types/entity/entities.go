@@ -53,21 +53,22 @@ type WorkflowInputField struct {
 }
 
 type WorkflowStep struct {
-	Key, Name, AgentRef, Instructions string
-	DependsOn                         []string
-	HumanGateAfter                    bool
+	Key, Name, AgentRef, Instructions, ExpectedResult string
+	Position, ParallelGroup, TimeoutSeconds           int32
+	Parallel, HumanGateAfter                          bool
+	DependsOn, GateDecisions, RequiredCapabilityKeys  []string
 }
 
 type WorkflowVersion struct {
-	Ref, Instructions, CompletionCriteria string
-	VersionNumber                         int32
-	Inputs                                []WorkflowInputField
-	Steps                                 []WorkflowStep
-	AgentRefs                             []string
-	Concurrency                           int32
-	TimeoutSeconds                        int64
-	GateDecisions                         []string
-	ResultSchema                          map[string]any
+	Ref, Name, Purpose, CoordinatorAgentRef, Instructions, CompletionCriteria string
+	VersionNumber                                                             int32
+	Inputs                                                                    []WorkflowInputField
+	Steps                                                                     []WorkflowStep
+	AgentRefs                                                                 []string
+	Concurrency                                                               int32
+	TimeoutSeconds                                                            int64
+	GateDecisions                                                             []string
+	ResultSchema                                                              map[string]any
 }
 
 type Workflow struct {

@@ -59,13 +59,13 @@ const (
 
 // Defines values for AssistantPlanOperationType.
 const (
-	CHANGECAPABILITY       AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	CHANGEINTEGRATIONGRANT AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	CREATEAGENT            AssistantPlanOperationType = "CREATE_AGENT"
-	CREATEPROJECT          AssistantPlanOperationType = "CREATE_PROJECT"
-	CREATESCHEDULE         AssistantPlanOperationType = "CREATE_SCHEDULE"
-	CREATEWORKFLOW         AssistantPlanOperationType = "CREATE_WORKFLOW"
-	LAUNCHRUN              AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypeCHANGECAPABILITY       AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT            AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEPROJECT          AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATESCHEDULE         AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATEWORKFLOW         AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN              AssistantPlanOperationType = "LAUNCH_RUN"
 )
 
 // Defines values for AssistantTurnRole.
@@ -204,25 +204,32 @@ const (
 
 // Defines values for NextAction.
 const (
-	NextActionADDTURN     NextAction = "ADD_TURN"
-	NextActionAPPLYPLAN   NextAction = "APPLY_PLAN"
-	NextActionARCHIVE     NextAction = "ARCHIVE"
-	NextActionBIND        NextAction = "BIND"
-	NextActionCANCEL      NextAction = "CANCEL"
-	NextActionDISABLE     NextAction = "DISABLE"
-	NextActionDOWNLOAD    NextAction = "DOWNLOAD"
-	NextActionEDIT        NextAction = "EDIT"
-	NextActionENABLE      NextAction = "ENABLE"
-	NextActionLAUNCH      NextAction = "LAUNCH"
-	NextActionOPEN        NextAction = "OPEN"
-	NextActionPUBLISH     NextAction = "PUBLISH"
-	NextActionRECOVER     NextAction = "RECOVER"
-	NextActionRESOLVEGATE NextAction = "RESOLVE_GATE"
-	NextActionRETRY       NextAction = "RETRY"
-	NextActionREVOKE      NextAction = "REVOKE"
-	NextActionROLLBACK    NextAction = "ROLLBACK"
-	NextActionTEST        NextAction = "TEST"
-	NextActionVALIDATE    NextAction = "VALIDATE"
+	NextActionADDTURN            NextAction = "ADD_TURN"
+	NextActionAPPLYPLAN          NextAction = "APPLY_PLAN"
+	NextActionARCHIVE            NextAction = "ARCHIVE"
+	NextActionBIND               NextAction = "BIND"
+	NextActionCANCEL             NextAction = "CANCEL"
+	NextActionCREATEAGENT        NextAction = "CREATE_AGENT"
+	NextActionCREATERUN          NextAction = "CREATE_RUN"
+	NextActionCREATESCHEDULE     NextAction = "CREATE_SCHEDULE"
+	NextActionCREATEWORKFLOW     NextAction = "CREATE_WORKFLOW"
+	NextActionDISABLE            NextAction = "DISABLE"
+	NextActionDOWNLOAD           NextAction = "DOWNLOAD"
+	NextActionEDIT               NextAction = "EDIT"
+	NextActionENABLE             NextAction = "ENABLE"
+	NextActionLAUNCH             NextAction = "LAUNCH"
+	NextActionMANAGEINTEGRATIONS NextAction = "MANAGE_INTEGRATIONS"
+	NextActionMANAGEMEMBERS      NextAction = "MANAGE_MEMBERS"
+	NextActionOPEN               NextAction = "OPEN"
+	NextActionPUBLISH            NextAction = "PUBLISH"
+	NextActionRECOVER            NextAction = "RECOVER"
+	NextActionRESOLVEGATE        NextAction = "RESOLVE_GATE"
+	NextActionRETRY              NextAction = "RETRY"
+	NextActionREVOKE             NextAction = "REVOKE"
+	NextActionROLLBACK           NextAction = "ROLLBACK"
+	NextActionTEST               NextAction = "TEST"
+	NextActionUPLOADARTIFACT     NextAction = "UPLOAD_ARTIFACT"
+	NextActionVALIDATE           NextAction = "VALIDATE"
 )
 
 // Defines values for OwnerGateAllowedDecisions.
@@ -466,10 +473,10 @@ const (
 
 // Defines values for WorkflowStepInputGateDecisions.
 const (
-	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
-	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
-	REJECT         WorkflowStepInputGateDecisions = "REJECT"
-	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
+	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
 // Defines values for CommandSystemAssistantJSONBodyAction.
