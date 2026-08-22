@@ -60,7 +60,6 @@ spec:
             - {name: CONTROL_API_GATEWAY_STARTUP_TIMEOUT, value: 20s}
             - {name: CONTROL_API_GATEWAY_SHUTDOWN_TIMEOUT, value: 20s}
             - {name: CONTROL_API_GATEWAY_READINESS_INTERVAL, value: 10s}
-            - {name: CONTROL_API_GATEWAY_REALTIME_POLL_INTERVAL, value: 3s}
             - {name: CONTROL_API_GATEWAY_RATE_WINDOW, value: 1m}
             - {name: CONTROL_API_GATEWAY_RATE_LIMIT, value: "120"}
             - {name: CONTROL_API_GATEWAY_MAXIMUM_RATE_KEYS, value: "10000"}
@@ -71,10 +70,6 @@ spec:
             - {name: CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY, value: "4"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.mattercodex-system.svc:8443"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
-            - {name: CONTROL_API_GATEWAY_INTERACTION_TARGET, value: "dns:///interaction-gateway.mattercodex-system.svc:9443"}
-            - {name: CONTROL_API_GATEWAY_INTERACTION_TLS_SERVER_NAME, value: interaction-gateway.mattercodex-system.svc.cluster.local}
-            - {name: CONTROL_API_GATEWAY_INTEGRATION_TARGET, value: "dns:///integration-gateway.mattercodex-system.svc:9443"}
-            - {name: CONTROL_API_GATEWAY_INTEGRATION_TLS_SERVER_NAME, value: integration-gateway.mattercodex-system.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/control-api-gateway/observability/otel-ca.pem}
@@ -85,7 +80,7 @@ spec:
             - {name: https, containerPort: 8443, protocol: TCP}
             - {name: metrics, containerPort: 9090, protocol: TCP}
           startupProbe:
-            httpGet: {path: /readyz, port: metrics}
+            httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 30
@@ -116,6 +111,9 @@ spec:
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
             - {name: internal-rpc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/control-plane, readOnly: true}
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/control-api-gateway/application-grant, readOnly: true}
+            - {name: nats-client-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats-client, readOnly: true}
+            - {name: nats-credential, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats, readOnly: true}
+            - {name: nats-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/nats, readOnly: true}
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/control-api-gateway/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
@@ -130,6 +128,12 @@ spec:
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: application-grant
           secret: {secretName: control-api-gateway-application-grant, defaultMode: 0440, items: [{key: readiness.jwt, path: readiness.jwt}]}
+        - name: nats-client-tls
+          secret: {secretName: control-api-gateway-nats-client-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}
+        - name: nats-credential
+          secret: {secretName: control-api-gateway-nats, defaultMode: 0440, items: [{key: credentials.creds, path: credentials.creds}]}
+        - name: nats-ca
+          configMap: {name: mattercodex-nats-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: observability-ca
           configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}
         - name: sentry-dsn

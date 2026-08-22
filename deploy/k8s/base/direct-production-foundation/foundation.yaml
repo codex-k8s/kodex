@@ -1286,7 +1286,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [control-plane, runtime-controller]
+                values: [control-api-gateway, control-plane, runtime-controller]
       ports:
         - {protocol: TCP, port: 4222}
 ---
@@ -1298,7 +1298,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [control-plane, runtime-controller]
+        values: [control-api-gateway, control-plane, runtime-controller]
   policyTypes: [Egress]
   egress:
     - to:

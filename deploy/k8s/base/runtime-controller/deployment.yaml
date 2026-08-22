@@ -25,7 +25,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: runtime-controller
-          image: ghcr.io/codex-k8s/matter-codex/runtime-controller@sha256:${RUNTIME_CONTROLLER_IMAGE_DIGEST}
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           envFrom: [{configMapRef: {name: runtime-controller-runtime}}]
           env:
@@ -70,6 +70,6 @@ spec:
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
         - name: provider-credential
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: runtime-controller-provider-credential}}
+          secret: {secretName: runtime-controller-provider-credential, defaultMode: 0440, items: [{key: api-key, path: api-key}]}
         - name: tmp
           emptyDir: {sizeLimit: 16Mi}

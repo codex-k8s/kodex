@@ -27,7 +27,14 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
-              app.kubernetes.io/component: external-gateway
+              app.kubernetes.io/component: integration-worker
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-controller
+              app.kubernetes.io/component: hot-runtime
       ports:
         - {protocol: TCP, port: 8080}
     - from:

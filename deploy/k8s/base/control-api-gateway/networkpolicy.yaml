@@ -38,11 +38,8 @@ spec:
         - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
       ports: [{protocol: TCP, port: 8443}]
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway, app.kubernetes.io/component: external-gateway}}
-      ports: [{protocol: TCP, port: 9443}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: integration-gateway, app.kubernetes.io/component: external-gateway}}
-      ports: [{protocol: TCP, port: 9443}]
+        - podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+      ports: [{protocol: TCP, port: 4222}]
     - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
       ports: [{protocol: TCP, port: 8200}]
