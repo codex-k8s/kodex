@@ -8,8 +8,9 @@ GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
 ASYNCAPI ?= asyncapi
 CONTROL_API_GATEWAY_ASYNCAPI_VERSION := @asyncapi/cli/6.0.2
+OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-authority-policy-codegen test-control-plane-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-authority-policy-codegen test-control-plane-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -24,6 +25,9 @@ check-proto-toolchain:
 		GRPC_GO_PLUGIN_REMOTE='$(GRPC_GO_PLUGIN_REMOTE)' \
 		GRPC_GO_PLUGIN_REVISION='$(GRPC_GO_PLUGIN_REVISION)' \
 		./scripts/check-proto-toolchain.sh
+
+check-openapi-toolchain:
+	@OAPI_CODEGEN_VERSION='$(OAPI_CODEGEN_VERSION)' ./scripts/check-openapi-toolchain.sh
 
 test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
@@ -58,7 +62,7 @@ gen-openapi: gen-openapi-go gen-openapi-ts
 
 gen-openapi-go: gen-control-api-gateway-openapi-go
 
-gen-control-api-gateway-openapi-go:
+gen-control-api-gateway-openapi-go: check-openapi-toolchain
 	oapi-codegen -config tools/codegen/openapi/control-api-gateway-go.yaml contracts/openapi/control-api-gateway/v1/openapi.yaml
 	gofmt -w services/external/control-api-gateway/internal/transport/http/generated
 
