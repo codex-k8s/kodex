@@ -351,16 +351,19 @@ node "$repository_root/tools/deploy/direct-production-material-helper.mjs" valid
   "$temporary_directory/rendered-provider-snapshot.json" \
   "$temporary_directory/rendered-provider-snapshot.sha256" \
   "$temporary_directory/rendered-provider-snapshot.generation" "$test_oidc_issuer"
-for name in control-plane-nats runtime-controller-nats; do
+for name in control-plane-nats control-plane-nats-bootstrap control-api-gateway-nats; do
   jq -er --arg name "$name" '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data["user.creds"]' "$material_json" |
     base64 -d >"$temporary_directory/$name.creds"
 done
 node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-nats-creds \
   "$temporary_directory/control-plane-nats.creds" control-plane \
-  '$JS.API.>,control_plane.runtime_configuration_changed' '_INBOX.>'
+  '$JS.API.STREAM.INFO.CONTROL_PLANE,control_plane.platform.*.events,control_plane.run.*.*.events' '_INBOX.>' '' ''
 node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-nats-creds \
-  "$temporary_directory/runtime-controller-nats.creds" runtime-controller \
-  '$JS.ACK.>,$JS.API.>' '_INBOX.>,control_plane.runtime_configuration_changed'
+  "$temporary_directory/control-plane-nats-bootstrap.creds" control-plane-bootstrap \
+  '$JS.API.STREAM.CREATE.CONTROL_PLANE,$JS.API.STREAM.INFO.CONTROL_PLANE' '_INBOX.>' '' ''
+node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-nats-creds \
+  "$temporary_directory/control-api-gateway-nats.creds" control-api-gateway '' \
+  'control_plane.run.*.*.events' '>' ''
 jq -er '.[] | select(.kind=="Secret" and .metadata.name=="control-plane-postgres-runtime") | .data.dsn' "$material_json" |
   base64 -d >"$temporary_directory/postgres-dsn"
 grep -Eq '^postgresql://[^:]+:[a-f0-9]{64}@control-plane-postgresql-rw\.mattercodex-system\.svc\.cluster\.local:5432/control_plane\?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/control-plane/postgres/ca\.pem&options=-c%20role%3Dcontrol_plane_runtime$' \

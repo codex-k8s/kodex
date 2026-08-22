@@ -17,7 +17,7 @@ spec:
         app.kubernetes.io/name: control-plane
         app.kubernetes.io/component: broker-bootstrap
     spec:
-      serviceAccountName: control-plane
+      serviceAccountName: control-plane-broker-bootstrap
       automountServiceAccountToken: false
       restartPolicy: Never
       enableServiceLinks: false
@@ -48,10 +48,10 @@ spec:
               value: /var/run/config/mattercodex/control-plane/nats/ca.pem
             - name: CONTROL_PLANE_NATS_CREDENTIALS_FILE
               value: /var/run/secrets/mattercodex/control-plane/nats/user.creds
-            - name: CONTROL_PLANE_TLS_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/control-plane/workload-tls/tls.crt
-            - name: CONTROL_PLANE_TLS_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/control-plane/workload-tls/tls.key
+            - name: CONTROL_PLANE_NATS_CERTIFICATE_FILE
+              value: /var/run/secrets/mattercodex/control-plane/nats-client/tls.crt
+            - name: CONTROL_PLANE_NATS_PRIVATE_KEY_FILE
+              value: /var/run/secrets/mattercodex/control-plane/nats-client/tls.key
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "3"
             - name: CONTROL_PLANE_READINESS_TIMEOUT
@@ -72,8 +72,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: workload-tls
-              mountPath: /var/run/secrets/mattercodex/control-plane/workload-tls
+            - name: nats-client-tls
+              mountPath: /var/run/secrets/mattercodex/control-plane/nats-client
               readOnly: true
             - name: nats-credential
               mountPath: /var/run/secrets/mattercodex/control-plane/nats
@@ -82,16 +82,16 @@ spec:
               mountPath: /var/run/config/mattercodex/control-plane/nats
               readOnly: true
       volumes:
-        - name: workload-tls
+        - name: nats-client-tls
           secret:
-            secretName: internal-rpc-authority-control-plane-workload-tls
+            secretName: control-plane-nats-bootstrap-client-tls
             defaultMode: 0440
         - name: nats-credential
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: control-plane-nats
+              secretProviderClass: control-plane-nats-bootstrap
         - name: nats-ca
           configMap:
             name: mattercodex-nats-ca

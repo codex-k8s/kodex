@@ -184,6 +184,9 @@ spec:
             - name: nats-credential
               mountPath: /var/run/secrets/mattercodex/control-plane/nats
               readOnly: true
+            - name: nats-client-tls
+              mountPath: /var/run/secrets/mattercodex/control-plane/nats-client
+              readOnly: true
             - name: nats-ca
               mountPath: /var/run/config/mattercodex/control-plane/nats
               readOnly: true
@@ -241,6 +244,15 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-nats
+        - name: nats-client-tls
+          secret:
+            secretName: control-plane-nats-client-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
         - name: nats-ca
           configMap:
             name: mattercodex-nats-ca

@@ -109,7 +109,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	defer authority.Close()
 	publisher, err := natsjetstream.New(natsjetstream.Config{
 		URL: config.NATSURL, TLSServerName: config.NATSTLSServerName, CAFile: config.NATSCAFile,
-		CertificateFile: config.ServerCertificateFile, PrivateKeyFile: config.ServerPrivateKeyFile,
+		CertificateFile: config.NATSCertificateFile, PrivateKeyFile: config.NATSPrivateKeyFile,
 		CredentialsFile: config.NATSCredentialsFile, Stream: config.NATSStream,
 		Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
 		Replicas: config.NATSReplicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000,

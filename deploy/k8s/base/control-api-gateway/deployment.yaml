@@ -128,7 +128,7 @@ spec:
         - name: nats-client-tls
           secret: {secretName: control-api-gateway-nats-client-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}
         - name: nats-credential
-          secret: {secretName: control-api-gateway-nats, defaultMode: 0440, items: [{key: credentials.creds, path: credentials.creds}]}
+          secret: {secretName: control-api-gateway-nats, defaultMode: 0440, items: [{key: user.creds, path: user.creds}]}
         - name: nats-ca
           configMap: {name: mattercodex-nats-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: observability-ca

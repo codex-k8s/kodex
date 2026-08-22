@@ -76,8 +76,8 @@ func bootstrapBroker(ctx context.Context) error {
 	}
 	publisher, err := natsjetstream.New(natsjetstream.Config{
 		URL: os.Getenv("CONTROL_PLANE_NATS_URL"), TLSServerName: os.Getenv("CONTROL_PLANE_NATS_TLS_SERVER_NAME"),
-		CAFile: os.Getenv("CONTROL_PLANE_NATS_CA_FILE"), CertificateFile: os.Getenv("CONTROL_PLANE_TLS_CERTIFICATE_FILE"),
-		PrivateKeyFile: os.Getenv("CONTROL_PLANE_TLS_PRIVATE_KEY_FILE"), CredentialsFile: os.Getenv("CONTROL_PLANE_NATS_CREDENTIALS_FILE"),
+		CAFile: os.Getenv("CONTROL_PLANE_NATS_CA_FILE"), CertificateFile: os.Getenv("CONTROL_PLANE_NATS_CERTIFICATE_FILE"),
+		PrivateKeyFile: os.Getenv("CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"), CredentialsFile: os.Getenv("CONTROL_PLANE_NATS_CREDENTIALS_FILE"),
 		Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
 		Replicas: replicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000, MaxBytes: maximumBytes,
 		MaxPerSubject: 1_000_000, MaxAge: 30 * 24 * time.Hour, DuplicateWindow: 2 * time.Minute, ConnectTimeout: 5 * time.Second,

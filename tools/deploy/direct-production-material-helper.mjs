@@ -596,17 +596,23 @@ switch (command) {
     break;
   }
   case "validate-nats-creds": {
-    if (args.length !== 4) fail("validate-nats-creds requires input, name, publish and subscribe sets");
+    if (args.length !== 6) fail("validate-nats-creds requires input, name, allow publish, allow subscribe, deny publish and deny subscribe sets");
     const value = readFileSync(args[0], "utf8");
     const jwtMatch = value.match(/BEGIN NATS USER JWT-----\s*([A-Za-z0-9_.-]+)\s*-+END NATS USER JWT/);
     if (!jwtMatch || !/BEGIN USER NKEY SEED/.test(value)) fail("NATS credentials file is invalid");
     const claims = decodeJWT(jwtMatch[1]);
     const expectedPublish = args[2].split(",").filter(Boolean).sort();
     const expectedSubscribe = args[3].split(",").filter(Boolean).sort();
+    const expectedPublishDeny = args[4].split(",").filter(Boolean).sort();
+    const expectedSubscribeDeny = args[5].split(",").filter(Boolean).sort();
     const actualPublish = [...(claims.nats?.pub?.allow ?? [])].sort();
     const actualSubscribe = [...(claims.nats?.sub?.allow ?? [])].sort();
+    const actualPublishDeny = [...(claims.nats?.pub?.deny ?? [])].sort();
+    const actualSubscribeDeny = [...(claims.nats?.sub?.deny ?? [])].sort();
     if (claims.name !== args[1] || JSON.stringify(actualPublish) !== JSON.stringify(expectedPublish) ||
-        JSON.stringify(actualSubscribe) !== JSON.stringify(expectedSubscribe)) fail("NATS user permissions are invalid");
+        JSON.stringify(actualSubscribe) !== JSON.stringify(expectedSubscribe) ||
+        JSON.stringify(actualPublishDeny) !== JSON.stringify(expectedPublishDeny) ||
+        JSON.stringify(actualSubscribeDeny) !== JSON.stringify(expectedSubscribeDeny)) fail("NATS user permissions are invalid");
     break;
   }
   case "validate-nats-server": {

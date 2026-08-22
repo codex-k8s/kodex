@@ -26,6 +26,8 @@ type Config struct {
 	NATSURL                        string        `env:"CONTROL_PLANE_NATS_URL"`
 	NATSTLSServerName              string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                     string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
+	NATSCertificateFile            string        `env:"CONTROL_PLANE_NATS_CERTIFICATE_FILE"`
+	NATSPrivateKeyFile             string        `env:"CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"`
 	NATSCredentialsFile            string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
 	NATSStream                     string        `env:"CONTROL_PLANE_NATS_STREAM"`
 	NATSReplicas                   int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
@@ -94,6 +96,8 @@ func loadConfig() (Config, error) {
 		NATSURL:                 "tls://nats.mattercodex-system.svc:4222",
 		NATSTLSServerName:       "nats.mattercodex-system.svc.cluster.local",
 		NATSCAFile:              "/var/run/config/mattercodex/control-plane/nats/ca.pem",
+		NATSCertificateFile:     "/var/run/secrets/mattercodex/control-plane/nats-client/tls.crt",
+		NATSPrivateKeyFile:      "/var/run/secrets/mattercodex/control-plane/nats-client/tls.key",
 		NATSCredentialsFile:     "/var/run/secrets/mattercodex/control-plane/nats/user.creds",
 		NATSStream:              "CONTROL_PLANE",
 		NATSReplicas:            3,
@@ -139,7 +143,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}

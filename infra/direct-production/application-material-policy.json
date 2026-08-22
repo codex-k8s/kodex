@@ -289,6 +289,14 @@
     {
       "classification": "cryptographically_generated",
       "kind": "Secret",
+      "name": "control-api-gateway-nats",
+      "keys": [
+        "user.creds"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
       "name": "control-api-gateway-public-tls-material",
       "keys": [
         "ca.crt",
@@ -387,6 +395,14 @@
       "name": "control-plane-lease-signing",
       "keys": [
         "key"
+      ]
+    },
+    {
+      "classification": "cryptographically_generated",
+      "kind": "Secret",
+      "name": "control-plane-nats-bootstrap",
+      "keys": [
+        "user.creds"
       ]
     },
     {
@@ -1174,24 +1190,6 @@
       "name": "runtime-controller-application-grant",
       "keys": [
         "application-grant.jws"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "runtime-controller-nats",
-      "keys": [
-        "user.creds"
-      ]
-    },
-    {
-      "classification": "cryptographically_generated",
-      "kind": "Secret",
-      "name": "runtime-controller-nats-tls",
-      "keys": [
-        "ca.crt",
-        "tls.crt",
-        "tls.key"
       ]
     },
     {
