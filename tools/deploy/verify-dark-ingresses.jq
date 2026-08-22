@@ -11,9 +11,9 @@ def approved_control_center_ingress:
   .metadata.annotations["traefik.ingress.kubernetes.io/router.tls"] == "true" and
   .spec.ingressClassName == "kodex-public" and
   (.spec.defaultBackend // null) == null and
-  .spec.tls == [{"hosts":["control.kodex.works"],"secretName":"control-center-public-tls"}] and
+  .spec.tls == [{"hosts":[$public_host],"secretName":"control-center-public-tls"}] and
   .spec.rules == [{
-    "host":"control.kodex.works",
+    "host":$public_host,
     "http":{"paths":[{
       "backend":{"service":{"name":"control-center-public-bridge","port":{"name":"http"}}},
       "path":"/",

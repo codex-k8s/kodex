@@ -12,7 +12,7 @@ require_denied() {
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
 usage() {
-  printf 'Usage: %s --context <exact-context> --operation preflight|apply|readback --mode dark|cutover|rollback --source-sha <40-hex> --lock <path> --lock-sha256 <64-hex> [--gate-evidence <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --operation preflight|apply|readback --mode dark|cutover|rollback --public-host <dns-name> --source-sha <40-hex> --lock <path> --lock-sha256 <64-hex> [--gate-evidence <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -22,6 +22,7 @@ source_sha=""
 lock_file=""
 lock_sha256=""
 gate_evidence=""
+public_host=""
 while (($# > 0)); do
   case "$1" in
     --context) expected_context="${2:-}"; shift 2 ;;
@@ -31,12 +32,14 @@ while (($# > 0)); do
     --lock) lock_file="${2:-}"; shift 2 ;;
     --lock-sha256) lock_sha256="${2:-}"; shift 2 ;;
     --gate-evidence) gate_evidence="${2:-}"; shift 2 ;;
+    --public-host) public_host="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
+[[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "public host is invalid"
 case "$operation" in preflight|apply|readback) ;; *) fail "operation must be preflight, apply or readback" ;; esac
 case "$mode" in dark|cutover|rollback) ;; *) fail "mode must be dark, cutover or rollback" ;; esac
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
@@ -450,6 +453,6 @@ kubectl --context "$expected_context" -n mattercodex-system get pods -l matterco
 # dark release itself still contains no Ingress, and every other route is
 # rejected by the allowlist readback below.
 kubectl --context "$expected_context" -n mattercodex-system get ingress -o json |
-  jq -e -f "$script_directory/verify-dark-ingresses.jq" >/dev/null ||
+  jq -e --arg public_host "$public_host" -f "$script_directory/verify-dark-ingresses.jq" >/dev/null ||
   fail "dark namespace contains an unapproved Ingress"
 printf 'Direct production %s completed for mode %s\n' "$operation" "$mode"

@@ -86,7 +86,7 @@ spec:
               valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: owner-initial-password}}
             - name: MATTERCODEX_ORGANIZATION_ID
               valueFrom: {secretKeyRef: {name: keycloak-bootstrap, key: organization-id}}
-            - {name: KC_HOSTNAME, value: https://sso.kodex.works}
+            - {name: KC_HOSTNAME, value: https://__MATTERCODEX_OIDC_HOST__}
             - {name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "false"}
             - {name: KC_PROXY_HEADERS, value: xforwarded}
             - {name: KC_HTTP_ENABLED, value: "true"}
@@ -148,10 +148,10 @@ metadata:
 spec:
   ingressClassName: kodex-public
   tls:
-    - hosts: [sso.kodex.works]
+    - hosts: [__MATTERCODEX_OIDC_HOST__]
       secretName: sso-public-tls
   rules:
-    - host: sso.kodex.works
+    - host: __MATTERCODEX_OIDC_HOST__
       http:
         paths:
           - path: /

@@ -19,8 +19,8 @@ Runbook описывает первичную установку, повторн
 
 Публичные endpoints:
 
-- `https://sso.kodex.works` - Keycloak;
-- `https://control.kodex.works` - owner Control Center;
+- `https://__MATTERCODEX_OIDC_HOST__` - Keycloak;
+- `https://__MATTERCODEX_PUBLIC_HOST__` - owner Control Center;
 - realm `mattercodex` - пользовательская identity;
 - realm `master` - только операторская автоматизация Keycloak.
 
@@ -86,7 +86,7 @@ owner выполняется в realm `mattercodex`; оно не ослабля�
 доменную authorization boundary Control API.
 
 Google Identity Provider включается отдельно после настройки exact redirect URI
-`https://sso.kodex.works/realms/mattercodex/broker/google/endpoint` и
+`https://__MATTERCODEX_OIDC_HOST__/realms/mattercodex/broker/google/endpoint` и
 ограниченного first-login flow. Наличие Google OAuth не является prerequisite
 для первого локального owner login.
 
@@ -153,7 +153,7 @@ credentials и access tokens не печатаются. Официальный �
 
 1. disposable owner-user получает только `mattercodex-owner`;
 2. OIDC authorization code flow с PKCE завершается на
-   `https://control.kodex.works/auth/callback`;
+   `https://__MATTERCODEX_PUBLIC_HOST__/auth/callback`;
 3. `POST /api/v1/session` возвращает `204` и устанавливает session/CSRF cookies;
 4. `GET /api/v1/projects` с сессией возвращает `200`, без сессии - `401`;
 5. disposable user удаляется даже при неуспешном сценарии;

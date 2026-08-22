@@ -64,17 +64,17 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "frontchannelLogout": true,
-      "rootUrl": "https://control.kodex.works",
-      "baseUrl": "https://control.kodex.works/",
+      "rootUrl": "https://__MATTERCODEX_PUBLIC_HOST__",
+      "baseUrl": "https://__MATTERCODEX_PUBLIC_HOST__/",
       "redirectUris": [
-        "https://control.kodex.works/auth/callback"
+        "https://__MATTERCODEX_PUBLIC_HOST__/auth/callback"
       ],
       "webOrigins": [
-        "https://control.kodex.works"
+        "https://__MATTERCODEX_PUBLIC_HOST__"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "https://control.kodex.works/*"
+        "post.logout.redirect.uris": "https://__MATTERCODEX_PUBLIC_HOST__/*"
       },
       "optionalClientScopes": [
         "mattercodex.owner"

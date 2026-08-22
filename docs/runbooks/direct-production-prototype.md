@@ -317,7 +317,7 @@ KUBECONFIG=/secure/path/kubeconfig \
 ```
 
 Команда сверяет чистый exact checkout, отсутствие публичного ingress
-`control.kodex.works`, отсутствие обслуженного authority state, останавливает
+`__MATTERCODEX_PUBLIC_HOST__`, отсутствие обслуженного authority state, останавливает
 только зависящие от authority workloads, пересоздаёт только новую БД
 `internal_rpc_authority` из чистого `template0` и удаляет только
 publisher/reconciler-owned runtime

@@ -118,7 +118,7 @@ func renderedBotServicePodTemplate(t *testing.T, revision string, image string) 
 
 func normalizeBotServicePodRevision(template map[string]any) {
 	annotations := nestedMap(template, "metadata", "annotations")
-	annotations["matter-codex.kodex.works/pod-input-revision"] = "normalized"
+	annotations["mattercodex.dev/pod-input-revision"] = "normalized"
 }
 
 func normalizeBotServiceImage(template map[string]any) {

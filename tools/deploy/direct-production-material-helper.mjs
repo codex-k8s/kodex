@@ -241,12 +241,23 @@ switch (command) {
     break;
   }
   case "validate-oidc-snapshot": {
-    if (args.length !== 3) fail("validate-oidc-snapshot requires snapshot, SHA-256 and generation paths");
+    if (args.length !== 4) fail("validate-oidc-snapshot requires snapshot, SHA-256, generation and expected issuer");
     const snapshot = JSON.parse(readFileSync(args[0], "utf8"));
     const generation = readFileSync(args[2], "utf8").trim();
+    const expectedIssuer = args[3];
+    let issuerURL;
+    try {
+      issuerURL = new URL(expectedIssuer);
+    } catch {
+      fail("expected OIDC issuer is invalid");
+    }
+    if (issuerURL.protocol !== "https:" || issuerURL.username !== "" || issuerURL.password !== "" ||
+        issuerURL.search !== "" || issuerURL.hash !== "") {
+      fail("expected OIDC issuer is invalid");
+    }
     if (JSON.stringify(Object.keys(snapshot).sort()) !== JSON.stringify(["algorithms", "audience", "digest_sha256", "generation", "issuer", "jwks", "schema_version"]) ||
         snapshot.schema_version !== 1 || !Number.isSafeInteger(snapshot.generation) || snapshot.generation < 1 ||
-        String(snapshot.generation) !== generation || snapshot.issuer !== "https://sso.kodex.works/realms/mattercodex" ||
+        String(snapshot.generation) !== generation || snapshot.issuer !== expectedIssuer ||
         snapshot.audience !== "mattercodex-integration-gateway" || JSON.stringify(snapshot.algorithms) !== '["RS256"]' ||
         snapshot.jwks === null || !Array.isArray(snapshot.jwks.keys) || snapshot.jwks.keys.length < 1 || snapshot.jwks.keys.length > 16) {
       fail("OIDC provider snapshot binding is invalid");

@@ -4,7 +4,7 @@ umask 077
 
 fail() { printf 'Direct production SSO bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode apply|readback --oidc-ca-file <path> --public-ipv4 <address> [--external-material-file <path>] [--owner-username <name>] [--owner-email <email>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode apply|readback --public-host <dns-name> --oidc-host <dns-name> --oidc-ca-file <path> --public-ipv4 <address> [--external-material-file <path>] [--owner-username <name>] [--owner-email <email>]\n' "$0" >&2
 }
 
 context=""
@@ -12,6 +12,8 @@ mode=""
 oidc_ca_file=""
 external_material_file=""
 public_ipv4=""
+public_host=""
+oidc_host=""
 owner_username="lepehovsv"
 owner_email="lepehovsv@gmail.com"
 while (($# > 0)); do
@@ -21,6 +23,8 @@ while (($# > 0)); do
     --oidc-ca-file) oidc_ca_file="${2:-}"; shift 2 ;;
     --external-material-file) external_material_file="${2:-}"; shift 2 ;;
     --public-ipv4) public_ipv4="${2:-}"; shift 2 ;;
+    --public-host) public_host="${2:-}"; shift 2 ;;
+    --oidc-host) oidc_host="${2:-}"; shift 2 ;;
     --owner-username) owner_username="${2:-}"; shift 2 ;;
     --owner-email) owner_email="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -30,6 +34,11 @@ done
 
 [[ -n "$context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in apply|readback) ;; *) fail "mode must be apply or readback" ;; esac
+[[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "public host is invalid"
+[[ "$oidc_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "OIDC host is invalid"
+public_origin="https://$public_host"
+oidc_origin="https://$oidc_host"
+oidc_issuer="$oidc_origin/realms/mattercodex"
 [[ -r "$oidc_ca_file" ]] || fail "OIDC CA file is required"
 [[ "$public_ipv4" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "public IPv4 address is invalid"
 IFS=. read -r ipv4_a ipv4_b ipv4_c ipv4_d <<<"$public_ipv4"
@@ -50,6 +59,12 @@ trap 'rm -rf -- "$temporary_directory"' EXIT HUP INT TERM
 
 render="$temporary_directory/sso.yaml"
 kubectl kustomize "$script_directory" >"$render"
+PUBLIC_HOST="$public_host" OIDC_HOST="$oidc_host" yq -i '
+  (.. | select(tag == "!!str")) |=
+    sub("__MATTERCODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
+  (.. | select(tag == "!!str")) |=
+    sub("__MATTERCODEX_OIDC_HOST__"; strenv(OIDC_HOST))
+' "$render"
 oidc_egress="$temporary_directory/control-api-oidc-egress.yaml"
 PUBLIC_OIDC_CIDR="$public_ipv4/32" yq '
   .spec.egress[0].to[0].ipBlock.cidr = strenv(PUBLIC_OIDC_CIDR)
@@ -111,7 +126,7 @@ wait_keycloak_public_endpoint() {
   local attempt
   for attempt in {1..30}; do
     if curl --fail --silent --show-error --connect-timeout 3 --max-time 5 \
-      https://sso.kodex.works/realms/master/.well-known/openid-configuration >/dev/null 2>&1; then
+      "$oidc_origin/realms/master/.well-known/openid-configuration" >/dev/null 2>&1; then
       return
     fi
     sleep 1
@@ -134,7 +149,7 @@ keycloak_bootstrap_admin_login() {
     --retry 5 --retry-delay 1 --retry-all-errors \
     --header 'Content-Type: application/x-www-form-urlencoded' \
     --data-binary "@$token_request" \
-    https://sso.kodex.works/realms/master/protocol/openid-connect/token >"$token_response" ||
+    "$oidc_origin/realms/master/protocol/openid-connect/token" >"$token_response" ||
     fail "Keycloak bootstrap admin authentication failed"
   write_keycloak_admin_curl_config "$token_response"
   unset admin_username
@@ -156,7 +171,7 @@ keycloak_service_admin_login() {
     --retry 5 --retry-delay 1 --retry-all-errors \
     --header 'Content-Type: application/x-www-form-urlencoded' \
     --data-binary "@$token_request" \
-    https://sso.kodex.works/realms/master/protocol/openid-connect/token >"$token_response" ||
+    "$oidc_origin/realms/master/protocol/openid-connect/token" >"$token_response" ||
     fail "Keycloak service admin authentication failed"
   write_keycloak_admin_curl_config "$token_response"
   unset client_id
@@ -168,7 +183,7 @@ keycloak_admin_api() {
   if [[ -n "$body" ]]; then
     arguments+=(--header 'Content-Type: application/json' --data-binary "@$body")
   fi
-  curl "${arguments[@]}" "https://sso.kodex.works/admin/realms/$realm$path"
+  curl "${arguments[@]}" "$oidc_origin/admin/realms/$realm$path"
 }
 
 keycloak_admin_client_id() {
@@ -409,9 +424,9 @@ kubectl --context "$context" -n identity get deployment sso -o json |
   jq -e '(.status.readyReplicas // 0) == 1 and (.status.availableReplicas // 0) == 1' >/dev/null ||
   fail "Keycloak is not Ready"
 discovery=$(curl --fail --silent --show-error --max-time 10 \
-  https://sso.kodex.works/realms/mattercodex/.well-known/openid-configuration)
-jwks_uri=$(jq -er 'select(.issuer == "https://sso.kodex.works/realms/mattercodex") | .jwks_uri' <<<"$discovery")
-[[ "$jwks_uri" == "https://sso.kodex.works/realms/mattercodex/protocol/openid-connect/certs" ]] ||
+  "$oidc_issuer/.well-known/openid-configuration")
+jwks_uri=$(jq -er --arg issuer "$oidc_issuer" 'select(.issuer == $issuer) | .jwks_uri' <<<"$discovery")
+[[ "$jwks_uri" == "$oidc_issuer/protocol/openid-connect/certs" ]] ||
   fail "OIDC discovery readback mismatch"
 curl --fail --silent --show-error --max-time 10 "$jwks_uri" |
   jq -e '.keys | type == "array" and length > 0 and all(.[]; .kty == "RSA" and (.kid | type == "string" and length > 0))' >/dev/null ||

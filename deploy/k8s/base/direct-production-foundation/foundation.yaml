@@ -72,7 +72,7 @@ spec:
   duration: 2160h
   renewBefore: 360h
   privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
-  dnsNames: [control.kodex.works]
+  dnsNames: [__MATTERCODEX_PUBLIC_HOST__]
   usages: [server auth]
   issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
 ---
@@ -908,7 +908,7 @@ data:
                             - match: {prefix: "/"}
                               route:
                                 cluster: legacy_mattermost
-                                host_rewrite_literal: chat.kodex.works
+                                host_rewrite_literal: __MATTERCODEX_MATTERMOST_HOST__
                     upgrade_configs:
                       - upgrade_type: websocket
                     http_filters:

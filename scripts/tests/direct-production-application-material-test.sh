@@ -9,6 +9,7 @@ policy="$repository_root/infra/direct-production/application-material-policy.jso
 prototype_policy="$repository_root/infra/direct-production/internal-rpc-authority-prototype-material-policy.json"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
+test_oidc_issuer="https://sso.example.test/realms/mattercodex"
 
 materializer_existing_key_check=$(sed -n '/^verify_key_set_json()/,/^}/p' "$materializer")
 grep -Fq '(($actual - $allowed) | length) == 0' <<<"$materializer_existing_key_check" &&
@@ -156,7 +157,7 @@ writeFileSync(process.argv[2], JSON.stringify({...aggregateInput,digest_sha256:s
 const {publicKey} = generateKeyPairSync("rsa", {modulusLength:2048});
 const exported = publicKey.export({format:"jwk"});
 const key = {use:"sig",kty:"RSA",kid:"test-provider-key",alg:"RS256",n:exported.n,e:exported.e};
-const snapshotInput = {schema_version:1,generation:7,issuer:"https://sso.kodex.works/realms/mattercodex",audience:"mattercodex-integration-gateway",algorithms:["RS256"],jwks:{keys:[key]}};
+const snapshotInput = {schema_version:1,generation:7,issuer:"https://sso.example.test/realms/mattercodex",audience:"mattercodex-integration-gateway",algorithms:["RS256"],jwks:{keys:[key]}};
 const digest = sha(JSON.stringify(snapshotInput));
 writeFileSync(process.argv[3], JSON.stringify({...snapshotInput,digest_sha256:digest})+"\n", {mode:0o600});
 writeFileSync(process.argv[4], digest+"\n", {mode:0o600});
@@ -205,7 +206,8 @@ AUTHORITY_READBACK_TRUST="$(base64 -w0 "$authority_fixture/external/readback-cre
 "$classifier" --output "$temporary_directory/with-external.json" --external-material-file "$external_fixture" >/dev/null
 
 material="$temporary_directory/application-material.yaml"
-"$materializer" --mode render --external-material-file "$external_fixture" --output "$material" >/dev/null
+"$materializer" --mode render --oidc-issuer "$test_oidc_issuer" \
+  --external-material-file "$external_fixture" --output "$material" >/dev/null
 [[ "$(stat -c '%a' "$material")" == 600 ]] || {
   printf 'Application material render permissions are not 0600\n' >&2
   exit 1
@@ -348,7 +350,7 @@ done
 node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-oidc-snapshot \
   "$temporary_directory/rendered-provider-snapshot.json" \
   "$temporary_directory/rendered-provider-snapshot.sha256" \
-  "$temporary_directory/rendered-provider-snapshot.generation"
+  "$temporary_directory/rendered-provider-snapshot.generation" "$test_oidc_issuer"
 for name in control-plane-nats runtime-controller-nats; do
   jq -er --arg name "$name" '.[] | select(.kind=="Secret" and .metadata.name==$name) | .data["user.creds"]' "$material_json" |
     base64 -d >"$temporary_directory/$name.creds"
@@ -855,7 +857,7 @@ printf '%s\n' 6 >"$temporary_directory/rollback-generation"
 if node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-oidc-snapshot \
   "$temporary_directory/rendered-provider-snapshot.json" \
   "$temporary_directory/rendered-provider-snapshot.sha256" \
-  "$temporary_directory/rollback-generation" >/dev/null 2>&1; then
+  "$temporary_directory/rollback-generation" "$test_oidc_issuer" >/dev/null 2>&1; then
   printf 'OIDC provider snapshot generation rollback was accepted\n' >&2
   exit 1
 fi

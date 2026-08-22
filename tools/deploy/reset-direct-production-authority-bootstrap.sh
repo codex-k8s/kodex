@@ -5,17 +5,19 @@ fail() { printf 'Direct production authority bootstrap reset failed: %s\n' "$*" 
 trap 'fail "unexpected command failure at line $LINENO"' ERR
 
 usage() {
-  printf 'Usage: %s --owner-approved --revision <exact-git-sha> --context <exact-context>\n' "$0" >&2
+  printf 'Usage: %s --owner-approved --revision <exact-git-sha> --context <exact-context> --public-host <dns-name>\n' "$0" >&2
 }
 
 owner_approved=false
 revision=""
 expected_context=""
+public_host=""
 while (($# > 0)); do
   case "$1" in
     --owner-approved) owner_approved=true; shift ;;
     --revision) revision="${2:-}"; shift 2 ;;
     --context) expected_context="${2:-}"; shift 2 ;;
+    --public-host) public_host="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -24,6 +26,7 @@ done
 [[ "$owner_approved" == true ]] || fail "explicit owner approval is required"
 [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || fail "exact git revision is required"
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
+[[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "public host is invalid"
 for command_name in git jq kubectl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -43,8 +46,8 @@ kubectl -n "$namespace" get pod "$postgres_pod" >/dev/null 2>&1 ||
   fail "direct-production PostgreSQL pod is absent"
 
 # Этот destructive path допустим только до первого публичного cutover.
-if kubectl -n "$namespace" get ingress -o json | jq -e '
-  any(.items[]?; any(.spec.rules[]?; .host == "control.kodex.works"))
+if kubectl -n "$namespace" get ingress -o json | jq -e --arg public_host "$public_host" '
+  any(.items[]?; any(.spec.rules[]?; .host == $public_host))
 ' >/dev/null; then
   fail "public Control Center ingress already exists"
 fi

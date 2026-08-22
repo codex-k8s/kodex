@@ -98,6 +98,7 @@ jobs:
           LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
           MODE: ${{ inputs.mode }}
           GH_TOKEN: ${{ github.token }}
+          MATTERCODEX_PUBLIC_HOST: ${{ vars.MATTERCODEX_PUBLIC_HOST }}
         run: |
           temporary_directory=$(mktemp -d)
           trap 'rm -rf -- "$temporary_directory"' EXIT
@@ -105,6 +106,7 @@ jobs:
           export KUBECONFIG="$temporary_directory/kubeconfig"
           context=$(/var/run/mattercodex-tools/kubectl config current-context)
           PATH="/var/run/mattercodex-tools:$PATH" tools/deploy/direct-production.sh \
-            --context "$context" --operation apply --mode "$MODE" --source-sha "$SOURCE_SHA" \
+            --context "$context" --operation apply --mode "$MODE" \
+            --public-host "$MATTERCODEX_PUBLIC_HOST" --source-sha "$SOURCE_SHA" \
             --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256" \
             --gate-evidence owner-gate.json

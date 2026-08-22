@@ -13,7 +13,7 @@ updated: 2026-08-15
 ## Назначение
 
 Этот runbook материализует публичный owner UI на
-`https://control.kodex.works` после успешного exact dark deploy и SSO
+`https://__MATTERCODEX_PUBLIC_HOST__` после успешного exact dark deploy и SSO
 bootstrap. Он не собирает application images и не изменяет данные продукта.
 
 Внешний `kodex-public` ingress завершает публичный TLS. Отдельный Envoy bridge
@@ -27,9 +27,9 @@ bootstrap. Он не собирает application images и не изменяе�
 - exact dark release успешно применён и прошёл readback;
 - `staff-control-center` и `control-api-gateway` имеют Ready replicas;
 - SSO из `RUN-MC-016` (`docs/runbooks/direct-production-sso.md`) доступен на
-  `https://sso.kodex.works`;
+  `https://__MATTERCODEX_OIDC_HOST__`;
 - `staff-control-center-ingress-client-tls` материализован cert-manager;
-- DNS `control.kodex.works` указывает на production node;
+- DNS `__MATTERCODEX_PUBLIC_HOST__` указывает на production node;
 - `letsencrypt-prod` и `kodex-public` доступны.
 
 ## Применение
@@ -60,9 +60,9 @@ infra/direct-production/control-center/bootstrap.sh \
 
 ## Ручная проверка
 
-1. Открыть `https://control.kodex.works/` в чистом browser profile.
+1. Открыть `https://__MATTERCODEX_PUBLIC_HOST__/` в чистом browser profile.
 2. Начать вход и убедиться, что redirect ведёт только на
-   `https://sso.kodex.works/realms/mattercodex`.
+   `https://__MATTERCODEX_OIDC_HOST__/realms/mattercodex`.
 3. Войти owner-учётной записью и сменить временный пароль.
 4. Проверить загрузку dashboard, REST-запрос и WebSocket без mixed content.
 5. Выйти и убедиться, что защищённые данные не остаются доступны после logout.

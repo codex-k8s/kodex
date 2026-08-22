@@ -8,7 +8,7 @@ verify_certificate_hostname() {
   openssl verify -CAfile "$2" -verify_hostname "$3" "$1" >/dev/null 2>&1
 }
 usage() {
-  printf 'Usage: %s --mode render|preflight|apply|readback --external-material-file <path> [--context <exact-context>] [--output <path>] [--nsc-bin <path>]\n' "$0" >&2
+  printf 'Usage: %s --mode render|preflight|apply|readback --oidc-issuer <https-url> --external-material-file <path> [--context <exact-context>] [--output <path>] [--nsc-bin <path>]\n' "$0" >&2
 }
 
 mode=""
@@ -16,6 +16,7 @@ expected_context=""
 external_material_file=""
 output=""
 nsc_bin=""
+oidc_issuer=""
 while (($# > 0)); do
   case "$1" in
     --mode) mode="${2:-}"; shift 2 ;;
@@ -23,11 +24,13 @@ while (($# > 0)); do
     --external-material-file) external_material_file="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     --nsc-bin) nsc_bin="${2:-}"; shift 2 ;;
+    --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 case "$mode" in render|preflight|apply|readback) ;; *) fail "mode must be render, preflight, apply or readback" ;; esac
+[[ "$oidc_issuer" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]?#]*)?$ ]] || fail "exact HTTPS OIDC issuer is required"
 [[ "$mode" == readback || -r "$external_material_file" ]] || fail "external material file is required"
 [[ "$mode" != render || -n "$output" ]] || fail "render output is required"
 [[ "$mode" == render || -n "$expected_context" ]] || fail "exact Kubernetes context is required"
@@ -204,7 +207,8 @@ if [[ "$mode" == readback ]]; then
       >"$temporary_directory/$key" || fail "ConfigMap/integration-gateway-oidc-provider readback is invalid"
   done
   node "$helper" validate-oidc-snapshot "$temporary_directory/provider-snapshot.json" \
-    "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" >/dev/null
+    "$temporary_directory/provider-snapshot.sha256" "$temporary_directory/provider-snapshot.generation" \
+    "$oidc_issuer" >/dev/null
   while IFS= read -r name; do
     service_account=${name#internal-rpc-authority-}; service_account=${service_account%-workload-tls}
     cert="$temporary_directory/readback-$name.crt"
@@ -344,7 +348,8 @@ node "$helper" validate-git-aggregate \
 node "$helper" validate-oidc-snapshot \
   "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.json)" \
   "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.sha256)" \
-  "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.generation)" >/dev/null
+  "$(value_path ConfigMap integration-gateway-oidc-provider provider-snapshot.generation)" \
+  "$oidc_issuer" >/dev/null
 
 # Dynamic aggregate Secrets начинаются с канонического пустого поколения
 # и сохраняются при idempotent materialization без сброса runtime CAS state.

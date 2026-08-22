@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       annotations:
-        matter-codex.kodex.works/pod-input-revision: "${MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION}"
+        mattercodex.dev/pod-input-revision: "${MATTERCODEX_BOT_SERVICE_POD_INPUT_REVISION}"
       labels:
         app.kubernetes.io/name: matter-codex-bot-service
         app.kubernetes.io/component: bot-service
