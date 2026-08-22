@@ -75,16 +75,6 @@ ARG PRETTIER_VERSION=3.8.4
 ARG PNPM_VERSION=11.8.0
 ARG YARN_VERSION=1.22.22
 ARG HEY_OPENAPI_TS_VERSION=0.98.2
-# AsyncAPI CLI транзитивно использует AWS SDK через oclif. Фиксируем последнюю
-# полную линейку, чтобы npm не выбрал пакет с неопубликованной зависимостью.
-ARG AWS_SDK_CLIENT_CLOUDFRONT_VERSION=3.1110.0
-ARG AWS_SDK_CLIENT_S3_VERSION=3.1110.0
-ARG AWS_SDK_CREDENTIAL_PROVIDER_NODE_VERSION=3.972.79
-ARG ASYNCAPI_CLI_VERSION=6.0.2
-# CLI допускает плавающий Studio; 1.4.0 ссылается на снятый с npm studio-ui.
-ARG ASYNCAPI_STUDIO_VERSION=1.2.0
-ARG ASYNCAPI_GENERATOR_VERSION=3.3.0
-ARG ASYNCAPI_MODELINA_CLI_VERSION=5.10.1
 ARG WSCAT_VERSION=6.1.0
 ARG PLAYWRIGHT_VERSION=1.61.1
 ARG PLAYWRIGHT_MCP_VERSION=0.0.77
@@ -175,13 +165,6 @@ RUN set -eu; \
 		"prettier@${PRETTIER_VERSION}" \
 		"pnpm@${PNPM_VERSION}" \
 		"@hey-api/openapi-ts@${HEY_OPENAPI_TS_VERSION}" \
-		"@aws-sdk/client-cloudfront@${AWS_SDK_CLIENT_CLOUDFRONT_VERSION}" \
-		"@aws-sdk/client-s3@${AWS_SDK_CLIENT_S3_VERSION}" \
-		"@aws-sdk/credential-provider-node@${AWS_SDK_CREDENTIAL_PROVIDER_NODE_VERSION}" \
-		"@asyncapi/cli@${ASYNCAPI_CLI_VERSION}" \
-		"@asyncapi/studio@${ASYNCAPI_STUDIO_VERSION}" \
-		"@asyncapi/generator@${ASYNCAPI_GENERATOR_VERSION}" \
-		"@asyncapi/modelina-cli@${ASYNCAPI_MODELINA_CLI_VERSION}" \
 		"wscat@${WSCAT_VERSION}" \
 		"playwright@${PLAYWRIGHT_VERSION}" \
 		"@playwright/test@${PLAYWRIGHT_VERSION}" \
@@ -225,8 +208,6 @@ RUN set -eu; \
 	pnpm --version >/dev/null; \
 	yarn --version >/dev/null; \
 	command -v openapi-ts >/dev/null; \
-	command -v asyncapi >/dev/null; \
-	command -v modelina >/dev/null; \
 	command -v wscat >/dev/null; \
 	chromium --version >/dev/null; \
 	playwright --version >/dev/null; \
