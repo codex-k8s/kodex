@@ -24,15 +24,13 @@ type Config struct {
 	ControlPlaneCertificateFile string        `env:"AUTOMATION_SCHEDULER_CONTROL_PLANE_CERTIFICATE_FILE"`
 	ControlPlanePrivateKeyFile  string        `env:"AUTOMATION_SCHEDULER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile        string        `env:"AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE"`
-	OperationGrantFile          string        `env:"AUTOMATION_SCHEDULER_OPERATION_GRANT_FILE"`
+	InstanceID                  string        `env:"AUTOMATION_SCHEDULER_INSTANCE_ID"`
 	StartupTimeout              time.Duration `env:"AUTOMATION_SCHEDULER_STARTUP_TIMEOUT"`
 	ShutdownTimeout             time.Duration `env:"AUTOMATION_SCHEDULER_SHUTDOWN_TIMEOUT"`
 	RPCDeadline                 time.Duration `env:"AUTOMATION_SCHEDULER_RPC_DEADLINE"`
 	PollInterval                time.Duration `env:"AUTOMATION_SCHEDULER_POLL_INTERVAL"`
 	ReadinessInterval           time.Duration `env:"AUTOMATION_SCHEDULER_READINESS_INTERVAL"`
 	DueLimit                    int           `env:"AUTOMATION_SCHEDULER_DUE_LIMIT"`
-	ClaimLimit                  int           `env:"AUTOMATION_SCHEDULER_CLAIM_LIMIT"`
-	MaximumTrackedClaims        int           `env:"AUTOMATION_SCHEDULER_MAXIMUM_TRACKED_CLAIMS"`
 }
 
 func loadConfig() (Config, error) {
@@ -44,15 +42,13 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws",
-		OperationGrantFile:          "/var/run/secrets/mattercodex/automation-scheduler/application-grant/operation-grant.jws",
+		InstanceID:                  "automation-scheduler-0",
 		StartupTimeout:              30 * time.Second,
 		ShutdownTimeout:             20 * time.Second,
 		RPCDeadline:                 3 * time.Second,
 		PollInterval:                time.Second,
 		ReadinessInterval:           10 * time.Second,
 		DueLimit:                    32,
-		ClaimLimit:                  32,
-		MaximumTrackedClaims:        256,
 	}
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
 		return Config{}, err
@@ -81,7 +77,6 @@ func (config Config) validate() error {
 		config.ControlPlaneCertificateFile,
 		config.ControlPlanePrivateKeyFile,
 		config.ApplicationGrantFile,
-		config.OperationGrantFile,
 	} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("automation-scheduler credential path is invalid")
@@ -92,9 +87,7 @@ func (config Config) validate() error {
 		config.RPCDeadline < 500*time.Millisecond || config.RPCDeadline > 10*time.Second ||
 		config.PollInterval < 250*time.Millisecond || config.PollInterval > time.Minute ||
 		config.ReadinessInterval < time.Second || config.ReadinessInterval > time.Minute ||
-		config.DueLimit < 1 || config.DueLimit > 100 ||
-		config.ClaimLimit < 1 || config.ClaimLimit > 100 ||
-		config.MaximumTrackedClaims < config.ClaimLimit || config.MaximumTrackedClaims > 4096 {
+		config.DueLimit < 1 || config.DueLimit > 100 || config.InstanceID == "" || len(config.InstanceID) > 128 {
 		return errors.New("automation-scheduler lifecycle configuration is invalid")
 	}
 	return nil

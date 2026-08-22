@@ -51,8 +51,8 @@ spec:
               value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key
             - name: AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE
               value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws
-            - name: AUTOMATION_SCHEDULER_OPERATION_GRANT_FILE
-              value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/operation-grant.jws
+            - name: AUTOMATION_SCHEDULER_INSTANCE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
@@ -71,7 +71,7 @@ spec:
               protocol: TCP
           startupProbe: &technicalProbe
             httpGet:
-              path: /livez
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 2
@@ -85,7 +85,7 @@ spec:
             failureThreshold: 2
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 10
@@ -95,7 +95,7 @@ spec:
               cpu: 50m
               memory: 64Mi
             limits:
-              cpu: 500m
+              cpu: "2"
               memory: 256Mi
           securityContext:
             runAsNonRoot: true

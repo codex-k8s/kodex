@@ -94,6 +94,15 @@ func RuntimeOperations() map[string]string {
 	}
 }
 
+// AutomationSchedulerOperations возвращает минимальный профиль job, которая
+// только материализует server-owned due occurrences.
+func AutomationSchedulerOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime.schedules.claim":       controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName,
+		"platform.runtime.schedules.materialize": controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName,
+	}
+}
+
 func InteractionGatewayOperations() map[string]string                 { return RuntimeOperations() }
 func IntegrationGatewayOperations() map[string]string                 { return RuntimeOperations() }
 func IntegrationGatewayManagementOperations() map[string]string       { return RuntimeOperations() }

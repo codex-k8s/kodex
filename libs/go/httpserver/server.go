@@ -54,6 +54,10 @@ func New(config Config, readiness Readiness, metrics http.Handler, routes ...Exa
 		return nil, errors.New("technical HTTP server configuration is invalid")
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
+		setHeaders(writer)
+		writer.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /livez", func(writer http.ResponseWriter, _ *http.Request) {
 		setHeaders(writer)
 		writer.WriteHeader(http.StatusNoContent)
@@ -71,7 +75,7 @@ func New(config Config, readiness Readiness, metrics http.Handler, routes ...Exa
 		setHeaders(writer)
 		metrics.ServeHTTP(writer, request)
 	}))
-	registered := map[string]struct{}{"/livez": {}, "/readyz": {}, "/metrics": {}}
+	registered := map[string]struct{}{"/healthz": {}, "/livez": {}, "/readyz": {}, "/metrics": {}}
 	for _, route := range routes {
 		if !validExactGETRoute(route, registered) {
 			return nil, errors.New("technical HTTP route configuration is invalid")

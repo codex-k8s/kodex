@@ -67,6 +67,10 @@ var (
 	queryRuntimeCompleteexecution22 string
 	//go:embed sql/runtime_completeexecution_23.sql
 	queryRuntimeCompleteexecution23 string
+	//go:embed sql/runtime_completeexecution_24.sql
+	queryRuntimeCompleteexecution24 string
+	//go:embed sql/runtime_completeexecution_25.sql
+	queryRuntimeCompleteexecution25 string
 	//go:embed sql/runtime_delegateexecution_1.sql
 	queryRuntimeDelegateexecution1 string
 	//go:embed sql/runtime_delegateexecution_2.sql

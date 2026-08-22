@@ -303,6 +303,17 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution23, lease["rootRunID"])
 		}
 	}
+	if runState == "SUCCEEDED" || runState == "FAILED" {
+		var scheduleID string
+		err := tx.QueryRow(ctx, queryRuntimeCompleteexecution24, lease["rootRunID"], map[bool]string{true: "COMPLETED", false: "FAILED"}[runState == "SUCCEEDED"]).Scan(&scheduleID)
+		if err == nil {
+			if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecution25, scheduleID); updateErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_COMPLETED", stringMap(lease, "nodeRef"), "", "", "", nonEmptyResult(payload), runState, nodeState)
 	if err != nil {
 		return commandOutcome{}, err
