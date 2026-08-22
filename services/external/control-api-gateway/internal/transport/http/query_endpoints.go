@@ -40,6 +40,10 @@ func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p gen
 	writeMessage(w, http.StatusOK, response, "", "projects")
 }
 func (server *Server) GetProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.GetProject(r.Context(), &controlplanev1.GetProjectRequest{ProjectRef: ref})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -48,6 +52,10 @@ func (server *Server) GetProject(w http.ResponseWriter, r *http.Request, ref gen
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
 func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Page: page(nil, nil)})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -56,6 +64,10 @@ func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Requ
 	writeMessage(w, http.StatusOK, response, "", "memberships")
 }
 func (server *Server) ListAgents(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListAgentsParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListAgents(r.Context(), &controlplanev1.ListAgentsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -72,6 +84,10 @@ func (server *Server) GetAgent(w http.ResponseWriter, r *http.Request, ref gener
 	writeMessage(w, http.StatusOK, response, "agent", "")
 }
 func (server *Server) ListWorkflows(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListWorkflowsParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListWorkflows(r.Context(), &controlplanev1.ListWorkflowsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -151,6 +167,10 @@ func (server *Server) GetOwnerGate(w http.ResponseWriter, r *http.Request, ref g
 	writeMessage(w, http.StatusOK, response, "gate", "")
 }
 func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListArtifactsParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{ProjectRef: ref, RunRef: stringValue(p.RunRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -167,6 +187,10 @@ func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref ge
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
 func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListSchedules(r.Context(), &controlplanev1.ListSchedulesRequest{ProjectRef: ref, Page: page(nil, nil)})
 	if err != nil {
 		writeRPCProblem(w, err)

@@ -37,6 +37,10 @@ func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p ge
 	writeMessage(w, http.StatusCreated, response, "project", "")
 }
 func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.UpdateProjectParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.ProjectInput](w, r)
 	if !ok {
 		return
@@ -53,6 +57,10 @@ func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref 
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
 func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.AddProjectMembershipParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.MembershipInput](w, r)
 	if !ok {
 		return
@@ -66,6 +74,10 @@ func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Reques
 	writeMessage(w, http.StatusCreated, response, "membership", "")
 }
 func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, membershipRef generated.MembershipRef, p generated.ChangeProjectMembershipParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.MembershipInput](w, r)
 	if !ok {
 		return
@@ -82,6 +94,10 @@ func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Req
 	writeMessage(w, http.StatusOK, response, "membership", "")
 }
 func (server *Server) RemoveProjectMembership(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, membershipRef generated.MembershipRef, p generated.RemoveProjectMembershipParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
@@ -95,6 +111,10 @@ func (server *Server) RemoveProjectMembership(w http.ResponseWriter, r *http.Req
 }
 
 func (server *Server) CreateAgent(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateAgentParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.AgentInput](w, r)
 	if !ok {
 		return
@@ -228,6 +248,10 @@ func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion
 	return draft
 }
 func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateWorkflowParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.WorkflowInput](w, r)
 	if !ok {
 		return
@@ -380,6 +404,10 @@ func scheduleInput(body generated.ScheduleInput) (*controlplanev1.RunTarget, *st
 	return targetProto(string(body.TargetType), body.TargetRef), input
 }
 func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateScheduleParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	body, ok := decodeJSON[generated.ScheduleInput](w, r)
 	if !ok {
 		return
@@ -511,6 +539,10 @@ func (server *Server) ChangeArtifactBinding(w http.ResponseWriter, r *http.Reque
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
 func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.UploadArtifactParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
 	content, err := io.ReadAll(io.LimitReader(r.Body, (16<<20)+1))
 	if err != nil || len(content) > 16<<20 {
 		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)

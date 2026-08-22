@@ -170,6 +170,15 @@ func stringValue[T ~string](value *T) string {
 	return string(*value)
 }
 
+func withProjectReference(writer http.ResponseWriter, request *http.Request, reference string) (*http.Request, bool) {
+	ctx, err := controlplaneclient.WithProjectReference(request.Context(), reference)
+	if err != nil {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return request.WithContext(ctx), true
+}
+
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
