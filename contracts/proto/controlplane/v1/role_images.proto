@@ -1,0 +1,381 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// RoleImageService владеет специализированным lifecycle окружений ролей.
+// Caller не назначает organization, owner, policy, generation или promotion target.
+service RoleImageService {
+  rpc ListRoleImageRecipes(ListRoleImageRecipesRequest) returns (ListRoleImageRecipesResponse);
+  rpc GetRoleImageRecipe(GetRoleImageRecipeRequest) returns (GetRoleImageRecipeResponse);
+  rpc ManageRoleImageRecipe(ManageRoleImageRecipeRequest) returns (ManageRoleImageRecipeResponse);
+
+  rpc ClaimImageBuild(ClaimImageBuildRequest) returns (ClaimImageBuildResponse);
+  rpc RenewImageBuild(RenewImageBuildRequest) returns (RenewImageBuildResponse);
+  rpc ReportImageBuildProgress(ReportImageBuildProgressRequest) returns (ReportImageBuildProgressResponse);
+  rpc CompleteImageBuild(CompleteImageBuildRequest) returns (CompleteImageBuildResponse);
+  rpc FailImageBuild(FailImageBuildRequest) returns (FailImageBuildResponse);
+
+  rpc ClaimImageAdmission(ClaimImageAdmissionRequest) returns (ClaimImageAdmissionResponse);
+  rpc RecordImageAdmission(RecordImageAdmissionRequest) returns (RecordImageAdmissionResponse);
+  rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
+  rpc AuthorizeImagePromotion(AuthorizeImagePromotionRequest) returns (AuthorizeImagePromotionResponse);
+  rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
+}
+
+message RoleImagePlatform {
+  string os = 1;
+  string architecture = 2;
+  string variant = 3;
+}
+
+message RoleImagePackage {
+  string manager = 1;
+  string name = 2;
+  string version = 3;
+  string digest = 4;
+  string source_ref = 5;
+}
+
+message RoleImageTool {
+  string name = 1;
+  string version = 2;
+  string source_ref = 3;
+  string sha256 = 4;
+}
+
+message RoleImageRecipeInput {
+  string base_image_reference = 1;
+  string base_image_digest = 2;
+  string source_ref = 3;
+  string source_revision = 4;
+  string source_sha256 = 5;
+  string context_ref = 6;
+  string context_sha256 = 7;
+  string builder_sha256 = 8;
+  string frontend_sha256 = 9;
+  repeated RoleImagePlatform platforms = 10;
+  repeated RoleImagePackage packages = 11;
+  repeated RoleImageTool tools = 12;
+  string installation_block = 13;
+  string toolchain_sha256 = 14;
+}
+
+message RoleImageRecipe {
+  string ref = 1;
+  uint64 version = 2;
+  string role_definition_ref = 3;
+  string name = 4;
+  string state = 5;
+  RoleImageRecipeInput input = 6;
+  uint64 generation = 7;
+  string spec_sha256 = 8;
+  uint64 policy_revision = 9;
+  string policy_sha256 = 10;
+  uint64 role_runtime_contract_revision = 11;
+  string role_runtime_contract_sha256 = 12;
+  string active_image_artifact_ref = 13;
+  string promoted_image_reference = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+  repeated string next_actions = 17;
+}
+
+enum ImageBuildStage {
+  IMAGE_BUILD_STAGE_UNSPECIFIED = 0;
+  IMAGE_BUILD_STAGE_QUEUED = 1;
+  IMAGE_BUILD_STAGE_CONTEXT_VALIDATION = 2;
+  IMAGE_BUILD_STAGE_BASE_PULL = 3;
+  IMAGE_BUILD_STAGE_SOLVING = 4;
+  IMAGE_BUILD_STAGE_STAGING_PUSH = 5;
+  IMAGE_BUILD_STAGE_PROVENANCE = 6;
+  IMAGE_BUILD_STAGE_COMPLETED = 7;
+  IMAGE_BUILD_STAGE_FAILED = 8;
+  IMAGE_BUILD_STAGE_CANCELLED = 9;
+  IMAGE_BUILD_STAGE_EXPIRED = 10;
+  IMAGE_BUILD_STAGE_DEAD_LETTER = 11;
+  IMAGE_BUILD_STAGE_MATERIALIZATION = 12;
+  IMAGE_BUILD_STAGE_INSTALLATION = 13;
+  IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION = 14;
+}
+
+message ImageBuild {
+  string ref = 1;
+  uint64 version = 2;
+  string recipe_ref = 3;
+  uint64 recipe_version = 4;
+  uint64 recipe_generation = 5;
+  string spec_sha256 = 6;
+  uint32 attempt = 7;
+  uint64 fence = 8;
+  ImageBuildStage stage = 9;
+  uint32 progress_percent = 10;
+  string staging_reference = 11;
+  string manifest_digest = 12;
+  string provenance_sha256 = 13;
+  string immutable_build_sha256 = 14;
+  string safe_error_code = 15;
+  string diagnostic_code = 16;
+  string diagnostic_summary = 17;
+  google.protobuf.Timestamp lease_expires_at = 18;
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+}
+
+enum ImageAdmissionVerdict {
+  IMAGE_ADMISSION_VERDICT_UNSPECIFIED = 0;
+  IMAGE_ADMISSION_VERDICT_ACCEPTED = 1;
+  IMAGE_ADMISSION_VERDICT_REJECTED = 2;
+}
+
+message ImageArtifact {
+  string ref = 1;
+  uint64 version = 2;
+  string recipe_ref = 3;
+  uint64 recipe_version = 4;
+  uint64 recipe_generation = 5;
+  string spec_sha256 = 6;
+  string build_ref = 7;
+  uint64 build_version = 8;
+  uint32 build_attempt = 9;
+  string staging_reference = 10;
+  string manifest_digest = 11;
+  string immutable_build_sha256 = 12;
+  string provenance_sha256 = 13;
+  string base_image_digest = 14;
+  string source_sha256 = 15;
+  string context_sha256 = 16;
+  string builder_sha256 = 17;
+  string frontend_sha256 = 18;
+  string toolchain_sha256 = 19;
+  repeated RoleImagePlatform platforms = 20;
+  uint64 policy_revision = 21;
+  string policy_sha256 = 22;
+  string sbom_sha256 = 23;
+  string vulnerability_evidence_sha256 = 24;
+  ImageAdmissionVerdict admission_verdict = 25;
+  string signature_identity = 26;
+  string signature_sha256 = 27;
+  uint64 admission_revision = 28;
+  string admission_receipt_sha256 = 29;
+  string admission_receipt_oci_manifest_digest = 30;
+  string promoted_reference = 31;
+  string promotion_readback_sha256 = 32;
+  uint64 role_runtime_contract_revision = 33;
+  string role_runtime_contract_sha256 = 34;
+  google.protobuf.Timestamp promoted_at = 35;
+  google.protobuf.Timestamp created_at = 36;
+  google.protobuf.Timestamp updated_at = 37;
+}
+
+enum RoleImageRecipeAction {
+  ROLE_IMAGE_RECIPE_ACTION_UNSPECIFIED = 0;
+  ROLE_IMAGE_RECIPE_ACTION_CREATE = 1;
+  ROLE_IMAGE_RECIPE_ACTION_UPDATE = 2;
+  ROLE_IMAGE_RECIPE_ACTION_ARCHIVE = 3;
+  ROLE_IMAGE_RECIPE_ACTION_RESTORE = 4;
+  ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD = 5;
+}
+
+message ListRoleImageRecipesRequest {
+  string project_ref = 1;
+  string role_definition_ref = 2;
+  PageRequest page = 3;
+}
+
+message ListRoleImageRecipesResponse {
+  repeated RoleImageRecipe recipes = 1;
+  PageInfo page = 2;
+}
+
+message GetRoleImageRecipeRequest {
+  string recipe_ref = 1;
+}
+
+message GetRoleImageRecipeResponse {
+  RoleImageRecipe recipe = 1;
+  repeated ImageBuild builds = 2;
+  ImageArtifact active_artifact = 3;
+}
+
+message ManageRoleImageRecipeRequest {
+  MutationContext mutation = 1;
+  RoleImageRecipeAction action = 2;
+  string recipe_ref = 3;
+  string role_definition_ref = 4;
+  string name = 5;
+  RoleImageRecipeInput input = 6;
+  string project_ref = 7;
+}
+
+message ManageRoleImageRecipeResponse {
+  RoleImageRecipe recipe = 1;
+  ImageBuild image_build = 2;
+  ImageArtifact image_artifact = 3;
+  bool reused = 4;
+}
+
+message RoleImageBuildInput {
+  string recipe_ref = 1;
+  uint64 recipe_version = 2;
+  uint64 recipe_generation = 3;
+  string spec_sha256 = 4;
+  string base_image_reference = 5;
+  string base_image_digest = 6;
+  string source_ref = 7;
+  string source_revision = 8;
+  string source_sha256 = 9;
+  string context_ref = 10;
+  string context_sha256 = 11;
+  string builder_sha256 = 12;
+  string frontend_sha256 = 13;
+  repeated RoleImagePlatform platforms = 14;
+  repeated RoleImagePackage packages = 15;
+  repeated RoleImageTool tools = 16;
+  string installation_block = 17;
+  string toolchain_sha256 = 18;
+  uint64 policy_revision = 19;
+  string policy_sha256 = 20;
+  string immutable_build_sha256 = 21;
+  uint64 role_runtime_contract_revision = 22;
+  string role_runtime_contract_sha256 = 23;
+}
+
+message ClaimImageBuildRequest {
+  string idempotency_key = 1;
+}
+message ClaimImageBuildResponse {
+  ImageBuild image_build = 1;
+  RoleImageBuildInput input = 2;
+  string lease_token = 3;
+  uint64 fence = 4;
+  uint64 authority_generation = 5;
+  google.protobuf.Timestamp lease_expires_at = 6;
+}
+message RenewImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_ref = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+}
+message RenewImageBuildResponse {
+  ImageBuild image_build = 1;
+  string lease_token = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+message ReportImageBuildProgressRequest {
+  string idempotency_key = 1;
+  string image_build_ref = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  ImageBuildStage stage = 7;
+  uint32 progress_percent = 8;
+}
+message ReportImageBuildProgressResponse {
+  ImageBuild image_build = 1;
+}
+message CompleteImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_ref = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  string staging_reference = 7;
+  string manifest_digest = 8;
+  string provenance_sha256 = 9;
+  string immutable_build_sha256 = 10;
+}
+message CompleteImageBuildResponse {
+  ImageBuild image_build = 1;
+  ImageArtifact image_artifact = 2;
+}
+message FailImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_ref = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  string error_code = 7;
+  string diagnostic_code = 8;
+  string diagnostic_summary = 9;
+}
+message FailImageBuildResponse {
+  ImageBuild image_build = 1;
+}
+
+message ClaimImageAdmissionRequest {
+  string idempotency_key = 1;
+}
+message ClaimImageAdmissionResponse {
+  ImageArtifact image_artifact = 1;
+  string claim_token = 2;
+  uint64 fence = 3;
+  uint64 authority_generation = 4;
+  google.protobuf.Timestamp claim_expires_at = 5;
+}
+message RecordImageAdmissionRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string claim_token = 5;
+  string manifest_digest = 6;
+  string immutable_build_sha256 = 7;
+  string provenance_sha256 = 8;
+  string sbom_sha256 = 9;
+  string vulnerability_evidence_sha256 = 10;
+  uint64 policy_revision = 11;
+  string policy_sha256 = 12;
+  ImageAdmissionVerdict verdict = 13;
+  string signature_identity = 14;
+  string signature_sha256 = 15;
+  string admission_receipt_sha256 = 16;
+  string admission_receipt_oci_manifest_digest = 17;
+}
+message RecordImageAdmissionResponse {
+  ImageArtifact image_artifact = 1;
+}
+message ClaimImagePromotionRequest {
+  string idempotency_key = 1;
+}
+message ClaimImagePromotionResponse {
+  ImageArtifact image_artifact = 1;
+  string promotion_claim = 2;
+  uint64 fence = 3;
+  uint64 authority_generation = 4;
+  google.protobuf.Timestamp claim_expires_at = 5;
+}
+message AuthorizeImagePromotionRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  string promotion_claim = 4;
+  string manifest_digest = 5;
+}
+message AuthorizeImagePromotionResponse {
+  ImageArtifact image_artifact = 1;
+  string authorization_token = 2;
+  google.protobuf.Timestamp authorization_expires_at = 3;
+}
+message CompleteImagePromotionRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  string authorization_token = 4;
+  string promoted_reference = 5;
+  string manifest_digest = 6;
+  string promotion_readback_sha256 = 7;
+}
+message CompleteImagePromotionResponse {
+  ImageArtifact image_artifact = 1;
+}
