@@ -16,6 +16,7 @@ tags:
   - name: Bootstrap
   - name: Projects
   - name: Agents
+  - name: RoleEnvironments
   - name: Workflows
   - name: Runs
   - name: Decisions
@@ -338,6 +339,106 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Agent' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/role-environments:
+    get:
+      tags: [RoleEnvironments]
+      operationId: listRoleEnvironments
+      responses:
+        '200':
+          description: Безопасный каталог поддерживаемых окружений ролей
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleEnvironmentPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/role-image-recipes:
+    parameters: [{ $ref: '#/components/parameters/ProjectRef' }]
+    get:
+      tags: [RoleEnvironments]
+      operationId: listRoleImageRecipes
+      parameters:
+        - { $ref: '#/components/parameters/RoleDefinitionRefQuery' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Окружения ролей Проекта
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleImageRecipePage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [RoleEnvironments]
+      operationId: createRoleImageRecipe
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleImageRecipeCreateInput' }
+      responses:
+        '201':
+          description: Окружение роли создано
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleImageRecipe' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectRef' }
+      - { $ref: '#/components/parameters/RecipeRef' }
+    get:
+      tags: [RoleEnvironments]
+      operationId: getRoleImageRecipe
+      responses:
+        '200':
+          description: Окружение роли и история сборок
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleImageRecipeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      tags: [RoleEnvironments]
+      operationId: updateRoleImageRecipe
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleImageRecipeUpdateInput' }
+      responses:
+        '200':
+          description: Окружение роли изменено
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleImageRecipe' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands:
+    post:
+      tags: [RoleEnvironments]
+      operationId: commandRoleImageRecipe
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRef' }
+        - { $ref: '#/components/parameters/RecipeRef' }
+        - { $ref: '#/components/parameters/IfMatch' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleImageRecipeCommand' }
+      responses:
+        '200':
+          description: Команда окружения роли применена
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleImageRecipeCommandReceipt' }
         default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/projects/{projectRef}/workflows:
@@ -1038,6 +1139,16 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RecipeRef:
+      name: recipeRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RoleDefinitionRefQuery:
+      name: roleDefinitionRef
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     WorkflowRef:
       name: workflowRef
       in: path
@@ -1120,7 +1231,7 @@ components:
       format: date-time
     NextAction:
       type: string
-      enum: [OPEN, EDIT, ARCHIVE, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT]
     Problem:
       type: object
       additionalProperties: false
@@ -1314,6 +1425,133 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Agent' } }
         nextPageToken: { type: string }
+    RoleEnvironmentPlatform:
+      type: object
+      additionalProperties: false
+      required: [os, architecture]
+      properties:
+        os: { type: string, enum: [linux] }
+        architecture: { type: string, enum: [amd64, arm64] }
+        variant: { type: string, maxLength: 80 }
+    RoleEnvironment:
+      type: object
+      additionalProperties: false
+      required: [key, nameMessageKey, descriptionMessageKey, softwareMessageKeys, platforms, recommended, available, customInstallationAllowed]
+      properties:
+        key: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        nameMessageKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        descriptionMessageKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        softwareMessageKeys:
+          type: array
+          maxItems: 100
+          items: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        platforms: { type: array, minItems: 1, maxItems: 8, items: { $ref: '#/components/schemas/RoleEnvironmentPlatform' } }
+        recommended: { type: boolean }
+        available: { type: boolean }
+        unavailableMessageKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        customInstallationAllowed: { type: boolean }
+    RoleEnvironmentPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RoleEnvironment' } }
+    RoleEnvironmentSelection:
+      type: object
+      additionalProperties: false
+      required: [environmentKey]
+      properties:
+        environmentKey: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        packageKeys:
+          type: array
+          maxItems: 256
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        toolKeys:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-z][a-z0-9.-]*$', maxLength: 100 }
+        installationBlock:
+          type: string
+          maxLength: 65536
+          description: Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
+    RoleImageRecipe:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, roleDefinitionRef, name, state, environment, generation, promotedImageReady, createdAt, updatedAt, nextActions]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        roleDefinitionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        state: { type: string, enum: [ACTIVE, ARCHIVED] }
+        environment: { $ref: '#/components/schemas/RoleEnvironmentSelection' }
+        generation: { type: integer, format: int64, minimum: 1 }
+        promotedImageReady: { type: boolean }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+    RoleImageBuild:
+      type: object
+      additionalProperties: false
+      required: [ref, version, recipeRef, attempt, stage, progressPercent, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        attempt: { type: integer, minimum: 1 }
+        stage: { type: string, enum: [QUEUED, MATERIALIZATION, CONTEXT_VALIDATION, BASE_PULL, SOLVING, INSTALLATION, TRUSTED_RUNTIME_FINALIZATION, STAGING_PUSH, PROVENANCE, COMPLETED, FAILED, CANCELLED, EXPIRED, DEAD_LETTER] }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        safeErrorCode: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 }
+        diagnosticCode: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 }
+        diagnosticSummary: { type: string, maxLength: 256 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    RoleImageRecipeCreateInput:
+      type: object
+      additionalProperties: false
+      required: [roleDefinitionRef, name, environment]
+      properties:
+        roleDefinitionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        environment: { $ref: '#/components/schemas/RoleEnvironmentSelection' }
+    RoleImageRecipeUpdateInput:
+      type: object
+      additionalProperties: false
+      required: [name, environment]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        environment: { $ref: '#/components/schemas/RoleEnvironmentSelection' }
+    RoleImageRecipeCommand:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [REQUEST_BUILD, ARCHIVE, RESTORE] }
+    RoleImageRecipePage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RoleImageRecipe' } }
+        nextPageToken: { type: string }
+    RoleImageRecipeDetail:
+      type: object
+      additionalProperties: false
+      required: [recipe, builds]
+      properties:
+        recipe: { $ref: '#/components/schemas/RoleImageRecipe' }
+        builds: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RoleImageBuild' } }
+    RoleImageRecipeCommandReceipt:
+      type: object
+      additionalProperties: false
+      required: [recipe, reused]
+      properties:
+        recipe: { $ref: '#/components/schemas/RoleImageRecipe' }
+        imageBuild: { $ref: '#/components/schemas/RoleImageBuild' }
+        reused: { type: boolean }
     WorkflowStep:
       type: object
       additionalProperties: false

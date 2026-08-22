@@ -223,11 +223,14 @@ const (
 	NextActionOPEN               NextAction = "OPEN"
 	NextActionPUBLISH            NextAction = "PUBLISH"
 	NextActionRECOVER            NextAction = "RECOVER"
+	NextActionREQUESTBUILD       NextAction = "REQUEST_BUILD"
 	NextActionRESOLVEGATE        NextAction = "RESOLVE_GATE"
+	NextActionRESTORE            NextAction = "RESTORE"
 	NextActionRETRY              NextAction = "RETRY"
 	NextActionREVOKE             NextAction = "REVOKE"
 	NextActionROLLBACK           NextAction = "ROLLBACK"
 	NextActionTEST               NextAction = "TEST"
+	NextActionUPDATE             NextAction = "UPDATE"
 	NextActionUPLOADARTIFACT     NextAction = "UPLOAD_ARTIFACT"
 	NextActionVALIDATE           NextAction = "VALIDATE"
 )
@@ -274,6 +277,48 @@ const (
 const (
 	ProjectInputLanguageEn ProjectInputLanguage = "en"
 	ProjectInputLanguageRu ProjectInputLanguage = "ru"
+)
+
+// Defines values for RoleEnvironmentPlatformArchitecture.
+const (
+	Amd64 RoleEnvironmentPlatformArchitecture = "amd64"
+	Arm64 RoleEnvironmentPlatformArchitecture = "arm64"
+)
+
+// Defines values for RoleEnvironmentPlatformOs.
+const (
+	Linux RoleEnvironmentPlatformOs = "linux"
+)
+
+// Defines values for RoleImageBuildStage.
+const (
+	RoleImageBuildStageBASEPULL                   RoleImageBuildStage = "BASE_PULL"
+	RoleImageBuildStageCANCELLED                  RoleImageBuildStage = "CANCELLED"
+	RoleImageBuildStageCOMPLETED                  RoleImageBuildStage = "COMPLETED"
+	RoleImageBuildStageCONTEXTVALIDATION          RoleImageBuildStage = "CONTEXT_VALIDATION"
+	RoleImageBuildStageDEADLETTER                 RoleImageBuildStage = "DEAD_LETTER"
+	RoleImageBuildStageEXPIRED                    RoleImageBuildStage = "EXPIRED"
+	RoleImageBuildStageFAILED                     RoleImageBuildStage = "FAILED"
+	RoleImageBuildStageINSTALLATION               RoleImageBuildStage = "INSTALLATION"
+	RoleImageBuildStageMATERIALIZATION            RoleImageBuildStage = "MATERIALIZATION"
+	RoleImageBuildStagePROVENANCE                 RoleImageBuildStage = "PROVENANCE"
+	RoleImageBuildStageQUEUED                     RoleImageBuildStage = "QUEUED"
+	RoleImageBuildStageSOLVING                    RoleImageBuildStage = "SOLVING"
+	RoleImageBuildStageSTAGINGPUSH                RoleImageBuildStage = "STAGING_PUSH"
+	RoleImageBuildStageTRUSTEDRUNTIMEFINALIZATION RoleImageBuildStage = "TRUSTED_RUNTIME_FINALIZATION"
+)
+
+// Defines values for RoleImageRecipeState.
+const (
+	RoleImageRecipeStateACTIVE   RoleImageRecipeState = "ACTIVE"
+	RoleImageRecipeStateARCHIVED RoleImageRecipeState = "ARCHIVED"
+)
+
+// Defines values for RoleImageRecipeCommandAction.
+const (
+	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
 
 // Defines values for RunSource.
@@ -398,17 +443,17 @@ const (
 
 // Defines values for ScheduleState.
 const (
-	ScheduleStateACTIVE         ScheduleState = "ACTIVE"
-	ScheduleStateARCHIVED       ScheduleState = "ARCHIVED"
-	ScheduleStateNEEDSATTENTION ScheduleState = "NEEDS_ATTENTION"
-	ScheduleStatePAUSED         ScheduleState = "PAUSED"
+	ACTIVE         ScheduleState = "ACTIVE"
+	ARCHIVED       ScheduleState = "ARCHIVED"
+	NEEDSATTENTION ScheduleState = "NEEDS_ATTENTION"
+	PAUSED         ScheduleState = "PAUSED"
 )
 
 // Defines values for ScheduleCommandAction.
 const (
-	ARCHIVE ScheduleCommandAction = "ARCHIVE"
-	ENABLE  ScheduleCommandAction = "ENABLE"
-	PAUSE   ScheduleCommandAction = "PAUSE"
+	ScheduleCommandActionARCHIVE ScheduleCommandAction = "ARCHIVE"
+	ScheduleCommandActionENABLE  ScheduleCommandAction = "ENABLE"
+	ScheduleCommandActionPAUSE   ScheduleCommandAction = "PAUSE"
 )
 
 // Defines values for ScheduleInputNotificationPolicy.
@@ -436,11 +481,11 @@ const (
 
 // Defines values for SystemAssistantRuntimeState.
 const (
-	BUSY         SystemAssistantRuntimeState = "BUSY"
-	FAILED       SystemAssistantRuntimeState = "FAILED"
-	PROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
-	READY        SystemAssistantRuntimeState = "READY"
-	RECOVERING   SystemAssistantRuntimeState = "RECOVERING"
+	SystemAssistantRuntimeStateBUSY         SystemAssistantRuntimeState = "BUSY"
+	SystemAssistantRuntimeStateFAILED       SystemAssistantRuntimeState = "FAILED"
+	SystemAssistantRuntimeStatePROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
+	SystemAssistantRuntimeStateREADY        SystemAssistantRuntimeState = "READY"
+	SystemAssistantRuntimeStateRECOVERING   SystemAssistantRuntimeState = "RECOVERING"
 )
 
 // Defines values for SystemAssistantSystem.
@@ -957,6 +1002,124 @@ type ProjectPage struct {
 	NextPageToken *string   `json:"nextPageToken,omitempty"`
 }
 
+// RoleEnvironment defines model for RoleEnvironment.
+type RoleEnvironment struct {
+	Available                 bool                      `json:"available"`
+	CustomInstallationAllowed bool                      `json:"customInstallationAllowed"`
+	DescriptionMessageKey     string                    `json:"descriptionMessageKey"`
+	Key                       string                    `json:"key"`
+	NameMessageKey            string                    `json:"nameMessageKey"`
+	Platforms                 []RoleEnvironmentPlatform `json:"platforms"`
+	Recommended               bool                      `json:"recommended"`
+	SoftwareMessageKeys       []string                  `json:"softwareMessageKeys"`
+	UnavailableMessageKey     *string                   `json:"unavailableMessageKey,omitempty"`
+}
+
+// RoleEnvironmentPage defines model for RoleEnvironmentPage.
+type RoleEnvironmentPage struct {
+	Items []RoleEnvironment `json:"items"`
+}
+
+// RoleEnvironmentPlatform defines model for RoleEnvironmentPlatform.
+type RoleEnvironmentPlatform struct {
+	Architecture RoleEnvironmentPlatformArchitecture `json:"architecture"`
+	Os           RoleEnvironmentPlatformOs           `json:"os"`
+	Variant      *string                             `json:"variant,omitempty"`
+}
+
+// RoleEnvironmentPlatformArchitecture defines model for RoleEnvironmentPlatform.Architecture.
+type RoleEnvironmentPlatformArchitecture string
+
+// RoleEnvironmentPlatformOs defines model for RoleEnvironmentPlatform.Os.
+type RoleEnvironmentPlatformOs string
+
+// RoleEnvironmentSelection defines model for RoleEnvironmentSelection.
+type RoleEnvironmentSelection struct {
+	EnvironmentKey string `json:"environmentKey"`
+
+	// InstallationBlock Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
+	InstallationBlock *string   `json:"installationBlock,omitempty"`
+	PackageKeys       *[]string `json:"packageKeys,omitempty"`
+	ToolKeys          *[]string `json:"toolKeys,omitempty"`
+}
+
+// RoleImageBuild defines model for RoleImageBuild.
+type RoleImageBuild struct {
+	Attempt           int                 `json:"attempt"`
+	CreatedAt         Timestamp           `json:"createdAt"`
+	DiagnosticCode    *string             `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary *string             `json:"diagnosticSummary,omitempty"`
+	ProgressPercent   int                 `json:"progressPercent"`
+	RecipeRef         OpaqueRef           `json:"recipeRef"`
+	Ref               OpaqueRef           `json:"ref"`
+	SafeErrorCode     *string             `json:"safeErrorCode,omitempty"`
+	Stage             RoleImageBuildStage `json:"stage"`
+	UpdatedAt         Timestamp           `json:"updatedAt"`
+	Version           int64               `json:"version"`
+}
+
+// RoleImageBuildStage defines model for RoleImageBuild.Stage.
+type RoleImageBuildStage string
+
+// RoleImageRecipe defines model for RoleImageRecipe.
+type RoleImageRecipe struct {
+	CreatedAt          Timestamp                `json:"createdAt"`
+	Environment        RoleEnvironmentSelection `json:"environment"`
+	Generation         int64                    `json:"generation"`
+	Name               string                   `json:"name"`
+	NextActions        []NextAction             `json:"nextActions"`
+	ProjectRef         OpaqueRef                `json:"projectRef"`
+	PromotedImageReady bool                     `json:"promotedImageReady"`
+	Ref                OpaqueRef                `json:"ref"`
+	RoleDefinitionRef  OpaqueRef                `json:"roleDefinitionRef"`
+	State              RoleImageRecipeState     `json:"state"`
+	UpdatedAt          Timestamp                `json:"updatedAt"`
+	Version            int64                    `json:"version"`
+}
+
+// RoleImageRecipeState defines model for RoleImageRecipe.State.
+type RoleImageRecipeState string
+
+// RoleImageRecipeCommand defines model for RoleImageRecipeCommand.
+type RoleImageRecipeCommand struct {
+	Action RoleImageRecipeCommandAction `json:"action"`
+}
+
+// RoleImageRecipeCommandAction defines model for RoleImageRecipeCommand.Action.
+type RoleImageRecipeCommandAction string
+
+// RoleImageRecipeCommandReceipt defines model for RoleImageRecipeCommandReceipt.
+type RoleImageRecipeCommandReceipt struct {
+	ImageBuild *RoleImageBuild `json:"imageBuild,omitempty"`
+	Recipe     RoleImageRecipe `json:"recipe"`
+	Reused     bool            `json:"reused"`
+}
+
+// RoleImageRecipeCreateInput defines model for RoleImageRecipeCreateInput.
+type RoleImageRecipeCreateInput struct {
+	Environment       RoleEnvironmentSelection `json:"environment"`
+	Name              string                   `json:"name"`
+	RoleDefinitionRef OpaqueRef                `json:"roleDefinitionRef"`
+}
+
+// RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
+type RoleImageRecipeDetail struct {
+	Builds []RoleImageBuild `json:"builds"`
+	Recipe RoleImageRecipe  `json:"recipe"`
+}
+
+// RoleImageRecipePage defines model for RoleImageRecipePage.
+type RoleImageRecipePage struct {
+	Items         []RoleImageRecipe `json:"items"`
+	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
+// RoleImageRecipeUpdateInput defines model for RoleImageRecipeUpdateInput.
+type RoleImageRecipeUpdateInput struct {
+	Environment RoleEnvironmentSelection `json:"environment"`
+	Name        string                   `json:"name"`
+}
+
 // Run defines model for Run.
 type Run struct {
 	Attempt           int          `json:"attempt"`
@@ -1359,6 +1522,12 @@ type ProjectRefQuery = OpaqueRef
 // Query defines model for Query.
 type Query = string
 
+// RecipeRef defines model for RecipeRef.
+type RecipeRef = OpaqueRef
+
+// RoleDefinitionRefQuery defines model for RoleDefinitionRefQuery.
+type RoleDefinitionRefQuery = OpaqueRef
+
 // RunRef defines model for RunRef.
 type RunRef = OpaqueRef
 
@@ -1577,6 +1746,33 @@ type ChangeProjectMembershipParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListRoleImageRecipesParams defines parameters for ListRoleImageRecipes.
+type ListRoleImageRecipesParams struct {
+	RoleDefinitionRef *RoleDefinitionRefQuery `form:"roleDefinitionRef,omitempty" json:"roleDefinitionRef,omitempty"`
+	PageSize          *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken         *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateRoleImageRecipeParams defines parameters for CreateRoleImageRecipe.
+type CreateRoleImageRecipeParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UpdateRoleImageRecipeParams defines parameters for UpdateRoleImageRecipe.
+type UpdateRoleImageRecipeParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandRoleImageRecipeParams defines parameters for CommandRoleImageRecipe.
+type CommandRoleImageRecipeParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // CreateScheduleParams defines parameters for CreateSchedule.
 type CreateScheduleParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -1744,6 +1940,15 @@ type AddProjectMembershipJSONRequestBody = MembershipInput
 // ChangeProjectMembershipJSONRequestBody defines body for ChangeProjectMembership for application/json ContentType.
 type ChangeProjectMembershipJSONRequestBody = MembershipInput
 
+// CreateRoleImageRecipeJSONRequestBody defines body for CreateRoleImageRecipe for application/json ContentType.
+type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
+
+// UpdateRoleImageRecipeJSONRequestBody defines body for UpdateRoleImageRecipe for application/json ContentType.
+type UpdateRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
+
+// CommandRoleImageRecipeJSONRequestBody defines body for CommandRoleImageRecipe for application/json ContentType.
+type CommandRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
+
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = ScheduleInput
 
@@ -1897,6 +2102,21 @@ type ServerInterface interface {
 	// (PATCH /api/v1/projects/{projectRef}/members/{membershipRef})
 	ChangeProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, membershipRef MembershipRef, params ChangeProjectMembershipParams)
 
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes)
+	ListRoleImageRecipes(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListRoleImageRecipesParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes)
+	CreateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateRoleImageRecipeParams)
+
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
+	GetRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef)
+
+	// (PATCH /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
+	UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params UpdateRoleImageRecipeParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands)
+	CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params CommandRoleImageRecipeParams)
+
 	// (GET /api/v1/projects/{projectRef}/schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
 
@@ -1908,6 +2128,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/workflows)
 	CreateWorkflow(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateWorkflowParams)
+
+	// (GET /api/v1/role-environments)
+	ListRoleEnvironments(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -4570,6 +4793,414 @@ func (siw *ServerInterfaceWrapper) ChangeProjectMembership(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// ListRoleImageRecipes operation middleware
+func (siw *ServerInterfaceWrapper) ListRoleImageRecipes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRoleImageRecipesParams
+
+	// ------------- Optional query parameter "roleDefinitionRef" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "roleDefinitionRef", r.URL.Query(), &params.RoleDefinitionRef)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleDefinitionRef", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageSize", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageToken", r.URL.Query(), &params.PageToken)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRoleImageRecipes(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CreateRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRoleImageRecipe(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) GetRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoleImageRecipe(w, r, projectRef, recipeRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSchedules operation middleware
 func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.Request) {
 
@@ -4814,6 +5445,26 @@ func (siw *ServerInterfaceWrapper) CreateWorkflow(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateWorkflow(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRoleEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListRoleEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRoleEnvironments(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6220,10 +6871,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.ChangeProjectMembership)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.ListRoleImageRecipes)
+	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)
+	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.UpdateRoleImageRecipe)
+	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands", wrapper.CommandRoleImageRecipe)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.ListSchedules)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.CreateSchedule)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.ListWorkflows)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.CreateWorkflow)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/role-environments", wrapper.ListRoleEnvironments)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runs/{runRef}", wrapper.GetRun)

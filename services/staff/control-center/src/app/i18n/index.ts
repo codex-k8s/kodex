@@ -155,6 +155,42 @@ const ru = {
     publish: "Опубликовать инструкции",
     rollback: "Вернуть опубликованную версию",
   },
+  roleEnvironments: {
+    title: "Рабочее окружение",
+    description:
+      "Изолированный образ с инструментами и программами для этой роли.",
+    choose: "Выберите рабочее окружение",
+    recommended: "Рекомендуется",
+    unavailable: "Окружение пока недоступно в этой установке.",
+    roleUnavailable:
+      "Для сотрудника ещё не создана роль. Сохраните основные настройки сотрудника и повторите действие.",
+    prepare: "Сохранить и подготовить окружение",
+    restore: "Восстановить",
+    lastBuild: "Последняя сборка",
+    buildProgress: "Подготовка окружения: {progress}%",
+    recipeName: "{name}: рабочее окружение",
+    catalogTitle: "Каталог рабочих окружений",
+    catalogDescription:
+      "Пользователи выбирают назначение окружения; внутренние образы и digest управляются платформой.",
+  },
+  "role-environments": {
+    standard: {
+      name: "Стандартное окружение",
+      description:
+        "Базовый набор для анализа, подготовки текстов и работы с файлами.",
+    },
+    documents: {
+      name: "Документы и распознавание",
+      description:
+        "Среда для PDF, OCR, офисных документов и извлечения структурированных данных.",
+    },
+    software: {
+      base: "Базовые инструменты MatterCodex",
+      pdf: "Обработка PDF",
+      ocr: "Распознавание текста",
+      office: "Офисные форматы",
+    },
+  },
   workflows: {
     title: "Процессы",
     subtitle: "Согласованная работа нескольких ИИ-сотрудников",
@@ -370,6 +406,16 @@ const ru = {
     PROVISIONING: "Подготавливается",
     BUSY: "Занят",
     RECOVERING: "Восстанавливается",
+    MATERIALIZATION: "Подготавливаются входные данные",
+    CONTEXT_VALIDATION: "Проверяется контекст сборки",
+    BASE_PULL: "Получается базовое окружение",
+    SOLVING: "Формируется образ",
+    INSTALLATION: "Устанавливаются инструменты",
+    TRUSTED_RUNTIME_FINALIZATION: "Добавляется защищённый runtime",
+    STAGING_PUSH: "Образ сохраняется для проверки",
+    PROVENANCE: "Формируются доказательства сборки",
+    COMPLETED: "Готово",
+    DEAD_LETTER: "Требуется вмешательство",
   },
   errors: {
     default: "Не удалось выполнить действие. Повторите попытку.",
@@ -543,6 +589,42 @@ const en = {
     validate: "Validate instructions",
     publish: "Publish instructions",
     rollback: "Restore published version",
+  },
+  roleEnvironments: {
+    title: "Work environment",
+    description:
+      "An isolated image with tools and software selected for this role.",
+    choose: "Choose a work environment",
+    recommended: "Recommended",
+    unavailable: "This environment is not available in this deployment.",
+    roleUnavailable:
+      "The employee role has not been created yet. Save the employee settings and try again.",
+    prepare: "Save and prepare environment",
+    restore: "Restore",
+    lastBuild: "Latest build",
+    buildProgress: "Preparing environment: {progress}%",
+    recipeName: "{name}: work environment",
+    catalogTitle: "Work environment catalog",
+    catalogDescription:
+      "Users choose an environment by purpose; internal images and digests are managed by the platform.",
+  },
+  "role-environments": {
+    standard: {
+      name: "Standard environment",
+      description:
+        "Core tools for analysis, writing and general file operations.",
+    },
+    documents: {
+      name: "Documents and recognition",
+      description:
+        "PDF, OCR, office document and structured data extraction environment.",
+    },
+    software: {
+      base: "MatterCodex core tools",
+      pdf: "PDF processing",
+      ocr: "Text recognition",
+      office: "Office formats",
+    },
   },
   workflows: {
     ...ru.workflows,
@@ -763,6 +845,16 @@ const en = {
     PROVISIONING: "Provisioning",
     BUSY: "Busy",
     RECOVERING: "Recovering",
+    MATERIALIZATION: "Preparing build input",
+    CONTEXT_VALIDATION: "Validating build context",
+    BASE_PULL: "Fetching base environment",
+    SOLVING: "Building image",
+    INSTALLATION: "Installing tools",
+    TRUSTED_RUNTIME_FINALIZATION: "Adding protected runtime",
+    STAGING_PUSH: "Storing image for verification",
+    PROVENANCE: "Producing build evidence",
+    COMPLETED: "Ready",
+    DEAD_LETTER: "Needs intervention",
   },
   errors: {
     default: "The action could not be completed. Try again.",

@@ -13,9 +13,17 @@ const ownerInstructions = ref("");
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const state = computed(() => platform.administration);
+const environments = computed(() =>
+  Object.values(platform.roleEnvironments).sort((left, right) =>
+    left.key.localeCompare(right.key),
+  ),
+);
 
 async function load(): Promise<void> {
-  await platform.loadAdministration();
+  await Promise.all([
+    platform.loadAdministration(),
+    platform.loadRoleEnvironments(),
+  ]);
   ownerInstructions.value = platform.assistant?.ownerInstructions ?? "";
 }
 
@@ -89,6 +97,37 @@ onMounted(() => void load());
               {{ $t("common.save") }}</button
             ><ProblemNotice v-if="problem" :problem="problem" compact />
           </section>
+          <section class="panel environment-catalog">
+            <h2>{{ $t("roleEnvironments.catalogTitle") }}</h2>
+            <p>{{ $t("roleEnvironments.catalogDescription") }}</p>
+            <div class="entity-list">
+              <article
+                v-for="environment in environments"
+                :key="environment.key"
+                class="card"
+              >
+                <div class="card-heading">
+                  <strong>{{ $t(environment.nameMessageKey) }}</strong>
+                  <StatusBadge
+                    :state="environment.available ? 'READY' : 'UNAVAILABLE'"
+                  />
+                </div>
+                <p>{{ $t(environment.descriptionMessageKey) }}</p>
+                <small>
+                  {{
+                    environment.softwareMessageKeys
+                      .map((key) => $t(key))
+                      .join(" · ")
+                  }}
+                </small>
+              </article>
+            </div>
+            <ProblemNotice
+              v-if="platform.problems.roleEnvironments"
+              :problem="platform.problems.roleEnvironments"
+              compact
+            />
+          </section>
           <section class="panel">
             <h2>{{ $t("administration.incidents") }}</h2>
             <div v-if="state.incidents.length" class="entity-list">
@@ -128,6 +167,9 @@ onMounted(() => void load());
   display: flex;
   justify-content: space-between;
   gap: 10px;
+}
+.environment-catalog {
+  grid-column: 1 / -1;
 }
 @media (max-width: 900px) {
   .administration-grid {

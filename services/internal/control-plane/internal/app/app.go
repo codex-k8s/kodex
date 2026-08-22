@@ -73,7 +73,11 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := service.Bootstrap(startup); err != nil {
 		return fmt.Errorf("bootstrap platform: %w", err)
 	}
-	roleImageService, err := roleimageservice.New(repository)
+	roleEnvironmentCatalog, err := loadRoleEnvironmentCatalog(config)
+	if err != nil {
+		return fmt.Errorf("load role environment catalog: %w", err)
+	}
+	roleImageService, err := roleimageservice.New(repository, roleEnvironmentCatalog)
 	if err != nil {
 		return fmt.Errorf("construct role image service: %w", err)
 	}

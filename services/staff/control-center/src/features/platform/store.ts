@@ -10,6 +10,7 @@ import {
   commandAgent,
   commandAgentInstructions,
   commandIntegrationConnection,
+  commandRoleImageRecipe,
   commandRun,
   commandSchedule,
   commandWorkflow,
@@ -20,6 +21,7 @@ import {
   createInstructionDraft,
   createIntegrationConnection,
   createProject,
+  createRoleImageRecipe,
   createRun,
   createSchedule,
   createWorkflow,
@@ -29,6 +31,7 @@ import {
   getIntegrationConnection,
   getOverview,
   getProject,
+  getRoleImageRecipe,
   getRun,
   getRunGraph,
   getSystemAssistant,
@@ -43,6 +46,8 @@ import {
   listPlatformCapabilities,
   listProjectMemberships,
   listProjects,
+  listRoleEnvironments,
+  listRoleImageRecipes,
   listRunEvents,
   listRuns,
   listSchedules,
@@ -51,6 +56,7 @@ import {
   removeProjectMembership,
   updateAgent,
   updateProject,
+  updateRoleImageRecipe,
   updateSchedule,
   updateSystemAssistantOwnerInstructions,
   updateWorkflowDraft,
@@ -76,6 +82,11 @@ import type {
   PlatformCapability,
   Project,
   ProjectInput,
+  RoleEnvironment,
+  RoleEnvironmentSelection,
+  RoleImageBuild,
+  RoleImageRecipe,
+  RoleImageRecipeCommand,
   Run,
   RunCommand,
   RunEvent,
@@ -100,6 +111,8 @@ type QueryKey =
   | "project"
   | "agents"
   | "agent"
+  | "roleEnvironments"
+  | "roleImages"
   | "workflows"
   | "workflow"
   | "runs"
@@ -139,6 +152,9 @@ export const usePlatformStore = defineStore("platform", () => {
   const capabilities = ref<PlatformCapability[]>([]);
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
+  const roleEnvironments = reactive<Record<string, RoleEnvironment>>({});
+  const roleImageRecipes = reactive<Record<string, RoleImageRecipe>>({});
+  const roleImageBuilds = reactive<Record<string, RoleImageBuild>>({});
   const workflows = reactive<Record<string, Workflow>>({});
   const runs = reactive<Record<string, Run>>({});
   const graphs = reactive<Record<string, RunGraph>>({});
@@ -284,6 +300,63 @@ export const usePlatformStore = defineStore("platform", () => {
         ).data,
       (value) => {
         agents[value.ref] = value;
+      },
+    );
+  }
+
+  async function loadRoleEnvironments(): Promise<void> {
+    await query(
+      "roleEnvironments",
+      async () =>
+        (await unwrap(listRoleEnvironments({ signal: requestSignal() }))).data
+          .items,
+      (values) => {
+        for (const value of values) roleEnvironments[value.key] = value;
+      },
+    );
+  }
+
+  async function loadRoleImageRecipes(
+    projectRef: string,
+    roleDefinitionRef?: string,
+  ): Promise<void> {
+    await query(
+      "roleImages",
+      async () =>
+        (
+          await unwrap(
+            listRoleImageRecipes({
+              path: { projectRef },
+              query: {
+                ...(roleDefinitionRef ? { roleDefinitionRef } : {}),
+                pageSize: 100,
+              },
+              signal: requestSignal(),
+            }),
+          )
+        ).data.items,
+      (values) => upsert(roleImageRecipes, values),
+    );
+  }
+
+  async function loadRoleImageRecipe(
+    projectRef: string,
+    recipeRef: string,
+  ): Promise<void> {
+    await query(
+      "roleImages",
+      async () =>
+        (
+          await unwrap(
+            getRoleImageRecipe({
+              path: { projectRef, recipeRef },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (value) => {
+        upsert(roleImageRecipes, [value.recipe]);
+        upsert(roleImageBuilds, value.builds);
       },
     );
   }
@@ -670,6 +743,56 @@ export const usePlatformStore = defineStore("platform", () => {
     return result.data;
   }
 
+  async function saveRoleImageRecipe(
+    projectRef: string,
+    roleDefinitionRef: string,
+    name: string,
+    environment: RoleEnvironmentSelection,
+    current?: RoleImageRecipe,
+  ): Promise<RoleImageRecipe> {
+    const result = current
+      ? await mutate(
+          (headers) =>
+            updateRoleImageRecipe({
+              path: { projectRef, recipeRef: current.ref },
+              body: { name, environment },
+              headers: versionedHeaders(headers),
+              signal: requestSignal(),
+            }),
+          current.version,
+        )
+      : await mutate((headers) =>
+          createRoleImageRecipe({
+            path: { projectRef },
+            body: { roleDefinitionRef, name, environment },
+            headers: mutationHeaders(headers),
+            signal: requestSignal(),
+          }),
+        );
+    upsert(roleImageRecipes, [result.data]);
+    return result.data;
+  }
+
+  async function changeRoleImageRecipe(
+    projectRef: string,
+    recipe: RoleImageRecipe,
+    action: RoleImageRecipeCommand["action"],
+  ): Promise<RoleImageRecipe> {
+    const result = await mutate(
+      (headers) =>
+        commandRoleImageRecipe({
+          path: { projectRef, recipeRef: recipe.ref },
+          body: { action },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      recipe.version,
+    );
+    upsert(roleImageRecipes, [result.data.recipe]);
+    if (result.data.imageBuild) upsert(roleImageBuilds, [result.data.imageBuild]);
+    return result.data.recipe;
+  }
+
   async function saveInstructions(
     agent: Agent,
     content: string,
@@ -1001,6 +1124,9 @@ export const usePlatformStore = defineStore("platform", () => {
     capabilities,
     projects,
     agents,
+    roleEnvironments,
+    roleImageRecipes,
+    roleImageBuilds,
     workflows,
     runs,
     graphs,
@@ -1025,6 +1151,9 @@ export const usePlatformStore = defineStore("platform", () => {
     loadProject,
     loadAgents,
     loadAgent,
+    loadRoleEnvironments,
+    loadRoleImageRecipes,
+    loadRoleImageRecipe,
     loadWorkflows,
     loadWorkflow,
     loadRuns,
@@ -1045,6 +1174,8 @@ export const usePlatformStore = defineStore("platform", () => {
     saveProject,
     saveAgent,
     changeAgent,
+    saveRoleImageRecipe,
+    changeRoleImageRecipe,
     saveInstructions,
     instructionCommand,
     saveWorkflow,

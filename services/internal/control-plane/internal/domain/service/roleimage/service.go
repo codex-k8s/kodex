@@ -20,6 +20,7 @@ import (
 
 const (
 	permissionListRecipes        = "platform.role-images.recipes.list"
+	permissionListEnvironments   = "platform.role-images.environments.list"
 	permissionGetRecipe          = "platform.role-images.recipes.get"
 	permissionManageRecipe       = "platform.role-images.recipes.manage"
 	permissionClaimBuild         = "platform.role-images.builds.claim"
@@ -42,13 +43,27 @@ var (
 	signatureIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$`)
 )
 
-type Service struct{ repository repository.Repository }
+type Service struct {
+	repository repository.Repository
+	catalog    *Catalog
+}
 
-func New(repo repository.Repository) (*Service, error) {
-	if repo == nil {
+func New(repo repository.Repository, catalog *Catalog) (*Service, error) {
+	if repo == nil || catalog == nil {
 		return nil, errors.New("role image repository is required")
 	}
-	return &Service{repository: repo}, nil
+	return &Service{repository: repo, catalog: catalog}, nil
+}
+
+func (service *Service) ListEnvironments(ctx context.Context, principal value.Principal) ([]Environment, error) {
+	principal, err := service.resolvePrincipal(ctx, principal)
+	if err != nil {
+		return nil, err
+	}
+	if err := authorize(principal, permissionListEnvironments, "control-api-gateway"); err != nil {
+		return nil, err
+	}
+	return service.catalog.List(), nil
 }
 
 func (service *Service) List(ctx context.Context, principal value.Principal, filter repository.Filter) ([]entity.RoleImageRecipe, string, error) {
@@ -82,6 +97,13 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 	if err := authorize(input.Principal, permissionManageRecipe, "control-api-gateway"); err != nil {
 		return repository.ManageResult{}, err
 	}
+	input.Action = strings.ToUpper(strings.TrimSpace(input.Action))
+	if input.Action == "CREATE" || input.Action == "UPDATE" {
+		input.Recipe, err = service.catalog.Resolve(input.Environment)
+		if err != nil {
+			return repository.ManageResult{}, err
+		}
+	}
 	input.Mutation.Operation = "role-image-recipe." + strings.ToLower(input.Action)
 	input.Mutation.IntentDigest = digest(struct {
 		Action, RecipeRef, ProjectRef, RoleDefinitionRef, Name string
@@ -103,7 +125,9 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 		}
 	case "ARCHIVE", "RESTORE", "REQUEST_BUILD":
 		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") ||
-			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" {
+			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" ||
+			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
+			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	default:
@@ -289,7 +313,9 @@ func validateRecipe(input entity.RoleImageRecipeInput) error {
 		!sha256Pattern.MatchString(input.SourceSHA256) || !validExternalRef(input.ContextRef) ||
 		!sha256Pattern.MatchString(input.ContextSHA256) || !sha256Pattern.MatchString(input.BuilderSHA256) ||
 		!sha256Pattern.MatchString(input.FrontendSHA256) || !sha256Pattern.MatchString(input.ToolchainSHA256) ||
-		len(input.Platforms) == 0 || len(input.Platforms) > 8 || len(input.Packages) > 256 || len(input.Tools) > 128 ||
+		!validCatalogKey(input.EnvironmentKey) || len(input.PackageKeys) != len(input.Packages) ||
+		len(input.ToolKeys) != len(input.Tools) || len(input.Platforms) == 0 || len(input.Platforms) > 8 ||
+		len(input.Packages) > 256 || len(input.Tools) > 128 ||
 		!utf8.ValidString(input.InstallationBlock) || len(input.InstallationBlock) > 64<<10 || strings.ContainsRune(input.InstallationBlock, 0) {
 		return errs.ErrInvalid
 	}
@@ -302,26 +328,41 @@ func validateRecipe(input entity.RoleImageRecipeInput) error {
 		platformKeys = append(platformKeys, platform.OS+"/"+platform.Architecture+"/"+platform.Variant)
 	}
 	packageKeys := make([]string, 0, len(input.Packages))
-	for _, item := range input.Packages {
+	for index, item := range input.Packages {
 		if !slices.Contains([]string{"apk", "apt", "dnf", "pip", "npm"}, item.Manager) ||
 			!namePattern.MatchString(item.Name) || !namePattern.MatchString(item.Version) ||
-			!manifestPattern.MatchString(item.Digest) || !validExternalRef(item.SourceRef) {
+			!manifestPattern.MatchString(item.Digest) || !validExternalRef(item.SourceRef) ||
+			!validCatalogKey(input.PackageKeys[index]) {
 			return errs.ErrInvalid
 		}
-		packageKeys = append(packageKeys, item.Manager+"/"+item.Name)
+		packageKeys = append(packageKeys, input.PackageKeys[index])
 	}
 	toolKeys := make([]string, 0, len(input.Tools))
-	for _, item := range input.Tools {
+	for index, item := range input.Tools {
 		if !namePattern.MatchString(item.Name) || !namePattern.MatchString(item.Version) ||
-			!validExternalRef(item.SourceRef) || !sha256Pattern.MatchString(item.SHA256) {
+			!validExternalRef(item.SourceRef) || !sha256Pattern.MatchString(item.SHA256) ||
+			!validCatalogKey(input.ToolKeys[index]) {
 			return errs.ErrInvalid
 		}
-		toolKeys = append(toolKeys, item.Name)
+		toolKeys = append(toolKeys, input.ToolKeys[index])
 	}
 	if !uniqueSorted(platformKeys) || !uniqueSorted(packageKeys) || !uniqueSorted(toolKeys) {
 		return errs.ErrInvalid
 	}
 	return nil
+}
+
+func validCatalogKey(input string) bool {
+	if input == "" || len(input) > 100 || input[0] < 'a' || input[0] > 'z' {
+		return false
+	}
+	for _, character := range input {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '.' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func uniqueSorted(values []string) bool {

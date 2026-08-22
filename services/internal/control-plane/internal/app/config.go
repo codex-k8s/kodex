@@ -55,6 +55,10 @@ type Config struct {
 	StagingImageRepository         string        `env:"CONTROL_PLANE_STAGING_IMAGE_REPOSITORY"`
 	PromotedImageRepository        string        `env:"CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY"`
 	RoleImageInputRepository       string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
+	RoleEnvironmentCatalogFile     string        `env:"CONTROL_PLANE_ROLE_ENVIRONMENT_CATALOG_FILE"`
+	RoleImageBuilderSHA256         string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_SHA256"`
+	RoleImageFrontendSHA256        string        `env:"CONTROL_PLANE_ROLE_IMAGE_FRONTEND_SHA256"`
+	RoleImageToolchainSHA256       string        `env:"CONTROL_PLANE_ROLE_IMAGE_TOOLCHAIN_SHA256"`
 	TrustedRoleBaseRepository      string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
 	TrustedRoleBaseDigest          string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
 	DefaultRoleImageReference      string        `env:"CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"`
@@ -112,6 +116,7 @@ func loadConfig() (Config, error) {
 		ImageAdmissionClaimTTL:         30 * time.Minute,
 		ImagePromotionClaimTTL:         15 * time.Minute,
 		ImageMaximumAttempts:           3,
+		RoleEnvironmentCatalogFile:     "/var/run/config/mattercodex/control-plane/role-environments/catalog.json",
 		OIDCAudience:                   "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		OIDCRefreshInterval: 30 * time.Second,
 		StartupTimeout:      20 * time.Second, ReadinessTimeout: 2 * time.Second,
@@ -134,7 +139,7 @@ func (config Config) validate() error {
 			return errors.New("control-plane listen address is invalid")
 		}
 	}
-	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.OIDCCAFile} {
+	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile, config.PostgresDSNFile, config.PostgresCAFile, config.NATSCAFile, config.NATSCredentialsFile, config.AuthorityVerifierSocket, config.AuthorityPolicyFile, config.ProofSignerFile, config.ProofSignerTrustFile, config.AutomationGrantTrustFile, config.IntegrationGrantTrustFile, config.RuntimeGrantTrustFile, config.RoleImageBuilderGrantTrustFile, config.ImageAdmissionGrantTrustFile, config.ImagePromotionGrantTrustFile, config.LeaseSigningKeyFile, config.RoleEnvironmentCatalogFile, config.OIDCCAFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("control-plane file path is invalid")
 		}
@@ -153,6 +158,8 @@ func (config Config) validate() error {
 		!validImageRepository(config.StagingImageRepository) || !validImageRepository(config.PromotedImageRepository) ||
 		!validImageRepository(config.RoleImageInputRepository) || !validImageRepository(config.TrustedRoleBaseRepository) ||
 		!validManifestDigest(config.TrustedRoleBaseDigest) || !validPinnedImageReference(config.DefaultRoleImageReference) ||
+		!validSHA256(config.RoleImageBuilderSHA256) || !validSHA256(config.RoleImageFrontendSHA256) ||
+		!validSHA256(config.RoleImageToolchainSHA256) ||
 		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||

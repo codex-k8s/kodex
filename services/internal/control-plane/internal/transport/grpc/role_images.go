@@ -25,42 +25,6 @@ func NewRoleImageServer(service *roleimageservice.Service) (*RoleImageServer, er
 	return &RoleImageServer{service: service}, nil
 }
 
-func domainRoleImageRecipeInput(input *controlplanev1.RoleImageRecipeInput) entity.RoleImageRecipeInput {
-	if input == nil {
-		return entity.RoleImageRecipeInput{}
-	}
-	result := entity.RoleImageRecipeInput{
-		BaseImageReference: input.GetBaseImageReference(),
-		BaseImageDigest:    input.GetBaseImageDigest(),
-		SourceRef:          input.GetSourceRef(),
-		SourceRevision:     input.GetSourceRevision(),
-		SourceSHA256:       input.GetSourceSha256(),
-		ContextRef:         input.GetContextRef(),
-		ContextSHA256:      input.GetContextSha256(),
-		BuilderSHA256:      input.GetBuilderSha256(),
-		FrontendSHA256:     input.GetFrontendSha256(),
-		InstallationBlock:  input.GetInstallationBlock(),
-		ToolchainSHA256:    input.GetToolchainSha256(),
-	}
-	for _, item := range input.GetPlatforms() {
-		result.Platforms = append(result.Platforms, entity.RoleImagePlatform{
-			OS: item.GetOs(), Architecture: item.GetArchitecture(), Variant: item.GetVariant(),
-		})
-	}
-	for _, item := range input.GetPackages() {
-		result.Packages = append(result.Packages, entity.RoleImagePackage{
-			Manager: item.GetManager(), Name: item.GetName(), Version: item.GetVersion(),
-			Digest: item.GetDigest(), SourceRef: item.GetSourceRef(),
-		})
-	}
-	for _, item := range input.GetTools() {
-		result.Tools = append(result.Tools, entity.RoleImageTool{
-			Name: item.GetName(), Version: item.GetVersion(), SourceRef: item.GetSourceRef(), SHA256: item.GetSha256(),
-		})
-	}
-	return result
-}
-
 func castRoleImageRecipeInput(input entity.RoleImageRecipeInput) *controlplanev1.RoleImageRecipeInput {
 	result := &controlplanev1.RoleImageRecipeInput{
 		BaseImageReference: input.BaseImageReference,
@@ -74,6 +38,9 @@ func castRoleImageRecipeInput(input entity.RoleImageRecipeInput) *controlplanev1
 		FrontendSha256:     input.FrontendSHA256,
 		InstallationBlock:  input.InstallationBlock,
 		ToolchainSha256:    input.ToolchainSHA256,
+		EnvironmentKey:     input.EnvironmentKey,
+		PackageKeys:        append([]string(nil), input.PackageKeys...),
+		ToolKeys:           append([]string(nil), input.ToolKeys...),
 	}
 	for _, item := range input.Platforms {
 		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
@@ -96,8 +63,8 @@ func castRoleImageRecipeInput(input entity.RoleImageRecipeInput) *controlplanev1
 
 func castRoleImageRecipe(input entity.RoleImageRecipe) *controlplanev1.RoleImageRecipe {
 	return &controlplanev1.RoleImageRecipe{
-		Ref: input.Ref, Version: input.Version, RoleDefinitionRef: input.RoleDefinitionRef,
-		Name: input.Name, State: input.State, Input: castRoleImageRecipeInput(input.Input),
+		Ref: input.Ref, Version: input.Version, ProjectRef: input.ProjectRef, RoleDefinitionRef: input.RoleDefinitionRef,
+		Name: input.Name, State: input.State,
 		Generation: input.Generation, SpecSha256: input.SpecSHA256,
 		PolicyRevision: input.PolicyRevision, PolicySha256: input.PolicySHA256,
 		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
@@ -106,6 +73,41 @@ func castRoleImageRecipe(input entity.RoleImageRecipe) *controlplanev1.RoleImage
 		PromotedImageReference:      input.PromotedImageReference,
 		CreatedAt:                   timestamp(input.CreatedAt), UpdatedAt: timestamp(input.UpdatedAt),
 		NextActions: append([]string(nil), input.NextActions...),
+		Environment: &controlplanev1.RoleEnvironmentSelection{
+			EnvironmentKey:    input.Input.EnvironmentKey,
+			PackageKeys:       append([]string(nil), input.Input.PackageKeys...),
+			ToolKeys:          append([]string(nil), input.Input.ToolKeys...),
+			InstallationBlock: input.Input.InstallationBlock,
+		},
+	}
+}
+
+func castRoleEnvironment(input roleimageservice.Environment) *controlplanev1.RoleEnvironment {
+	result := &controlplanev1.RoleEnvironment{
+		Key: input.Key, NameMessageKey: input.NameMessageKey,
+		DescriptionMessageKey: input.DescriptionMessageKey,
+		SoftwareMessageKeys:   append([]string(nil), input.SoftwareMessageKeys...),
+		Recommended:           input.Recommended, Available: input.Available,
+		UnavailableMessageKey:     input.UnavailableMessageKey,
+		CustomInstallationAllowed: input.CustomInstallationAllowed,
+	}
+	for _, item := range input.Input.Platforms {
+		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
+			Os: item.OS, Architecture: item.Architecture, Variant: item.Variant,
+		})
+	}
+	return result
+}
+
+func domainRoleEnvironmentSelection(input *controlplanev1.RoleEnvironmentSelection) entity.RoleEnvironmentSelection {
+	if input == nil {
+		return entity.RoleEnvironmentSelection{}
+	}
+	return entity.RoleEnvironmentSelection{
+		EnvironmentKey:    input.GetEnvironmentKey(),
+		PackageKeys:       append([]string(nil), input.GetPackageKeys()...),
+		ToolKeys:          append([]string(nil), input.GetToolKeys()...),
+		InstallationBlock: input.GetInstallationBlock(),
 	}
 }
 
@@ -212,6 +214,22 @@ func roleImageAction(action controlplanev1.RoleImageRecipeAction) string {
 	return strings.TrimPrefix(action.String(), "ROLE_IMAGE_RECIPE_ACTION_")
 }
 
+func (server *RoleImageServer) ListRoleEnvironments(ctx context.Context, _ *controlplanev1.ListRoleEnvironmentsRequest) (*controlplanev1.ListRoleEnvironmentsResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListRoleEnvironments_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, err := server.service.ListEnvironments(ctx, p)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListRoleEnvironmentsResponse{}
+	for _, item := range items {
+		response.Environments = append(response.Environments, castRoleEnvironment(item))
+	}
+	return response, nil
+}
+
 func (server *RoleImageServer) ListRoleImageRecipes(ctx context.Context, request *controlplanev1.ListRoleImageRecipesRequest) (*controlplanev1.ListRoleImageRecipesResponse, error) {
 	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName)
 	if err != nil {
@@ -258,7 +276,7 @@ func (server *RoleImageServer) ManageRoleImageRecipe(ctx context.Context, reques
 		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
 		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(),
 		RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(),
-		Recipe: domainRoleImageRecipeInput(request.GetInput()),
+		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
 	})
 	if err != nil {
 		return nil, transportError(err)

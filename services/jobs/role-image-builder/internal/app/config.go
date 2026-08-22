@@ -38,6 +38,7 @@ type Config struct {
 	InputRegistryCAFile          string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_CA_FILE"`
 	InputRegistryCertificateFile string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_CERTIFICATE_FILE"`
 	InputRegistryPrivateKeyFile  string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_PRIVATE_KEY_FILE"`
+	AllowedRoleBaseImagesFile    string        `env:"ROLE_IMAGE_BUILDER_ALLOWED_ROLE_BASE_IMAGES_FILE"`
 	TrustedRoleBaseRepository    string        `env:"ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY"`
 	TrustedRoleBaseDigest        string        `env:"ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST"`
 	FrontendRepository           string        `env:"ROLE_IMAGE_BUILDER_FRONTEND_REPOSITORY"`
@@ -76,6 +77,7 @@ func loadConfig() (Config, error) {
 		InputRegistryCAFile:          "/var/run/secrets/mattercodex/role-image-builder/input-read/ca.pem",
 		InputRegistryCertificateFile: "/var/run/secrets/mattercodex/role-image-builder/input-read/tls.crt",
 		InputRegistryPrivateKeyFile:  "/var/run/secrets/mattercodex/role-image-builder/input-read/tls.key",
+		AllowedRoleBaseImagesFile:    "/var/run/config/mattercodex/role-image-builder/role-environments/catalog.json",
 		TrustedRoleBaseRepository:    "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
 		TrustedRoleBaseDigest:        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		FrontendRepository:           "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile",
@@ -117,6 +119,10 @@ func (config Config) validate() error {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("role image builder path is invalid")
 		}
+	}
+	if !filepath.IsAbs(config.AllowedRoleBaseImagesFile) ||
+		filepath.Clean(config.AllowedRoleBaseImagesFile) != config.AllowedRoleBaseImagesFile {
+		return errors.New("role image builder path is invalid")
 	}
 	if config.StartupTimeout < 5*time.Second || config.StartupTimeout > 2*time.Minute ||
 		config.ShutdownTimeout < 5*time.Second || config.ShutdownTimeout > time.Minute ||

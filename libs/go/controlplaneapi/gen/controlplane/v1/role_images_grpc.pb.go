@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	RoleImageService_ListRoleEnvironments_FullMethodName     = "/controlplane.v1.RoleImageService/ListRoleEnvironments"
 	RoleImageService_ListRoleImageRecipes_FullMethodName     = "/controlplane.v1.RoleImageService/ListRoleImageRecipes"
 	RoleImageService_GetRoleImageRecipe_FullMethodName       = "/controlplane.v1.RoleImageService/GetRoleImageRecipe"
 	RoleImageService_ManageRoleImageRecipe_FullMethodName    = "/controlplane.v1.RoleImageService/ManageRoleImageRecipe"
@@ -41,6 +42,7 @@ const (
 // RoleImageService владеет специализированным lifecycle окружений ролей.
 // Caller не назначает organization, owner, policy, generation или promotion target.
 type RoleImageServiceClient interface {
+	ListRoleEnvironments(ctx context.Context, in *ListRoleEnvironmentsRequest, opts ...grpc.CallOption) (*ListRoleEnvironmentsResponse, error)
 	ListRoleImageRecipes(ctx context.Context, in *ListRoleImageRecipesRequest, opts ...grpc.CallOption) (*ListRoleImageRecipesResponse, error)
 	GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error)
 	ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error)
@@ -62,6 +64,16 @@ type roleImageServiceClient struct {
 
 func NewRoleImageServiceClient(cc grpc.ClientConnInterface) RoleImageServiceClient {
 	return &roleImageServiceClient{cc}
+}
+
+func (c *roleImageServiceClient) ListRoleEnvironments(ctx context.Context, in *ListRoleEnvironmentsRequest, opts ...grpc.CallOption) (*ListRoleEnvironmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRoleEnvironmentsResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_ListRoleEnvironments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *roleImageServiceClient) ListRoleImageRecipes(ctx context.Context, in *ListRoleImageRecipesRequest, opts ...grpc.CallOption) (*ListRoleImageRecipesResponse, error) {
@@ -201,6 +213,7 @@ func (c *roleImageServiceClient) CompleteImagePromotion(ctx context.Context, in 
 // RoleImageService владеет специализированным lifecycle окружений ролей.
 // Caller не назначает organization, owner, policy, generation или promotion target.
 type RoleImageServiceServer interface {
+	ListRoleEnvironments(context.Context, *ListRoleEnvironmentsRequest) (*ListRoleEnvironmentsResponse, error)
 	ListRoleImageRecipes(context.Context, *ListRoleImageRecipesRequest) (*ListRoleImageRecipesResponse, error)
 	GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error)
 	ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error)
@@ -224,6 +237,9 @@ type RoleImageServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRoleImageServiceServer struct{}
 
+func (UnimplementedRoleImageServiceServer) ListRoleEnvironments(context.Context, *ListRoleEnvironmentsRequest) (*ListRoleEnvironmentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoleEnvironments not implemented")
+}
 func (UnimplementedRoleImageServiceServer) ListRoleImageRecipes(context.Context, *ListRoleImageRecipesRequest) (*ListRoleImageRecipesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRoleImageRecipes not implemented")
 }
@@ -282,6 +298,24 @@ func RegisterRoleImageServiceServer(s grpc.ServiceRegistrar, srv RoleImageServic
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&RoleImageService_ServiceDesc, srv)
+}
+
+func _RoleImageService_ListRoleEnvironments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRoleEnvironmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).ListRoleEnvironments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_ListRoleEnvironments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).ListRoleEnvironments(ctx, req.(*ListRoleEnvironmentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RoleImageService_ListRoleImageRecipes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -525,6 +559,10 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.RoleImageService",
 	HandlerType: (*RoleImageServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListRoleEnvironments",
+			Handler:    _RoleImageService_ListRoleEnvironments_Handler,
+		},
 		{
 			MethodName: "ListRoleImageRecipes",
 			Handler:    _RoleImageService_ListRoleImageRecipes_Handler,

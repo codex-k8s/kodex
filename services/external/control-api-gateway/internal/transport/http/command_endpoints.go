@@ -447,8 +447,8 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 	if !ok {
 		return
 	}
-	enabled := body.Action == generated.ENABLE
-	if body.Action != generated.ENABLE && body.Action != generated.PAUSE && body.Action != generated.ARCHIVE {
+	enabled := body.Action == generated.ScheduleCommandActionENABLE
+	if body.Action != generated.ScheduleCommandActionENABLE && body.Action != generated.ScheduleCommandActionPAUSE && body.Action != generated.ScheduleCommandActionARCHIVE {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}

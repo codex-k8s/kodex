@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
+import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetArtifactData, GetArtifactErrors, GetArtifactResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -253,6 +253,78 @@ export const commandAgentInstructions = <ThrowOnError extends boolean = false>(o
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}/instruction-commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listRoleEnvironments = <ThrowOnError extends boolean = false>(options?: Options<ListRoleEnvironmentsData, ThrowOnError>): RequestResult<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError> => (options?.client ?? client).get<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/role-environments',
+    ...options
+});
+
+export const listRoleImageRecipes = <ThrowOnError extends boolean = false>(options: Options<ListRoleImageRecipesData, ThrowOnError>): RequestResult<ListRoleImageRecipesResponses, ListRoleImageRecipesErrors, ThrowOnError> => (options.client ?? client).get<ListRoleImageRecipesResponses, ListRoleImageRecipesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes',
+    ...options
+});
+
+export const createRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<CreateRoleImageRecipeData, ThrowOnError>): RequestResult<CreateRoleImageRecipeResponses, CreateRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).post<CreateRoleImageRecipeResponses, CreateRoleImageRecipeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<GetRoleImageRecipeData, ThrowOnError>): RequestResult<GetRoleImageRecipeResponses, GetRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).get<GetRoleImageRecipeResponses, GetRoleImageRecipeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}',
+    ...options
+});
+
+export const updateRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<UpdateRoleImageRecipeData, ThrowOnError>): RequestResult<UpdateRoleImageRecipeResponses, UpdateRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRoleImageRecipeResponses, UpdateRoleImageRecipeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const commandRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<CommandRoleImageRecipeData, ThrowOnError>): RequestResult<CommandRoleImageRecipeResponses, CommandRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).post<CommandRoleImageRecipeResponses, CommandRoleImageRecipeErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'mattercodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands',
     ...options,
     headers: {
         'Content-Type': 'application/json',

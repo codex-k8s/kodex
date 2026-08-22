@@ -8,7 +8,7 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'ARCHIVE' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT';
 
 export type Problem = {
     type: string;
@@ -171,6 +171,98 @@ export type InstructionCommand = {
 export type AgentPage = {
     items: Array<Agent>;
     nextPageToken?: string;
+};
+
+export type RoleEnvironmentPlatform = {
+    os: 'linux';
+    architecture: 'amd64' | 'arm64';
+    variant?: string;
+};
+
+export type RoleEnvironment = {
+    key: string;
+    nameMessageKey: string;
+    descriptionMessageKey: string;
+    softwareMessageKeys: Array<string>;
+    platforms: Array<RoleEnvironmentPlatform>;
+    recommended: boolean;
+    available: boolean;
+    unavailableMessageKey?: string;
+    customInstallationAllowed: boolean;
+};
+
+export type RoleEnvironmentPage = {
+    items: Array<RoleEnvironment>;
+};
+
+export type RoleEnvironmentSelection = {
+    environmentKey: string;
+    packageKeys?: Array<string>;
+    toolKeys?: Array<string>;
+    /**
+     * Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
+     */
+    installationBlock?: string;
+};
+
+export type RoleImageRecipe = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    roleDefinitionRef: OpaqueRef;
+    name: string;
+    state: 'ACTIVE' | 'ARCHIVED';
+    environment: RoleEnvironmentSelection;
+    generation: number;
+    promotedImageReady: boolean;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    nextActions: Array<NextAction>;
+};
+
+export type RoleImageBuild = {
+    ref: OpaqueRef;
+    version: number;
+    recipeRef: OpaqueRef;
+    attempt: number;
+    stage: 'QUEUED' | 'MATERIALIZATION' | 'CONTEXT_VALIDATION' | 'BASE_PULL' | 'SOLVING' | 'INSTALLATION' | 'TRUSTED_RUNTIME_FINALIZATION' | 'STAGING_PUSH' | 'PROVENANCE' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'DEAD_LETTER';
+    progressPercent: number;
+    safeErrorCode?: string;
+    diagnosticCode?: string;
+    diagnosticSummary?: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type RoleImageRecipeCreateInput = {
+    roleDefinitionRef: OpaqueRef;
+    name: string;
+    environment: RoleEnvironmentSelection;
+};
+
+export type RoleImageRecipeUpdateInput = {
+    name: string;
+    environment: RoleEnvironmentSelection;
+};
+
+export type RoleImageRecipeCommand = {
+    action: 'REQUEST_BUILD' | 'ARCHIVE' | 'RESTORE';
+};
+
+export type RoleImageRecipePage = {
+    items: Array<RoleImageRecipe>;
+    nextPageToken?: string;
+};
+
+export type RoleImageRecipeDetail = {
+    recipe: RoleImageRecipe;
+    builds: Array<RoleImageBuild>;
+};
+
+export type RoleImageRecipeCommandReceipt = {
+    recipe: RoleImageRecipe;
+    imageBuild?: RoleImageBuild;
+    reused: boolean;
 };
 
 export type WorkflowStep = {
@@ -641,6 +733,10 @@ export type ProjectRefQuery = OpaqueRef;
 export type MembershipRef = OpaqueRef;
 
 export type AgentRef = OpaqueRef;
+
+export type RecipeRef = OpaqueRef;
+
+export type RoleDefinitionRefQuery = OpaqueRef;
 
 export type WorkflowRef = OpaqueRef;
 
@@ -1295,6 +1391,187 @@ export type CommandAgentInstructionsResponses = {
 };
 
 export type CommandAgentInstructionsResponse = CommandAgentInstructionsResponses[keyof CommandAgentInstructionsResponses];
+
+export type ListRoleEnvironmentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/role-environments';
+};
+
+export type ListRoleEnvironmentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRoleEnvironmentsError = ListRoleEnvironmentsErrors[keyof ListRoleEnvironmentsErrors];
+
+export type ListRoleEnvironmentsResponses = {
+    /**
+     * Безопасный каталог поддерживаемых окружений ролей
+     */
+    200: RoleEnvironmentPage;
+};
+
+export type ListRoleEnvironmentsResponse = ListRoleEnvironmentsResponses[keyof ListRoleEnvironmentsResponses];
+
+export type ListRoleImageRecipesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        roleDefinitionRef?: OpaqueRef;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/role-image-recipes';
+};
+
+export type ListRoleImageRecipesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRoleImageRecipesError = ListRoleImageRecipesErrors[keyof ListRoleImageRecipesErrors];
+
+export type ListRoleImageRecipesResponses = {
+    /**
+     * Окружения ролей Проекта
+     */
+    200: RoleImageRecipePage;
+};
+
+export type ListRoleImageRecipesResponse = ListRoleImageRecipesResponses[keyof ListRoleImageRecipesResponses];
+
+export type CreateRoleImageRecipeData = {
+    body: RoleImageRecipeCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes';
+};
+
+export type CreateRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRoleImageRecipeError = CreateRoleImageRecipeErrors[keyof CreateRoleImageRecipeErrors];
+
+export type CreateRoleImageRecipeResponses = {
+    /**
+     * Окружение роли создано
+     */
+    201: RoleImageRecipe;
+};
+
+export type CreateRoleImageRecipeResponse = CreateRoleImageRecipeResponses[keyof CreateRoleImageRecipeResponses];
+
+export type GetRoleImageRecipeData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}';
+};
+
+export type GetRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRoleImageRecipeError = GetRoleImageRecipeErrors[keyof GetRoleImageRecipeErrors];
+
+export type GetRoleImageRecipeResponses = {
+    /**
+     * Окружение роли и история сборок
+     */
+    200: RoleImageRecipeDetail;
+};
+
+export type GetRoleImageRecipeResponse = GetRoleImageRecipeResponses[keyof GetRoleImageRecipeResponses];
+
+export type UpdateRoleImageRecipeData = {
+    body: RoleImageRecipeUpdateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}';
+};
+
+export type UpdateRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UpdateRoleImageRecipeError = UpdateRoleImageRecipeErrors[keyof UpdateRoleImageRecipeErrors];
+
+export type UpdateRoleImageRecipeResponses = {
+    /**
+     * Окружение роли изменено
+     */
+    200: RoleImageRecipe;
+};
+
+export type UpdateRoleImageRecipeResponse = UpdateRoleImageRecipeResponses[keyof UpdateRoleImageRecipeResponses];
+
+export type CommandRoleImageRecipeData = {
+    body: RoleImageRecipeCommand;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands';
+};
+
+export type CommandRoleImageRecipeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CommandRoleImageRecipeError = CommandRoleImageRecipeErrors[keyof CommandRoleImageRecipeErrors];
+
+export type CommandRoleImageRecipeResponses = {
+    /**
+     * Команда окружения роли применена
+     */
+    200: RoleImageRecipeCommandReceipt;
+};
+
+export type CommandRoleImageRecipeResponse = CommandRoleImageRecipeResponses[keyof CommandRoleImageRecipeResponses];
 
 export type ListWorkflowsData = {
     body?: never;

@@ -71,6 +71,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		InputRegistryCAFile:          config.InputRegistryCAFile,
 		InputRegistryCertificateFile: config.InputRegistryCertificateFile,
 		InputRegistryPrivateKeyFile:  config.InputRegistryPrivateKeyFile,
+		AllowedRoleBaseImagesFile:    config.AllowedRoleBaseImagesFile,
 		WorkspaceRoot:                config.WorkspaceRoot, InputRepository: config.InputRepository,
 		TrustedRoleBaseRepository: config.TrustedRoleBaseRepository, TrustedRoleBaseDigest: config.TrustedRoleBaseDigest,
 		FrontendRepository: config.FrontendRepository,

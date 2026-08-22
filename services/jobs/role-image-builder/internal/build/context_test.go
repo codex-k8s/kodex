@@ -63,7 +63,12 @@ func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeAB
 		InstallationBlock:         "echo first",
 	}
 	first := installationScript(input)
-	dockerfileRaw := dockerfile(input, "registry.example.test/mattercodex/dockerfile")
+	dockerfileRaw := dockerfile(
+		input,
+		"registry.example.test/mattercodex/dockerfile",
+		"registry.example.test/mattercodex/agent-runner",
+		"sha256:"+strings.Repeat("e", 64),
+	)
 	input.InstallationBlock = "echo second"
 	second := installationScript(input)
 	if bytes.Equal(first, second) {

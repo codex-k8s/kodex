@@ -29,6 +29,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.integration-connections.get":   controlplanev1.PlatformQueryService_GetIntegrationConnection_FullMethodName,
 		"platform.query.administration.get":            controlplanev1.PlatformQueryService_GetAdministration_FullMethodName,
 		"platform.query.audit.list":                    controlplanev1.PlatformQueryService_ListAuditEvents_FullMethodName,
+		"platform.role-images.environments.list":       controlplanev1.RoleImageService_ListRoleEnvironments_FullMethodName,
 		"platform.role-images.recipes.list":            controlplanev1.RoleImageService_ListRoleImageRecipes_FullMethodName,
 		"platform.role-images.recipes.get":             controlplanev1.RoleImageService_GetRoleImageRecipe_FullMethodName,
 		"platform.role-images.recipes.manage":          controlplanev1.RoleImageService_ManageRoleImageRecipe_FullMethodName,

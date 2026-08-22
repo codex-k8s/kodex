@@ -21,6 +21,7 @@ type ManageInput struct {
 	RecipeRef, ProjectRef   string
 	RoleDefinitionRef, Name string
 	Recipe                  entity.RoleImageRecipeInput
+	Environment             entity.RoleEnvironmentSelection
 }
 
 type ManageResult struct {

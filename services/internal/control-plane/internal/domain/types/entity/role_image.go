@@ -23,9 +23,19 @@ type RoleImageRecipeInput struct {
 	BaseImageReference, BaseImageDigest, SourceRef, SourceRevision, SourceSHA256 string
 	ContextRef, ContextSHA256, BuilderSHA256, FrontendSHA256, InstallationBlock  string
 	ToolchainSHA256                                                              string
+	EnvironmentKey                                                               string
+	PackageKeys, ToolKeys                                                        []string
 	Platforms                                                                    []RoleImagePlatform
 	Packages                                                                     []RoleImagePackage
 	Tools                                                                        []RoleImageTool
+}
+
+// RoleEnvironmentSelection содержит только owner-facing выбор из
+// авторитетного каталога. Supply-chain locators назначает control-plane.
+type RoleEnvironmentSelection struct {
+	EnvironmentKey        string
+	PackageKeys, ToolKeys []string
+	InstallationBlock     string
 }
 
 type RoleImageRecipe struct {

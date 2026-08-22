@@ -10,6 +10,7 @@ option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/g
 // RoleImageService владеет специализированным lifecycle окружений ролей.
 // Caller не назначает organization, owner, policy, generation или promotion target.
 service RoleImageService {
+  rpc ListRoleEnvironments(ListRoleEnvironmentsRequest) returns (ListRoleEnvironmentsResponse);
   rpc ListRoleImageRecipes(ListRoleImageRecipesRequest) returns (ListRoleImageRecipesResponse);
   rpc GetRoleImageRecipe(GetRoleImageRecipeRequest) returns (GetRoleImageRecipeResponse);
   rpc ManageRoleImageRecipe(ManageRoleImageRecipeRequest) returns (ManageRoleImageRecipeResponse);
@@ -48,6 +49,34 @@ message RoleImageTool {
   string sha256 = 4;
 }
 
+// RoleEnvironment является безопасным owner-facing элементом каталога. Exact
+// OCI locators и supply-chain digests остаются внутри control-plane и build
+// claim, поэтому browser выбирает stable key, а не вводит внутренние значения.
+message RoleEnvironment {
+  string key = 1;
+  string name_message_key = 2;
+  string description_message_key = 3;
+  repeated string software_message_keys = 4;
+  repeated RoleImagePlatform platforms = 5;
+  bool recommended = 6;
+  bool available = 7;
+  string unavailable_message_key = 8;
+  bool custom_installation_allowed = 9;
+}
+
+message RoleEnvironmentSelection {
+  string environment_key = 1;
+  repeated string package_keys = 2;
+  repeated string tool_keys = 3;
+  string installation_block = 4;
+}
+
+message ListRoleEnvironmentsRequest {}
+
+message ListRoleEnvironmentsResponse {
+  repeated RoleEnvironment environments = 1;
+}
+
 message RoleImageRecipeInput {
   string base_image_reference = 1;
   string base_image_digest = 2;
@@ -63,15 +92,19 @@ message RoleImageRecipeInput {
   repeated RoleImageTool tools = 12;
   string installation_block = 13;
   string toolchain_sha256 = 14;
+  string environment_key = 15;
+  repeated string package_keys = 16;
+  repeated string tool_keys = 17;
 }
 
 message RoleImageRecipe {
+  reserved 6;
+  reserved "input";
   string ref = 1;
   uint64 version = 2;
   string role_definition_ref = 3;
   string name = 4;
   string state = 5;
-  RoleImageRecipeInput input = 6;
   uint64 generation = 7;
   string spec_sha256 = 8;
   uint64 policy_revision = 9;
@@ -83,6 +116,8 @@ message RoleImageRecipe {
   google.protobuf.Timestamp created_at = 15;
   google.protobuf.Timestamp updated_at = 16;
   repeated string next_actions = 17;
+  RoleEnvironmentSelection environment = 18;
+  string project_ref = 19;
 }
 
 enum ImageBuildStage {
@@ -203,13 +238,15 @@ message GetRoleImageRecipeResponse {
 }
 
 message ManageRoleImageRecipeRequest {
+  reserved 6;
+  reserved "input";
   MutationContext mutation = 1;
   RoleImageRecipeAction action = 2;
   string recipe_ref = 3;
   string role_definition_ref = 4;
   string name = 5;
-  RoleImageRecipeInput input = 6;
   string project_ref = 7;
+  RoleEnvironmentSelection environment = 8;
 }
 
 message ManageRoleImageRecipeResponse {

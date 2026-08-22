@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -10,11 +11,34 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
+const roleImageRecipe = computed(() =>
+  Object.values(platform.roleImageRecipes).find(
+    (item) =>
+      item.projectRef === projectRef.value &&
+      item.roleDefinitionRef === agent.value?.roleDefinitionRef,
+  ),
+);
+const roleEnvironments = computed(() =>
+  Object.values(platform.roleEnvironments).sort(
+    (left, right) =>
+      Number(right.recommended) - Number(left.recommended) ||
+      left.key.localeCompare(right.key),
+  ),
+);
+const selectedEnvironment = ref("");
+const latestBuild = computed(() => {
+  const recipe = roleImageRecipe.value;
+  if (!recipe) return undefined;
+  return Object.values(platform.roleImageBuilds)
+    .filter((item) => item.recipeRef === recipe.ref)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+});
 const instructions = ref("");
 const task = ref("");
 const busy = ref(false);
@@ -25,6 +49,73 @@ async function load() {
     agent.value?.draftInstructions?.content ??
     agent.value?.publishedInstructions?.content ??
     "";
+  await Promise.all([
+    platform.loadRoleEnvironments(),
+    platform.loadRoleImageRecipes(
+      projectRef.value,
+      agent.value?.roleDefinitionRef,
+    ),
+  ]);
+  if (roleImageRecipe.value) {
+    selectedEnvironment.value =
+      roleImageRecipe.value.environment.environmentKey;
+    await platform.loadRoleImageRecipe(
+      projectRef.value,
+      roleImageRecipe.value.ref,
+    );
+  } else {
+    selectedEnvironment.value =
+      roleEnvironments.value.find((item) => item.recommended && item.available)
+        ?.key ?? "";
+  }
+}
+
+async function prepareRoleEnvironment() {
+  if (
+    !agent.value?.roleDefinitionRef ||
+    !selectedEnvironment.value ||
+    !platform.roleEnvironments[selectedEnvironment.value]?.available
+  )
+    return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const recipe = await platform.saveRoleImageRecipe(
+      projectRef.value,
+      agent.value.roleDefinitionRef,
+      t("roleEnvironments.recipeName", { name: agent.value.name }),
+      { environmentKey: selectedEnvironment.value },
+      roleImageRecipe.value,
+    );
+    if (recipe.nextActions.includes("REQUEST_BUILD")) {
+      await platform.changeRoleImageRecipe(
+        projectRef.value,
+        recipe,
+        "REQUEST_BUILD",
+      );
+    }
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function changeRoleEnvironment(action: "ARCHIVE" | "RESTORE") {
+  if (!roleImageRecipe.value) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    await platform.changeRoleImageRecipe(
+      projectRef.value,
+      roleImageRecipe.value,
+      action,
+    );
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
 }
 async function saveInstructions() {
   if (!agent.value) return;
@@ -159,6 +250,134 @@ onMounted(() => void load());
               </button>
             </div>
           </article>
+          <article class="panel role-environment-panel">
+            <div class="section-header">
+              <div>
+                <h2>{{ $t("roleEnvironments.title") }}</h2>
+                <p>{{ $t("roleEnvironments.description") }}</p>
+              </div>
+              <StatusBadge v-if="latestBuild" :state="latestBuild.stage" />
+              <StatusBadge
+                v-else-if="roleImageRecipe?.promotedImageReady"
+                state="READY"
+              />
+            </div>
+            <fieldset
+              class="environment-options"
+              :disabled="busy || !agent.roleDefinitionRef"
+            >
+              <legend class="sr-only">
+                {{ $t("roleEnvironments.choose") }}
+              </legend>
+              <label
+                v-for="environment in roleEnvironments"
+                :key="environment.key"
+                class="environment-option"
+                :class="{
+                  'environment-option--selected':
+                    selectedEnvironment === environment.key,
+                  'environment-option--unavailable': !environment.available,
+                }"
+              >
+                <input
+                  v-model="selectedEnvironment"
+                  type="radio"
+                  name="role-environment"
+                  :value="environment.key"
+                  :disabled="!environment.available"
+                />
+                <span>
+                  <strong>{{ $t(environment.nameMessageKey) }}</strong>
+                  <small v-if="environment.recommended">
+                    {{ $t("roleEnvironments.recommended") }}
+                  </small>
+                  <span>{{ $t(environment.descriptionMessageKey) }}</span>
+                  <span class="environment-software">
+                    {{
+                      environment.softwareMessageKeys
+                        .map((key) => $t(key))
+                        .join(" · ")
+                    }}
+                  </span>
+                  <span v-if="!environment.available">
+                    {{
+                      $t(
+                        environment.unavailableMessageKey ??
+                          "roleEnvironments.unavailable",
+                      )
+                    }}
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+            <p v-if="!agent.roleDefinitionRef" role="status">
+              {{ $t("roleEnvironments.roleUnavailable") }}
+            </p>
+            <p v-if="latestBuild" class="build-progress" aria-live="polite">
+              {{
+                $t("roleEnvironments.buildProgress", {
+                  progress: latestBuild.progressPercent,
+                })
+              }}
+            </p>
+            <div class="inline-actions">
+              <button
+                class="button button--primary"
+                type="button"
+                :disabled="
+                  busy ||
+                  !agent.roleDefinitionRef ||
+                  !selectedEnvironment ||
+                  !platform.roleEnvironments[selectedEnvironment]?.available
+                "
+                @click="prepareRoleEnvironment"
+              >
+                {{ $t("roleEnvironments.prepare") }}
+              </button>
+              <button
+                v-if="roleImageRecipe?.nextActions.includes('ARCHIVE')"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="changeRoleEnvironment('ARCHIVE')"
+              >
+                {{ $t("common.archive") }}
+              </button>
+              <button
+                v-if="roleImageRecipe?.nextActions.includes('RESTORE')"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="changeRoleEnvironment('RESTORE')"
+              >
+                {{ $t("roleEnvironments.restore") }}
+              </button>
+            </div>
+            <details v-if="roleImageRecipe || latestBuild">
+              <summary>{{ $t("common.advanced") }}</summary>
+              <dl class="metadata">
+                <div v-if="roleImageRecipe">
+                  <dt>
+                    {{
+                      $t("common.version", {
+                        version: roleImageRecipe.version,
+                      })
+                    }}
+                  </dt>
+                  <dd>{{ $t("states." + roleImageRecipe.state) }}</dd>
+                </div>
+                <div v-if="latestBuild">
+                  <dt>{{ $t("roleEnvironments.lastBuild") }}</dt>
+                  <dd>{{ $t("states." + latestBuild.stage) }}</dd>
+                </div>
+              </dl>
+            </details>
+            <ProblemNotice
+              v-if="platform.problems.roleImages"
+              :problem="platform.problems.roleImages"
+              compact
+            />
+          </article>
           <ProblemNotice v-if="problem" :problem="problem" compact />
         </section>
         <aside class="detail-side">
@@ -239,6 +458,44 @@ onMounted(() => void load());
 .launch-panel {
   display: grid;
   gap: 12px;
+}
+.environment-options {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+.environment-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.environment-option > span,
+.environment-option > span > span {
+  display: block;
+}
+.environment-option strong {
+  margin-right: 8px;
+}
+.environment-option small {
+  color: var(--accent-strong);
+}
+.environment-option--selected {
+  border-color: var(--accent-strong);
+}
+.environment-option--unavailable {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.environment-software,
+.build-progress {
+  margin-top: 6px;
+  color: var(--subtle);
+  font-size: 0.86rem;
 }
 @media (max-width: 900px) {
   .detail-layout {
