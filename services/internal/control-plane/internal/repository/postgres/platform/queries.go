@@ -92,6 +92,27 @@ func (repository *Repository) ListCapabilities(ctx context.Context, principal va
 	return result, rows.Err()
 }
 
+func (repository *Repository) ListRuntimes(ctx context.Context, principal value.Principal) ([]entity.RuntimeSelection, error) {
+	if _, err := repository.resolveScope(ctx, principal); err != nil {
+		return nil, err
+	}
+	rows, err := repository.pool.Query(ctx, queryQueriesListruntimesSelectRuntimeProfilesEnabled)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer rows.Close()
+	var result []entity.RuntimeSelection
+	for rows.Next() {
+		var item entity.RuntimeSelection
+		if err := rows.Scan(&item.Ref, &item.Name, &item.Provider, &item.Model, &item.RuntimeRevision); err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		item.Ready = true
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
 func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
@@ -263,16 +284,18 @@ func agentActions(agent entity.Agent) []string {
 	if agent.System {
 		return []string{"OPEN", "RECOVER"}
 	}
-	actions := []string{"OPEN", "EDIT"}
+	actions := []string{"OPEN"}
+	if agent.State == "ARCHIVED" {
+		return actions
+	}
+	actions = append(actions, "EDIT", "MANAGE_CAPABILITIES")
 	if agent.Enabled && agent.State == "READY" {
 		actions = append(actions, "LAUNCH", "DISABLE")
 	}
 	if !agent.Enabled {
 		actions = append(actions, "ENABLE")
 	}
-	if agent.State != "ARCHIVED" {
-		actions = append(actions, "ARCHIVE")
-	}
+	actions = append(actions, "ARCHIVE")
 	return actions
 }
 

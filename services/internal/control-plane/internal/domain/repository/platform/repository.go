@@ -88,6 +88,7 @@ type Repository interface {
 	GetBootstrapState(context.Context, value.Principal) (BootstrapState, error)
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
+	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)

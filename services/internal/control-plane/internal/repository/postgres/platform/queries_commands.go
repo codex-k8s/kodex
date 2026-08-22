@@ -35,6 +35,8 @@ var (
 	queryCommandsCreateagentInsertRoleDefinitionsRefOrganizationIdProjectIdName string
 	//go:embed sql/commands_createagent_insert_instruction_versions_ref_agent_id_state.sql
 	queryCommandsCreateagentInsertInstructionVersionsRefAgentIdState string
+	//go:embed sql/commands_resolve_enabled_runtime_profile.sql
+	queryCommandsResolveEnabledRuntimeProfile string
 	//go:embed sql/commands_mustprojectid_select_projects_organization_id_ref_lifecycle.sql
 	queryCommandsMustprojectidSelectProjectsOrganizationIdRefLifecycle string
 	//go:embed sql/commands_changeagent_update_agents_name_purpose_role_description.sql
@@ -67,6 +69,8 @@ var (
 	queryCommandsChangeinstructionsUpdateAgentsVersionUpdatedAt string
 	//go:embed sql/commands_changeagentbinding_select_agents_organization_id_ref.sql
 	queryCommandsChangeagentbindingSelectAgentsOrganizationIdRef string
+	//go:embed sql/commands_changeagentbinding_select_enabled_capability.sql
+	queryCommandsChangeagentbindingSelectEnabledCapability string
 	//go:embed sql/commands_changeagentbinding_enable_integration_grant.sql
 	queryCommandsChangeagentbindingEnableIntegrationGrant string
 	//go:embed sql/commands_changeagentbinding_revoke_integration_grant.sql
@@ -77,6 +81,8 @@ var (
 	queryCommandsChangeagentbindingRemoveCapability string
 	//go:embed sql/commands_changeagentbinding_update_agents_version_updated_at.sql
 	queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt string
+	//go:embed sql/commands_changeagentbinding_select_agent_readback.sql
+	queryCommandsChangeagentbindingSelectAgentReadback string
 	//go:embed sql/commands_changeworkflow_insert_workflows_ref_project_id_purpose.sql
 	queryCommandsChangeworkflowInsertWorkflowsRefProjectIdPurpose string
 	//go:embed sql/commands_changeworkflow_select_workflows_organization_id_ref.sql

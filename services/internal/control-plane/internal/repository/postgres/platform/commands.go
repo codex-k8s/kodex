@@ -262,6 +262,10 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if runtimeKey == "" {
 		runtimeKey = defaultRuntimeKey
 	}
+	runtime, err := resolveEnabledRuntime(ctx, tx, runtimeKey)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	var roleID, roleRef, roleName string
 	if input.RoleDefinitionRef != "" {
 		err := tx.QueryRow(ctx, queryCommandsCreateagentSelectRoleDefinitionsOrganizationIdProjectIdRef,
@@ -284,7 +288,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	ref, _ := newRef("agt")
 	var agentID string
 	var item entity.Agent
-	err := tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, roleID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+	err = tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, roleID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
@@ -298,9 +302,26 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	item.RoleDefinitionRef = roleRef
 	item.RoleDefinitionName = roleName
 	item.RuntimeKey = runtimeKey
+	item.RuntimeName = runtime.Name
+	item.Provider = runtime.Provider
+	item.Model = runtime.Model
+	item.RuntimeRevision = runtime.RuntimeRevision
 	item.PublishedInstructions = &entity.InstructionVersion{Ref: instructionRef, VersionNumber: 1, State: "PUBLISHED", Content: input.Instructions, Digest: hex.EncodeToString(digest[:]), CreatedAt: publishedAt, PublishedAt: &publishedAt}
 	item.NextActions = agentActions(item)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "i18n:AGENT_CREATED_READY", platformEvent: "AGENT_CHANGED"}, nil
+}
+
+func resolveEnabledRuntime(ctx context.Context, tx pgx.Tx, ref string) (entity.RuntimeSelection, error) {
+	var runtime entity.RuntimeSelection
+	err := tx.QueryRow(ctx, queryCommandsResolveEnabledRuntimeProfile, ref).Scan(&runtime.Ref, &runtime.Name, &runtime.Provider, &runtime.Model, &runtime.RuntimeRevision)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.RuntimeSelection{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return entity.RuntimeSelection{}, errs.ErrUnavailable
+	}
+	runtime.Ready = true
+	return runtime, nil
 }
 
 func mapWriteError(err error) error {
@@ -333,6 +354,11 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	var projectID string
 	switch input.Kind {
 	case command.UpdateAgent:
+		if payload.RuntimeRef != "" {
+			if _, err := resolveEnabledRuntime(ctx, tx, payload.RuntimeRef); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		err := tx.QueryRow(ctx, queryCommandsChangeagentUpdateAgentsNamePurposeRoleDescription, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef, payload.RoleDefinitionRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -467,15 +493,26 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
-	} else if input.Kind == command.ChangeAgentCapability && payload.Enabled {
-		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingAppendCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
+	} else if input.Kind == command.ChangeAgentCapability {
+		if !validCapabilityKey(payload.BindingRef) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		var capabilityKey string
+		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectEnabledCapability, payload.BindingRef).Scan(&capabilityKey); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		} else if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		query := queryCommandsChangeagentbindingRemoveCapability
+		if payload.Enabled {
+			query = queryCommandsChangeagentbindingAppendCapability
+		}
+		tag, err := tx.Exec(ctx, query, scope.organizationID, payload.AgentRef, capabilityKey)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-	} else if input.Kind == command.ChangeAgentCapability {
-		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingRemoveCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
-		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
 		}
 	} else {
 		return commandOutcome{}, errs.ErrInvalid
@@ -483,7 +520,17 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	if _, err := tx.Exec(ctx, queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt, scope.organizationID, payload.AgentRef); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	agent := entity.Agent{Ref: payload.AgentRef, ProjectRef: projectRef, Version: current + 1}
+	var agent entity.Agent
+	if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectAgentReadback, scope.organizationID, payload.AgentRef).Scan(
+		&agent.Ref, &agent.ProjectRef, &agent.RoleDefinitionRef, &agent.RoleDefinitionName,
+		&agent.Name, &agent.Purpose, &agent.RoleDescription, &agent.AvatarURL,
+		&agent.State, &agent.Enabled, &agent.Version, &agent.RuntimeKey,
+		&agent.RuntimeName, &agent.Provider, &agent.Model, &agent.RuntimeRevision,
+		&agent.Capabilities, &agent.KnowledgeArtifactRefs, &agent.CreatedAt, &agent.UpdatedAt,
+	); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	agent.NextActions = agentActions(agent)
 	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "i18n:AGENT_PERMISSIONS_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 

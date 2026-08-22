@@ -15,6 +15,7 @@ service PlatformQueryService {
   rpc GetBootstrapState(GetBootstrapStateRequest) returns (GetBootstrapStateResponse);
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
   rpc ListPlatformCapabilities(ListPlatformCapabilitiesRequest) returns (ListPlatformCapabilitiesResponse);
+  rpc ListRuntimeSelections(ListRuntimeSelectionsRequest) returns (ListRuntimeSelectionsResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   rpc ListProjectMemberships(ListProjectMembershipsRequest) returns (ListProjectMembershipsResponse);
@@ -176,6 +177,7 @@ enum NextAction {
   NEXT_ACTION_MANAGE_INTEGRATIONS = 24;
   NEXT_ACTION_MANAGE_MEMBERS = 25;
   NEXT_ACTION_UPLOAD_ARTIFACT = 26;
+  NEXT_ACTION_MANAGE_CAPABILITIES = 27;
 }
 
 enum EntityLifecycle {
@@ -861,6 +863,10 @@ message GetOverviewResponse {
 message ListPlatformCapabilitiesRequest {}
 message ListPlatformCapabilitiesResponse {
   repeated PlatformCapability capabilities = 1;
+}
+message ListRuntimeSelectionsRequest {}
+message ListRuntimeSelectionsResponse {
+  repeated RuntimeSelection runtimes = 1;
 }
 
 message ListProjectsRequest {

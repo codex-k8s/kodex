@@ -79,6 +79,13 @@ func (service *Service) ListCapabilities(ctx context.Context, p value.Principal)
 	}
 	return service.repository.ListCapabilities(ctx, p)
 }
+func (service *Service) ListRuntimes(ctx context.Context, p value.Principal) ([]entity.RuntimeSelection, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return service.repository.ListRuntimes(ctx, p)
+}
 func (service *Service) ListProjects(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Project, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

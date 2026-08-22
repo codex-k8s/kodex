@@ -439,15 +439,32 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || project.Project == nil {
 		t.Fatalf("create delegation project: result=%#v err=%v", project.Project, err)
 	}
+	runtimes, err := service.ListRuntimes(ctx, owner)
+	if err != nil || len(runtimes) != 1 || !runtimes[0].Ready || runtimes[0].Ref != defaultRuntimeKey {
+		t.Fatalf("list enabled runtime catalog: runtimes=%#v err=%v", runtimes, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-unknown-runtime"}, Payload: command.AgentInput{
+			ProjectRef: project.Project.Ref, Name: "Invalid runtime agent", Purpose: "Must not be created",
+			RoleDescription: "Invalid runtime", Instructions: "This instruction is long enough for validation.", RuntimeRef: "runtime_unknown",
+		}}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("create agent accepted unknown runtime: %v", err)
+	}
 	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-coordinator", "Content coordinator")
 	firstChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-researcher", "Research specialist")
 	secondChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-editor", "Content editor")
 	coordinatorVersion := coordinator.Version
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-unknown-capability", ExpectedVersion: &coordinatorVersion},
+		Payload:  command.AgentBindingInput{AgentRef: coordinator.Ref, BindingRef: "platform.unknown", Enabled: true},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("grant accepted unknown capability: %v", err)
+	}
 	capability, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-capability-1", ExpectedVersion: &coordinatorVersion},
 		Payload:  command.AgentBindingInput{AgentRef: coordinator.Ref, BindingRef: "platform.run.delegate", Enabled: true},
 	})
-	if err != nil || capability.Agent == nil {
+	if err != nil || capability.Agent == nil || capability.Agent.Name == "" || !contains(capability.Agent.Capabilities, "platform.run.delegate") {
 		t.Fatalf("grant delegation capability: result=%#v err=%v", capability.Agent, err)
 	}
 	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,

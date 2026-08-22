@@ -9,6 +9,8 @@ var (
 	queryQueriesGetoverviewSelectProjectsOrganizationIdLifecycleState string
 	//go:embed sql/queries_listcapabilities_select_platform_capabilities_enabled.sql
 	queryQueriesListcapabilitiesSelectPlatformCapabilitiesEnabled string
+	//go:embed sql/queries_listruntimes_select_runtime_profiles_enabled.sql
+	queryQueriesListruntimesSelectRuntimeProfilesEnabled string
 	//go:embed sql/queries_listprojects_select_projects_organization_id_project_id_subject_id.sql
 	queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId string
 	//go:embed sql/queries_getproject_select_projects_organization_id_ref_project_id.sql

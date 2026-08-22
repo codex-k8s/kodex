@@ -22,6 +22,7 @@ const (
 	PlatformQueryService_GetBootstrapState_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
 	PlatformQueryService_GetOverview_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOverview"
 	PlatformQueryService_ListPlatformCapabilities_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListRuntimeSelections_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
 	PlatformQueryService_ListProjects_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListProjects"
 	PlatformQueryService_GetProject_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetProject"
 	PlatformQueryService_ListProjectMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
@@ -53,6 +54,7 @@ type PlatformQueryServiceClient interface {
 	GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error)
 	GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error)
+	ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	ListProjectMemberships(ctx context.Context, in *ListProjectMembershipsRequest, opts ...grpc.CallOption) (*ListProjectMembershipsResponse, error)
@@ -109,6 +111,16 @@ func (c *platformQueryServiceClient) ListPlatformCapabilities(ctx context.Contex
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPlatformCapabilitiesResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_ListPlatformCapabilities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeSelectionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuntimeSelections_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -342,6 +354,7 @@ type PlatformQueryServiceServer interface {
 	GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error)
 	GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error)
+	ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error)
@@ -382,6 +395,9 @@ func (UnimplementedPlatformQueryServiceServer) GetOverview(context.Context, *Get
 }
 func (UnimplementedPlatformQueryServiceServer) ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPlatformCapabilities not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSelections not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
@@ -520,6 +536,24 @@ func _PlatformQueryService_ListPlatformCapabilities_Handler(srv interface{}, ctx
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).ListPlatformCapabilities(ctx, req.(*ListPlatformCapabilitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListRuntimeSelections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeSelectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListRuntimeSelections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListRuntimeSelections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListRuntimeSelections(ctx, req.(*ListRuntimeSelectionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -938,6 +972,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPlatformCapabilities",
 			Handler:    _PlatformQueryService_ListPlatformCapabilities_Handler,
+		},
+		{
+			MethodName: "ListRuntimeSelections",
+			Handler:    _PlatformQueryService_ListRuntimeSelections_Handler,
 		},
 		{
 			MethodName: "ListProjects",

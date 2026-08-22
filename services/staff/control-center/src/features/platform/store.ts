@@ -53,6 +53,7 @@ import {
   listRoleImageRecipes,
   listRunEvents,
   listRuns,
+  listRuntimeSelections,
   listSchedules,
   listWorkflows,
   resolveOwnerGate,
@@ -91,6 +92,7 @@ import type {
   RoleImageBuild,
   RoleImageRecipe,
   RoleImageRecipeCommand,
+  RuntimeSelection,
   Run,
   RunCommand,
   RunEvent,
@@ -125,8 +127,10 @@ type QueryKey =
   | "project"
   | "agents"
   | "agent"
+  | "capabilities"
   | "roleEnvironments"
   | "roleImages"
+  | "runtimes"
   | "workflows"
   | "workflow"
   | "runs"
@@ -165,6 +169,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const overview = ref<Overview>();
   const administration = ref<AdministrationState>();
   const capabilities = ref<PlatformCapability[]>([]);
+  const runtimes = reactive<Record<string, RuntimeSelection>>({});
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
   const roleEnvironments = reactive<Record<string, RoleEnvironment>>({});
@@ -760,10 +765,25 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function loadCapabilities(): Promise<void> {
-    const value = await unwrap(
-      listPlatformCapabilities({ signal: requestSignal() }),
+    await query(
+      "capabilities",
+      async () =>
+        (await unwrap(listPlatformCapabilities({ signal: requestSignal() })))
+          .data.items,
+      (values) => {
+        capabilities.value = values;
+      },
     );
-    capabilities.value = value.data.items;
+  }
+
+  async function loadRuntimes(): Promise<void> {
+    await query(
+      "runtimes",
+      async () =>
+        (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
+          .items,
+      (values) => replace(runtimes, values),
+    );
   }
 
   async function finishOnboarding(): Promise<void> {
@@ -831,8 +851,19 @@ export const usePlatformStore = defineStore("platform", () => {
     return result.data;
   }
 
+  async function readAgent(agentRef: string): Promise<Agent> {
+    const readback = await unwrap(
+      getAgent({
+        path: { agentRef },
+        signal: requestSignal(),
+      }),
+    );
+    upsert(agents, [readback.data]);
+    return agents[readback.data.ref] ?? readback.data;
+  }
+
   async function changeAgent(agent: Agent, body: AgentCommand): Promise<Agent> {
-    const result = await mutate(
+    await mutate(
       (headers) =>
         commandAgent({
           path: { agentRef: agent.ref },
@@ -842,8 +873,7 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       agent.version,
     );
-    agents[result.data.ref] = result.data;
-    return result.data;
+    return readAgent(agent.ref);
   }
 
   async function saveRoleImageRecipe(
@@ -901,7 +931,7 @@ export const usePlatformStore = defineStore("platform", () => {
     agent: Agent,
     content: string,
   ): Promise<Agent> {
-    const draft = await mutate(
+    await mutate(
       (headers) =>
         createInstructionDraft({
           path: { agentRef: agent.ref },
@@ -914,15 +944,14 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       agent.version,
     );
-    agents[draft.data.ref] = draft.data;
-    return draft.data;
+    return readAgent(agent.ref);
   }
 
   async function instructionCommand(
     agent: Agent,
     action: "VALIDATE" | "PUBLISH" | "ROLLBACK",
   ): Promise<Agent> {
-    const result = await mutate(
+    await mutate(
       (headers) =>
         commandAgentInstructions({
           path: { agentRef: agent.ref },
@@ -932,8 +961,7 @@ export const usePlatformStore = defineStore("platform", () => {
         }),
       agent.version,
     );
-    agents[result.data.ref] = result.data;
-    return result.data;
+    return readAgent(agent.ref);
   }
 
   async function saveWorkflow(
@@ -1210,6 +1238,7 @@ export const usePlatformStore = defineStore("platform", () => {
     overview,
     administration,
     capabilities,
+    runtimes,
     projects,
     agents,
     roleEnvironments,
@@ -1263,6 +1292,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadAdministration,
     loadAudit,
     loadCapabilities,
+    loadRuntimes,
     finishOnboarding,
     saveProject,
     saveAgent,

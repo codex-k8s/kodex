@@ -101,6 +101,24 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/PlatformCapability' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-selections:
+    get:
+      tags: [Bootstrap]
+      operationId: listRuntimeSelections
+      responses:
+        '200':
+          description: Доступные профили выполнения ИИ-сотрудников
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RuntimeSelection' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/projects:
     get:
@@ -1257,7 +1275,7 @@ components:
       format: date-time
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES]
     Problem:
       type: object
       additionalProperties: false
@@ -1389,7 +1407,7 @@ components:
     Agent:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, name, purpose, roleDescription, state, enabled, system, capabilities, integrations, knowledgeArtifactRefs, updatedAt, nextActions]
+      required: [ref, version, projectRef, name, purpose, roleDescription, state, enabled, system, runtimeRef, runtimeName, runtimeReady, capabilities, integrations, knowledgeArtifactRefs, updatedAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -1403,7 +1421,12 @@ components:
         state: { type: string, enum: [DRAFT, READY, RUNNING, DISABLED, ARCHIVED] }
         enabled: { type: boolean }
         system: { type: boolean }
+        runtimeRef: { $ref: '#/components/schemas/OpaqueRef' }
         runtimeName: { type: string, maxLength: 120 }
+        runtimeRevision: { type: string, maxLength: 160 }
+        runtimeProvider: { type: string, maxLength: 120 }
+        runtimeModel: { type: string, maxLength: 160 }
+        runtimeReady: { type: boolean }
         publishedInstructions: { $ref: '#/components/schemas/InstructionVersion' }
         draftInstructions: { $ref: '#/components/schemas/InstructionVersion' }
         capabilities: { type: array, items: { $ref: '#/components/schemas/PlatformCapability' } }
@@ -1428,6 +1451,17 @@ components:
           allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
           description: Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
         initialInstructions: { type: string, maxLength: 65536 }
+    RuntimeSelection:
+      type: object
+      additionalProperties: false
+      required: [ref, name, revision, ready, provider, model]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        revision: { type: string, minLength: 1, maxLength: 160 }
+        ready: { type: boolean }
+        provider: { type: string, minLength: 1, maxLength: 120 }
+        model: { type: string, minLength: 1, maxLength: 160 }
     AgentCommand:
       type: object
       additionalProperties: false

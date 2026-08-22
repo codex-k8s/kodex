@@ -35,6 +35,7 @@ type InstructionVersion struct {
 
 type RuntimeSelection struct {
 	Ref, Name, Provider, Model, RuntimeRevision string
+	Ready                                       bool
 }
 
 type Agent struct {

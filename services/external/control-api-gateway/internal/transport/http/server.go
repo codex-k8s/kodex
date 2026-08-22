@@ -289,7 +289,13 @@ func normalize(value any) {
 			delete(current, "agentBindingRefs")
 		}
 		if runtimeValue, ok := current["runtime"].(map[string]any); ok {
+			current["runtimeRef"] = runtimeValue["ref"]
 			current["runtimeName"] = runtimeValue["name"]
+			current["runtimeRevision"] = runtimeValue["revision"]
+			current["runtimeProvider"] = runtimeValue["provider"]
+			current["runtimeModel"] = runtimeValue["model"]
+			runtimeReady, _ := runtimeValue["ready"].(bool)
+			current["runtimeReady"] = runtimeReady
 			delete(current, "runtime")
 		}
 		if assistantState, ok := current["corePromptRevision"]; ok && assistantState != nil {

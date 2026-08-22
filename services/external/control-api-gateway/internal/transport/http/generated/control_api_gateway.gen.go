@@ -225,6 +225,7 @@ const (
 	NextActionEDIT               NextAction = "EDIT"
 	NextActionENABLE             NextAction = "ENABLE"
 	NextActionLAUNCH             NextAction = "LAUNCH"
+	NextActionMANAGECAPABILITIES NextAction = "MANAGE_CAPABILITIES"
 	NextActionMANAGEINTEGRATIONS NextAction = "MANAGE_INTEGRATIONS"
 	NextActionMANAGEMEMBERS      NextAction = "MANAGE_MEMBERS"
 	NextActionOPEN               NextAction = "OPEN"
@@ -585,7 +586,12 @@ type Agent struct {
 	RoleDefinitionName    *string              `json:"roleDefinitionName,omitempty"`
 	RoleDefinitionRef     *OpaqueRef           `json:"roleDefinitionRef,omitempty"`
 	RoleDescription       string               `json:"roleDescription"`
-	RuntimeName           *string              `json:"runtimeName,omitempty"`
+	RuntimeModel          *string              `json:"runtimeModel,omitempty"`
+	RuntimeName           string               `json:"runtimeName"`
+	RuntimeProvider       *string              `json:"runtimeProvider,omitempty"`
+	RuntimeReady          bool                 `json:"runtimeReady"`
+	RuntimeRef            OpaqueRef            `json:"runtimeRef"`
+	RuntimeRevision       *string              `json:"runtimeRevision,omitempty"`
 	State                 AgentState           `json:"state"`
 	System                bool                 `json:"system"`
 	UpdatedAt             Timestamp            `json:"updatedAt"`
@@ -1337,6 +1343,16 @@ type RunTargetType string
 type RunWorkspace struct {
 	Graph RunGraph `json:"graph"`
 	Run   Run      `json:"run"`
+}
+
+// RuntimeSelection defines model for RuntimeSelection.
+type RuntimeSelection struct {
+	Model    string    `json:"model"`
+	Name     string    `json:"name"`
+	Provider string    `json:"provider"`
+	Ready    bool      `json:"ready"`
+	Ref      OpaqueRef `json:"ref"`
+	Revision string    `json:"revision"`
 }
 
 // Schedule defines model for Schedule.
@@ -2219,6 +2235,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runs/{runRef}/graph)
 	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (GET /api/v1/runtime-selections)
+	ListRuntimeSelections(w http.ResponseWriter, r *http.Request)
 
 	// (PATCH /api/v1/schedules/{scheduleRef})
 	UpdateSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params UpdateScheduleParams)
@@ -5967,6 +5986,26 @@ func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListRuntimeSelections operation middleware
+func (siw *ServerInterfaceWrapper) ListRuntimeSelections(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRuntimeSelections(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpdateSchedule operation middleware
 func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
@@ -7034,6 +7073,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/schedules/{scheduleRef}/commands", wrapper.CommandSchedule)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/session", wrapper.DeleteOwnerSession)

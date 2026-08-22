@@ -8,7 +8,7 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES';
 
 export type Problem = {
     type: string;
@@ -129,7 +129,12 @@ export type Agent = {
     state: 'DRAFT' | 'READY' | 'RUNNING' | 'DISABLED' | 'ARCHIVED';
     enabled: boolean;
     system: boolean;
-    runtimeName?: string;
+    runtimeRef: OpaqueRef;
+    runtimeName: string;
+    runtimeRevision?: string;
+    runtimeProvider?: string;
+    runtimeModel?: string;
+    runtimeReady: boolean;
     publishedInstructions?: InstructionVersion;
     draftInstructions?: InstructionVersion;
     capabilities: Array<PlatformCapability>;
@@ -154,6 +159,15 @@ export type AgentInput = {
      */
     runtimeRef?: OpaqueRef;
     initialInstructions?: string;
+};
+
+export type RuntimeSelection = {
+    ref: OpaqueRef;
+    name: string;
+    revision: string;
+    ready: boolean;
+    provider: string;
+    model: string;
 };
 
 export type AgentCommand = {
@@ -950,6 +964,33 @@ export type ListPlatformCapabilitiesResponses = {
 };
 
 export type ListPlatformCapabilitiesResponse = ListPlatformCapabilitiesResponses[keyof ListPlatformCapabilitiesResponses];
+
+export type ListRuntimeSelectionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/runtime-selections';
+};
+
+export type ListRuntimeSelectionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListRuntimeSelectionsError = ListRuntimeSelectionsErrors[keyof ListRuntimeSelectionsErrors];
+
+export type ListRuntimeSelectionsResponses = {
+    /**
+     * Доступные профили выполнения ИИ-сотрудников
+     */
+    200: {
+        items: Array<RuntimeSelection>;
+    };
+};
+
+export type ListRuntimeSelectionsResponse = ListRuntimeSelectionsResponses[keyof ListRuntimeSelectionsResponses];
 
 export type ListProjectsData = {
     body?: never;

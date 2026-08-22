@@ -145,6 +145,9 @@ func castProject(value entity.Project) *controlplanev1.Project {
 func castCapability(value entity.IntegrationCapability) *controlplanev1.PlatformCapability {
 	return &controlplanev1.PlatformCapability{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Risk, AvailableWithoutIntegration: strings.HasPrefix(value.Key, "platform.")}
 }
+func castRuntime(value entity.RuntimeSelection) *controlplanev1.RuntimeSelection {
+	return &controlplanev1.RuntimeSelection{Ref: value.Ref, Name: value.Name, Revision: value.RuntimeRevision, Ready: value.Ready, Provider: value.Provider, Model: value.Model}
+}
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
 	return &controlplanev1.IntegrationCapability{Key: value.Key, Name: value.Name, Description: value.Description, Risk: value.Risk, ApprovalRequired: value.Risk == "HIGH"}
 }
@@ -159,7 +162,7 @@ func castAgent(value entity.Agent) *controlplanev1.Agent {
 	for _, key := range value.Capabilities {
 		capabilities = append(capabilities, &controlplanev1.PlatformCapability{Key: key, Name: key, AvailableWithoutIntegration: strings.HasPrefix(key, "platform.")})
 	}
-	return &controlplanev1.Agent{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RoleDefinitionRef: value.RoleDefinitionRef, RoleDefinitionName: value.RoleDefinitionName, Name: value.Name, Purpose: value.Purpose, RoleDescription: value.RoleDescription, AvatarUrl: value.AvatarURL, State: agentState(value.State), Enabled: value.Enabled, System: value.System, Runtime: &controlplanev1.RuntimeSelection{Ref: value.RuntimeKey, Name: value.RuntimeName, Revision: value.RuntimeRevision, Ready: value.State == "READY"}, PublishedInstructions: castInstruction(value.PublishedInstructions), DraftInstructions: castInstruction(value.DraftInstructions), Capabilities: capabilities, IntegrationGrantRefs: value.IntegrationGrantRefs, KnowledgeArtifactRefs: value.KnowledgeArtifactRefs, UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Agent{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RoleDefinitionRef: value.RoleDefinitionRef, RoleDefinitionName: value.RoleDefinitionName, Name: value.Name, Purpose: value.Purpose, RoleDescription: value.RoleDescription, AvatarUrl: value.AvatarURL, State: agentState(value.State), Enabled: value.Enabled, System: value.System, Runtime: &controlplanev1.RuntimeSelection{Ref: value.RuntimeKey, Name: value.RuntimeName, Revision: value.RuntimeRevision, Ready: value.State == "READY", Provider: value.Provider, Model: value.Model}, PublishedInstructions: castInstruction(value.PublishedInstructions), DraftInstructions: castInstruction(value.DraftInstructions), Capabilities: capabilities, IntegrationGrantRefs: value.IntegrationGrantRefs, KnowledgeArtifactRefs: value.KnowledgeArtifactRefs, UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
 }
 func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentRef string) *controlplanev1.WorkflowVersion {
 	if value == nil {

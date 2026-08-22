@@ -31,6 +31,14 @@ func (server *Server) ListPlatformCapabilities(w http.ResponseWriter, r *http.Re
 	}
 	writeMessage(w, http.StatusOK, response, "", "capabilities")
 }
+func (server *Server) ListRuntimeSelections(w http.ResponseWriter, r *http.Request) {
+	response, err := server.control.Query.ListRuntimeSelections(r.Context(), &controlplanev1.ListRuntimeSelectionsRequest{})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "runtimes")
+}
 func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p generated.ListProjectsParams) {
 	response, err := server.control.Query.ListProjects(r.Context(), &controlplanev1.ListProjectsRequest{Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {

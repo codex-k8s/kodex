@@ -266,6 +266,7 @@
           "platform.query.run-graph.get",
           "platform.query.runs.get",
           "platform.query.runs.list",
+          "platform.query.runtimes.list",
           "platform.query.schedules.list",
           "platform.query.workflows.get",
           "platform.query.workflows.list",
@@ -2243,6 +2244,35 @@
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "permission": "platform.query.runs.list",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.query.runtimes.list",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/ListRuntimeSelections",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.query.runtimes.list",
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",

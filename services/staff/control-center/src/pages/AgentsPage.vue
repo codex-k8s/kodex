@@ -23,6 +23,9 @@ const list = computed(() =>
     (item) => item.projectRef === projectRef.value && !item.system,
   ),
 );
+const runtimes = computed(() =>
+  Object.values(platform.runtimes).filter((item) => item.ready),
+);
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -31,7 +34,13 @@ const form = reactive({
   purpose: "",
   roleDescription: "",
   initialInstructions: "",
+  runtimeRef: "",
 });
+
+function openDialog(): void {
+  form.runtimeRef ||= runtimes.value[0]?.ref ?? "";
+  dialog.value = true;
+}
 
 async function submit(): Promise<void> {
   busy.value = true;
@@ -51,6 +60,7 @@ onMounted(
     void Promise.all([
       platform.loadProject(projectRef.value),
       platform.loadAgents(projectRef.value),
+      platform.loadRuntimes(),
     ]),
 );
 </script>
@@ -62,7 +72,7 @@ onMounted(
         v-if="canCreate"
         class="button button--primary"
         type="button"
-        @click="dialog = true"
+        @click="openDialog"
       >
         {{ $t("agents.new") }}
       </button></template
@@ -79,7 +89,7 @@ onMounted(
           v-if="canCreate"
           class="button button--primary"
           type="button"
-          @click="dialog = true"
+          @click="openDialog"
         >
           {{ $t("agents.new") }}
         </button></template
@@ -128,8 +138,30 @@ onMounted(
             v-model.trim="form.initialInstructions"
             required
             maxlength="65536"
-          /></label
-        ><ProblemNotice
+          />
+        </label>
+        <details class="field--wide advanced-settings">
+          <summary>{{ $t("common.advanced") }}</summary>
+          <label class="field"
+            ><span>{{ $t("agents.runtime") }}</span
+            ><select v-model="form.runtimeRef" required>
+              <option
+                v-for="runtime in runtimes"
+                :key="runtime.ref"
+                :value="runtime.ref"
+              >
+                {{ runtime.name }}
+              </option>
+            </select>
+            <small>{{ $t("agents.runtimeHelp") }}</small></label
+          >
+          <ProblemNotice
+            v-if="platform.problems.runtimes"
+            :problem="platform.problems.runtimes"
+            compact
+          />
+        </details>
+        <ProblemNotice
           v-if="problem"
           class="field--wide"
           :problem="problem"
@@ -156,3 +188,16 @@ onMounted(
     >
   </PageFrame>
 </template>
+
+<style scoped>
+.advanced-settings {
+  display: grid;
+  gap: 12px;
+}
+.advanced-settings summary {
+  cursor: pointer;
+}
+.advanced-settings .field {
+  margin-top: 12px;
+}
+</style>

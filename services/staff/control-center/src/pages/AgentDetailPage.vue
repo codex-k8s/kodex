@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -17,6 +17,22 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
+const runtimes = computed(() =>
+  Object.values(platform.runtimes).filter((item) => item.ready),
+);
+const canManageCapabilities = computed(() =>
+  agent.value?.nextActions.includes("MANAGE_CAPABILITIES"),
+);
+const capabilityCatalog = computed(() => {
+  const values = [...platform.capabilities].sort(
+    (left, right) =>
+      left.category.localeCompare(right.category) ||
+      left.name.localeCompare(right.name),
+  );
+  return canManageCapabilities.value
+    ? values
+    : values.filter((item) => hasCapability(item.key));
+});
 const roleImageRecipe = computed(() =>
   Object.values(platform.roleImageRecipes).find(
     (item) =>
@@ -42,9 +58,37 @@ const latestBuild = computed(() => {
 const instructions = ref("");
 const task = ref("");
 const busy = ref(false);
+const editingProfile = ref(false);
+const capabilityBusy = ref("");
 const problem = ref<AppProblem>();
+const profile = reactive({
+  name: "",
+  purpose: "",
+  roleDescription: "",
+  avatarUrl: "",
+  runtimeRef: "",
+});
+
+function syncProfile(): void {
+  if (!agent.value) return;
+  profile.name = agent.value.name;
+  profile.purpose = agent.value.purpose;
+  profile.roleDescription = agent.value.roleDescription;
+  profile.avatarUrl = agent.value.avatarUrl ?? "";
+  profile.runtimeRef = agent.value.runtimeRef;
+}
+
+function hasCapability(key: string): boolean {
+  return agent.value?.capabilities.some((item) => item.key === key) ?? false;
+}
+
 async function load() {
-  await platform.loadAgent(agentRef.value);
+  await Promise.all([
+    platform.loadAgent(agentRef.value),
+    platform.loadRuntimes(),
+    platform.loadCapabilities(),
+  ]);
+  syncProfile();
   instructions.value =
     agent.value?.draftInstructions?.content ??
     agent.value?.publishedInstructions?.content ??
@@ -67,6 +111,54 @@ async function load() {
     selectedEnvironment.value =
       roleEnvironments.value.find((item) => item.recommended && item.available)
         ?.key ?? "";
+  }
+}
+
+async function saveProfile(): Promise<void> {
+  if (!agent.value) return;
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    await platform.saveAgent(
+      projectRef.value,
+      {
+        name: profile.name,
+        purpose: profile.purpose,
+        roleDescription: profile.roleDescription,
+        roleDefinitionRef: agent.value.roleDefinitionRef,
+        avatarUrl: profile.avatarUrl || undefined,
+        runtimeRef: profile.runtimeRef,
+      },
+      agent.value,
+    );
+    syncProfile();
+    editingProfile.value = false;
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    busy.value = false;
+  }
+}
+
+function cancelProfile(): void {
+  syncProfile();
+  editingProfile.value = false;
+}
+
+async function toggleCapability(key: string): Promise<void> {
+  if (!agent.value || !canManageCapabilities.value || capabilityBusy.value)
+    return;
+  capabilityBusy.value = key;
+  problem.value = undefined;
+  try {
+    await platform.changeAgent(agent.value, {
+      action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
+      capabilityKey: key,
+    });
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    capabilityBusy.value = "";
   }
 }
 
@@ -200,18 +292,117 @@ onMounted(() => void load());
       <div v-if="agent" class="detail-layout">
         <section class="detail-main">
           <article class="panel">
-            <h2>{{ $t("agents.role") }}</h2>
-            <p>{{ agent.roleDescription }}</p>
-            <dl class="metadata">
-              <div>
-                <dt>{{ $t("agents.runtime") }}</dt>
-                <dd>{{ agent.runtimeName ?? $t("common.noData") }}</dd>
+            <div class="section-header">
+              <h2>{{ $t("agents.profile") }}</h2>
+              <button
+                v-if="!editingProfile && agent.nextActions.includes('EDIT')"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="editingProfile = true"
+              >
+                {{ $t("common.edit") }}
+              </button>
+            </div>
+            <form
+              v-if="editingProfile"
+              class="form-grid profile-form"
+              @submit.prevent="saveProfile"
+            >
+              <label class="field"
+                ><span>{{ $t("common.name") }}</span
+                ><input v-model.trim="profile.name" required maxlength="120"
+              /></label>
+              <label class="field"
+                ><span>{{ $t("common.purpose") }}</span
+                ><input
+                  v-model.trim="profile.purpose"
+                  required
+                  maxlength="1000"
+              /></label>
+              <label class="field field--wide"
+                ><span>{{ $t("agents.role") }}</span
+                ><textarea
+                  v-model.trim="profile.roleDescription"
+                  required
+                  maxlength="1000"
+                />
+              </label>
+              <label class="field"
+                ><span>{{ $t("agents.runtime") }}</span
+                ><select v-model="profile.runtimeRef" required>
+                  <option
+                    v-for="runtime in runtimes"
+                    :key="runtime.ref"
+                    :value="runtime.ref"
+                  >
+                    {{ runtime.name }}
+                  </option>
+                </select></label
+              >
+              <label class="field"
+                ><span>{{ $t("agents.avatar") }}</span
+                ><input
+                  v-model.trim="profile.avatarUrl"
+                  type="url"
+                  maxlength="500"
+              /></label>
+              <div class="inline-actions field--wide">
+                <button
+                  class="button"
+                  type="button"
+                  :disabled="busy"
+                  @click="cancelProfile"
+                >
+                  {{ $t("common.cancel") }}
+                </button>
+                <button
+                  class="button button--primary"
+                  type="submit"
+                  :disabled="busy || !profile.runtimeRef"
+                >
+                  {{ $t("common.save") }}
+                </button>
               </div>
-              <div>
-                <dt>{{ $t("common.version", { version: agent.version }) }}</dt>
-                <dd>{{ new Date(agent.updatedAt).toLocaleString() }}</dd>
-              </div>
-            </dl>
+            </form>
+            <template v-else>
+              <h3>{{ agent.roleDefinitionName ?? agent.name }}</h3>
+              <p>{{ agent.roleDescription }}</p>
+              <dl class="metadata">
+                <div>
+                  <dt>{{ $t("agents.runtime") }}</dt>
+                  <dd>{{ agent.runtimeName }}</dd>
+                </div>
+                <div>
+                  <dt>
+                    {{ $t("common.version", { version: agent.version }) }}
+                  </dt>
+                  <dd>{{ new Date(agent.updatedAt).toLocaleString() }}</dd>
+                </div>
+              </dl>
+              <details class="runtime-details">
+                <summary>{{ $t("common.advanced") }}</summary>
+                <dl class="metadata">
+                  <div>
+                    <dt>{{ $t("agents.provider") }}</dt>
+                    <dd>{{ agent.runtimeProvider }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.model") }}</dt>
+                    <dd>{{ agent.runtimeModel }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.runtimeRevision") }}</dt>
+                    <dd>{{ agent.runtimeRevision }}</dd>
+                  </div>
+                </dl>
+              </details>
+            </template>
+            <ProblemNotice
+              v-if="platform.problems.runtimes"
+              :problem="platform.problems.runtimes"
+              compact
+            />
           </article>
           <article class="panel">
             <div class="section-header">
@@ -398,15 +589,40 @@ onMounted(() => void load());
             </button>
           </section>
           <section class="panel">
-            <h2>{{ $t("agents.capabilities") }}</h2>
-            <div class="chip-list">
-              <span
-                v-for="capability in agent.capabilities"
-                :key="capability.key"
-                >{{ capability.name }}</span
-              >
-              <p v-if="!agent.capabilities.length">{{ $t("common.empty") }}</p>
+            <div class="section-header">
+              <h2>{{ $t("agents.capabilities") }}</h2>
+              <span v-if="canManageCapabilities" class="secondary-text">
+                {{ $t("agents.capabilitiesHelp") }}
+              </span>
             </div>
+            <div class="capability-list">
+              <label
+                v-for="capability in capabilityCatalog"
+                :key="capability.key"
+                class="capability-item"
+              >
+                <input
+                  v-if="canManageCapabilities"
+                  type="checkbox"
+                  :checked="hasCapability(capability.key)"
+                  :disabled="Boolean(capabilityBusy)"
+                  @change="toggleCapability(capability.key)"
+                />
+                <span>
+                  <strong>{{ capability.name }}</strong>
+                  <small>{{ capability.description }}</small>
+                </span>
+              </label>
+              <p v-if="!capabilityCatalog.length">{{ $t("common.empty") }}</p>
+            </div>
+            <p v-if="capabilityBusy" class="secondary-text" aria-live="polite">
+              {{ $t("agents.capabilitySaving") }}
+            </p>
+            <ProblemNotice
+              v-if="platform.problems.capabilities"
+              :problem="platform.problems.capabilities"
+              compact
+            />
           </section>
           <section class="panel">
             <h2>{{ $t("agents.knowledge") }}</h2>
@@ -458,6 +674,35 @@ onMounted(() => void load());
 .launch-panel {
   display: grid;
   gap: 12px;
+}
+.profile-form,
+.capability-list {
+  display: grid;
+  gap: 10px;
+}
+.runtime-details {
+  margin-top: 14px;
+}
+.runtime-details summary {
+  cursor: pointer;
+}
+.capability-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.capability-item strong,
+.capability-item small {
+  display: block;
+}
+.capability-item small,
+.secondary-text {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
 }
 .environment-options {
   display: grid;

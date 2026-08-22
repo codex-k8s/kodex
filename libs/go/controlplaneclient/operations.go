@@ -8,6 +8,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.bootstrap.get":                 controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName,
 		"platform.query.overview.get":                  controlplanev1.PlatformQueryService_GetOverview_FullMethodName,
 		"platform.query.capabilities.list":             controlplanev1.PlatformQueryService_ListPlatformCapabilities_FullMethodName,
+		"platform.query.runtimes.list":                 controlplanev1.PlatformQueryService_ListRuntimeSelections_FullMethodName,
 		"platform.query.projects.list":                 controlplanev1.PlatformQueryService_ListProjects_FullMethodName,
 		"platform.query.projects.get":                  controlplanev1.PlatformQueryService_GetProject_FullMethodName,
 		"platform.query.memberships.list":              controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName,

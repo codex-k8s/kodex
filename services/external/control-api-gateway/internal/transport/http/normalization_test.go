@@ -44,6 +44,21 @@ func TestNormalizeArtifactSource(t *testing.T) {
 	}
 }
 
+func TestNormalizeFlattensAgentRuntimeWithExplicitReadiness(t *testing.T) {
+	t.Parallel()
+	value := map[string]any{"runtime": map[string]any{
+		"ref": "builtin-safe-runtime", "name": "Runtime", "revision": "runtime-v1",
+		"provider": "provider", "model": "model",
+	}}
+	normalize(value)
+	if _, exists := value["runtime"]; exists {
+		t.Fatalf("вложенный runtime не удалён: %#v", value)
+	}
+	if value["runtimeRef"] != "builtin-safe-runtime" || value["runtimeReady"] != false {
+		t.Fatalf("runtime агента нормализован неверно: %#v", value)
+	}
+}
+
 func TestSafeAttachmentFileNameRemovesHeaderAndPathControls(t *testing.T) {
 	t.Parallel()
 

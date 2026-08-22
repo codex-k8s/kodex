@@ -47,6 +47,22 @@ func (server *Server) ListPlatformCapabilities(ctx context.Context, _ *controlpl
 	return response, nil
 }
 
+func (server *Server) ListRuntimeSelections(ctx context.Context, _ *controlplanev1.ListRuntimeSelectionsRequest) (*controlplanev1.ListRuntimeSelectionsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListRuntimeSelections_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, err := server.service.ListRuntimes(ctx, p)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListRuntimeSelectionsResponse{}
+	for _, item := range items {
+		response.Runtimes = append(response.Runtimes, castRuntime(item))
+	}
+	return response, nil
+}
+
 func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.ListProjectsRequest) (*controlplanev1.ListProjectsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjects_FullMethodName)
 	if err != nil {
