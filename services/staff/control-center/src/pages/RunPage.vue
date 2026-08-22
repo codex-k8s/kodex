@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import type {
+  Artifact,
   OwnerGate,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -46,9 +48,16 @@ const selectedNode = computed(
     graph.value?.nodes.find((n) => n.state === "RUNNING") ??
     graph.value?.nodes[0],
 );
+const selectedNodeEvents = computed(() =>
+  eventList.value
+    .filter((event) => event.nodeRef === selectedNode.value?.ref)
+    .slice(0, 20)
+    .reverse(),
+);
 const turn = ref("");
 const comment = ref("");
 const busy = ref(false);
+const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 async function load() {
   await platform.loadRun(runRef.value);
@@ -111,6 +120,30 @@ async function decide(
 }
 function select(node: RunNode) {
   selectedRef.value = node.ref;
+}
+async function downloadArtifact(artifact: Artifact): Promise<void> {
+  if (!artifact.nextActions.includes("DOWNLOAD")) return;
+  downloadBusyRef.value = artifact.ref;
+  problem.value = undefined;
+  try {
+    const body = await platform.downloadArtifactContent(
+      artifact.ref,
+      "DOWNLOAD",
+    );
+    const url = URL.createObjectURL(body);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = artifact.fileName;
+    anchor.hidden = true;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    problem.value = asProblem(error);
+  } finally {
+    downloadBusyRef.value = "";
+  }
 }
 function openCurrentStream(): void {
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
@@ -221,43 +254,12 @@ onBeforeUnmount(() => {
             <h2>{{ $t("runs.graph") }}</h2>
             <span>{{ graph.nodes.length }}</span>
           </div>
-          <div class="run-graph" role="list">
-            <button
-              v-for="node in graph.nodes"
-              :key="node.ref"
-              type="button"
-              role="listitem"
-              class="graph-node"
-              :class="{
-                'graph-node--selected': node.ref === selectedNode?.ref,
-              }"
-              @click="select(node)"
-            >
-              <span class="node-icon" aria-hidden="true">{{
-                node.type === "HUMAN_GATE"
-                  ? "◇"
-                  : node.type === "EXTERNAL_ACTION"
-                    ? "□"
-                    : "●"
-              }}</span
-              ><span
-                ><strong>{{ node.displayName }}</strong
-                ><small>{{
-                  node.progressSummary ?? node.role ?? node.type
-                }}</small></span
-              ><StatusBadge :state="node.state" />
-            </button>
-          </div>
-          <details v-if="graph.edges.length" class="edge-details">
-            <summary>
-              {{ graph.edges.length }} · {{ $t("runs.connections") }}
-            </summary>
-            <ul>
-              <li v-for="edge in graph.edges" :key="edge.ref">
-                {{ edge.label }} · {{ edge.type }}
-              </li>
-            </ul>
-          </details>
+          <RunGraphCanvas
+            :nodes="graph.nodes"
+            :edges="graph.edges"
+            :selected-ref="selectedNode?.ref"
+            @select="select"
+          />
         </section>
         <section class="timeline-panel">
           <div class="workspace-heading">
@@ -312,7 +314,50 @@ onBeforeUnmount(() => {
               <span v-for="name in selectedNode.integrationNames" :key="name">{{
                 name
               }}</span>
-            </div></template
+            </div>
+            <dl class="node-relations">
+              <div v-if="selectedNode.callbackSummary">
+                <dt>{{ $t("runs.callback") }}</dt>
+                <dd>{{ selectedNode.callbackSummary }}</dd>
+              </div>
+              <div v-if="selectedNode.artifactRefs.length">
+                <dt>{{ $t("runs.artifacts") }}</dt>
+                <dd>{{ selectedNode.artifactRefs.length }}</dd>
+              </div>
+              <div v-if="selectedNode.childRunRefs.length">
+                <dt>{{ $t("runs.childRuns") }}</dt>
+                <dd class="node-links">
+                  <RouterLink
+                    v-for="childRef in selectedNode.childRunRefs"
+                    :key="childRef"
+                    :to="`/runs/${childRef}`"
+                  >
+                    {{ $t("runs.openChildRun") }}
+                  </RouterLink>
+                </dd>
+              </div>
+              <div v-if="selectedNode.startedAt">
+                <dt>{{ $t("runs.startedAt") }}</dt>
+                <dd>{{ new Date(selectedNode.startedAt).toLocaleString() }}</dd>
+              </div>
+              <div v-if="selectedNode.finishedAt">
+                <dt>{{ $t("runs.finishedAt") }}</dt>
+                <dd>{{ new Date(selectedNode.finishedAt).toLocaleString() }}</dd>
+              </div>
+            </dl>
+            <section class="node-conversation" aria-live="polite">
+              <h3>{{ $t("runs.nodeConversation") }}</h3>
+              <ol v-if="selectedNodeEvents.length">
+                <li v-for="event in selectedNodeEvents" :key="event.sequence">
+                  <span>{{ event.summary }}</span>
+                  <p v-if="event.progress">{{ event.progress }}</p>
+                  <time :datetime="event.occurredAt">
+                    {{ new Date(event.occurredAt).toLocaleTimeString() }}
+                  </time>
+                </li>
+              </ol>
+              <p v-else>{{ $t("runs.noNodeActivity") }}</p>
+            </section></template
           >
         </aside>
       </div>
@@ -320,15 +365,20 @@ onBeforeUnmount(() => {
         <article class="panel">
           <h2>{{ $t("runs.artifacts") }}</h2>
           <div v-if="artifactList.length" class="artifact-list">
-            <a
+            <button
               v-for="artifact in artifactList"
               :key="artifact.ref"
-              :href="`/api/v1/artifacts/${artifact.ref}/content`"
               class="artifact-row"
+              type="button"
+              :disabled="
+                downloadBusyRef === artifact.ref ||
+                !artifact.nextActions.includes('DOWNLOAD')
+              "
+              @click="downloadArtifact(artifact)"
               ><span>{{ artifact.fileName }}</span
               ><StatusBadge :state="artifact.scanState" /><span
                 >{{ artifact.sizeBytes }} B</span
-              ></a
+              ></button
             >
           </div>
           <p v-else>{{ $t("common.empty") }}</p>
@@ -420,45 +470,6 @@ onBeforeUnmount(() => {
 .workspace-heading h2 {
   margin: 0 0 12px;
 }
-.run-graph {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  background: #f7f9fb;
-  border: 1px solid #eff2f5;
-  border-radius: 9px;
-}
-.graph-node {
-  display: grid;
-  grid-template-columns: 30px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 11px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
-  text-align: left;
-  cursor: pointer;
-}
-.graph-node--selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(27, 111, 196, 0.13);
-}
-.graph-node span:nth-child(2) {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.graph-node small {
-  color: var(--muted);
-}
-.node-icon {
-  color: var(--accent);
-}
-.edge-details {
-  margin-top: 14px;
-  color: var(--muted);
-}
 .timeline {
   display: grid;
   gap: 0;
@@ -506,6 +517,45 @@ onBeforeUnmount(() => {
 .metadata dd {
   margin: 4px 0;
 }
+.node-relations {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.node-relations dt {
+  color: var(--subtle);
+  font-size: 0.78rem;
+}
+.node-relations dd {
+  margin: 3px 0 0;
+}
+.node-links {
+  display: grid;
+  gap: 4px;
+}
+.node-conversation {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.node-conversation ol {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.node-conversation li {
+  padding: 9px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+.node-conversation p {
+  margin: 4px 0;
+}
+.node-conversation time {
+  color: var(--subtle);
+  font-size: 0.75rem;
+}
 .chip-list {
   display: flex;
   gap: 6px;
@@ -529,10 +579,16 @@ onBeforeUnmount(() => {
 .artifact-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
+  width: 100%;
   gap: 12px;
   padding: 10px 0;
+  border: 0;
   border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 .empty-compact {
   color: var(--muted);

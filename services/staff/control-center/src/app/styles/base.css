@@ -14,9 +14,14 @@
   --danger-soft: #fceded;
   --muted: #4e5a68;
   --subtle: #7c8794;
+  --text: #10161e;
+  --text-secondary: #4e5a68;
   --border: #dfe4ea;
+  --border-strong: #c9d1da;
+  --hairline: #eff2f5;
   --surface: #fff;
   --panel: #fbfcfd;
+  --canvas: #f7f9fb;
 }
 
 * {
