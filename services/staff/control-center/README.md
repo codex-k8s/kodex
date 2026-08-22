@@ -61,9 +61,9 @@ project/session операции locator не используют. Пока р�
 создана или не выбрана, project-scoped routes и realtime не запускаются;
 создание первой рабочей области остаётся доступным без realtime projection.
 
-Канонический production origin консоли — `https://control.kodex.works/`.
-Интерактивная аутентификация выполняется через Keycloak realm
-`https://sso.kodex.works/realms/mattercodex` по Authorization Code + PKCE.
+Production origin консоли и OIDC issuer задаются конфигурацией конкретной
+установки. Интерактивная аутентификация выполняется по Authorization Code +
+PKCE; значения deployment-домена в исходном коде отсутствуют.
 Имена `control-api.mattercodex.local` и другие `*.mattercodex.local` являются
 только внутренними TLS/SNI authority и не публикуются как пользовательские URL.
 

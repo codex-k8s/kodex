@@ -157,7 +157,7 @@ spec:
       applicationCredential:
         type: OIDC_BEARER
         metadataKey: authorization
-        exactIssuer: https://sso.kodex.works/realms/mattercodex
+        exactIssuer: __MATTERCODEX_OIDC_ISSUER__
         exactAudience: mattercodex-control-api
         exactTrustBundleId: mattercodex-oidc-signers-g1
         actorSource: VERIFIED_OIDC_SUBJECT
