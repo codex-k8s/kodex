@@ -1,0 +1,498 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Макеты экранов"
+    },
+    {
+      "id": "page-2",
+      "name": "Черновики направлений"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "page": "page-1",
+      "title": "Карта макетов",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "01_onboarding_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-01 · Первичная настройка · desktop",
+      "x": 0,
+      "y": 1224,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "01_onboarding_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-01 · Первичная настройка · mobile",
+      "x": 1560,
+      "y": 1224,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "02_assistant_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-02 · Помощник MatterCodex · desktop",
+      "x": 0,
+      "y": 2448,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "02_assistant_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-02 · Помощник MatterCodex · mobile",
+      "x": 1560,
+      "y": 2448,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "03_home_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-03 · Главная · desktop",
+      "x": 0,
+      "y": 3672,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "03_home_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-03 · Главная · mobile",
+      "x": 1560,
+      "y": 3672,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "04_projects_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-04 · Проекты · desktop",
+      "x": 0,
+      "y": 4896,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "04_projects_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-04 · Проекты · mobile",
+      "x": 1560,
+      "y": 4896,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "05_project_overview_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-05 · Обзор Проекта · desktop",
+      "x": 0,
+      "y": 6120,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "05_project_overview_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-05 · Обзор Проекта · mobile",
+      "x": 1560,
+      "y": 6120,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "06_agents_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-06 · ИИ-сотрудники · desktop",
+      "x": 0,
+      "y": 7344,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "06_agents_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-06 · ИИ-сотрудники · mobile",
+      "x": 1560,
+      "y": 7344,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "07_agent_detail_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-07 · ИИ-сотрудник · desktop",
+      "x": 0,
+      "y": 8568,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "07_agent_detail_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-07 · ИИ-сотрудник · mobile",
+      "x": 1560,
+      "y": 8568,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "08_workflows_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-08 · Процессы · desktop",
+      "x": 0,
+      "y": 9792,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "08_workflows_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-08 · Процессы · mobile",
+      "x": 1560,
+      "y": 9792,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "09_workflow_detail_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-09 · Редактор Процесса · desktop",
+      "x": 0,
+      "y": 11016,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "09_workflow_detail_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-09 · Редактор Процесса · mobile",
+      "x": 1560,
+      "y": 11016,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "10_new_run_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-10 · Новый запуск · desktop",
+      "x": 0,
+      "y": 12240,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "10_new_run_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-10 · Новый запуск · mobile",
+      "x": 1560,
+      "y": 12240,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "11_runs_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-11 · Запуски · desktop",
+      "x": 0,
+      "y": 13464,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "11_runs_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-11 · Запуски · mobile",
+      "x": 1560,
+      "y": 13464,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "12_live_run_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-12 · Live Run Workspace · desktop",
+      "x": 0,
+      "y": 14688,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "12_live_run_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-12 · Live Run Workspace · mobile",
+      "x": 1560,
+      "y": 14688,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "13_files_knowledge_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-13 · Файлы и знания · desktop",
+      "x": 0,
+      "y": 15912,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "13_files_knowledge_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-13 · Файлы и знания · mobile",
+      "x": 1560,
+      "y": 15912,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "14_automations_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-14 · Автоматизации · desktop",
+      "x": 0,
+      "y": 17136,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "14_automations_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-14 · Автоматизации · mobile",
+      "x": 1560,
+      "y": 17136,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "15_integrations_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-15 · Интеграции · desktop",
+      "x": 0,
+      "y": 18360,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "15_integrations_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-15 · Интеграции · mobile",
+      "x": 1560,
+      "y": 18360,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "16_decisions_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-16 · Решения · desktop",
+      "x": 0,
+      "y": 19584,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "16_decisions_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-16 · Решения · mobile",
+      "x": 1560,
+      "y": 19584,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "17_access_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-17 · Участники и доступ · desktop",
+      "x": 0,
+      "y": 20808,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "17_access_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-17 · Участники и доступ · mobile",
+      "x": 1560,
+      "y": 20808,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "18_administration_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-18 · Администрирование · desktop",
+      "x": 0,
+      "y": 22032,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "18_administration_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-18 · Администрирование · mobile",
+      "x": 1560,
+      "y": 22032,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "19_audit_diagnostics_desktop.dc.html",
+      "page": "page-1",
+      "title": "UX-19 · Аудит и диагностика · desktop",
+      "x": 0,
+      "y": 23256,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "19_audit_diagnostics_mobile.dc.html",
+      "page": "page-1",
+      "title": "UX-19 · Аудит и диагностика · mobile",
+      "x": 1560,
+      "y": 23256,
+      "w": 390,
+      "h": 844,
+      "print": "fixed"
+    },
+    {
+      "file": "VariantAdark.dc.html",
+      "page": "page-2",
+      "title": "Вариант А · тёмный",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "VariantB.dc.html",
+      "page": "page-2",
+      "title": "Вариант Б · Рабочее место",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "VariantC.dc.html",
+      "page": "page-2",
+      "title": "Вариант В · Отчёт",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    },
+    {
+      "file": "VariantD.dc.html",
+      "page": "page-2",
+      "title": "Вариант Г · Сетка",
+      "x": 4680,
+      "y": 0,
+      "w": 1440,
+      "h": 1024,
+      "print": "fixed"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "grp-start",
+      "page": "page-1",
+      "x": -700,
+      "y": 1224,
+      "w": 560,
+      "text": "НАЧАЛО РАБОТЫ\nUX-01 Первичная настройка, UX-02 Помощник MatterCodex, UX-03 Главная.\nЗдесь пользователь впервые видит платформу: помощник готов, интеграции не нужны, основной путь — «Начать с помощником»."
+    },
+    {
+      "id": "grp-projects",
+      "page": "page-1",
+      "x": -700,
+      "y": 4896,
+      "w": 560,
+      "text": "ПРОЕКТЫ И КОМАНДА\nUX-04 Проекты, UX-05 Обзор Проекта, UX-06 ИИ-сотрудники, UX-07 ИИ-сотрудник.\nПроект — единственный контейнер работы. У агента версионируемые инструкции: опубликованная неизменяема, правки идут через черновик."
+    },
+    {
+      "id": "grp-runs",
+      "page": "page-1",
+      "x": -700,
+      "y": 9792,
+      "w": 560,
+      "text": "ПРОЦЕССЫ И ЗАПУСКИ\nUX-08 Процессы, UX-09 Редактор Процесса, UX-10 Новый запуск, UX-11 Запуски, UX-12 Live Run Workspace.\nСостояние определения Процесса нигде не смешивается с состоянием запуска. UX-12 — эталон дизайн-системы, с него начинался вариант А."
+    },
+    {
+      "id": "grp-material",
+      "page": "page-1",
+      "x": -700,
+      "y": 15912,
+      "w": 560,
+      "text": "МАТЕРИАЛЫ И ПОДКЛЮЧЕНИЯ\nUX-13 Файлы и знания, UX-14 Автоматизации, UX-15 Интеграции.\nПроверка безопасности файла показана отдельным этапом. Пустой каталог интеграций — валидное готовое состояние, а не ошибка."
+    },
+    {
+      "id": "grp-admin",
+      "page": "page-1",
+      "x": -700,
+      "y": 19584,
+      "w": 560,
+      "text": "РЕШЕНИЯ И АДМИНИСТРИРОВАНИЕ\nUX-16 Решения, UX-17 Участники и доступ, UX-18 Администрирование, UX-19 Аудит и диагностика.\nРешение человека принимается ровно один раз. Готовность ядра отделена от необязательных адаптеров, аудит показывает двойную атрибуцию «пользователь через помощника»."
+    },
+    {
+      "id": "drafts",
+      "page": "page-2",
+      "x": 0,
+      "y": -300,
+      "w": 620,
+      "text": "ЧЕРНОВИКИ НАПРАВЛЕНИЙ\nЧетыре исходных направления экрана Live Run Workspace, из которых выбран вариант А (в светлой палитре).\nОставлены для истории решения; в производство идёт только страница «Макеты экранов»."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

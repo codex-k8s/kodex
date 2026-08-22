@@ -1,0 +1,320 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Onest:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #A15C3A; text-decoration: none; border-bottom: 1px solid rgba(161,92,58,0.35); }
+    a:hover { color: #7C4227; border-bottom-color: #7C4227; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 1024px; display: flex; overflow: hidden; background: #FAF7F0; color: #17150F; font-family: 'Onest', system-ui, sans-serif; font-size: 13px; line-height: 1.5; font-feature-settings: 'tnum' 1;">
+
+  <!-- НАВИГАЦИЯ -->
+  <nav style="width: 216px; flex: 0 0 216px; display: flex; flex-direction: column; border-right: 1px solid #DED8C8; padding: 0 0 20px;">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 24px; border-bottom: 1px solid #DED8C8;">
+      <span style="font-family: 'Literata', Georgia, serif; font-size: 16px; font-weight: 600; letter-spacing: -0.01em;">MatterCodex</span>
+    </div>
+
+    <div style="padding: 20px 24px 16px; border-bottom: 1px solid #EDE7D9;">
+      <a href="#" style="display: block; border: 0; color: #17150F;">
+        <div style="font-family: 'Literata', Georgia, serif; font-size: 13.5px; font-weight: 500;">Помощник MatterCodex</div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: #5A7A3C;">
+          <span style="width: 5px; height: 5px; background: #5A7A3C;"></span> Готов
+        </div>
+      </a>
+    </div>
+
+    <div style="display: flex; flex-direction: column; padding: 14px 0;">
+      <a href="#" style="border: 0; color: #5C574C; padding: 7px 24px; font-size: 13.5px;">Главная</a>
+      <a href="#" style="border: 0; color: #5C574C; padding: 7px 24px; font-size: 13.5px;">Проекты</a>
+      <a href="#" aria-current="page" style="border: 0; color: #17150F; padding: 7px 24px 7px 21px; font-size: 13.5px; font-weight: 500; border-left: 3px solid #A15C3A;">Запуски</a>
+      <a href="#" style="border: 0; color: #5C574C; padding: 7px 24px; font-size: 13.5px; display: flex; align-items: center; justify-content: space-between;">
+        <span>Решения</span>
+        <span style="font-family: 'Literata', Georgia, serif; font-size: 12px; color: #8A6A17;">1</span>
+      </a>
+      <a href="#" style="border: 0; color: #5C574C; padding: 7px 24px; font-size: 13.5px;">Интеграции</a>
+    </div>
+
+    <div style="flex: 1 1 auto;"></div>
+    <div style="padding-top: 14px; border-top: 1px solid #EDE7D9;">
+      <a href="#" style="border: 0; color: #5C574C; padding: 7px 24px; font-size: 13.5px; display: block;">Администрирование</a>
+    </div>
+  </nav>
+
+  <!-- КОНТЕНТ -->
+  <div style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0;">
+
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+    <header style="height: 52px; flex: 0 0 52px; display: flex; align-items: center; gap: 20px; padding: 0 28px; border-bottom: 1px solid #DED8C8;">
+      <button style="display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: #17150F;">
+        <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">Проект</span>
+        Корпоративные продажи
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8C8577" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <span style="width: 1px; height: 20px; background: #DED8C8;"></span>
+      <span style="display: flex; align-items: center; gap: 8px; color: #8C8577; font-size: 13px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+        Найти проект, агента или запуск
+      </span>
+      <div style="flex: 1 1 auto;"></div>
+      <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #5A7A3C;"><span style="width: 5px; height: 5px; background: #5A7A3C;"></span>В сети</span>
+      <span style="font-size: 12.5px; color: #5C574C;">Решения <span style="font-family: 'Literata', Georgia, serif; color: #8A6A17;">1</span></span>
+      <span style="font-size: 12.5px; color: #5C574C;">Уведомления</span>
+      <span style="width: 1px; height: 20px; background: #DED8C8;"></span>
+      <span style="display: flex; align-items: center; gap: 8px;">
+        <span style="width: 26px; height: 26px; border: 1px solid #DED8C8; font-family: 'Literata', Georgia, serif; font-size: 11px; display: flex; align-items: center; justify-content: center;">АВ</span>
+        <span style="font-size: 12.5px;">Анна Волкова</span>
+      </span>
+    </header>
+
+    <!-- МАСТХЕД ЗАПУСКА -->
+    <div style="flex: 0 0 132px; padding: 18px 28px 16px; border-bottom: 1px solid #17150F;">
+      <div style="font-size: 11.5px; color: #8C8577;"><a href="#">Запуски</a> <span style="padding: 0 5px;">/</span> Подготовить предложение для компании Север</div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin-top: 9px;">
+        <div style="min-width: 0;">
+          <h1 style="margin: 0; font-family: 'Literata', Georgia, serif; font-size: 26px; font-weight: 500; letter-spacing: -0.015em; line-height: 1.15; text-wrap: pretty;">Подготовить предложение для&nbsp;компании&nbsp;Север</h1>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: #5C574C;">
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #A15C3A; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+              Выполняется
+            </span>
+            <span style="color: #C9C2B0;">|</span>
+            <span style="font-family: 'Literata', Georgia, serif;">12 мин</span>
+            <span style="color: #C9C2B0;">|</span>
+            <span>Запустила Анна Волкова</span>
+            <span style="color: #C9C2B0;">|</span>
+            <span>Источник: Control Center</span>
+            <span style="color: #C9C2B0;">|</span>
+            <span>Процесс «Обработка нового лида» v3</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding-bottom: 4px;">
+          <button style="height: 34px; padding: 0 15px; border: 1px solid #B08072; background: none; color: #8C3A24; font: inherit; font-size: 13px;">Отменить запуск</button>
+          <button aria-label="Другие действия" style="width: 34px; height: 34px; border: 1px solid #DED8C8; background: none; color: #5C574C;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ТЕЛО -->
+    <div style="flex: 1 1 auto; display: flex; min-height: 0;">
+
+      <!-- ГРАФ + ЖУРНАЛ -->
+      <div style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #DED8C8;">
+
+        <section style="padding: 20px 28px 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #DED8C8; padding-bottom: 9px;">
+            <h2 style="margin: 0; font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 600;">Граф выполнения</h2>
+            <div style="display: flex; align-items: center; gap: 16px; font-size: 12px; color: #5C574C;">
+              <button style="background: none; border: 0; padding: 0; font: inherit; color: #5C574C; border-bottom: 1px solid #DED8C8;">Свернуть завершённые</button>
+              <button style="background: none; border: 0; padding: 0; font: inherit; color: #5C574C; border-bottom: 1px solid #DED8C8;">Только выбранная ветка</button>
+              <button style="background: none; border: 0; padding: 0; font: inherit; color: #5C574C; border-bottom: 1px solid #DED8C8;">Показать списком</button>
+            </div>
+          </div>
+
+          <!-- Уровень 1 -->
+          <div style="display: flex; gap: 16px; padding: 14px 0 13px; border-bottom: 1px solid #EDE7D9;">
+            <span style="flex: 0 0 26px; font-family: 'Literata', Georgia, serif; font-size: 13px; color: #A9A294; padding-top: 1px;">1</span>
+            <div style="flex: 1 1 auto; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 10px;">
+                <span style="font-family: 'Literata', Georgia, serif; font-size: 16px; font-weight: 500;">Обработка нового лида</span>
+                <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">Процесс</span>
+              </div>
+              <div style="font-size: 12.5px; color: #5C574C; margin-top: 3px;">Координатор «Менеджер продаж» ведёт работу и соберёт итог</div>
+            </div>
+            <div style="flex: 0 0 190px; text-align: right;">
+              <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #A15C3A;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+                Выполняется
+              </div>
+              <div style="font-family: 'Literata', Georgia, serif; font-size: 12px; color: #8C8577; margin-top: 3px;">с 12:04 · попытка 1</div>
+            </div>
+          </div>
+
+          <!-- Уровень 2 -->
+          <div style="display: flex; gap: 16px; padding: 14px 0 13px; border-bottom: 1px solid #EDE7D9;">
+            <span style="flex: 0 0 26px;"></span>
+            <span style="flex: 0 0 26px; font-family: 'Literata', Georgia, serif; font-size: 13px; color: #A9A294; padding-top: 1px;">2</span>
+            <div style="flex: 1 1 auto; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 10px;">
+                <span style="font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 500;">Аналитик продаж</span>
+                <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">ИИ-сотрудник</span>
+              </div>
+              <div style="font-size: 12.5px; color: #5C574C; margin-top: 3px;">Исследование клиента готово · <a href="#">research-summary.md</a></div>
+            </div>
+            <div style="flex: 0 0 190px; text-align: right;">
+              <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #5A7A3C;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M5 12.5 10 17.5 19 7"/></svg>
+                Завершён
+              </div>
+              <div style="font-family: 'Literata', Georgia, serif; font-size: 12px; color: #8C8577; margin-top: 3px;">6 мин · попытка 1</div>
+            </div>
+          </div>
+
+          <!-- Параллельная группа -->
+          <div style="display: flex; gap: 16px; padding: 12px 0 0;">
+            <span style="flex: 0 0 26px;"></span>
+            <span style="flex: 0 0 26px;"></span>
+            <div style="flex: 1 1 auto; border-left: 1px solid #C9C2B0; padding-left: 18px;">
+              <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577; padding-bottom: 6px;">Параллельно · передано обоим · до 2 исполнений</div>
+
+              <div style="display: flex; gap: 16px; padding: 11px 0; border-top: 1px solid #EDE7D9; background: #F4EFE2; margin: 0 -10px; padding-left: 10px; padding-right: 10px; box-shadow: inset 3px 0 0 #A15C3A;">
+                <span style="flex: 0 0 26px; font-family: 'Literata', Georgia, serif; font-size: 13px; color: #A9A294; padding-top: 1px;">3</span>
+                <div style="flex: 1 1 auto; min-width: 0;">
+                  <div style="display: flex; align-items: baseline; gap: 10px;">
+                    <span style="font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 500;">Редактор предложений</span>
+                    <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">ИИ-сотрудник</span>
+                  </div>
+                  <div style="font-family: 'Literata', Georgia, serif; font-size: 13.5px; color: #17150F; margin-top: 4px; font-style: italic;">«Собираю итоговую структуру документа»</div>
+                </div>
+                <div style="flex: 0 0 190px; text-align: right;">
+                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #A15C3A;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+                    Выполняется
+                  </div>
+                  <div style="font-family: 'Literata', Georgia, serif; font-size: 12px; color: #8C8577; margin-top: 3px;">4 мин · ход 1 · попытка 1</div>
+                  <div style="margin-top: 6px; height: 2px; background: #E2DAC6;"><span style="display: block; width: 62%; height: 2px; background: #A15C3A;"></span></div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 16px; padding: 12px 0 11px; border-top: 1px solid #EDE7D9;">
+                <span style="flex: 0 0 26px; font-family: 'Literata', Georgia, serif; font-size: 13px; color: #A9A294; padding-top: 1px;">4</span>
+                <div style="flex: 1 1 auto; min-width: 0;">
+                  <div style="display: flex; align-items: baseline; gap: 10px;">
+                    <span style="font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 500;">Юридический консультант</span>
+                    <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">ИИ-сотрудник</span>
+                  </div>
+                  <div style="font-size: 12.5px; color: #5C574C; margin-top: 3px;">Начнёт оценку рисков после передачи материалов</div>
+                </div>
+                <div style="flex: 0 0 190px; text-align: right;">
+                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8A6A17;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+                    Ожидает данных
+                  </div>
+                  <div style="font-family: 'Literata', Georgia, serif; font-size: 12px; color: #8C8577; margin-top: 3px;">не начат · попытка 0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Уровень 5 -->
+          <div style="display: flex; gap: 16px; padding: 13px 0 14px; border-top: 1px solid #EDE7D9; border-bottom: 1px solid #DED8C8;">
+            <span style="flex: 0 0 26px;"></span>
+            <span style="flex: 0 0 26px; font-family: 'Literata', Georgia, serif; font-size: 13px; color: #A9A294; padding-top: 1px;">5</span>
+            <div style="flex: 1 1 auto; min-width: 0;">
+              <div style="display: flex; align-items: baseline; gap: 10px;">
+                <span style="font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 500;">Согласовать предложение</span>
+                <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8A6A17;">Решение человека</span>
+              </div>
+              <div style="font-size: 12.5px; color: #5C574C; margin-top: 3px;">Ответ вернётся координатору · решает владелец Проекта</div>
+            </div>
+            <div style="flex: 0 0 190px; text-align: right;">
+              <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8A6A17;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 20 8v5c0 4-3.4 6-8 7-4.6-1-8-3-8-7V8Z"/></svg>
+                Предстоит
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Журнал событий -->
+        <section style="padding: 20px 28px 0; flex: 1 1 auto; min-height: 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #DED8C8; padding-bottom: 9px;">
+            <h2 style="margin: 0; font-family: 'Literata', Georgia, serif; font-size: 15px; font-weight: 600;">Ход выполнения</h2>
+            <span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #5A7A3C;"><span style="width: 5px; height: 5px; background: #5A7A3C;"></span>В сети · события получены</span>
+          </div>
+          <div style="columns: 2; column-gap: 34px; padding-top: 10px;">
+            <div style="break-inside: avoid; display: flex; gap: 12px; padding: 6px 0;">
+              <span style="flex: 0 0 40px; font-family: 'Literata', Georgia, serif; font-size: 12.5px; color: #8C8577;">12:04</span>
+              <span style="font-size: 12.5px; color: #17150F;">Запуск создан из Control Center · Анна Волкова</span>
+            </div>
+            <div style="break-inside: avoid; display: flex; gap: 12px; padding: 6px 0;">
+              <span style="flex: 0 0 40px; font-family: 'Literata', Georgia, serif; font-size: 12.5px; color: #8C8577;">12:05</span>
+              <span style="font-size: 12.5px; color: #17150F;">Координатор принял входные данные и начал работу</span>
+            </div>
+            <div style="break-inside: avoid; display: flex; gap: 12px; padding: 6px 0;">
+              <span style="flex: 0 0 40px; font-family: 'Literata', Georgia, serif; font-size: 12.5px; color: #8C8577;">12:06</span>
+              <span style="font-size: 12.5px; color: #17150F;">Задача делегирована Аналитику продаж: исследовать компанию Север</span>
+            </div>
+            <div style="break-inside: avoid; display: flex; gap: 12px; padding: 6px 0;">
+              <span style="flex: 0 0 40px; font-family: 'Literata', Georgia, serif; font-size: 12.5px; color: #8C8577;">12:12</span>
+              <span style="font-size: 12.5px; color: #17150F;">Готов результат исследования · <a href="#">research-summary.md</a></span>
+            </div>
+            <div style="break-inside: avoid; display: flex; gap: 12px; padding: 6px 0;">
+              <span style="flex: 0 0 40px; font-family: 'Literata', Georgia, serif; font-size: 12.5px; color: #8C8577;">12:13</span>
+              <span style="font-size: 12.5px; color: #17150F;">Редактор предложений начал подготовку документа</span>
+            </div>
+          </div>
+          <p style="margin: 12px 0 0; font-size: 11.5px; color: #8C8577;">Промежуточные сообщения объединяются, чтобы поток событий оставался читаемым.</p>
+        </section>
+
+        <!-- Нижняя сводка -->
+        <div style="flex: 0 0 46px; display: flex; align-items: center; gap: 24px; padding: 0 28px; border-top: 1px solid #DED8C8;">
+          <span style="font-size: 12.5px; color: #5C574C;">Ввод</span>
+          <span style="font-size: 12.5px; color: #5C574C;">Результат</span>
+          <span style="font-size: 12.5px; color: #17150F; font-weight: 500; border-bottom: 2px solid #A15C3A; padding-bottom: 2px;">Файлы · 1</span>
+          <span style="font-size: 12.5px; color: #5C574C;">Решения · 0</span>
+          <span style="font-size: 12.5px; color: #5C574C;">Инциденты · 0</span>
+        </div>
+      </div>
+
+      <!-- ДИАЛОГ ВЫБРАННОГО УЗЛА -->
+      <aside style="width: 372px; flex: 0 0 372px; display: flex; flex-direction: column; background: #FFFEFB; min-height: 0;">
+        <div style="padding: 20px 24px 14px; border-bottom: 1px solid #DED8C8;">
+          <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">Выбранный узел</div>
+          <h2 style="margin: 5px 0 0; font-family: 'Literata', Georgia, serif; font-size: 18px; font-weight: 500;">Редактор предложений</h2>
+          <div style="font-size: 12.5px; color: #5C574C; margin-top: 3px;">Готовит итоговые документы</div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #A15C3A;">
+            <span style="display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+              Выполняется
+            </span>
+            <span style="color: #8C8577; letter-spacing: 0; text-transform: none; font-family: 'Literata', Georgia, serif; font-size: 12px;">ход 1 · попытка 1</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 22px; padding: 11px 24px; border-bottom: 1px solid #DED8C8;">
+          <span style="font-size: 13px; font-weight: 500; border-bottom: 2px solid #A15C3A; padding-bottom: 3px;">Диалог</span>
+          <span style="font-size: 13px; color: #5C574C;">Подробности</span>
+          <span style="font-size: 13px; color: #5C574C;">Файлы</span>
+        </div>
+
+        <div style="flex: 1 1 auto; padding: 18px 24px; min-height: 0; overflow: hidden;">
+          <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">Задача от координатора · 12:06</div>
+          <p style="margin: 7px 0 0; font-size: 13.5px; line-height: 1.6; color: #17150F;">Подготовь коммерческое предложение для компании Север на основе исследования клиента. Раздел выгод должен опираться на подтверждённые факты.</p>
+
+          <div style="height: 1px; background: #EDE7D9; margin: 18px 0;"></div>
+
+          <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577;">Редактор предложений · 12:16</div>
+          <p style="margin: 7px 0 0; font-family: 'Literata', Georgia, serif; font-size: 14px; line-height: 1.6; color: #17150F;">Подготовил структуру, сейчас заполняю раздел с выгодами.</p>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 12.5px; color: #A15C3A;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+            Собираю итоговую структуру документа
+          </div>
+        </div>
+
+        <div style="padding: 16px 24px 20px; border-top: 1px solid #DED8C8;">
+          <label for="c-composer" style="display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8C8577; margin-bottom: 8px;">Добавить задание или уточнение</label>
+          <div id="c-composer" style="min-height: 66px; padding: 10px 12px; border: 1px solid #DED8C8; background: #FAF7F0; color: #8C8577; font-size: 13px;">Опишите уточнение для этого ИИ-сотрудника…</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+            <span style="font-size: 11.5px; color: #8C8577;">Встанет в очередь хода</span>
+            <button style="height: 34px; padding: 0 18px; border: 0; background: #17150F; color: #FAF7F0; font: inherit; font-size: 13px;">Отправить</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -88,6 +88,8 @@ updated: 2026-07-28
 | `PRD-MC-004`       | `docs/product/user-scenarios.md`                            |
 | `PRD-MC-005`       | `docs/product/requirements.md`                              |
 | `ARCH-MC-001`      | `docs/architecture/README.md`                               |
+| `UX-MC-002`        | `docs/design/web-first-reset-prompt-pack.md`                |
+| `UX-MC-003`        | `docs/design/mockups/index.md`                               |
 | `ARCH-DOC-002`     | `docs/architecture/technology-stack.md`                     |
 | `ARCH-MC-002`      | `docs/architecture/high-level-architecture.md`              |
 | `ARCH-MC-003`      | `docs/architecture/domain-map.md`                           |

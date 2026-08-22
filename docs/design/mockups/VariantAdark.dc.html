@@ -1,0 +1,374 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #4DA3FF; text-decoration: none; }
+    a:hover { color: #8CC6FF; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 1024px; display: flex; overflow: hidden; background: #0C0F14; color: #E6EAF0; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; line-height: 1.45; font-feature-settings: 'tnum' 1;">
+
+  <!-- ГЛОБАЛЬНАЯ НАВИГАЦИЯ -->
+  <nav style="width: 232px; flex: 0 0 232px; display: flex; flex-direction: column; background: #090C11; border-right: 1px solid #1B212B;">
+    <div style="height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid #1B212B;">
+      <div style="width: 24px; height: 24px; border-radius: 6px; background: linear-gradient(140deg, #4DA3FF, #1E5C99); display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0C0F14" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V7l8 5 8-5v11"/></svg>
+      </div>
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">MatterCodex</span>
+    </div>
+
+    <div style="padding: 14px 12px 10px;">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #131A24; border: 1px solid #23303F; color: #E6EAF0;">
+        <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 7px; background: #16283C; display: flex; align-items: center; justify-content: center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4DA3FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v3a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-3a3 3 0 0 1 3-3h1V7a4 4 0 0 1 4-4Z"/><path d="M9.5 13h.01M14.5 13h.01"/></svg>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-size: 12.5px; font-weight: 500;">Помощник MatterCodex</span>
+          <span style="font-size: 10.5px; color: #6FCF8C;">Готов</span>
+        </span>
+      </a>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 12px;">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #9AA5B4;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/></svg>
+        <span>Главная</span>
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #9AA5B4;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+        <span>Проекты</span>
+      </a>
+      <a href="#" aria-current="page" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: #16283C; color: #FFFFFF; box-shadow: inset 2px 0 0 #4DA3FF;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4DA3FF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5v15l12-7.5Z"/></svg>
+        <span style="font-weight: 500;">Запуски</span>
+      </a>
+      <a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #9AA5B4;">
+        <span style="display: flex; align-items: center; gap: 10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.5 11 15l4.5-5.5"/><circle cx="12" cy="12" r="8.5"/></svg>
+          <span>Решения</span>
+        </span>
+        <span style="min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #D29922; color: #1A1206; font-size: 10.5px; font-weight: 600; display: flex; align-items: center; justify-content: center;">1</span>
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #9AA5B4;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a4 4 0 0 0 5.7.4l2.6-2.6a4 4 0 0 0-5.7-5.7l-1.3 1.3"/><path d="M14 11a4 4 0 0 0-5.7-.4l-2.6 2.6a4 4 0 0 0 5.7 5.7l1.3-1.3"/></svg>
+        <span>Интеграции</span>
+      </a>
+    </div>
+
+    <div style="flex: 1 1 auto;"></div>
+
+    <div style="padding: 12px; border-top: 1px solid #1B212B;">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #9AA5B4;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7"/></svg>
+        <span>Администрирование</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- ОСНОВНАЯ ОБЛАСТЬ -->
+  <div style="flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0;">
+
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+    <header style="height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 14px; padding: 0 20px; border-bottom: 1px solid #1B212B; background: #0B0E13;">
+      <button style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #232A35; background: #12161D; color: #E6EAF0; font: inherit; font-size: 12.5px;">
+        <span style="width: 6px; height: 6px; border-radius: 3px; background: #4DA3FF;"></span>
+        Корпоративные продажи
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7686" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+
+      <div style="flex: 0 1 360px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #1F2630; background: #0F131A;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B7686" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <span style="color: #6B7686; font-size: 12.5px;">Найти проект, агента или запуск</span>
+      </div>
+
+      <div style="flex: 1 1 auto;"></div>
+
+      <span style="display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 13px; background: #10251A; border: 1px solid #1D3D2A; color: #6FCF8C; font-size: 11.5px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5 10 17.5 19 7"/></svg>
+        В сети
+      </span>
+
+      <span style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid #232A35;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA5B4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.5 11 15l4.5-5.5"/><circle cx="12" cy="12" r="8.5"/></svg>
+        <span style="position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #D29922; color: #1A1206; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</span>
+      </span>
+
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid #232A35;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AA5B4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 20a2.4 2.4 0 0 0 4 0"/></svg>
+      </span>
+
+      <span style="display: flex; align-items: center; gap: 8px; padding-left: 6px;">
+        <span style="width: 28px; height: 28px; border-radius: 14px; background: #2B3A4C; color: #C9D6E4; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; justify-content: center;">АВ</span>
+        <span style="display: flex; flex-direction: column;">
+          <span style="font-size: 12px;">Анна Волкова</span>
+          <span style="font-size: 10.5px; color: #6B7686;">Владелец</span>
+        </span>
+      </span>
+    </header>
+
+    <!-- ШАПКА ЗАПУСКА -->
+    <div style="height: 96px; flex: 0 0 96px; padding: 14px 24px 0; border-bottom: 1px solid #1B212B; background: #0D1117;">
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6B7686;">
+        <a href="#" style="color: #9AA5B4;">Запуски</a>
+        <span>/</span>
+        <span>Подготовить предложение для компании Север</span>
+      </div>
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-top: 8px;">
+        <div style="min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <h1 style="margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.015em;">Подготовить предложение для компании Север</h1>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: #12283F; border: 1px solid #1E4670; color: #4DA3FF; font-size: 11.5px; font-weight: 500;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+              Выполняется
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 7px; font-size: 11.5px; color: #6B7686;">
+            <span style="color: #9AA5B4; font-family: 'IBM Plex Mono', monospace;">12 мин</span>
+            <span>·</span><span>Запустила Анна Волкова</span>
+            <span>·</span><span>Источник: Control Center</span>
+            <span>·</span><span>Процесс · <span style="color: #9AA5B4;">Обработка нового лида v3</span></span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+          <button style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid #5B2A2A; background: #1E1214; color: #F2A0A0; font: inherit; font-size: 12.5px; font-weight: 500;">Отменить запуск</button>
+          <button aria-label="Другие действия" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #232A35; background: #12161D; color: #9AA5B4;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ТЕЛО -->
+    <div style="flex: 1 1 auto; display: flex; min-height: 0;">
+
+      <!-- ЦЕНТР: ГРАФ + ХОД ВЫПОЛНЕНИЯ -->
+      <div style="width: 868px; flex: 0 0 868px; display: flex; flex-direction: column; border-right: 1px solid #1B212B;">
+
+        <!-- Граф -->
+        <section style="height: 520px; flex: 0 0 520px; display: flex; flex-direction: column; border-bottom: 1px solid #1B212B;">
+          <div style="height: 46px; flex: 0 0 46px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #151B24;">
+            <h2 style="margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: #9AA5B4;">Граф выполнения</h2>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button style="height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid #232A35; background: #12161D; color: #9AA5B4; font: inherit; font-size: 11.5px;">Свернуть завершённые</button>
+              <button style="height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid #232A35; background: #12161D; color: #9AA5B4; font: inherit; font-size: 11.5px;">Только выбранная ветка</button>
+              <span style="display: flex; align-items: center; border: 1px solid #232A35; border-radius: 6px; overflow: hidden;">
+                <button aria-label="Уменьшить" style="width: 26px; height: 26px; border: 0; background: #12161D; color: #9AA5B4;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/></svg>
+                </button>
+                <span style="width: 1px; height: 26px; background: #232A35;"></span>
+                <button aria-label="Увеличить" style="width: 26px; height: 26px; border: 0; background: #12161D; color: #9AA5B4;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>
+                </button>
+              </span>
+              <button style="height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid #232A35; background: #12161D; color: #9AA5B4; font: inherit; font-size: 11.5px;">По размеру</button>
+              <button style="height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid #232A35; background: #12161D; color: #9AA5B4; font: inherit; font-size: 11.5px;">Списком</button>
+            </div>
+          </div>
+
+          <div style="position: relative; flex: 1 1 auto; background-image: radial-gradient(#171E27 1px, transparent 1px); background-size: 22px 22px;">
+            <svg width="868" height="474" viewBox="0 0 868 474" style="position: absolute; inset: 0;" aria-hidden="true">
+              <defs>
+                <marker id="a-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 7 3.5 0 7Z" fill="#3E4B5E"/></marker>
+                <marker id="a-arrow-live" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 7 3.5 0 7Z" fill="#2F6DA8"/></marker>
+              </defs>
+              <rect x="452" y="40" width="188" height="380" rx="12" fill="#0E141C" stroke="#2A3442" stroke-width="1" stroke-dasharray="5 4"/>
+              <path d="M180 236 L233 236" stroke="#3E4B5E" stroke-width="1.6" fill="none" marker-end="url(#a-arrow)"/>
+              <path d="M404 236 C434 236 434 120 457 120" stroke="#2F6DA8" stroke-width="1.6" fill="none" marker-end="url(#a-arrow-live)"/>
+              <path d="M404 236 C434 236 434 352 457 352" stroke="#3E4B5E" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#a-arrow)"/>
+              <path d="M628 120 C658 120 658 236 681 236" stroke="#3E4B5E" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#a-arrow)"/>
+              <path d="M628 352 C658 352 658 236 681 236" stroke="#3E4B5E" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#a-arrow)"/>
+            </svg>
+
+            <span style="position: absolute; left: 452px; top: 20px; font-size: 10.5px; color: #6B7686; background: #0C0F14; padding: 0 6px;">Параллельная ветка · до 2 исполнений</span>
+
+            <span style="position: absolute; left: 182px; top: 214px; width: 56px; text-align: center; font-size: 10px; color: #6B7686; background: #0C0F14; padding: 1px 0;">передано</span>
+            <span style="position: absolute; left: 406px; top: 150px; width: 52px; text-align: center; font-size: 10px; color: #4DA3FF; background: #0C0F14; padding: 1px 0;">передано</span>
+            <span style="position: absolute; left: 404px; top: 300px; width: 56px; text-align: center; font-size: 10px; color: #6B7686; line-height: 1.25; background: #0C0F14; padding: 1px 0;">ожидает результат</span>
+            <span style="position: absolute; left: 630px; top: 150px; width: 52px; text-align: center; font-size: 10px; color: #6B7686; line-height: 1.25; background: #0C0F14; padding: 1px 0;">ответ вернётся</span>
+            <span style="position: absolute; left: 630px; top: 300px; width: 52px; text-align: center; font-size: 10px; color: #6B7686; line-height: 1.25; background: #0C0F14; padding: 1px 0;">ответ вернётся</span>
+
+            <!-- Узел: корневой Процесс -->
+            <div style="position: absolute; left: 16px; top: 190px; width: 164px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: #131922; border: 1px solid #2A3442; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7686;">Процесс</span>
+              <span style="font-size: 12.5px; font-weight: 600; line-height: 1.3;">Обработка нового лида</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #4DA3FF;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+                Выполняется
+              </span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #6B7686;">12:04 · попытка 1</span>
+            </div>
+
+            <!-- Узел: Аналитик продаж -->
+            <div style="position: absolute; left: 240px; top: 184px; width: 164px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: #101A14; border: 1px solid #23402D; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 7px;">
+                <span style="width: 20px; height: 20px; border-radius: 10px; background: #1D3D2A; color: #6FCF8C; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">АП</span>
+                <span style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7686;">ИИ-сотрудник</span>
+              </div>
+              <span style="font-size: 12.5px; font-weight: 600; line-height: 1.3;">Аналитик продаж</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6FCF8C;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12.5 10 17.5 19 7"/></svg>
+                Завершён
+              </span>
+              <span style="font-size: 10.5px; color: #8A94A3; line-height: 1.35;">Исследование клиента готово</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #6B7686;">6 мин · попытка 1</span>
+            </div>
+
+            <!-- Узел: Редактор предложений (выбран) -->
+            <div style="position: absolute; left: 464px; top: 56px; width: 164px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: #101923; border: 1px solid #4DA3FF; outline: 2px solid rgba(77,163,255,0.35); outline-offset: 2px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 7px;">
+                <span style="width: 20px; height: 20px; border-radius: 10px; background: #1E4670; color: #9CCBFF; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">РП</span>
+                <span style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7686;">ИИ-сотрудник</span>
+              </div>
+              <span style="font-size: 12.5px; font-weight: 600; line-height: 1.3;">Редактор предложений</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #4DA3FF;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+                Выполняется
+              </span>
+              <span style="font-size: 10.5px; color: #C2CDDB; line-height: 1.35;">Собираю итоговую структуру документа</span>
+              <span style="height: 3px; border-radius: 2px; background: #1B2635; overflow: hidden;"><span style="display: block; width: 62%; height: 3px; background: #4DA3FF;"></span></span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #6B7686;">4 мин · ход 1 · попытка 1</span>
+            </div>
+
+            <!-- Узел: Юридический консультант -->
+            <div style="position: absolute; left: 464px; top: 300px; width: 164px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: #131922; border: 1px solid #2A3442; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 7px;">
+                <span style="width: 20px; height: 20px; border-radius: 10px; background: #2B3A4C; color: #C9D6E4; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;">ЮК</span>
+                <span style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7686;">ИИ-сотрудник</span>
+              </div>
+              <span style="font-size: 12.5px; font-weight: 600; line-height: 1.3;">Юридический консультант</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #C9A227;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+                Ожидает входных данных
+              </span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #6B7686;">не начат · попытка 0</span>
+            </div>
+
+            <!-- Узел: Human Gate -->
+            <div style="position: absolute; left: 688px; top: 190px; width: 164px; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; background: #1A1608; border: 1px solid #4A3B12; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #C9A227;">Решение человека</span>
+              <span style="font-size: 12.5px; font-weight: 600; line-height: 1.3;">Согласовать предложение</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #C9A227;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 20 8v5c0 4-3.4 6-8 7-4.6-1-8-3-8-7V8Z"/></svg>
+                Предстоит
+              </span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #6B7686;">решает владелец Проекта</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Ход выполнения -->
+        <section style="flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;">
+          <div style="height: 42px; flex: 0 0 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #151B24;">
+            <h2 style="margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: #9AA5B4;">Ход выполнения</h2>
+            <span style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6FCF8C;">
+              <span style="width: 6px; height: 6px; border-radius: 3px; background: #6FCF8C;"></span>
+              В сети · события получены
+            </span>
+          </div>
+          <div style="flex: 1 1 auto; display: flex; flex-direction: column; padding: 6px 16px;">
+            <div style="display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid #12181F;">
+              <span style="flex: 0 0 46px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">12:04</span>
+              <span style="flex: 0 0 168px; font-size: 11.5px; color: #9AA5B4;">Обработка нового лида</span>
+              <span style="flex: 1 1 auto; font-size: 12px; color: #C2CDDB;">Запуск создан из Control Center</span>
+            </div>
+            <div style="display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid #12181F;">
+              <span style="flex: 0 0 46px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">12:05</span>
+              <span style="flex: 0 0 168px; font-size: 11.5px; color: #9AA5B4;">Менеджер продаж</span>
+              <span style="flex: 1 1 auto; font-size: 12px; color: #C2CDDB;">Координатор принял входные данные и начал работу</span>
+            </div>
+            <div style="display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid #12181F;">
+              <span style="flex: 0 0 46px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">12:06</span>
+              <span style="flex: 0 0 168px; font-size: 11.5px; color: #9AA5B4;">Аналитик продаж</span>
+              <span style="flex: 1 1 auto; font-size: 12px; color: #C2CDDB;">Задача делегирована: исследовать компанию Север</span>
+            </div>
+            <div style="display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid #12181F;">
+              <span style="flex: 0 0 46px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">12:12</span>
+              <span style="flex: 0 0 168px; font-size: 11.5px; color: #9AA5B4;">Аналитик продаж</span>
+              <span style="flex: 1 1 auto; font-size: 12px; color: #C2CDDB;">Готов результат исследования · <a href="#">research-summary.md</a></span>
+            </div>
+            <div style="display: flex; gap: 12px; padding: 7px 0;">
+              <span style="flex: 0 0 46px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">12:13</span>
+              <span style="flex: 0 0 168px; font-size: 11.5px; color: #4DA3FF;">Редактор предложений</span>
+              <span style="flex: 1 1 auto; font-size: 12px; color: #C2CDDB;">Начал подготовку документа</span>
+            </div>
+            <div style="margin-top: auto; padding-top: 8px; font-size: 10.5px; color: #5A6472;">Промежуточные сообщения объединяются, чтобы не перегружать поток событий.</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ПАНЕЛЬ КОНТЕКСТА -->
+      <aside style="width: 340px; flex: 0 0 340px; display: flex; flex-direction: column; background: #0A0D12; min-height: 0;">
+        <div style="padding: 14px 16px; border-bottom: 1px solid #1B212B;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 32px; height: 32px; border-radius: 16px; background: #1E4670; color: #9CCBFF; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">РП</span>
+            <div style="min-width: 0;">
+              <div style="font-size: 13.5px; font-weight: 600;">Редактор предложений</div>
+              <div style="font-size: 11px; color: #6B7686;">Готовит итоговые документы</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px; background: #12283F; border: 1px solid #1E4670; color: #4DA3FF; font-size: 11px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+              Выполняется
+            </span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #6B7686;">ход 1 · попытка 1</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid #1B212B;">
+          <span style="padding: 10px 10px 9px; font-size: 12.5px; font-weight: 500; color: #FFFFFF; box-shadow: inset 0 -2px 0 #4DA3FF;">Диалог</span>
+          <span style="padding: 10px 10px 9px; font-size: 12.5px; color: #6B7686;">Подробности</span>
+          <span style="padding: 10px 10px 9px; font-size: 12.5px; color: #6B7686;">Файлы</span>
+        </div>
+
+        <div style="flex: 1 1 auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden;">
+          <div>
+            <div style="font-size: 10.5px; color: #6B7686; margin-bottom: 5px;">Исходная задача от координатора</div>
+            <div style="padding: 10px 12px; border-radius: 10px; background: #12161D; border: 1px solid #1F2630; font-size: 12px; color: #C2CDDB; line-height: 1.5;">Подготовь коммерческое предложение для компании Север на основе исследования клиента. Раздел выгод должен опираться на подтверждённые факты.</div>
+          </div>
+          <div>
+            <div style="font-size: 10.5px; color: #6B7686; margin-bottom: 5px;">Редактор предложений · 12:16</div>
+            <div style="padding: 10px 12px; border-radius: 10px; background: #101923; border: 1px solid #23405E; font-size: 12px; color: #DCE6F2; line-height: 1.5;">Подготовил структуру, сейчас заполняю раздел с выгодами.</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4DA3FF;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/></svg>
+            Собираю итоговую структуру документа
+          </div>
+        </div>
+
+        <div style="padding: 12px 16px 14px; border-top: 1px solid #1B212B;">
+          <label for="a-composer" style="display: block; font-size: 11px; color: #9AA5B4; margin-bottom: 6px;">Добавить задание или уточнение</label>
+          <div id="a-composer" style="min-height: 62px; padding: 9px 11px; border-radius: 9px; background: #0F131A; border: 1px solid #232A35; color: #5A6472; font-size: 12px;">Опишите уточнение для этого ИИ-сотрудника…</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 9px;">
+            <span style="font-size: 10.5px; color: #5A6472;">Сообщение встанет в очередь хода</span>
+            <button style="height: 30px; padding: 0 14px; border-radius: 8px; border: 0; background: #2F6DA8; color: #FFFFFF; font: inherit; font-size: 12.5px; font-weight: 500;">Отправить</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- НИЖНЯЯ СВОДКА -->
+    <div style="height: 44px; flex: 0 0 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-top: 1px solid #1B212B; background: #0B0E13;">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 7px; font-size: 12px; color: #9AA5B4;">Ввод</span>
+        <span style="height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 7px; font-size: 12px; color: #9AA5B4;">Результат</span>
+        <span style="height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 7px; background: #12161D; border: 1px solid #232A35; font-size: 12px; color: #E6EAF0;">Файлы · 1</span>
+        <span style="height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 7px; font-size: 12px; color: #9AA5B4;">Решения · 0</span>
+        <span style="height: 28px; display: flex; align-items: center; padding: 0 12px; border-radius: 7px; font-size: 12px; color: #9AA5B4;">Инциденты · 0</span>
+      </div>
+      <span style="font-size: 11px; color: #5A6472;">Промежуточный файл research-summary.md открывается отдельным безопасным просмотром</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
