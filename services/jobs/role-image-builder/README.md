@@ -55,6 +55,15 @@ workload владеют evidence, verdict и переносом exact digest.
    `repository@sha256` reference. `runtime-controller`, credential materializer
    и admission webhook сравнивают именно этот reference и evidence binding.
 
+Admission и promotion не требуют ручного запуска. Отдельный
+`image-admission-controller` автоматически создаёт одну последовательную
+цепочку phase Job/PVC. Он не получает owner, registry, signing или Vault
+credentials; каждая фаза сохраняет собственный ServiceAccount и secret
+boundary. RBAC дополняется `ValidatingAdmissionPolicy`, которая по exact caller
+identity отклоняет чужой image, command, env, volume либо ServiceAccount.
+`render-image-admission-job.sh` остаётся встроенным deterministic renderer и
+read-only способом сравнить будущий phase manifest.
+
 События для этого пути не публикуются: producer, admission и runtime используют
 авторитетные защищённые read/command RPC. Ложного AsyncAPI consumer нет.
 
@@ -64,6 +73,13 @@ workload владеют evidence, verdict и переносом exact digest.
 потокобезопасный снимок, который фоновый monitor рассчитывает по workload-local
 issuer sidecar, authenticated input registry и реальному bounded BuildKit solve.
 Probe не выполняет сетевых вызовов сам.
+
+Для `image-admission-controller` действует тот же контракт: `/healthz`
+проверяет только процесс, а `/readyz` читает рассчитанный фоновым monitor
+снимок прямого Kubernetes API и immutable policy. Недоступность
+`control-plane`, registry или phase workload не делает controller Pod
+неготовым; рабочая phase Job получает типизированный отказ и повторяется через
+ограниченный reconcile.
 
 Соседний `control-plane` не входит в Kubernetes readiness builder. Его
 недоступность переводит рабочий claim/build loop в отдельное degraded-состояние
@@ -126,7 +142,7 @@ BuildKit output и credential values отбрасываются.
 
 ```bash
 go test ./...
-go build ./cmd/role-image-builder ./cmd/image-admission-bridge
+go build ./cmd/role-image-builder ./cmd/image-admission-controller ./cmd/image-admission-bridge
 docker build --target runtime -f services/jobs/role-image-builder/Dockerfile .
 docker build --target admission-runtime \
   --build-arg ADMISSION_TOOLS_IMAGE="$ADMISSION_TOOLS_IMAGE" \

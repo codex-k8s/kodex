@@ -2,24 +2,31 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha" >&2
+  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-revision [all|claim|scan|sign|admit|promote]" >&2
 }
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 || $# -gt 3 ]]; then
   usage
   exit 64
 fi
 
 environment_name=$1
 run_id=$2
+requested_phase=${3:-all}
 [[ $environment_name == staging || $environment_name == production ]] || { usage; exit 64; }
 [[ $run_id =~ ^v[0-9]{14}-[a-f0-9]{40}$ ]] || { echo "run_id is invalid" >&2; exit 64; }
-command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
+[[ $requested_phase =~ ^(all|claim|scan|sign|admit|promote)$ ]] || { usage; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 69; }
 
 # Версионированный ConfigMap задаёт только owner intent. Artifact/build tuple
 # выдаётся control-plane после запуска claim phase и не принимается от caller.
-intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+if [[ -n ${IMAGE_ADMISSION_POLICY_JSON:-} ]]; then
+  [[ ${#IMAGE_ADMISSION_POLICY_JSON} -le 65536 ]] || { echo "admission policy document is too large" >&2; exit 78; }
+  intent=$IMAGE_ADMISSION_POLICY_JSON
+else
+  command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
+  intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+fi
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
 authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
@@ -76,7 +83,8 @@ claim_name="mc-admit-$suffix"
 # Claim TTL равен 15 минутам; каждый Job вместе с повторами завершается раньше.
 deadline=720
 
-cat <<EOF
+emit_pvc() {
+  cat <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -92,6 +100,7 @@ spec:
   resources:
     requests: {storage: 2Gi}
 EOF
+}
 
 emit_job() {
   local phase=$1 service_account=$2 identity_spc=$3 protected=${4:-false}
@@ -121,7 +130,7 @@ metadata:
 spec:
   backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
-  ttlSecondsAfterFinished: 86400
+  ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
@@ -308,8 +317,11 @@ EOF
   fi
 }
 
-emit_job claim image-admission mattercodex-image-admission-owner true
-emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
-emit_job sign mattercodex-image-signer mattercodex-image-signer false
-emit_job admit image-admission mattercodex-image-admission-owner true
-emit_job promote image-promotion mattercodex-image-promotion-writer true
+if [[ $requested_phase == all || $requested_phase == claim ]]; then
+  emit_pvc
+  emit_job claim image-admission mattercodex-image-admission-owner true
+fi
+[[ $requested_phase != all && $requested_phase != scan ]] || emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
+[[ $requested_phase != all && $requested_phase != sign ]] || emit_job sign mattercodex-image-signer mattercodex-image-signer false
+[[ $requested_phase != all && $requested_phase != admit ]] || emit_job admit image-admission mattercodex-image-admission-owner true
+[[ $requested_phase != all && $requested_phase != promote ]] || emit_job promote image-promotion mattercodex-image-promotion-writer true

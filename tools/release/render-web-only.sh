@@ -11,7 +11,8 @@ usage() {
     "Usage: $0 --lock <release-lock.json> --lock-sha256 <64-hex> --output <render.yaml>" \
     '  --public-host <dns> --public-origin <https://dns>' \
     '  --oidc-issuer <https-url> --oidc-jwks-url <https-url>' \
-    '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' >&2
+    '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
+    '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' >&2
 }
 
 lock_file=""
@@ -23,6 +24,7 @@ oidc_issuer=""
 oidc_jwks_url=""
 oidc_connect_address=""
 oidc_tls_server_name=""
+kubernetes_api_service_cidr=""
 
 while (($# > 0)); do
   case "$1" in
@@ -35,6 +37,7 @@ while (($# > 0)); do
     --oidc-jwks-url) oidc_jwks_url="${2:-}"; shift 2 ;;
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-tls-server-name) oidc_tls_server_name="${2:-}"; shift 2 ;;
+    --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -58,6 +61,8 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+go run "$repository_root/tools/release/validate-host-cidr.go" "$kubernetes_api_service_cidr" >/dev/null ||
+  fail 'Kubernetes API Service CIDR is invalid'
 source_sha=$(jq -er '.source_sha' "$lock_file")
 "$script_directory/validate-release-lock.sh" \
   --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
@@ -102,7 +107,8 @@ OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_CONNECT_ADDRESS="$oidc_connect_address" \
 OIDC_TLS_SERVER_NAME="$oidc_tls_server_name" \
 OIDC_ORIGIN="$oidc_origin" \
-PULL_REGISTRY_HOST="$pull_registry_host" yq -i '
+PULL_REGISTRY_HOST="$pull_registry_host" \
+KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__MATTERCODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
     sub("__MATTERCODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
@@ -111,6 +117,7 @@ PULL_REGISTRY_HOST="$pull_registry_host" yq -i '
     sub("__MATTERCODEX_OIDC_CONNECT_ADDRESS__"; strenv(OIDC_CONNECT_ADDRESS)) |
     sub("__MATTERCODEX_OIDC_TLS_SERVER_NAME__"; strenv(OIDC_TLS_SERVER_NAME)) |
     sub("__MATTERCODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
+    sub("__MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR)) |
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
   )
 ' "$rendered"
@@ -126,6 +133,7 @@ AUTHORITY_REF="$authority_ref" \
 ADMISSION_REF="$admission_ref" \
 ADMISSION_TOOLS_REF="$admission_tools_ref" \
 ADMISSION_TOOLS_DIGEST="$admission_tools_digest" \
+SOURCE_SHA="$source_sha" \
 FRONTEND_SHA256="$frontend_sha256" yq -i '
   (.. | select(tag == "!!str")) |= sub(
     "[A-Za-z0-9._:/-]+/image-admission-tools@sha256:[a-f0-9]{64}";
@@ -133,6 +141,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy");
     .metadata.annotations."mattercodex.dev/admission-tools-sha256" = strenv(ADMISSION_TOOLS_DIGEST) |
+    .data.orchestrationRevision = strenv(SOURCE_SHA) |
     .data.toolsImage = strenv(ADMISSION_TOOLS_REF) |
     .data.admissionImage = strenv(ADMISSION_REF) |
     .data.authorityImage = strenv(AUTHORITY_REF) |

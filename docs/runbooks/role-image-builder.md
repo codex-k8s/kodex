@@ -4,8 +4,8 @@ title: Диагностика role-image-builder
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-08-05
+version: 1.2.0
+updated: 2026-08-22
 ---
 
 # Диагностика role-image-builder
@@ -28,6 +28,13 @@ values.
 4. Сверить exact policy revision/digest, staging reference, manifest digest,
    provenance digest и current attempt/fence. Payload ID или annotation не
    являются доказательством полномочий.
+5. Проверить `image-admission-controller`: `/healthz` отвечает за процесс,
+   `/readyz` читает локальный readiness snapshot, ServiceAccount имеет только
+   get/list/create Job/PVC и get immutable policy. Registry, Vault и
+   control-plane credentials в Pod отсутствуют.
+6. Сверить обе `ValidatingAdmissionPolicy`: exact controller caller, Deny,
+   immutable ConfigMap parameter и закрытые image/command/env/volume/
+   ServiceAccount контракты. Не обходить policy ручным созданием phase Job.
 
 ## Типовые отказы
 

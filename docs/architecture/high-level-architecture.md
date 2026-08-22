@@ -80,6 +80,16 @@ web-only профиля.
 - когда guarded удалить terminal pod, не затрагивая PVC;
 - когда восстановить ход из очереди после временной ошибки.
 
+## Цепочка образов ролей
+
+`role-image-builder` получает fenced build attempt и собирает отдельный
+promoted OCI image окружения роли через rootless BuildKit. Следующие фазы
+автоматически создаёт `image-admission-controller`: `claim`, `scan`, `sign`,
+`admit` и отдельную `promote`. Controller не получает credentials этих фаз;
+его Kubernetes identity ограничена RBAC и fail-closed
+`ValidatingAdmissionPolicy` точными Job/PVC templates. Runtime запускает агента
+только из owner-selected promoted `repository@sha256`.
+
 ## Запуск агента
 
 Компонент запуска агента управляет процессами внутри pod сессии:

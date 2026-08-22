@@ -3,6 +3,8 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - admission-policy.yaml
+  - image-admission-controller.yaml
+  - image-admission-controller-policy.yaml
   - role-environments.yaml
   - serviceaccount.yaml
   - registry.yaml

@@ -14,9 +14,42 @@ spec:
           - image-retention
           - image-pull-readback
           - image-admission
+          - image-admission-orchestrator
   policyTypes:
     - Ingress
     - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-admission-controller-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: image-admission-controller
+      app.kubernetes.io/component: image-admission-orchestrator
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
+      ports: [{protocol: TCP, port: 9090}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - ipBlock: {cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
+      ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

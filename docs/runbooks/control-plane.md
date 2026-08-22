@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.22.2
-updated: 2026-08-09
+version: 1.23.0
+updated: 2026-08-22
 ---
 
 # Диагностика и восстановление control-plane
@@ -70,8 +70,10 @@ registry-pull.<environment-domain>` тем же
    использует input-read и client-only BuildKit mTLS, но не получает
    staging-push/signer/promotion credential и не имеет egress к push либо
    promotion endpoint; staging-push принадлежит только BuildKit;
-5. пять последовательно ожидающих Job из
-   `tools/render-image-admission-job.sh` начинают с protected owner claim,
+5. `image-admission-controller` автоматически создаёт одну последовательную
+   цепочку phase Job и отдельную promotion Job; встроенный
+   `tools/render-image-admission-job.sh` только детерминированно строит точный
+   template. Каждая цепочка начинается с protected owner claim,
    проверяют exact BuildKit provenance/labels/digest, формируют SBOM, применяют
    зафиксированную vulnerability policy, проверяют signature identity и
    записывают evidence через protected RPC; scanner/signer/admission/promotion
@@ -89,58 +91,38 @@ SAN расходится, workload остаётся неготовой, FQDN н�
 ## Read-only preflight
 
 1. Зафиксировать Git SHA, три независимых image digest и утверждённый pull FQDN.
-2. Получить canonical render без apply:
+2. Получить единый canonical web-only render без apply:
 
 ```bash
-tools/render-control-plane.sh \
-  staging \
-  sha256:<control-plane-image-digest> \
-  sha256:<internal-rpc-authority-image-digest> \
-  sha256:<agent-runtime-image-digest> \
-  registry-pull.<environment-domain> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-image-admission-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
-  <approved-vulnerability-policy-sha256> \
-  <forward-only-pull-credential-generation> \
-  <exact-node-ipv4-cidr> \
-  <exact-node-ipv6-cidr> \
-  sha256:<trusted-role-base-digest> \
-  <frontend-sha256> \
-  <role-runtime-contract-revision> \
-  <role-runtime-contract-sha256> \
-  > /tmp/control-plane-staging.yaml
+tools/release/render-web-only.sh \
+  --lock <release-lock.json> \
+  --lock-sha256 <release-lock-sha256> \
+  --output /tmp/mattercodex-web-only.yaml \
+  --public-host <environment-public-domain> \
+  --public-origin https://<environment-public-domain> \
+  --oidc-issuer https://<oidc-domain>/<issuer-path> \
+  --oidc-jwks-url https://<oidc-domain>/<jwks-path> \
+  --oidc-connect-address <oidc-host>:<tls-port> \
+  --oidc-tls-server-name <oidc-domain> \
+  --kubernetes-api-service-cidr <exact-service-ip>/32
 ```
 
-3. Получить отдельный supply-chain render без apply:
+3. Для сравнения отдельной phase использовать только read-only renderer с
+   JSON уже отрендеренного immutable policy. Он не выполняет apply и не
+   является production trigger:
 
 ```bash
-tools/render-image-supply-chain.sh \
-  staging \
-  sha256:<control-plane-image-digest> \
-  sha256:<internal-rpc-authority-image-digest> \
-  registry-pull.<environment-domain> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-image-admission-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
-  <approved-vulnerability-policy-sha256> \
-  <forward-only-pull-credential-generation> \
-  <exact-node-ipv4-cidr> \
-  <exact-node-ipv6-cidr> \
-  sha256:<trusted-role-base-digest> \
-  <frontend-sha256> \
-  <role-runtime-contract-revision> \
-  <role-runtime-contract-sha256> \
-  > /tmp/image-supply-chain-staging.yaml
-
+IMAGE_ADMISSION_POLICY_JSON='<immutable policy JSON without secrets>' \
 tools/render-image-admission-job.sh \
-  staging \
+  production \
   v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  > /tmp/role-image-admission.yaml
+  claim \
+  > /tmp/role-image-admission-claim.yaml
 ```
 
 4. Сверить immutable ConfigMap owner intent, server-owned builder/build type,
-   полный admission run digest в PVC/Jobs, пять фаз и четыре независимых
+   controller RBAC и обе fail-closed `ValidatingAdmissionPolicy`, полный
+   admission run digest в PVC/Jobs, пять фаз и четыре независимых
    admission/promotion/scanner/signer ServiceAccount,
    SecretProviderClass, client certificate, certificate guard, probes,
    selectors и exact destinations NetworkPolicy.

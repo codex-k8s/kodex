@@ -84,29 +84,52 @@ trusted_base_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 frontend_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 runtime_contract_sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 pull_host=registry.nodes.example.test
-"$repository_root/tools/render-image-supply-chain.sh" staging \
-  "$control_digest" "$authority_digest" "$pull_host" "$tools_image" "$admission_image" 7 "$policy_sha256" 3 \
-  10.42.0.0/24 fd42::/64 "$trusted_base_digest" "$frontend_sha256" 1 "$runtime_contract_sha256" \
+kubectl kustomize "$repository_root/deploy/k8s/overlays/staging/image-supply-chain" \
   >"$temporary_directory/supply.yaml"
-[[ $(grep -F -c "common_name: $pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
+for policy_name in mattercodex-image-admission-controller-jobs \
+  mattercodex-image-admission-controller-workspaces; do
+  POLICY_NAME="$policy_name" yq -e '
+    select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == strenv(POLICY_NAME)) |
+    .spec.failurePolicy == "Fail"
+  ' "$temporary_directory/supply.yaml" >/dev/null || {
+    echo "controller admission policy is missing: $policy_name" >&2
+    exit 1
+  }
+done
+yq -e '
+  select(.kind == "Role" and .metadata.name == "image-admission-controller") |
+  ([.rules[].resources[]] | sort | join(",")) == "configmaps,jobs,persistentvolumeclaims"
+' "$temporary_directory/supply.yaml" >/dev/null || {
+  echo "image admission controller RBAC expanded beyond bounded resources" >&2
+  exit 1
+}
+if grep -Fq 'component: kube-apiserver' "$temporary_directory/supply.yaml" ||
+  ! grep -Fq 'cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__' "$temporary_directory/supply.yaml"; then
+  echo "image admission controller Kubernetes API destination is not render-bound" >&2
+  exit 1
+fi
+render_pull_host=registry-pull.invalid
+render_tools_image=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+render_admission_image=mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+[[ $(grep -F -c "common_name: $render_pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
-[[ $(grep -F -c '10.42.0.0/24' "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c 'fd42::/64' "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c "$tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
+[[ $(grep -F -c '192.0.2.0/32' "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(grep -F -c '2001:db8::/128' "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(grep -F -c "$render_tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
 for binary in registry-pull-authorizer registry-write-authorizer node-pull-bootstrap; do
   binary_images=$(MC195_BINARY="/usr/local/bin/$binary" yq eval-all '
     select(.kind == "Deployment" or .kind == "DaemonSet") |
     .spec.template.spec.containers[] | select(.command[]? == strenv(MC195_BINARY)) | .image' \
     "$temporary_directory/supply.yaml" | grep -v '^---$')
-  [[ -n $binary_images ]] && ! grep -Fvxq "$admission_image" <<<"$binary_images" || {
+  [[ -n $binary_images ]] && ! grep -Fvxq "$render_admission_image" <<<"$binary_images" || {
     echo "$binary does not use the image that contains the compiled binary" >&2
     exit 1
   }
 done
 grep -Fq 'openssl x509 -in /identity/tls.crt -checkend 900' "$temporary_directory/supply.yaml"
 grep -Fq 'DOCKER_CONFIG_FILE' "$temporary_directory/supply.yaml"
-grep -Fq "$pull_host/mattercodex/control-plane@$control_digest" "$temporary_directory/supply.yaml"
-grep -Fq "$pull_host/mattercodex/agent-runner@$trusted_base_digest" "$temporary_directory/supply.yaml"
+grep -Fq 'registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
+grep -Fq 'registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
 push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-push") |
   .spec.template.spec.containers[] | select(.name == "registry") | .env[] |
   select(.name == "REGISTRY_HTTP_RELATIVEURLS") | .value' "$temporary_directory/supply.yaml")
@@ -130,9 +153,9 @@ if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "mattercod
   echo "signer received evidence registry network authority" >&2
   exit 1
 fi
-[[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "3"' \
+[[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c 'pullCredentialGeneration: "3"' \
+[[ $(grep -F -c 'pullCredentialGeneration: "0"' \
   "$temporary_directory/supply.yaml") -eq 1 ]]
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
@@ -161,14 +184,6 @@ if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "role-imag
   echo "builder still has staging push egress" >&2
   exit 1
 fi
-if "$repository_root/tools/render-image-supply-chain.sh" staging \
-  "$control_digest" "$authority_digest" registry-pull.mattercodex-system.svc.cluster.local \
-  "$tools_image" "$admission_image" 7 "$policy_sha256" 3 10.42.0.0/24 fd42::/64 \
-  "$trusted_base_digest" "$frontend_sha256" 1 "$runtime_contract_sha256" >/dev/null 2>&1; then
-  echo "internal Service DNS was accepted as node pull SAN" >&2
-  exit 1
-fi
-
 mkdir "$temporary_directory/bin"
 cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
@@ -186,6 +201,20 @@ PATH="$temporary_directory/bin:$PATH" \
   "$repository_root/tools/render-image-admission-job.sh" production \
   "$build_tag" \
   >"$temporary_directory/admission-production.yaml"
+policy_json=$(PATH="$temporary_directory/bin:$PATH" kubectl)
+for phase in claim scan sign admit promote; do
+  IMAGE_ADMISSION_POLICY_JSON="$policy_json" \
+    "$repository_root/tools/render-image-admission-job.sh" staging "$build_tag" "$phase" \
+    >"$temporary_directory/admission-$phase.yaml"
+  [[ $(yq eval-all 'select(.kind == "Job") | .metadata.labels."mattercodex.dev/image-admission-phase"' \
+    "$temporary_directory/admission-$phase.yaml" | grep -Fxc "$phase") -eq 1 ]]
+done
+[[ $(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
+  "$temporary_directory/admission-claim.yaml" | grep -c '^mc-admit-') -eq 1 ]]
+for phase in scan sign admit promote; do
+  [[ -z $(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
+    "$temporary_directory/admission-$phase.yaml" | grep -v '^---$') ]]
+done
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \

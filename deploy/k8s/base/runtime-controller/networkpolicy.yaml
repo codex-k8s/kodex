@@ -38,9 +38,8 @@ spec:
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}}]
       ports: [{protocol: TCP, port: 8443}]
     - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-          podSelector: {matchLabels: {component: kube-apiserver}}
-      ports: [{protocol: TCP, port: 6443}]
+        - ipBlock: {cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
           podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}

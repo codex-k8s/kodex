@@ -43,7 +43,8 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
   --oidc-issuer https://identity.example.test/realms/mattercodex \
   --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
   --oidc-connect-address identity.example.test:443 \
-  --oidc-tls-server-name identity.example.test >/dev/null
+  --oidc-tls-server-name identity.example.test \
+  --kubernetes-api-service-cidr 10.96.0.1/32 >/dev/null
 
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
@@ -52,10 +53,24 @@ if rg -ni 'bot-service|legacy-data-migration|interaction-gateway|mattermost' "$r
   fail 'web-only render contains a retired or optional interaction unit'
 fi
 
-for deployment in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler role-image-builder staff-control-center; do
+for deployment in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler role-image-builder image-admission-controller staff-control-center; do
   DEPLOYMENT="$deployment" yq -e 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" >/dev/null ||
     fail "required deployment is absent: $deployment"
 done
+
+api_policy_matches=$(yq -e '
+  select(.kind == "NetworkPolicy" and
+    (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+     .metadata.name == "runtime-controller-exact-paths")) |
+  .spec.egress[] | select(.to[].ipBlock.cidr == "10.96.0.1/32") |
+  ((.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 443)
+' "$render_file" | grep -c '^true$')
+if [[ $api_policy_matches -ne 2 ]]; then
+  fail 'Kubernetes API Service egress is not bound to the rendered host CIDR'
+fi
+if go run "$repository_root/tools/release/validate-host-cidr.go" 10.96.0.0/24 >/dev/null 2>&1; then
+  fail 'non-host Kubernetes API CIDR was accepted'
+fi
 
 yq -e '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |

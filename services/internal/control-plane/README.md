@@ -429,34 +429,27 @@ mutations без tenant/resource labels.
 
 ## Развёртывание и миграции
 
-База находится в `deploy/k8s/base/control-plane`, наложения окружений — в
-`deploy/k8s/overlays/{staging,production}/control-plane`. Канонический render
-требует три независимых digest и node-reachable FQDN pull endpoint; смешивать
+База находится в `deploy/k8s/base/control-plane`, а active production aggregate
+— в `deploy/k8s/profiles/web-only`. Канонический render принимает только
+проверенный release lock, явный публичный domain и OIDC endpoints; смешивать
 digest `control-plane` и среды агента запрещено:
 
 ```bash
-tools/render-control-plane.sh \
-  staging \
-  sha256:<control-plane-image-digest> \
-  sha256:<internal-rpc-authority-image-digest> \
-  sha256:<agent-runtime-image-digest> \
-  registry-pull.<environment-domain> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-image-admission-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
-  <approved-vulnerability-policy-sha256> \
-  <forward-only-pull-credential-generation> \
-  <exact-node-ipv4-cidr> \
-  <exact-node-ipv6-cidr> \
-  sha256:<trusted-role-base-digest> \
-  <frontend-sha256> \
-  <role-runtime-contract-revision> \
-  <role-runtime-contract-sha256> \
-  > /tmp/control-plane-staging.yaml
+tools/release/render-web-only.sh \
+  --lock <release-lock.json> \
+  --lock-sha256 <release-lock-sha256> \
+  --output /tmp/mattercodex-web-only.yaml \
+  --public-host <environment-public-domain> \
+  --public-origin https://<environment-public-domain> \
+  --oidc-issuer https://<oidc-domain>/<issuer-path> \
+  --oidc-jwks-url https://<oidc-domain>/<jwks-path> \
+  --oidc-connect-address <oidc-host>:<tls-port> \
+  --oidc-tls-server-name <oidc-domain> \
+  --kubernetes-api-service-cidr <exact-service-ip>/32
 ```
 
-Команда только рендерит; она не применяет manifest. Для production нужно
-заменить `staging` на `production` и использовать отдельно утверждённые digest.
+Команда только рендерит и закрыто проверяет каждый internal image по release
+lock; она не применяет manifest.
 
 Общая база `deploy/k8s/base/image-supply-chain` материализует локальный
 OCI registry четырьмя независимыми Deployment/ServiceAccount/Vault CSI
@@ -492,13 +485,19 @@ rotation обязательно создаёт новые Pod на каждом 
 private `emptyDir`, отправляет сборку во внешний rootless BuildKit и не имеет
 staging-push credential/egress. Staging push identity принадлежит BuildKit;
 builder не монтирует signer, promotion, admin или node-pull identity. Отдельный
-`tools/render-image-admission-job.sh` не принимает artifact IDs/digests от
-caller: первая фаза получает server-owned claim, после чего scanner и signer
+`image-admission-controller` автоматически материализует одну последовательную
+цепочку фаз и отдельную promotion phase. Встроенный
+`tools/render-image-admission-job.sh` является deterministic renderer и не
+принимает artifact IDs/digests от caller: первая фаза получает server-owned
+claim, после чего scanner и signer
 проверяют exact staging digest, labels и native BuildKit provenance. Admission
 фиксирует SBOM/vulnerability/signature/receipt через protected RPC, а отдельный
 promotion workload расходует one-time claim только после exact registry
 readback. Rejected, stale или неполное evidence не становится пригодным.
-Marker/PVC задают только порядок пяти фаз и не являются owner state. Immutable
+Controller не монтирует credentials фаз, а его право `create jobs` ограничено
+fail-closed `ValidatingAdmissionPolicy` точными image/command/env/volume/
+ServiceAccount. Marker/PVC задают только порядок пяти фаз и не являются owner
+state. Immutable
 intent фиксирует закрытый состав `base64`, `cmp`, `cosign`, `date`, `grype`,
 `image-admission-bridge`, `jq`, `regctl`, `sha256sum`, `syft`; signer,
 admission, promotion и admin credentials различны и доставляются Vault CSI без
@@ -511,37 +510,22 @@ TLS/auth или использовать internal Service DNS как kubelet pul
 BuildKit, Shipwright Build/BuildRun и Tekton Tasks. В соответствии с
 `ADR-MC-008` выбран прямой BuildKit как минимальный авторитетный backend;
 Shipwright и Tekton остаются возможными оркестраторами поверх него, но не
-создают второй источник истины. Старый Kaniko template сохранён только для
-legacy-контура и не включён в новую базу.
+создают второй источник истины. Kaniko и legacy build templates в fresh reset
+отсутствуют.
 
-Supply-chain и build Job имеют отдельные fail-closed render interfaces:
+Полный supply-chain входит в единый release render. Отдельный phase renderer
+используется только для read-only сравнения будущего Job:
 
 ```bash
-tools/render-image-supply-chain.sh \
-  staging \
-  sha256:<control-plane-image-digest> \
-  sha256:<internal-rpc-authority-image-digest> \
-  registry-pull.<environment-domain> \
-  <approved-admission-tools-image>@sha256:<digest> \
-  <approved-image-admission-image>@sha256:<digest> \
-  <approved-vulnerability-policy-revision> \
-  <approved-vulnerability-policy-sha256> \
-  <forward-only-pull-credential-generation> \
-  <exact-node-ipv4-cidr> \
-  <exact-node-ipv6-cidr> \
-  sha256:<trusted-role-base-digest> \
-  <frontend-sha256> \
-  <role-runtime-contract-revision> \
-  <role-runtime-contract-sha256> \
-  > /tmp/image-supply-chain-staging.yaml
-
+IMAGE_ADMISSION_POLICY_JSON='<immutable policy JSON without secrets>' \
 tools/render-image-admission-job.sh \
-  staging \
+  production \
   v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  > /tmp/role-image-admission.yaml
+  claim \
+  > /tmp/role-image-admission-claim.yaml
 ```
 
-Команды только материализуют YAML. Apply, сборка и promotion требуют
+Команда только материализует YAML. Apply, сборка и promotion требуют
 отдельного разрешения владельца; после них обязательны exact digest readback
 admission receipt/promotion endpoint и готовность node-pull DaemonSet.
 

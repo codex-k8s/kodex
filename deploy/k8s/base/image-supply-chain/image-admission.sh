@@ -159,13 +159,25 @@ load_promotion_claim() {
 claim_promotion() {
   remaining=120
   while [ "$remaining" -gt 0 ]; do
-    if image-admission-bridge claim-promotion; then
+    if image-admission-bridge claim-promotion 2>/dev/null; then
       return 0
     fi
     remaining=$((remaining - 1))
-    sleep 10
+    sleep 5
   done
-  fail "owner promotion claim timeout"
+  fail "owner promotion work is unavailable"
+}
+
+claim_admission() {
+  remaining=120
+  while [ "$remaining" -gt 0 ]; do
+    if image-admission-bridge claim 2>/dev/null; then
+      return 0
+    fi
+    remaining=$((remaining - 1))
+    sleep 5
+  done
+  fail "owner admission work is unavailable"
 }
 
 evidence_entries() {
@@ -511,7 +523,7 @@ require_policy
 
 case "${1:-}" in
   claim)
-    image-admission-bridge claim
+    claim_admission
     write_marker claim.complete
     ;;
   scan)
