@@ -1,19 +1,35 @@
 apiVersion: v1
 kind: ConfigMap
-metadata: {name: runtime-controller-runtime}
+metadata:
+  name: runtime-controller-runtime
 data:
   RUNTIME_CONTROLLER_TECHNICAL_LISTEN: ":9090"
+  RUNTIME_CONTROLLER_CALLBACK_LISTEN: ":8444"
+  RUNTIME_CONTROLLER_CALLBACK_TLS_SERVER_NAME: "runtime-controller-callback.mattercodex-system.svc.cluster.local"
+  RUNTIME_CONTROLLER_CALLBACK_SERVER_CERTIFICATE_FILE: "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.crt"
+  RUNTIME_CONTROLLER_CALLBACK_SERVER_PRIVATE_KEY_FILE: "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.key"
+  RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_FILE: "/var/run/config/mattercodex/runtime-controller/callback-client/ca.crt"
+  RUNTIME_CONTROLLER_CALLBACK_EXPECTED_CLIENT_SPIFFE_ID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
+  RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_SECRET: "runtime-execution-client-tls"
+  RUNTIME_CONTROLLER_CALLBACK_CLIENT_TLS_SECRET: "runtime-execution-client-tls"
   RUNTIME_CONTROLLER_CONTROL_PLANE_TARGET: "dns:///control-plane.mattercodex-system.svc:8443"
-  RUNTIME_CONTROLLER_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.mattercodex-system.svc.cluster.local
-  RUNTIME_CONTROLLER_CONTROL_PLANE_CA_FILE: /var/run/config/mattercodex/runtime-controller/control-plane/ca.pem
-  RUNTIME_CONTROLLER_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE: /var/run/secrets/mattercodex/runtime-controller/control-plane-client/tls.crt
-  RUNTIME_CONTROLLER_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE: /var/run/secrets/mattercodex/runtime-controller/control-plane-client/tls.key
-  RUNTIME_CONTROLLER_CONTROL_PLANE_APPLICATION_GRANT_FILE: /var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws
-  RUNTIME_CONTROLLER_PROVIDER_PROXY: http://egress-gateway.mattercodex-system.svc.cluster.local:8080
-  RUNTIME_CONTROLLER_PROVIDER_CREDENTIAL_FILE: /var/run/secrets/mattercodex/runtime-controller/provider/api-key
-  RUNTIME_CONTROLLER_POLL_INTERVAL: 500ms
-  RUNTIME_CONTROLLER_HEARTBEAT_INTERVAL: 15s
-  RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL: 10s
-  RUNTIME_CONTROLLER_REQUEST_TIMEOUT: 5s
-  RUNTIME_CONTROLLER_EXECUTION_TIMEOUT: 20m
-  RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT: 30s
+  RUNTIME_CONTROLLER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.mattercodex-system.svc.cluster.local"
+  RUNTIME_CONTROLLER_CONTROL_PLANE_CA_FILE: "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem"
+  RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt"
+  RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key"
+  RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE: "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws"
+  RUNTIME_CONTROLLER_PROVIDER_AUTH_SECRET: "runtime-provider-auth"
+  RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY: "http://egress-gateway.mattercodex-system.svc:8080"
+  RUNTIME_CONTROLLER_STORAGE_CLASS: "runtime-session"
+  RUNTIME_CONTROLLER_SESSION_PVC_SIZE: "20Gi"
+  RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT: "agent-runner"
+  RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS: "16"
+  RUNTIME_CONTROLLER_TURN_CPU_MILLI: "2000"
+  RUNTIME_CONTROLLER_TURN_MEMORY_BYTES: "4294967296"
+  RUNTIME_CONTROLLER_POLL_INTERVAL: "500ms"
+  RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL: "10s"
+  RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL: "10s"
+  RUNTIME_CONTROLLER_REQUEST_TIMEOUT: "5s"
+  RUNTIME_CONTROLLER_EXECUTION_TIMEOUT: "1h"
+  RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT: "30s"
+  RUNTIME_CONTROLLER_WARM_LONG_POLL: "20s"

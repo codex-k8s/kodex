@@ -2,19 +2,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: runtime-controller
-  labels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: hot-runtime}
+  labels:
+    app.kubernetes.io/name: runtime-controller
+    app.kubernetes.io/component: internal-controller
 spec:
-  replicas: 1
+  replicas: 2
   revisionHistoryLimit: 2
   strategy:
     type: RollingUpdate
-    rollingUpdate: {maxUnavailable: 1, maxSurge: 0}
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
   selector:
-    matchLabels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: hot-runtime}
+    matchLabels:
+      app.kubernetes.io/name: runtime-controller
+      app.kubernetes.io/component: internal-controller
   template:
     metadata:
-      labels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: hot-runtime}
-      annotations: {kubectl.kubernetes.io/default-container: runtime-controller}
+      labels:
+        app.kubernetes.io/name: runtime-controller
+        app.kubernetes.io/component: internal-controller
+      annotations:
+        mattercodex.dev/controller-image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        mattercodex.dev/authority-image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
     spec:
       serviceAccountName: runtime-controller
       automountServiceAccountToken: false
@@ -27,28 +35,50 @@ spec:
         - name: runtime-controller
           image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          envFrom: [{configMapRef: {name: runtime-controller-runtime}}]
+          envFrom:
+            - configMapRef: {name: runtime-controller-runtime}
           env:
-            - name: RUNTIME_CONTROLLER_WORKLOAD_INSTANCE
-              valueFrom: {fieldRef: {fieldPath: metadata.name}}
-          ports: [{name: technical, containerPort: 9090, protocol: TCP}]
-          startupProbe: &probe
-            httpGet: {path: /healthz, port: technical}
+            - name: POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
+            - name: RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: promotedPullRepository}}
+            - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
+            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: "/var/run/config/mattercodex/runtime-controller/observability/otel-ca.pem"}
+            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+            - {name: SENTRY_DSN_FILE, value: "/var/run/secrets/mattercodex/runtime-controller/observability/sentry-dsn"}
+            - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
+          ports:
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            - {name: callback, containerPort: 8444, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 30
           readinessProbe:
-            <<: *probe
-            httpGet: {path: /readyz, port: technical}
+            httpGet: {path: /readyz, port: metrics}
+            timeoutSeconds: 2
             periodSeconds: 5
             failureThreshold: 2
           livenessProbe:
-            <<: *probe
+            httpGet: {path: /healthz, port: metrics}
+            timeoutSeconds: 2
             periodSeconds: 10
             failureThreshold: 3
           resources:
-            requests: {cpu: 200m, memory: 256Mi}
-            limits: {cpu: "2", memory: 2Gi}
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -57,19 +87,36 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: control-plane-client-tls, mountPath: /var/run/secrets/mattercodex/runtime-controller/control-plane-client, readOnly: true}
+            - {name: kube-api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
+            - {name: workload-tls, mountPath: /var/run/secrets/mattercodex/runtime-controller/workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/runtime-controller/control-plane, readOnly: true}
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/runtime-controller/application-grant, readOnly: true}
-            - {name: provider-credential, mountPath: /var/run/secrets/mattercodex/runtime-controller/provider, readOnly: true}
-            - {name: tmp, mountPath: /tmp}
+            - {name: callback-server-tls, mountPath: /var/run/secrets/mattercodex/runtime-controller/callback-server, readOnly: true}
+            - {name: callback-client-ca, mountPath: /var/run/config/mattercodex/runtime-controller/callback-client, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/mattercodex/runtime-controller/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/runtime-controller/observability, readOnly: true}
       volumes:
-        - name: control-plane-client-tls
-          secret: {secretName: internal-rpc-authority-runtime-controller-workload-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}
+        - name: kube-api-access
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken: {expirationSeconds: 600, path: token}
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{key: ca.crt, path: ca.crt}]
+              - downwardAPI:
+                  items: [{path: namespace, fieldRef: {fieldPath: metadata.namespace}}]
+        - name: workload-tls
+          secret: {secretName: internal-rpc-authority-runtime-controller-workload-tls, defaultMode: 0440}
         - name: control-plane-ca
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
-        - name: provider-credential
-          secret: {secretName: runtime-controller-provider-credential, defaultMode: 0440, items: [{key: api-key, path: api-key}]}
-        - name: tmp
-          emptyDir: {sizeLimit: 16Mi}
+        - name: callback-server-tls
+          secret: {secretName: runtime-controller-callback-server-tls, defaultMode: 0440}
+        - name: callback-client-ca
+          secret: {secretName: runtime-execution-client-tls, defaultMode: 0440, items: [{key: ca.crt, path: ca.crt}]}
+        - name: otel-ca
+          configMap: {name: mattercodex-otel-ca, defaultMode: 0440}
+        - name: sentry-dsn
+          secret: {secretName: mattercodex-sentry, defaultMode: 0440}

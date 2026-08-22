@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: runtime-controller
+  labels: {app.kubernetes.io/name: runtime-controller}
+spec:
+  groups:
+    - name: runtime-controller
+      rules:
+        - alert: RuntimeControllerNotReady
+          expr: max(mattercodex_runtime_controller_readiness{ready="false"}) == 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Runtime controller is not ready
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md

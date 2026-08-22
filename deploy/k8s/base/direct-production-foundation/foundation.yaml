@@ -190,6 +190,38 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: runtime-controller-callback-server
+  namespace: mattercodex-system
+spec:
+  secretName: runtime-controller-callback-server-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - runtime-controller-callback
+    - runtime-controller-callback.mattercodex-system.svc
+    - runtime-controller-callback.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: runtime-execution-client
+  namespace: mattercodex-system
+spec:
+  secretName: runtime-execution-client-tls
+  duration: 24h
+  renewBefore: 8h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner
+  usages: [client auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: mattercodex-legacy-mattermost-bridge
   namespace: mattercodex-system
 spec:

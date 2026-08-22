@@ -34,7 +34,6 @@ var ErrProviderAuthentication = errors.New("Codex provider authentication is una
 type brokerRequest struct {
 	Input         model.Input `json:"input"`
 	Prompt        []byte      `json:"prompt"`
-	Auth          []byte      `json:"auth"`
 	MCPSocket     string      `json:"mcp_socket"`
 	MCPProxyToken string      `json:"mcp_proxy_token"`
 }
@@ -47,27 +46,16 @@ type brokerResponse struct {
 // ExecuteViaBroker передаёт provider-only данные отдельному UID по UDS.
 // Ни app-server, ни запускаемый им shell не получают authority mounts runner.
 func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string) (Result, error) {
-	auth, err := readProviderAuthentication(input)
-	if err != nil {
-		return Result{}, err
-	}
-	return executeViaBroker(ctx, input, prompt, auth, mcpSocket, mcpProxyToken)
-}
-
-// ValidateProviderAuthentication проверяет immutable account snapshot до
-// ClaimTurn. Ошибка затем закрывается owner-visible BLOCKED handoff уже после
-// admission, не передавая provider diagnostic в lifecycle transition.
-func ValidateProviderAuthentication(input model.Input) error {
-	_, err := readProviderAuthentication(input)
-	return err
+	return executeViaBroker(ctx, input, prompt, mcpSocket, mcpProxyToken)
 }
 
 func readProviderAuthentication(input model.Input) ([]byte, error) {
-	if err := security.VerifyProtectedRegular(input.CredentialFiles.CodexAuth, false); err != nil {
+	if err := security.VerifyProtectedRegular(input.ProviderAuthFile, false); err != nil {
 		return nil, ErrProviderAuthentication
 	}
-	auth, err := os.ReadFile(input.CredentialFiles.CodexAuth)
-	if err != nil || validateProviderAuthenticationPayload(auth, input.CredentialFiles.CodexAuthSHA256) != nil {
+	auth, err := os.ReadFile(input.ProviderAuthFile)
+	expectedDigest, digestErr := readProviderDigest(input.ProviderAuthSHA256File)
+	if err != nil || digestErr != nil || validateProviderAuthenticationPayload(auth, expectedDigest) != nil {
 		return nil, ErrProviderAuthentication
 	}
 	return auth, nil
@@ -85,7 +73,7 @@ func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) e
 	return nil
 }
 
-func executeViaBroker(ctx context.Context, input model.Input, prompt, auth []byte, mcpSocket, mcpProxyToken string) (Result, error) {
+func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string) (Result, error) {
 	dialer := net.Dialer{}
 	var connection net.Conn
 	var err error
@@ -106,7 +94,7 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt, auth []byt
 	}
 	defer connection.Close()
 	encoder := json.NewEncoder(connection)
-	if err := encoder.Encode(brokerRequest{Input: input, Prompt: prompt, Auth: auth,
+	if err := encoder.Encode(brokerRequest{Input: input, Prompt: prompt,
 		MCPSocket: mcpSocket, MCPProxyToken: mcpProxyToken}); err != nil {
 		return Result{}, errors.New("send isolated Codex provider request")
 	}
@@ -184,11 +172,19 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	decoder.DisallowUnknownFields()
 	var request brokerRequest
 	if decoder.Decode(&request) != nil || !decodeEOF(decoder) || request.Input.Validate() != nil ||
-		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 || len(request.Auth) == 0 || len(request.Auth) > 1<<20 {
+		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 {
 		return errors.New("provider broker request is invalid")
 	}
-	digest := sha256.Sum256(request.Auth)
-	if hex.EncodeToString(digest[:]) != request.Input.CredentialFiles.CodexAuthSHA256 {
+	auth, err := readProviderAuthentication(request.Input)
+	if err != nil {
+		return err
+	}
+	expectedDigest, err := readProviderDigest(request.Input.ProviderAuthSHA256File)
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(auth)
+	if hex.EncodeToString(digest[:]) != expectedDigest {
 		return errors.New("provider broker account pin mismatch")
 	}
 	if request.MCPSocket != "/run/mattercodex/provider/mcp-authority.sock" || len(request.MCPProxyToken) != 64 {
@@ -202,7 +198,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 		return err
 	}
 	defer bridge.Close()
-	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), request.Auth); err != nil {
+	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
 		return err
 	}
 	defer os.Remove(filepath.Join(request.Input.CodexHome, "auth.json"))

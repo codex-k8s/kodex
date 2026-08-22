@@ -1,8 +1,0 @@
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: agent-runner
-  labels: {app.kubernetes.io/name: agent-runner}
-spec:
-  selector: {matchLabels: {app.kubernetes.io/name: agent-runner, app.kubernetes.io/component: job-runtime}}
-  endpoints: [{port: metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}]

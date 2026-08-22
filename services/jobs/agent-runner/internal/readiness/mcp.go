@@ -45,11 +45,12 @@ type MCPProxy struct {
 }
 
 func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPProxy, error) {
-	upstream, err := url.Parse(input.MCP.URL)
+	upstream, err := url.Parse(input.CallbackURL)
 	if err != nil || upstream.Scheme != "https" || upstream.Host == "" {
 		return nil, errors.New("required MCP endpoint is invalid")
 	}
-	transport, err := exactMCPTransport(input.MCP.TLS)
+	upstream.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/mcp"
+	transport, err := exactMCPTransport(input.CallbackTLS)
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +86,10 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 			request.Header.Del("X-Forwarded-Host")
 			request.Header.Del("X-Forwarded-Proto")
 			request.Header.Set("Authorization", "Bearer "+token)
-			request.Header.Set("X-MatterCodex-Execution-ID", input.ExecutionID)
-			request.Header.Set("X-MatterCodex-Turn-ID", input.TurnID)
+			request.Header.Set("X-MatterCodex-Run-Ref", input.RunRef)
+			request.Header.Set("X-MatterCodex-Turn-Ref", input.TurnRef)
 			request.Header.Set("X-MatterCodex-Attempt", strconv.FormatUint(uint64(input.Attempt), 10))
-			request.Header.Set("X-MatterCodex-MCP-Binding-Version", strconv.FormatUint(input.MCPBindingVersion, 10))
+			request.Header.Set("X-MatterCodex-MCP-Binding-Version", strconv.FormatInt(input.RuntimeRevisionVersion, 10))
 		},
 		Transport: transport,
 		ErrorLog:  log.New(io.Discard, "", 0),

@@ -2,314 +2,239 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"log/slog"
-	"strings"
+	"sync"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/provider"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/callback"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type runtime struct {
-	control   *controlplaneclient.Client
-	provider  *provider.Responses
-	config    Config
-	assistant *serviceruntime.Readiness
-	logger    *slog.Logger
-	revision  string
+	control      *controlplaneclient.Client
+	manager      *workload.Manager
+	coordinator  *callback.Coordinator
+	config       Config
+	assistant    *serviceruntime.Readiness
+	logger       *slog.Logger
+	capacity     chan struct{}
+	warmMu       sync.RWMutex
+	warmRevision string
+	warmTicket   string
 }
 
-func newRuntime(control *controlplaneclient.Client, model *provider.Responses, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	assistant.Set(false, "assistant_runtime_starting")
-	return &runtime{control: control, provider: model, config: config, assistant: assistant, logger: logger}
+func newRuntime(control *controlplaneclient.Client, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
+	return &runtime{control: control, manager: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger, capacity: make(chan struct{}, config.MaximumConcurrentTurns)}
 }
 
 func (runtime *runtime) Run(ctx context.Context) error {
-	if err := runtime.reconcile(ctx); err != nil {
-		runtime.setAssistantUnavailable(ctx)
+	if err := runtime.manager.CleanupStaleTurns(ctx); err != nil {
+		return err
 	}
-	heartbeat := time.NewTicker(runtime.config.HeartbeatInterval)
+	_ = runtime.reconcileWarm(ctx)
 	poll := time.NewTicker(runtime.config.PollInterval)
-	defer heartbeat.Stop()
 	defer poll.Stop()
+	warm := time.NewTicker(runtime.config.InfrastructureCheckInterval)
+	defer warm.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-heartbeat.C:
-			if err := runtime.reconcile(ctx); err != nil {
+		case <-warm.C:
+			if err := runtime.reconcileWarm(ctx); err != nil {
 				runtime.setAssistantUnavailable(ctx)
 			}
 		case <-poll.C:
-			ready, _ := runtime.assistant.Ready()
-			if !ready {
+			if len(runtime.capacity) >= cap(runtime.capacity) {
 				continue
 			}
-			if err := runtime.claimAndExecute(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				runtime.setAssistantUnavailable(ctx)
+			if err := runtime.claim(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				runtime.logger.ErrorContext(ctx, "runtime claim cycle failed", "error_class", "control_plane")
 			}
 		}
 	}
 }
 
-func (runtime *runtime) reconcile(ctx context.Context) error {
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+func (runtime *runtime) reconcileWarm(ctx context.Context) error {
+	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	response, err := runtime.control.Runtime.ReconcileWarmRuntime(requestContext, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.WorkloadInstance})
-	if err != nil || response.GetDesiredRevision() == nil || response.GetDesiredRevision().GetRuntime() == nil {
-		return errors.New("reconcile warm runtime")
+	response, err := runtime.control.Runtime.ReconcileWarmRuntime(request, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID})
+	if err != nil || response.GetDesiredRevision() == nil {
+		return errors.New("reconcile system assistant warm runtime")
 	}
-	revision := response.GetDesiredRevision()
-	if err := runtime.provider.Check(requestContext, revision.GetRuntime().GetProvider(), revision.GetRuntime().GetModel()); err != nil {
-		_ = runtime.reportWarm(ctx, revision.GetRef(), controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_FAILED, safeCode(err))
-		return errors.New("check warm provider runtime")
-	}
-	runtime.revision = revision.GetRef()
-	if err := runtime.reportWarm(ctx, runtime.revision, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY, ""); err != nil {
+	input, err := runtime.manager.BuildWarmInput(response.GetDesiredRevision())
+	if err != nil {
 		return err
 	}
-	if runtime.assistant.Set(true, "ready") {
-		runtime.logger.InfoContext(ctx, "warm runtime availability restored")
+	ready, err := runtime.manager.EnsureWarm(request, input)
+	if err != nil {
+		return err
+	}
+	state := controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_PROVISIONING
+	if ready {
+		state = controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY
+	}
+	if err := runtime.reportWarm(ctx, input.RuntimeRevisionRef, state, ""); err != nil {
+		return err
+	}
+	if ready {
+		ticket, ticketErr := runtime.manager.WarmTicket(request, input.RuntimeRevisionRef)
+		if ticketErr != nil {
+			return ticketErr
+		}
+		runtime.warmMu.Lock()
+		runtime.warmRevision = input.RuntimeRevisionDigest
+		runtime.warmTicket = ticket
+		runtime.warmMu.Unlock()
+		if runtime.assistant.Set(true, "ready") {
+			runtime.logger.InfoContext(ctx, "system assistant warm runtime restored")
+		}
+	} else {
+		runtime.assistant.Set(false, "assistant_runtime_materializing")
 	}
 	return nil
 }
 
-func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
-	if runtime.assistant.Set(false, "assistant_runtime_unavailable") {
-		runtime.logger.WarnContext(ctx, "warm runtime availability lost", "error_class", "dependency")
-	}
-}
-
 func (runtime *runtime) reportWarm(ctx context.Context, revision string, state controlplanev1.AssistantRuntimeState, code string) error {
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	_, err := runtime.control.Runtime.ReportWarmRuntime(requestContext, &controlplanev1.ReportWarmRuntimeRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: uuid.NewString()}, WorkloadInstance: runtime.config.WorkloadInstance,
-		RuntimeRevision: revision, State: state, SafeErrorCode: code,
-	})
+	_, err := runtime.control.Runtime.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(revision, state.String())}, WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
 	return err
 }
 
-func (runtime *runtime) claimAndExecute(ctx context.Context) error {
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-	response, err := runtime.control.Runtime.ClaimExecution(requestContext, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.WorkloadInstance, Limit: 1})
+func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
+	if runtime.assistant.Set(false, "assistant_runtime_unavailable") {
+		runtime.logger.WarnContext(ctx, "system assistant warm runtime lost", "error_class", "dependency")
+	}
+}
+
+func (runtime *runtime) claim(ctx context.Context) error {
+	limit := cap(runtime.capacity) - len(runtime.capacity)
+	if limit > 8 {
+		limit = 8
+	}
+	if limit < 1 {
+		return nil
+	}
+	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+	response, err := runtime.control.Runtime.ClaimExecution(request, &controlplanev1.ClaimExecutionRequest{WorkloadInstance: runtime.config.PodUID, Limit: int32(limit)})
 	cancel()
 	if err != nil {
 		return err
 	}
 	for _, execution := range response.GetExecutions() {
-		if execution.GetRevision().GetSystemAssistant() {
-			_ = runtime.reportWarm(ctx, runtime.revision, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY, "")
+		input, buildErr := runtime.manager.BuildTurnInput(execution)
+		if buildErr != nil {
+			runtime.failClaim(ctx, input, execution, "RUNTIME_REVISION_INVALID")
+			continue
 		}
-		runtime.execute(ctx, execution)
-		if execution.GetRevision().GetSystemAssistant() {
-			_ = runtime.reportWarm(ctx, runtime.revision, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY, "")
+		runtime.capacity <- struct{}{}
+		done := runtime.coordinator.Register(input)
+		if input.SystemAssistant {
+			runtime.warmMu.RLock()
+			warmRevision, warmTicket := runtime.warmRevision, runtime.warmTicket
+			runtime.warmMu.RUnlock()
+			if warmRevision != input.RuntimeRevisionDigest || warmTicket == "" {
+				<-runtime.capacity
+				runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_RUNTIME_UNAVAILABLE")
+				continue
+			}
+			if err := runtime.manager.RegisterWarmTurn(ctx, input, warmTicket); err != nil || runtime.coordinator.EnqueueWarm(input) != nil {
+				<-runtime.capacity
+				runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
+				continue
+			}
+			_ = runtime.reportWarm(ctx, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY, "")
+		} else if err := runtime.manager.EnsureTurn(ctx, input); err != nil {
+			<-runtime.capacity
+			runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
+			continue
 		}
+		go runtime.track(ctx, input, done)
 	}
 	return nil
 }
 
-func (runtime *runtime) execute(ctx context.Context, execution *controlplanev1.ClaimedExecution) {
-	lease := execution.GetLease()
-	revision := execution.GetRevision()
-	if lease == nil || revision == nil || revision.GetRuntime() == nil {
-		return
-	}
-	executionContext, cancel := context.WithTimeout(ctx, runtime.config.ExecutionTimeout)
-	renewDone := make(chan error, 1)
-	go runtime.renewLease(executionContext, cancel, lease, renewDone)
-	defer func() {
-		cancel()
-		<-renewDone
-	}()
-	_ = runtime.progress(executionContext, lease, "MODEL_REQUEST_RUNNING")
-	input := map[string]any{}
-	if revision.GetBoundedInput() != nil {
-		input = revision.GetBoundedInput().AsMap()
-	}
-	inputJSON, _ := json.Marshal(input)
-	providerInput := provider.Request{
-		IdempotencyKey: lease.GetRef() + "-" + execution.GetRun().GetRef(), Model: revision.GetRuntime().GetModel(), Instructions: revision.GetInstructions(), Task: execution.GetTask(), InputJSON: inputJSON,
-		AllowDelegation: containsCapability(revision, "platform.run.delegate"),
-	}
-	for _, message := range revision.GetSessionContext() {
-		providerInput.SessionContext = append(providerInput.SessionContext, provider.Message{Role: message.GetRole(), Content: message.GetContent()})
-	}
-	for _, target := range revision.GetDelegationTargets() {
-		providerInput.DelegationTargets = append(providerInput.DelegationTargets, provider.DelegationTarget{Ref: target.GetRef(), Name: target.GetName(), Purpose: target.GetPurpose(), RoleDescription: target.GetRoleDescription()})
-	}
-	for _, grant := range revision.GetIntegrationGrants() {
-		providerInput.IntegrationGrants = append(providerInput.IntegrationGrants, provider.IntegrationGrant{Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(), ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(), CapabilityName: grant.GetCapabilityName(), Description: grant.GetCapabilityDescription(), Risk: grant.GetRisk()})
-	}
-	result, err := runtime.provider.Execute(executionContext, providerInput, func(toolContext context.Context, call provider.ToolCall) (string, error) {
-		if call.CapabilityKey != "" {
-			return runtime.invokeIntegration(toolContext, execution, call)
-		}
-		return runtime.delegate(toolContext, execution, call)
-	})
-	if err != nil {
-		runtime.complete(executionContext, execution, false, "", safeCode(err), nil)
-		return
-	}
-	body := []byte(result.Text)
-	digest := sha256.Sum256(body)
-	artifact := &controlplanev1.CompletedArtifactInput{FileName: "result.md", MediaType: "text/markdown", SizeBytes: int64(len(body)), Content: body, Sha256: hex.EncodeToString(digest[:])}
-	runtime.complete(executionContext, execution, true, result.Text, "", []*controlplanev1.CompletedArtifactInput{artifact})
-}
-
-func (runtime *runtime) invokeIntegration(ctx context.Context, execution *controlplanev1.ClaimedExecution, call provider.ToolCall) (string, error) {
-	allowed := false
-	for _, grant := range execution.GetRevision().GetIntegrationGrants() {
-		if grant.GetConnectionRef() == call.ConnectionRef && grant.GetCapabilityKey() == call.CapabilityKey && grant.GetEnabled() && grant.GetRisk() != "HIGH" {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return "", errors.New("integration capability is not allowed")
-	}
-	boundedInput, err := structpb.NewStruct(call.Input)
-	if err != nil {
-		return "", errors.New("encode integration input")
-	}
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-	response, err := runtime.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{
-		RunRef: execution.GetRun().GetRef(), NodeRef: execution.GetNode().GetRef(), ConnectionRef: call.ConnectionRef, CapabilityKey: call.CapabilityKey,
-		BoundedInput: boundedInput, IdempotencyKey: stableIdempotencyKey(execution.GetLease().GetRef(), call.CallID),
-	})
-	cancel()
-	if err != nil || response.GetInvocationRef() == "" {
-		return "", errors.New("resolve integration invocation")
-	}
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		readContext, readCancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-		state, readErr := runtime.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: response.GetInvocationRef()})
-		readCancel()
-		if readErr != nil {
-			return "", errors.New("read integration invocation")
-		}
-		switch state.GetState() {
-		case "SUCCEEDED":
-			encoded, _ := json.Marshal(map[string]any{"ok": true, "result": state.GetResultSummary()})
-			return string(encoded), nil
-		case "FAILED", "CANCELLED":
-			encoded, _ := json.Marshal(map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()})
-			return string(encoded), nil
-		}
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func (runtime *runtime) renewLease(ctx context.Context, cancelExecution context.CancelFunc, lease *controlplanev1.WorkLease, done chan<- error) {
-	ticker := time.NewTicker(runtime.config.LeaseRenewInterval)
-	defer ticker.Stop()
+func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+	defer func() { <-runtime.capacity }()
+	execution, cancel := context.WithTimeout(parent, runtime.config.ExecutionTimeout)
+	defer cancel()
+	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
+	defer renew.Stop()
+	inspect := time.NewTicker(2 * time.Second)
+	defer inspect.Stop()
+	_ = runtime.progress(execution, input, "WORKLOAD_SCHEDULED")
 	for {
 		select {
-		case <-ctx.Done():
-			done <- nil
+		case <-done:
+			if input.SystemAssistant {
+				_ = runtime.reportWarm(parent, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY, "")
+			}
 			return
-		case <-ticker.C:
-			requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
-			response, err := runtime.control.Runtime.RenewExecution(requestContext, &controlplanev1.RenewExecutionRequest{LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration()})
-			cancel()
-			if err != nil || response.GetLease() == nil {
-				cancelExecution()
-				done <- errors.New("renew execution lease")
+		case <-execution.Done():
+			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_TIMEOUT")
+			return
+		case <-renew.C:
+			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
+			_, err := runtime.control.Runtime.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+			cancelRequest()
+			if err != nil {
+				_ = runtime.manager.DeleteTurn(context.WithoutCancel(parent), input.LeaseRef)
+				runtime.coordinator.Complete(input.LeaseRef)
+				return
+			}
+		case <-inspect.C:
+			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
+			state, err := runtime.manager.TurnPodState(request, input)
+			cancelRequest()
+			if err == nil && (state == "FAILED" || state == "SUCCEEDED" || state == "MISSING" || state == "CONFLICT") {
+				runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED")
 				return
 			}
 		}
 	}
 }
 
-func (runtime *runtime) progress(ctx context.Context, lease *controlplanev1.WorkLease, progress string) error {
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+func (runtime *runtime) progress(ctx context.Context, input runtimecontract.RunnerInput, code string) error {
+	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	_, err := runtime.control.Runtime.ReportExecutionProgress(requestContext, &controlplanev1.ReportExecutionProgressRequest{LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Progress: progress})
+	_, err := runtime.control.Runtime.ReportExecutionProgress(request, &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Progress: "i18n:" + code})
 	return err
 }
 
-func (runtime *runtime) delegate(ctx context.Context, execution *controlplanev1.ClaimedExecution, call provider.ToolCall) (string, error) {
-	allowed := false
-	for _, target := range execution.GetRevision().GetDelegationTargets() {
-		if target.GetRef() == call.TargetAgentRef {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return "", errors.New("delegation target is not allowed")
-	}
-	requestContext, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+func (runtime *runtime) completeFailure(base context.Context, input runtimecontract.RunnerInput, code string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
 	defer cancel()
-	response, err := runtime.control.Runtime.DelegateExecution(requestContext, &controlplanev1.DelegateExecutionRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotencyKey(execution.GetLease().GetRef(), call.CallID)},
-		LeaseRef: execution.GetLease().GetRef(), Fence: execution.GetLease().GetFence(), Generation: execution.GetLease().GetGeneration(), TargetAgentRef: call.TargetAgentRef, Task: call.Task, Input: &structpb.Struct{},
-	})
+	_, err := runtime.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeRuntimeErrorCode(code)})
 	if err != nil {
-		return "", err
+		runtime.logger.ErrorContext(ctx, "complete failed runtime execution failed", "error_class", "control_plane")
 	}
-	payload := struct {
-		OK              bool   `json:"ok"`
-		ChildRunRef     string `json:"childRunRef"`
-		CallbackEdgeRef string `json:"callbackEdgeRef"`
-	}{OK: true, ChildRunRef: response.GetChildRun().GetRef(), CallbackEdgeRef: response.GetCallbackEdgeRef()}
-	raw, _ := json.Marshal(payload)
-	return string(raw), nil
+	_ = runtime.manager.DeleteTurn(ctx, input.LeaseRef)
+	runtime.coordinator.Complete(input.LeaseRef)
 }
 
-func (runtime *runtime) complete(ctx context.Context, execution *controlplanev1.ClaimedExecution, success bool, result, code string, artifacts []*controlplanev1.CompletedArtifactInput) {
-	requestContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), runtime.config.RequestTimeout)
-	defer cancel()
-	_, err := runtime.control.Runtime.CompleteExecution(requestContext, &controlplanev1.CompleteExecutionRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotencyKey(execution.GetLease().GetRef(), "complete")},
-		LeaseRef: execution.GetLease().GetRef(), Fence: execution.GetLease().GetFence(), Generation: execution.GetLease().GetGeneration(), Success: success, ResultSummary: bounded(result, 4000), SafeErrorCode: code, Artifacts: artifacts,
-	})
-	if err != nil && status.Code(err) != codes.AlreadyExists {
-		runtime.logger.ErrorContext(ctx, "complete runtime execution failed", "error_class", "control_plane")
+func (runtime *runtime) failClaim(ctx context.Context, input runtimecontract.RunnerInput, execution *controlplanev1.ClaimedExecution, code string) {
+	if input.LeaseRef == "" && execution != nil && execution.GetLease() != nil {
+		input.LeaseRef, input.LeaseFence, input.LeaseGeneration = execution.GetLease().GetRef(), execution.GetLease().GetFence(), execution.GetLease().GetGeneration()
+	}
+	if input.LeaseRef != "" {
+		runtime.completeFailure(ctx, input, code)
 	}
 }
 
-func safeCode(err error) string {
-	var safe *provider.SafeError
-	if errors.As(err, &safe) {
-		return safe.Code
-	}
-	return "RUNTIME_UNAVAILABLE"
-}
-
-func containsCapability(revision *controlplanev1.RuntimeRevisionSnapshot, key string) bool {
-	for _, capability := range revision.GetCapabilities() {
-		if capability.GetKey() == key {
-			return true
-		}
-	}
-	return false
-}
-
-func stableIdempotencyKey(left, right string) string {
+func stableIdempotency(left, right string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(left+"\x00"+right)).String()
 }
 
-func bounded(value string, limit int) string {
-	value = strings.TrimSpace(value)
-	if len(value) <= limit {
-		return value
+func safeRuntimeErrorCode(code string) string {
+	if code == "RUNTIME_REVISION_INVALID" || code == "RUNTIME_CONFIGURATION_STALE" {
+		return "RUNTIME_PROFILE_UNSUPPORTED"
 	}
-	return strings.TrimSpace(value[:limit])
+	return "RUNTIME_UNAVAILABLE"
 }

@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -13,35 +15,71 @@ import (
 const (
 	controlPlaneTarget        = "dns:///control-plane.mattercodex-system.svc:8443"
 	controlPlaneTLSServerName = "control-plane.mattercodex-system.svc.cluster.local"
-	providerProxy             = "http://egress-gateway.mattercodex-system.svc.cluster.local:8080"
+	callbackTLSServerName     = "runtime-controller-callback.mattercodex-system.svc.cluster.local"
 )
 
+var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
 type Config struct {
-	TechnicalListen                   string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
-	WorkloadInstance                  string        `env:"RUNTIME_CONTROLLER_WORKLOAD_INSTANCE"`
-	ControlPlaneTarget                string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TARGET"`
-	ControlPlaneTLSServerName         string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TLS_SERVER_NAME"`
-	ControlPlaneCAFile                string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CA_FILE"`
-	ControlPlaneClientCertificateFile string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE"`
-	ControlPlaneClientPrivateKeyFile  string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE"`
-	ControlPlaneApplicationGrantFile  string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_APPLICATION_GRANT_FILE"`
-	ProviderProxy                     string        `env:"RUNTIME_CONTROLLER_PROVIDER_PROXY"`
-	ProviderCredentialFile            string        `env:"RUNTIME_CONTROLLER_PROVIDER_CREDENTIAL_FILE"`
-	PollInterval                      time.Duration `env:"RUNTIME_CONTROLLER_POLL_INTERVAL"`
-	HeartbeatInterval                 time.Duration `env:"RUNTIME_CONTROLLER_HEARTBEAT_INTERVAL"`
-	LeaseRenewInterval                time.Duration `env:"RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL"`
-	RequestTimeout                    time.Duration `env:"RUNTIME_CONTROLLER_REQUEST_TIMEOUT"`
-	ExecutionTimeout                  time.Duration `env:"RUNTIME_CONTROLLER_EXECUTION_TIMEOUT"`
-	ShutdownTimeout                   time.Duration `env:"RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT"`
+	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	Namespace                      string        `env:"POD_NAMESPACE"`
+	PodUID                         string        `env:"POD_UID"`
+	PodIP                          string        `env:"POD_IP"`
+	TechnicalListen                string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
+	CallbackListen                 string        `env:"RUNTIME_CONTROLLER_CALLBACK_LISTEN"`
+	CallbackTLSServerName          string        `env:"RUNTIME_CONTROLLER_CALLBACK_TLS_SERVER_NAME"`
+	CallbackServerCertificateFile  string        `env:"RUNTIME_CONTROLLER_CALLBACK_SERVER_CERTIFICATE_FILE"`
+	CallbackServerPrivateKeyFile   string        `env:"RUNTIME_CONTROLLER_CALLBACK_SERVER_PRIVATE_KEY_FILE"`
+	CallbackClientCAFile           string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_FILE"`
+	CallbackExpectedClientSPIFFEID string        `env:"RUNTIME_CONTROLLER_CALLBACK_EXPECTED_CLIENT_SPIFFE_ID"`
+	CallbackClientCASecret         string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_SECRET"`
+	CallbackClientTLSSecret        string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_TLS_SECRET"`
+	ControlPlaneTarget             string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName      string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile             string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile    string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile     string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile           string        `env:"RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE"`
+	PromotedRoleImageRepository    string        `env:"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY"`
+	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
+	ProviderAuthSecret             string        `env:"RUNTIME_CONTROLLER_PROVIDER_AUTH_SECRET"`
+	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
+	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
+	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
+	RunnerServiceAccount           string        `env:"RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT"`
+	MaximumConcurrentTurns         int           `env:"RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS"`
+	TurnCPUMilli                   int64         `env:"RUNTIME_CONTROLLER_TURN_CPU_MILLI"`
+	TurnMemoryBytes                int64         `env:"RUNTIME_CONTROLLER_TURN_MEMORY_BYTES"`
+	PollInterval                   time.Duration `env:"RUNTIME_CONTROLLER_POLL_INTERVAL"`
+	InfrastructureCheckInterval    time.Duration `env:"RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL"`
+	LeaseRenewInterval             time.Duration `env:"RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL"`
+	RequestTimeout                 time.Duration `env:"RUNTIME_CONTROLLER_REQUEST_TIMEOUT"`
+	ExecutionTimeout               time.Duration `env:"RUNTIME_CONTROLLER_EXECUTION_TIMEOUT"`
+	ShutdownTimeout                time.Duration `env:"RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT"`
+	WarmLongPoll                   time.Duration `env:"RUNTIME_CONTROLLER_WARM_LONG_POLL"`
 }
 
 func loadConfig() (Config, error) {
 	config := Config{
-		TechnicalListen: ":9090", WorkloadInstance: "runtime-controller-warm-0",
+		Environment: "development", Namespace: "mattercodex-system",
+		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
+		CallbackServerCertificateFile:  "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.crt",
+		CallbackServerPrivateKeyFile:   "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.key",
+		CallbackClientCAFile:           "/var/run/config/mattercodex/runtime-controller/callback-client/ca.crt",
+		CallbackExpectedClientSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		CallbackClientCASecret:         "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName,
-		ControlPlaneCAFile: "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/mattercodex/runtime-controller/control-plane-client/tls.key", ControlPlaneApplicationGrantFile: "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		ProviderProxy: providerProxy, ProviderCredentialFile: "/var/run/secrets/mattercodex/runtime-controller/provider/api-key",
-		PollInterval: 500 * time.Millisecond, HeartbeatInterval: 15 * time.Second, LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second, ExecutionTimeout: 20 * time.Minute, ShutdownTimeout: 30 * time.Second,
+		ControlPlaneCAFile:          "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
+		ProviderAuthSecret:          "runtime-provider-auth", ProviderHTTPSProxy: "http://egress-gateway.mattercodex-system.svc:8080",
+		StorageClass: "runtime-session", SessionPVCSize: "20Gi",
+		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
+		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
+		ExecutionTimeout: 60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -50,23 +88,49 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
-	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
-		return errors.New("runtime controller technical listen address is invalid")
+	if config.PodUID == "" || len(config.PodUID) > 128 || net.ParseIP(config.PodIP) == nil ||
+		config.Namespace == "" || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
+		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName {
+		return errors.New("runtime controller identity is invalid")
 	}
-	if config.WorkloadInstance == "" || len(config.WorkloadInstance) > 128 || config.ControlPlaneTarget != controlPlaneTarget || config.ControlPlaneTLSServerName != controlPlaneTLSServerName {
-		return errors.New("runtime controller internal identity is invalid")
+	for _, address := range []string{config.TechnicalListen, config.CallbackListen} {
+		if _, _, err := net.SplitHostPort(address); err != nil {
+			return errors.New("runtime controller listen address is invalid")
+		}
 	}
-	proxy, err := url.Parse(config.ProviderProxy)
-	if err != nil || proxy.String() != providerProxy {
-		return errors.New("runtime controller provider proxy is invalid")
-	}
-	for _, fileName := range []string{config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile, config.ProviderCredentialFile} {
+	for _, fileName := range []string{config.CallbackServerCertificateFile, config.CallbackServerPrivateKeyFile,
+		config.CallbackClientCAFile, config.ControlPlaneCAFile, config.ControlPlaneCertificateFile,
+		config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile} {
 		if !filepath.IsAbs(fileName) {
 			return errors.New("runtime controller file path is invalid")
 		}
 	}
-	if config.PollInterval < 100*time.Millisecond || config.PollInterval > 10*time.Second || config.HeartbeatInterval < 5*time.Second || config.HeartbeatInterval > 30*time.Second || config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval >= config.HeartbeatInterval || config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second || config.ExecutionTimeout < time.Minute || config.ExecutionTimeout > time.Hour || config.ShutdownTimeout < 5*time.Second {
+	spiffe, err := url.Parse(config.CallbackExpectedClientSPIFFEID)
+	if err != nil || spiffe.Scheme != "spiffe" || spiffe.Host == "" || spiffe.Path == "" || spiffe.RawQuery != "" || spiffe.Fragment != "" {
+		return errors.New("runtime callback client identity is invalid")
+	}
+	proxy, proxyErr := url.Parse(config.ProviderHTTPSProxy)
+	if !validDNSLabel(config.CallbackClientCASecret) || !validDNSLabel(config.CallbackClientTLSSecret) ||
+		!validDNSLabel(config.ProviderAuthSecret) || !validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
+		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
+		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
+		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {
+		return errors.New("runtime role image policy is invalid")
+	}
+	if config.MaximumConcurrentTurns < 1 || config.MaximumConcurrentTurns > 128 || config.TurnCPUMilli < 100 ||
+		config.TurnCPUMilli > 16000 || config.TurnMemoryBytes < 128<<20 || config.TurnMemoryBytes > 64<<30 ||
+		config.PollInterval < 100*time.Millisecond || config.PollInterval > 10*time.Second ||
+		config.InfrastructureCheckInterval < 5*time.Second || config.InfrastructureCheckInterval > time.Minute ||
+		config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval > 20*time.Second ||
+		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
+		config.ExecutionTimeout < time.Minute || config.ExecutionTimeout > 4*time.Hour ||
+		config.ShutdownTimeout < 5*time.Second || config.ShutdownTimeout > time.Minute ||
+		config.WarmLongPoll < time.Second || config.WarmLongPoll > 30*time.Second {
 		return errors.New("runtime controller bounded configuration is invalid")
 	}
 	return nil
+}
+
+func validDNSLabel(value string) bool {
+	return regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`).MatchString(value)
 }
