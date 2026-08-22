@@ -37,7 +37,6 @@ type Config struct {
 	ControlPlaneCAFile                string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_CA_FILE"`
 	ControlPlaneClientCertificateFile string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE"`
 	ControlPlaneClientPrivateKeyFile  string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE"`
-	ControlPlaneApplicationGrantFile  string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE"`
 	NATSURL                           string        `env:"CONTROL_API_GATEWAY_NATS_URL"`
 	NATSTLSServerName                 string        `env:"CONTROL_API_GATEWAY_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                        string        `env:"CONTROL_API_GATEWAY_NATS_CA_FILE"`
@@ -64,7 +63,7 @@ func loadConfig() (Config, error) {
 		HTTPListen: ":8443", TechnicalListen: ":9090", TLSCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.crt", TLSPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.key",
 		OIDCAudience: "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
 		SessionCurrentKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/session/current.hex", SessionPreviousKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/session/previous.hex", SessionTTL: 15 * time.Minute,
-		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName, ControlPlaneCAFile: "/var/run/config/mattercodex/control-api-gateway/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.key", ControlPlaneApplicationGrantFile: "/var/run/secrets/mattercodex/control-api-gateway/application-grant/readiness.jwt",
+		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName, ControlPlaneCAFile: "/var/run/config/mattercodex/control-api-gateway/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.key",
 		NATSURL: "tls://nats.mattercodex-system.svc:4222", NATSTLSServerName: "nats.mattercodex-system.svc.cluster.local", NATSCAFile: "/var/run/config/mattercodex/control-api-gateway/nats/ca.pem", NATSCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/nats-client/tls.crt", NATSPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/nats-client/tls.key", NATSCredentialsFile: "/var/run/secrets/mattercodex/control-api-gateway/nats/credentials.creds",
 		RequestTimeout: 15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second, ShutdownTimeout: 20 * time.Second, ReadinessInterval: 10 * time.Second, RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000, PreAuthConcurrency: 32, MaximumHTTPConcurrency: 256, PerSubjectHTTPConcurrency: 16, MaximumWebSocketConcurrency: 128, PerSubjectWebSocketConcurrency: 4,
 	}
@@ -83,7 +82,7 @@ func (config Config) validate() error {
 	if config.HTTPListen == config.TechnicalListen {
 		return errors.New("control API listeners must be separate")
 	}
-	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile} {
+	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.NATSCAFile, config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control API runtime path is invalid")
 		}

@@ -42,12 +42,12 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	}
 	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
 	const (
-		callerIssuer   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration"
+		callerIssuer   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler"
 		verifierIssuer = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 		audience       = "urn:mattercodex:internal-rpc:control-plane"
-		method         = "/controlplane.v1.ControlPlaneService/CheckReadiness"
-		operation      = "control.legacy-data-migration.readiness"
-		callerSPIFFE   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration"
+		method         = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
+		operation      = "platform.runtime.schedules.claim"
+		callerSPIFFE   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler"
 		targetSPIFFE   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
 	)
 	policy := model.PolicySnapshot{
@@ -58,12 +58,12 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		PolicyRevision: 31, SignerGeneration: 7, Issuer: verifierIssuer,
 		SignerKeyID: verifierKey.KeyID,
 		OperationBindings: []model.OperationBinding{{
-			OperationID: operation, CallerWorkloadID: "legacy-data-migration",
+			OperationID: operation, CallerWorkloadID: "automation-scheduler",
 			CallerSPIFFEID: callerSPIFFE, Issuer: callerIssuer,
 			TargetWorkloadID: "control-plane", TargetSPIFFEID: targetSPIFFE,
-			Audience: audience, FullMethod: method, Permission: "controlplane.readiness.check",
+			Audience: audience, FullMethod: method, Permission: operation,
 			AuthorityProofIssuer: targetSPIFFE, AuthorityProofAudience: "urn:mattercodex:proof",
-			AuthoritySources: []string{"LEGACY_MIGRATION"}, TokenTTLSeconds: 30,
+			AuthoritySources: []string{"DOMAIN_STATE"}, TokenTTLSeconds: 30,
 		}},
 	}
 	keyRecord := func(
@@ -91,9 +91,9 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	claims := model.AuthorizationClaims{
 		Version: model.ContractVersion, Issuer: callerIssuer, Audience: audience,
 		Subject:    callerSPIFFE,
-		Caller:     model.Workload{WorkloadID: "legacy-data-migration", SPIFFEID: callerSPIFFE},
+		Caller:     model.Workload{WorkloadID: "automation-scheduler", SPIFFEID: callerSPIFFE},
 		Target:     model.Workload{WorkloadID: "control-plane", SPIFFEID: targetSPIFFE},
-		FullMethod: method, OperationID: operation, Permission: "controlplane.readiness.check",
+		FullMethod: method, OperationID: operation, Permission: operation,
 		JTI: "1d30e336-18e7-4b3c-a939-d6af0ac198ef", IssuedAt: now.Unix(),
 		NotBefore: now.Unix(), ExpiresAt: now.Add(30 * time.Second).Unix(),
 		ReplayMode: model.ReplayModeOneTime, SourceRevision: 7,

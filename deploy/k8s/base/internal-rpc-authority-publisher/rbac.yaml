@@ -33,12 +33,6 @@ rules:
       - internal-rpc-authority-integration-gateway-issuer-key
       - internal-rpc-authority-integration-gateway-manifest-trust
       - internal-rpc-authority-integration-gateway-proof-trust
-      - internal-rpc-authority-integration-gateway-verifier-delivery
-      - internal-rpc-authority-interaction-gateway-issuer-delivery
-      - internal-rpc-authority-interaction-gateway-issuer-key
-      - internal-rpc-authority-interaction-gateway-manifest-trust
-      - internal-rpc-authority-interaction-gateway-proof-trust
-      - internal-rpc-authority-interaction-gateway-verifier-delivery
       - internal-rpc-authority-role-image-builder-issuer-delivery
       - internal-rpc-authority-role-image-builder-issuer-key
       - internal-rpc-authority-role-image-builder-manifest-trust
@@ -47,10 +41,6 @@ rules:
       - internal-rpc-authority-runtime-controller-issuer-key
       - internal-rpc-authority-runtime-controller-manifest-trust
       - internal-rpc-authority-runtime-controller-proof-trust
-      - internal-rpc-authority-runtime-s3-restore-exchanger-issuer-delivery
-      - internal-rpc-authority-runtime-s3-restore-exchanger-issuer-key
-      - internal-rpc-authority-runtime-s3-restore-exchanger-manifest-trust
-      - internal-rpc-authority-runtime-s3-restore-exchanger-proof-trust
       - internal-rpc-authority-snapshot
     verbs:
       - get

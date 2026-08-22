@@ -88,7 +88,8 @@ func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 func Dial(ctx context.Context, config Config) (*Client, error) {
 	if config.Target == "" || config.TLSServerName == "" || !filepath.IsAbs(config.CAFile) ||
 		!filepath.IsAbs(config.ClientCertificateFile) || !filepath.IsAbs(config.ClientPrivateKeyFile) ||
-		!filepath.IsAbs(config.ApplicationGrantFile) || config.ExpectedIssuerUID == 0 || config.ExpectedIssuerGID == 0 ||
+		config.ApplicationGrantFile != "" && !filepath.IsAbs(config.ApplicationGrantFile) ||
+		config.ExpectedIssuerUID == 0 || config.ExpectedIssuerGID == 0 ||
 		config.DialTimeout < 100*time.Millisecond || config.DialTimeout > 5*time.Second || len(config.Operations) == 0 {
 		return nil, errors.New("control-plane client configuration is invalid")
 	}
@@ -158,6 +159,9 @@ func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMetho
 	}
 	grant, _ := ctx.Value(applicationGrantContextKey{}).(string)
 	if grant == "" {
+		if client.grantFile == "" {
+			return "", "", errors.New("request application credential is missing")
+		}
 		var err error
 		grant, err = readCredential(client.grantFile)
 		if err != nil {

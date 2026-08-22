@@ -62,7 +62,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ApplicationGrantFile: config.ControlPlaneApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProjectRequiredOperations: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProjectRequiredOperations: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
 	if err != nil {
 		return err
 	}

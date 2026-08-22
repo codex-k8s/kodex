@@ -218,6 +218,7 @@ func (authority *Authority) Issue(
 		proof.Caller.SPIFFEID != binding.CallerSPIFFEID ||
 		proof.ProofRevision == 0 ||
 		proof.SignerGeneration == 0 ||
+		proof.CallerCredentialRevision == 0 ||
 		proof.JTI == "" {
 		return "", model.AuthorizationClaims{}, failure.New(
 			failure.BindingMismatch,
@@ -286,20 +287,21 @@ func (authority *Authority) Issue(
 			WorkloadID: binding.TargetWorkloadID,
 			SPIFFEID:   binding.TargetSPIFFEID,
 		},
-		FullMethod:         binding.FullMethod,
-		OperationID:        binding.OperationID,
-		Authority:          proof.Authority,
-		Permission:         binding.Permission,
-		JTI:                jti,
-		IssuedAt:           now.Unix(),
-		NotBefore:          now.Unix(),
-		ExpiresAt:          expiresAt.Unix(),
-		ReplayMode:         model.ReplayModeOneTime,
-		SourceRevision:     authority.policy.SourceRevision,
-		SourceDigestSHA256: authority.policy.SourceDigestSHA256,
-		KeySetRevision:     authority.policy.KeySetRevision,
-		PolicyRevision:     authority.policy.PolicyRevision,
-		SignerGeneration:   authority.policy.SignerGeneration,
+		FullMethod:               binding.FullMethod,
+		OperationID:              binding.OperationID,
+		Authority:                proof.Authority,
+		Permission:               binding.Permission,
+		JTI:                      jti,
+		IssuedAt:                 now.Unix(),
+		NotBefore:                now.Unix(),
+		ExpiresAt:                expiresAt.Unix(),
+		ReplayMode:               model.ReplayModeOneTime,
+		SourceRevision:           authority.policy.SourceRevision,
+		SourceDigestSHA256:       authority.policy.SourceDigestSHA256,
+		KeySetRevision:           authority.policy.KeySetRevision,
+		PolicyRevision:           authority.policy.PolicyRevision,
+		SignerGeneration:         authority.policy.SignerGeneration,
+		CallerCredentialRevision: proof.CallerCredentialRevision,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(
 		claims,

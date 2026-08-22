@@ -94,8 +94,6 @@ spec:
               value: 15m
             - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
               value: "3"
-            - name: CONTROL_PLANE_RECOVERY_POLL_INTERVAL
-              value: 1s
             - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
               value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
@@ -172,20 +170,8 @@ spec:
             - name: postgres-runtime
               mountPath: /var/run/secrets/mattercodex/control-plane/postgres-runtime
               readOnly: true
-            - name: postgres-relay
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-relay
-              readOnly: true
-            - name: postgres-context
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
-              readOnly: true
             - name: postgres-ca
               mountPath: /var/run/config/mattercodex/control-plane/postgres
-              readOnly: true
-            - name: redis-credential
-              mountPath: /var/run/secrets/mattercodex/control-plane/redis
-              readOnly: true
-            - name: redis-ca
-              mountPath: /var/run/config/mattercodex/control-plane/redis
               readOnly: true
             - name: nats-credential
               mountPath: /var/run/secrets/mattercodex/control-plane/nats
@@ -196,9 +182,6 @@ spec:
             - name: lease-signing
               mountPath: /var/run/secrets/mattercodex/control-plane/lease-signing
               readOnly: true
-            - name: runtime-workload-signing
-              mountPath: /var/run/secrets/mattercodex/control-plane/runtime-workload-signing
-              readOnly: true
             - name: authority-policy
               mountPath: /var/run/config/mattercodex/control-plane/authority
               readOnly: true
@@ -207,21 +190,6 @@ spec:
               readOnly: true
             - name: application-grants
               mountPath: /var/run/config/mattercodex/control-plane/application-grants
-              readOnly: true
-            - name: integration-continuation-grant-signer
-              mountPath: /var/run/secrets/mattercodex/control-plane/continuation-grant
-              readOnly: true
-            - name: interaction-readback-signer
-              mountPath: /var/run/secrets/mattercodex/control-plane/interaction-readback
-              readOnly: true
-            - name: interaction-readback-trust
-              mountPath: /var/run/config/mattercodex/control-plane/interaction-readback
-              readOnly: true
-            - name: instruction-object-store
-              mountPath: /var/run/secrets/mattercodex/control-plane/instruction-object-store
-              readOnly: true
-            - name: object-store-ca
-              mountPath: /var/run/config/mattercodex/control-plane/object-store
               readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
@@ -249,34 +217,9 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-postgres-runtime
-        - name: postgres-relay
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-relay
-        - name: postgres-context
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-context
         - name: postgres-ca
           configMap:
             name: control-plane-postgresql-ca
-            defaultMode: 0440
-            items:
-              - key: ca.pem
-                path: ca.pem
-        - name: redis-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-redis
-        - name: redis-ca
-          configMap:
-            name: control-plane-redis-ca
             defaultMode: 0440
             items:
               - key: ca.pem
@@ -300,12 +243,6 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-lease-signing
-        - name: runtime-workload-signing
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-runtime-workload-signing
         - name: authority-policy
           configMap:
             name: internal-rpc-authority-publisher-target-registry
@@ -326,37 +263,6 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-application-grants
-        - name: integration-continuation-grant-signer
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-integration-continuation-grant-signer
-        - name: interaction-readback-signer
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-interaction-readback-signer
-        - name: interaction-readback-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-interaction-readback-trust
-        - name: instruction-object-store
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-instruction-object-store
-        - name: object-store-ca
-          configMap:
-            name: object-store-ca
-            defaultMode: 0440
-            items:
-              - key: ca.pem
-                path: ca.pem
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

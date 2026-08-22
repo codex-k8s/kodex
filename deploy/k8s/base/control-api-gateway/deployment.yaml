@@ -110,7 +110,6 @@ spec:
             - {name: session-keys, mountPath: /var/run/secrets/mattercodex/control-api-gateway/session, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
             - {name: internal-rpc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/control-plane, readOnly: true}
-            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/control-api-gateway/application-grant, readOnly: true}
             - {name: nats-client-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats-client, readOnly: true}
             - {name: nats-credential, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats, readOnly: true}
             - {name: nats-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/nats, readOnly: true}
@@ -126,8 +125,6 @@ spec:
           secret: {secretName: control-api-gateway-session-keys, defaultMode: 0440}
         - name: internal-rpc-ca
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
-        - name: application-grant
-          secret: {secretName: control-api-gateway-application-grant, defaultMode: 0440, items: [{key: readiness.jwt, path: readiness.jwt}]}
         - name: nats-client-tls
           secret: {secretName: control-api-gateway-nats-client-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}
         - name: nats-credential
