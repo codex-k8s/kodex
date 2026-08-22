@@ -17,6 +17,9 @@ const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const form = reactive({ name: "", purpose: "", language: "ru" as "ru" | "en" });
+const canCreate = computed(() =>
+  platform.projectCollectionActions.includes("CREATE_PROJECT"),
+);
 const filtered = computed(() => {
   const query =
     typeof route.query.q === "string" ? route.query.q.toLowerCase() : "";
@@ -45,7 +48,7 @@ onMounted(() => void platform.loadProjects());
 
 <template>
   <PageFrame :title="$t('projects.title')" :subtitle="$t('projects.subtitle')">
-    <template #actions
+    <template v-if="canCreate" #actions
       ><button
         class="button button--primary"
         type="button"
@@ -62,7 +65,7 @@ onMounted(() => void platform.loadProjects());
       :empty-text="$t('projects.emptyText')"
       @retry="platform.loadProjects()"
     >
-      <template #empty-action
+      <template v-if="canCreate" #empty-action
         ><button
           class="button button--primary"
           type="button"

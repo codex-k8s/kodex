@@ -8,7 +8,7 @@ export type OpaqueRef = string;
 
 export type Timestamp = string;
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION';
 
 export type Problem = {
     type: string;
@@ -85,6 +85,7 @@ export type ProjectInput = {
 export type ProjectPage = {
     items: Array<Project>;
     nextPageToken?: string;
+    nextActions: Array<NextAction>;
 };
 
 export type Membership = {
@@ -2613,6 +2614,7 @@ export type ListIntegrationDefinitionsResponses = {
     200: {
         items: Array<IntegrationDefinition>;
         coreReady: boolean;
+        nextActions: Array<NextAction>;
     };
 };
 

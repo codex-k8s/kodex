@@ -125,15 +125,15 @@ func (repository *Repository) ListRuntimes(ctx context.Context, principal value.
 	return result, rows.Err()
 }
 
-func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, error) {
+func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	rows, err := repository.pool.Query(ctx, queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId,
 		scope.organizationID, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
 	if err != nil {
-		return nil, "", errs.ErrUnavailable
+		return nil, "", nil, errs.ErrUnavailable
 	}
 	defer rows.Close()
 	var result []entity.Project
@@ -142,7 +142,7 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 		var projectID string
 		var permissions []string
 		if err := rows.Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt, &permissions); err != nil {
-			return nil, "", errs.ErrUnavailable
+			return nil, "", nil, errs.ErrUnavailable
 		}
 		if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
 			permissions = allPermissions()
@@ -150,7 +150,8 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 		item.NextActions = projectActions(permissions)
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	actions := collectionCreateActions(scope.role, "CREATE_PROJECT")
+	return result, "", actions, rows.Err()
 }
 
 func (repository *Repository) GetProject(ctx context.Context, principal value.Principal, ref string) (entity.Project, error) {
@@ -866,13 +867,14 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	return result, "", rows.Err()
 }
 
-func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, category string) ([]entity.IntegrationDefinition, error) {
-	if _, err := repository.resolveScope(ctx, principal); err != nil {
-		return nil, err
+func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, nil, err
 	}
 	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory, category)
 	if err != nil {
-		return nil, errs.ErrUnavailable
+		return nil, nil, errs.ErrUnavailable
 	}
 	defer rows.Close()
 	var result []entity.IntegrationDefinition
@@ -880,14 +882,22 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 		var item entity.IntegrationDefinition
 		var capabilities, schema []byte
 		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled, &capabilities, &schema); err != nil {
-			return nil, errs.ErrUnavailable
+			return nil, nil, errs.ErrUnavailable
 		}
 		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
-			return nil, errs.ErrUnavailable
+			return nil, nil, errs.ErrUnavailable
 		}
 		result = append(result, item)
 	}
-	return result, rows.Err()
+	actions := collectionCreateActions(scope.role, "CREATE_CONNECTION")
+	return result, actions, rows.Err()
+}
+
+func collectionCreateActions(role, action string) []string {
+	if role == "OWNER" || role == "ADMINISTRATOR" {
+		return []string{action}
+	}
+	return []string{}
 }
 func (repository *Repository) ListIntegrationConnections(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.IntegrationConnection, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
@@ -1095,7 +1105,7 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}
-	definitions, err := repository.ListIntegrationDefinitions(ctx, principal, "")
+	definitions, _, err := repository.ListIntegrationDefinitions(ctx, principal, "")
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}

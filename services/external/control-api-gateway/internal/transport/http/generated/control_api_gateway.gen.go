@@ -542,6 +542,8 @@ const (
 	NextActionBIND               NextAction = "BIND"
 	NextActionCANCEL             NextAction = "CANCEL"
 	NextActionCREATEAGENT        NextAction = "CREATE_AGENT"
+	NextActionCREATECONNECTION   NextAction = "CREATE_CONNECTION"
+	NextActionCREATEPROJECT      NextAction = "CREATE_PROJECT"
 	NextActionCREATERUN          NextAction = "CREATE_RUN"
 	NextActionCREATESCHEDULE     NextAction = "CREATE_SCHEDULE"
 	NextActionCREATEWORKFLOW     NextAction = "CREATE_WORKFLOW"
@@ -583,6 +585,10 @@ func (e NextAction) Valid() bool {
 	case NextActionCANCEL:
 		return true
 	case NextActionCREATEAGENT:
+		return true
+	case NextActionCREATECONNECTION:
+		return true
+	case NextActionCREATEPROJECT:
 		return true
 	case NextActionCREATERUN:
 		return true
@@ -2234,8 +2240,9 @@ type ProjectMembershipCreateInputPermissions string
 
 // ProjectPage defines model for ProjectPage.
 type ProjectPage struct {
-	Items         []Project `json:"items"`
-	NextPageToken *string   `json:"nextPageToken,omitempty"`
+	Items         []Project    `json:"items"`
+	NextActions   []NextAction `json:"nextActions"`
+	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
 // RoleEnvironment defines model for RoleEnvironment.

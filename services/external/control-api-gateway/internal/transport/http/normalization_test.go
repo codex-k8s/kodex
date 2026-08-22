@@ -1,9 +1,20 @@
 package httptransport
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
+
+type localizingRecorder struct{ *httptest.ResponseRecorder }
+
+func (recorder *localizingRecorder) Localize(messageID string) string {
+	return "localized:" + messageID
+}
 
 func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	t.Parallel()
@@ -41,6 +52,15 @@ func TestNormalizeArtifactSource(t *testing.T) {
 	normalize(value)
 	if value["source"] != "AGENT_RESULT" {
 		t.Fatalf("источник artifact не нормализован: %#v", value)
+	}
+}
+
+func TestNormalizeEnumCollections(t *testing.T) {
+	t.Parallel()
+	value := map[string]any{"nextActions": []any{"NEXT_ACTION_OPEN", "NEXT_ACTION_CREATE_PROJECT"}}
+	normalize(value)
+	if !reflect.DeepEqual(value["nextActions"], []any{"OPEN", "CREATE_PROJECT"}) {
+		t.Fatalf("enum collection не нормализована: %#v", value)
 	}
 }
 
@@ -94,5 +114,34 @@ func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
 	nested := value["nested"].(map[string]any)
 	if nested["title"] != "localized:OWNER_GATE_REVIEW_TITLE" {
 		t.Fatalf("вложенная ссылка на сообщение не локализована: %#v", value)
+	}
+}
+
+func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.T) {
+	t.Parallel()
+
+	writer := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
+	writeMessage(writer, http.StatusOK, &controlplanev1.ListIntegrationDefinitionsResponse{
+		Definitions: []*controlplanev1.IntegrationDefinition{{
+			Key: "example", Name: "i18n:INTEGRATION_EXAMPLE_NAME", Available: true,
+		}},
+		NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_CREATE_CONNECTION},
+		CoreReady:   true,
+	}, "", "definitions")
+
+	var value map[string]any
+	if err := json.Unmarshal(writer.Body.Bytes(), &value); err != nil {
+		t.Fatalf("декодировать response: %v", err)
+	}
+	items, _ := value["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["name"] != "localized:INTEGRATION_EXAMPLE_NAME" {
+		t.Fatalf("каталог не локализован: %#v", value)
+	}
+	if ready, _ := value["coreReady"].(bool); !ready {
+		t.Fatalf("core readiness потерян: %#v", value)
+	}
+	actions, _ := value["nextActions"].([]any)
+	if len(actions) != 1 || actions[0] != "CREATE_CONNECTION" {
+		t.Fatalf("авторитетные действия потеряны: %#v", value)
 	}
 }

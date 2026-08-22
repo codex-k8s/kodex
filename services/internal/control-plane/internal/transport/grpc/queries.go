@@ -80,11 +80,11 @@ func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListProjects(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
+	items, next, actions, err := server.service.ListProjects(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListProjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListProjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: nextActions(actions)}
 	for _, item := range items {
 		response.Projects = append(response.Projects, castProject(item))
 	}
@@ -374,11 +374,11 @@ func (server *Server) ListIntegrationDefinitions(ctx context.Context, request *c
 	if err != nil {
 		return nil, err
 	}
-	items, err := server.service.ListIntegrationDefinitions(ctx, p, request.GetCategory())
+	items, actions, err := server.service.ListIntegrationDefinitions(ctx, p, request.GetCategory())
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListIntegrationDefinitionsResponse{}
+	response := &controlplanev1.ListIntegrationDefinitionsResponse{NextActions: nextActions(actions), CoreReady: true}
 	for _, item := range items {
 		response.Definitions = append(response.Definitions, castDefinition(item))
 	}

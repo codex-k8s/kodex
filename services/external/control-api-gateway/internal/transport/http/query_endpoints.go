@@ -240,11 +240,7 @@ func (server *Server) ListIntegrationDefinitions(w http.ResponseWriter, r *http.
 		writeRPCProblem(w, err)
 		return
 	}
-	value, _ := messageMap(response)
-	value["items"] = value["definitions"]
-	delete(value, "definitions")
-	value["coreReady"] = true
-	writeJSON(w, http.StatusOK, value)
+	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
 func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
 	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{Page: page(nil, nil)})

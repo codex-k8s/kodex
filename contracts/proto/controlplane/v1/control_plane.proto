@@ -200,6 +200,8 @@ enum NextAction {
   NEXT_ACTION_UPLOAD_ARTIFACT = 26;
   NEXT_ACTION_MANAGE_CAPABILITIES = 27;
   NEXT_ACTION_MANAGE_GRANTS = 28;
+  NEXT_ACTION_CREATE_PROJECT = 29;
+  NEXT_ACTION_CREATE_CONNECTION = 30;
 }
 
 enum EntityLifecycle {
@@ -926,6 +928,7 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Project projects = 1;
   PageInfo page = 2;
+  repeated NextAction next_actions = 3;
 }
 message GetProjectRequest {
   string project_ref = 1;
@@ -1452,6 +1455,8 @@ message ListIntegrationDefinitionsRequest {
 }
 message ListIntegrationDefinitionsResponse {
   repeated IntegrationDefinition definitions = 1;
+  repeated NextAction next_actions = 2;
+  bool core_ready = 3;
 }
 message ListIntegrationConnectionsRequest {
   PageRequest page = 1;

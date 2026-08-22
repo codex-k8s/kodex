@@ -236,9 +236,12 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 	if err != nil {
 		t.Fatalf("construct integration service: %v", err)
 	}
-	definitions, err := service.ListIntegrationDefinitions(ctx, owner, "")
+	definitions, actions, err := service.ListIntegrationDefinitions(ctx, owner, "")
 	if err != nil || len(definitions) != 3 {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
+	}
+	if !contains(actions, "CREATE_CONNECTION") {
+		t.Fatalf("owner integration collection actions=%v, want CREATE_CONNECTION", actions)
 	}
 	for _, definition := range definitions {
 		if len(definition.ConfigurationFields) == 0 {

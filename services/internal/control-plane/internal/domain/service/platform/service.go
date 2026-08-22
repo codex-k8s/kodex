@@ -93,10 +93,10 @@ func (service *Service) ListRuntimes(ctx context.Context, p value.Principal) ([]
 	}
 	return service.repository.ListRuntimes(ctx, p)
 }
-func (service *Service) ListProjects(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Project, string, error) {
+func (service *Service) ListProjects(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	return service.repository.ListProjects(ctx, p, filter)
 }
@@ -265,10 +265,10 @@ func (service *Service) ListSchedules(ctx context.Context, p value.Principal, fi
 	}
 	return service.repository.ListSchedules(ctx, p, filter)
 }
-func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, category string) ([]entity.IntegrationDefinition, error) {
+func (service *Service) ListIntegrationDefinitions(ctx context.Context, p value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return service.repository.ListIntegrationDefinitions(ctx, p, category)
 }

@@ -38,12 +38,15 @@ function project(ref: string, version = 1): Project {
   };
 }
 
-function response(items: Project[]): {
+function response(
+  items: Project[],
+  nextActions: ProjectPage["nextActions"] = [],
+): {
   data: ProjectPage;
   response: Response;
 } {
   return {
-    data: { items },
+    data: { items, nextActions },
     response: new Response(null, { status: 200 }),
   };
 }
@@ -100,6 +103,21 @@ describe("platform store", () => {
     expect(store.projects.project_second?.version).toBe(2);
   });
 
+  it("заменяет разрешённые действия коллекции только авторитетным ответом", async () => {
+    listProjectsMock
+      .mockResolvedValueOnce(
+        response([project("project_owner")], ["CREATE_PROJECT"]),
+      )
+      .mockResolvedValueOnce(response([project("project_member")]));
+    const store = usePlatformStore();
+
+    await store.loadProjects();
+    expect(store.projectCollectionActions).toEqual(["CREATE_PROJECT"]);
+
+    await store.loadProjects();
+    expect(store.projectCollectionActions).toEqual([]);
+  });
+
   it("сохраняет forbidden как безопасное состояние запроса", async () => {
     listProjectsMock.mockResolvedValue({
       error: {
@@ -127,6 +145,7 @@ describe("platform store", () => {
     store.clearOwnerState();
 
     expect(store.projectList).toEqual([]);
+    expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
   });
 });

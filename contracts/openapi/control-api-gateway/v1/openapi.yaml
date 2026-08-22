@@ -978,10 +978,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, coreReady]
+                required: [items, coreReady, nextActions]
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/IntegrationDefinition' } }
                   coreReady: { type: boolean }
+                  nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections:
     get:
@@ -1361,7 +1362,7 @@ components:
       format: date-time
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION]
     Problem:
       type: object
       additionalProperties: false
@@ -1451,10 +1452,11 @@ components:
     ProjectPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, nextActions]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Project' } }
         nextPageToken: { type: string }
+        nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     Membership:
       type: object
       additionalProperties: false

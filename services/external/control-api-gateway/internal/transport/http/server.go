@@ -209,6 +209,9 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 		if nextActions, ok := value["nextActions"].([]any); ok {
 			output["nextActions"] = nextActions
 		}
+		if coreReady, ok := value["coreReady"].(bool); ok {
+			output["coreReady"] = coreReady
+		}
 		value = output
 	}
 	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
@@ -271,19 +274,17 @@ var enumPrefixes = []string{"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTIO
 func normalize(value any) {
 	switch current := value.(type) {
 	case []any:
-		for _, item := range current {
+		for index, item := range current {
 			normalize(item)
+			if text, ok := item.(string); ok {
+				current[index] = normalizeEnum(text)
+			}
 		}
 	case map[string]any:
 		for key, item := range current {
 			normalize(item)
 			if text, ok := item.(string); ok {
-				for _, prefix := range enumPrefixes {
-					if strings.HasPrefix(text, prefix) {
-						current[key] = strings.TrimPrefix(text, prefix)
-						break
-					}
-				}
+				current[key] = normalizeEnum(text)
 			}
 		}
 		if permissions, ok := current["projectPermissions"]; ok {
@@ -325,6 +326,15 @@ func normalize(value any) {
 		}
 		ensureRequiredCollections(current)
 	}
+}
+
+func normalizeEnum(value string) string {
+	for _, prefix := range enumPrefixes {
+		if strings.HasPrefix(value, prefix) {
+			return strings.TrimPrefix(value, prefix)
+		}
+	}
+	return value
 }
 
 func ensureRequiredCollections(value map[string]any) {

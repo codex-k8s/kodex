@@ -206,6 +206,8 @@ export const usePlatformStore = defineStore("platform", () => {
   );
   const platformMembershipActions = ref<NextAction[]>([]);
   const projectMembershipActions = ref<NextAction[]>([]);
+  const projectCollectionActions = ref<NextAction[]>([]);
+  const integrationDefinitionActions = ref<NextAction[]>([]);
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
@@ -324,8 +326,11 @@ export const usePlatformStore = defineStore("platform", () => {
           await unwrap(
             listProjects({ query: { pageSize: 100 }, signal: requestSignal() }),
           )
-        ).data.items,
-      (values) => replace(projects, values),
+        ).data,
+      (value) => {
+        replace(projects, value.items);
+        projectCollectionActions.value = value.nextActions;
+      },
     );
   }
 
@@ -681,11 +686,13 @@ export const usePlatformStore = defineStore("platform", () => {
         ]);
         return {
           definitions: definitionPage.data.items,
+          definitionActions: definitionPage.data.nextActions,
           connections: connectionPage.data.items,
         };
       },
       (value) => {
         replaceByKey(definitions, value.definitions, (item) => item.key);
+        integrationDefinitionActions.value = value.definitionActions;
         replace(connections, value.connections);
       },
     );
@@ -1553,6 +1560,8 @@ export const usePlatformStore = defineStore("platform", () => {
     capabilities.value = [];
     platformMembershipActions.value = [];
     projectMembershipActions.value = [];
+    projectCollectionActions.value = [];
+    integrationDefinitionActions.value = [];
     assistant.value = undefined;
     auditEvents.value = [];
     selectProjectRef(undefined);
@@ -1588,6 +1597,8 @@ export const usePlatformStore = defineStore("platform", () => {
     platformMembershipCandidates,
     platformMembershipActions,
     projectMembershipActions,
+    projectCollectionActions,
+    integrationDefinitionActions,
     conversations,
     assistant,
     auditEvents,

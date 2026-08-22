@@ -16,6 +16,9 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const definitions = computed(() => Object.values(platform.definitions));
 const connections = computed(() => Object.values(platform.connections));
+const canCreateConnection = computed(() =>
+  platform.integrationDefinitionActions.includes("CREATE_CONNECTION"),
+);
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -58,7 +61,7 @@ const selectedTargets = computed(() =>
 
 function openConnection(definitionKey: string): void {
   const definition = platform.definitions[definitionKey];
-  if (!definition?.available) return;
+  if (!canCreateConnection.value || !definition?.available) return;
   form.definitionKey = definition.key;
   form.name = definition.name;
   form.configuration = Object.fromEntries(
@@ -449,6 +452,7 @@ onMounted(() => {
               {{ $t("integrations.unavailable") }}
             </p>
             <button
+              v-if="canCreateConnection"
               class="button button--primary"
               type="button"
               :disabled="!definition.available"
