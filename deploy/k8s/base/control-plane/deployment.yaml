@@ -106,6 +106,8 @@ spec:
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
             - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256

@@ -28,8 +28,9 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	defer func() { _ = tx.Rollback(ctx) }()
 	var assistant entity.SystemAssistant
 	var limits []byte
-	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef, warmInstance, runtimeKey, profileRevision, provider, model string
-	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model)
+	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef string
+	var warmInstance, runtimeKey, profileRevision, provider, model, roleDefinitionRef string
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model, &roleDefinitionRef)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
@@ -47,7 +48,32 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		assistant.RuntimeState = "RECOVERING"
 		assistant.Version++
 	}
-	snapshot := map[string]any{"assistantRef": assistant.Ref, "stableKey": assistant.StableKey, "systemSessionRef": systemSessionRef, "runtimeRevision": assistant.DesiredRuntimeRevision, "runtimeKey": runtimeKey, "profileRevision": profileRevision, "runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef, "corePromptDigest": promptDigest, "corePrompt": promptContent, "ownerInstructions": ownerInstructions, "resourceLimits": assistant.ResourceLimits, "directSecretAccess": false}
+	resolvedInstructions := promptContent
+	if ownerInstructions != "" {
+		resolvedInstructions += "\n\n<owner-instructions>\n" + ownerInstructions + "\n</owner-instructions>"
+	}
+	revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
+		assistant.DesiredRuntimeRevision, profileRevision, provider, model, promptDigest,
+		ownerInstructions, roleDefinitionRef, repository.roleImages.DefaultImageReference,
+		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractSHA256,
+	}, "\x00")))
+	snapshot := map[string]any{
+		"assistantRef": assistant.Ref, "agentRef": assistant.Ref,
+		"stableKey": assistant.StableKey, "sessionRef": systemSessionRef,
+		"systemSessionRef": systemSessionRef, "runtimeRevisionRef": assistant.DesiredRuntimeRevision,
+		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
+		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
+		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
+		"corePromptDigest": promptDigest, "corePrompt": promptContent,
+		"ownerInstructions": ownerInstructions, "instructions": resolvedInstructions,
+		"resourceLimits": assistant.ResourceLimits, "directSecretAccess": false,
+		"roleDefinitionRef":           roleDefinitionRef,
+		"imageReference":              repository.roleImages.DefaultImageReference,
+		"imageManifestDigest":         repository.roleImages.DefaultImageDigest,
+		"roleRuntimeContractRevision": repository.roleImages.RoleRuntimeContractRevision,
+		"roleRuntimeContractSHA256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}

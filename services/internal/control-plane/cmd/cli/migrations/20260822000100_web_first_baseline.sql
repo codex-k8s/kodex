@@ -457,6 +457,45 @@ CREATE TABLE control_plane.run_nodes (
 
 CREATE INDEX run_nodes_graph ON control_plane.run_nodes (root_run_id, created_at);
 
+CREATE TABLE control_plane.runtime_revisions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^rrev_[A-Za-z0-9_-]{8,89}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    session_id uuid NOT NULL REFERENCES control_plane.sessions(id),
+    turn_id uuid REFERENCES control_plane.session_turns(id),
+    agent_id uuid NOT NULL REFERENCES control_plane.agents(id),
+    role_definition_id uuid NOT NULL REFERENCES control_plane.role_definitions(id),
+    role_image_recipe_id uuid REFERENCES control_plane.role_image_recipes(id),
+    role_image_artifact_id uuid REFERENCES control_plane.image_artifacts(id),
+    generation bigint NOT NULL CHECK (generation > 0),
+    attempt integer NOT NULL CHECK (attempt > 0),
+    runtime_profile_key text NOT NULL REFERENCES control_plane.runtime_profiles(stable_key),
+    runtime_profile_revision text NOT NULL,
+    provider text NOT NULL,
+    model text NOT NULL,
+    instruction_ref text NOT NULL,
+    instruction_digest text NOT NULL CHECK (instruction_digest ~ '^[a-f0-9]{64}$'),
+    input_digest text NOT NULL CHECK (input_digest ~ '^[a-f0-9]{64}$'),
+    capabilities text[] NOT NULL,
+    integration_grants_digest text NOT NULL CHECK (integration_grants_digest ~ '^[a-f0-9]{64}$'),
+    image_reference text NOT NULL CHECK (image_reference ~ '@sha256:[a-f0-9]{64}$'),
+    image_manifest_digest text NOT NULL CHECK (image_manifest_digest ~ '^sha256:[a-f0-9]{64}$'),
+    role_runtime_contract_revision bigint NOT NULL CHECK (role_runtime_contract_revision > 0),
+    role_runtime_contract_sha256 text NOT NULL CHECK (role_runtime_contract_sha256 ~ '^[a-f0-9]{64}$'),
+    revision_digest text NOT NULL CHECK (revision_digest ~ '^[a-f0-9]{64}$'),
+    safe_snapshot jsonb NOT NULL CHECK (octet_length(safe_snapshot::text) <= 262144),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (node_id, generation)
+);
+
+CREATE TRIGGER protect_runtime_revision
+BEFORE UPDATE OR DELETE ON control_plane.runtime_revisions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_immutable_row();
+
 CREATE TABLE control_plane.run_edges (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
@@ -758,6 +797,7 @@ CREATE TABLE control_plane.runtime_leases (
     organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
     run_id uuid NOT NULL REFERENCES control_plane.runs(id),
     node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    runtime_revision_id uuid NOT NULL REFERENCES control_plane.runtime_revisions(id),
     workload_instance text NOT NULL,
     fence_digest text NOT NULL CHECK (fence_digest ~ '^[a-f0-9]{64}$'),
     generation bigint NOT NULL CHECK (generation > 0),

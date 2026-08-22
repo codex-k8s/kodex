@@ -78,3 +78,7 @@ OWNER_GATE_NODE_ROLE:
   other: Result review
 ARTIFACT_UPLOADED:
   other: File uploaded
+RUN_TURN_STARTED:
+  other: The AI employee started working
+ROLE_IMAGE_RECIPE_CHANGED:
+  other: The role environment configuration was updated

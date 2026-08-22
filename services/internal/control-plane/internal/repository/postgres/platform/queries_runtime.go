@@ -5,10 +5,12 @@ import _ "embed"
 var (
 	//go:embed sql/runtime_claimexecution_expire_stale_leases.sql
 	queryRuntimeClaimexecutionExpireStaleLeases string
-	//go:embed sql/runtime_claimexecution_select_integration_grants_organization_id_target_kind_target_ref.sql
-	queryRuntimeClaimexecutionSelectIntegrationGrantsOrganizationIdTargetKindTargetRef string
+	//go:embed sql/runtime_claimexecution_select_claimable_agent_executions.sql
+	queryRuntimeClaimExecutionSelectClaimableAgentExecutions string
 	//go:embed sql/runtime_claimexecution_select_runtime_leases_node_id.sql
 	queryRuntimeClaimexecutionSelectRuntimeLeasesNodeId string
+	//go:embed sql/runtime_claimexecution_insert_runtime_revision.sql
+	queryRuntimeClaimExecutionInsertRuntimeRevision string
 	//go:embed sql/runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance.sql
 	queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance string
 	//go:embed sql/runtime_claimexecution_update_run_nodes_state_started_at_version.sql

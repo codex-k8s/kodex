@@ -57,6 +57,7 @@ type Config struct {
 	RoleImageInputRepository       string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
 	TrustedRoleBaseRepository      string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
 	TrustedRoleBaseDigest          string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
+	DefaultRoleImageReference      string        `env:"CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"`
 	RoleRuntimeContractRevision    uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256      string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
 	OIDCIssuer                     string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
@@ -151,7 +152,8 @@ func (config Config) validate() error {
 		config.ImageMaximumAttempts < 1 || config.ImageMaximumAttempts > 10 ||
 		!validImageRepository(config.StagingImageRepository) || !validImageRepository(config.PromotedImageRepository) ||
 		!validImageRepository(config.RoleImageInputRepository) || !validImageRepository(config.TrustedRoleBaseRepository) ||
-		!validManifestDigest(config.TrustedRoleBaseDigest) || config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
+		!validManifestDigest(config.TrustedRoleBaseDigest) || !validPinnedImageReference(config.DefaultRoleImageReference) ||
+		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
 		config.OIDCRefreshInterval < 10*time.Second || config.OIDCRefreshInterval > time.Minute ||
@@ -195,6 +197,11 @@ func validManifestDigest(value string) bool {
 
 func validImageRepository(value string) bool {
 	return value != "" && len(value) <= 500 && !strings.ContainsAny(value, "@ \t\r\n") && strings.Contains(value, "/")
+}
+
+func validPinnedImageReference(value string) bool {
+	separator := strings.LastIndex(value, "@")
+	return separator > 0 && validImageRepository(value[:separator]) && validManifestDigest(value[separator+1:])
 }
 
 func validRuntimeIdentifier(value string) bool {

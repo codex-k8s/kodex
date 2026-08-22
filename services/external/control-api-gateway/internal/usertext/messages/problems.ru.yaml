@@ -78,3 +78,7 @@ OWNER_GATE_NODE_ROLE:
   other: Проверка результата
 ARTIFACT_UPLOADED:
   other: Файл загружен
+RUN_TURN_STARTED:
+  other: ИИ-сотрудник начал работу
+ROLE_IMAGE_RECIPE_CHANGED:
+  other: Конфигурация среды роли обновлена

@@ -60,7 +60,7 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if agentRef == "" {
 		agentRef = mapString(values, "assistantRef")
 	}
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevision"), Version: 1, RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
 	result.RoleImageRecipeRef = mapString(values, "roleImageRecipeRef")
 	result.RoleImageArtifactRef = mapString(values, "roleImageArtifactRef")

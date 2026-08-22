@@ -41,7 +41,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionExpireStaleLeases, scope.organizationID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryRuntimeClaimexecutionSelectIntegrationGrantsOrganizationIdTargetKindTargetRef, scope.organizationID, payload.Limit)
+	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
+		scope.organizationID, payload.Limit, repository.roleImages.DefaultImageReference,
+		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
+		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -49,11 +52,25 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	for rows.Next() {
-		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef, sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision, provider, model, instructionRef, instructionDigest, instructions, turnRef, stableKey, callbackEdgeRef string
+		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef string
+		var sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision string
+		var provider, model, instructionRef, instructionDigest, instructions, turnRef string
+		var stableKey, callbackEdgeRef, turnID, agentID, roleDefinitionID, roleDefinitionRef string
+		var roleImageRecipeID, roleImageRecipeRef, roleImageArtifactID, roleImageArtifactRef string
+		var imageReference, imageManifestDigest, roleRuntimeContractSHA256 string
+		var roleRuntimeContractRevision int64
 		var attempt int32
 		var capabilities, knowledge []string
 		var rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext []byte
-		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID, &projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey, &runtimeRevision, &provider, &model, &instructionRef, &instructionDigest, &instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef, &stableKey, &rawIntegrationGrants, &rawDelegationTargets, &callbackEdgeRef, &rawSessionContext); err != nil {
+		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID,
+			&projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey,
+			&runtimeRevision, &provider, &model, &instructionRef, &instructionDigest,
+			&instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef,
+			&stableKey, &rawIntegrationGrants, &rawDelegationTargets, &callbackEdgeRef,
+			&rawSessionContext, &turnID, &agentID, &roleDefinitionID, &roleDefinitionRef,
+			&roleImageRecipeID, &roleImageRecipeRef, &roleImageArtifactID,
+			&roleImageArtifactRef, &imageReference, &imageManifestDigest,
+			&roleRuntimeContractRevision, &roleRuntimeContractSHA256); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		fence, err := newRef("fnc")
@@ -67,17 +84,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectRuntimeLeasesNodeId, nodeID).Scan(&generation); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance, leaseRef, scope.organizationID, runID, nodeID, payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation, hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, nodeRef, "TURN_STARTED", nodeRef, "", "", "", "Агент начал работу", "RUNNING", "RUNNING")
-		if err != nil {
-			return commandOutcome{}, err
-		}
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
 		var delegationTargets []map[string]string
@@ -87,8 +93,72 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
-		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{runtimeRevision, provider, model, hex.EncodeToString(resolvedInstructionsDigest[:]), strings.Join(capabilities, ","), string(rawIntegrationGrants)}, "\x00")))
-		items = append(items, map[string]any{"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef, "turnRef": turnRef, "attempt": attempt, "task": task, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt, "agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey, "runtimeRevision": runtimeRevision, "runtimeProvider": provider, "runtimeModel": model, "instructionRef": instructionRef, "instructionDigest": instructionDigest, "instructions": instructions, "capabilities": capabilities, "integrationGrants": integrationGrants, "knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets, "callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext, "input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]), "revisionDigest": hex.EncodeToString(revisionDigest[:]), "eventRef": event.Ref})
+		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
+		integrationGrantsDigest := sha256.Sum256(rawIntegrationGrants)
+		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
+		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
+			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
+			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
+			integrationGrantsDigestHex, string(rawDelegationTargets), string(rawSessionContext),
+			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
+			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
+		}, "\x00")))
+		revisionDigestHex := hex.EncodeToString(revisionDigest[:])
+		revisionRef, err := newRef("rrev")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot := map[string]any{
+			"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
+			"turnRef": turnRef, "attempt": attempt, "task": task,
+			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
+			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
+			"runtimeModel": model, "instructionRef": instructionRef,
+			"instructionDigest": instructionDigest, "instructions": instructions,
+			"capabilities": capabilities, "integrationGrants": integrationGrants,
+			"knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets,
+			"callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext,
+			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
+			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,
+			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
+			"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
+			"imageReference": imageReference, "imageManifestDigest": imageManifestDigest,
+			"roleRuntimeContractRevision": roleRuntimeContractRevision,
+			"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
+		}
+		rawSnapshot, err := json.Marshal(snapshot)
+		if err != nil || len(rawSnapshot) > 256<<10 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		var runtimeRevisionID string
+		if err := tx.QueryRow(ctx, queryRuntimeClaimExecutionInsertRuntimeRevision,
+			revisionRef, scope.organizationID, projectID, rootRunID, runID, nodeID,
+			sessionID, turnID, agentID, roleDefinitionID, roleImageRecipeID,
+			roleImageArtifactID, generation, attempt, runtimeKey, runtimeRevision,
+			provider, model, instructionRef, resolvedInstructionsDigestHex,
+			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
+			imageReference, imageManifestDigest, roleRuntimeContractRevision,
+			roleRuntimeContractSHA256, revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		expiresAt := time.Now().UTC().Add(30 * time.Second)
+		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,
+			leaseRef, scope.organizationID, runID, nodeID, runtimeRevisionID,
+			payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
+			hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID,
+			nodeRef, "TURN_STARTED", nodeRef, "", "", "", "i18n:RUN_TURN_STARTED", "RUNNING", "RUNNING")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot["leaseRef"], snapshot["fence"], snapshot["generation"] = leaseRef, fence, generation
+		snapshot["expiresAt"], snapshot["eventRef"] = expiresAt, event.Ref
+		items = append(items, snapshot)
 		if firstRunRef == "" {
 			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 		}

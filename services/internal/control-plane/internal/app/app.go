@@ -62,7 +62,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		BuildLeaseDuration: config.ImageBuildLeaseDuration, AdmissionClaimTTL: config.ImageAdmissionClaimTTL,
 		PromotionClaimTTL: config.ImagePromotionClaimTTL, MaximumAttempts: config.ImageMaximumAttempts,
 		StagingRepository: config.StagingImageRepository, PromotedRepository: config.PromotedImageRepository,
-		LeaseSigningKey: leaseSigningKey,
+		DefaultImageReference: config.DefaultRoleImageReference, LeaseSigningKey: leaseSigningKey,
 	}); err != nil {
 		return fmt.Errorf("configure role image lifecycle: %w", err)
 	}

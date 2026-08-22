@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -39,12 +40,13 @@ type Repository struct {
 // и secret, которым control-plane детерминированно подписывает fenced claims.
 type RoleImageConfig struct {
 	PolicyRevision, RoleRuntimeContractRevision uint64
-	PolicySHA256, RoleRuntimeContractSHA256      string
-	BuildLeaseDuration, AdmissionClaimTTL        time.Duration
-	PromotionClaimTTL                            time.Duration
-	MaximumAttempts                              uint32
-	StagingRepository, PromotedRepository        string
-	LeaseSigningKey                              []byte
+	PolicySHA256, RoleRuntimeContractSHA256     string
+	BuildLeaseDuration, AdmissionClaimTTL       time.Duration
+	PromotionClaimTTL                           time.Duration
+	MaximumAttempts                             uint32
+	StagingRepository, PromotedRepository       string
+	DefaultImageReference, DefaultImageDigest   string
+	LeaseSigningKey                             []byte
 }
 
 func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string) (*Repository, error) {
@@ -62,6 +64,13 @@ func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error 
 		config.StagingRepository == "" || config.PromotedRepository == "" || len(config.LeaseSigningKey) < 32 {
 		return errors.New("role image configuration is invalid")
 	}
+	separator := strings.LastIndex(config.DefaultImageReference, "@")
+	if separator < 1 || separator == len(config.DefaultImageReference)-1 ||
+		!strings.HasPrefix(config.DefaultImageReference[separator+1:], "sha256:") ||
+		len(config.DefaultImageReference[separator+1:]) != 71 {
+		return errors.New("default role image reference is invalid")
+	}
+	config.DefaultImageDigest = config.DefaultImageReference[separator+1:]
 	config.LeaseSigningKey = append([]byte(nil), config.LeaseSigningKey...)
 	repository.roleImages = config
 	return nil
