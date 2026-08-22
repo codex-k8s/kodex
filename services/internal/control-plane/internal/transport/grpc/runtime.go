@@ -5,7 +5,9 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -186,6 +188,24 @@ func (server *Server) DelegateExecution(ctx context.Context, request *controlpla
 		return nil, err
 	}
 	return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), CallbackEdgeRef: mapString(result.Runtime, "callbackEdgeRef")}, nil
+}
+
+func (server *Server) ProposeAssistantPlan(ctx context.Context, request *controlplanev1.ProposeAssistantPlanRequest) (*controlplanev1.ProposeAssistantPlanResponse, error) {
+	operations := make([]entity.AssistantPlanOperation, 0, len(request.GetOperations()))
+	for _, item := range request.GetOperations() {
+		if item == nil || item.GetType() == controlplanev1.AssistantPlanOperation_TYPE_UNSPECIFIED {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		operations = append(operations, entity.AssistantPlanOperation{
+			Key: item.GetRef(), Type: enumSuffix(item.GetType(), "TYPE_"), Summary: item.GetSummary(), Input: asMap(item.GetBoundedInput()),
+		})
+	}
+	payload := command.ProposeAssistantPlanInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Summary: request.GetSummary(), Operations: operations}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName, command.ProposeAssistantPlan, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}, nil
 }
 
 func (server *Server) DeliverCallback(ctx context.Context, request *controlplanev1.DeliverCallbackRequest) (*controlplanev1.DeliverCallbackResponse, error) {

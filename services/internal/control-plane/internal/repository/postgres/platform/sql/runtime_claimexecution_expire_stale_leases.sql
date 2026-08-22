@@ -5,6 +5,6 @@ WITH expired AS (
 		WHERE organization_id=$1::uuid AND state='CLAIMED' AND expires_at<=clock_timestamp()
 		RETURNING node_id
 	) UPDATE control_plane.run_nodes n
-	SET state='QUEUED',started_at=NULL,progress_summary='',version=version+1
+	SET state='QUEUED',started_at=NULL,progress_summary='',version=n.version+1
 	FROM expired e,control_plane.runs r
 	WHERE n.id=e.node_id AND r.id=n.run_id AND r.state IN('QUEUED','RUNNING')

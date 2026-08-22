@@ -34,6 +34,11 @@ SELECT n.id::text,
        a.knowledge_artifact_refs,
        r.input,
        n.attempt,
+       COALESCE((
+           SELECT max(lease.generation)
+           FROM control_plane.runtime_leases lease
+           WHERE lease.node_id = n.id
+       ), 0) + 1,
        COALESCE(t.ref, ''),
        COALESCE(a.system_key, ''),
        COALESCE((

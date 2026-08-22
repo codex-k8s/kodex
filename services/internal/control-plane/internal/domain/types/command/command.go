@@ -54,6 +54,7 @@ const (
 	ReportExecutionProgress       Kind = "REPORT_EXECUTION_PROGRESS"
 	CompleteExecution             Kind = "COMPLETE_EXECUTION"
 	DelegateExecution             Kind = "DELEGATE_EXECUTION"
+	ProposeAssistantPlan          Kind = "PROPOSE_ASSISTANT_PLAN"
 	DeliverCallback               Kind = "DELIVER_CALLBACK"
 	ReportWarmRuntime             Kind = "REPORT_WARM_RUNTIME"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
@@ -146,6 +147,11 @@ type DelegateInput struct {
 	LeaseRef, Fence, TargetAgentRef, Task string
 	Generation                            int64
 	Input                                 map[string]any
+}
+type ProposeAssistantPlanInput struct {
+	LeaseRef, Fence, Summary string
+	Generation               int64
+	Operations               []entity.AssistantPlanOperation
 }
 type CallbackInput struct{ ChildRunRef, CallbackEdgeRef string }
 type WarmRuntimeInput struct{ WorkloadInstance, RuntimeRevision, State, SafeErrorCode string }

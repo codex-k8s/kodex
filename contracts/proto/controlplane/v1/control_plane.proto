@@ -94,6 +94,7 @@ service RuntimeWorkService {
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
+  rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
   rpc DeliverCallback(DeliverCallbackRequest) returns (DeliverCallbackResponse);
   rpc ReconcileWarmRuntime(ReconcileWarmRuntimeRequest) returns (ReconcileWarmRuntimeResponse);
   rpc ReportWarmRuntime(ReportWarmRuntimeRequest) returns (ReportWarmRuntimeResponse);
@@ -1519,6 +1520,18 @@ message DelegateExecutionResponse {
   Run child_run = 1;
   RunGraph root_graph = 2;
   string callback_edge_ref = 3;
+}
+message ProposeAssistantPlanRequest {
+  MutationContext mutation = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string summary = 5;
+  repeated AssistantPlanOperation operations = 6;
+}
+message ProposeAssistantPlanResponse {
+  AssistantPlan plan = 1;
+  AssistantConversation conversation = 2;
 }
 message DeliverCallbackRequest {
   MutationContext mutation = 1;

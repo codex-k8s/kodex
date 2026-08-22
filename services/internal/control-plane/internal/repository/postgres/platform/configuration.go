@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -257,109 +257,57 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	}
 	var runtimeReady bool
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("read system assistant runtime readiness: %w", errs.ErrUnavailable)
 	}
 	var conversationID, sessionID, sessionRef string
-	var projectID *string
-	var projectRef string
+	var projectID, projectRef string
 	var version int64
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version); err != nil {
-		return commandOutcome{}, errs.ErrNotFound
+		return commandOutcome{}, fmt.Errorf("lock system assistant conversation: %w", errs.ErrNotFound)
 	}
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	turnRef, _ := newRef("trn")
+	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
+	if artifactRefs == nil {
+		artifactRefs = []string{}
+	}
 	var turnNumber int64
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectSessionsId, sessionID).Scan(&turnNumber); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("lock system assistant session: %w", errs.ErrUnavailable)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertSessionTurnsRefSessionIdActorKind, turnRef, scope.organizationID, sessionID, turnNumber, scope.actorRef, payload.Content, payload.ArtifactRefs); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertSessionTurnsRefSessionIdActorKind, turnRef, scope.organizationID, sessionID, turnNumber, scope.actorRef, payload.Content, artifactRefs); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert system assistant user turn: %w", errs.ErrUnavailable)
 	}
-	_, _ = tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID)
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+		return commandOutcome{}, fmt.Errorf("advance system assistant session: %w", errs.ErrUnavailable)
+	}
 	runRef, _ := newRef("run")
 	var runID string
 	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("insert system assistant run: %w", errs.ErrUnavailable)
 	}
-	_, _ = tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateRunsRootRunIdStartedAt, runID)
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateRunsRootRunIdStartedAt, runID); err != nil {
+		return commandOutcome{}, fmt.Errorf("start system assistant root run: %w", errs.ErrUnavailable)
+	}
 	nodeRef, _ := newRef("nod")
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, truncate(payload.Content, 1000)); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("insert system assistant execution node: %w", errs.ErrUnavailable)
 	}
-	plan := repository.assistantFallbackPlan(payload.Content, projectRef)
-	var latestPlanID any
-	if plan != nil {
-		planRef, _ := newRef("pln")
-		plan.Ref = planRef
-		plan.State = "PROPOSED"
-		plan.Version = 1
-		plan.CreatedAt = time.Now().UTC()
-		var planID string
-		if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertAssistantPlansRefConversationRefOperations, planRef, scope.organizationID, payload.ConversationRef, plan.Summary, asJSON(plan.Operations)).Scan(&planID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		latestPlanID = planID
-	} else {
-		latestPlanID = nil
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt, conversationID); err != nil {
+		return commandOutcome{}, fmt.Errorf("advance system assistant conversation: %w", errs.ErrUnavailable)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateAssistantConversationsLatestPlanIdVersionUpdatedAt, conversationID, latestPlanID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	projectValue := ""
-	if projectID != nil {
-		projectValue = *projectID
-	}
-	if _, err := repository.emitRunEvent(ctx, tx, scope, projectValue, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
+	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation := entity.AssistantConversation{Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef, State: "ACTIVE", Version: version + 1, LatestPlan: plan}
-	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, ArtifactRefs: payload.ArtifactRefs, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
+	conversation := entity.AssistantConversation{Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef, State: "ACTIVE", Version: version + 1}
+	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, ArtifactRefs: artifactRefs, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
 	assistant, err := repository.getAssistantTx(ctx, tx, scope)
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant, Plan: plan}, projectID: projectValue, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED"}, nil
-}
-
-func (repository *Repository) assistantFallbackPlan(content, projectRef string) *entity.AssistantPlan {
-	normalized := strings.ToLower(strings.TrimSpace(content))
-	locale := texti18n.RussianLocale
-	if strings.Contains(normalized, "create project") || strings.Contains(normalized, "create agent") {
-		locale = texti18n.DefaultLocale
-	}
-	t := func(messageID string, data map[string]any) string {
-		return repository.texts.Localize(locale, messageID, data)
-	}
-	name := quotedName(content)
-	if strings.Contains(normalized, "создай проект") || strings.Contains(normalized, "create project") {
-		if name == "" {
-			name = t("ASSISTANT_DEFAULT_PROJECT_NAME", nil)
-		}
-		return &entity.AssistantPlan{Summary: t("ASSISTANT_PLAN_CREATE_PROJECT", map[string]any{"Name": name}), Operations: []entity.AssistantPlanOperation{{Key: "create-project", Type: "CREATE_PROJECT", Summary: t("ASSISTANT_PLAN_CREATE_PROJECT_OPERATION", nil), TargetKind: "PROJECT", Input: map[string]any{"name": name, "purpose": t("ASSISTANT_CREATED_PROJECT_PURPOSE", nil), "language": locale}}}}
-	}
-	if projectRef != "" && (strings.Contains(normalized, "создай агента") || strings.Contains(normalized, "create agent")) {
-		if name == "" {
-			name = t("ASSISTANT_DEFAULT_AGENT_NAME", nil)
-		}
-		return &entity.AssistantPlan{Summary: t("ASSISTANT_PLAN_CREATE_AGENT", map[string]any{"Name": name}), Operations: []entity.AssistantPlanOperation{{Key: "create-agent", Type: "CREATE_AGENT", Summary: t("ASSISTANT_PLAN_CREATE_AGENT_OPERATION", nil), TargetKind: "AGENT", Input: map[string]any{"projectRef": projectRef, "name": name, "purpose": t("ASSISTANT_CREATED_AGENT_PURPOSE", nil), "roleDescription": t("ASSISTANT_CREATED_AGENT_ROLE", nil), "instructions": t("ASSISTANT_CREATED_AGENT_INSTRUCTIONS", nil)}}}}
-	}
-	return nil
-}
-func quotedName(content string) string {
-	for _, pair := range [][2]string{{"«", "»"}, {"\"", "\""}} {
-		start := strings.Index(content, pair[0])
-		if start < 0 {
-			continue
-		}
-		rest := content[start+len(pair[0]):]
-		end := strings.Index(rest, pair[1])
-		if end > 0 {
-			return truncate(rest[:end], 160)
-		}
-	}
-	return ""
+	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED"}, nil
 }
 
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -383,47 +331,28 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	created := []string{}
 	var projectID, projectRef string
 	for _, operation := range operations {
-		switch operation.Type {
-		case "CREATE_PROJECT":
-			if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
-				return commandOutcome{}, errs.ErrForbidden
-			}
-			name, _ := operation.Input["name"].(string)
-			purpose, _ := operation.Input["purpose"].(string)
-			language, _ := operation.Input["language"].(string)
-			outcome, err := repository.createProject(ctx, tx, scope, command.ProjectInput{Name: name, Purpose: purpose, Language: language})
-			if err != nil {
-				return commandOutcome{}, err
-			}
-			created = append(created, outcome.resourceRef)
+		planned, err := assistantOperationCommand(operation)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if err := repository.authorizeCommand(ctx, tx, scope, planned); err != nil {
+			return commandOutcome{}, err
+		}
+		outcome, err := repository.applyCommand(ctx, tx, scope, planned)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		created = append(created, outcome.resourceRef)
+		if outcome.projectID != "" {
 			projectID, projectRef = outcome.projectID, outcome.projectRef
-			if err := repository.auditAssistantOperation(ctx, tx, scope, outcome, operation.Type); err != nil {
+		}
+		if err := repository.auditAssistantOperation(ctx, tx, scope, outcome, operation.Type); err != nil {
+			return commandOutcome{}, err
+		}
+		if outcome.platformEvent != "" {
+			if err := repository.emitPlatformEvent(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary); err != nil {
 				return commandOutcome{}, err
 			}
-		case "CREATE_AGENT":
-			project, _ := operation.Input["projectRef"].(string)
-			allowedProjectID := mustProjectID(ctx, tx, scope.organizationID, project)
-			if allowedProjectID == "" {
-				return commandOutcome{}, errs.ErrNotFound
-			}
-			if err := requireProjectPermission(ctx, tx, scope, allowedProjectID, "MANAGE_AGENTS"); err != nil {
-				return commandOutcome{}, err
-			}
-			name, _ := operation.Input["name"].(string)
-			purpose, _ := operation.Input["purpose"].(string)
-			role, _ := operation.Input["roleDescription"].(string)
-			instructions, _ := operation.Input["instructions"].(string)
-			outcome, err := repository.createAgent(ctx, tx, scope, command.AgentInput{ProjectRef: project, Name: name, Purpose: purpose, RoleDescription: role, Instructions: instructions})
-			if err != nil {
-				return commandOutcome{}, err
-			}
-			created = append(created, outcome.resourceRef)
-			projectID, projectRef = outcome.projectID, outcome.projectRef
-			if err := repository.auditAssistantOperation(ctx, tx, scope, outcome, operation.Type); err != nil {
-				return commandOutcome{}, err
-			}
-		default:
-			return commandOutcome{}, errs.ErrInvalid
 		}
 	}
 	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommandUpdateAssistantPlansStateVersionAppliedAt, planID); err != nil {

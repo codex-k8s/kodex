@@ -12,14 +12,12 @@ import (
 	"strings"
 	"time"
 
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/systemassistant"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/usertext"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,7 +32,6 @@ type Repository struct {
 	pool                   *pgxpool.Pool
 	defaultRuntimeProvider string
 	defaultRuntimeModel    string
-	texts                  *texti18n.Localizer
 	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
 }
@@ -62,11 +59,7 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string)
 	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" {
 		return nil, errors.New("PostgreSQL pool is required")
 	}
-	texts, err := usertext.New()
-	if err != nil {
-		return nil, errors.New("load control-plane user text catalog")
-	}
-	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel, texts: texts}, nil
+	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel}, nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {

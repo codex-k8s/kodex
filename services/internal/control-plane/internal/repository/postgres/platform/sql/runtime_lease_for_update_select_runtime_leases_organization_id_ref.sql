@@ -5,4 +5,4 @@ JOIN control_plane.runs r ON r.id=l.run_id
 LEFT JOIN control_plane.projects p ON p.id=r.project_id
 JOIN control_plane.run_nodes n ON n.id=l.node_id
 WHERE l.organization_id=$1::uuid AND l.ref=$2
-FOR UPDATE
+FOR UPDATE OF l

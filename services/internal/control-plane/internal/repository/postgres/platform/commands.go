@@ -128,7 +128,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan, command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
-	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.DeliverCallback:
+	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback:
 		return repository.changeExecution(ctx, tx, scope, input)
 	case command.ReportWarmRuntime:
 		return repository.reportWarmRuntime(ctx, tx, scope, input)

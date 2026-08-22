@@ -374,7 +374,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.DeliverCallback, command.ReportWarmRuntime,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback, command.ReportWarmRuntime,
 		command.MaterializeOccurrence, command.CompleteOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation:
 		return true

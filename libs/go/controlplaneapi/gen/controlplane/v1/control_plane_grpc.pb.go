@@ -2799,6 +2799,7 @@ const (
 	RuntimeWorkService_ReportExecutionProgress_FullMethodName           = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
 	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
+	RuntimeWorkService_ProposeAssistantPlan_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
 	RuntimeWorkService_DeliverCallback_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/DeliverCallback"
 	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
 	RuntimeWorkService_ReportWarmRuntime_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
@@ -2822,6 +2823,7 @@ type RuntimeWorkServiceClient interface {
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
+	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
 	DeliverCallback(ctx context.Context, in *DeliverCallbackRequest, opts ...grpc.CallOption) (*DeliverCallbackResponse, error)
 	ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error)
@@ -2888,6 +2890,16 @@ func (c *runtimeWorkServiceClient) DelegateExecution(ctx context.Context, in *De
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DelegateExecutionResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_DelegateExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProposeAssistantPlanResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ProposeAssistantPlan_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3023,6 +3035,7 @@ type RuntimeWorkServiceServer interface {
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
+	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
 	DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error)
 	ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error)
@@ -3059,6 +3072,9 @@ func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DelegateExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeliverCallback not implemented")
@@ -3203,6 +3219,24 @@ func _RuntimeWorkService_DelegateExecution_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).DelegateExecution(ctx, req.(*DelegateExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProposeAssistantPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ProposeAssistantPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ProposeAssistantPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ProposeAssistantPlan(ctx, req.(*ProposeAssistantPlanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3449,6 +3483,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DelegateExecution",
 			Handler:    _RuntimeWorkService_DelegateExecution_Handler,
+		},
+		{
+			MethodName: "ProposeAssistantPlan",
+			Handler:    _RuntimeWorkService_ProposeAssistantPlan_Handler,
 		},
 		{
 			MethodName: "DeliverCallback",

@@ -7,8 +7,6 @@ var (
 	queryRuntimeClaimexecutionExpireStaleLeases string
 	//go:embed sql/runtime_claimexecution_select_claimable_agent_executions.sql
 	queryRuntimeClaimExecutionSelectClaimableAgentExecutions string
-	//go:embed sql/runtime_claimexecution_select_runtime_leases_node_id.sql
-	queryRuntimeClaimexecutionSelectRuntimeLeasesNodeId string
 	//go:embed sql/runtime_claimexecution_insert_runtime_revision.sql
 	queryRuntimeClaimExecutionInsertRuntimeRevision string
 	//go:embed sql/runtime_claimexecution_insert_runtime_leases_ref_run_id_workload_instance.sql
@@ -93,6 +91,8 @@ var (
 	queryRuntimeDelegateexecutionInsertDelegationEdge string
 	//go:embed sql/runtime_delegateexecution_insert_callback_edge.sql
 	queryRuntimeDelegateexecutionInsertCallbackEdge string
+	//go:embed sql/runtime_proposeassistantplan_select_context.sql
+	queryRuntimeProposeassistantplanSelectContext string
 	//go:embed sql/runtime_delivercallback_select_runs_organization_id_ref.sql
 	queryRuntimeDelivercallbackSelectRunsOrganizationIdRef string
 	//go:embed sql/runtime_delivercallback_insert_callback_receipts_child_run_id.sql

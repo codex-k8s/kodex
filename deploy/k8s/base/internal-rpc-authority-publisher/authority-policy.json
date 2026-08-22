@@ -354,6 +354,7 @@
           "DOMAIN_STATE"
         ],
         "allowed_operation_ids": [
+          "platform.runtime.assistant.plan.propose",
           "platform.runtime.execution.claim",
           "platform.runtime.execution.complete",
           "platform.runtime.execution.delegate",
@@ -2731,6 +2732,34 @@
           "DOMAIN_STATE"
         ],
         "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.runtime.assistant.plan.propose",
+        "caller_workload_id": "runtime-controller",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.runtime.assistant.plan.propose",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,

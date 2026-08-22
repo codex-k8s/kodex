@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -316,6 +317,9 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{}
+	if input.SystemAssistant {
+		result = append(result, assistantPlanTool())
+	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, map[string]any{"name": "delegate_agent", "description": "Start an allowed child AI employee.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"target_agent_ref", "task"}, "properties": map[string]any{"target_agent_ref": map[string]string{"type": "string"}, "task": map[string]string{"type": "string"}, "input": map[string]string{"type": "object"}}}})
 	}
@@ -339,6 +343,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	var result any
 	var err error
 	switch params.Name {
+	case "propose_configuration_plan":
+		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "delegate_agent":
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
@@ -351,6 +357,62 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		encoded, _ = json.Marshal(map[string]string{"error_code": "TOOL_UNAVAILABLE"})
 	}
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "isError": err != nil})
+}
+
+func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !input.SystemAssistant || !onlyKeys(arguments, "summary", "operations") {
+		return nil, errors.New("assistant plan tool is not available")
+	}
+	summary, _ := arguments["summary"].(string)
+	rawOperations, _ := arguments["operations"].([]any)
+	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
+		return nil, errors.New("assistant plan is invalid")
+	}
+	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
+	for index, raw := range rawOperations {
+		operation, ok := raw.(map[string]any)
+		if !ok || !onlyKeys(operation, "type", "summary", "input") {
+			return nil, errors.New("assistant plan operation is invalid")
+		}
+		kind, _ := operation["type"].(string)
+		operationSummary, _ := operation["summary"].(string)
+		bounded, _ := operation["input"].(map[string]any)
+		typeValue, exists := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+kind]
+		if !exists || typeValue == 0 || strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 || bounded == nil {
+			return nil, errors.New("assistant plan operation is invalid")
+		}
+		structure, err := structpb.NewStruct(bounded)
+		if err != nil {
+			return nil, errors.New("assistant plan operation input is invalid")
+		}
+		operations = append(operations, &controlplanev1.AssistantPlanOperation{Ref: fmt.Sprintf("operation-%03d", index+1),
+			Type: controlplanev1.AssistantPlanOperation_Type(typeValue), Summary: strings.TrimSpace(operationSummary), BoundedInput: structure})
+	}
+	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ProposeAssistantPlan(requestContext, &controlplanev1.ProposeAssistantPlanRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
+		Summary: strings.TrimSpace(summary), Operations: operations,
+	})
+	if err != nil || response.GetPlan().GetRef() == "" || response.GetConversation().GetRef() == "" {
+		return nil, errors.New("propose assistant plan")
+	}
+	return map[string]any{"ok": true, "plan_ref": response.GetPlan().GetRef(), "plan_version": response.GetPlan().GetVersion(),
+		"conversation_ref": response.GetConversation().GetRef()}, nil
+}
+
+func onlyKeys(values map[string]any, allowed ...string) bool {
+	known := make(map[string]struct{}, len(allowed))
+	for _, key := range allowed {
+		known[key] = struct{}{}
+	}
+	for key := range values {
+		if _, ok := known[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

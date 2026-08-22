@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -26,11 +27,30 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.completeExecution(ctx, tx, scope, input)
 	case command.DelegateExecution:
 		return repository.delegateExecution(ctx, tx, scope, input)
+	case command.ProposeAssistantPlan:
+		return repository.proposeAssistantPlan(ctx, tx, scope, input)
 	case command.DeliverCallback:
 		return repository.deliverCallback(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
+}
+
+type claimableExecution struct {
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef               string
+	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision             string
+	provider, model, providerAccountID, providerAccountRef                         string
+	providerCredentialID, providerCredentialRef                                    string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion           string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions      string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                           string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef     string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest string
+	roleRuntimeContractSHA256                                                      string
+	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
+	attempt                                                                        int32
+	capabilities, knowledge                                                        []string
+	rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext        []byte
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -39,46 +59,69 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionExpireStaleLeases, scope.organizationID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("expire stale runtime leases: %w", errs.ErrUnavailable)
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.DefaultImageReference,
 		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
 	if err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("select claimable executions: %w", errs.ErrUnavailable)
 	}
 	defer rows.Close()
+	claimable := make([]claimableExecution, 0, payload.Limit)
+	for rows.Next() {
+		candidate := claimableExecution{}
+		if err := rows.Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef,
+			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.sessionID,
+			&candidate.sessionRef, &candidate.task, &candidate.agentRef, &candidate.runtimeKey,
+			&candidate.runtimeRevision, &candidate.provider, &candidate.model, &candidate.providerAccountID,
+			&candidate.providerAccountRef, &candidate.providerCredentialID, &candidate.providerCredentialRef,
+			&candidate.providerCredentialRevisionNumber, &candidate.providerSecretName,
+			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
+			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
+			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
+			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
+			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
+			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
+			&candidate.roleDefinitionID, &candidate.roleDefinitionRef, &candidate.roleImageRecipeID,
+			&candidate.roleImageRecipeRef, &candidate.roleImageArtifactID, &candidate.roleImageArtifactRef,
+			&candidate.imageReference, &candidate.imageManifestDigest,
+			&candidate.roleRuntimeContractRevision, &candidate.roleRuntimeContractSHA256); err != nil {
+			return commandOutcome{}, fmt.Errorf("scan claimable execution: %w", errs.ErrUnavailable)
+		}
+		claimable = append(claimable, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return commandOutcome{}, fmt.Errorf("iterate claimable executions: %w", errs.ErrUnavailable)
+	}
+	rows.Close()
+
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
-	for rows.Next() {
-		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef string
-		var sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision string
-		var provider, model, instructionRef, instructionDigest, instructions, turnRef string
-		var providerAccountID, providerAccountRef, providerCredentialID, providerCredentialRef string
-		var providerSecretName, providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256 string
-		var providerCredentialRevisionNumber int64
-		var stableKey, callbackEdgeRef, turnID, agentID, roleDefinitionID, roleDefinitionRef string
-		var roleImageRecipeID, roleImageRecipeRef, roleImageArtifactID, roleImageArtifactRef string
-		var imageReference, imageManifestDigest, roleRuntimeContractSHA256 string
-		var roleRuntimeContractRevision int64
-		var attempt int32
-		var capabilities, knowledge []string
-		var rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext []byte
-		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID,
-			&projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey,
-			&runtimeRevision, &provider, &model, &providerAccountID, &providerAccountRef,
-			&providerCredentialID, &providerCredentialRef, &providerCredentialRevisionNumber,
-			&providerSecretName, &providerSecretUID, &providerSecretResourceVersion,
-			&providerCredentialSHA256, &instructionRef, &instructionDigest,
-			&instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef,
-			&stableKey, &rawIntegrationGrants, &rawDelegationTargets, &callbackEdgeRef,
-			&rawSessionContext, &turnID, &agentID, &roleDefinitionID, &roleDefinitionRef,
-			&roleImageRecipeID, &roleImageRecipeRef, &roleImageArtifactID,
-			&roleImageArtifactRef, &imageReference, &imageManifestDigest,
-			&roleRuntimeContractRevision, &roleRuntimeContractSHA256); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
+	for _, candidate := range claimable {
+		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
+		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
+		sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
+		runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, candidate.provider, candidate.model
+		providerAccountID, providerAccountRef := candidate.providerAccountID, candidate.providerAccountRef
+		providerCredentialID, providerCredentialRef := candidate.providerCredentialID, candidate.providerCredentialRef
+		providerCredentialRevisionNumber := candidate.providerCredentialRevisionNumber
+		providerSecretName, providerSecretUID := candidate.providerSecretName, candidate.providerSecretUID
+		providerSecretResourceVersion := candidate.providerSecretResourceVersion
+		providerCredentialSHA256 := candidate.providerCredentialSHA256
+		instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
+		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
+		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
+		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
+		callbackEdgeRef, rawSessionContext := candidate.callbackEdgeRef, candidate.rawSessionContext
+		turnID, agentID := candidate.turnID, candidate.agentID
+		roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
+		roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
+		roleImageArtifactID, roleImageArtifactRef := candidate.roleImageArtifactID, candidate.roleImageArtifactRef
+		imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
+		roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
+		roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
 		fence, err := newRef("fnc")
 		if err != nil {
 			return commandOutcome{}, err
@@ -86,10 +129,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		fenceDigest := sha256.Sum256([]byte(fence))
 		leaseRef, _ := newRef("lea")
 		inputDigest := sha256.Sum256(rawInput)
-		var generation int64
-		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectRuntimeLeasesNodeId, nodeID).Scan(&generation); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
 		var delegationTargets []map[string]string
@@ -157,22 +196,22 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
 			imageReference, imageManifestDigest, roleRuntimeContractRevision,
 			roleRuntimeContractSHA256, revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
-			return commandOutcome{}, errs.ErrConflict
+			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
 		}
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
 		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,
 			leaseRef, scope.organizationID, runID, nodeID, runtimeRevisionID,
 			payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
 			hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
-			return commandOutcome{}, errs.ErrConflict
+			return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrConflict)
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, fmt.Errorf("start claimed execution node: %w", errs.ErrUnavailable)
 		}
 		event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID,
 			nodeRef, "TURN_STARTED", nodeRef, "", "", "", "i18n:RUN_TURN_STARTED", "RUNNING", "RUNNING")
 		if err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, fmt.Errorf("emit claimed execution event: %w", err)
 		}
 		snapshot["leaseRef"], snapshot["fence"], snapshot["generation"] = leaseRef, fence, generation
 		snapshot["expiresAt"], snapshot["eventRef"] = expiresAt, event.Ref
@@ -180,9 +219,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if firstRunRef == "" {
 			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
 	}
 	resourceRef := firstRunRef
 	if resourceRef == "" {

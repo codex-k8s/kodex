@@ -7,7 +7,6 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
@@ -30,7 +29,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.3.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
@@ -42,15 +40,12 @@ require (
 	github.com/nats-io/nats.go v1.52.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/nicksnyder/go-i18n/v2 v2.6.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.44.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
