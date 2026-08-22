@@ -58,6 +58,19 @@ workload владеют evidence, verdict и переносом exact digest.
 События для этого пути не публикуются: producer, admission и runtime используют
 авторитетные защищённые read/command RPC. Ложного AsyncAPI consumer нет.
 
+## Health, readiness и отказ зависимостей
+
+`/healthz` отражает только жизнь процесса. `/readyz` читает локальный
+потокобезопасный снимок, который фоновый monitor рассчитывает по workload-local
+issuer sidecar, authenticated input registry и реальному bounded BuildKit solve.
+Probe не выполняет сетевых вызовов сам.
+
+Соседний `control-plane` не входит в Kubernetes readiness builder. Его
+недоступность переводит рабочий claim/build loop в отдельное degraded-состояние
+с одним warning на отказ и одним сообщением на восстановление; Pod остаётся
+готовым принимать работу после восстановления. Полный защищённый путь до
+`control-plane` проверяется отдельной диагностикой и фактическими RPC.
+
 ## Lifecycle matrix
 
 | Переход | Владелец и результат |

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -272,7 +273,7 @@ func RunDatabaseCredentialReconciler(
 		credentialService,
 	)
 	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
-		return runCredentialReconciliation(ctx, config, credentialService, readiness, metrics)
+		return runCredentialReconciliation(ctx, config, credentialService, readiness, metrics, logger)
 	})
 	serveErrors := make(chan error, 2)
 	go func() {
@@ -520,6 +521,7 @@ func runCredentialReconciliation(
 	credentialService *service.DatabaseCredentialLifecycle,
 	readiness *serviceruntime.Readiness,
 	metrics *observability.Metrics,
+	logger *slog.Logger,
 ) error {
 	ticker := time.NewTicker(config.ReconcileInterval)
 	defer ticker.Stop()
@@ -530,10 +532,14 @@ func runCredentialReconciliation(
 			_, err = credentialService.Ready(ctx)
 		}
 		if err == nil {
-			readiness.Set(true, "ready")
+			if readiness.Set(true, "ready") {
+				logger.Info("database credential reconciliation restored")
+			}
 			metrics.SetReady(true)
 		} else {
-			readiness.Set(false, "reconciliation-failed")
+			if readiness.Set(false, "reconciliation-failed") {
+				logger.Error("database credential reconciliation unavailable", "error_class", "postgresql_or_vault")
+			}
 			metrics.SetReady(false)
 		}
 		select {

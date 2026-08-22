@@ -55,3 +55,32 @@ func TestTechnicalHealthDoesNotDependOnReadiness(t *testing.T) {
 		t.Fatalf("healthz зависит от readiness: %d", response.Code)
 	}
 }
+
+func TestAuthorityReadinessAggregatesIndependentLocalConditions(t *testing.T) {
+	t.Parallel()
+
+	snapshot := serviceruntime.NewReadiness()
+	metrics := observability.NewMetrics("authority_readiness_aggregate_test", "test", nil)
+	state := newAuthorityReadiness(snapshot, metrics)
+	assertReadiness := func(expected bool, reason string) {
+		t.Helper()
+		actual, actualReason := snapshot.Ready()
+		if actual != expected || actualReason != reason {
+			t.Fatalf("readiness = %t/%s, want %t/%s", actual, actualReason, expected, reason)
+		}
+	}
+
+	assertReadiness(true, "ready")
+	if !state.Set(conditionReplay, false) || state.Set(conditionReplay, false) {
+		t.Fatal("replay condition edge was not reported exactly once")
+	}
+	assertReadiness(false, "replay_cleanup_unavailable")
+	if !state.Set(conditionSnapshot, false) {
+		t.Fatal("snapshot condition edge was not reported")
+	}
+	assertReadiness(false, "snapshot_unavailable")
+	state.Set(conditionReplay, true)
+	assertReadiness(false, "snapshot_unavailable")
+	state.Set(conditionSnapshot, true)
+	assertReadiness(true, "ready")
+}

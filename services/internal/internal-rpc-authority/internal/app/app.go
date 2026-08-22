@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
@@ -42,6 +43,60 @@ const (
 type snapshotMaintenance interface {
 	ServedStateReady(context.Context) error
 	ActivateSnapshot(context.Context) error
+}
+
+type authorityReadinessCondition string
+
+const (
+	conditionSnapshot authorityReadinessCondition = "snapshot"
+	conditionReplay   authorityReadinessCondition = "replay_cleanup"
+	conditionRestore  authorityReadinessCondition = "restore_coordination"
+)
+
+var authorityReadinessOrder = [...]authorityReadinessCondition{conditionSnapshot, conditionReplay, conditionRestore}
+
+type authorityReadiness struct {
+	mutex      sync.Mutex
+	snapshot   *serviceruntime.Readiness
+	metrics    *observability.Metrics
+	conditions map[authorityReadinessCondition]bool
+}
+
+func newAuthorityReadiness(snapshot *serviceruntime.Readiness, metrics *observability.Metrics) *authorityReadiness {
+	conditions := make(map[authorityReadinessCondition]bool, len(authorityReadinessOrder))
+	for _, condition := range authorityReadinessOrder {
+		conditions[condition] = true
+	}
+	state := &authorityReadiness{snapshot: snapshot, metrics: metrics, conditions: conditions}
+	state.publishLocked()
+	return state
+}
+
+// Set обновляет одно локальное условие и возвращает true только на его edge.
+// Общая готовность является конъюнкцией всех условий, поэтому один worker не
+// может скрыть отказ другого успешным tick.
+func (state *authorityReadiness) Set(condition authorityReadinessCondition, ready bool) bool {
+	state.mutex.Lock()
+	defer state.mutex.Unlock()
+	previous, exists := state.conditions[condition]
+	if !exists || previous == ready {
+		return false
+	}
+	state.conditions[condition] = ready
+	state.publishLocked()
+	return true
+}
+
+func (state *authorityReadiness) publishLocked() {
+	ready, reason := true, "ready"
+	for _, condition := range authorityReadinessOrder {
+		if !state.conditions[condition] {
+			ready, reason = false, string(condition)+"_unavailable"
+			break
+		}
+	}
+	state.snapshot.Set(ready, reason)
+	state.metrics.SetReady(ready)
 }
 
 // Run запускает локальный issuer или verifier и управляет его жизненным циклом.
@@ -256,6 +311,7 @@ func Run(
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "starting")
 	metrics.SetReady(false)
+	localReadiness := newAuthorityReadiness(readiness, metrics)
 	errorObserver := grpcserver.ErrorObserverFunc(func(
 		_ context.Context,
 		method string,
@@ -316,14 +372,13 @@ func Run(
 				config,
 				store,
 				authorityApplication,
-				readiness,
-				metrics,
+				localReadiness,
 				logger,
 			)
 			return nil
 		},
 		func(ctx context.Context) error {
-			runReplayCleanup(ctx, config, store, readiness, metrics, logger)
+			runReplayCleanup(ctx, config, store, localReadiness, logger)
 			return nil
 		},
 		func(ctx context.Context) error {
@@ -332,8 +387,7 @@ func Run(
 				config,
 				restoreWorkloadAgent,
 				authorityApplication,
-				readiness,
-				metrics,
+				localReadiness,
 				logger,
 			)
 			return nil
@@ -351,8 +405,6 @@ func Run(
 			serveErrors <- fmt.Errorf("serve technical HTTP: %w", serveErr)
 		}
 	}()
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
 	logger.Info(logMessageStart, "mode", string(mode), "workload", config.WorkloadID)
 	var runtimeErr error
 	select {
@@ -424,8 +476,7 @@ func runRestoreWorkloadAgent(
 	config Config,
 	agent *restoreagent.Agent,
 	authorityApplication *application.Authority,
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
+	readiness *authorityReadiness,
 	logger *slog.Logger,
 ) {
 	ticker := time.NewTicker(2 * time.Second)
@@ -436,9 +487,11 @@ func runRestoreWorkloadAgent(
 		cancel()
 		if err != nil {
 			authorityApplication.SetRestoreBlocked(true)
-			readiness.Set(false, "restore-coordination-failed")
-			metrics.SetReady(false)
-			logger.Error("restore coordination poll failed", "error", err)
+			if readiness.Set(conditionRestore, false) {
+				logger.Error("restore coordination unavailable", "error_class", "restore_controller")
+			}
+		} else if readiness.Set(conditionRestore, true) {
+			logger.Info("restore coordination restored")
 		}
 		select {
 		case <-ctx.Done():
@@ -452,8 +505,7 @@ func runReplayCleanup(
 	ctx context.Context,
 	config Config,
 	cleaner reservationCleaner,
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
+	readiness *authorityReadiness,
 	logger *slog.Logger,
 ) {
 	kind := repository.ReservationAuthorizationContext
@@ -471,9 +523,11 @@ func runReplayCleanup(
 		)
 		cancel()
 		if err != nil {
-			readiness.Set(false, "replay-cleanup-failed")
-			metrics.SetReady(false)
-			logger.Error("replay reservation cleanup failed")
+			if readiness.Set(conditionReplay, false) {
+				logger.Error("replay reservation cleanup unavailable", "error_class", "postgresql")
+			}
+		} else if readiness.Set(conditionReplay, true) {
+			logger.Info("replay reservation cleanup restored")
 		}
 		select {
 		case <-ctx.Done():
@@ -508,13 +562,13 @@ func runSnapshotReload(
 	config Config,
 	store *authorityrepository.Store,
 	authorityApplication *application.Authority,
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
+	readiness *authorityReadiness,
 	logger *slog.Logger,
 ) {
 	ticker := time.NewTicker(config.SnapshotReloadInterval)
 	defer ticker.Stop()
 	lastReadbackRefresh := time.Now()
+	readbackRefreshDeferred := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -535,9 +589,9 @@ func runSnapshotReload(
 		})
 		if err != nil {
 			authorityApplication.SetAvailable(false)
-			readiness.Set(false, "snapshot-reload-rejected")
-			metrics.SetReady(false)
-			logger.Error("authority snapshot reload rejected")
+			if readiness.Set(conditionSnapshot, false) {
+				logger.Error("authority snapshot reload rejected", "error_class", "snapshot")
+			}
 			continue
 		}
 		if loaded.Policy.SourceRevision == current.SourceRevision &&
@@ -556,17 +610,24 @@ func runSnapshotReload(
 			probeCancel()
 			if err == nil {
 				authorityApplication.SetAvailable(true)
-				readiness.Set(true, "ready")
-				metrics.SetReady(true)
+				if readiness.Set(conditionSnapshot, true) {
+					logger.Info("authority snapshot readiness restored")
+				}
 				if lastReadbackRefresh.Equal(previousReadbackRefresh) &&
 					time.Since(previousReadbackRefresh) >= snapshotReadbackRefreshInterval {
-					logger.Warn("served snapshot readback refresh deferred; current receipt remains valid")
+					if !readbackRefreshDeferred {
+						readbackRefreshDeferred = true
+						logger.Warn("served snapshot readback refresh deferred", "error_class", "readback_attestor")
+					}
+				} else if readbackRefreshDeferred {
+					readbackRefreshDeferred = false
+					logger.Info("served snapshot readback refresh restored")
 				}
 			} else {
 				authorityApplication.SetAvailable(false)
-				readiness.Set(false, "served-snapshot-readback-failed")
-				metrics.SetReady(false)
-				logger.Error("served snapshot readback refresh failed", "error", err)
+				if readiness.Set(conditionSnapshot, false) {
+					logger.Error("served snapshot readback unavailable", "error_class", "readback_attestor")
+				}
 			}
 			continue
 		}
@@ -581,14 +642,14 @@ func runSnapshotReload(
 		activationCancel()
 		if err != nil {
 			authorityApplication.SetAvailable(false)
-			readiness.Set(false, "snapshot-reload-rejected")
-			metrics.SetReady(false)
-			logger.Error("authority snapshot activation rejected")
+			if readiness.Set(conditionSnapshot, false) {
+				logger.Error("authority snapshot activation rejected", "error_class", "snapshot")
+			}
 			continue
 		}
 		lastReadbackRefresh = time.Now()
-		readiness.Set(true, "ready")
-		metrics.SetReady(true)
+		readbackRefreshDeferred = false
+		readiness.Set(conditionSnapshot, true)
 		logger.Info(
 			"authority snapshot activated",
 			"source_revision", loaded.Policy.SourceRevision,

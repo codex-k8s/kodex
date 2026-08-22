@@ -61,6 +61,15 @@ func (client *Client) Check(ctx context.Context) error {
 	return client.shared.Check(callCtx)
 }
 
+// CheckLocalAuthority проверяет только workload-local issuer sidecar. Соседний
+// control-plane проверяется рабочими RPC и отдельным diagnostic-контуром, но не
+// участвует в Kubernetes readiness builder Pod.
+func (client *Client) CheckLocalAuthority(ctx context.Context) error {
+	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
+	defer cancel()
+	return client.shared.CheckLocalAuthority(callCtx)
+}
+
 func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	var response *controlplanev1.ClaimImageBuildResponse
 	err := client.call(ctx, func(callCtx context.Context) error {

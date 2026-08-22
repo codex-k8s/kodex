@@ -23,9 +23,10 @@
 - Используется для service-to-service взаимодействия внутри платформы.
 
 ### HTTP/REST (внешний API и callbacks)
-- HTTP API для webhook, Mattermost callbacks и внешних интеграций держится только на gateway-слое.
+- HTTP API для owner PWA, webhook callbacks и внешних интеграций держится только на gateway-слое.
 - Внутренние доменные сервисы не публикуют бизнес-ручки наружу напрямую; для них допустимы только служебные `/health/*` и `/metrics` без отдельного OpenAPI.
-- OpenAPI YAML обязателен для стабильных gateway API и делится по осмысленным поверхностям, а не одним большим файлом на всю платформу. Для Mattermost slash callback MVP допустим typed handler без отдельного OpenAPI.
+- OpenAPI YAML обязателен для стабильного owner gateway API и делится по
+  осмысленным поверхностям; provider callback не становится core API.
 
 ### WebSocket (опционально)
 - Только где есть реальный realtime use-case.
@@ -164,7 +165,10 @@
 ## Нефункциональные требования
 
 Обязательное:
-- Health: `/health/livez`, `/health/readyz`.
+- Health: `/healthz` отражает только жизнь процесса; `/readyz` читает
+  рассчитанный фоновым monitor локальный снимок без I/O в probe path.
+- Readiness включает только unit, его sidecar и прямую инфраструктуру.
+  Соседние бизнес-сервисы проверяются рабочими RPC и отдельной диагностикой.
 - Metrics: `/metrics`.
 - Structured logs, без секретов/PII.
 - OTel tracing и пропагация контекста.

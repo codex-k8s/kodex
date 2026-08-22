@@ -232,7 +232,9 @@ func RunReadbackAttestor(
 				},
 			)
 			if loadErr != nil {
-				readiness.Set(false, "readback-trust-reload-failed")
+				if readiness.Set(false, "readback-trust-reload-failed") {
+					logger.Error("readback trust reload unavailable", "error_class", "snapshot")
+				}
 				metrics.SetReady(false)
 				continue
 			}
@@ -241,11 +243,15 @@ func RunReadbackAttestor(
 				nextTrust,
 				readbackTrustState(nextMetadata, time.Now()),
 			); activateErr != nil {
-				readiness.Set(false, "readback-trust-watermark-rejected")
+				if readiness.Set(false, "readback-trust-watermark-rejected") {
+					logger.Error("readback trust activation rejected", "error_class", "watermark")
+				}
 				metrics.SetReady(false)
 				continue
 			}
-			readiness.Set(true, "ready")
+			if readiness.Set(true, "ready") {
+				logger.Info("readback trust readiness restored")
+			}
 			metrics.SetReady(true)
 		}
 	})

@@ -42,6 +42,7 @@ func (runtime *runtime) Run(ctx context.Context) error {
 	defer poll.Stop()
 	warm := time.NewTicker(runtime.config.InfrastructureCheckInterval)
 	defer warm.Stop()
+	claimDegraded := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -54,8 +55,13 @@ func (runtime *runtime) Run(ctx context.Context) error {
 			if len(runtime.capacity) >= cap(runtime.capacity) {
 				continue
 			}
-			if err := runtime.claim(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				runtime.logger.ErrorContext(ctx, "runtime claim cycle failed", "error_class", "control_plane")
+			err := runtime.claim(ctx)
+			if err != nil && !errors.Is(err, context.Canceled) && !claimDegraded {
+				claimDegraded = true
+				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane")
+			} else if err == nil && claimDegraded {
+				claimDegraded = false
+				runtime.logger.InfoContext(ctx, "runtime claim delivery restored")
 			}
 		}
 	}
