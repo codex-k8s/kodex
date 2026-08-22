@@ -53,7 +53,7 @@ lock-файлом; точный image — Dockerfile либо release lock.
 | `oidc-client-ts` | `3.3.0` | browser OIDC/session boundary |
 | `@hey-api/client-fetch` | `0.13.1` | generated OpenAPI client runtime |
 | `@hey-api/openapi-ts` | `0.99.0` | OpenAPI TypeScript codegen |
-| `@asyncapi/cli` | `6.0.2` | AsyncAPI validation/codegen |
+| `@asyncapi/parser` | `3.6.3` | AsyncAPI validation для ограниченного repository-owned codegen |
 | `vite` | `8.0.16` | production build |
 | `vitest` | `4.1.6` | frontend unit tests |
 | `@playwright/test` | `1.61.0` | browser E2E contract и live disposable execution |

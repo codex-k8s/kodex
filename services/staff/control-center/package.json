@@ -21,6 +21,7 @@
     "format:check": "prettier --check .",
     "config:check": "node tools/check-runtime-config.mjs",
     "generate:openapi": "openapi-ts -f openapi-ts.config.mjs",
+    "validate:asyncapi": "node tools/generate-asyncapi.mjs --validate-only",
     "generate:asyncapi": "node tools/generate-asyncapi.mjs",
     "codegen": "npm run generate:openapi && npm run generate:asyncapi"
   },
@@ -34,7 +35,7 @@
     "vue-router": "4.6.3"
   },
   "devDependencies": {
-    "@asyncapi/cli": "6.0.2",
+    "@asyncapi/parser": "3.6.3",
     "@eslint/js": "9.39.2",
     "@hey-api/openapi-ts": "0.99.0",
     "@playwright/test": "1.61.0",
@@ -43,6 +44,7 @@
     "eslint": "9.39.2",
     "eslint-plugin-vue": "10.7.0",
     "globals": "16.5.0",
+    "js-yaml": "4.3.1",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.52.0",

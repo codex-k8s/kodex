@@ -6,8 +6,7 @@ PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
 PROTOBUF_GO_PLUGIN_REVISION := 1
 GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
-ASYNCAPI ?= asyncapi
-CONTROL_API_GATEWAY_ASYNCAPI_VERSION := @asyncapi/cli/6.0.2
+CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
 .PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-authority-policy-codegen test-control-plane-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
@@ -66,21 +65,16 @@ gen-control-api-gateway-openapi-go: check-openapi-toolchain
 	gofmt -w services/external/control-api-gateway/internal/transport/http/generated
 
 check-control-api-gateway-asyncapi-toolchain:
-	@version="$$($(ASYNCAPI) --version)"; \
-	case "$$version" in \
-		"$(CONTROL_API_GATEWAY_ASYNCAPI_VERSION) "*) ;; \
-		*) echo "unexpected AsyncAPI CLI version: expected $(CONTROL_API_GATEWAY_ASYNCAPI_VERSION)" >&2; exit 1 ;; \
-	esac
+	@cd services/staff/control-center && node tools/generate-asyncapi.mjs --check-toolchain
+	@cd services/staff/control-center && \
+		test "$$(node -p 'require("./node_modules/@asyncapi/parser/package.json").version')" = "$(CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION)"
 
 lint-control-api-gateway-asyncapi: check-control-api-gateway-asyncapi-toolchain
-	$(ASYNCAPI) validate contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml
+	cd services/staff/control-center && npm run validate:asyncapi
 
 gen-control-api-gateway-asyncapi: check-control-api-gateway-asyncapi-toolchain
-	rm -rf services/external/control-api-gateway/internal/transport/websocket/generated
-	mkdir -p services/external/control-api-gateway/internal/transport/websocket/generated
-	$(ASYNCAPI) generate models golang contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml \
-		--packageName generated --goIncludeComments --no-interactive \
-		--output services/external/control-api-gateway/internal/transport/websocket/generated
+	cd services/staff/control-center && npm run generate:asyncapi
+	gofmt -w services/external/control-api-gateway/internal/transport/websocket/generated
 	$(MAKE) check-control-api-gateway-asyncapi-codegen
 
 check-control-api-gateway-asyncapi-codegen:
