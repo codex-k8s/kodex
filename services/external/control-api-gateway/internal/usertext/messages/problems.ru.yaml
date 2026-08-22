@@ -52,3 +52,29 @@ RUNTIME_UNAVAILABLE:
   other: Среда выполнения агента временно недоступна
 RUNTIME_LIMIT_EXCEEDED:
   other: Агент превысил ограничение выполнения
+SYSTEM_ASSISTANT_NAME:
+  other: Системный помощник
+SYSTEM_ASSISTANT_PURPOSE:
+  other: Настраивает платформу и объясняет её текущее состояние
+SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
+  other: Встроенный неудаляемый помощник с типизированными MCP-инструментами
+DEFAULT_RUNTIME_NAME:
+  other: Базовая среда
+INSTALLATION_OWNER_NAME:
+  other: Владелец установки
+SYSTEM_ASSISTANT_COMMAND:
+  other: Команда системному помощнику
+RUN_COORDINATION_ROLE:
+  other: Координация
+RUN_CANCELLED_BY_OWNER:
+  other: Запуск отменён владельцем
+OWNER_GATE_REVIEW_TITLE:
+  other: Проверить результат
+OWNER_GATE_REVIEW_PROMPT:
+  other: Подтвердите продолжение процесса
+OWNER_GATE_NODE_NAME:
+  other: Требуется решение
+OWNER_GATE_NODE_ROLE:
+  other: Проверка результата
+ARTIFACT_UPLOADED:
+  other: Файл загружен

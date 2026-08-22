@@ -52,3 +52,29 @@ RUNTIME_UNAVAILABLE:
   other: The agent runtime is temporarily unavailable
 RUNTIME_LIMIT_EXCEEDED:
   other: The agent exceeded an execution limit
+SYSTEM_ASSISTANT_NAME:
+  other: System assistant
+SYSTEM_ASSISTANT_PURPOSE:
+  other: Configures the platform and explains its current state
+SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
+  other: Built-in non-removable assistant with typed MCP tools
+DEFAULT_RUNTIME_NAME:
+  other: Default runtime
+INSTALLATION_OWNER_NAME:
+  other: Installation owner
+SYSTEM_ASSISTANT_COMMAND:
+  other: System assistant command
+RUN_COORDINATION_ROLE:
+  other: Coordination
+RUN_CANCELLED_BY_OWNER:
+  other: Run cancelled by owner
+OWNER_GATE_REVIEW_TITLE:
+  other: Review the result
+OWNER_GATE_REVIEW_PROMPT:
+  other: Confirm whether the process should continue
+OWNER_GATE_NODE_NAME:
+  other: Decision required
+OWNER_GATE_NODE_ROLE:
+  other: Result review
+ARTIFACT_UPLOADED:
+  other: File uploaded

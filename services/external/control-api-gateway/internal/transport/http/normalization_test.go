@@ -34,3 +34,30 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
+	t.Parallel()
+
+	value := map[string]any{
+		"name":             "i18n:SYSTEM_ASSISTANT_NAME",
+		"ownerContent":     "SYSTEM_ASSISTANT_NAME",
+		"safeErrorCode":    "RUNTIME_UNAVAILABLE",
+		"safeErrorMessage": "stale",
+		"nested":           map[string]any{"title": "i18n:OWNER_GATE_REVIEW_TITLE"},
+	}
+	LocalizeSafeErrors(value, func(messageID string) string { return "localized:" + messageID })
+
+	if value["name"] != "localized:SYSTEM_ASSISTANT_NAME" {
+		t.Fatalf("явная ссылка на сообщение не локализована: %#v", value)
+	}
+	if value["ownerContent"] != "SYSTEM_ASSISTANT_NAME" {
+		t.Fatalf("пользовательский текст ошибочно локализован: %#v", value)
+	}
+	if value["safeErrorMessage"] != "localized:RUNTIME_UNAVAILABLE" {
+		t.Fatalf("безопасная ошибка не локализована: %#v", value)
+	}
+	nested := value["nested"].(map[string]any)
+	if nested["title"] != "localized:OWNER_GATE_REVIEW_TITLE" {
+		t.Fatalf("вложенная ссылка на сообщение не локализована: %#v", value)
+	}
+}

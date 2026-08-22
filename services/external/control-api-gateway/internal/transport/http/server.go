@@ -234,8 +234,11 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			LocalizeSafeErrors(item, localize)
 		}
 	case map[string]any:
-		for _, item := range current {
+		for key, item := range current {
 			LocalizeSafeErrors(item, localize)
+			if text, ok := item.(string); ok && strings.HasPrefix(text, "i18n:") {
+				current[key] = localize(strings.TrimPrefix(text, "i18n:"))
+			}
 		}
 		code, _ := current["safeErrorCode"].(string)
 		if code != "" {
