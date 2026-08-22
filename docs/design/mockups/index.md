@@ -112,10 +112,12 @@ cd docs/design/mockups && node build.mjs
 Исключение: `12_live_run_desktop.dc.html` написан вручную — это эталон, с которого
 началась дизайн-система, он не перегенерируется из `build.mjs`.
 
-## Что не покрыто
+## Состояния вне основных artboards
 
 UX-MC-002 перечисляет около тридцати отдельных состояний (loading, empty, error,
 forbidden, offline, conflict, ongoing operation) — например
 `01_onboarding_bootstrap_error`, `12_live_run_gate_open`,
 `16_decision_stale_winner`. Здесь показано основное ready-состояние каждого
-экрана; отдельные состояния можно добавить тем же способом.
+экрана. Полный контракт этих состояний обязателен для production Control Center
+независимо от наличия отдельного статического artboard; отсутствие отдельного
+HTML не означает перенос состояния за пределы reset.

@@ -4,8 +4,8 @@ title: Карта доменов
 type: architecture
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # Карта доменов
@@ -16,8 +16,8 @@ updated: 2026-07-16
 | Проекты и внешние диалоги | `Project`, `ProjectMembership`, optional `ExternalConversationBinding` | Сообщения и каналы внешнего provider как core state |
 | Агенты и инструкции | `RoleDefinition`, `Agent`, `AgentAssignment`, `InstructionSet` | Выполнение сессий, внешние учетные данные |
 | Поставщики и учетные записи | `ProviderDefinition`, `AIProviderAccount`, `AccountPool`, наблюдения за лимитами | Промпты агента, сессии другой учетной записи |
-| Оркестрация среды выполнения | `AgentSession`, `Turn`, `RuntimeRevision`, `RuntimeLease` | Kubernetes как источник бизнес-состояния |
-| Процессы и автоматизации | `Playbook`, `ProcessRun`, `ChildRun`, `AutomationSchedule`, `ScheduledRun` | Выполнение внешних изменений через интеграции |
+| Оркестрация среды выполнения | `Session`, `Turn`, `Run`, `RunNode`, `RunEdge`, `RunEvent`, `RuntimeRevision`, `RuntimeLease` | Kubernetes как источник бизнес-состояния |
+| Процессы и автоматизации | `Workflow`, `WorkflowVersion`, `Schedule`, `ScheduleOccurrence` | Выполнение внешних изменений через интеграции |
 | Интеграции и согласования | `IntegrationDefinition`, `Connection`, `Capability`, `Grant`, `ApprovalRequest` | Жизненный цикл агента, состояние интерфейса |
 | Файлы и знания | `Artifact`, `ArtifactVersion`, `Delivery`, `KnowledgeSpace` | Метаданные файлов Mattermost как источник истины |
 | Образы и цепочка поставки | `RoleImageRecipe`, `ImageBuild`, `ImageArtifact` | Состояние сессии среды выполнения |

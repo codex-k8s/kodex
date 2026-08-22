@@ -4,7 +4,7 @@ title: Базовый продуктовый контракт MatterCodex
 type: product-index
 status: approved
 owner: product
-version: 1.0.0
+version: 1.0.1
 updated: 2026-08-22
 ---
 
@@ -72,8 +72,8 @@ Workspace, Room, Team, Channel, Thread, repository, cluster и provider account 
 | `PRD-MC-003` | `docs/product/business-processes.md` | Основные процессы |
 | `PRD-MC-004` | `docs/product/user-scenarios.md` | Проверяемые сценарии |
 | `PRD-MC-005` | `docs/product/requirements.md` | Функциональные и NFR требования |
-| `UX-MC-002` | `docs/design/screen-map.md` | Утверждённая карта экранов |
-| `UX-MC-003` | `docs/design/prompt-pack.md` | Контракт генерации макетов |
+| `UX-MC-002` | `docs/design/web-first-reset-prompt-pack.md` | Утверждённая карта экранов и самостоятельный prompt pack |
+| `UX-MC-003` | `docs/design/mockups/index.md` | Индекс утверждённых HTML-макетов |
 
 ## POST-MVP
 

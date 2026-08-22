@@ -4,8 +4,8 @@ title: Домены MatterCodex
 type: domain-index
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # Домены MatterCodex
@@ -15,7 +15,7 @@ updated: 2026-07-16
 | Код | Домен | Файл |
 | --- | --- | --- |
 | `DOM-MC-002` | Идентификация и доступ | `identity-access.md` |
-| `DOM-MC-003` | Рабочие области и диалоги | `workspaces-conversations.md` |
+| `DOM-MC-003` | Проекты, сессии и внешние диалоги | `projects-sessions.md` |
 | `DOM-MC-004` | Агенты и инструкции | `agents-instructions.md` |
 | `DOM-MC-005` | Поставщики и учетные записи | `providers-accounts.md` |
 | `DOM-MC-006` | Оркестрация среды выполнения | `runtime-orchestration.md` |

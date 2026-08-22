@@ -4,15 +4,14 @@ title: Реестр архитектурных решений
 type: decision-index
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 1.0.1
+updated: 2026-08-23
 ---
 
 # Реестр архитектурных решений
 
 | ADR | Решение | Статус |
 | --- | --- | --- |
-| `ADR-MC-001` | Эволюционный модульный монолит и поэтапное выделение сервисов | superseded by ADR-MC-015 |
 | `ADR-MC-002` | Универсальная web-first модель `Organization`, `Project` и `Agent` | approved |
 | `ADR-MC-003` | Совместное управление через UI и GitOps | approved |
 | `ADR-MC-004` | `RuntimeRevision` и неизменяемая привязка учетной записи поставщика | approved |

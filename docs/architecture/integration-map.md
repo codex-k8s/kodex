@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-07
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Карта интеграций
@@ -37,12 +37,17 @@ updated: 2026-08-07
 - изменение промышленного кластера Kubernetes;
 - изменение настроек MatterCodex.
 
-## Материализация MCP в Codex
+## Материализация MCP в runtime
 
-Перед каждым app-server `thread/start` либо `thread/resume` объект
-`RuntimeRevision` собирает разрешённые агенту привязки MCP. Каждая привязка
-записывается отдельной именованной секцией `[mcp_servers.<stable_name>]` в
-сгенерированный `config.toml` Codex.
+Перед каждым turn объект `RuntimeRevision` собирает разрешённые Agent привязки
+MCP, версии capabilities/grants и bounded policy. Provider adapter обязан
+материализовать их до запуска или возобновления provider session и не может
+добавить tool, отсутствующий в revision.
+
+Первый Codex adapter записывает каждую привязку отдельной именованной секцией
+`[mcp_servers.<stable_name>]` в сгенерированный `config.toml` перед app-server
+`thread/start` либо `thread/resume`. Это adapter detail: Codex thread ID и TOML
+не являются core domain fields.
 
 Для секции задаются транспорт, endpoint или команда, `required`, разрешенные инструменты, безопасные ссылки на заголовки из переменных окружения, `startup_timeout_sec` и `tool_timeout_sec`. Значения секретов в TOML не записываются. `tool_timeout_sec` устанавливается в максимальное разрешенное установленной версией Codex и политикой платформы значение, чтобы обычные долгие операции не обрывались преждевременно.
 
@@ -131,9 +136,10 @@ server-owned A/AAAA resolution с TTL/CNAME/special-purpose validation. TLS
 4. Решение человека и выполнение операции сохраняются идемпотентно независимо от наличия pod.
 5. Событие outbox ставит ход продолжения в очередь той же сессии и той же учетной записи поставщика.
 6. Контроллер среды выполнения восстанавливает архив, заново генерирует
-   актуальный `config.toml`, запускает app-server `thread/resume` exact
-   server-owned thread ID и передаёт доверенный структурированный результат
-   исходного вызова инструмента.
+   актуальный provider config, возобновляет exact server-owned provider session
+   и передаёт доверенный структурированный результат исходного вызова
+   инструмента. Codex adapter использует `config.toml` и app-server
+   `thread/resume`.
 7. Отклонение, истечение срока и ошибка продолжают сессию тем же способом и не теряются при перезапуске сервисов.
 
 Открытый сетевой запрос и живой pod не удерживаются с пятницы до понедельника. Корреляция выполняется по неизменяемому идентификатору вызова и хешу аргументов; подменить результат другого вызова нельзя.
