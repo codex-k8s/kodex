@@ -371,6 +371,7 @@ export type Run = {
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
+    retryOfRunRef?: OpaqueRef;
     target: RunTarget;
     title: string;
     inputSummary?: string;

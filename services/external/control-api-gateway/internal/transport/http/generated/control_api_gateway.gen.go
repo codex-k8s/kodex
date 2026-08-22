@@ -1236,6 +1236,7 @@ type Run struct {
 	ProjectRef        OpaqueRef    `json:"projectRef"`
 	Ref               OpaqueRef    `json:"ref"`
 	ResultSummary     *string      `json:"resultSummary,omitempty"`
+	RetryOfRunRef     *OpaqueRef   `json:"retryOfRunRef,omitempty"`
 	RootRunRef        OpaqueRef    `json:"rootRunRef"`
 	SafeErrorCode     *string      `json:"safeErrorCode,omitempty"`
 	SafeErrorMessage  *string      `json:"safeErrorMessage,omitempty"`

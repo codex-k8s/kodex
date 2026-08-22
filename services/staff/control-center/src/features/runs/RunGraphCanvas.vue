@@ -176,10 +176,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
               <StatusBadge :state="item.node.state" />
             </span>
             <span class="canvas-node__role">
-              {{
-                item.node.role ||
-                $t("runs.nodeTypes." + item.node.type)
-              }}
+              {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
             </span>
             <span class="canvas-node__progress">
               {{
@@ -246,8 +243,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
   overflow: auto;
   background:
     linear-gradient(var(--hairline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hairline) 1px, transparent 1px),
-    var(--canvas);
+    linear-gradient(90deg, var(--hairline) 1px, transparent 1px), var(--canvas);
   background-size: 24px 24px;
   scrollbar-gutter: stable;
 }

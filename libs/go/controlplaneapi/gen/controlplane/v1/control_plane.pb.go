@@ -2944,8 +2944,11 @@ type Run struct {
 	StartedAt         *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	FinishedAt        *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
 	NextActions       []NextAction           `protobuf:"varint,23,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// retry_of_run_ref — server-owned predecessor attempt. Это opaque readback,
+	// а не authority и не принимается ни одной mutation-командой.
+	RetryOfRunRef string `protobuf:"bytes,24,opt,name=retry_of_run_ref,json=retryOfRunRef,proto3" json:"retry_of_run_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Run) Reset() {
@@ -3137,6 +3140,13 @@ func (x *Run) GetNextActions() []NextAction {
 		return x.NextActions
 	}
 	return nil
+}
+
+func (x *Run) GetRetryOfRunRef() string {
+	if x != nil {
+		return x.RetryOfRunRef
+	}
+	return ""
 }
 
 type RunNode struct {
@@ -17398,7 +17408,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\fworkflow_ref\x18\x02 \x01(\tH\x00R\vworkflowRef\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12%\n" +
 	"\x0etarget_version\x18\x04 \x01(\x03R\rtargetVersionB\b\n" +
-	"\x06target\"\xd7\a\n" +
+	"\x06target\"\x80\b\n" +
 	"\x03Run\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
@@ -17429,7 +17439,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"started_at\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12>\n" +
-	"\fnext_actions\x18\x17 \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\"\x88\a\n" +
+	"\fnext_actions\x18\x17 \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x12'\n" +
+	"\x10retry_of_run_ref\x18\x18 \x01(\tR\rretryOfRunRef\"\x88\a\n" +
 	"\aRunNode\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x17\n" +
 	"\arun_ref\x18\x02 \x01(\tR\x06runRef\x12&\n" +

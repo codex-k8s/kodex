@@ -1813,6 +1813,7 @@ components:
         sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
         rootRunRef: { $ref: '#/components/schemas/OpaqueRef' }
         parentRunRef: { $ref: '#/components/schemas/OpaqueRef' }
+        retryOfRunRef: { $ref: '#/components/schemas/OpaqueRef' }
         target: { $ref: '#/components/schemas/RunTarget' }
         title: { type: string, maxLength: 240 }
         inputSummary: { type: string, maxLength: 2000 }

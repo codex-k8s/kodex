@@ -194,7 +194,13 @@ onBeforeUnmount(() => {
       ><div v-if="run && graph" class="run-summary">
         <span>{{ run.target.displayName }}</span
         ><span>{{ run.source }}</span
-        ><span>{{ new Date(run.createdAt).toLocaleString() }}</span
+        ><span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span
+        ><RouterLink
+          v-if="run.retryOfRunRef"
+          :to="`/runs/${run.retryOfRunRef}`"
+          >{{ $t("runs.previousAttempt") }}</RouterLink
+        >
+        <span>{{ new Date(run.createdAt).toLocaleString() }}</span
         ><span
           class="live-indicator"
           :class="`live-indicator--${realtime.state[graph?.runRef ?? runRef]?.state ?? 'connecting'}`"
@@ -305,7 +311,7 @@ onBeforeUnmount(() => {
             <dl class="metadata">
               <div>
                 <dt>
-                  {{ $t("common.version", { version: selectedNode.attempt }) }}
+                  {{ $t("runs.attempt", { attempt: selectedNode.attempt }) }}
                 </dt>
                 <dd>{{ selectedNode.role }}</dd>
               </div>
@@ -342,7 +348,9 @@ onBeforeUnmount(() => {
               </div>
               <div v-if="selectedNode.finishedAt">
                 <dt>{{ $t("runs.finishedAt") }}</dt>
-                <dd>{{ new Date(selectedNode.finishedAt).toLocaleString() }}</dd>
+                <dd>
+                  {{ new Date(selectedNode.finishedAt).toLocaleString() }}
+                </dd>
               </div>
             </dl>
             <section class="node-conversation" aria-live="polite">
@@ -375,11 +383,12 @@ onBeforeUnmount(() => {
                 !artifact.nextActions.includes('DOWNLOAD')
               "
               @click="downloadArtifact(artifact)"
-              ><span>{{ artifact.fileName }}</span
+            >
+              <span>{{ artifact.fileName }}</span
               ><StatusBadge :state="artifact.scanState" /><span
                 >{{ artifact.sizeBytes }} B</span
-              ></button
-            >
+              >
+            </button>
           </div>
           <p v-else>{{ $t("common.empty") }}</p>
         </article>

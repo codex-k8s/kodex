@@ -530,6 +530,9 @@ message Run {
   google.protobuf.Timestamp started_at = 21;
   google.protobuf.Timestamp finished_at = 22;
   repeated NextAction next_actions = 23;
+  // retry_of_run_ref — server-owned predecessor attempt. Это opaque readback,
+  // а не authority и не принимается ни одной mutation-командой.
+  string retry_of_run_ref = 24;
 }
 
 message RunNode {
