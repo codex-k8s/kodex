@@ -9,6 +9,41 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// RejectMalformedUnary отклоняет payload, помеченный StrictProtoCodec.
+func RejectMalformedUnary(
+	ctx context.Context,
+	request any,
+	_ *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
+	if HasMalformedProto(request) {
+		return nil, status.Error(codes.InvalidArgument, "protobuf request is malformed")
+	}
+	return handler(ctx, request)
+}
+
+// RejectMalformedStream проверяет каждое сообщение streaming RPC после decode.
+func RejectMalformedStream(
+	service any,
+	stream grpc.ServerStream,
+	_ *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
+	return handler(service, &strictServerStream{ServerStream: stream})
+}
+
+type strictServerStream struct{ grpc.ServerStream }
+
+func (stream *strictServerStream) RecvMsg(message any) error {
+	if err := stream.ServerStream.RecvMsg(message); err != nil {
+		return err
+	}
+	if HasMalformedProto(message) {
+		return status.Error(codes.InvalidArgument, "protobuf request is malformed")
+	}
+	return nil
+}
+
 // ErrorObserver получает неожиданные ошибки единожды на серверной границе.
 type ErrorObserver interface {
 	ObserveUnexpected(context.Context, string, codes.Code, error)
@@ -66,5 +101,32 @@ func ErrorBoundary(observer ErrorObserver) grpc.UnaryServerInterceptor {
 			}
 		}
 		return response, err
+	}
+}
+
+// StreamErrorBoundary применяет единую panic/error boundary к streaming RPC.
+func StreamErrorBoundary(observer ErrorObserver) grpc.StreamServerInterceptor {
+	return func(
+		service any,
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) (err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				err = status.Error(codes.Internal, "internal server error")
+				if observer != nil {
+					observer.ObserveUnexpected(stream.Context(), info.FullMethod, codes.Internal, fmt.Errorf("panic recovered"))
+				}
+			}
+		}()
+		err = handler(service, stream)
+		if err != nil {
+			code := status.Code(err)
+			if observer != nil && IsUnexpectedCode(code) {
+				observer.ObserveUnexpected(stream.Context(), info.FullMethod, code, err)
+			}
+		}
+		return err
 	}
 }

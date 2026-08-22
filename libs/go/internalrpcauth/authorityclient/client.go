@@ -268,6 +268,58 @@ func VerifierUnaryServerInterceptor(
 	}
 }
 
+// VerifierStreamServerInterceptor применяет ту же exact-method, mTLS и replay
+// границу к streaming RPC и передаёт проверенный context серверному stream.
+func VerifierStreamServerInterceptor(
+	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
+) grpc.StreamServerInterceptor {
+	return func(
+		service any,
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		ctx := stream.Context()
+		transport, err := verifiedMTLSPeer(ctx)
+		if err != nil {
+			return err
+		}
+		incoming, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return status.Error(codes.Unauthenticated, "authorization context required")
+		}
+		values := incoming.Get(AuthorizationMetadata)
+		if len(values) != 1 || values[0] == "" {
+			return status.Error(codes.Unauthenticated, "authorization context required")
+		}
+		verified, err := verifier.VerifyAuthorizationContext(
+			ctx,
+			&internalrpcauthorityv1.VerifyAuthorizationContextRequest{
+				CompactJws:         values[0],
+				ObservedFullMethod: info.FullMethod,
+				DownstreamPeer:     transport,
+			},
+		)
+		if err != nil {
+			return err
+		}
+		if verified.GetContext() == nil {
+			return status.Error(codes.Internal, "verified authorization context missing")
+		}
+		return handler(service, &authorizedServerStream{
+			ServerStream: stream,
+			ctx:          context.WithValue(ctx, verifiedContextKey{}, verified.GetContext()),
+		})
+	}
+}
+
+type authorizedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (stream *authorizedServerStream) Context() context.Context { return stream.ctx }
+
 func verifiedMTLSPeer(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.DownstreamTransportPeer, error) {

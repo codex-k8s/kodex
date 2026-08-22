@@ -16,10 +16,11 @@ if rg -q 'func \([^)]*\) (UnmarshalJSON|MarshalJSON)\(' "$generated_dir"; then
   exit 1
 fi
 for required in \
-  subscribe_envelope.go subscribe_message_type.go projection_channel.go \
-  resource_kind.go snapshot_envelope.go snapshot_message_type.go \
-  snapshot_items.go problem_envelope.go problem_message_type.go \
-  resource.go run_projection.go incident_projection.go configuration_change.go; do
+  resume_envelope.go snapshot_envelope.go event_envelope.go \
+  resync_envelope.go heartbeat_envelope.go problem_envelope.go \
+  run_graph.go run_node.go run_node_type.go run_node_state.go \
+  run_edge.go run_edge_type.go run_event.go run_event_type.go run_state.go \
+  next_action.go resync_reason.go problem_code.go; do
   if [ ! -f "$generated_dir/$required" ]; then
     echo "named AsyncAPI model is missing: $required" >&2
     exit 1

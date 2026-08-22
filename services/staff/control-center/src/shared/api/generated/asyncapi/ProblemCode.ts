@@ -1,0 +1,3 @@
+
+type ProblemCode = "UNAUTHORIZED" | "FORBIDDEN" | "RUN_NOT_FOUND" | "RATE_LIMITED" | "GAP_UNRECOVERABLE" | "BACKPRESSURE" | "INTERNAL";
+export { ProblemCode };

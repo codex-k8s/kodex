@@ -2,12 +2,9 @@
 package generated
 
 type SnapshotEnvelope struct {
-  ReservedType *SnapshotMessageType
-  RequestId string
-  Channel *ProjectionChannel
+  ReservedType string
+  RequestRef string
+  RunRef string
   Sequence int
-  SnapshotId string
-  Complete bool
-  ServerTime string
-  Items *SnapshotItems
+  Snapshot *RunGraph
 }

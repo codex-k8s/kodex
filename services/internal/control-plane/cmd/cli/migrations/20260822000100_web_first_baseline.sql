@@ -1,0 +1,680 @@
+-- +goose Up
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE SCHEMA IF NOT EXISTS control_plane;
+
+CREATE TABLE control_plane.installation (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    schema_version integer NOT NULL CHECK (schema_version = 1),
+    platform_sequence bigint NOT NULL DEFAULT 0 CHECK (platform_sequence >= 0),
+    bootstrapped_at timestamptz,
+    onboarding_completed_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.organizations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    authority_tenant_ref text UNIQUE,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.subjects (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    issuer text NOT NULL CHECK (char_length(issuer) BETWEEN 1 AND 500),
+    external_subject_digest text NOT NULL CHECK (external_subject_digest ~ '^[a-f0-9]{64}$'),
+    display_name text NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 160),
+    email_masked text NOT NULL DEFAULT '',
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, issuer, external_subject_digest)
+);
+
+CREATE TABLE control_plane.owner_claim_contracts (
+    organization_id uuid PRIMARY KEY REFERENCES control_plane.organizations(id),
+    stable_key text NOT NULL UNIQUE CHECK (stable_key = 'installation-owner'),
+    state text NOT NULL CHECK (state IN ('PENDING_CLAIM', 'CLAIMED')),
+    subject_id uuid REFERENCES control_plane.subjects(id),
+    claimed_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    CHECK ((state = 'PENDING_CLAIM' AND subject_id IS NULL AND claimed_at IS NULL) OR
+           (state = 'CLAIMED' AND subject_id IS NOT NULL AND claimed_at IS NOT NULL))
+);
+
+CREATE TABLE control_plane.memberships (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid,
+    subject_id uuid NOT NULL REFERENCES control_plane.subjects(id),
+    role text NOT NULL CHECK (role IN ('OWNER', 'ADMINISTRATOR', 'OPERATOR', 'MEMBER', 'AUDITOR')),
+    permissions text[] NOT NULL DEFAULT '{}',
+    active boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE UNIQUE INDEX memberships_platform_one
+    ON control_plane.memberships (organization_id, subject_id)
+    WHERE project_id IS NULL;
+
+CREATE TABLE control_plane.projects (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    purpose text NOT NULL DEFAULT '' CHECK (char_length(purpose) <= 2000),
+    language text NOT NULL DEFAULT 'ru' CHECK (language IN ('ru', 'en')),
+    lifecycle text NOT NULL DEFAULT 'ACTIVE' CHECK (lifecycle IN ('ACTIVE', 'ARCHIVED')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, name)
+);
+
+ALTER TABLE control_plane.memberships
+    ADD CONSTRAINT memberships_project_fk
+    FOREIGN KEY (project_id) REFERENCES control_plane.projects(id);
+
+CREATE UNIQUE INDEX memberships_project_one
+    ON control_plane.memberships (project_id, subject_id)
+    WHERE project_id IS NOT NULL;
+
+CREATE TABLE control_plane.platform_capabilities (
+    stable_key text PRIMARY KEY,
+    name text NOT NULL,
+    description text NOT NULL,
+    risk text NOT NULL CHECK (risk IN ('LOW', 'MEDIUM', 'HIGH')),
+    enabled boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+
+CREATE TABLE control_plane.runtime_profiles (
+    stable_key text PRIMARY KEY,
+    name text NOT NULL,
+    provider text NOT NULL,
+    model text NOT NULL,
+    runtime_revision text NOT NULL,
+    resource_limits jsonb NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+
+CREATE TABLE control_plane.agents (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    system_key text,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    purpose text NOT NULL DEFAULT '' CHECK (char_length(purpose) <= 2000),
+    role_description text NOT NULL DEFAULT '' CHECK (char_length(role_description) <= 4000),
+    avatar_url text NOT NULL DEFAULT '',
+    runtime_key text NOT NULL REFERENCES control_plane.runtime_profiles(stable_key),
+    state text NOT NULL CHECK (state IN ('DRAFT', 'READY', 'RUNNING', 'DISABLED', 'ARCHIVED')),
+    enabled boolean NOT NULL DEFAULT true,
+    capabilities text[] NOT NULL DEFAULT '{}',
+    knowledge_artifact_refs text[] NOT NULL DEFAULT '{}',
+    external_identities jsonb NOT NULL DEFAULT '[]'::jsonb,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, system_key),
+    CHECK ((system_key IS NULL AND project_id IS NOT NULL) OR
+           (system_key = 'system-assistant' AND project_id IS NULL AND enabled AND state <> 'ARCHIVED'))
+);
+
+CREATE TABLE control_plane.instruction_versions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    agent_id uuid NOT NULL REFERENCES control_plane.agents(id),
+    version_number integer NOT NULL CHECK (version_number > 0),
+    state text NOT NULL CHECK (state IN ('DRAFT', 'VALID', 'INVALID', 'PUBLISHED')),
+    content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 100000),
+    digest text NOT NULL CHECK (digest ~ '^[a-f0-9]{64}$'),
+    validation_problems jsonb NOT NULL DEFAULT '[]'::jsonb,
+    core boolean NOT NULL DEFAULT false,
+    parent_ref text,
+    created_by uuid REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    published_at timestamptz,
+    UNIQUE (agent_id, version_number),
+    UNIQUE (agent_id, digest),
+    CHECK ((state = 'PUBLISHED') = (published_at IS NOT NULL))
+);
+
+CREATE UNIQUE INDEX instruction_one_draft
+    ON control_plane.instruction_versions (agent_id)
+    WHERE state IN ('DRAFT', 'VALID', 'INVALID');
+
+CREATE TABLE control_plane.workflows (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    purpose text NOT NULL DEFAULT '' CHECK (char_length(purpose) <= 2000),
+    coordinator_agent_id uuid REFERENCES control_plane.agents(id),
+    state text NOT NULL CHECK (state IN ('DRAFT', 'VALID', 'PUBLISHED', 'ARCHIVED')),
+    draft_spec jsonb NOT NULL,
+    published_spec jsonb,
+    published_version integer NOT NULL DEFAULT 0 CHECK (published_version >= 0),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (project_id, name)
+);
+
+CREATE TABLE control_plane.workflow_versions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    workflow_id uuid NOT NULL REFERENCES control_plane.workflows(id),
+    version_number integer NOT NULL CHECK (version_number > 0),
+    spec jsonb NOT NULL,
+    digest text NOT NULL CHECK (digest ~ '^[a-f0-9]{64}$'),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (workflow_id, version_number),
+    UNIQUE (workflow_id, digest)
+);
+
+CREATE OR REPLACE FUNCTION control_plane.protect_immutable_row()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'immutable row cannot be changed';
+END;
+$$;
+
+CREATE TRIGGER protect_workflow_version
+BEFORE UPDATE OR DELETE ON control_plane.workflow_versions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_immutable_row();
+
+CREATE TABLE control_plane.sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    target_type text NOT NULL CHECK (target_type IN ('AGENT', 'WORKFLOW', 'SYSTEM_ASSISTANT')),
+    target_ref text NOT NULL,
+    state text NOT NULL CHECK (state IN ('ACTIVE', 'CLOSED')),
+    next_turn_number bigint NOT NULL DEFAULT 1 CHECK (next_turn_number > 0),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.runs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    session_id uuid REFERENCES control_plane.sessions(id),
+    root_run_id uuid REFERENCES control_plane.runs(id),
+    parent_run_id uuid REFERENCES control_plane.runs(id),
+    retry_of_run_id uuid REFERENCES control_plane.runs(id),
+    target_type text NOT NULL CHECK (target_type IN ('AGENT', 'WORKFLOW', 'SYSTEM_ASSISTANT')),
+    target_ref text NOT NULL,
+    source text NOT NULL CHECK (source IN ('CONTROL_CENTER', 'SYSTEM_ASSISTANT', 'SCHEDULE', 'INTEGRATION', 'AGENT_DELEGATION', 'MATTERMOST')),
+    title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 300),
+    task text NOT NULL CHECK (char_length(task) BETWEEN 1 AND 20000),
+    input jsonb NOT NULL DEFAULT '{}'::jsonb,
+    input_artifact_refs text[] NOT NULL DEFAULT '{}',
+    state text NOT NULL CHECK (state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
+    graph_revision bigint NOT NULL DEFAULT 1 CHECK (graph_revision > 0),
+    event_sequence bigint NOT NULL DEFAULT 0 CHECK (event_sequence >= 0),
+    result_summary text NOT NULL DEFAULT '',
+    safe_error_code text NOT NULL DEFAULT '',
+    safe_error_message text NOT NULL DEFAULT '',
+    usage jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    initiated_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX runs_project_recent ON control_plane.runs (project_id, created_at DESC);
+CREATE INDEX runs_root ON control_plane.runs (root_run_id, created_at);
+
+CREATE TABLE control_plane.session_turns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    session_id uuid NOT NULL REFERENCES control_plane.sessions(id),
+    run_id uuid REFERENCES control_plane.runs(id),
+    turn_number bigint NOT NULL CHECK (turn_number > 0),
+    actor_kind text NOT NULL CHECK (actor_kind IN ('USER', 'AGENT', 'SYSTEM_ASSISTANT')),
+    actor_ref text NOT NULL,
+    content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 100000),
+    artifact_refs text[] NOT NULL DEFAULT '{}',
+    state text NOT NULL CHECK (state IN ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED')),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    started_at timestamptz,
+    completed_at timestamptz,
+    UNIQUE (session_id, turn_number)
+);
+
+CREATE TABLE control_plane.run_nodes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    parent_node_id uuid REFERENCES control_plane.run_nodes(id),
+    type text NOT NULL CHECK (type IN ('ROOT_PROCESS', 'AGENT_EXECUTION', 'HUMAN_GATE', 'EXTERNAL_ACTION')),
+    state text NOT NULL CHECK (state IN ('QUEUED', 'RUNNING', 'WAITING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'SKIPPED')),
+    display_name text NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 160),
+    role text NOT NULL DEFAULT '',
+    agent_id uuid REFERENCES control_plane.agents(id),
+    turn_id uuid REFERENCES control_plane.session_turns(id),
+    workflow_step_key text NOT NULL DEFAULT '',
+    human_gate_after boolean NOT NULL DEFAULT false,
+    attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
+    input_summary text NOT NULL DEFAULT '',
+    progress_summary text NOT NULL DEFAULT '',
+    integration_names text[] NOT NULL DEFAULT '{}',
+    callback_summary text NOT NULL DEFAULT '',
+    safe_error_code text NOT NULL DEFAULT '',
+    safe_error_message text NOT NULL DEFAULT '',
+    next_actions text[] NOT NULL DEFAULT '{}',
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    started_at timestamptz,
+    finished_at timestamptz
+);
+
+CREATE INDEX run_nodes_graph ON control_plane.run_nodes (root_run_id, created_at);
+
+CREATE TABLE control_plane.run_edges (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    source_node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    target_node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    type text NOT NULL CHECK (type IN ('DELEGATED_TO', 'CALLBACK_TO', 'RETRY_OF', 'CONTINUES', 'WAITING_FOR')),
+    label text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (root_run_id, source_node_id, target_node_id, type)
+);
+
+CREATE TABLE control_plane.run_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    aggregate_ref text NOT NULL,
+    aggregate_version bigint NOT NULL CHECK (aggregate_version > 0),
+    sequence bigint NOT NULL CHECK (sequence > 0),
+    type text NOT NULL CHECK (type IN ('RUN_CREATED', 'RUN_STATE_CHANGED', 'NODE_ADDED', 'NODE_STATE_CHANGED', 'EDGE_ADDED', 'TURN_QUEUED', 'TURN_STARTED', 'TURN_PROGRESS', 'TURN_COMPLETED', 'DELEGATION_CREATED', 'CALLBACK_DELIVERED', 'OWNER_GATE_OPENED', 'OWNER_GATE_RESOLVED', 'ARTIFACT_AVAILABLE', 'INCIDENT_LINKED')),
+    node_ref text,
+    edge_ref text,
+    gate_ref text,
+    artifact_ref text,
+    safe_summary text NOT NULL CHECK (char_length(safe_summary) <= 2000),
+    safe_progress text NOT NULL DEFAULT '' CHECK (char_length(safe_progress) <= 2000),
+    run_state text,
+    node_state text,
+    correlation_ref text NOT NULL,
+    causation_ref text,
+    occurred_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (root_run_id, sequence)
+);
+
+CREATE TABLE control_plane.owner_gates (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    title text NOT NULL,
+    prompt text NOT NULL,
+    context_summary text NOT NULL DEFAULT '',
+    allowed_decisions text[] NOT NULL,
+    state text NOT NULL CHECK (state IN ('OPEN', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED')),
+    decision text,
+    decision_comment text NOT NULL DEFAULT '',
+    resolved_by uuid REFERENCES control_plane.subjects(id),
+    resolved_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((state = 'OPEN' AND decision IS NULL AND resolved_by IS NULL AND resolved_at IS NULL) OR
+           (state <> 'OPEN' AND decision IS NOT NULL AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL))
+);
+
+CREATE INDEX owner_gates_open ON control_plane.owner_gates (project_id, created_at) WHERE state = 'OPEN';
+
+CREATE TABLE control_plane.artifacts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    run_id uuid REFERENCES control_plane.runs(id),
+    node_id uuid REFERENCES control_plane.run_nodes(id),
+    file_name text NOT NULL CHECK (char_length(file_name) BETWEEN 1 AND 255),
+    media_type text NOT NULL CHECK (char_length(media_type) BETWEEN 1 AND 255),
+    size_bytes bigint NOT NULL CHECK (size_bytes BETWEEN 0 AND 1073741824),
+    digest text NOT NULL CHECK (digest ~ '^sha256:[a-f0-9]{64}$'),
+    scan_state text NOT NULL CHECK (scan_state IN ('PENDING', 'CLEAN', 'REJECTED', 'FAILED')),
+    object_receipt_ref text NOT NULL,
+    preview_state text NOT NULL CHECK (preview_state IN ('AVAILABLE', 'UNAVAILABLE', 'BLOCKED')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.artifact_bindings (
+    artifact_id uuid NOT NULL REFERENCES control_plane.artifacts(id),
+    target_kind text NOT NULL CHECK (target_kind IN ('AGENT', 'WORKFLOW', 'RUN_RESULT', 'RUN_INPUT', 'KNOWLEDGE')),
+    target_ref text NOT NULL,
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (artifact_id, target_kind, target_ref)
+);
+
+CREATE TABLE control_plane.artifact_content (
+    artifact_id uuid PRIMARY KEY REFERENCES control_plane.artifacts(id) ON DELETE CASCADE,
+    body bytea NOT NULL CHECK (octet_length(body) <= 16777216)
+);
+
+CREATE TABLE control_plane.schedules (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    name text NOT NULL,
+    target_type text NOT NULL CHECK (target_type IN ('AGENT', 'WORKFLOW')),
+    target_ref text NOT NULL,
+    preset text NOT NULL,
+    cron_expression text NOT NULL,
+    timezone text NOT NULL,
+    input jsonb NOT NULL DEFAULT '{}'::jsonb,
+    session_policy text NOT NULL,
+    notification_policy text NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    next_run_at timestamptz,
+    last_run_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (project_id, name)
+);
+
+CREATE TABLE control_plane.integration_definitions (
+    stable_key text PRIMARY KEY,
+    name text NOT NULL,
+    description text NOT NULL,
+    category text NOT NULL,
+    optional boolean NOT NULL DEFAULT true CHECK (optional),
+    enabled boolean NOT NULL DEFAULT true,
+    capabilities jsonb NOT NULL DEFAULT '[]'::jsonb,
+    configuration_schema jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+
+CREATE TABLE control_plane.integration_connections (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    definition_key text NOT NULL REFERENCES control_plane.integration_definitions(stable_key),
+    name text NOT NULL,
+    state text NOT NULL CHECK (state IN ('NOT_CONNECTED', 'CONNECTED', 'DEGRADED', 'DISABLED')),
+    enabled boolean NOT NULL DEFAULT true,
+    credential_materialization_ref text NOT NULL,
+    masked_credentials_state text NOT NULL CHECK (masked_credentials_state IN ('NOT_CONFIGURED', 'CONFIGURED', 'INVALID')),
+    public_configuration jsonb NOT NULL DEFAULT '{}'::jsonb,
+    last_test_summary text NOT NULL DEFAULT '',
+    last_tested_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, name)
+);
+
+CREATE TABLE control_plane.integration_grants (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    connection_id uuid NOT NULL REFERENCES control_plane.integration_connections(id),
+    capability_key text NOT NULL,
+    target_kind text NOT NULL CHECK (target_kind IN ('AGENT', 'WORKFLOW')),
+    target_ref text NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    approval_policy text NOT NULL DEFAULT 'OWNER_FOR_HIGH_RISK',
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (connection_id, capability_key, target_kind, target_ref)
+);
+
+CREATE TABLE control_plane.assistant_runtime (
+    organization_id uuid PRIMARY KEY REFERENCES control_plane.organizations(id),
+    agent_id uuid NOT NULL UNIQUE REFERENCES control_plane.agents(id),
+    stable_key text NOT NULL UNIQUE CHECK (stable_key = 'system-assistant'),
+    core_prompt_ref text NOT NULL REFERENCES control_plane.instruction_versions(ref),
+    core_prompt_revision text NOT NULL,
+    owner_instructions text NOT NULL DEFAULT '',
+    runtime_state text NOT NULL CHECK (runtime_state IN ('STARTING', 'READY', 'RECOVERING', 'UNAVAILABLE')),
+    runtime_revision text NOT NULL,
+    desired_runtime_revision text NOT NULL,
+    system_session_ref text NOT NULL REFERENCES control_plane.sessions(ref),
+    warm_instance_ref text,
+    resource_limits jsonb NOT NULL,
+    last_heartbeat_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.assistant_plans (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    conversation_ref text NOT NULL,
+    summary text NOT NULL,
+    operations jsonb NOT NULL,
+    state text NOT NULL CHECK (state IN ('PROPOSED', 'APPLYING', 'APPLIED', 'REJECTED', 'FAILED')),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    applied_at timestamptz
+);
+
+CREATE TABLE control_plane.assistant_conversations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    session_id uuid NOT NULL UNIQUE REFERENCES control_plane.sessions(id),
+    title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 300),
+    state text NOT NULL CHECK (state IN ('ACTIVE', 'CLOSED')),
+    latest_plan_id uuid REFERENCES control_plane.assistant_plans(id),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+ALTER TABLE control_plane.assistant_plans
+    ADD CONSTRAINT assistant_plans_conversation_fk
+    FOREIGN KEY (conversation_ref) REFERENCES control_plane.assistant_conversations(ref);
+
+CREATE TABLE control_plane.schedule_occurrences (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    schedule_id uuid NOT NULL REFERENCES control_plane.schedules(id),
+    scheduled_for timestamptz NOT NULL,
+    state text NOT NULL CHECK (state IN ('DUE', 'CLAIMED', 'MATERIALIZED', 'COMPLETED', 'FAILED', 'CANCELLED')),
+    run_id uuid REFERENCES control_plane.runs(id),
+    attempt integer NOT NULL DEFAULT 1 CHECK (attempt > 0),
+    lease_ref text UNIQUE,
+    fence_digest text,
+    generation bigint NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    workload_instance text,
+    lease_expires_at timestamptz,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (schedule_id, scheduled_for, attempt)
+);
+
+CREATE TABLE control_plane.integration_invocations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    connection_id uuid NOT NULL REFERENCES control_plane.integration_connections(id),
+    grant_id uuid NOT NULL REFERENCES control_plane.integration_grants(id),
+    capability_key text NOT NULL,
+    operation text NOT NULL,
+    input_digest text NOT NULL CHECK (input_digest ~ '^[a-f0-9]{64}$'),
+    bounded_input jsonb NOT NULL,
+    effect_fence_digest text NOT NULL CHECK (effect_fence_digest ~ '^[a-f0-9]{64}$'),
+    state text NOT NULL CHECK (state IN ('READY', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    result_summary text NOT NULL DEFAULT '',
+    safe_error_code text NOT NULL DEFAULT '',
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE control_plane.runtime_leases (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    node_id uuid NOT NULL REFERENCES control_plane.run_nodes(id),
+    workload_instance text NOT NULL,
+    fence_digest text NOT NULL CHECK (fence_digest ~ '^[a-f0-9]{64}$'),
+    generation bigint NOT NULL CHECK (generation > 0),
+    state text NOT NULL CHECK (state IN ('CLAIMED', 'COMPLETED', 'CANCELLED', 'EXPIRED')),
+    input_digest text NOT NULL CHECK (input_digest ~ '^[a-f0-9]{64}$'),
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (node_id, generation)
+);
+
+CREATE TABLE control_plane.callback_receipts (
+    child_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    callback_edge_id uuid NOT NULL REFERENCES control_plane.run_edges(id),
+    delivered_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (child_run_id, callback_edge_id)
+);
+
+CREATE TABLE control_plane.idempotency_receipts (
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    actor_id uuid NOT NULL REFERENCES control_plane.subjects(id),
+    operation text NOT NULL,
+    idempotency_key text NOT NULL,
+    intent_digest text NOT NULL CHECK (intent_digest ~ '^[a-f0-9]{64}$'),
+    response_type text NOT NULL,
+    response_payload bytea NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    expires_at timestamptz NOT NULL,
+    PRIMARY KEY (organization_id, actor_id, operation, idempotency_key)
+);
+
+CREATE TABLE control_plane.audit_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    actor_id uuid NOT NULL REFERENCES control_plane.subjects(id),
+    assistant_agent_id uuid REFERENCES control_plane.agents(id),
+    action text NOT NULL,
+    resource_kind text NOT NULL,
+    resource_ref text NOT NULL,
+    outcome text NOT NULL CHECK (outcome IN ('SUCCEEDED', 'REJECTED', 'FAILED', 'CONFLICT')),
+    safe_summary text NOT NULL,
+    correlation_ref text NOT NULL,
+    occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX audit_events_scope ON control_plane.audit_events (organization_id, project_id, occurred_at DESC);
+
+CREATE TABLE control_plane.outbox_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id uuid NOT NULL UNIQUE,
+    subject text NOT NULL,
+    ordering_key text NOT NULL,
+    sequence bigint NOT NULL CHECK (sequence > 0),
+    payload bytea NOT NULL CHECK (octet_length(payload) <= 65536),
+    state text NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING', 'CLAIMED', 'PUBLISHED', 'DEAD_LETTER')),
+    attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    available_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    lease_owner text,
+    lease_expires_at timestamptz,
+    broker_receipt text,
+    published_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (ordering_key, sequence)
+);
+
+CREATE INDEX outbox_pending ON control_plane.outbox_events (available_at, created_at)
+    WHERE state IN ('PENDING', 'CLAIMED');
+
+CREATE OR REPLACE FUNCTION control_plane.protect_system_agent()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE' AND OLD.system_key = 'system-assistant' THEN
+        RAISE EXCEPTION 'system assistant is protected';
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.system_key = 'system-assistant' AND
+       (NEW.system_key IS DISTINCT FROM OLD.system_key OR NEW.enabled = false OR
+        NEW.state IN ('DISABLED', 'ARCHIVED') OR NEW.project_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'system assistant invariant violation';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+CREATE TRIGGER protect_system_agent
+BEFORE UPDATE OR DELETE ON control_plane.agents
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_system_agent();
+
+CREATE OR REPLACE FUNCTION control_plane.protect_core_prompt()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF OLD.core OR OLD.state = 'PUBLISHED' THEN
+        RAISE EXCEPTION 'published instruction is immutable';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+CREATE TRIGGER protect_core_prompt
+BEFORE UPDATE OR DELETE ON control_plane.instruction_versions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_core_prompt();
+
+INSERT INTO control_plane.installation (singleton, schema_version)
+VALUES (true, 1)
+ON CONFLICT (singleton) DO NOTHING;
+
+-- +goose Down
+DROP SCHEMA IF EXISTS control_plane CASCADE;

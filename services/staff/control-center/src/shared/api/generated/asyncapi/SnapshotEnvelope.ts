@@ -1,14 +1,9 @@
-import {SnapshotMessageType} from './SnapshotMessageType';
-import {ProjectionChannel} from './ProjectionChannel';
-import {SnapshotItems} from './SnapshotItems';
+import {RunGraph} from './RunGraph';
 interface SnapshotEnvelope {
-  reservedType: SnapshotMessageType;
-  requestId: string;
-  channel: ProjectionChannel;
+  reservedType: 'GRAPH_SNAPSHOT';
+  requestRef: string;
+  runRef: string;
   sequence: number;
-  snapshotId: string;
-  complete: boolean;
-  serverTime: string;
-  items: SnapshotItems;
+  snapshot: RunGraph;
 }
 export { SnapshotEnvelope };

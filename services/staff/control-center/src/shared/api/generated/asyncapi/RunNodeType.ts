@@ -1,0 +1,3 @@
+
+type RunNodeType = "ROOT_PROCESS" | "AGENT_EXECUTION" | "HUMAN_GATE" | "EXTERNAL_ACTION";
+export { RunNodeType };

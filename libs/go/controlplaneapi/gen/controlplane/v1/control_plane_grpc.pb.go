@@ -19,7421 +19,3332 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlaneService_CreateProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CreateProject"
-	ControlPlaneService_ListProjects_FullMethodName                             = "/controlplane.v1.ControlPlaneService/ListProjects"
-	ControlPlaneService_UpdateProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/UpdateProject"
-	ControlPlaneService_DeleteProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/DeleteProject"
-	ControlPlaneService_CreateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CreateResource"
-	ControlPlaneService_UpdateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/UpdateResource"
-	ControlPlaneService_TransitionResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/TransitionResource"
-	ControlPlaneService_DeleteResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/DeleteResource"
-	ControlPlaneService_ManageAccessResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
-	ControlPlaneService_DetachAccessResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DetachAccessResource"
-	ControlPlaneService_CopyAccessResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CopyAccessResource"
-	ControlPlaneService_ManageRoleDefinition_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageRoleDefinition"
-	ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName               = "/controlplane.v1.ControlPlaneService/ReconcileGitRoleDefinition"
-	ControlPlaneService_ManageAgent_FullMethodName                              = "/controlplane.v1.ControlPlaneService/ManageAgent"
-	ControlPlaneService_ReconcileGitAgent_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ReconcileGitAgent"
-	ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity"
-	ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName             = "/controlplane.v1.ControlPlaneService/GetOwnerConfigurationCatalog"
-	ControlPlaneService_ManageAgentAssignment_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageAgentAssignment"
-	ControlPlaneService_ManageInstructionSet_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageInstructionSet"
-	ControlPlaneService_ReconcileGitInstructionSet_FullMethodName               = "/controlplane.v1.ControlPlaneService/ReconcileGitInstructionSet"
-	ControlPlaneService_CompareInstructionSetVersions_FullMethodName            = "/controlplane.v1.ControlPlaneService/CompareInstructionSetVersions"
-	ControlPlaneService_ManageProviderConnectionReference_FullMethodName        = "/controlplane.v1.ControlPlaneService/ManageProviderConnectionReference"
-	ControlPlaneService_ManageProviderPool_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageProviderPool"
-	ControlPlaneService_ReconcileGitProviderPool_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ReconcileGitProviderPool"
-	ControlPlaneService_GetRoleDefinition_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetRoleDefinition"
-	ControlPlaneService_ListRoleDefinitions_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListRoleDefinitions"
-	ControlPlaneService_ListRoleDefinitionHistory_FullMethodName                = "/controlplane.v1.ControlPlaneService/ListRoleDefinitionHistory"
-	ControlPlaneService_GetAgent_FullMethodName                                 = "/controlplane.v1.ControlPlaneService/GetAgent"
-	ControlPlaneService_ListAgents_FullMethodName                               = "/controlplane.v1.ControlPlaneService/ListAgents"
-	ControlPlaneService_ListAgentHistory_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ListAgentHistory"
-	ControlPlaneService_GetAgentAssignment_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetAgentAssignment"
-	ControlPlaneService_ListAgentAssignments_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListAgentAssignments"
-	ControlPlaneService_ListAgentAssignmentHistory_FullMethodName               = "/controlplane.v1.ControlPlaneService/ListAgentAssignmentHistory"
-	ControlPlaneService_GetInstructionSet_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetInstructionSet"
-	ControlPlaneService_ListInstructionSets_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListInstructionSets"
-	ControlPlaneService_ListInstructionSetHistory_FullMethodName                = "/controlplane.v1.ControlPlaneService/ListInstructionSetHistory"
-	ControlPlaneService_GetProviderConnectionReference_FullMethodName           = "/controlplane.v1.ControlPlaneService/GetProviderConnectionReference"
-	ControlPlaneService_ListProviderConnectionReferences_FullMethodName         = "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferences"
-	ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName   = "/controlplane.v1.ControlPlaneService/ListProviderConnectionReferenceHistory"
-	ControlPlaneService_GetProviderPool_FullMethodName                          = "/controlplane.v1.ControlPlaneService/GetProviderPool"
-	ControlPlaneService_ListProviderPools_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ListProviderPools"
-	ControlPlaneService_ListProviderPoolHistory_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ListProviderPoolHistory"
-	ControlPlaneService_GetResource_FullMethodName                              = "/controlplane.v1.ControlPlaneService/GetResource"
-	ControlPlaneService_ListResources_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ListResources"
-	ControlPlaneService_SearchResources_FullMethodName                          = "/controlplane.v1.ControlPlaneService/SearchResources"
-	ControlPlaneService_SearchMemoryRecords_FullMethodName                      = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
-	ControlPlaneService_ListAuditEvents_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
-	ControlPlaneService_ListRuntimeIncidents_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents"
-	ControlPlaneService_ListTombstones_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ListTombstones"
-	ControlPlaneService_GetDiagnostics_FullMethodName                           = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
-	ControlPlaneService_ListOutboxFailures_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
-	ControlPlaneService_RepairOutboxEvent_FullMethodName                        = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
-	ControlPlaneService_AdmitOwnerSession_FullMethodName                        = "/controlplane.v1.ControlPlaneService/AdmitOwnerSession"
-	ControlPlaneService_RevokeOwnerSession_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RevokeOwnerSession"
-	ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName                  = "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS"
-	ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS"
-	ControlPlaneService_CheckGatewayPublicTLS_FullMethodName                    = "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS"
-	ControlPlaneService_EnqueueTurn_FullMethodName                              = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
-	ControlPlaneService_ClaimTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/ClaimTurn"
-	ControlPlaneService_RenewTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/RenewTurn"
-	ControlPlaneService_ReportRuntimeProgress_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ReportRuntimeProgress"
-	ControlPlaneService_CompleteTurn_FullMethodName                             = "/controlplane.v1.ControlPlaneService/CompleteTurn"
-	ControlPlaneService_RetryTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/RetryTurn"
-	ControlPlaneService_CancelTurn_FullMethodName                               = "/controlplane.v1.ControlPlaneService/CancelTurn"
-	ControlPlaneService_ManageSession_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ManageSession"
-	ControlPlaneService_BindSessionMCP_FullMethodName                           = "/controlplane.v1.ControlPlaneService/BindSessionMCP"
-	ControlPlaneService_ManageConversationLifecycle_FullMethodName              = "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle"
-	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
-	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
-	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
-	ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName        = "/controlplane.v1.ControlPlaneService/CreateScheduleFromOwnerSelections"
-	ControlPlaneService_ManageOwnerSchedule_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageOwnerSchedule"
-	ControlPlaneService_GetOwnerSchedule_FullMethodName                         = "/controlplane.v1.ControlPlaneService/GetOwnerSchedule"
-	ControlPlaneService_ListOwnerSchedules_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListOwnerSchedules"
-	ControlPlaneService_BindScheduleConfiguration_FullMethodName                = "/controlplane.v1.ControlPlaneService/BindScheduleConfiguration"
-	ControlPlaneService_RunScheduleNow_FullMethodName                           = "/controlplane.v1.ControlPlaneService/RunScheduleNow"
-	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
-	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
-	ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName            = "/controlplane.v1.ControlPlaneService/MaterializeScheduleOccurrence"
-	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
-	ControlPlaneService_CancelScheduleOccurrence_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
-	ControlPlaneService_ListScheduleOccurrences_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
-	ControlPlaneService_ResolveScheduleRecovery_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ResolveScheduleRecovery"
-	ControlPlaneService_StartProcess_FullMethodName                             = "/controlplane.v1.ControlPlaneService/StartProcess"
-	ControlPlaneService_CancelProcess_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CancelProcess"
-	ControlPlaneService_CompleteProcess_FullMethodName                          = "/controlplane.v1.ControlPlaneService/CompleteProcess"
-	ControlPlaneService_ManageRun_FullMethodName                                = "/controlplane.v1.ControlPlaneService/ManageRun"
-	ControlPlaneService_ListOwnerRuns_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ListOwnerRuns"
-	ControlPlaneService_GetRunDetail_FullMethodName                             = "/controlplane.v1.ControlPlaneService/GetRunDetail"
-	ControlPlaneService_ListRunTimeline_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ListRunTimeline"
-	ControlPlaneService_GetRunLineage_FullMethodName                            = "/controlplane.v1.ControlPlaneService/GetRunLineage"
-	ControlPlaneService_ListRunArtifacts_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ListRunArtifacts"
-	ControlPlaneService_RequestOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
-	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
-	ControlPlaneService_ExpireOwnerGate_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
-	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
-	ControlPlaneService_ClaimInteractionDelivery_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ClaimInteractionDelivery"
-	ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName    = "/controlplane.v1.ControlPlaneService/IssueInteractionDeliveryReadbackGrant"
-	ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName = "/controlplane.v1.ControlPlaneService/ValidateInteractionDeliveryReadbackGrant"
-	ControlPlaneService_RecordInteractionDelivery_FullMethodName                = "/controlplane.v1.ControlPlaneService/RecordInteractionDelivery"
-	ControlPlaneService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
-	ControlPlaneService_ListBackups_FullMethodName                              = "/controlplane.v1.ControlPlaneService/ListBackups"
-	ControlPlaneService_GetBackup_FullMethodName                                = "/controlplane.v1.ControlPlaneService/GetBackup"
-	ControlPlaneService_RestoreBackup_FullMethodName                            = "/controlplane.v1.ControlPlaneService/RestoreBackup"
-	ControlPlaneService_GetRestoreOperation_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRestoreOperation"
-	ControlPlaneService_ListRestoreOperations_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListRestoreOperations"
-	ControlPlaneService_ManageWorkspaceBackup_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageWorkspaceBackup"
-	ControlPlaneService_GetWorkspaceBackup_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetWorkspaceBackup"
-	ControlPlaneService_ListWorkspaceBackups_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListWorkspaceBackups"
-	ControlPlaneService_ManageWorkspaceRestore_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ManageWorkspaceRestore"
-	ControlPlaneService_GetWorkspaceRestore_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetWorkspaceRestore"
-	ControlPlaneService_ListWorkspaceRestores_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListWorkspaceRestores"
-	ControlPlaneService_ManageRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRuntimeIncident"
-	ControlPlaneService_GetRuntimeIncident_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRuntimeIncident"
-	ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName               = "/controlplane.v1.ControlPlaneService/ListRuntimeIncidentHistory"
-	ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping"
-	ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName            = "/controlplane.v1.ControlPlaneService/GetWorkspaceMattermostMapping"
-	ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName          = "/controlplane.v1.ControlPlaneService/ListWorkspaceMattermostMappings"
-	ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName            = "/controlplane.v1.ControlPlaneService/GetLegacyConfigurationCutover"
-	ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName          = "/controlplane.v1.ControlPlaneService/ListLegacyConfigurationCutovers"
-	ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName        = "/controlplane.v1.ControlPlaneService/ResolveLegacyConfigurationCutover"
-	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
-	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
-	ControlPlaneService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRoleImageRecipe"
-	ControlPlaneService_GetRoleImageRecipe_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRoleImageRecipe"
-	ControlPlaneService_ClaimImageBuild_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimImageBuild"
-	ControlPlaneService_RenewImageBuild_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewImageBuild"
-	ControlPlaneService_ReportImageBuildProgress_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ReportImageBuildProgress"
-	ControlPlaneService_CompleteImageBuild_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CompleteImageBuild"
-	ControlPlaneService_FailImageBuild_FullMethodName                           = "/controlplane.v1.ControlPlaneService/FailImageBuild"
-	ControlPlaneService_ManageImageBuild_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ManageImageBuild"
-	ControlPlaneService_ClaimImageAdmission_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ClaimImageAdmission"
-	ControlPlaneService_RecordImageAdmission_FullMethodName                     = "/controlplane.v1.ControlPlaneService/RecordImageAdmission"
-	ControlPlaneService_ClaimImagePromotion_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ClaimImagePromotion"
-	ControlPlaneService_AuthorizeImagePromotion_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AuthorizeImagePromotion"
-	ControlPlaneService_CompleteImagePromotion_FullMethodName                   = "/controlplane.v1.ControlPlaneService/CompleteImagePromotion"
-	ControlPlaneService_GetRoleImageBuild_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetRoleImageBuild"
-	ControlPlaneService_GetRuntimeRevision_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
-	ControlPlaneService_RecordMemoryEmbedding_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
-	ControlPlaneService_ClaimRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
-	ControlPlaneService_SetResourceRetentionPolicy_FullMethodName               = "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy"
-	ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName            = "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy"
-	ControlPlaneService_GetResourceRetentionPolicy_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy"
-	ControlPlaneService_HoldRuntimeRetention_FullMethodName                     = "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention"
-	ControlPlaneService_ReleaseRuntimeRetention_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention"
-	ControlPlaneService_GetRuntimeExecution_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
-	ControlPlaneService_GetRuntimeMaterialization_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetRuntimeMaterialization"
-	ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName                   = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeOutput"
-	ControlPlaneService_RegisterRuntimeOutput_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RegisterRuntimeOutput"
-	ControlPlaneService_AdmitRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
-	ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeRestoreEffect"
-	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
-	ControlPlaneService_RecordRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
-	ControlPlaneService_CompleteRuntimeExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
-	ControlPlaneService_CancelRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
-	ControlPlaneService_RetryRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
-	ControlPlaneService_ManageRuntimeAction_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageRuntimeAction"
-	ControlPlaneService_RescheduleRuntimeExecution_FullMethodName               = "/controlplane.v1.ControlPlaneService/RescheduleRuntimeExecution"
-	ControlPlaneService_ExpireRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
-	ControlPlaneService_RecordRuntimeArchive_FullMethodName                     = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
-	ControlPlaneService_VerifyRuntimeRestore_FullMethodName                     = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
-	ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName                 = "/controlplane.v1.ControlPlaneService/BindRuntimeRestoreTarget"
-	ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeRehydrate"
-	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
-	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName       = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
-	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName        = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
-	ControlPlaneService_ResolveIntegrationSession_FullMethodName                = "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession"
-	ControlPlaneService_SuspendForIntegrationApproval_FullMethodName            = "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval"
-	ControlPlaneService_ApproveIntegrationInvocation_FullMethodName             = "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation"
-	ControlPlaneService_RejectIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation"
-	ControlPlaneService_ExpireIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation"
-	ControlPlaneService_CancelIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation"
-	ControlPlaneService_BeginIntegrationExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution"
-	ControlPlaneService_CompleteIntegrationExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution"
-	ControlPlaneService_FailIntegrationExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
-	ControlPlaneService_GetIntegrationContinuation_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
-	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName       = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
-	ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName              = "/controlplane.v1.ControlPlaneService/PrepareLegacyGraphMigration"
-	ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName          = "/controlplane.v1.ControlPlaneService/MaterializeLegacyGraphMigration"
-	ControlPlaneService_GetLegacyGraphMigration_FullMethodName                  = "/controlplane.v1.ControlPlaneService/GetLegacyGraphMigration"
-	ControlPlaneService_AbortLegacyGraphMigration_FullMethodName                = "/controlplane.v1.ControlPlaneService/AbortLegacyGraphMigration"
-	ControlPlaneService_CheckReadiness_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CheckReadiness"
+	PlatformQueryService_GetBootstrapState_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetOverview_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetOverview"
+	PlatformQueryService_ListPlatformCapabilities_FullMethodName   = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListProjects_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_GetProject_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetProject"
+	PlatformQueryService_ListProjectMemberships_FullMethodName     = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
+	PlatformQueryService_ListAgents_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListAgents"
+	PlatformQueryService_GetAgent_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListWorkflows_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListWorkflows"
+	PlatformQueryService_GetWorkflow_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetWorkflow"
+	PlatformQueryService_ListRuns_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListRuns"
+	PlatformQueryService_GetRun_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetRun"
+	PlatformQueryService_GetRunGraph_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRunGraph"
+	PlatformQueryService_ListRunEvents_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListRunEvents"
+	PlatformQueryService_ListOwnerGates_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_GetOwnerGate_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
+	PlatformQueryService_ListArtifacts_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListArtifacts"
+	PlatformQueryService_GetArtifact_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_ListSchedules_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_ListIntegrationDefinitions_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
+	PlatformQueryService_ListIntegrationConnections_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
+	PlatformQueryService_GetIntegrationConnection_FullMethodName   = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetAdministration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetAdministration"
+	PlatformQueryService_ListAuditEvents_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 )
 
-// ControlPlaneServiceClient is the client API for ControlPlaneService service.
+// PlatformQueryServiceClient is the client API for PlatformQueryService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
-// Actor, организация, область проекта и полномочия не принимаются в нагрузке:
-// транспорт получает их только из проверенного контекста авторизации #186.
-type ControlPlaneServiceClient interface {
-	// CreateProject выполняет версионированную операцию ControlPlaneService.
-	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
-	// ListProjects выполняет версионированную операцию ControlPlaneService.
+type PlatformQueryServiceClient interface {
+	GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error)
+	GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error)
+	ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
-	// UpdateProject изменяет только exact owner project после tenant resolution.
-	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
-	// DeleteProject атомарно завершает lifecycle пустого owner project.
-	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
-	// CreateResource выполняет версионированную операцию ControlPlaneService.
-	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
-	// UpdateResource выполняет версионированную операцию ControlPlaneService.
-	UpdateResource(ctx context.Context, in *UpdateResourceRequest, opts ...grpc.CallOption) (*UpdateResourceResponse, error)
-	// TransitionResource выполняет версионированную операцию ControlPlaneService.
-	TransitionResource(ctx context.Context, in *TransitionResourceRequest, opts ...grpc.CallOption) (*TransitionResourceResponse, error)
-	// DeleteResource выполняет версионированную операцию ControlPlaneService.
-	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
-	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
-	ManageAccessResource(ctx context.Context, in *ManageAccessResourceRequest, opts ...grpc.CallOption) (*ManageAccessResourceResponse, error)
-	// DetachAccessResource атомарно переводит Git-owned TEAM/ROLE/PROMPT_PROFILE
-	// в UI ownership без принятия spec или source от вызывающего.
-	DetachAccessResource(ctx context.Context, in *DetachAccessResourceRequest, opts ...grpc.CallOption) (*DetachAccessResourceResponse, error)
-	// CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
-	// из авторитетной закреплённой версии источника.
-	CopyAccessResource(ctx context.Context, in *CopyAccessResourceRequest, opts ...grpc.CallOption) (*CopyAccessResourceResponse, error)
-	// ManageRoleDefinition — закрытый create/update/archive/delete реестр.
-	ManageRoleDefinition(ctx context.Context, in *ManageRoleDefinitionRequest, opts ...grpc.CallOption) (*ManageRoleDefinitionResponse, error)
-	// ReconcileGitRoleDefinition — единственный Git-owned create/update path.
-	ReconcileGitRoleDefinition(ctx context.Context, in *ReconcileGitRoleDefinitionRequest, opts ...grpc.CallOption) (*ReconcileGitRoleDefinitionResponse, error)
-	// ManageAgent — закрытый UI lifecycle и pause/resume/enable/disable реестр Agent.
-	ManageAgent(ctx context.Context, in *ManageAgentRequest, opts ...grpc.CallOption) (*ManageAgentResponse, error)
-	// ReconcileGitAgent — единственный Git-owned create/update path Agent.
-	ReconcileGitAgent(ctx context.Context, in *ReconcileGitAgentRequest, opts ...grpc.CallOption) (*ReconcileGitAgentResponse, error)
-	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
-	ManageAgentMattermostBotIdentity(ctx context.Context, in *ManageAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*ManageAgentMattermostBotIdentityResponse, error)
-	// GetOwnerConfigurationCatalog возвращает server-authored runtime и Schedule selections.
-	GetOwnerConfigurationCatalog(ctx context.Context, in *GetOwnerConfigurationCatalogRequest, opts ...grpc.CallOption) (*GetOwnerConfigurationCatalogResponse, error)
-	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
-	ManageAgentAssignment(ctx context.Context, in *ManageAgentAssignmentRequest, opts ...grpc.CallOption) (*ManageAgentAssignmentResponse, error)
-	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
-	ManageInstructionSet(ctx context.Context, in *ManageInstructionSetRequest, opts ...grpc.CallOption) (*ManageInstructionSetResponse, error)
-	// ReconcileGitInstructionSet — единственный Git-owned content update path.
-	ReconcileGitInstructionSet(ctx context.Context, in *ReconcileGitInstructionSetRequest, opts ...grpc.CallOption) (*ReconcileGitInstructionSetResponse, error)
-	// CompareInstructionSetVersions сравнивает две exact immutable версии.
-	CompareInstructionSetVersions(ctx context.Context, in *CompareInstructionSetVersionsRequest, opts ...grpc.CallOption) (*CompareInstructionSetVersionsResponse, error)
-	// ManageProviderConnectionReference принимает только metadata проверенного provider receipt.
-	ManageProviderConnectionReference(ctx context.Context, in *ManageProviderConnectionReferenceRequest, opts ...grpc.CallOption) (*ManageProviderConnectionReferenceResponse, error)
-	// ManageProviderPool фиксирует version-pinned eligibility/weight snapshot.
-	ManageProviderPool(ctx context.Context, in *ManageProviderPoolRequest, opts ...grpc.CallOption) (*ManageProviderPoolResponse, error)
-	// ReconcileGitProviderPool — единственный Git-owned pool snapshot path.
-	ReconcileGitProviderPool(ctx context.Context, in *ReconcileGitProviderPoolRequest, opts ...grpc.CallOption) (*ReconcileGitProviderPoolResponse, error)
-	// GetRoleDefinition возвращает typed owner projection.
-	GetRoleDefinition(ctx context.Context, in *GetRoleDefinitionRequest, opts ...grpc.CallOption) (*GetRoleDefinitionResponse, error)
-	// ListRoleDefinitions возвращает typed owner collection.
-	ListRoleDefinitions(ctx context.Context, in *ListRoleDefinitionsRequest, opts ...grpc.CallOption) (*ListRoleDefinitionsResponse, error)
-	// ListRoleDefinitionHistory возвращает immutable snapshots агрегата.
-	ListRoleDefinitionHistory(ctx context.Context, in *ListRoleDefinitionHistoryRequest, opts ...grpc.CallOption) (*ListRoleDefinitionHistoryResponse, error)
-	// GetAgent возвращает typed owner projection.
-	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error)
-	// ListAgents возвращает typed owner collection.
+	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
+	ListProjectMemberships(ctx context.Context, in *ListProjectMembershipsRequest, opts ...grpc.CallOption) (*ListProjectMembershipsResponse, error)
 	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
-	// ListAgentHistory возвращает immutable snapshots агрегата.
-	ListAgentHistory(ctx context.Context, in *ListAgentHistoryRequest, opts ...grpc.CallOption) (*ListAgentHistoryResponse, error)
-	// GetAgentAssignment возвращает typed owner projection.
-	GetAgentAssignment(ctx context.Context, in *GetAgentAssignmentRequest, opts ...grpc.CallOption) (*GetAgentAssignmentResponse, error)
-	// ListAgentAssignments возвращает typed owner collection.
-	ListAgentAssignments(ctx context.Context, in *ListAgentAssignmentsRequest, opts ...grpc.CallOption) (*ListAgentAssignmentsResponse, error)
-	// ListAgentAssignmentHistory возвращает immutable snapshots агрегата.
-	ListAgentAssignmentHistory(ctx context.Context, in *ListAgentAssignmentHistoryRequest, opts ...grpc.CallOption) (*ListAgentAssignmentHistoryResponse, error)
-	// GetInstructionSet возвращает текущую typed owner projection.
-	GetInstructionSet(ctx context.Context, in *GetInstructionSetRequest, opts ...grpc.CallOption) (*GetInstructionSetResponse, error)
-	// ListInstructionSets возвращает typed owner collection.
-	ListInstructionSets(ctx context.Context, in *ListInstructionSetsRequest, opts ...grpc.CallOption) (*ListInstructionSetsResponse, error)
-	// ListInstructionSetHistory возвращает immutable content versions.
-	ListInstructionSetHistory(ctx context.Context, in *ListInstructionSetHistoryRequest, opts ...grpc.CallOption) (*ListInstructionSetHistoryResponse, error)
-	// GetProviderConnectionReference возвращает только masked metadata.
-	GetProviderConnectionReference(ctx context.Context, in *GetProviderConnectionReferenceRequest, opts ...grpc.CallOption) (*GetProviderConnectionReferenceResponse, error)
-	// ListProviderConnectionReferences возвращает только masked metadata.
-	ListProviderConnectionReferences(ctx context.Context, in *ListProviderConnectionReferencesRequest, opts ...grpc.CallOption) (*ListProviderConnectionReferencesResponse, error)
-	// ListProviderConnectionReferenceHistory возвращает metadata snapshots без provider payload.
-	ListProviderConnectionReferenceHistory(ctx context.Context, in *ListProviderConnectionReferenceHistoryRequest, opts ...grpc.CallOption) (*ListProviderConnectionReferenceHistoryResponse, error)
-	// GetProviderPool возвращает immutable eligibility snapshot.
-	GetProviderPool(ctx context.Context, in *GetProviderPoolRequest, opts ...grpc.CallOption) (*GetProviderPoolResponse, error)
-	// ListProviderPools возвращает typed owner collection.
-	ListProviderPools(ctx context.Context, in *ListProviderPoolsRequest, opts ...grpc.CallOption) (*ListProviderPoolsResponse, error)
-	// ListProviderPoolHistory возвращает immutable snapshots агрегата.
-	ListProviderPoolHistory(ctx context.Context, in *ListProviderPoolHistoryRequest, opts ...grpc.CallOption) (*ListProviderPoolHistoryResponse, error)
-	// GetResource выполняет версионированную операцию ControlPlaneService.
-	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
-	// ListResources выполняет версионированную операцию ControlPlaneService.
-	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
-	// SearchResources выполняет версионированную операцию ControlPlaneService.
-	SearchResources(ctx context.Context, in *SearchResourcesRequest, opts ...grpc.CallOption) (*SearchResourcesResponse, error)
-	// SearchMemoryRecords выполняет версионированную операцию ControlPlaneService.
-	SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error)
-	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
+	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error)
+	ListWorkflows(ctx context.Context, in *ListWorkflowsRequest, opts ...grpc.CallOption) (*ListWorkflowsResponse, error)
+	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*GetWorkflowResponse, error)
+	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
+	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
+	GetRunGraph(ctx context.Context, in *GetRunGraphRequest, opts ...grpc.CallOption) (*GetRunGraphResponse, error)
+	ListRunEvents(ctx context.Context, in *ListRunEventsRequest, opts ...grpc.CallOption) (*ListRunEventsResponse, error)
+	ListOwnerGates(ctx context.Context, in *ListOwnerGatesRequest, opts ...grpc.CallOption) (*ListOwnerGatesResponse, error)
+	GetOwnerGate(ctx context.Context, in *GetOwnerGateRequest, opts ...grpc.CallOption) (*GetOwnerGateResponse, error)
+	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
+	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
+	ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error)
+	ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error)
+	ListIntegrationConnections(ctx context.Context, in *ListIntegrationConnectionsRequest, opts ...grpc.CallOption) (*ListIntegrationConnectionsResponse, error)
+	GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error)
+	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
-	// ListRuntimeIncidents возвращает typed watchdog evidence в owner boundary.
-	ListRuntimeIncidents(ctx context.Context, in *ListRuntimeIncidentsRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentsResponse, error)
-	// ListTombstones выполняет версионированную операцию ControlPlaneService.
-	ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error)
-	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
-	GetDiagnostics(ctx context.Context, in *GetDiagnosticsRequest, opts ...grpc.CallOption) (*GetDiagnosticsResponse, error)
-	// ListOutboxFailures возвращает ограниченный terminal repair contour.
-	ListOutboxFailures(ctx context.Context, in *ListOutboxFailuresRequest, opts ...grpc.CallOption) (*ListOutboxFailuresResponse, error)
-	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
-	RepairOutboxEvent(ctx context.Context, in *RepairOutboxEventRequest, opts ...grpc.CallOption) (*RepairOutboxEventResponse, error)
-	// AdmitOwnerSession фиксирует current OIDC session revision и credential digest
-	// после специализированного proof, не принимая actor/tenant/session из payload.
-	AdmitOwnerSession(ctx context.Context, in *AdmitOwnerSessionRequest, opts ...grpc.CallOption) (*AdmitOwnerSessionResponse, error)
-	// RevokeOwnerSession закрывает только exact current browser session.
-	RevokeOwnerSession(ctx context.Context, in *RevokeOwnerSessionRequest, opts ...grpc.CallOption) (*RevokeOwnerSessionResponse, error)
-	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
-	// обслуживаемое APPLIED generation.
-	PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error)
-	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
-	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
-	ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error)
-	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
-	CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error)
-	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
-	EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error)
-	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
-	// ограниченную аренду.
-	ClaimTurn(ctx context.Context, in *ClaimTurnRequest, opts ...grpc.CallOption) (*ClaimTurnResponse, error)
-	// RenewTurn продлевает только аренду текущей попытки, fence и поколения.
-	RenewTurn(ctx context.Context, in *RenewTurnRequest, opts ...grpc.CallOption) (*RenewTurnResponse, error)
-	// ReportRuntimeProgress создаёт durable owner delivery, не завершая Turn.
-	ReportRuntimeProgress(ctx context.Context, in *ReportRuntimeProgressRequest, opts ...grpc.CallOption) (*ReportRuntimeProgressResponse, error)
-	// CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
-	CompleteTurn(ctx context.Context, in *CompleteTurnRequest, opts ...grpc.CallOption) (*CompleteTurnResponse, error)
-	// RetryTurn выполняет версионированную операцию ControlPlaneService.
-	RetryTurn(ctx context.Context, in *RetryTurnRequest, opts ...grpc.CallOption) (*RetryTurnResponse, error)
-	// CancelTurn выполняет версионированную операцию ControlPlaneService.
-	CancelTurn(ctx context.Context, in *CancelTurnRequest, opts ...grpc.CallOption) (*CancelTurnResponse, error)
-	// ManageSession — единственный путь жизненного цикла SESSION; привязку
-	// провайдера выбирает сервер.
-	ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error)
-	// BindSessionMCP закрепляет bot-service-owned session token как свежую
-	// immutable credential binding exact control Session.
-	BindSessionMCP(ctx context.Context, in *BindSessionMCPRequest, opts ...grpc.CallOption) (*BindSessionMCPResponse, error)
-	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
-	// delete/restore/finalize path без доступа gateway к generic transition.
-	ManageConversationLifecycle(ctx context.Context, in *ManageConversationLifecycleRequest, opts ...grpc.CallOption) (*ManageConversationLifecycleResponse, error)
-	// ManageMemoryRecord связывает область и владельца с проверенным actor.
-	ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error)
-	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
-	// ходом, попыткой и рабочей нагрузкой.
-	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
-	// ManageSchedule изменяет расписание только через закрытые действия сервера.
-	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
-	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
-	// selections и атомарно закрепляет server-resolved target tuple.
-	CreateScheduleFromOwnerSelections(ctx context.Context, in *CreateScheduleFromOwnerSelectionsRequest, opts ...grpc.CallOption) (*CreateScheduleFromOwnerSelectionsResponse, error)
-	// ManageOwnerSchedule создаёт либо обновляет Schedule из basic owner intent.
-	ManageOwnerSchedule(ctx context.Context, in *ManageOwnerScheduleRequest, opts ...grpc.CallOption) (*ManageOwnerScheduleResponse, error)
-	// GetOwnerSchedule возвращает безопасную effective basic/advanced проекцию.
-	GetOwnerSchedule(ctx context.Context, in *GetOwnerScheduleRequest, opts ...grpc.CallOption) (*GetOwnerScheduleResponse, error)
-	// ListOwnerSchedules применяет ту же owner eligibility и redaction границу.
-	ListOwnerSchedules(ctx context.Context, in *ListOwnerSchedulesRequest, opts ...grpc.CallOption) (*ListOwnerSchedulesResponse, error)
-	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
-	BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error)
-	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
-	// плановый watermark расписания.
-	RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error)
-	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
-	// среды исполнения.
-	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
-	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	ClaimScheduleOccurrence(ctx context.Context, in *ClaimScheduleOccurrenceRequest, opts ...grpc.CallOption) (*ClaimScheduleOccurrenceResponse, error)
-	// MaterializeScheduleOccurrence расходует одноразовую exact-occurrence capability.
-	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
-	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error)
-	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	CancelScheduleOccurrence(ctx context.Context, in *CancelScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CancelScheduleOccurrenceResponse, error)
-	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
-	ListScheduleOccurrences(ctx context.Context, in *ListScheduleOccurrencesRequest, opts ...grpc.CallOption) (*ListScheduleOccurrencesResponse, error)
-	// ResolveScheduleRecovery — единственный owner repair/cancel/skip path RECOVERY_BLOCKED.
-	ResolveScheduleRecovery(ctx context.Context, in *ResolveScheduleRecoveryRequest, opts ...grpc.CallOption) (*ResolveScheduleRecoveryResponse, error)
-	// StartProcess выполняет версионированную операцию ControlPlaneService.
-	StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error)
-	// CancelProcess выполняет версионированную операцию ControlPlaneService.
-	CancelProcess(ctx context.Context, in *CancelProcessRequest, opts ...grpc.CallOption) (*CancelProcessResponse, error)
-	// CompleteProcess завершает процесс по авторитетному terminal-ходу.
-	CompleteProcess(ctx context.Context, in *CompleteProcessRequest, opts ...grpc.CallOption) (*CompleteProcessResponse, error)
-	// ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
-	ManageRun(ctx context.Context, in *ManageRunRequest, opts ...grpc.CallOption) (*ManageRunResponse, error)
-	// ListOwnerRuns возвращает bounded safe owner projections без UUID joins.
-	ListOwnerRuns(ctx context.Context, in *ListOwnerRunsRequest, opts ...grpc.CallOption) (*ListOwnerRunsResponse, error)
-	// GetRunDetail возвращает exact current graph без authority-bearing token.
-	GetRunDetail(ctx context.Context, in *GetRunDetailRequest, opts ...grpc.CallOption) (*GetRunDetailResponse, error)
-	// ListRunTimeline возвращает bounded typed audit timeline.
-	ListRunTimeline(ctx context.Context, in *ListRunTimelineRequest, opts ...grpc.CallOption) (*ListRunTimelineResponse, error)
-	// GetRunLineage возвращает server-owned root/parent/current lineage.
-	GetRunLineage(ctx context.Context, in *GetRunLineageRequest, opts ...grpc.CallOption) (*GetRunLineageResponse, error)
-	// ListRunArtifacts возвращает typed metadata без artifact bytes.
-	ListRunArtifacts(ctx context.Context, in *ListRunArtifactsRequest, opts ...grpc.CallOption) (*ListRunArtifactsResponse, error)
-	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
-	RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error)
-	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
-	// сервером выбранной ожидающей карточки.
-	ClaimOwnerGateDelivery(ctx context.Context, in *ClaimOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*ClaimOwnerGateDeliveryResponse, error)
-	// ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
-	// просроченную карточку и весь её execution graph.
-	ExpireOwnerGate(ctx context.Context, in *ExpireOwnerGateRequest, opts ...grpc.CallOption) (*ExpireOwnerGateResponse, error)
-	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
-	// принадлежащей серверу.
-	RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error)
-	// ClaimInteractionDelivery потребляет owner-produced durable work final/status/artifact path.
-	ClaimInteractionDelivery(ctx context.Context, in *ClaimInteractionDeliveryRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveryResponse, error)
-	// IssueInteractionDeliveryReadbackGrant выдаёт и сохраняет exact delivery-scoped application credential.
-	IssueInteractionDeliveryReadbackGrant(ctx context.Context, in *IssueInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*IssueInteractionDeliveryReadbackGrantResponse, error)
-	// ValidateInteractionDeliveryReadbackGrant проверяет durable issue/revocation state тем же owner path.
-	ValidateInteractionDeliveryReadbackGrant(ctx context.Context, in *ValidateInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*ValidateInteractionDeliveryReadbackGrantResponse, error)
-	// RecordInteractionDelivery фиксирует exact provider receipt под lease/fence.
-	RecordInteractionDelivery(ctx context.Context, in *RecordInteractionDeliveryRequest, opts ...grpc.CallOption) (*RecordInteractionDeliveryResponse, error)
-	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
-	// ходом и попыткой.
-	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
-	// ListBackups возвращает безопасную owner-проекцию runtime archive evidence.
-	ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error)
-	// GetBackup возвращает exact version backup без storage/worker authority.
-	GetBackup(ctx context.Context, in *GetBackupRequest, opts ...grpc.CallOption) (*GetBackupResponse, error)
-	// RestoreBackup создаёт отдельную server-owned restore operation.
-	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
-	// GetRestoreOperation возвращает единый versioned readback restore graph.
-	GetRestoreOperation(ctx context.Context, in *GetRestoreOperationRequest, opts ...grpc.CallOption) (*GetRestoreOperationResponse, error)
-	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
-	// включая фильтр по backup после потери HTTP Location.
-	ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error)
-	// ManageWorkspaceBackup владеет WORKSPACE/ALL_WORKSPACES snapshot lifecycle.
-	ManageWorkspaceBackup(ctx context.Context, in *ManageWorkspaceBackupRequest, opts ...grpc.CallOption) (*ManageWorkspaceBackupResponse, error)
-	// GetWorkspaceBackup возвращает exact immutable membership и terminal state.
-	GetWorkspaceBackup(ctx context.Context, in *GetWorkspaceBackupRequest, opts ...grpc.CallOption) (*GetWorkspaceBackupResponse, error)
-	// ListWorkspaceBackups возвращает owner-scoped discovery/rejoin path.
-	ListWorkspaceBackups(ctx context.Context, in *ListWorkspaceBackupsRequest, opts ...grpc.CallOption) (*ListWorkspaceBackupsResponse, error)
-	// ManageWorkspaceRestore владеет fresh attempt/generation/revoke lifecycle.
-	ManageWorkspaceRestore(ctx context.Context, in *ManageWorkspaceRestoreRequest, opts ...grpc.CallOption) (*ManageWorkspaceRestoreResponse, error)
-	// GetWorkspaceRestore возвращает exact version-pinned restore envelope.
-	GetWorkspaceRestore(ctx context.Context, in *GetWorkspaceRestoreRequest, opts ...grpc.CallOption) (*GetWorkspaceRestoreResponse, error)
-	// ListWorkspaceRestores возвращает owner-scoped discovery/rejoin path.
-	ListWorkspaceRestores(ctx context.Context, in *ListWorkspaceRestoresRequest, opts ...grpc.CallOption) (*ListWorkspaceRestoresResponse, error)
-	// ManageRuntimeIncident применяет закрытые acknowledge/retry/release/close действия.
-	ManageRuntimeIncident(ctx context.Context, in *ManageRuntimeIncidentRequest, opts ...grpc.CallOption) (*ManageRuntimeIncidentResponse, error)
-	// GetRuntimeIncident возвращает exact version incident projection.
-	GetRuntimeIncident(ctx context.Context, in *GetRuntimeIncidentRequest, opts ...grpc.CallOption) (*GetRuntimeIncidentResponse, error)
-	// ListRuntimeIncidentHistory возвращает immutable action history.
-	ListRuntimeIncidentHistory(ctx context.Context, in *ListRuntimeIncidentHistoryRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentHistoryResponse, error)
-	// ManageWorkspaceMattermostMapping принимает только authority-registered provider readback receipt.
-	ManageWorkspaceMattermostMapping(ctx context.Context, in *ManageWorkspaceMattermostMappingRequest, opts ...grpc.CallOption) (*ManageWorkspaceMattermostMappingResponse, error)
-	// GetWorkspaceMattermostMapping возвращает mapping metadata без provider credentials.
-	GetWorkspaceMattermostMapping(ctx context.Context, in *GetWorkspaceMattermostMappingRequest, opts ...grpc.CallOption) (*GetWorkspaceMattermostMappingResponse, error)
-	// ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
-	ListWorkspaceMattermostMappings(ctx context.Context, in *ListWorkspaceMattermostMappingsRequest, opts ...grpc.CallOption) (*ListWorkspaceMattermostMappingsResponse, error)
-	// Get/ListLegacyConfigurationCutover дают typed per-row upgrade readback.
-	GetLegacyConfigurationCutover(ctx context.Context, in *GetLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*GetLegacyConfigurationCutoverResponse, error)
-	ListLegacyConfigurationCutovers(ctx context.Context, in *ListLegacyConfigurationCutoversRequest, opts ...grpc.CallOption) (*ListLegacyConfigurationCutoversResponse, error)
-	// ResolveLegacyConfigurationCutover атомарно материализует target catalog из
-	// immutable legacy graph и exact content; authority IDs сервер не принимает.
-	ResolveLegacyConfigurationCutover(ctx context.Context, in *ResolveLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*ResolveLegacyConfigurationCutoverResponse, error)
-	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
-	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
-	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
-	RecordArtifactScan(ctx context.Context, in *RecordArtifactScanRequest, opts ...grpc.CallOption) (*RecordArtifactScanResponse, error)
-	// ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
-	// и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
-	ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error)
-	// GetRoleImageRecipe возвращает владельцу exact version полной редактируемой
-	// спецификации; secret references остаются ссылками, а значения не возвращаются.
-	GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error)
-	// ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
-	// из payload и возвращает секретный installation block только в этом ответе.
-	ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error)
-	// RenewImageBuild продлевает только current attempt/fence/grant generation.
-	RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error)
-	// ReportImageBuildProgress фиксирует только bounded stage/progress без build input.
-	ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error)
-	// CompleteImageBuild закрепляет staging digest и provenance exact immutable tuple.
-	CompleteImageBuild(ctx context.Context, in *CompleteImageBuildRequest, opts ...grpc.CallOption) (*CompleteImageBuildResponse, error)
-	// FailImageBuild закрывает current attempt безопасным error code без log payload.
-	FailImageBuild(ctx context.Context, in *FailImageBuildRequest, opts ...grpc.CallOption) (*FailImageBuildResponse, error)
-	// ManageImageBuild — закрытый owner path cancel/retry/expiry/dead-letter.
-	ManageImageBuild(ctx context.Context, in *ManageImageBuildRequest, opts ...grpc.CallOption) (*ManageImageBuildResponse, error)
-	// ClaimImageAdmission выдаёт independent admission workload exact staging tuple.
-	ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error)
-	// RecordImageAdmission сохраняет SBOM/vulnerability/signature evidence.
-	RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error)
-	// ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
-	// для server-selected accepted artifact; истёкший claim заменяется.
-	ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error)
-	// AuthorizeImagePromotion атомарно расходует current claim до любого
-	// pull-visible side effect и фиксирует durable exact publish authorization.
-	AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error)
-	// CompleteImagePromotion принимает только предварительно сохранённую publish
-	// authorization после exact promoted readback.
-	CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error)
-	// GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
-	GetRoleImageBuild(ctx context.Context, in *GetRoleImageBuildRequest, opts ...grpc.CallOption) (*GetRoleImageBuildResponse, error)
-	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
-	// runtime-controller.
-	GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error)
-	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
-	// источник истины.
-	RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error)
-	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
-	// точной попытки из проверенного runtime grant; request не принимает IDs.
-	ClaimRuntimeExecution(ctx context.Context, in *ClaimRuntimeExecutionRequest, opts ...grpc.CallOption) (*ClaimRuntimeExecutionResponse, error)
-	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
-	SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error)
-	// RetireResourceRetentionPolicy закрывает exact current policy version.
-	RetireResourceRetentionPolicy(ctx context.Context, in *RetireResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*RetireResourceRetentionPolicyResponse, error)
-	// GetResourceRetentionPolicy читает current owner policy без local default.
-	GetResourceRetentionPolicy(ctx context.Context, in *GetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*GetResourceRetentionPolicyResponse, error)
-	// HoldRuntimeRetention устанавливает server-owned manual/legal hold сессии.
-	HoldRuntimeRetention(ctx context.Context, in *HoldRuntimeRetentionRequest, opts ...grpc.CallOption) (*HoldRuntimeRetentionResponse, error)
-	// ReleaseRuntimeRetention снимает exact versioned hold.
-	ReleaseRuntimeRetention(ctx context.Context, in *ReleaseRuntimeRetentionRequest, opts ...grpc.CallOption) (*ReleaseRuntimeRetentionResponse, error)
-	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
-	GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error)
-	// GetRuntimeMaterialization подтверждает один exact execution-bound object
-	// для mediation через interaction-gateway без S3 credential у runner.
-	GetRuntimeMaterialization(ctx context.Context, in *GetRuntimeMaterializationRequest, opts ...grpc.CallOption) (*GetRuntimeMaterializationResponse, error)
-	// AuthorizeRuntimeOutput разрешает gateway один bounded content-addressed put
-	// для exact active execution до обращения к private object store.
-	AuthorizeRuntimeOutput(ctx context.Context, in *AuthorizeRuntimeOutputRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeOutputResponse, error)
-	// RegisterRuntimeOutput атомарно закрепляет проверенный object readback как
-	// server-owned Artifact exact execution; caller не назначает owner.
-	RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error)
-	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
-	AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error)
-	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
-	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
-	AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error)
-	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
-	HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error)
-	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
-	RecordRuntimeIncident(ctx context.Context, in *RecordRuntimeIncidentRequest, opts ...grpc.CallOption) (*RecordRuntimeIncidentResponse, error)
-	// CompleteRuntimeExecution фиксирует единственный terminal result/error.
-	CompleteRuntimeExecution(ctx context.Context, in *CompleteRuntimeExecutionRequest, opts ...grpc.CallOption) (*CompleteRuntimeExecutionResponse, error)
-	// CancelRuntimeExecution закрывает весь graph исполнения одной owner transaction.
-	CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error)
-	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
-	RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error)
-	// ManageRuntimeAction разрешает Stop/Retry только из проверенного interaction
-	// callback и сам выбирает current Turn/RuntimeExecution tuple внутри owner boundary.
-	ManageRuntimeAction(ctx context.Context, in *ManageRuntimeActionRequest, opts ...grpc.CallOption) (*ManageRuntimeActionResponse, error)
-	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
-	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
-	RescheduleRuntimeExecution(ctx context.Context, in *RescheduleRuntimeExecutionRequest, opts ...grpc.CallOption) (*RescheduleRuntimeExecutionResponse, error)
-	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
-	ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error)
-	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
-	RecordRuntimeArchive(ctx context.Context, in *RecordRuntimeArchiveRequest, opts ...grpc.CallOption) (*RecordRuntimeArchiveResponse, error)
-	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
-	VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error)
-	// BindRuntimeRestoreTarget одноразово связывает restore с exact новой PVC.
-	BindRuntimeRestoreTarget(ctx context.Context, in *BindRuntimeRestoreTargetRequest, opts ...grpc.CallOption) (*BindRuntimeRestoreTargetResponse, error)
-	// CompleteRuntimeRehydrate потребляет restore assignment после durable proof
-	// и до запуска role Pod.
-	CompleteRuntimeRehydrate(ctx context.Context, in *CompleteRuntimeRehydrateRequest, opts ...grpc.CallOption) (*CompleteRuntimeRehydrateResponse, error)
-	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
-	AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error)
-	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
-	ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
-	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
-	ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error)
-	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
-	ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error)
-	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
-	SuspendForIntegrationApproval(ctx context.Context, in *SuspendForIntegrationApprovalRequest, opts ...grpc.CallOption) (*SuspendForIntegrationApprovalResponse, error)
-	// ApproveIntegrationInvocation фиксирует единственное положительное решение.
-	ApproveIntegrationInvocation(ctx context.Context, in *ApproveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ApproveIntegrationInvocationResponse, error)
-	// RejectIntegrationInvocation фиксирует отказ и один continuation turn.
-	RejectIntegrationInvocation(ctx context.Context, in *RejectIntegrationInvocationRequest, opts ...grpc.CallOption) (*RejectIntegrationInvocationResponse, error)
-	// ExpireIntegrationInvocation использует только database clock и server state.
-	ExpireIntegrationInvocation(ctx context.Context, in *ExpireIntegrationInvocationRequest, opts ...grpc.CallOption) (*ExpireIntegrationInvocationResponse, error)
-	// CancelIntegrationInvocation закрывает ожидающий или approved intent.
-	CancelIntegrationInvocation(ctx context.Context, in *CancelIntegrationInvocationRequest, opts ...grpc.CallOption) (*CancelIntegrationInvocationResponse, error)
-	// BeginIntegrationExecution ограждает исполнение одобренного invocation.
-	BeginIntegrationExecution(ctx context.Context, in *BeginIntegrationExecutionRequest, opts ...grpc.CallOption) (*BeginIntegrationExecutionResponse, error)
-	// CompleteIntegrationExecution фиксирует structured result и continuation.
-	CompleteIntegrationExecution(ctx context.Context, in *CompleteIntegrationExecutionRequest, opts ...grpc.CallOption) (*CompleteIntegrationExecutionResponse, error)
-	// FailIntegrationExecution фиксирует structured error и continuation.
-	FailIntegrationExecution(ctx context.Context, in *FailIntegrationExecutionRequest, opts ...grpc.CallOption) (*FailIntegrationExecutionResponse, error)
-	// GetIntegrationContinuation разрешает version-pinned structured rejoin по
-	// проверенному current turn; request не принимает continuation IDs.
-	GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error)
-	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
-	AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error)
-	// PrepareLegacyGraphMigration сохраняет immutable typed plan без business mutation.
-	PrepareLegacyGraphMigration(ctx context.Context, in *PrepareLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*PrepareLegacyGraphMigrationResponse, error)
-	// MaterializeLegacyGraphMigration атомарно создаёт весь owner graph.
-	MaterializeLegacyGraphMigration(ctx context.Context, in *MaterializeLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*MaterializeLegacyGraphMigrationResponse, error)
-	// GetLegacyGraphMigration выполняет version-pinned readback плана.
-	GetLegacyGraphMigration(ctx context.Context, in *GetLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*GetLegacyGraphMigrationResponse, error)
-	// AbortLegacyGraphMigration выбирает ABORTED только для PREPARED плана.
-	AbortLegacyGraphMigration(ctx context.Context, in *AbortLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*AbortLegacyGraphMigrationResponse, error)
-	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
-	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
 
-type controlPlaneServiceClient struct {
+type platformQueryServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewControlPlaneServiceClient(cc grpc.ClientConnInterface) ControlPlaneServiceClient {
-	return &controlPlaneServiceClient{cc}
+func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
+	return &platformQueryServiceClient{cc}
 }
 
-func (c *controlPlaneServiceClient) CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error) {
+func (c *platformQueryServiceClient) GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateProjectResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CreateProject_FullMethodName, in, out, cOpts...)
+	out := new(GetBootstrapStateResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetBootstrapState_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error) {
+func (c *platformQueryServiceClient) GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOverviewResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetOverview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPlatformCapabilitiesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListPlatformCapabilities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProjectsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListProjects_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListProjects_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error) {
+func (c *platformQueryServiceClient) GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateProjectResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_UpdateProject_FullMethodName, in, out, cOpts...)
+	out := new(GetProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error) {
+func (c *platformQueryServiceClient) ListProjectMemberships(ctx context.Context, in *ListProjectMembershipsRequest, opts ...grpc.CallOption) (*ListProjectMembershipsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteProjectResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteProject_FullMethodName, in, out, cOpts...)
+	out := new(ListProjectMembershipsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListProjectMemberships_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CreateResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) UpdateResource(ctx context.Context, in *UpdateResourceRequest, opts ...grpc.CallOption) (*UpdateResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_UpdateResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) TransitionResource(ctx context.Context, in *TransitionResourceRequest, opts ...grpc.CallOption) (*TransitionResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TransitionResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_TransitionResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageAccessResource(ctx context.Context, in *ManageAccessResourceRequest, opts ...grpc.CallOption) (*ManageAccessResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageAccessResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAccessResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DetachAccessResource(ctx context.Context, in *DetachAccessResourceRequest, opts ...grpc.CallOption) (*DetachAccessResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DetachAccessResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DetachAccessResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CopyAccessResource(ctx context.Context, in *CopyAccessResourceRequest, opts ...grpc.CallOption) (*CopyAccessResourceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CopyAccessResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CopyAccessResource_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageRoleDefinition(ctx context.Context, in *ManageRoleDefinitionRequest, opts ...grpc.CallOption) (*ManageRoleDefinitionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageRoleDefinitionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRoleDefinition_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReconcileGitRoleDefinition(ctx context.Context, in *ReconcileGitRoleDefinitionRequest, opts ...grpc.CallOption) (*ReconcileGitRoleDefinitionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReconcileGitRoleDefinitionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageAgent(ctx context.Context, in *ManageAgentRequest, opts ...grpc.CallOption) (*ManageAgentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageAgentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReconcileGitAgent(ctx context.Context, in *ReconcileGitAgentRequest, opts ...grpc.CallOption) (*ReconcileGitAgentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReconcileGitAgentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitAgent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageAgentMattermostBotIdentity(ctx context.Context, in *ManageAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*ManageAgentMattermostBotIdentityResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageAgentMattermostBotIdentityResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetOwnerConfigurationCatalog(ctx context.Context, in *GetOwnerConfigurationCatalogRequest, opts ...grpc.CallOption) (*GetOwnerConfigurationCatalogResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetOwnerConfigurationCatalogResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageAgentAssignment(ctx context.Context, in *ManageAgentAssignmentRequest, opts ...grpc.CallOption) (*ManageAgentAssignmentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageAgentAssignmentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgentAssignment_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageInstructionSet(ctx context.Context, in *ManageInstructionSetRequest, opts ...grpc.CallOption) (*ManageInstructionSetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageInstructionSetResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageInstructionSet_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReconcileGitInstructionSet(ctx context.Context, in *ReconcileGitInstructionSetRequest, opts ...grpc.CallOption) (*ReconcileGitInstructionSetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReconcileGitInstructionSetResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitInstructionSet_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompareInstructionSetVersions(ctx context.Context, in *CompareInstructionSetVersionsRequest, opts ...grpc.CallOption) (*CompareInstructionSetVersionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompareInstructionSetVersionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompareInstructionSetVersions_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageProviderConnectionReference(ctx context.Context, in *ManageProviderConnectionReferenceRequest, opts ...grpc.CallOption) (*ManageProviderConnectionReferenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageProviderConnectionReferenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageProviderConnectionReference_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageProviderPool(ctx context.Context, in *ManageProviderPoolRequest, opts ...grpc.CallOption) (*ManageProviderPoolResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageProviderPoolResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageProviderPool_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReconcileGitProviderPool(ctx context.Context, in *ReconcileGitProviderPoolRequest, opts ...grpc.CallOption) (*ReconcileGitProviderPoolResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReconcileGitProviderPoolResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitProviderPool_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRoleDefinition(ctx context.Context, in *GetRoleDefinitionRequest, opts ...grpc.CallOption) (*GetRoleDefinitionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRoleDefinitionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRoleDefinition_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRoleDefinitions(ctx context.Context, in *ListRoleDefinitionsRequest, opts ...grpc.CallOption) (*ListRoleDefinitionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRoleDefinitionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRoleDefinitions_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRoleDefinitionHistory(ctx context.Context, in *ListRoleDefinitionHistoryRequest, opts ...grpc.CallOption) (*ListRoleDefinitionHistoryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRoleDefinitionHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRoleDefinitionHistory_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetAgentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetAgent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error) {
+func (c *platformQueryServiceClient) ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAgentsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAgents_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListAgents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListAgentHistory(ctx context.Context, in *ListAgentHistoryRequest, opts ...grpc.CallOption) (*ListAgentHistoryResponse, error) {
+func (c *platformQueryServiceClient) GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListAgentHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAgentHistory_FullMethodName, in, out, cOpts...)
+	out := new(GetAgentResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAgent_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetAgentAssignment(ctx context.Context, in *GetAgentAssignmentRequest, opts ...grpc.CallOption) (*GetAgentAssignmentResponse, error) {
+func (c *platformQueryServiceClient) ListWorkflows(ctx context.Context, in *ListWorkflowsRequest, opts ...grpc.CallOption) (*ListWorkflowsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetAgentAssignmentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetAgentAssignment_FullMethodName, in, out, cOpts...)
+	out := new(ListWorkflowsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListWorkflows_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListAgentAssignments(ctx context.Context, in *ListAgentAssignmentsRequest, opts ...grpc.CallOption) (*ListAgentAssignmentsResponse, error) {
+func (c *platformQueryServiceClient) GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*GetWorkflowResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListAgentAssignmentsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAgentAssignments_FullMethodName, in, out, cOpts...)
+	out := new(GetWorkflowResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetWorkflow_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListAgentAssignmentHistory(ctx context.Context, in *ListAgentAssignmentHistoryRequest, opts ...grpc.CallOption) (*ListAgentAssignmentHistoryResponse, error) {
+func (c *platformQueryServiceClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListAgentAssignmentHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAgentAssignmentHistory_FullMethodName, in, out, cOpts...)
+	out := new(ListRunsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetInstructionSet(ctx context.Context, in *GetInstructionSetRequest, opts ...grpc.CallOption) (*GetInstructionSetResponse, error) {
+func (c *platformQueryServiceClient) GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetInstructionSetResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetInstructionSet_FullMethodName, in, out, cOpts...)
+	out := new(GetRunResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRun_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListInstructionSets(ctx context.Context, in *ListInstructionSetsRequest, opts ...grpc.CallOption) (*ListInstructionSetsResponse, error) {
+func (c *platformQueryServiceClient) GetRunGraph(ctx context.Context, in *GetRunGraphRequest, opts ...grpc.CallOption) (*GetRunGraphResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListInstructionSetsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListInstructionSets_FullMethodName, in, out, cOpts...)
+	out := new(GetRunGraphResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRunGraph_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListInstructionSetHistory(ctx context.Context, in *ListInstructionSetHistoryRequest, opts ...grpc.CallOption) (*ListInstructionSetHistoryResponse, error) {
+func (c *platformQueryServiceClient) ListRunEvents(ctx context.Context, in *ListRunEventsRequest, opts ...grpc.CallOption) (*ListRunEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListInstructionSetHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListInstructionSetHistory_FullMethodName, in, out, cOpts...)
+	out := new(ListRunEventsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListRunEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetProviderConnectionReference(ctx context.Context, in *GetProviderConnectionReferenceRequest, opts ...grpc.CallOption) (*GetProviderConnectionReferenceResponse, error) {
+func (c *platformQueryServiceClient) ListOwnerGates(ctx context.Context, in *ListOwnerGatesRequest, opts ...grpc.CallOption) (*ListOwnerGatesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetProviderConnectionReferenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetProviderConnectionReference_FullMethodName, in, out, cOpts...)
+	out := new(ListOwnerGatesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListOwnerGates_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListProviderConnectionReferences(ctx context.Context, in *ListProviderConnectionReferencesRequest, opts ...grpc.CallOption) (*ListProviderConnectionReferencesResponse, error) {
+func (c *platformQueryServiceClient) GetOwnerGate(ctx context.Context, in *GetOwnerGateRequest, opts ...grpc.CallOption) (*GetOwnerGateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListProviderConnectionReferencesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListProviderConnectionReferences_FullMethodName, in, out, cOpts...)
+	out := new(GetOwnerGateResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetOwnerGate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListProviderConnectionReferenceHistory(ctx context.Context, in *ListProviderConnectionReferenceHistoryRequest, opts ...grpc.CallOption) (*ListProviderConnectionReferenceHistoryResponse, error) {
+func (c *platformQueryServiceClient) ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListProviderConnectionReferenceHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName, in, out, cOpts...)
+	out := new(ListArtifactsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListArtifacts_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetProviderPool(ctx context.Context, in *GetProviderPoolRequest, opts ...grpc.CallOption) (*GetProviderPoolResponse, error) {
+func (c *platformQueryServiceClient) GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetProviderPoolResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetProviderPool_FullMethodName, in, out, cOpts...)
+	out := new(GetArtifactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetArtifact_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListProviderPools(ctx context.Context, in *ListProviderPoolsRequest, opts ...grpc.CallOption) (*ListProviderPoolsResponse, error) {
+func (c *platformQueryServiceClient) ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListProviderPoolsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListProviderPools_FullMethodName, in, out, cOpts...)
+	out := new(ListSchedulesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListSchedules_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListProviderPoolHistory(ctx context.Context, in *ListProviderPoolHistoryRequest, opts ...grpc.CallOption) (*ListProviderPoolHistoryResponse, error) {
+func (c *platformQueryServiceClient) ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListProviderPoolHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListProviderPoolHistory_FullMethodName, in, out, cOpts...)
+	out := new(ListIntegrationDefinitionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListIntegrationDefinitions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error) {
+func (c *platformQueryServiceClient) ListIntegrationConnections(ctx context.Context, in *ListIntegrationConnectionsRequest, opts ...grpc.CallOption) (*ListIntegrationConnectionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetResourceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetResource_FullMethodName, in, out, cOpts...)
+	out := new(ListIntegrationConnectionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListIntegrationConnections_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error) {
+func (c *platformQueryServiceClient) GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListResourcesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListResources_FullMethodName, in, out, cOpts...)
+	out := new(GetIntegrationConnectionResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetIntegrationConnection_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) SearchResources(ctx context.Context, in *SearchResourcesRequest, opts ...grpc.CallOption) (*SearchResourcesResponse, error) {
+func (c *platformQueryServiceClient) GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SearchResourcesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SearchResources_FullMethodName, in, out, cOpts...)
+	out := new(GetAdministrationResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAdministration_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SearchMemoryRecordsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SearchMemoryRecords_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
+func (c *platformQueryServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAuditEventsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAuditEvents_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListAuditEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListRuntimeIncidents(ctx context.Context, in *ListRuntimeIncidentsRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRuntimeIncidentsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRuntimeIncidents_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListTombstonesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListTombstones_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetDiagnostics(ctx context.Context, in *GetDiagnosticsRequest, opts ...grpc.CallOption) (*GetDiagnosticsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetDiagnosticsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetDiagnostics_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListOutboxFailures(ctx context.Context, in *ListOutboxFailuresRequest, opts ...grpc.CallOption) (*ListOutboxFailuresResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListOutboxFailuresResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListOutboxFailures_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RepairOutboxEvent(ctx context.Context, in *RepairOutboxEventRequest, opts ...grpc.CallOption) (*RepairOutboxEventResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RepairOutboxEventResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RepairOutboxEvent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AdmitOwnerSession(ctx context.Context, in *AdmitOwnerSessionRequest, opts ...grpc.CallOption) (*AdmitOwnerSessionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AdmitOwnerSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AdmitOwnerSession_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RevokeOwnerSession(ctx context.Context, in *RevokeOwnerSessionRequest, opts ...grpc.CallOption) (*RevokeOwnerSessionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RevokeOwnerSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RevokeOwnerSession_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PrepareGatewayPublicTLSResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ConfirmGatewayPublicTLSResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CheckGatewayPublicTLSResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CheckGatewayPublicTLS_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EnqueueTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_EnqueueTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimTurn(ctx context.Context, in *ClaimTurnRequest, opts ...grpc.CallOption) (*ClaimTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RenewTurn(ctx context.Context, in *RenewTurnRequest, opts ...grpc.CallOption) (*RenewTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RenewTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RenewTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReportRuntimeProgress(ctx context.Context, in *ReportRuntimeProgressRequest, opts ...grpc.CallOption) (*ReportRuntimeProgressResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReportRuntimeProgressResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReportRuntimeProgress_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteTurn(ctx context.Context, in *CompleteTurnRequest, opts ...grpc.CallOption) (*CompleteTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RetryTurn(ctx context.Context, in *RetryTurnRequest, opts ...grpc.CallOption) (*RetryTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RetryTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RetryTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CancelTurn(ctx context.Context, in *CancelTurnRequest, opts ...grpc.CallOption) (*CancelTurnResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CancelTurnResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CancelTurn_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSession_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) BindSessionMCP(ctx context.Context, in *BindSessionMCPRequest, opts ...grpc.CallOption) (*BindSessionMCPResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BindSessionMCPResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_BindSessionMCP_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageConversationLifecycle(ctx context.Context, in *ManageConversationLifecycleRequest, opts ...grpc.CallOption) (*ManageConversationLifecycleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageConversationLifecycleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageConversationLifecycle_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageMemoryRecordResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageMemoryRecord_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageWorkClaimResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageWorkClaim_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageScheduleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSchedule_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CreateScheduleFromOwnerSelections(ctx context.Context, in *CreateScheduleFromOwnerSelectionsRequest, opts ...grpc.CallOption) (*CreateScheduleFromOwnerSelectionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateScheduleFromOwnerSelectionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageOwnerSchedule(ctx context.Context, in *ManageOwnerScheduleRequest, opts ...grpc.CallOption) (*ManageOwnerScheduleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageOwnerScheduleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageOwnerSchedule_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetOwnerSchedule(ctx context.Context, in *GetOwnerScheduleRequest, opts ...grpc.CallOption) (*GetOwnerScheduleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetOwnerScheduleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetOwnerSchedule_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListOwnerSchedules(ctx context.Context, in *ListOwnerSchedulesRequest, opts ...grpc.CallOption) (*ListOwnerSchedulesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListOwnerSchedulesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListOwnerSchedules_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BindScheduleConfigurationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_BindScheduleConfiguration_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RunScheduleNowResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RunScheduleNow_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimDueSchedulesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimDueSchedules_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimScheduleOccurrence(ctx context.Context, in *ClaimScheduleOccurrenceRequest, opts ...grpc.CallOption) (*ClaimScheduleOccurrenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimScheduleOccurrenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimScheduleOccurrence_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MaterializeScheduleOccurrenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteScheduleOccurrenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteScheduleOccurrence_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CancelScheduleOccurrence(ctx context.Context, in *CancelScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CancelScheduleOccurrenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CancelScheduleOccurrenceResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CancelScheduleOccurrence_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListScheduleOccurrences(ctx context.Context, in *ListScheduleOccurrencesRequest, opts ...grpc.CallOption) (*ListScheduleOccurrencesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListScheduleOccurrencesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListScheduleOccurrences_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ResolveScheduleRecovery(ctx context.Context, in *ResolveScheduleRecoveryRequest, opts ...grpc.CallOption) (*ResolveScheduleRecoveryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveScheduleRecoveryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveScheduleRecovery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StartProcessResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StartProcess_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CancelProcess(ctx context.Context, in *CancelProcessRequest, opts ...grpc.CallOption) (*CancelProcessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CancelProcessResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CancelProcess_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteProcess(ctx context.Context, in *CompleteProcessRequest, opts ...grpc.CallOption) (*CompleteProcessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteProcessResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteProcess_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageRun(ctx context.Context, in *ManageRunRequest, opts ...grpc.CallOption) (*ManageRunResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageRunResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRun_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListOwnerRuns(ctx context.Context, in *ListOwnerRunsRequest, opts ...grpc.CallOption) (*ListOwnerRunsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListOwnerRunsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListOwnerRuns_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRunDetail(ctx context.Context, in *GetRunDetailRequest, opts ...grpc.CallOption) (*GetRunDetailResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRunDetailResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRunDetail_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRunTimeline(ctx context.Context, in *ListRunTimelineRequest, opts ...grpc.CallOption) (*ListRunTimelineResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRunTimelineResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRunTimeline_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRunLineage(ctx context.Context, in *GetRunLineageRequest, opts ...grpc.CallOption) (*GetRunLineageResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRunLineageResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRunLineage_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRunArtifacts(ctx context.Context, in *ListRunArtifactsRequest, opts ...grpc.CallOption) (*ListRunArtifactsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRunArtifactsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRunArtifacts_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RequestOwnerGate(ctx context.Context, in *RequestOwnerGateRequest, opts ...grpc.CallOption) (*RequestOwnerGateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RequestOwnerGateResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RequestOwnerGate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimOwnerGateDelivery(ctx context.Context, in *ClaimOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*ClaimOwnerGateDeliveryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimOwnerGateDeliveryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ExpireOwnerGate(ctx context.Context, in *ExpireOwnerGateRequest, opts ...grpc.CallOption) (*ExpireOwnerGateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ExpireOwnerGateResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireOwnerGate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordOwnerGateDeliveryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordOwnerGateDelivery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimInteractionDelivery(ctx context.Context, in *ClaimInteractionDeliveryRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimInteractionDeliveryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimInteractionDelivery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) IssueInteractionDeliveryReadbackGrant(ctx context.Context, in *IssueInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*IssueInteractionDeliveryReadbackGrantResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(IssueInteractionDeliveryReadbackGrantResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ValidateInteractionDeliveryReadbackGrant(ctx context.Context, in *ValidateInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*ValidateInteractionDeliveryReadbackGrantResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ValidateInteractionDeliveryReadbackGrantResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordInteractionDelivery(ctx context.Context, in *RecordInteractionDeliveryRequest, opts ...grpc.CallOption) (*RecordInteractionDeliveryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordInteractionDeliveryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordInteractionDelivery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveOwnerGateResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveOwnerGate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListBackupsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListBackups_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetBackup(ctx context.Context, in *GetBackupRequest, opts ...grpc.CallOption) (*GetBackupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetBackupResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RestoreBackupResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RestoreBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRestoreOperation(ctx context.Context, in *GetRestoreOperationRequest, opts ...grpc.CallOption) (*GetRestoreOperationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRestoreOperationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRestoreOperation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRestoreOperationsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRestoreOperations_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageWorkspaceBackup(ctx context.Context, in *ManageWorkspaceBackupRequest, opts ...grpc.CallOption) (*ManageWorkspaceBackupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageWorkspaceBackupResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageWorkspaceBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetWorkspaceBackup(ctx context.Context, in *GetWorkspaceBackupRequest, opts ...grpc.CallOption) (*GetWorkspaceBackupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWorkspaceBackupResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetWorkspaceBackup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListWorkspaceBackups(ctx context.Context, in *ListWorkspaceBackupsRequest, opts ...grpc.CallOption) (*ListWorkspaceBackupsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListWorkspaceBackupsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListWorkspaceBackups_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageWorkspaceRestore(ctx context.Context, in *ManageWorkspaceRestoreRequest, opts ...grpc.CallOption) (*ManageWorkspaceRestoreResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageWorkspaceRestoreResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageWorkspaceRestore_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetWorkspaceRestore(ctx context.Context, in *GetWorkspaceRestoreRequest, opts ...grpc.CallOption) (*GetWorkspaceRestoreResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWorkspaceRestoreResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetWorkspaceRestore_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListWorkspaceRestores(ctx context.Context, in *ListWorkspaceRestoresRequest, opts ...grpc.CallOption) (*ListWorkspaceRestoresResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListWorkspaceRestoresResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListWorkspaceRestores_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageRuntimeIncident(ctx context.Context, in *ManageRuntimeIncidentRequest, opts ...grpc.CallOption) (*ManageRuntimeIncidentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageRuntimeIncidentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRuntimeIncident_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRuntimeIncident(ctx context.Context, in *GetRuntimeIncidentRequest, opts ...grpc.CallOption) (*GetRuntimeIncidentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRuntimeIncidentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeIncident_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRuntimeIncidentHistory(ctx context.Context, in *ListRuntimeIncidentHistoryRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentHistoryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRuntimeIncidentHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageWorkspaceMattermostMapping(ctx context.Context, in *ManageWorkspaceMattermostMappingRequest, opts ...grpc.CallOption) (*ManageWorkspaceMattermostMappingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageWorkspaceMattermostMappingResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetWorkspaceMattermostMapping(ctx context.Context, in *GetWorkspaceMattermostMappingRequest, opts ...grpc.CallOption) (*GetWorkspaceMattermostMappingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWorkspaceMattermostMappingResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListWorkspaceMattermostMappings(ctx context.Context, in *ListWorkspaceMattermostMappingsRequest, opts ...grpc.CallOption) (*ListWorkspaceMattermostMappingsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListWorkspaceMattermostMappingsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetLegacyConfigurationCutover(ctx context.Context, in *GetLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*GetLegacyConfigurationCutoverResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetLegacyConfigurationCutoverResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListLegacyConfigurationCutovers(ctx context.Context, in *ListLegacyConfigurationCutoversRequest, opts ...grpc.CallOption) (*ListLegacyConfigurationCutoversResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListLegacyConfigurationCutoversResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ResolveLegacyConfigurationCutover(ctx context.Context, in *ResolveLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*ResolveLegacyConfigurationCutoverResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveLegacyConfigurationCutoverResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterArtifactResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RegisterArtifact_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordArtifactScan(ctx context.Context, in *RecordArtifactScanRequest, opts ...grpc.CallOption) (*RecordArtifactScanResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordArtifactScanResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordArtifactScan_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageRoleImageRecipeResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRoleImageRecipe_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRoleImageRecipeResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRoleImageRecipe_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RenewImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RenewImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReportImageBuildProgressResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReportImageBuildProgress_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteImageBuild(ctx context.Context, in *CompleteImageBuildRequest, opts ...grpc.CallOption) (*CompleteImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) FailImageBuild(ctx context.Context, in *FailImageBuildRequest, opts ...grpc.CallOption) (*FailImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_FailImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageImageBuild(ctx context.Context, in *ManageImageBuildRequest, opts ...grpc.CallOption) (*ManageImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimImageAdmissionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImageAdmission_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordImageAdmissionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordImageAdmission_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimImagePromotionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImagePromotion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthorizeImagePromotionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeImagePromotion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteImagePromotionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteImagePromotion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRoleImageBuild(ctx context.Context, in *GetRoleImageBuildRequest, opts ...grpc.CallOption) (*GetRoleImageBuildResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRoleImageBuildResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRoleImageBuild_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRuntimeRevisionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeRevision_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordMemoryEmbeddingResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordMemoryEmbedding_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ClaimRuntimeExecution(ctx context.Context, in *ClaimRuntimeExecutionRequest, opts ...grpc.CallOption) (*ClaimRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClaimRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetResourceRetentionPolicyResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SetResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RetireResourceRetentionPolicy(ctx context.Context, in *RetireResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*RetireResourceRetentionPolicyResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RetireResourceRetentionPolicyResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetResourceRetentionPolicy(ctx context.Context, in *GetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*GetResourceRetentionPolicyResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetResourceRetentionPolicyResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) HoldRuntimeRetention(ctx context.Context, in *HoldRuntimeRetentionRequest, opts ...grpc.CallOption) (*HoldRuntimeRetentionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HoldRuntimeRetentionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_HoldRuntimeRetention_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ReleaseRuntimeRetention(ctx context.Context, in *ReleaseRuntimeRetentionRequest, opts ...grpc.CallOption) (*ReleaseRuntimeRetentionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReleaseRuntimeRetentionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ReleaseRuntimeRetention_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRuntimeMaterialization(ctx context.Context, in *GetRuntimeMaterializationRequest, opts ...grpc.CallOption) (*GetRuntimeMaterializationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRuntimeMaterializationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeMaterialization_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AuthorizeRuntimeOutput(ctx context.Context, in *AuthorizeRuntimeOutputRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeOutputResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthorizeRuntimeOutputResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterRuntimeOutputResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RegisterRuntimeOutput_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AdmitRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AdmitRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthorizeRuntimeRestoreEffectResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HeartbeatRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordRuntimeIncident(ctx context.Context, in *RecordRuntimeIncidentRequest, opts ...grpc.CallOption) (*RecordRuntimeIncidentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordRuntimeIncidentResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordRuntimeIncident_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteRuntimeExecution(ctx context.Context, in *CompleteRuntimeExecutionRequest, opts ...grpc.CallOption) (*CompleteRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CancelRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CancelRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RetryRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RetryRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ManageRuntimeAction(ctx context.Context, in *ManageRuntimeActionRequest, opts ...grpc.CallOption) (*ManageRuntimeActionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ManageRuntimeActionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRuntimeAction_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RescheduleRuntimeExecution(ctx context.Context, in *RescheduleRuntimeExecutionRequest, opts ...grpc.CallOption) (*RescheduleRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RescheduleRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RescheduleRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ExpireRuntimeExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireRuntimeExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordRuntimeArchive(ctx context.Context, in *RecordRuntimeArchiveRequest, opts ...grpc.CallOption) (*RecordRuntimeArchiveResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordRuntimeArchiveResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordRuntimeArchive_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(VerifyRuntimeRestoreResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_VerifyRuntimeRestore_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) BindRuntimeRestoreTarget(ctx context.Context, in *BindRuntimeRestoreTargetRequest, opts ...grpc.CallOption) (*BindRuntimeRestoreTargetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BindRuntimeRestoreTargetResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteRuntimeRehydrate(ctx context.Context, in *CompleteRuntimeRehydrateRequest, opts ...grpc.CallOption) (*CompleteRuntimeRehydrateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteRuntimeRehydrateResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthorizeRuntimeCleanupResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ConsumeRuntimeCleanupAuthorizationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ExpireRuntimeCleanupAuthorizationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveIntegrationSessionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveIntegrationSession_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) SuspendForIntegrationApproval(ctx context.Context, in *SuspendForIntegrationApprovalRequest, opts ...grpc.CallOption) (*SuspendForIntegrationApprovalResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SuspendForIntegrationApprovalResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SuspendForIntegrationApproval_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ApproveIntegrationInvocation(ctx context.Context, in *ApproveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ApproveIntegrationInvocationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ApproveIntegrationInvocationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ApproveIntegrationInvocation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RejectIntegrationInvocation(ctx context.Context, in *RejectIntegrationInvocationRequest, opts ...grpc.CallOption) (*RejectIntegrationInvocationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RejectIntegrationInvocationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RejectIntegrationInvocation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ExpireIntegrationInvocation(ctx context.Context, in *ExpireIntegrationInvocationRequest, opts ...grpc.CallOption) (*ExpireIntegrationInvocationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ExpireIntegrationInvocationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireIntegrationInvocation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CancelIntegrationInvocation(ctx context.Context, in *CancelIntegrationInvocationRequest, opts ...grpc.CallOption) (*CancelIntegrationInvocationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CancelIntegrationInvocationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CancelIntegrationInvocation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) BeginIntegrationExecution(ctx context.Context, in *BeginIntegrationExecutionRequest, opts ...grpc.CallOption) (*BeginIntegrationExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BeginIntegrationExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_BeginIntegrationExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CompleteIntegrationExecution(ctx context.Context, in *CompleteIntegrationExecutionRequest, opts ...grpc.CallOption) (*CompleteIntegrationExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteIntegrationExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteIntegrationExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) FailIntegrationExecution(ctx context.Context, in *FailIntegrationExecutionRequest, opts ...grpc.CallOption) (*FailIntegrationExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FailIntegrationExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_FailIntegrationExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetIntegrationContinuationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetIntegrationContinuation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AcknowledgeIntegrationContinuationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) PrepareLegacyGraphMigration(ctx context.Context, in *PrepareLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*PrepareLegacyGraphMigrationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PrepareLegacyGraphMigrationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) MaterializeLegacyGraphMigration(ctx context.Context, in *MaterializeLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*MaterializeLegacyGraphMigrationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MaterializeLegacyGraphMigrationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetLegacyGraphMigration(ctx context.Context, in *GetLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*GetLegacyGraphMigrationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetLegacyGraphMigrationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetLegacyGraphMigration_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AbortLegacyGraphMigration(ctx context.Context, in *AbortLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*AbortLegacyGraphMigrationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AbortLegacyGraphMigrationResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AbortLegacyGraphMigration_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CheckReadinessResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CheckReadiness_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ControlPlaneServiceServer is the server API for ControlPlaneService service.
-// All implementations must embed UnimplementedControlPlaneServiceServer
+// PlatformQueryServiceServer is the server API for PlatformQueryService service.
+// All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
-//
-// ControlPlaneService владеет желаемым бизнес-состоянием MatterCodex.
-// Actor, организация, область проекта и полномочия не принимаются в нагрузке:
-// транспорт получает их только из проверенного контекста авторизации #186.
-type ControlPlaneServiceServer interface {
-	// CreateProject выполняет версионированную операцию ControlPlaneService.
-	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
-	// ListProjects выполняет версионированную операцию ControlPlaneService.
+type PlatformQueryServiceServer interface {
+	GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error)
+	GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error)
+	ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
-	// UpdateProject изменяет только exact owner project после tenant resolution.
-	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
-	// DeleteProject атомарно завершает lifecycle пустого owner project.
-	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
-	// CreateResource выполняет версионированную операцию ControlPlaneService.
-	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
-	// UpdateResource выполняет версионированную операцию ControlPlaneService.
-	UpdateResource(context.Context, *UpdateResourceRequest) (*UpdateResourceResponse, error)
-	// TransitionResource выполняет версионированную операцию ControlPlaneService.
-	TransitionResource(context.Context, *TransitionResourceRequest) (*TransitionResourceResponse, error)
-	// DeleteResource выполняет версионированную операцию ControlPlaneService.
-	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
-	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
-	ManageAccessResource(context.Context, *ManageAccessResourceRequest) (*ManageAccessResourceResponse, error)
-	// DetachAccessResource атомарно переводит Git-owned TEAM/ROLE/PROMPT_PROFILE
-	// в UI ownership без принятия spec или source от вызывающего.
-	DetachAccessResource(context.Context, *DetachAccessResourceRequest) (*DetachAccessResourceResponse, error)
-	// CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
-	// из авторитетной закреплённой версии источника.
-	CopyAccessResource(context.Context, *CopyAccessResourceRequest) (*CopyAccessResourceResponse, error)
-	// ManageRoleDefinition — закрытый create/update/archive/delete реестр.
-	ManageRoleDefinition(context.Context, *ManageRoleDefinitionRequest) (*ManageRoleDefinitionResponse, error)
-	// ReconcileGitRoleDefinition — единственный Git-owned create/update path.
-	ReconcileGitRoleDefinition(context.Context, *ReconcileGitRoleDefinitionRequest) (*ReconcileGitRoleDefinitionResponse, error)
-	// ManageAgent — закрытый UI lifecycle и pause/resume/enable/disable реестр Agent.
-	ManageAgent(context.Context, *ManageAgentRequest) (*ManageAgentResponse, error)
-	// ReconcileGitAgent — единственный Git-owned create/update path Agent.
-	ReconcileGitAgent(context.Context, *ReconcileGitAgentRequest) (*ReconcileGitAgentResponse, error)
-	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
-	ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error)
-	// GetOwnerConfigurationCatalog возвращает server-authored runtime и Schedule selections.
-	GetOwnerConfigurationCatalog(context.Context, *GetOwnerConfigurationCatalogRequest) (*GetOwnerConfigurationCatalogResponse, error)
-	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
-	ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error)
-	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
-	ManageInstructionSet(context.Context, *ManageInstructionSetRequest) (*ManageInstructionSetResponse, error)
-	// ReconcileGitInstructionSet — единственный Git-owned content update path.
-	ReconcileGitInstructionSet(context.Context, *ReconcileGitInstructionSetRequest) (*ReconcileGitInstructionSetResponse, error)
-	// CompareInstructionSetVersions сравнивает две exact immutable версии.
-	CompareInstructionSetVersions(context.Context, *CompareInstructionSetVersionsRequest) (*CompareInstructionSetVersionsResponse, error)
-	// ManageProviderConnectionReference принимает только metadata проверенного provider receipt.
-	ManageProviderConnectionReference(context.Context, *ManageProviderConnectionReferenceRequest) (*ManageProviderConnectionReferenceResponse, error)
-	// ManageProviderPool фиксирует version-pinned eligibility/weight snapshot.
-	ManageProviderPool(context.Context, *ManageProviderPoolRequest) (*ManageProviderPoolResponse, error)
-	// ReconcileGitProviderPool — единственный Git-owned pool snapshot path.
-	ReconcileGitProviderPool(context.Context, *ReconcileGitProviderPoolRequest) (*ReconcileGitProviderPoolResponse, error)
-	// GetRoleDefinition возвращает typed owner projection.
-	GetRoleDefinition(context.Context, *GetRoleDefinitionRequest) (*GetRoleDefinitionResponse, error)
-	// ListRoleDefinitions возвращает typed owner collection.
-	ListRoleDefinitions(context.Context, *ListRoleDefinitionsRequest) (*ListRoleDefinitionsResponse, error)
-	// ListRoleDefinitionHistory возвращает immutable snapshots агрегата.
-	ListRoleDefinitionHistory(context.Context, *ListRoleDefinitionHistoryRequest) (*ListRoleDefinitionHistoryResponse, error)
-	// GetAgent возвращает typed owner projection.
-	GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error)
-	// ListAgents возвращает typed owner collection.
+	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
+	ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error)
 	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
-	// ListAgentHistory возвращает immutable snapshots агрегата.
-	ListAgentHistory(context.Context, *ListAgentHistoryRequest) (*ListAgentHistoryResponse, error)
-	// GetAgentAssignment возвращает typed owner projection.
-	GetAgentAssignment(context.Context, *GetAgentAssignmentRequest) (*GetAgentAssignmentResponse, error)
-	// ListAgentAssignments возвращает typed owner collection.
-	ListAgentAssignments(context.Context, *ListAgentAssignmentsRequest) (*ListAgentAssignmentsResponse, error)
-	// ListAgentAssignmentHistory возвращает immutable snapshots агрегата.
-	ListAgentAssignmentHistory(context.Context, *ListAgentAssignmentHistoryRequest) (*ListAgentAssignmentHistoryResponse, error)
-	// GetInstructionSet возвращает текущую typed owner projection.
-	GetInstructionSet(context.Context, *GetInstructionSetRequest) (*GetInstructionSetResponse, error)
-	// ListInstructionSets возвращает typed owner collection.
-	ListInstructionSets(context.Context, *ListInstructionSetsRequest) (*ListInstructionSetsResponse, error)
-	// ListInstructionSetHistory возвращает immutable content versions.
-	ListInstructionSetHistory(context.Context, *ListInstructionSetHistoryRequest) (*ListInstructionSetHistoryResponse, error)
-	// GetProviderConnectionReference возвращает только masked metadata.
-	GetProviderConnectionReference(context.Context, *GetProviderConnectionReferenceRequest) (*GetProviderConnectionReferenceResponse, error)
-	// ListProviderConnectionReferences возвращает только masked metadata.
-	ListProviderConnectionReferences(context.Context, *ListProviderConnectionReferencesRequest) (*ListProviderConnectionReferencesResponse, error)
-	// ListProviderConnectionReferenceHistory возвращает metadata snapshots без provider payload.
-	ListProviderConnectionReferenceHistory(context.Context, *ListProviderConnectionReferenceHistoryRequest) (*ListProviderConnectionReferenceHistoryResponse, error)
-	// GetProviderPool возвращает immutable eligibility snapshot.
-	GetProviderPool(context.Context, *GetProviderPoolRequest) (*GetProviderPoolResponse, error)
-	// ListProviderPools возвращает typed owner collection.
-	ListProviderPools(context.Context, *ListProviderPoolsRequest) (*ListProviderPoolsResponse, error)
-	// ListProviderPoolHistory возвращает immutable snapshots агрегата.
-	ListProviderPoolHistory(context.Context, *ListProviderPoolHistoryRequest) (*ListProviderPoolHistoryResponse, error)
-	// GetResource выполняет версионированную операцию ControlPlaneService.
-	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
-	// ListResources выполняет версионированную операцию ControlPlaneService.
-	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
-	// SearchResources выполняет версионированную операцию ControlPlaneService.
-	SearchResources(context.Context, *SearchResourcesRequest) (*SearchResourcesResponse, error)
-	// SearchMemoryRecords выполняет версионированную операцию ControlPlaneService.
-	SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error)
-	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
+	GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error)
+	ListWorkflows(context.Context, *ListWorkflowsRequest) (*ListWorkflowsResponse, error)
+	GetWorkflow(context.Context, *GetWorkflowRequest) (*GetWorkflowResponse, error)
+	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
+	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
+	GetRunGraph(context.Context, *GetRunGraphRequest) (*GetRunGraphResponse, error)
+	ListRunEvents(context.Context, *ListRunEventsRequest) (*ListRunEventsResponse, error)
+	ListOwnerGates(context.Context, *ListOwnerGatesRequest) (*ListOwnerGatesResponse, error)
+	GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error)
+	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
+	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
+	ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error)
+	ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error)
+	ListIntegrationConnections(context.Context, *ListIntegrationConnectionsRequest) (*ListIntegrationConnectionsResponse, error)
+	GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error)
+	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
-	// ListRuntimeIncidents возвращает typed watchdog evidence в owner boundary.
-	ListRuntimeIncidents(context.Context, *ListRuntimeIncidentsRequest) (*ListRuntimeIncidentsResponse, error)
-	// ListTombstones выполняет версионированную операцию ControlPlaneService.
-	ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error)
-	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
-	GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error)
-	// ListOutboxFailures возвращает ограниченный terminal repair contour.
-	ListOutboxFailures(context.Context, *ListOutboxFailuresRequest) (*ListOutboxFailuresResponse, error)
-	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
-	RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error)
-	// AdmitOwnerSession фиксирует current OIDC session revision и credential digest
-	// после специализированного proof, не принимая actor/tenant/session из payload.
-	AdmitOwnerSession(context.Context, *AdmitOwnerSessionRequest) (*AdmitOwnerSessionResponse, error)
-	// RevokeOwnerSession закрывает только exact current browser session.
-	RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error)
-	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
-	// обслуживаемое APPLIED generation.
-	PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error)
-	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
-	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
-	ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error)
-	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
-	CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error)
-	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
-	EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error)
-	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
-	// ограниченную аренду.
-	ClaimTurn(context.Context, *ClaimTurnRequest) (*ClaimTurnResponse, error)
-	// RenewTurn продлевает только аренду текущей попытки, fence и поколения.
-	RenewTurn(context.Context, *RenewTurnRequest) (*RenewTurnResponse, error)
-	// ReportRuntimeProgress создаёт durable owner delivery, не завершая Turn.
-	ReportRuntimeProgress(context.Context, *ReportRuntimeProgressRequest) (*ReportRuntimeProgressResponse, error)
-	// CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
-	CompleteTurn(context.Context, *CompleteTurnRequest) (*CompleteTurnResponse, error)
-	// RetryTurn выполняет версионированную операцию ControlPlaneService.
-	RetryTurn(context.Context, *RetryTurnRequest) (*RetryTurnResponse, error)
-	// CancelTurn выполняет версионированную операцию ControlPlaneService.
-	CancelTurn(context.Context, *CancelTurnRequest) (*CancelTurnResponse, error)
-	// ManageSession — единственный путь жизненного цикла SESSION; привязку
-	// провайдера выбирает сервер.
-	ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error)
-	// BindSessionMCP закрепляет bot-service-owned session token как свежую
-	// immutable credential binding exact control Session.
-	BindSessionMCP(context.Context, *BindSessionMCPRequest) (*BindSessionMCPResponse, error)
-	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
-	// delete/restore/finalize path без доступа gateway к generic transition.
-	ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error)
-	// ManageMemoryRecord связывает область и владельца с проверенным actor.
-	ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error)
-	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
-	// ходом, попыткой и рабочей нагрузкой.
-	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
-	// ManageSchedule изменяет расписание только через закрытые действия сервера.
-	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
-	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
-	// selections и атомарно закрепляет server-resolved target tuple.
-	CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error)
-	// ManageOwnerSchedule создаёт либо обновляет Schedule из basic owner intent.
-	ManageOwnerSchedule(context.Context, *ManageOwnerScheduleRequest) (*ManageOwnerScheduleResponse, error)
-	// GetOwnerSchedule возвращает безопасную effective basic/advanced проекцию.
-	GetOwnerSchedule(context.Context, *GetOwnerScheduleRequest) (*GetOwnerScheduleResponse, error)
-	// ListOwnerSchedules применяет ту же owner eligibility и redaction границу.
-	ListOwnerSchedules(context.Context, *ListOwnerSchedulesRequest) (*ListOwnerSchedulesResponse, error)
-	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
-	BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error)
-	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
-	// плановый watermark расписания.
-	RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error)
-	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
-	// среды исполнения.
-	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
-	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	ClaimScheduleOccurrence(context.Context, *ClaimScheduleOccurrenceRequest) (*ClaimScheduleOccurrenceResponse, error)
-	// MaterializeScheduleOccurrence расходует одноразовую exact-occurrence capability.
-	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
-	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error)
-	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
-	CancelScheduleOccurrence(context.Context, *CancelScheduleOccurrenceRequest) (*CancelScheduleOccurrenceResponse, error)
-	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
-	ListScheduleOccurrences(context.Context, *ListScheduleOccurrencesRequest) (*ListScheduleOccurrencesResponse, error)
-	// ResolveScheduleRecovery — единственный owner repair/cancel/skip path RECOVERY_BLOCKED.
-	ResolveScheduleRecovery(context.Context, *ResolveScheduleRecoveryRequest) (*ResolveScheduleRecoveryResponse, error)
-	// StartProcess выполняет версионированную операцию ControlPlaneService.
-	StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error)
-	// CancelProcess выполняет версионированную операцию ControlPlaneService.
-	CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error)
-	// CompleteProcess завершает процесс по авторитетному terminal-ходу.
-	CompleteProcess(context.Context, *CompleteProcessRequest) (*CompleteProcessResponse, error)
-	// ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
-	ManageRun(context.Context, *ManageRunRequest) (*ManageRunResponse, error)
-	// ListOwnerRuns возвращает bounded safe owner projections без UUID joins.
-	ListOwnerRuns(context.Context, *ListOwnerRunsRequest) (*ListOwnerRunsResponse, error)
-	// GetRunDetail возвращает exact current graph без authority-bearing token.
-	GetRunDetail(context.Context, *GetRunDetailRequest) (*GetRunDetailResponse, error)
-	// ListRunTimeline возвращает bounded typed audit timeline.
-	ListRunTimeline(context.Context, *ListRunTimelineRequest) (*ListRunTimelineResponse, error)
-	// GetRunLineage возвращает server-owned root/parent/current lineage.
-	GetRunLineage(context.Context, *GetRunLineageRequest) (*GetRunLineageResponse, error)
-	// ListRunArtifacts возвращает typed metadata без artifact bytes.
-	ListRunArtifacts(context.Context, *ListRunArtifactsRequest) (*ListRunArtifactsResponse, error)
-	// RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
-	RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error)
-	// ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
-	// сервером выбранной ожидающей карточки.
-	ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error)
-	// ExpireOwnerGate автономно закрывает одну выбранную PostgreSQL
-	// просроченную карточку и весь её execution graph.
-	ExpireOwnerGate(context.Context, *ExpireOwnerGateRequest) (*ExpireOwnerGateResponse, error)
-	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
-	// принадлежащей серверу.
-	RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error)
-	// ClaimInteractionDelivery потребляет owner-produced durable work final/status/artifact path.
-	ClaimInteractionDelivery(context.Context, *ClaimInteractionDeliveryRequest) (*ClaimInteractionDeliveryResponse, error)
-	// IssueInteractionDeliveryReadbackGrant выдаёт и сохраняет exact delivery-scoped application credential.
-	IssueInteractionDeliveryReadbackGrant(context.Context, *IssueInteractionDeliveryReadbackGrantRequest) (*IssueInteractionDeliveryReadbackGrantResponse, error)
-	// ValidateInteractionDeliveryReadbackGrant проверяет durable issue/revocation state тем же owner path.
-	ValidateInteractionDeliveryReadbackGrant(context.Context, *ValidateInteractionDeliveryReadbackGrantRequest) (*ValidateInteractionDeliveryReadbackGrantResponse, error)
-	// RecordInteractionDelivery фиксирует exact provider receipt под lease/fence.
-	RecordInteractionDelivery(context.Context, *RecordInteractionDeliveryRequest) (*RecordInteractionDeliveryResponse, error)
-	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
-	// ходом и попыткой.
-	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
-	// ListBackups возвращает безопасную owner-проекцию runtime archive evidence.
-	ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error)
-	// GetBackup возвращает exact version backup без storage/worker authority.
-	GetBackup(context.Context, *GetBackupRequest) (*GetBackupResponse, error)
-	// RestoreBackup создаёт отдельную server-owned restore operation.
-	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
-	// GetRestoreOperation возвращает единый versioned readback restore graph.
-	GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error)
-	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
-	// включая фильтр по backup после потери HTTP Location.
-	ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error)
-	// ManageWorkspaceBackup владеет WORKSPACE/ALL_WORKSPACES snapshot lifecycle.
-	ManageWorkspaceBackup(context.Context, *ManageWorkspaceBackupRequest) (*ManageWorkspaceBackupResponse, error)
-	// GetWorkspaceBackup возвращает exact immutable membership и terminal state.
-	GetWorkspaceBackup(context.Context, *GetWorkspaceBackupRequest) (*GetWorkspaceBackupResponse, error)
-	// ListWorkspaceBackups возвращает owner-scoped discovery/rejoin path.
-	ListWorkspaceBackups(context.Context, *ListWorkspaceBackupsRequest) (*ListWorkspaceBackupsResponse, error)
-	// ManageWorkspaceRestore владеет fresh attempt/generation/revoke lifecycle.
-	ManageWorkspaceRestore(context.Context, *ManageWorkspaceRestoreRequest) (*ManageWorkspaceRestoreResponse, error)
-	// GetWorkspaceRestore возвращает exact version-pinned restore envelope.
-	GetWorkspaceRestore(context.Context, *GetWorkspaceRestoreRequest) (*GetWorkspaceRestoreResponse, error)
-	// ListWorkspaceRestores возвращает owner-scoped discovery/rejoin path.
-	ListWorkspaceRestores(context.Context, *ListWorkspaceRestoresRequest) (*ListWorkspaceRestoresResponse, error)
-	// ManageRuntimeIncident применяет закрытые acknowledge/retry/release/close действия.
-	ManageRuntimeIncident(context.Context, *ManageRuntimeIncidentRequest) (*ManageRuntimeIncidentResponse, error)
-	// GetRuntimeIncident возвращает exact version incident projection.
-	GetRuntimeIncident(context.Context, *GetRuntimeIncidentRequest) (*GetRuntimeIncidentResponse, error)
-	// ListRuntimeIncidentHistory возвращает immutable action history.
-	ListRuntimeIncidentHistory(context.Context, *ListRuntimeIncidentHistoryRequest) (*ListRuntimeIncidentHistoryResponse, error)
-	// ManageWorkspaceMattermostMapping принимает только authority-registered provider readback receipt.
-	ManageWorkspaceMattermostMapping(context.Context, *ManageWorkspaceMattermostMappingRequest) (*ManageWorkspaceMattermostMappingResponse, error)
-	// GetWorkspaceMattermostMapping возвращает mapping metadata без provider credentials.
-	GetWorkspaceMattermostMapping(context.Context, *GetWorkspaceMattermostMappingRequest) (*GetWorkspaceMattermostMappingResponse, error)
-	// ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
-	ListWorkspaceMattermostMappings(context.Context, *ListWorkspaceMattermostMappingsRequest) (*ListWorkspaceMattermostMappingsResponse, error)
-	// Get/ListLegacyConfigurationCutover дают typed per-row upgrade readback.
-	GetLegacyConfigurationCutover(context.Context, *GetLegacyConfigurationCutoverRequest) (*GetLegacyConfigurationCutoverResponse, error)
-	ListLegacyConfigurationCutovers(context.Context, *ListLegacyConfigurationCutoversRequest) (*ListLegacyConfigurationCutoversResponse, error)
-	// ResolveLegacyConfigurationCutover атомарно материализует target catalog из
-	// immutable legacy graph и exact content; authority IDs сервер не принимает.
-	ResolveLegacyConfigurationCutover(context.Context, *ResolveLegacyConfigurationCutoverRequest) (*ResolveLegacyConfigurationCutoverResponse, error)
-	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
-	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
-	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
-	RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error)
-	// ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
-	// и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
-	ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error)
-	// GetRoleImageRecipe возвращает владельцу exact version полной редактируемой
-	// спецификации; secret references остаются ссылками, а значения не возвращаются.
-	GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error)
-	// ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
-	// из payload и возвращает секретный installation block только в этом ответе.
-	ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error)
-	// RenewImageBuild продлевает только current attempt/fence/grant generation.
-	RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error)
-	// ReportImageBuildProgress фиксирует только bounded stage/progress без build input.
-	ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error)
-	// CompleteImageBuild закрепляет staging digest и provenance exact immutable tuple.
-	CompleteImageBuild(context.Context, *CompleteImageBuildRequest) (*CompleteImageBuildResponse, error)
-	// FailImageBuild закрывает current attempt безопасным error code без log payload.
-	FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error)
-	// ManageImageBuild — закрытый owner path cancel/retry/expiry/dead-letter.
-	ManageImageBuild(context.Context, *ManageImageBuildRequest) (*ManageImageBuildResponse, error)
-	// ClaimImageAdmission выдаёт independent admission workload exact staging tuple.
-	ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error)
-	// RecordImageAdmission сохраняет SBOM/vulnerability/signature evidence.
-	RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error)
-	// ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
-	// для server-selected accepted artifact; истёкший claim заменяется.
-	ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error)
-	// AuthorizeImagePromotion атомарно расходует current claim до любого
-	// pull-visible side effect и фиксирует durable exact publish authorization.
-	AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error)
-	// CompleteImagePromotion принимает только предварительно сохранённую publish
-	// authorization после exact promoted readback.
-	CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error)
-	// GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
-	GetRoleImageBuild(context.Context, *GetRoleImageBuildRequest) (*GetRoleImageBuildResponse, error)
-	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
-	// runtime-controller.
-	GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error)
-	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
-	// источник истины.
-	RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error)
-	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
-	// точной попытки из проверенного runtime grant; request не принимает IDs.
-	ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error)
-	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
-	SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error)
-	// RetireResourceRetentionPolicy закрывает exact current policy version.
-	RetireResourceRetentionPolicy(context.Context, *RetireResourceRetentionPolicyRequest) (*RetireResourceRetentionPolicyResponse, error)
-	// GetResourceRetentionPolicy читает current owner policy без local default.
-	GetResourceRetentionPolicy(context.Context, *GetResourceRetentionPolicyRequest) (*GetResourceRetentionPolicyResponse, error)
-	// HoldRuntimeRetention устанавливает server-owned manual/legal hold сессии.
-	HoldRuntimeRetention(context.Context, *HoldRuntimeRetentionRequest) (*HoldRuntimeRetentionResponse, error)
-	// ReleaseRuntimeRetention снимает exact versioned hold.
-	ReleaseRuntimeRetention(context.Context, *ReleaseRuntimeRetentionRequest) (*ReleaseRuntimeRetentionResponse, error)
-	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
-	GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error)
-	// GetRuntimeMaterialization подтверждает один exact execution-bound object
-	// для mediation через interaction-gateway без S3 credential у runner.
-	GetRuntimeMaterialization(context.Context, *GetRuntimeMaterializationRequest) (*GetRuntimeMaterializationResponse, error)
-	// AuthorizeRuntimeOutput разрешает gateway один bounded content-addressed put
-	// для exact active execution до обращения к private object store.
-	AuthorizeRuntimeOutput(context.Context, *AuthorizeRuntimeOutputRequest) (*AuthorizeRuntimeOutputResponse, error)
-	// RegisterRuntimeOutput атомарно закрепляет проверенный object readback как
-	// server-owned Artifact exact execution; caller не назначает owner.
-	RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error)
-	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
-	AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error)
-	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
-	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
-	AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error)
-	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
-	HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error)
-	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
-	RecordRuntimeIncident(context.Context, *RecordRuntimeIncidentRequest) (*RecordRuntimeIncidentResponse, error)
-	// CompleteRuntimeExecution фиксирует единственный terminal result/error.
-	CompleteRuntimeExecution(context.Context, *CompleteRuntimeExecutionRequest) (*CompleteRuntimeExecutionResponse, error)
-	// CancelRuntimeExecution закрывает весь graph исполнения одной owner transaction.
-	CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error)
-	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
-	RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error)
-	// ManageRuntimeAction разрешает Stop/Retry только из проверенного interaction
-	// callback и сам выбирает current Turn/RuntimeExecution tuple внутри owner boundary.
-	ManageRuntimeAction(context.Context, *ManageRuntimeActionRequest) (*ManageRuntimeActionResponse, error)
-	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
-	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
-	RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error)
-	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
-	ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error)
-	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
-	RecordRuntimeArchive(context.Context, *RecordRuntimeArchiveRequest) (*RecordRuntimeArchiveResponse, error)
-	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
-	VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error)
-	// BindRuntimeRestoreTarget одноразово связывает restore с exact новой PVC.
-	BindRuntimeRestoreTarget(context.Context, *BindRuntimeRestoreTargetRequest) (*BindRuntimeRestoreTargetResponse, error)
-	// CompleteRuntimeRehydrate потребляет restore assignment после durable proof
-	// и до запуска role Pod.
-	CompleteRuntimeRehydrate(context.Context, *CompleteRuntimeRehydrateRequest) (*CompleteRuntimeRehydrateResponse, error)
-	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
-	AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error)
-	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
-	ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
-	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
-	ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error)
-	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
-	ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error)
-	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
-	SuspendForIntegrationApproval(context.Context, *SuspendForIntegrationApprovalRequest) (*SuspendForIntegrationApprovalResponse, error)
-	// ApproveIntegrationInvocation фиксирует единственное положительное решение.
-	ApproveIntegrationInvocation(context.Context, *ApproveIntegrationInvocationRequest) (*ApproveIntegrationInvocationResponse, error)
-	// RejectIntegrationInvocation фиксирует отказ и один continuation turn.
-	RejectIntegrationInvocation(context.Context, *RejectIntegrationInvocationRequest) (*RejectIntegrationInvocationResponse, error)
-	// ExpireIntegrationInvocation использует только database clock и server state.
-	ExpireIntegrationInvocation(context.Context, *ExpireIntegrationInvocationRequest) (*ExpireIntegrationInvocationResponse, error)
-	// CancelIntegrationInvocation закрывает ожидающий или approved intent.
-	CancelIntegrationInvocation(context.Context, *CancelIntegrationInvocationRequest) (*CancelIntegrationInvocationResponse, error)
-	// BeginIntegrationExecution ограждает исполнение одобренного invocation.
-	BeginIntegrationExecution(context.Context, *BeginIntegrationExecutionRequest) (*BeginIntegrationExecutionResponse, error)
-	// CompleteIntegrationExecution фиксирует structured result и continuation.
-	CompleteIntegrationExecution(context.Context, *CompleteIntegrationExecutionRequest) (*CompleteIntegrationExecutionResponse, error)
-	// FailIntegrationExecution фиксирует structured error и continuation.
-	FailIntegrationExecution(context.Context, *FailIntegrationExecutionRequest) (*FailIntegrationExecutionResponse, error)
-	// GetIntegrationContinuation разрешает version-pinned structured rejoin по
-	// проверенному current turn; request не принимает continuation IDs.
-	GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error)
-	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
-	AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error)
-	// PrepareLegacyGraphMigration сохраняет immutable typed plan без business mutation.
-	PrepareLegacyGraphMigration(context.Context, *PrepareLegacyGraphMigrationRequest) (*PrepareLegacyGraphMigrationResponse, error)
-	// MaterializeLegacyGraphMigration атомарно создаёт весь owner graph.
-	MaterializeLegacyGraphMigration(context.Context, *MaterializeLegacyGraphMigrationRequest) (*MaterializeLegacyGraphMigrationResponse, error)
-	// GetLegacyGraphMigration выполняет version-pinned readback плана.
-	GetLegacyGraphMigration(context.Context, *GetLegacyGraphMigrationRequest) (*GetLegacyGraphMigrationResponse, error)
-	// AbortLegacyGraphMigration выбирает ABORTED только для PREPARED плана.
-	AbortLegacyGraphMigration(context.Context, *AbortLegacyGraphMigrationRequest) (*AbortLegacyGraphMigrationResponse, error)
-	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
-	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
-	mustEmbedUnimplementedControlPlaneServiceServer()
+	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
-// UnimplementedControlPlaneServiceServer must be embedded to have
+// UnimplementedPlatformQueryServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedControlPlaneServiceServer struct{}
+type UnimplementedPlatformQueryServiceServer struct{}
 
-func (UnimplementedControlPlaneServiceServer) CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateProject not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBootstrapState not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
+func (UnimplementedPlatformQueryServiceServer) GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOverview not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPlatformCapabilities not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpdateProject not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProjectMemberships not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) UpdateResource(context.Context, *UpdateResourceRequest) (*UpdateResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpdateResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) TransitionResource(context.Context, *TransitionResourceRequest) (*TransitionResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method TransitionResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageAccessResource(context.Context, *ManageAccessResourceRequest) (*ManageAccessResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageAccessResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DetachAccessResource(context.Context, *DetachAccessResourceRequest) (*DetachAccessResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DetachAccessResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CopyAccessResource(context.Context, *CopyAccessResourceRequest) (*CopyAccessResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CopyAccessResource not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageRoleDefinition(context.Context, *ManageRoleDefinitionRequest) (*ManageRoleDefinitionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageRoleDefinition not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReconcileGitRoleDefinition(context.Context, *ReconcileGitRoleDefinitionRequest) (*ReconcileGitRoleDefinitionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReconcileGitRoleDefinition not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageAgent(context.Context, *ManageAgentRequest) (*ManageAgentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageAgent not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReconcileGitAgent(context.Context, *ReconcileGitAgentRequest) (*ReconcileGitAgentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReconcileGitAgent not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageAgentMattermostBotIdentity not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetOwnerConfigurationCatalog(context.Context, *GetOwnerConfigurationCatalogRequest) (*GetOwnerConfigurationCatalogResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetOwnerConfigurationCatalog not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageAgentAssignment not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageInstructionSet(context.Context, *ManageInstructionSetRequest) (*ManageInstructionSetResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageInstructionSet not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReconcileGitInstructionSet(context.Context, *ReconcileGitInstructionSetRequest) (*ReconcileGitInstructionSetResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReconcileGitInstructionSet not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompareInstructionSetVersions(context.Context, *CompareInstructionSetVersionsRequest) (*CompareInstructionSetVersionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompareInstructionSetVersions not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageProviderConnectionReference(context.Context, *ManageProviderConnectionReferenceRequest) (*ManageProviderConnectionReferenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageProviderConnectionReference not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageProviderPool(context.Context, *ManageProviderPoolRequest) (*ManageProviderPoolResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageProviderPool not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReconcileGitProviderPool(context.Context, *ReconcileGitProviderPoolRequest) (*ReconcileGitProviderPoolResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReconcileGitProviderPool not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRoleDefinition(context.Context, *GetRoleDefinitionRequest) (*GetRoleDefinitionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRoleDefinition not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRoleDefinitions(context.Context, *ListRoleDefinitionsRequest) (*ListRoleDefinitionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRoleDefinitions not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRoleDefinitionHistory(context.Context, *ListRoleDefinitionHistoryRequest) (*ListRoleDefinitionHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRoleDefinitionHistory not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetAgent not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error) {
+func (UnimplementedPlatformQueryServiceServer) ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAgents not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListAgentHistory(context.Context, *ListAgentHistoryRequest) (*ListAgentHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListAgentHistory not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgent not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetAgentAssignment(context.Context, *GetAgentAssignmentRequest) (*GetAgentAssignmentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetAgentAssignment not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListWorkflows(context.Context, *ListWorkflowsRequest) (*ListWorkflowsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListWorkflows not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListAgentAssignments(context.Context, *ListAgentAssignmentsRequest) (*ListAgentAssignmentsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListAgentAssignments not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetWorkflow(context.Context, *GetWorkflowRequest) (*GetWorkflowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWorkflow not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListAgentAssignmentHistory(context.Context, *ListAgentAssignmentHistoryRequest) (*ListAgentAssignmentHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListAgentAssignmentHistory not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuns not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetInstructionSet(context.Context, *GetInstructionSetRequest) (*GetInstructionSetResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetInstructionSet not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRun not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListInstructionSets(context.Context, *ListInstructionSetsRequest) (*ListInstructionSetsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListInstructionSets not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetRunGraph(context.Context, *GetRunGraphRequest) (*GetRunGraphResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRunGraph not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListInstructionSetHistory(context.Context, *ListInstructionSetHistoryRequest) (*ListInstructionSetHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListInstructionSetHistory not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListRunEvents(context.Context, *ListRunEventsRequest) (*ListRunEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRunEvents not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetProviderConnectionReference(context.Context, *GetProviderConnectionReferenceRequest) (*GetProviderConnectionReferenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetProviderConnectionReference not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListOwnerGates(context.Context, *ListOwnerGatesRequest) (*ListOwnerGatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOwnerGates not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListProviderConnectionReferences(context.Context, *ListProviderConnectionReferencesRequest) (*ListProviderConnectionReferencesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListProviderConnectionReferences not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOwnerGate not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListProviderConnectionReferenceHistory(context.Context, *ListProviderConnectionReferenceHistoryRequest) (*ListProviderConnectionReferenceHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListProviderConnectionReferenceHistory not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListArtifacts not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetProviderPool(context.Context, *GetProviderPoolRequest) (*GetProviderPoolResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetProviderPool not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArtifact not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListProviderPools(context.Context, *ListProviderPoolsRequest) (*ListProviderPoolsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListProviderPools not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSchedules not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListProviderPoolHistory(context.Context, *ListProviderPoolHistoryRequest) (*ListProviderPoolHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListProviderPoolHistory not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIntegrationDefinitions not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetResource not implemented")
+func (UnimplementedPlatformQueryServiceServer) ListIntegrationConnections(context.Context, *ListIntegrationConnectionsRequest) (*ListIntegrationConnectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIntegrationConnections not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListResources not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIntegrationConnection not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) SearchResources(context.Context, *SearchResourcesRequest) (*SearchResourcesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SearchResources not implemented")
+func (UnimplementedPlatformQueryServiceServer) GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAdministration not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SearchMemoryRecords not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
+func (UnimplementedPlatformQueryServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListRuntimeIncidents(context.Context, *ListRuntimeIncidentsRequest) (*ListRuntimeIncidentsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRuntimeIncidents not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListTombstones not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetDiagnostics(context.Context, *GetDiagnosticsRequest) (*GetDiagnosticsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetDiagnostics not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListOutboxFailures(context.Context, *ListOutboxFailuresRequest) (*ListOutboxFailuresResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListOutboxFailures not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RepairOutboxEvent not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AdmitOwnerSession(context.Context, *AdmitOwnerSessionRequest) (*AdmitOwnerSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AdmitOwnerSession not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RevokeOwnerSession not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PrepareGatewayPublicTLS not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ConfirmGatewayPublicTLS not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckGatewayPublicTLS not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method EnqueueTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimTurn(context.Context, *ClaimTurnRequest) (*ClaimTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RenewTurn(context.Context, *RenewTurnRequest) (*RenewTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RenewTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReportRuntimeProgress(context.Context, *ReportRuntimeProgressRequest) (*ReportRuntimeProgressResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportRuntimeProgress not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteTurn(context.Context, *CompleteTurnRequest) (*CompleteTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RetryTurn(context.Context, *RetryTurnRequest) (*RetryTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RetryTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CancelTurn(context.Context, *CancelTurnRequest) (*CancelTurnResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CancelTurn not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageSession not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) BindSessionMCP(context.Context, *BindSessionMCPRequest) (*BindSessionMCPResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method BindSessionMCP not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageConversationLifecycle not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageMemoryRecord not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageWorkClaim not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageSchedule not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateScheduleFromOwnerSelections not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageOwnerSchedule(context.Context, *ManageOwnerScheduleRequest) (*ManageOwnerScheduleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageOwnerSchedule not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetOwnerSchedule(context.Context, *GetOwnerScheduleRequest) (*GetOwnerScheduleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetOwnerSchedule not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListOwnerSchedules(context.Context, *ListOwnerSchedulesRequest) (*ListOwnerSchedulesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListOwnerSchedules not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method BindScheduleConfiguration not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RunScheduleNow not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimDueSchedules not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimScheduleOccurrence(context.Context, *ClaimScheduleOccurrenceRequest) (*ClaimScheduleOccurrenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimScheduleOccurrence not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method MaterializeScheduleOccurrence not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteScheduleOccurrence not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CancelScheduleOccurrence(context.Context, *CancelScheduleOccurrenceRequest) (*CancelScheduleOccurrenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CancelScheduleOccurrence not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListScheduleOccurrences(context.Context, *ListScheduleOccurrencesRequest) (*ListScheduleOccurrencesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListScheduleOccurrences not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ResolveScheduleRecovery(context.Context, *ResolveScheduleRecoveryRequest) (*ResolveScheduleRecoveryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveScheduleRecovery not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StartProcess not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CancelProcess(context.Context, *CancelProcessRequest) (*CancelProcessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CancelProcess not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteProcess(context.Context, *CompleteProcessRequest) (*CompleteProcessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteProcess not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageRun(context.Context, *ManageRunRequest) (*ManageRunResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageRun not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListOwnerRuns(context.Context, *ListOwnerRunsRequest) (*ListOwnerRunsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListOwnerRuns not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRunDetail(context.Context, *GetRunDetailRequest) (*GetRunDetailResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRunDetail not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRunTimeline(context.Context, *ListRunTimelineRequest) (*ListRunTimelineResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRunTimeline not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRunLineage(context.Context, *GetRunLineageRequest) (*GetRunLineageResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRunLineage not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRunArtifacts(context.Context, *ListRunArtifactsRequest) (*ListRunArtifactsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRunArtifacts not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RequestOwnerGate(context.Context, *RequestOwnerGateRequest) (*RequestOwnerGateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RequestOwnerGate not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimOwnerGateDelivery(context.Context, *ClaimOwnerGateDeliveryRequest) (*ClaimOwnerGateDeliveryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimOwnerGateDelivery not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ExpireOwnerGate(context.Context, *ExpireOwnerGateRequest) (*ExpireOwnerGateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ExpireOwnerGate not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordOwnerGateDelivery not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimInteractionDelivery(context.Context, *ClaimInteractionDeliveryRequest) (*ClaimInteractionDeliveryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimInteractionDelivery not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) IssueInteractionDeliveryReadbackGrant(context.Context, *IssueInteractionDeliveryReadbackGrantRequest) (*IssueInteractionDeliveryReadbackGrantResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method IssueInteractionDeliveryReadbackGrant not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ValidateInteractionDeliveryReadbackGrant(context.Context, *ValidateInteractionDeliveryReadbackGrantRequest) (*ValidateInteractionDeliveryReadbackGrantResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ValidateInteractionDeliveryReadbackGrant not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordInteractionDelivery(context.Context, *RecordInteractionDeliveryRequest) (*RecordInteractionDeliveryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordInteractionDelivery not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListBackups not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetBackup(context.Context, *GetBackupRequest) (*GetBackupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetBackup not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RestoreBackup not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRestoreOperation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRestoreOperations not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageWorkspaceBackup(context.Context, *ManageWorkspaceBackupRequest) (*ManageWorkspaceBackupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageWorkspaceBackup not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetWorkspaceBackup(context.Context, *GetWorkspaceBackupRequest) (*GetWorkspaceBackupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceBackup not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListWorkspaceBackups(context.Context, *ListWorkspaceBackupsRequest) (*ListWorkspaceBackupsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListWorkspaceBackups not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageWorkspaceRestore(context.Context, *ManageWorkspaceRestoreRequest) (*ManageWorkspaceRestoreResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageWorkspaceRestore not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetWorkspaceRestore(context.Context, *GetWorkspaceRestoreRequest) (*GetWorkspaceRestoreResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceRestore not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListWorkspaceRestores(context.Context, *ListWorkspaceRestoresRequest) (*ListWorkspaceRestoresResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListWorkspaceRestores not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageRuntimeIncident(context.Context, *ManageRuntimeIncidentRequest) (*ManageRuntimeIncidentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageRuntimeIncident not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRuntimeIncident(context.Context, *GetRuntimeIncidentRequest) (*GetRuntimeIncidentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRuntimeIncident not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRuntimeIncidentHistory(context.Context, *ListRuntimeIncidentHistoryRequest) (*ListRuntimeIncidentHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRuntimeIncidentHistory not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageWorkspaceMattermostMapping(context.Context, *ManageWorkspaceMattermostMappingRequest) (*ManageWorkspaceMattermostMappingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageWorkspaceMattermostMapping not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetWorkspaceMattermostMapping(context.Context, *GetWorkspaceMattermostMappingRequest) (*GetWorkspaceMattermostMappingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceMattermostMapping not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListWorkspaceMattermostMappings(context.Context, *ListWorkspaceMattermostMappingsRequest) (*ListWorkspaceMattermostMappingsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListWorkspaceMattermostMappings not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetLegacyConfigurationCutover(context.Context, *GetLegacyConfigurationCutoverRequest) (*GetLegacyConfigurationCutoverResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetLegacyConfigurationCutover not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListLegacyConfigurationCutovers(context.Context, *ListLegacyConfigurationCutoversRequest) (*ListLegacyConfigurationCutoversResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListLegacyConfigurationCutovers not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ResolveLegacyConfigurationCutover(context.Context, *ResolveLegacyConfigurationCutoverRequest) (*ResolveLegacyConfigurationCutoverResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveLegacyConfigurationCutover not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RegisterArtifact not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordArtifactScan not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageRoleImageRecipe not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRoleImageRecipe not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RenewImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportImageBuildProgress not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteImageBuild(context.Context, *CompleteImageBuildRequest) (*CompleteImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method FailImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageImageBuild(context.Context, *ManageImageBuildRequest) (*ManageImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimImageAdmission not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordImageAdmission not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimImagePromotion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AuthorizeImagePromotion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteImagePromotion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRoleImageBuild(context.Context, *GetRoleImageBuildRequest) (*GetRoleImageBuildResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRoleImageBuild not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRuntimeRevision not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordMemoryEmbedding not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ClaimRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetResourceRetentionPolicy not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RetireResourceRetentionPolicy(context.Context, *RetireResourceRetentionPolicyRequest) (*RetireResourceRetentionPolicyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RetireResourceRetentionPolicy not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetResourceRetentionPolicy(context.Context, *GetResourceRetentionPolicyRequest) (*GetResourceRetentionPolicyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetResourceRetentionPolicy not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) HoldRuntimeRetention(context.Context, *HoldRuntimeRetentionRequest) (*HoldRuntimeRetentionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method HoldRuntimeRetention not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ReleaseRuntimeRetention(context.Context, *ReleaseRuntimeRetentionRequest) (*ReleaseRuntimeRetentionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReleaseRuntimeRetention not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRuntimeMaterialization(context.Context, *GetRuntimeMaterializationRequest) (*GetRuntimeMaterializationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRuntimeMaterialization not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeOutput(context.Context, *AuthorizeRuntimeOutputRequest) (*AuthorizeRuntimeOutputResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeOutput not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RegisterRuntimeOutput not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AdmitRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeRestoreEffect not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method HeartbeatRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordRuntimeIncident(context.Context, *RecordRuntimeIncidentRequest) (*RecordRuntimeIncidentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordRuntimeIncident not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteRuntimeExecution(context.Context, *CompleteRuntimeExecutionRequest) (*CompleteRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CancelRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RetryRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ManageRuntimeAction(context.Context, *ManageRuntimeActionRequest) (*ManageRuntimeActionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ManageRuntimeAction not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RescheduleRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordRuntimeArchive(context.Context, *RecordRuntimeArchiveRequest) (*RecordRuntimeArchiveResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordRuntimeArchive not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method VerifyRuntimeRestore not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) BindRuntimeRestoreTarget(context.Context, *BindRuntimeRestoreTargetRequest) (*BindRuntimeRestoreTargetResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method BindRuntimeRestoreTarget not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteRuntimeRehydrate(context.Context, *CompleteRuntimeRehydrateRequest) (*CompleteRuntimeRehydrateResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeRehydrate not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeCleanup not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeCleanupAuthorization not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeCleanupAuthorization not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveIntegrationSession not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) SuspendForIntegrationApproval(context.Context, *SuspendForIntegrationApprovalRequest) (*SuspendForIntegrationApprovalResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SuspendForIntegrationApproval not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ApproveIntegrationInvocation(context.Context, *ApproveIntegrationInvocationRequest) (*ApproveIntegrationInvocationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ApproveIntegrationInvocation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RejectIntegrationInvocation(context.Context, *RejectIntegrationInvocationRequest) (*RejectIntegrationInvocationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RejectIntegrationInvocation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ExpireIntegrationInvocation(context.Context, *ExpireIntegrationInvocationRequest) (*ExpireIntegrationInvocationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ExpireIntegrationInvocation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CancelIntegrationInvocation(context.Context, *CancelIntegrationInvocationRequest) (*CancelIntegrationInvocationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CancelIntegrationInvocation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) BeginIntegrationExecution(context.Context, *BeginIntegrationExecutionRequest) (*BeginIntegrationExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method BeginIntegrationExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CompleteIntegrationExecution(context.Context, *CompleteIntegrationExecutionRequest) (*CompleteIntegrationExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteIntegrationExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) FailIntegrationExecution(context.Context, *FailIntegrationExecutionRequest) (*FailIntegrationExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method FailIntegrationExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetIntegrationContinuation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationContinuation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) PrepareLegacyGraphMigration(context.Context, *PrepareLegacyGraphMigrationRequest) (*PrepareLegacyGraphMigrationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PrepareLegacyGraphMigration not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) MaterializeLegacyGraphMigration(context.Context, *MaterializeLegacyGraphMigrationRequest) (*MaterializeLegacyGraphMigrationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method MaterializeLegacyGraphMigration not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetLegacyGraphMigration(context.Context, *GetLegacyGraphMigrationRequest) (*GetLegacyGraphMigrationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetLegacyGraphMigration not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AbortLegacyGraphMigration(context.Context, *AbortLegacyGraphMigrationRequest) (*AbortLegacyGraphMigrationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AbortLegacyGraphMigration not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) mustEmbedUnimplementedControlPlaneServiceServer() {}
-func (UnimplementedControlPlaneServiceServer) testEmbeddedByValue()                             {}
+func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
+func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
 
-// UnsafeControlPlaneServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ControlPlaneServiceServer will
+// UnsafePlatformQueryServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PlatformQueryServiceServer will
 // result in compilation errors.
-type UnsafeControlPlaneServiceServer interface {
-	mustEmbedUnimplementedControlPlaneServiceServer()
+type UnsafePlatformQueryServiceServer interface {
+	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
-func RegisterControlPlaneServiceServer(s grpc.ServiceRegistrar, srv ControlPlaneServiceServer) {
-	// If the following call panics, it indicates UnimplementedControlPlaneServiceServer was
+func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQueryServiceServer) {
+	// If the following call panics, it indicates UnimplementedPlatformQueryServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&ControlPlaneService_ServiceDesc, srv)
+	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
 }
 
-func _ControlPlaneService_CreateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateProjectRequest)
+func _PlatformQueryService_GetBootstrapState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBootstrapStateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CreateProject(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetBootstrapState(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CreateProject_FullMethodName,
+		FullMethod: PlatformQueryService_GetBootstrapState_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CreateProject(ctx, req.(*CreateProjectRequest))
+		return srv.(PlatformQueryServiceServer).GetBootstrapState(ctx, req.(*GetBootstrapStateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PlatformQueryService_GetOverview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOverviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetOverview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetOverview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetOverview(ctx, req.(*GetOverviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListPlatformCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlatformCapabilitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListPlatformCapabilities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListPlatformCapabilities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListPlatformCapabilities(ctx, req.(*ListPlatformCapabilitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListProjectsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListProjects(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListProjects(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListProjects_FullMethodName,
+		FullMethod: PlatformQueryService_ListProjects_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
+		return srv.(PlatformQueryServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_UpdateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateProjectRequest)
+func _PlatformQueryService_GetProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).UpdateProject(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_UpdateProject_FullMethodName,
+		FullMethod: PlatformQueryService_GetProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).UpdateProject(ctx, req.(*UpdateProjectRequest))
+		return srv.(PlatformQueryServiceServer).GetProject(ctx, req.(*GetProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteProjectRequest)
+func _PlatformQueryService_ListProjectMemberships_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProjectMembershipsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListProjectMemberships(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_DeleteProject_FullMethodName,
+		FullMethod: PlatformQueryService_ListProjectMemberships_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
+		return srv.(PlatformQueryServiceServer).ListProjectMemberships(ctx, req.(*ListProjectMembershipsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CreateResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CreateResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CreateResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CreateResource(ctx, req.(*CreateResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_UpdateResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).UpdateResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_UpdateResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).UpdateResource(ctx, req.(*UpdateResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_TransitionResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TransitionResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).TransitionResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_TransitionResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).TransitionResource(ctx, req.(*TransitionResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DeleteResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DeleteResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DeleteResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DeleteResource(ctx, req.(*DeleteResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageAccessResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageAccessResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageAccessResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageAccessResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageAccessResource(ctx, req.(*ManageAccessResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DetachAccessResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DetachAccessResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DetachAccessResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DetachAccessResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DetachAccessResource(ctx, req.(*DetachAccessResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CopyAccessResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CopyAccessResourceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CopyAccessResource(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CopyAccessResource_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CopyAccessResource(ctx, req.(*CopyAccessResourceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageRoleDefinition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageRoleDefinitionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageRoleDefinition(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageRoleDefinition_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageRoleDefinition(ctx, req.(*ManageRoleDefinitionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReconcileGitRoleDefinition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReconcileGitRoleDefinitionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReconcileGitRoleDefinition(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReconcileGitRoleDefinition(ctx, req.(*ReconcileGitRoleDefinitionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageAgentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageAgent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageAgent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageAgent(ctx, req.(*ManageAgentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReconcileGitAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReconcileGitAgentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReconcileGitAgent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReconcileGitAgent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReconcileGitAgent(ctx, req.(*ReconcileGitAgentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageAgentMattermostBotIdentityRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageAgentMattermostBotIdentity(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageAgentMattermostBotIdentity(ctx, req.(*ManageAgentMattermostBotIdentityRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetOwnerConfigurationCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetOwnerConfigurationCatalogRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetOwnerConfigurationCatalog(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetOwnerConfigurationCatalog(ctx, req.(*GetOwnerConfigurationCatalogRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageAgentAssignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageAgentAssignmentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageAgentAssignment(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageAgentAssignment_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageAgentAssignment(ctx, req.(*ManageAgentAssignmentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageInstructionSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageInstructionSetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageInstructionSet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageInstructionSet_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageInstructionSet(ctx, req.(*ManageInstructionSetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReconcileGitInstructionSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReconcileGitInstructionSetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReconcileGitInstructionSet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReconcileGitInstructionSet(ctx, req.(*ReconcileGitInstructionSetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompareInstructionSetVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompareInstructionSetVersionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompareInstructionSetVersions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompareInstructionSetVersions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompareInstructionSetVersions(ctx, req.(*CompareInstructionSetVersionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageProviderConnectionReference_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageProviderConnectionReferenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageProviderConnectionReference(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageProviderConnectionReference(ctx, req.(*ManageProviderConnectionReferenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageProviderPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageProviderPoolRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageProviderPool(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageProviderPool_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageProviderPool(ctx, req.(*ManageProviderPoolRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReconcileGitProviderPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReconcileGitProviderPoolRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReconcileGitProviderPool(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReconcileGitProviderPool(ctx, req.(*ReconcileGitProviderPoolRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRoleDefinition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoleDefinitionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRoleDefinition(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRoleDefinition_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRoleDefinition(ctx, req.(*GetRoleDefinitionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRoleDefinitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRoleDefinitionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRoleDefinitions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRoleDefinitions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRoleDefinitions(ctx, req.(*ListRoleDefinitionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRoleDefinitionHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRoleDefinitionHistoryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRoleDefinitionHistory(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRoleDefinitionHistory_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRoleDefinitionHistory(ctx, req.(*ListRoleDefinitionHistoryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetAgentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetAgent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetAgent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetAgent(ctx, req.(*GetAgentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListAgents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PlatformQueryService_ListAgents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAgentsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAgents(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListAgents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListAgents_FullMethodName,
+		FullMethod: PlatformQueryService_ListAgents_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAgents(ctx, req.(*ListAgentsRequest))
+		return srv.(PlatformQueryServiceServer).ListAgents(ctx, req.(*ListAgentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListAgentHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAgentHistoryRequest)
+func _PlatformQueryService_GetAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAgentHistory(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetAgent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListAgentHistory_FullMethodName,
+		FullMethod: PlatformQueryService_GetAgent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAgentHistory(ctx, req.(*ListAgentHistoryRequest))
+		return srv.(PlatformQueryServiceServer).GetAgent(ctx, req.(*GetAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetAgentAssignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetAgentAssignmentRequest)
+func _PlatformQueryService_ListWorkflows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWorkflowsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetAgentAssignment(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListWorkflows(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetAgentAssignment_FullMethodName,
+		FullMethod: PlatformQueryService_ListWorkflows_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetAgentAssignment(ctx, req.(*GetAgentAssignmentRequest))
+		return srv.(PlatformQueryServiceServer).ListWorkflows(ctx, req.(*ListWorkflowsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListAgentAssignments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAgentAssignmentsRequest)
+func _PlatformQueryService_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkflowRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAgentAssignments(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetWorkflow(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListAgentAssignments_FullMethodName,
+		FullMethod: PlatformQueryService_GetWorkflow_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAgentAssignments(ctx, req.(*ListAgentAssignmentsRequest))
+		return srv.(PlatformQueryServiceServer).GetWorkflow(ctx, req.(*GetWorkflowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListAgentAssignmentHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAgentAssignmentHistoryRequest)
+func _PlatformQueryService_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRunsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAgentAssignmentHistory(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListRuns(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListAgentAssignmentHistory_FullMethodName,
+		FullMethod: PlatformQueryService_ListRuns_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAgentAssignmentHistory(ctx, req.(*ListAgentAssignmentHistoryRequest))
+		return srv.(PlatformQueryServiceServer).ListRuns(ctx, req.(*ListRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetInstructionSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetInstructionSetRequest)
+func _PlatformQueryService_GetRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetInstructionSet(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetInstructionSet_FullMethodName,
+		FullMethod: PlatformQueryService_GetRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetInstructionSet(ctx, req.(*GetInstructionSetRequest))
+		return srv.(PlatformQueryServiceServer).GetRun(ctx, req.(*GetRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListInstructionSets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListInstructionSetsRequest)
+func _PlatformQueryService_GetRunGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRunGraphRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListInstructionSets(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetRunGraph(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListInstructionSets_FullMethodName,
+		FullMethod: PlatformQueryService_GetRunGraph_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListInstructionSets(ctx, req.(*ListInstructionSetsRequest))
+		return srv.(PlatformQueryServiceServer).GetRunGraph(ctx, req.(*GetRunGraphRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListInstructionSetHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListInstructionSetHistoryRequest)
+func _PlatformQueryService_ListRunEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRunEventsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListInstructionSetHistory(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListRunEvents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListInstructionSetHistory_FullMethodName,
+		FullMethod: PlatformQueryService_ListRunEvents_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListInstructionSetHistory(ctx, req.(*ListInstructionSetHistoryRequest))
+		return srv.(PlatformQueryServiceServer).ListRunEvents(ctx, req.(*ListRunEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetProviderConnectionReference_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetProviderConnectionReferenceRequest)
+func _PlatformQueryService_ListOwnerGates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOwnerGatesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetProviderConnectionReference(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListOwnerGates(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetProviderConnectionReference_FullMethodName,
+		FullMethod: PlatformQueryService_ListOwnerGates_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetProviderConnectionReference(ctx, req.(*GetProviderConnectionReferenceRequest))
+		return srv.(PlatformQueryServiceServer).ListOwnerGates(ctx, req.(*ListOwnerGatesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListProviderConnectionReferences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListProviderConnectionReferencesRequest)
+func _PlatformQueryService_GetOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOwnerGateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListProviderConnectionReferences(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetOwnerGate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
+		FullMethod: PlatformQueryService_GetOwnerGate_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListProviderConnectionReferences(ctx, req.(*ListProviderConnectionReferencesRequest))
+		return srv.(PlatformQueryServiceServer).GetOwnerGate(ctx, req.(*GetOwnerGateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListProviderConnectionReferenceHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListProviderConnectionReferenceHistoryRequest)
+func _PlatformQueryService_ListArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListArtifactsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListProviderConnectionReferenceHistory(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListArtifacts(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName,
+		FullMethod: PlatformQueryService_ListArtifacts_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListProviderConnectionReferenceHistory(ctx, req.(*ListProviderConnectionReferenceHistoryRequest))
+		return srv.(PlatformQueryServiceServer).ListArtifacts(ctx, req.(*ListArtifactsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetProviderPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetProviderPoolRequest)
+func _PlatformQueryService_GetArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArtifactRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetProviderPool(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetArtifact(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetProviderPool_FullMethodName,
+		FullMethod: PlatformQueryService_GetArtifact_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetProviderPool(ctx, req.(*GetProviderPoolRequest))
+		return srv.(PlatformQueryServiceServer).GetArtifact(ctx, req.(*GetArtifactRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListProviderPools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListProviderPoolsRequest)
+func _PlatformQueryService_ListSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSchedulesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListProviderPools(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListSchedules(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListProviderPools_FullMethodName,
+		FullMethod: PlatformQueryService_ListSchedules_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListProviderPools(ctx, req.(*ListProviderPoolsRequest))
+		return srv.(PlatformQueryServiceServer).ListSchedules(ctx, req.(*ListSchedulesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListProviderPoolHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListProviderPoolHistoryRequest)
+func _PlatformQueryService_ListIntegrationDefinitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIntegrationDefinitionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListProviderPoolHistory(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListIntegrationDefinitions(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListProviderPoolHistory_FullMethodName,
+		FullMethod: PlatformQueryService_ListIntegrationDefinitions_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListProviderPoolHistory(ctx, req.(*ListProviderPoolHistoryRequest))
+		return srv.(PlatformQueryServiceServer).ListIntegrationDefinitions(ctx, req.(*ListIntegrationDefinitionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetResourceRequest)
+func _PlatformQueryService_ListIntegrationConnections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIntegrationConnectionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetResource(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListIntegrationConnections(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetResource_FullMethodName,
+		FullMethod: PlatformQueryService_ListIntegrationConnections_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetResource(ctx, req.(*GetResourceRequest))
+		return srv.(PlatformQueryServiceServer).ListIntegrationConnections(ctx, req.(*ListIntegrationConnectionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListResources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListResourcesRequest)
+func _PlatformQueryService_GetIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListResources(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetIntegrationConnection(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListResources_FullMethodName,
+		FullMethod: PlatformQueryService_GetIntegrationConnection_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListResources(ctx, req.(*ListResourcesRequest))
+		return srv.(PlatformQueryServiceServer).GetIntegrationConnection(ctx, req.(*GetIntegrationConnectionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_SearchResources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SearchResourcesRequest)
+func _PlatformQueryService_GetAdministration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAdministrationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SearchResources(ctx, in)
+		return srv.(PlatformQueryServiceServer).GetAdministration(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_SearchResources_FullMethodName,
+		FullMethod: PlatformQueryService_GetAdministration_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SearchResources(ctx, req.(*SearchResourcesRequest))
+		return srv.(PlatformQueryServiceServer).GetAdministration(ctx, req.(*GetAdministrationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_SearchMemoryRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SearchMemoryRecordsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SearchMemoryRecords(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SearchMemoryRecords_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SearchMemoryRecords(ctx, req.(*SearchMemoryRecordsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PlatformQueryService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAuditEventsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAuditEvents(ctx, in)
+		return srv.(PlatformQueryServiceServer).ListAuditEvents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListAuditEvents_FullMethodName,
+		FullMethod: PlatformQueryService_ListAuditEvents_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
+		return srv.(PlatformQueryServiceServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListRuntimeIncidents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRuntimeIncidentsRequest)
+// PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.PlatformQueryService",
+	HandlerType: (*PlatformQueryServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetBootstrapState",
+			Handler:    _PlatformQueryService_GetBootstrapState_Handler,
+		},
+		{
+			MethodName: "GetOverview",
+			Handler:    _PlatformQueryService_GetOverview_Handler,
+		},
+		{
+			MethodName: "ListPlatformCapabilities",
+			Handler:    _PlatformQueryService_ListPlatformCapabilities_Handler,
+		},
+		{
+			MethodName: "ListProjects",
+			Handler:    _PlatformQueryService_ListProjects_Handler,
+		},
+		{
+			MethodName: "GetProject",
+			Handler:    _PlatformQueryService_GetProject_Handler,
+		},
+		{
+			MethodName: "ListProjectMemberships",
+			Handler:    _PlatformQueryService_ListProjectMemberships_Handler,
+		},
+		{
+			MethodName: "ListAgents",
+			Handler:    _PlatformQueryService_ListAgents_Handler,
+		},
+		{
+			MethodName: "GetAgent",
+			Handler:    _PlatformQueryService_GetAgent_Handler,
+		},
+		{
+			MethodName: "ListWorkflows",
+			Handler:    _PlatformQueryService_ListWorkflows_Handler,
+		},
+		{
+			MethodName: "GetWorkflow",
+			Handler:    _PlatformQueryService_GetWorkflow_Handler,
+		},
+		{
+			MethodName: "ListRuns",
+			Handler:    _PlatformQueryService_ListRuns_Handler,
+		},
+		{
+			MethodName: "GetRun",
+			Handler:    _PlatformQueryService_GetRun_Handler,
+		},
+		{
+			MethodName: "GetRunGraph",
+			Handler:    _PlatformQueryService_GetRunGraph_Handler,
+		},
+		{
+			MethodName: "ListRunEvents",
+			Handler:    _PlatformQueryService_ListRunEvents_Handler,
+		},
+		{
+			MethodName: "ListOwnerGates",
+			Handler:    _PlatformQueryService_ListOwnerGates_Handler,
+		},
+		{
+			MethodName: "GetOwnerGate",
+			Handler:    _PlatformQueryService_GetOwnerGate_Handler,
+		},
+		{
+			MethodName: "ListArtifacts",
+			Handler:    _PlatformQueryService_ListArtifacts_Handler,
+		},
+		{
+			MethodName: "GetArtifact",
+			Handler:    _PlatformQueryService_GetArtifact_Handler,
+		},
+		{
+			MethodName: "ListSchedules",
+			Handler:    _PlatformQueryService_ListSchedules_Handler,
+		},
+		{
+			MethodName: "ListIntegrationDefinitions",
+			Handler:    _PlatformQueryService_ListIntegrationDefinitions_Handler,
+		},
+		{
+			MethodName: "ListIntegrationConnections",
+			Handler:    _PlatformQueryService_ListIntegrationConnections_Handler,
+		},
+		{
+			MethodName: "GetIntegrationConnection",
+			Handler:    _PlatformQueryService_GetIntegrationConnection_Handler,
+		},
+		{
+			MethodName: "GetAdministration",
+			Handler:    _PlatformQueryService_GetAdministration_Handler,
+		},
+		{
+			MethodName: "ListAuditEvents",
+			Handler:    _PlatformQueryService_ListAuditEvents_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	PlatformCommandService_CompleteOnboarding_FullMethodName              = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
+	PlatformCommandService_CreateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateProject"
+	PlatformCommandService_UpdateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_AddProjectMembership_FullMethodName            = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
+	PlatformCommandService_ChangeProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
+	PlatformCommandService_RemoveProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
+	PlatformCommandService_CreateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/CreateAgent"
+	PlatformCommandService_UpdateAgent_FullMethodName                     = "/controlplane.v1.PlatformCommandService/UpdateAgent"
+	PlatformCommandService_SetAgentEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
+	PlatformCommandService_ArchiveAgent_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
+	PlatformCommandService_CreateInstructionDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
+	PlatformCommandService_ValidateInstructionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
+	PlatformCommandService_PublishInstructionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
+	PlatformCommandService_RollbackInstructions_FullMethodName            = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
+	PlatformCommandService_ChangeAgentCapability_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
+	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
+	PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentKnowledgeBinding"
+	PlatformCommandService_CreateWorkflow_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
+	PlatformCommandService_UpdateWorkflowDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
+	PlatformCommandService_ValidateWorkflowDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
+	PlatformCommandService_PublishWorkflowDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
+	PlatformCommandService_ArchiveWorkflow_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
+	PlatformCommandService_LaunchRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/LaunchRun"
+	PlatformCommandService_AddSessionTurn_FullMethodName                  = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
+	PlatformCommandService_CancelRun_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CancelRun"
+	PlatformCommandService_RetryRun_FullMethodName                        = "/controlplane.v1.PlatformCommandService/RetryRun"
+	PlatformCommandService_ResolveOwnerGate_FullMethodName                = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_UploadArtifact_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UploadArtifact"
+	PlatformCommandService_DownloadArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
+	PlatformCommandService_ChangeArtifactBinding_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
+	PlatformCommandService_CreateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateSchedule"
+	PlatformCommandService_UpdateSchedule_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
+	PlatformCommandService_SetScheduleEnabled_FullMethodName              = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
+	PlatformCommandService_CreateIntegrationConnection_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
+	PlatformCommandService_TestIntegrationConnection_FullMethodName       = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
+	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
+	PlatformCommandService_ChangeIntegrationGrant_FullMethodName          = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+)
+
+// PlatformCommandServiceClient is the client API for PlatformCommandService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type PlatformCommandServiceClient interface {
+	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
+	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
+	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
+	AddProjectMembership(ctx context.Context, in *AddProjectMembershipRequest, opts ...grpc.CallOption) (*AddProjectMembershipResponse, error)
+	ChangeProjectMembership(ctx context.Context, in *ChangeProjectMembershipRequest, opts ...grpc.CallOption) (*ChangeProjectMembershipResponse, error)
+	RemoveProjectMembership(ctx context.Context, in *RemoveProjectMembershipRequest, opts ...grpc.CallOption) (*RemoveProjectMembershipResponse, error)
+	CreateAgent(ctx context.Context, in *CreateAgentRequest, opts ...grpc.CallOption) (*CreateAgentResponse, error)
+	UpdateAgent(ctx context.Context, in *UpdateAgentRequest, opts ...grpc.CallOption) (*UpdateAgentResponse, error)
+	SetAgentEnabled(ctx context.Context, in *SetAgentEnabledRequest, opts ...grpc.CallOption) (*SetAgentEnabledResponse, error)
+	ArchiveAgent(ctx context.Context, in *ArchiveAgentRequest, opts ...grpc.CallOption) (*ArchiveAgentResponse, error)
+	CreateInstructionDraft(ctx context.Context, in *CreateInstructionDraftRequest, opts ...grpc.CallOption) (*CreateInstructionDraftResponse, error)
+	ValidateInstructionDraft(ctx context.Context, in *ValidateInstructionDraftRequest, opts ...grpc.CallOption) (*ValidateInstructionDraftResponse, error)
+	PublishInstructionDraft(ctx context.Context, in *PublishInstructionDraftRequest, opts ...grpc.CallOption) (*PublishInstructionDraftResponse, error)
+	RollbackInstructions(ctx context.Context, in *RollbackInstructionsRequest, opts ...grpc.CallOption) (*RollbackInstructionsResponse, error)
+	ChangeAgentCapability(ctx context.Context, in *ChangeAgentCapabilityRequest, opts ...grpc.CallOption) (*ChangeAgentCapabilityResponse, error)
+	ChangeAgentIntegrationGrant(ctx context.Context, in *ChangeAgentIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeAgentIntegrationGrantResponse, error)
+	ChangeAgentKnowledgeBinding(ctx context.Context, in *ChangeAgentKnowledgeBindingRequest, opts ...grpc.CallOption) (*ChangeAgentKnowledgeBindingResponse, error)
+	CreateWorkflow(ctx context.Context, in *CreateWorkflowRequest, opts ...grpc.CallOption) (*CreateWorkflowResponse, error)
+	UpdateWorkflowDraft(ctx context.Context, in *UpdateWorkflowDraftRequest, opts ...grpc.CallOption) (*UpdateWorkflowDraftResponse, error)
+	ValidateWorkflowDraft(ctx context.Context, in *ValidateWorkflowDraftRequest, opts ...grpc.CallOption) (*ValidateWorkflowDraftResponse, error)
+	PublishWorkflowDraft(ctx context.Context, in *PublishWorkflowDraftRequest, opts ...grpc.CallOption) (*PublishWorkflowDraftResponse, error)
+	ArchiveWorkflow(ctx context.Context, in *ArchiveWorkflowRequest, opts ...grpc.CallOption) (*ArchiveWorkflowResponse, error)
+	LaunchRun(ctx context.Context, in *LaunchRunRequest, opts ...grpc.CallOption) (*LaunchRunResponse, error)
+	AddSessionTurn(ctx context.Context, in *AddSessionTurnRequest, opts ...grpc.CallOption) (*AddSessionTurnResponse, error)
+	CancelRun(ctx context.Context, in *CancelRunRequest, opts ...grpc.CallOption) (*CancelRunResponse, error)
+	RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error)
+	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
+	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
+	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
+	ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error)
+	CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error)
+	UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error)
+	SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error)
+	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
+	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
+	SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error)
+	ChangeIntegrationGrant(ctx context.Context, in *ChangeIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeIntegrationGrantResponse, error)
+}
+
+type platformCommandServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
+	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteOnboardingResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CompleteOnboarding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) AddProjectMembership(ctx context.Context, in *AddProjectMembershipRequest, opts ...grpc.CallOption) (*AddProjectMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddProjectMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_AddProjectMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangeProjectMembership(ctx context.Context, in *ChangeProjectMembershipRequest, opts ...grpc.CallOption) (*ChangeProjectMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeProjectMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeProjectMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RemoveProjectMembership(ctx context.Context, in *RemoveProjectMembershipRequest, opts ...grpc.CallOption) (*RemoveProjectMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveProjectMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RemoveProjectMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateAgent(ctx context.Context, in *CreateAgentRequest, opts ...grpc.CallOption) (*CreateAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAgentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UpdateAgent(ctx context.Context, in *UpdateAgentRequest, opts ...grpc.CallOption) (*UpdateAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAgentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SetAgentEnabled(ctx context.Context, in *SetAgentEnabledRequest, opts ...grpc.CallOption) (*SetAgentEnabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetAgentEnabledResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SetAgentEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveAgent(ctx context.Context, in *ArchiveAgentRequest, opts ...grpc.CallOption) (*ArchiveAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveAgentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateInstructionDraft(ctx context.Context, in *CreateInstructionDraftRequest, opts ...grpc.CallOption) (*CreateInstructionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateInstructionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateInstructionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateInstructionDraft(ctx context.Context, in *ValidateInstructionDraftRequest, opts ...grpc.CallOption) (*ValidateInstructionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateInstructionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateInstructionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishInstructionDraft(ctx context.Context, in *PublishInstructionDraftRequest, opts ...grpc.CallOption) (*PublishInstructionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishInstructionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishInstructionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RollbackInstructions(ctx context.Context, in *RollbackInstructionsRequest, opts ...grpc.CallOption) (*RollbackInstructionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackInstructionsResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RollbackInstructions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangeAgentCapability(ctx context.Context, in *ChangeAgentCapabilityRequest, opts ...grpc.CallOption) (*ChangeAgentCapabilityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeAgentCapabilityResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeAgentCapability_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangeAgentIntegrationGrant(ctx context.Context, in *ChangeAgentIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeAgentIntegrationGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeAgentIntegrationGrantResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangeAgentKnowledgeBinding(ctx context.Context, in *ChangeAgentKnowledgeBindingRequest, opts ...grpc.CallOption) (*ChangeAgentKnowledgeBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeAgentKnowledgeBindingResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateWorkflow(ctx context.Context, in *CreateWorkflowRequest, opts ...grpc.CallOption) (*CreateWorkflowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateWorkflowResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateWorkflow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UpdateWorkflowDraft(ctx context.Context, in *UpdateWorkflowDraftRequest, opts ...grpc.CallOption) (*UpdateWorkflowDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateWorkflowDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateWorkflowDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateWorkflowDraft(ctx context.Context, in *ValidateWorkflowDraftRequest, opts ...grpc.CallOption) (*ValidateWorkflowDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateWorkflowDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateWorkflowDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishWorkflowDraft(ctx context.Context, in *PublishWorkflowDraftRequest, opts ...grpc.CallOption) (*PublishWorkflowDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishWorkflowDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishWorkflowDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveWorkflow(ctx context.Context, in *ArchiveWorkflowRequest, opts ...grpc.CallOption) (*ArchiveWorkflowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveWorkflowResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveWorkflow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) LaunchRun(ctx context.Context, in *LaunchRunRequest, opts ...grpc.CallOption) (*LaunchRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LaunchRunResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_LaunchRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) AddSessionTurn(ctx context.Context, in *AddSessionTurnRequest, opts ...grpc.CallOption) (*AddSessionTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddSessionTurnResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_AddSessionTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CancelRun(ctx context.Context, in *CancelRunRequest, opts ...grpc.CallOption) (*CancelRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelRunResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CancelRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryRunResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RetryRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveOwnerGateResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ResolveOwnerGate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[0], PlatformCommandService_UploadArtifact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadArtifactRequest, UploadArtifactResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadArtifactClient = grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse]
+
+func (c *platformCommandServiceClient) DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_DownloadArtifact_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadArtifactRequest, DownloadArtifactResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_DownloadArtifactClient = grpc.ServerStreamingClient[DownloadArtifactResponse]
+
+func (c *platformCommandServiceClient) ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeArtifactBindingResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeArtifactBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateSchedule(ctx context.Context, in *CreateScheduleRequest, opts ...grpc.CallOption) (*CreateScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateScheduleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UpdateSchedule(ctx context.Context, in *UpdateScheduleRequest, opts ...grpc.CallOption) (*UpdateScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateScheduleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SetScheduleEnabled(ctx context.Context, in *SetScheduleEnabledRequest, opts ...grpc.CallOption) (*SetScheduleEnabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetScheduleEnabledResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SetScheduleEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateIntegrationConnectionResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateIntegrationConnection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestIntegrationConnectionResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_TestIntegrationConnection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetIntegrationConnectionEnabledResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangeIntegrationGrant(ctx context.Context, in *ChangeIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeIntegrationGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeIntegrationGrantResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeIntegrationGrant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PlatformCommandServiceServer is the server API for PlatformCommandService service.
+// All implementations must embed UnimplementedPlatformCommandServiceServer
+// for forward compatibility.
+type PlatformCommandServiceServer interface {
+	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
+	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
+	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
+	AddProjectMembership(context.Context, *AddProjectMembershipRequest) (*AddProjectMembershipResponse, error)
+	ChangeProjectMembership(context.Context, *ChangeProjectMembershipRequest) (*ChangeProjectMembershipResponse, error)
+	RemoveProjectMembership(context.Context, *RemoveProjectMembershipRequest) (*RemoveProjectMembershipResponse, error)
+	CreateAgent(context.Context, *CreateAgentRequest) (*CreateAgentResponse, error)
+	UpdateAgent(context.Context, *UpdateAgentRequest) (*UpdateAgentResponse, error)
+	SetAgentEnabled(context.Context, *SetAgentEnabledRequest) (*SetAgentEnabledResponse, error)
+	ArchiveAgent(context.Context, *ArchiveAgentRequest) (*ArchiveAgentResponse, error)
+	CreateInstructionDraft(context.Context, *CreateInstructionDraftRequest) (*CreateInstructionDraftResponse, error)
+	ValidateInstructionDraft(context.Context, *ValidateInstructionDraftRequest) (*ValidateInstructionDraftResponse, error)
+	PublishInstructionDraft(context.Context, *PublishInstructionDraftRequest) (*PublishInstructionDraftResponse, error)
+	RollbackInstructions(context.Context, *RollbackInstructionsRequest) (*RollbackInstructionsResponse, error)
+	ChangeAgentCapability(context.Context, *ChangeAgentCapabilityRequest) (*ChangeAgentCapabilityResponse, error)
+	ChangeAgentIntegrationGrant(context.Context, *ChangeAgentIntegrationGrantRequest) (*ChangeAgentIntegrationGrantResponse, error)
+	ChangeAgentKnowledgeBinding(context.Context, *ChangeAgentKnowledgeBindingRequest) (*ChangeAgentKnowledgeBindingResponse, error)
+	CreateWorkflow(context.Context, *CreateWorkflowRequest) (*CreateWorkflowResponse, error)
+	UpdateWorkflowDraft(context.Context, *UpdateWorkflowDraftRequest) (*UpdateWorkflowDraftResponse, error)
+	ValidateWorkflowDraft(context.Context, *ValidateWorkflowDraftRequest) (*ValidateWorkflowDraftResponse, error)
+	PublishWorkflowDraft(context.Context, *PublishWorkflowDraftRequest) (*PublishWorkflowDraftResponse, error)
+	ArchiveWorkflow(context.Context, *ArchiveWorkflowRequest) (*ArchiveWorkflowResponse, error)
+	LaunchRun(context.Context, *LaunchRunRequest) (*LaunchRunResponse, error)
+	AddSessionTurn(context.Context, *AddSessionTurnRequest) (*AddSessionTurnResponse, error)
+	CancelRun(context.Context, *CancelRunRequest) (*CancelRunResponse, error)
+	RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error)
+	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
+	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
+	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
+	ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error)
+	CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error)
+	UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error)
+	SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error)
+	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
+	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
+	SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error)
+	ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error)
+	mustEmbedUnimplementedPlatformCommandServiceServer()
+}
+
+// UnimplementedPlatformCommandServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedPlatformCommandServiceServer struct{}
+
+func (UnimplementedPlatformCommandServiceServer) CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteOnboarding not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) AddProjectMembership(context.Context, *AddProjectMembershipRequest) (*AddProjectMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddProjectMembership not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeProjectMembership(context.Context, *ChangeProjectMembershipRequest) (*ChangeProjectMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeProjectMembership not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RemoveProjectMembership(context.Context, *RemoveProjectMembershipRequest) (*RemoveProjectMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveProjectMembership not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateAgent(context.Context, *CreateAgentRequest) (*CreateAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAgent not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UpdateAgent(context.Context, *UpdateAgentRequest) (*UpdateAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAgent not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SetAgentEnabled(context.Context, *SetAgentEnabledRequest) (*SetAgentEnabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAgentEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveAgent(context.Context, *ArchiveAgentRequest) (*ArchiveAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveAgent not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateInstructionDraft(context.Context, *CreateInstructionDraftRequest) (*CreateInstructionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateInstructionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateInstructionDraft(context.Context, *ValidateInstructionDraftRequest) (*ValidateInstructionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateInstructionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishInstructionDraft(context.Context, *PublishInstructionDraftRequest) (*PublishInstructionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishInstructionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RollbackInstructions(context.Context, *RollbackInstructionsRequest) (*RollbackInstructionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RollbackInstructions not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeAgentCapability(context.Context, *ChangeAgentCapabilityRequest) (*ChangeAgentCapabilityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeAgentCapability not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeAgentIntegrationGrant(context.Context, *ChangeAgentIntegrationGrantRequest) (*ChangeAgentIntegrationGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeAgentIntegrationGrant not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeAgentKnowledgeBinding(context.Context, *ChangeAgentKnowledgeBindingRequest) (*ChangeAgentKnowledgeBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeAgentKnowledgeBinding not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateWorkflow(context.Context, *CreateWorkflowRequest) (*CreateWorkflowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateWorkflow not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UpdateWorkflowDraft(context.Context, *UpdateWorkflowDraftRequest) (*UpdateWorkflowDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateWorkflowDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateWorkflowDraft(context.Context, *ValidateWorkflowDraftRequest) (*ValidateWorkflowDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateWorkflowDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishWorkflowDraft(context.Context, *PublishWorkflowDraftRequest) (*PublishWorkflowDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishWorkflowDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveWorkflow(context.Context, *ArchiveWorkflowRequest) (*ArchiveWorkflowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveWorkflow not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) LaunchRun(context.Context, *LaunchRunRequest) (*LaunchRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LaunchRun not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) AddSessionTurn(context.Context, *AddSessionTurnRequest) (*AddSessionTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddSessionTurn not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CancelRun(context.Context, *CancelRunRequest) (*CancelRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelRun not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryRun not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeArtifactBinding not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateSchedule(context.Context, *CreateScheduleRequest) (*CreateScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSchedule not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UpdateSchedule(context.Context, *UpdateScheduleRequest) (*UpdateScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateSchedule not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SetScheduleEnabled(context.Context, *SetScheduleEnabledRequest) (*SetScheduleEnabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetScheduleEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationConnection not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestIntegrationConnection not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetIntegrationConnectionEnabled not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeIntegrationGrant not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
+}
+func (UnimplementedPlatformCommandServiceServer) testEmbeddedByValue() {}
+
+// UnsafePlatformCommandServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PlatformCommandServiceServer will
+// result in compilation errors.
+type UnsafePlatformCommandServiceServer interface {
+	mustEmbedUnimplementedPlatformCommandServiceServer()
+}
+
+func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformCommandServiceServer) {
+	// If the following call panics, it indicates UnimplementedPlatformCommandServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_CompleteOnboarding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteOnboardingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRuntimeIncidents(ctx, in)
+		return srv.(PlatformCommandServiceServer).CompleteOnboarding(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListRuntimeIncidents_FullMethodName,
+		FullMethod: PlatformCommandService_CompleteOnboarding_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRuntimeIncidents(ctx, req.(*ListRuntimeIncidentsRequest))
+		return srv.(PlatformCommandServiceServer).CompleteOnboarding(ctx, req.(*CompleteOnboardingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListTombstones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListTombstonesRequest)
+func _PlatformCommandService_CreateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListTombstones(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListTombstones_FullMethodName,
+		FullMethod: PlatformCommandService_CreateProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListTombstones(ctx, req.(*ListTombstonesRequest))
+		return srv.(PlatformCommandServiceServer).CreateProject(ctx, req.(*CreateProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetDiagnostics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetDiagnosticsRequest)
+func _PlatformCommandService_UpdateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateProjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetDiagnostics(ctx, in)
+		return srv.(PlatformCommandServiceServer).UpdateProject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetDiagnostics_FullMethodName,
+		FullMethod: PlatformCommandService_UpdateProject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetDiagnostics(ctx, req.(*GetDiagnosticsRequest))
+		return srv.(PlatformCommandServiceServer).UpdateProject(ctx, req.(*UpdateProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListOutboxFailures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListOutboxFailuresRequest)
+func _PlatformCommandService_AddProjectMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddProjectMembershipRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListOutboxFailures(ctx, in)
+		return srv.(PlatformCommandServiceServer).AddProjectMembership(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListOutboxFailures_FullMethodName,
+		FullMethod: PlatformCommandService_AddProjectMembership_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListOutboxFailures(ctx, req.(*ListOutboxFailuresRequest))
+		return srv.(PlatformCommandServiceServer).AddProjectMembership(ctx, req.(*AddProjectMembershipRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RepairOutboxEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RepairOutboxEventRequest)
+func _PlatformCommandService_ChangeProjectMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeProjectMembershipRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RepairOutboxEvent(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeProjectMembership(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RepairOutboxEvent_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeProjectMembership_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RepairOutboxEvent(ctx, req.(*RepairOutboxEventRequest))
+		return srv.(PlatformCommandServiceServer).ChangeProjectMembership(ctx, req.(*ChangeProjectMembershipRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_AdmitOwnerSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AdmitOwnerSessionRequest)
+func _PlatformCommandService_RemoveProjectMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveProjectMembershipRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AdmitOwnerSession(ctx, in)
+		return srv.(PlatformCommandServiceServer).RemoveProjectMembership(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_AdmitOwnerSession_FullMethodName,
+		FullMethod: PlatformCommandService_RemoveProjectMembership_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AdmitOwnerSession(ctx, req.(*AdmitOwnerSessionRequest))
+		return srv.(PlatformCommandServiceServer).RemoveProjectMembership(ctx, req.(*RemoveProjectMembershipRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RevokeOwnerSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RevokeOwnerSessionRequest)
+func _PlatformCommandService_CreateAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RevokeOwnerSession(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateAgent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RevokeOwnerSession_FullMethodName,
+		FullMethod: PlatformCommandService_CreateAgent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RevokeOwnerSession(ctx, req.(*RevokeOwnerSessionRequest))
+		return srv.(PlatformCommandServiceServer).CreateAgent(ctx, req.(*CreateAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_PrepareGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PrepareGatewayPublicTLSRequest)
+func _PlatformCommandService_UpdateAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, in)
+		return srv.(PlatformCommandServiceServer).UpdateAgent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName,
+		FullMethod: PlatformCommandService_UpdateAgent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, req.(*PrepareGatewayPublicTLSRequest))
+		return srv.(PlatformCommandServiceServer).UpdateAgent(ctx, req.(*UpdateAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ConfirmGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfirmGatewayPublicTLSRequest)
+func _PlatformCommandService_SetAgentEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAgentEnabledRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, in)
+		return srv.(PlatformCommandServiceServer).SetAgentEnabled(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName,
+		FullMethod: PlatformCommandService_SetAgentEnabled_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, req.(*ConfirmGatewayPublicTLSRequest))
+		return srv.(PlatformCommandServiceServer).SetAgentEnabled(ctx, req.(*SetAgentEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CheckGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CheckGatewayPublicTLSRequest)
+func _PlatformCommandService_ArchiveAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, in)
+		return srv.(PlatformCommandServiceServer).ArchiveAgent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CheckGatewayPublicTLS_FullMethodName,
+		FullMethod: PlatformCommandService_ArchiveAgent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, req.(*CheckGatewayPublicTLSRequest))
+		return srv.(PlatformCommandServiceServer).ArchiveAgent(ctx, req.(*ArchiveAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_EnqueueTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnqueueTurnRequest)
+func _PlatformCommandService_CreateInstructionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateInstructionDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).EnqueueTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateInstructionDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_EnqueueTurn_FullMethodName,
+		FullMethod: PlatformCommandService_CreateInstructionDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).EnqueueTurn(ctx, req.(*EnqueueTurnRequest))
+		return srv.(PlatformCommandServiceServer).CreateInstructionDraft(ctx, req.(*CreateInstructionDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ClaimTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimTurnRequest)
+func _PlatformCommandService_ValidateInstructionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateInstructionDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).ValidateInstructionDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimTurn_FullMethodName,
+		FullMethod: PlatformCommandService_ValidateInstructionDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimTurn(ctx, req.(*ClaimTurnRequest))
+		return srv.(PlatformCommandServiceServer).ValidateInstructionDraft(ctx, req.(*ValidateInstructionDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RenewTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RenewTurnRequest)
+func _PlatformCommandService_PublishInstructionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishInstructionDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RenewTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).PublishInstructionDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RenewTurn_FullMethodName,
+		FullMethod: PlatformCommandService_PublishInstructionDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RenewTurn(ctx, req.(*RenewTurnRequest))
+		return srv.(PlatformCommandServiceServer).PublishInstructionDraft(ctx, req.(*PublishInstructionDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ReportRuntimeProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReportRuntimeProgressRequest)
+func _PlatformCommandService_RollbackInstructions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackInstructionsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReportRuntimeProgress(ctx, in)
+		return srv.(PlatformCommandServiceServer).RollbackInstructions(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ReportRuntimeProgress_FullMethodName,
+		FullMethod: PlatformCommandService_RollbackInstructions_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReportRuntimeProgress(ctx, req.(*ReportRuntimeProgressRequest))
+		return srv.(PlatformCommandServiceServer).RollbackInstructions(ctx, req.(*RollbackInstructionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CompleteTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteTurnRequest)
+func _PlatformCommandService_ChangeAgentCapability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeAgentCapabilityRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeAgentCapability(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteTurn_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeAgentCapability_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteTurn(ctx, req.(*CompleteTurnRequest))
+		return srv.(PlatformCommandServiceServer).ChangeAgentCapability(ctx, req.(*ChangeAgentCapabilityRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_RetryTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetryTurnRequest)
+func _PlatformCommandService_ChangeAgentIntegrationGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeAgentIntegrationGrantRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RetryTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeAgentIntegrationGrant(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_RetryTurn_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RetryTurn(ctx, req.(*RetryTurnRequest))
+		return srv.(PlatformCommandServiceServer).ChangeAgentIntegrationGrant(ctx, req.(*ChangeAgentIntegrationGrantRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CancelTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelTurnRequest)
+func _PlatformCommandService_ChangeAgentKnowledgeBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeAgentKnowledgeBindingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CancelTurn(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeAgentKnowledgeBinding(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CancelTurn_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CancelTurn(ctx, req.(*CancelTurnRequest))
+		return srv.(PlatformCommandServiceServer).ChangeAgentKnowledgeBinding(ctx, req.(*ChangeAgentKnowledgeBindingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageSessionRequest)
+func _PlatformCommandService_CreateWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateWorkflowRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageSession(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateWorkflow(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageSession_FullMethodName,
+		FullMethod: PlatformCommandService_CreateWorkflow_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageSession(ctx, req.(*ManageSessionRequest))
+		return srv.(PlatformCommandServiceServer).CreateWorkflow(ctx, req.(*CreateWorkflowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_BindSessionMCP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BindSessionMCPRequest)
+func _PlatformCommandService_UpdateWorkflowDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateWorkflowDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).BindSessionMCP(ctx, in)
+		return srv.(PlatformCommandServiceServer).UpdateWorkflowDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_BindSessionMCP_FullMethodName,
+		FullMethod: PlatformCommandService_UpdateWorkflowDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).BindSessionMCP(ctx, req.(*BindSessionMCPRequest))
+		return srv.(PlatformCommandServiceServer).UpdateWorkflowDraft(ctx, req.(*UpdateWorkflowDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageConversationLifecycle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageConversationLifecycleRequest)
+func _PlatformCommandService_ValidateWorkflowDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateWorkflowDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageConversationLifecycle(ctx, in)
+		return srv.(PlatformCommandServiceServer).ValidateWorkflowDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageConversationLifecycle_FullMethodName,
+		FullMethod: PlatformCommandService_ValidateWorkflowDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageConversationLifecycle(ctx, req.(*ManageConversationLifecycleRequest))
+		return srv.(PlatformCommandServiceServer).ValidateWorkflowDraft(ctx, req.(*ValidateWorkflowDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageMemoryRecordRequest)
+func _PlatformCommandService_PublishWorkflowDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishWorkflowDraftRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageMemoryRecord(ctx, in)
+		return srv.(PlatformCommandServiceServer).PublishWorkflowDraft(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageMemoryRecord_FullMethodName,
+		FullMethod: PlatformCommandService_PublishWorkflowDraft_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageMemoryRecord(ctx, req.(*ManageMemoryRecordRequest))
+		return srv.(PlatformCommandServiceServer).PublishWorkflowDraft(ctx, req.(*PublishWorkflowDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageWorkClaim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageWorkClaimRequest)
+func _PlatformCommandService_ArchiveWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveWorkflowRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageWorkClaim(ctx, in)
+		return srv.(PlatformCommandServiceServer).ArchiveWorkflow(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageWorkClaim_FullMethodName,
+		FullMethod: PlatformCommandService_ArchiveWorkflow_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageWorkClaim(ctx, req.(*ManageWorkClaimRequest))
+		return srv.(PlatformCommandServiceServer).ArchiveWorkflow(ctx, req.(*ArchiveWorkflowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageScheduleRequest)
+func _PlatformCommandService_LaunchRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LaunchRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageSchedule(ctx, in)
+		return srv.(PlatformCommandServiceServer).LaunchRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageSchedule_FullMethodName,
+		FullMethod: PlatformCommandService_LaunchRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageSchedule(ctx, req.(*ManageScheduleRequest))
+		return srv.(PlatformCommandServiceServer).LaunchRun(ctx, req.(*LaunchRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateScheduleFromOwnerSelectionsRequest)
+func _PlatformCommandService_AddSessionTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddSessionTurnRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CreateScheduleFromOwnerSelections(ctx, in)
+		return srv.(PlatformCommandServiceServer).AddSessionTurn(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName,
+		FullMethod: PlatformCommandService_AddSessionTurn_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CreateScheduleFromOwnerSelections(ctx, req.(*CreateScheduleFromOwnerSelectionsRequest))
+		return srv.(PlatformCommandServiceServer).AddSessionTurn(ctx, req.(*AddSessionTurnRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ManageOwnerSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageOwnerScheduleRequest)
+func _PlatformCommandService_CancelRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageOwnerSchedule(ctx, in)
+		return srv.(PlatformCommandServiceServer).CancelRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ManageOwnerSchedule_FullMethodName,
+		FullMethod: PlatformCommandService_CancelRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageOwnerSchedule(ctx, req.(*ManageOwnerScheduleRequest))
+		return srv.(PlatformCommandServiceServer).CancelRun(ctx, req.(*CancelRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetOwnerSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetOwnerScheduleRequest)
+func _PlatformCommandService_RetryRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryRunRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetOwnerSchedule(ctx, in)
+		return srv.(PlatformCommandServiceServer).RetryRun(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetOwnerSchedule_FullMethodName,
+		FullMethod: PlatformCommandService_RetryRun_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetOwnerSchedule(ctx, req.(*GetOwnerScheduleRequest))
+		return srv.(PlatformCommandServiceServer).RetryRun(ctx, req.(*RetryRunRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListOwnerSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListOwnerSchedulesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListOwnerSchedules(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListOwnerSchedules_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListOwnerSchedules(ctx, req.(*ListOwnerSchedulesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_BindScheduleConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BindScheduleConfigurationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).BindScheduleConfiguration(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_BindScheduleConfiguration_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).BindScheduleConfiguration(ctx, req.(*BindScheduleConfigurationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RunScheduleNow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RunScheduleNowRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RunScheduleNow_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, req.(*RunScheduleNowRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimDueSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimDueSchedulesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimDueSchedules(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimDueSchedules_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimDueSchedules(ctx, req.(*ClaimDueSchedulesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimScheduleOccurrenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimScheduleOccurrence(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimScheduleOccurrence(ctx, req.(*ClaimScheduleOccurrenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_MaterializeScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MaterializeScheduleOccurrenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).MaterializeScheduleOccurrence(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).MaterializeScheduleOccurrence(ctx, req.(*MaterializeScheduleOccurrenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteScheduleOccurrenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteScheduleOccurrence(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteScheduleOccurrence_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteScheduleOccurrence(ctx, req.(*CompleteScheduleOccurrenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CancelScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelScheduleOccurrenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CancelScheduleOccurrence(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CancelScheduleOccurrence_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CancelScheduleOccurrence(ctx, req.(*CancelScheduleOccurrenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListScheduleOccurrences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListScheduleOccurrencesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListScheduleOccurrences(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListScheduleOccurrences_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListScheduleOccurrences(ctx, req.(*ListScheduleOccurrencesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ResolveScheduleRecovery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveScheduleRecoveryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ResolveScheduleRecovery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ResolveScheduleRecovery(ctx, req.(*ResolveScheduleRecoveryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_StartProcess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartProcessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StartProcess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_StartProcess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StartProcess(ctx, req.(*StartProcessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CancelProcess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelProcessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CancelProcess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CancelProcess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CancelProcess(ctx, req.(*CancelProcessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteProcess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteProcessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteProcess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteProcess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteProcess(ctx, req.(*CompleteProcessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageRunRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageRun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageRun_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageRun(ctx, req.(*ManageRunRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListOwnerRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListOwnerRunsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListOwnerRuns(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListOwnerRuns_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListOwnerRuns(ctx, req.(*ListOwnerRunsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRunDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRunDetailRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRunDetail(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRunDetail_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRunDetail(ctx, req.(*GetRunDetailRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRunTimeline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRunTimelineRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRunTimeline(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRunTimeline_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRunTimeline(ctx, req.(*ListRunTimelineRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRunLineage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRunLineageRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRunLineage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRunLineage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRunLineage(ctx, req.(*GetRunLineageRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRunArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRunArtifactsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRunArtifacts(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRunArtifacts_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRunArtifacts(ctx, req.(*ListRunArtifactsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RequestOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestOwnerGateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RequestOwnerGate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RequestOwnerGate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RequestOwnerGate(ctx, req.(*RequestOwnerGateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimOwnerGateDeliveryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimOwnerGateDelivery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimOwnerGateDelivery(ctx, req.(*ClaimOwnerGateDeliveryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ExpireOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ExpireOwnerGateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ExpireOwnerGate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ExpireOwnerGate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ExpireOwnerGate(ctx, req.(*ExpireOwnerGateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordOwnerGateDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordOwnerGateDeliveryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordOwnerGateDelivery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordOwnerGateDelivery(ctx, req.(*RecordOwnerGateDeliveryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimInteractionDeliveryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimInteractionDelivery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimInteractionDelivery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimInteractionDelivery(ctx, req.(*ClaimInteractionDeliveryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_IssueInteractionDeliveryReadbackGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IssueInteractionDeliveryReadbackGrantRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).IssueInteractionDeliveryReadbackGrant(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).IssueInteractionDeliveryReadbackGrant(ctx, req.(*IssueInteractionDeliveryReadbackGrantRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidateInteractionDeliveryReadbackGrantRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ValidateInteractionDeliveryReadbackGrant(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ValidateInteractionDeliveryReadbackGrant(ctx, req.(*ValidateInteractionDeliveryReadbackGrantRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordInteractionDeliveryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordInteractionDelivery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordInteractionDelivery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordInteractionDelivery(ctx, req.(*RecordInteractionDeliveryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ResolveOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PlatformCommandService_ResolveOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveOwnerGateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ResolveOwnerGate(ctx, in)
+		return srv.(PlatformCommandServiceServer).ResolveOwnerGate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		FullMethod: PlatformCommandService_ResolveOwnerGate_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ResolveOwnerGate(ctx, req.(*ResolveOwnerGateRequest))
+		return srv.(PlatformCommandServiceServer).ResolveOwnerGate(ctx, req.(*ResolveOwnerGateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListBackupsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListBackups(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListBackups_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListBackups(ctx, req.(*ListBackupsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBackupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetBackup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetBackup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetBackup(ctx, req.(*GetBackupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RestoreBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RestoreBackupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RestoreBackup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RestoreBackup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RestoreBackup(ctx, req.(*RestoreBackupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRestoreOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRestoreOperationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRestoreOperation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRestoreOperation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRestoreOperation(ctx, req.(*GetRestoreOperationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRestoreOperations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRestoreOperationsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRestoreOperations_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, req.(*ListRestoreOperationsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageWorkspaceBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageWorkspaceBackupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceBackup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageWorkspaceBackup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceBackup(ctx, req.(*ManageWorkspaceBackupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetWorkspaceBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWorkspaceBackupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceBackup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetWorkspaceBackup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceBackup(ctx, req.(*GetWorkspaceBackupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListWorkspaceBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWorkspaceBackupsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceBackups(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListWorkspaceBackups_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceBackups(ctx, req.(*ListWorkspaceBackupsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageWorkspaceRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageWorkspaceRestoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceRestore(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageWorkspaceRestore_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceRestore(ctx, req.(*ManageWorkspaceRestoreRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetWorkspaceRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWorkspaceRestoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceRestore(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetWorkspaceRestore_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceRestore(ctx, req.(*GetWorkspaceRestoreRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListWorkspaceRestores_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWorkspaceRestoresRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceRestores(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListWorkspaceRestores_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceRestores(ctx, req.(*ListWorkspaceRestoresRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageRuntimeIncident_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageRuntimeIncidentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageRuntimeIncident(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageRuntimeIncident_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageRuntimeIncident(ctx, req.(*ManageRuntimeIncidentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRuntimeIncident_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRuntimeIncidentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRuntimeIncident(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRuntimeIncident_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRuntimeIncident(ctx, req.(*GetRuntimeIncidentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRuntimeIncidentHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRuntimeIncidentHistoryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRuntimeIncidentHistory(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRuntimeIncidentHistory(ctx, req.(*ListRuntimeIncidentHistoryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageWorkspaceMattermostMapping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageWorkspaceMattermostMappingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceMattermostMapping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageWorkspaceMattermostMapping(ctx, req.(*ManageWorkspaceMattermostMappingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetWorkspaceMattermostMapping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWorkspaceMattermostMappingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceMattermostMapping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceMattermostMapping(ctx, req.(*GetWorkspaceMattermostMappingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListWorkspaceMattermostMappings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWorkspaceMattermostMappingsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceMattermostMappings(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListWorkspaceMattermostMappings(ctx, req.(*ListWorkspaceMattermostMappingsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetLegacyConfigurationCutover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLegacyConfigurationCutoverRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetLegacyConfigurationCutover(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetLegacyConfigurationCutover(ctx, req.(*GetLegacyConfigurationCutoverRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListLegacyConfigurationCutovers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListLegacyConfigurationCutoversRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListLegacyConfigurationCutovers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListLegacyConfigurationCutovers(ctx, req.(*ListLegacyConfigurationCutoversRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ResolveLegacyConfigurationCutover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveLegacyConfigurationCutoverRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ResolveLegacyConfigurationCutover(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ResolveLegacyConfigurationCutover(ctx, req.(*ResolveLegacyConfigurationCutoverRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RegisterArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterArtifactRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RegisterArtifact(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RegisterArtifact_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RegisterArtifact(ctx, req.(*RegisterArtifactRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordArtifactScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordArtifactScanRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordArtifactScan(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordArtifactScan_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordArtifactScan(ctx, req.(*RecordArtifactScanRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageRoleImageRecipeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageRoleImageRecipe(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageRoleImageRecipe(ctx, req.(*ManageRoleImageRecipeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoleImageRecipeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRoleImageRecipe(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRoleImageRecipe_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRoleImageRecipe(ctx, req.(*GetRoleImageRecipeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimImageBuild(ctx, req.(*ClaimImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RenewImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RenewImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RenewImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RenewImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RenewImageBuild(ctx, req.(*RenewImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReportImageBuildProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReportImageBuildProgressRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReportImageBuildProgress(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReportImageBuildProgress_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReportImageBuildProgress(ctx, req.(*ReportImageBuildProgressRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteImageBuild(ctx, req.(*CompleteImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_FailImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FailImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).FailImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_FailImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).FailImageBuild(ctx, req.(*FailImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageImageBuild(ctx, req.(*ManageImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimImageAdmissionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimImageAdmission(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimImageAdmission_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimImageAdmission(ctx, req.(*ClaimImageAdmissionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordImageAdmissionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordImageAdmission(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordImageAdmission_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordImageAdmission(ctx, req.(*RecordImageAdmissionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimImagePromotionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimImagePromotion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimImagePromotion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimImagePromotion(ctx, req.(*ClaimImagePromotionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AuthorizeImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuthorizeImagePromotionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AuthorizeImagePromotion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AuthorizeImagePromotion(ctx, req.(*AuthorizeImagePromotionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteImagePromotionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteImagePromotion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteImagePromotion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteImagePromotion(ctx, req.(*CompleteImagePromotionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRoleImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoleImageBuildRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRoleImageBuild(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRoleImageBuild_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRoleImageBuild(ctx, req.(*GetRoleImageBuildRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRuntimeRevision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRuntimeRevisionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRuntimeRevision(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRuntimeRevision_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRuntimeRevision(ctx, req.(*GetRuntimeRevisionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordMemoryEmbedding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordMemoryEmbeddingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordMemoryEmbedding(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordMemoryEmbedding_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordMemoryEmbedding(ctx, req.(*RecordMemoryEmbeddingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ClaimRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ClaimRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ClaimRuntimeExecution(ctx, req.(*ClaimRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_SetResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetResourceRetentionPolicyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SetResourceRetentionPolicy(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SetResourceRetentionPolicy_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SetResourceRetentionPolicy(ctx, req.(*SetResourceRetentionPolicyRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RetireResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetireResourceRetentionPolicyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RetireResourceRetentionPolicy(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RetireResourceRetentionPolicy(ctx, req.(*RetireResourceRetentionPolicyRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetResourceRetentionPolicyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetResourceRetentionPolicy(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetResourceRetentionPolicy_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetResourceRetentionPolicy(ctx, req.(*GetResourceRetentionPolicyRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_HoldRuntimeRetention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HoldRuntimeRetentionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).HoldRuntimeRetention(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_HoldRuntimeRetention_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).HoldRuntimeRetention(ctx, req.(*HoldRuntimeRetentionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ReleaseRuntimeRetention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReleaseRuntimeRetentionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ReleaseRuntimeRetention(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ReleaseRuntimeRetention_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ReleaseRuntimeRetention(ctx, req.(*ReleaseRuntimeRetentionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRuntimeExecution(ctx, req.(*GetRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRuntimeMaterialization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRuntimeMaterializationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRuntimeMaterialization(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRuntimeMaterialization_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRuntimeMaterialization(ctx, req.(*GetRuntimeMaterializationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AuthorizeRuntimeOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuthorizeRuntimeOutputRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeOutput(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeOutput(ctx, req.(*AuthorizeRuntimeOutputRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RegisterRuntimeOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterRuntimeOutputRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RegisterRuntimeOutput(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RegisterRuntimeOutput_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RegisterRuntimeOutput(ctx, req.(*RegisterRuntimeOutputRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AdmitRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AdmitRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AdmitRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AdmitRuntimeExecution(ctx, req.(*AdmitRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuthorizeRuntimeRestoreEffectRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, req.(*AuthorizeRuntimeRestoreEffectRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_HeartbeatRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeartbeatRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).HeartbeatRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).HeartbeatRuntimeExecution(ctx, req.(*HeartbeatRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordRuntimeIncident_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordRuntimeIncidentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordRuntimeIncident(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordRuntimeIncident_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordRuntimeIncident(ctx, req.(*RecordRuntimeIncidentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteRuntimeExecution(ctx, req.(*CompleteRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CancelRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CancelRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CancelRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CancelRuntimeExecution(ctx, req.(*CancelRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RetryRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetryRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RetryRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RetryRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RetryRuntimeExecution(ctx, req.(*RetryRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ManageRuntimeAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ManageRuntimeActionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ManageRuntimeAction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ManageRuntimeAction_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ManageRuntimeAction(ctx, req.(*ManageRuntimeActionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RescheduleRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RescheduleRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RescheduleRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RescheduleRuntimeExecution(ctx, req.(*RescheduleRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ExpireRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ExpireRuntimeExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ExpireRuntimeExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ExpireRuntimeExecution(ctx, req.(*ExpireRuntimeExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordRuntimeArchive_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordRuntimeArchiveRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordRuntimeArchive(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordRuntimeArchive_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordRuntimeArchive(ctx, req.(*RecordRuntimeArchiveRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_VerifyRuntimeRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VerifyRuntimeRestoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).VerifyRuntimeRestore(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).VerifyRuntimeRestore(ctx, req.(*VerifyRuntimeRestoreRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_BindRuntimeRestoreTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BindRuntimeRestoreTargetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).BindRuntimeRestoreTarget(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).BindRuntimeRestoreTarget(ctx, req.(*BindRuntimeRestoreTargetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CompleteRuntimeRehydrate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteRuntimeRehydrateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteRuntimeRehydrate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteRuntimeRehydrate(ctx, req.(*CompleteRuntimeRehydrateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AuthorizeRuntimeCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuthorizeRuntimeCleanupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeCleanup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeCleanup(ctx, req.(*AuthorizeRuntimeCleanupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConsumeRuntimeCleanupAuthorizationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, req.(*ConsumeRuntimeCleanupAuthorizationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ExpireRuntimeCleanupAuthorizationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, req.(*ExpireRuntimeCleanupAuthorizationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ResolveIntegrationSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveIntegrationSessionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ResolveIntegrationSession(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ResolveIntegrationSession_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ResolveIntegrationSession(ctx, req.(*ResolveIntegrationSessionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_SuspendForIntegrationApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SuspendForIntegrationApprovalRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SuspendForIntegrationApproval(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SuspendForIntegrationApproval_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SuspendForIntegrationApproval(ctx, req.(*SuspendForIntegrationApprovalRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ApproveIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApproveIntegrationInvocationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ApproveIntegrationInvocation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ApproveIntegrationInvocation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ApproveIntegrationInvocation(ctx, req.(*ApproveIntegrationInvocationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RejectIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RejectIntegrationInvocationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RejectIntegrationInvocation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RejectIntegrationInvocation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RejectIntegrationInvocation(ctx, req.(*RejectIntegrationInvocationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ExpireIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ExpireIntegrationInvocationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ExpireIntegrationInvocation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ExpireIntegrationInvocation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ExpireIntegrationInvocation(ctx, req.(*ExpireIntegrationInvocationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func _PlatformCommandService_UploadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PlatformCommandServiceServer).UploadArtifact(&grpc.GenericServerStream[UploadArtifactRequest, UploadArtifactResponse]{ServerStream: stream})
 }
 
-func _ControlPlaneService_CancelIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CancelIntegrationInvocationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CancelIntegrationInvocation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CancelIntegrationInvocation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CancelIntegrationInvocation(ctx, req.(*CancelIntegrationInvocationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadArtifactServer = grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]
 
-func _ControlPlaneService_BeginIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BeginIntegrationExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).BeginIntegrationExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_BeginIntegrationExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).BeginIntegrationExecution(ctx, req.(*BeginIntegrationExecutionRequest))
+func _PlatformCommandService_DownloadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadArtifactRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(PlatformCommandServiceServer).DownloadArtifact(m, &grpc.GenericServerStream[DownloadArtifactRequest, DownloadArtifactResponse]{ServerStream: stream})
 }
 
-func _ControlPlaneService_CompleteIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteIntegrationExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CompleteIntegrationExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CompleteIntegrationExecution(ctx, req.(*CompleteIntegrationExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_DownloadArtifactServer = grpc.ServerStreamingServer[DownloadArtifactResponse]
 
-func _ControlPlaneService_FailIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FailIntegrationExecutionRequest)
+func _PlatformCommandService_ChangeArtifactBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeArtifactBindingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).FailIntegrationExecution(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeArtifactBinding(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_FailIntegrationExecution_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeArtifactBinding_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).FailIntegrationExecution(ctx, req.(*FailIntegrationExecutionRequest))
+		return srv.(PlatformCommandServiceServer).ChangeArtifactBinding(ctx, req.(*ChangeArtifactBindingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetIntegrationContinuation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetIntegrationContinuationRequest)
+func _PlatformCommandService_CreateSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateScheduleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetIntegrationContinuation(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateSchedule(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetIntegrationContinuation_FullMethodName,
+		FullMethod: PlatformCommandService_CreateSchedule_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetIntegrationContinuation(ctx, req.(*GetIntegrationContinuationRequest))
+		return srv.(PlatformCommandServiceServer).CreateSchedule(ctx, req.(*CreateScheduleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AcknowledgeIntegrationContinuationRequest)
+func _PlatformCommandService_UpdateSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateScheduleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AcknowledgeIntegrationContinuation(ctx, in)
+		return srv.(PlatformCommandServiceServer).UpdateSchedule(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName,
+		FullMethod: PlatformCommandService_UpdateSchedule_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AcknowledgeIntegrationContinuation(ctx, req.(*AcknowledgeIntegrationContinuationRequest))
+		return srv.(PlatformCommandServiceServer).UpdateSchedule(ctx, req.(*UpdateScheduleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_PrepareLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PrepareLegacyGraphMigrationRequest)
+func _PlatformCommandService_SetScheduleEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetScheduleEnabledRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).PrepareLegacyGraphMigration(ctx, in)
+		return srv.(PlatformCommandServiceServer).SetScheduleEnabled(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName,
+		FullMethod: PlatformCommandService_SetScheduleEnabled_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).PrepareLegacyGraphMigration(ctx, req.(*PrepareLegacyGraphMigrationRequest))
+		return srv.(PlatformCommandServiceServer).SetScheduleEnabled(ctx, req.(*SetScheduleEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_MaterializeLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MaterializeLegacyGraphMigrationRequest)
+func _PlatformCommandService_CreateIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).MaterializeLegacyGraphMigration(ctx, in)
+		return srv.(PlatformCommandServiceServer).CreateIntegrationConnection(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName,
+		FullMethod: PlatformCommandService_CreateIntegrationConnection_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).MaterializeLegacyGraphMigration(ctx, req.(*MaterializeLegacyGraphMigrationRequest))
+		return srv.(PlatformCommandServiceServer).CreateIntegrationConnection(ctx, req.(*CreateIntegrationConnectionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_GetLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLegacyGraphMigrationRequest)
+func _PlatformCommandService_TestIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetLegacyGraphMigration(ctx, in)
+		return srv.(PlatformCommandServiceServer).TestIntegrationConnection(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_GetLegacyGraphMigration_FullMethodName,
+		FullMethod: PlatformCommandService_TestIntegrationConnection_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetLegacyGraphMigration(ctx, req.(*GetLegacyGraphMigrationRequest))
+		return srv.(PlatformCommandServiceServer).TestIntegrationConnection(ctx, req.(*TestIntegrationConnectionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_AbortLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AbortLegacyGraphMigrationRequest)
+func _PlatformCommandService_SetIntegrationConnectionEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetIntegrationConnectionEnabledRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AbortLegacyGraphMigration(ctx, in)
+		return srv.(PlatformCommandServiceServer).SetIntegrationConnectionEnabled(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_AbortLegacyGraphMigration_FullMethodName,
+		FullMethod: PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AbortLegacyGraphMigration(ctx, req.(*AbortLegacyGraphMigrationRequest))
+		return srv.(PlatformCommandServiceServer).SetIntegrationConnectionEnabled(ctx, req.(*SetIntegrationConnectionEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CheckReadinessRequest)
+func _PlatformCommandService_ChangeIntegrationGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeIntegrationGrantRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CheckReadiness(ctx, in)
+		return srv.(PlatformCommandServiceServer).ChangeIntegrationGrant(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_CheckReadiness_FullMethodName,
+		FullMethod: PlatformCommandService_ChangeIntegrationGrant_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CheckReadiness(ctx, req.(*CheckReadinessRequest))
+		return srv.(PlatformCommandServiceServer).ChangeIntegrationGrant(ctx, req.(*ChangeIntegrationGrantRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// ControlPlaneService_ServiceDesc is the grpc.ServiceDesc for ControlPlaneService service.
+// PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "controlplane.v1.ControlPlaneService",
-	HandlerType: (*ControlPlaneServiceServer)(nil),
+var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.PlatformCommandService",
+	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateProject",
-			Handler:    _ControlPlaneService_CreateProject_Handler,
+			MethodName: "CompleteOnboarding",
+			Handler:    _PlatformCommandService_CompleteOnboarding_Handler,
 		},
 		{
-			MethodName: "ListProjects",
-			Handler:    _ControlPlaneService_ListProjects_Handler,
+			MethodName: "CreateProject",
+			Handler:    _PlatformCommandService_CreateProject_Handler,
 		},
 		{
 			MethodName: "UpdateProject",
-			Handler:    _ControlPlaneService_UpdateProject_Handler,
+			Handler:    _PlatformCommandService_UpdateProject_Handler,
 		},
 		{
-			MethodName: "DeleteProject",
-			Handler:    _ControlPlaneService_DeleteProject_Handler,
+			MethodName: "AddProjectMembership",
+			Handler:    _PlatformCommandService_AddProjectMembership_Handler,
 		},
 		{
-			MethodName: "CreateResource",
-			Handler:    _ControlPlaneService_CreateResource_Handler,
+			MethodName: "ChangeProjectMembership",
+			Handler:    _PlatformCommandService_ChangeProjectMembership_Handler,
 		},
 		{
-			MethodName: "UpdateResource",
-			Handler:    _ControlPlaneService_UpdateResource_Handler,
+			MethodName: "RemoveProjectMembership",
+			Handler:    _PlatformCommandService_RemoveProjectMembership_Handler,
 		},
 		{
-			MethodName: "TransitionResource",
-			Handler:    _ControlPlaneService_TransitionResource_Handler,
+			MethodName: "CreateAgent",
+			Handler:    _PlatformCommandService_CreateAgent_Handler,
 		},
 		{
-			MethodName: "DeleteResource",
-			Handler:    _ControlPlaneService_DeleteResource_Handler,
+			MethodName: "UpdateAgent",
+			Handler:    _PlatformCommandService_UpdateAgent_Handler,
 		},
 		{
-			MethodName: "ManageAccessResource",
-			Handler:    _ControlPlaneService_ManageAccessResource_Handler,
+			MethodName: "SetAgentEnabled",
+			Handler:    _PlatformCommandService_SetAgentEnabled_Handler,
 		},
 		{
-			MethodName: "DetachAccessResource",
-			Handler:    _ControlPlaneService_DetachAccessResource_Handler,
+			MethodName: "ArchiveAgent",
+			Handler:    _PlatformCommandService_ArchiveAgent_Handler,
 		},
 		{
-			MethodName: "CopyAccessResource",
-			Handler:    _ControlPlaneService_CopyAccessResource_Handler,
+			MethodName: "CreateInstructionDraft",
+			Handler:    _PlatformCommandService_CreateInstructionDraft_Handler,
 		},
 		{
-			MethodName: "ManageRoleDefinition",
-			Handler:    _ControlPlaneService_ManageRoleDefinition_Handler,
+			MethodName: "ValidateInstructionDraft",
+			Handler:    _PlatformCommandService_ValidateInstructionDraft_Handler,
 		},
 		{
-			MethodName: "ReconcileGitRoleDefinition",
-			Handler:    _ControlPlaneService_ReconcileGitRoleDefinition_Handler,
+			MethodName: "PublishInstructionDraft",
+			Handler:    _PlatformCommandService_PublishInstructionDraft_Handler,
 		},
 		{
-			MethodName: "ManageAgent",
-			Handler:    _ControlPlaneService_ManageAgent_Handler,
+			MethodName: "RollbackInstructions",
+			Handler:    _PlatformCommandService_RollbackInstructions_Handler,
 		},
 		{
-			MethodName: "ReconcileGitAgent",
-			Handler:    _ControlPlaneService_ReconcileGitAgent_Handler,
+			MethodName: "ChangeAgentCapability",
+			Handler:    _PlatformCommandService_ChangeAgentCapability_Handler,
 		},
 		{
-			MethodName: "ManageAgentMattermostBotIdentity",
-			Handler:    _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler,
+			MethodName: "ChangeAgentIntegrationGrant",
+			Handler:    _PlatformCommandService_ChangeAgentIntegrationGrant_Handler,
 		},
 		{
-			MethodName: "GetOwnerConfigurationCatalog",
-			Handler:    _ControlPlaneService_GetOwnerConfigurationCatalog_Handler,
+			MethodName: "ChangeAgentKnowledgeBinding",
+			Handler:    _PlatformCommandService_ChangeAgentKnowledgeBinding_Handler,
 		},
 		{
-			MethodName: "ManageAgentAssignment",
-			Handler:    _ControlPlaneService_ManageAgentAssignment_Handler,
+			MethodName: "CreateWorkflow",
+			Handler:    _PlatformCommandService_CreateWorkflow_Handler,
 		},
 		{
-			MethodName: "ManageInstructionSet",
-			Handler:    _ControlPlaneService_ManageInstructionSet_Handler,
+			MethodName: "UpdateWorkflowDraft",
+			Handler:    _PlatformCommandService_UpdateWorkflowDraft_Handler,
 		},
 		{
-			MethodName: "ReconcileGitInstructionSet",
-			Handler:    _ControlPlaneService_ReconcileGitInstructionSet_Handler,
+			MethodName: "ValidateWorkflowDraft",
+			Handler:    _PlatformCommandService_ValidateWorkflowDraft_Handler,
 		},
 		{
-			MethodName: "CompareInstructionSetVersions",
-			Handler:    _ControlPlaneService_CompareInstructionSetVersions_Handler,
+			MethodName: "PublishWorkflowDraft",
+			Handler:    _PlatformCommandService_PublishWorkflowDraft_Handler,
 		},
 		{
-			MethodName: "ManageProviderConnectionReference",
-			Handler:    _ControlPlaneService_ManageProviderConnectionReference_Handler,
+			MethodName: "ArchiveWorkflow",
+			Handler:    _PlatformCommandService_ArchiveWorkflow_Handler,
 		},
 		{
-			MethodName: "ManageProviderPool",
-			Handler:    _ControlPlaneService_ManageProviderPool_Handler,
+			MethodName: "LaunchRun",
+			Handler:    _PlatformCommandService_LaunchRun_Handler,
 		},
 		{
-			MethodName: "ReconcileGitProviderPool",
-			Handler:    _ControlPlaneService_ReconcileGitProviderPool_Handler,
+			MethodName: "AddSessionTurn",
+			Handler:    _PlatformCommandService_AddSessionTurn_Handler,
 		},
 		{
-			MethodName: "GetRoleDefinition",
-			Handler:    _ControlPlaneService_GetRoleDefinition_Handler,
+			MethodName: "CancelRun",
+			Handler:    _PlatformCommandService_CancelRun_Handler,
 		},
 		{
-			MethodName: "ListRoleDefinitions",
-			Handler:    _ControlPlaneService_ListRoleDefinitions_Handler,
-		},
-		{
-			MethodName: "ListRoleDefinitionHistory",
-			Handler:    _ControlPlaneService_ListRoleDefinitionHistory_Handler,
-		},
-		{
-			MethodName: "GetAgent",
-			Handler:    _ControlPlaneService_GetAgent_Handler,
-		},
-		{
-			MethodName: "ListAgents",
-			Handler:    _ControlPlaneService_ListAgents_Handler,
-		},
-		{
-			MethodName: "ListAgentHistory",
-			Handler:    _ControlPlaneService_ListAgentHistory_Handler,
-		},
-		{
-			MethodName: "GetAgentAssignment",
-			Handler:    _ControlPlaneService_GetAgentAssignment_Handler,
-		},
-		{
-			MethodName: "ListAgentAssignments",
-			Handler:    _ControlPlaneService_ListAgentAssignments_Handler,
-		},
-		{
-			MethodName: "ListAgentAssignmentHistory",
-			Handler:    _ControlPlaneService_ListAgentAssignmentHistory_Handler,
-		},
-		{
-			MethodName: "GetInstructionSet",
-			Handler:    _ControlPlaneService_GetInstructionSet_Handler,
-		},
-		{
-			MethodName: "ListInstructionSets",
-			Handler:    _ControlPlaneService_ListInstructionSets_Handler,
-		},
-		{
-			MethodName: "ListInstructionSetHistory",
-			Handler:    _ControlPlaneService_ListInstructionSetHistory_Handler,
-		},
-		{
-			MethodName: "GetProviderConnectionReference",
-			Handler:    _ControlPlaneService_GetProviderConnectionReference_Handler,
-		},
-		{
-			MethodName: "ListProviderConnectionReferences",
-			Handler:    _ControlPlaneService_ListProviderConnectionReferences_Handler,
-		},
-		{
-			MethodName: "ListProviderConnectionReferenceHistory",
-			Handler:    _ControlPlaneService_ListProviderConnectionReferenceHistory_Handler,
-		},
-		{
-			MethodName: "GetProviderPool",
-			Handler:    _ControlPlaneService_GetProviderPool_Handler,
-		},
-		{
-			MethodName: "ListProviderPools",
-			Handler:    _ControlPlaneService_ListProviderPools_Handler,
-		},
-		{
-			MethodName: "ListProviderPoolHistory",
-			Handler:    _ControlPlaneService_ListProviderPoolHistory_Handler,
-		},
-		{
-			MethodName: "GetResource",
-			Handler:    _ControlPlaneService_GetResource_Handler,
-		},
-		{
-			MethodName: "ListResources",
-			Handler:    _ControlPlaneService_ListResources_Handler,
-		},
-		{
-			MethodName: "SearchResources",
-			Handler:    _ControlPlaneService_SearchResources_Handler,
-		},
-		{
-			MethodName: "SearchMemoryRecords",
-			Handler:    _ControlPlaneService_SearchMemoryRecords_Handler,
-		},
-		{
-			MethodName: "ListAuditEvents",
-			Handler:    _ControlPlaneService_ListAuditEvents_Handler,
-		},
-		{
-			MethodName: "ListRuntimeIncidents",
-			Handler:    _ControlPlaneService_ListRuntimeIncidents_Handler,
-		},
-		{
-			MethodName: "ListTombstones",
-			Handler:    _ControlPlaneService_ListTombstones_Handler,
-		},
-		{
-			MethodName: "GetDiagnostics",
-			Handler:    _ControlPlaneService_GetDiagnostics_Handler,
-		},
-		{
-			MethodName: "ListOutboxFailures",
-			Handler:    _ControlPlaneService_ListOutboxFailures_Handler,
-		},
-		{
-			MethodName: "RepairOutboxEvent",
-			Handler:    _ControlPlaneService_RepairOutboxEvent_Handler,
-		},
-		{
-			MethodName: "AdmitOwnerSession",
-			Handler:    _ControlPlaneService_AdmitOwnerSession_Handler,
-		},
-		{
-			MethodName: "RevokeOwnerSession",
-			Handler:    _ControlPlaneService_RevokeOwnerSession_Handler,
-		},
-		{
-			MethodName: "PrepareGatewayPublicTLS",
-			Handler:    _ControlPlaneService_PrepareGatewayPublicTLS_Handler,
-		},
-		{
-			MethodName: "ConfirmGatewayPublicTLS",
-			Handler:    _ControlPlaneService_ConfirmGatewayPublicTLS_Handler,
-		},
-		{
-			MethodName: "CheckGatewayPublicTLS",
-			Handler:    _ControlPlaneService_CheckGatewayPublicTLS_Handler,
-		},
-		{
-			MethodName: "EnqueueTurn",
-			Handler:    _ControlPlaneService_EnqueueTurn_Handler,
-		},
-		{
-			MethodName: "ClaimTurn",
-			Handler:    _ControlPlaneService_ClaimTurn_Handler,
-		},
-		{
-			MethodName: "RenewTurn",
-			Handler:    _ControlPlaneService_RenewTurn_Handler,
-		},
-		{
-			MethodName: "ReportRuntimeProgress",
-			Handler:    _ControlPlaneService_ReportRuntimeProgress_Handler,
-		},
-		{
-			MethodName: "CompleteTurn",
-			Handler:    _ControlPlaneService_CompleteTurn_Handler,
-		},
-		{
-			MethodName: "RetryTurn",
-			Handler:    _ControlPlaneService_RetryTurn_Handler,
-		},
-		{
-			MethodName: "CancelTurn",
-			Handler:    _ControlPlaneService_CancelTurn_Handler,
-		},
-		{
-			MethodName: "ManageSession",
-			Handler:    _ControlPlaneService_ManageSession_Handler,
-		},
-		{
-			MethodName: "BindSessionMCP",
-			Handler:    _ControlPlaneService_BindSessionMCP_Handler,
-		},
-		{
-			MethodName: "ManageConversationLifecycle",
-			Handler:    _ControlPlaneService_ManageConversationLifecycle_Handler,
-		},
-		{
-			MethodName: "ManageMemoryRecord",
-			Handler:    _ControlPlaneService_ManageMemoryRecord_Handler,
-		},
-		{
-			MethodName: "ManageWorkClaim",
-			Handler:    _ControlPlaneService_ManageWorkClaim_Handler,
-		},
-		{
-			MethodName: "ManageSchedule",
-			Handler:    _ControlPlaneService_ManageSchedule_Handler,
-		},
-		{
-			MethodName: "CreateScheduleFromOwnerSelections",
-			Handler:    _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler,
-		},
-		{
-			MethodName: "ManageOwnerSchedule",
-			Handler:    _ControlPlaneService_ManageOwnerSchedule_Handler,
-		},
-		{
-			MethodName: "GetOwnerSchedule",
-			Handler:    _ControlPlaneService_GetOwnerSchedule_Handler,
-		},
-		{
-			MethodName: "ListOwnerSchedules",
-			Handler:    _ControlPlaneService_ListOwnerSchedules_Handler,
-		},
-		{
-			MethodName: "BindScheduleConfiguration",
-			Handler:    _ControlPlaneService_BindScheduleConfiguration_Handler,
-		},
-		{
-			MethodName: "RunScheduleNow",
-			Handler:    _ControlPlaneService_RunScheduleNow_Handler,
-		},
-		{
-			MethodName: "ClaimDueSchedules",
-			Handler:    _ControlPlaneService_ClaimDueSchedules_Handler,
-		},
-		{
-			MethodName: "ClaimScheduleOccurrence",
-			Handler:    _ControlPlaneService_ClaimScheduleOccurrence_Handler,
-		},
-		{
-			MethodName: "MaterializeScheduleOccurrence",
-			Handler:    _ControlPlaneService_MaterializeScheduleOccurrence_Handler,
-		},
-		{
-			MethodName: "CompleteScheduleOccurrence",
-			Handler:    _ControlPlaneService_CompleteScheduleOccurrence_Handler,
-		},
-		{
-			MethodName: "CancelScheduleOccurrence",
-			Handler:    _ControlPlaneService_CancelScheduleOccurrence_Handler,
-		},
-		{
-			MethodName: "ListScheduleOccurrences",
-			Handler:    _ControlPlaneService_ListScheduleOccurrences_Handler,
-		},
-		{
-			MethodName: "ResolveScheduleRecovery",
-			Handler:    _ControlPlaneService_ResolveScheduleRecovery_Handler,
-		},
-		{
-			MethodName: "StartProcess",
-			Handler:    _ControlPlaneService_StartProcess_Handler,
-		},
-		{
-			MethodName: "CancelProcess",
-			Handler:    _ControlPlaneService_CancelProcess_Handler,
-		},
-		{
-			MethodName: "CompleteProcess",
-			Handler:    _ControlPlaneService_CompleteProcess_Handler,
-		},
-		{
-			MethodName: "ManageRun",
-			Handler:    _ControlPlaneService_ManageRun_Handler,
-		},
-		{
-			MethodName: "ListOwnerRuns",
-			Handler:    _ControlPlaneService_ListOwnerRuns_Handler,
-		},
-		{
-			MethodName: "GetRunDetail",
-			Handler:    _ControlPlaneService_GetRunDetail_Handler,
-		},
-		{
-			MethodName: "ListRunTimeline",
-			Handler:    _ControlPlaneService_ListRunTimeline_Handler,
-		},
-		{
-			MethodName: "GetRunLineage",
-			Handler:    _ControlPlaneService_GetRunLineage_Handler,
-		},
-		{
-			MethodName: "ListRunArtifacts",
-			Handler:    _ControlPlaneService_ListRunArtifacts_Handler,
-		},
-		{
-			MethodName: "RequestOwnerGate",
-			Handler:    _ControlPlaneService_RequestOwnerGate_Handler,
-		},
-		{
-			MethodName: "ClaimOwnerGateDelivery",
-			Handler:    _ControlPlaneService_ClaimOwnerGateDelivery_Handler,
-		},
-		{
-			MethodName: "ExpireOwnerGate",
-			Handler:    _ControlPlaneService_ExpireOwnerGate_Handler,
-		},
-		{
-			MethodName: "RecordOwnerGateDelivery",
-			Handler:    _ControlPlaneService_RecordOwnerGateDelivery_Handler,
-		},
-		{
-			MethodName: "ClaimInteractionDelivery",
-			Handler:    _ControlPlaneService_ClaimInteractionDelivery_Handler,
-		},
-		{
-			MethodName: "IssueInteractionDeliveryReadbackGrant",
-			Handler:    _ControlPlaneService_IssueInteractionDeliveryReadbackGrant_Handler,
-		},
-		{
-			MethodName: "ValidateInteractionDeliveryReadbackGrant",
-			Handler:    _ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_Handler,
-		},
-		{
-			MethodName: "RecordInteractionDelivery",
-			Handler:    _ControlPlaneService_RecordInteractionDelivery_Handler,
+			MethodName: "RetryRun",
+			Handler:    _PlatformCommandService_RetryRun_Handler,
 		},
 		{
 			MethodName: "ResolveOwnerGate",
-			Handler:    _ControlPlaneService_ResolveOwnerGate_Handler,
-		},
-		{
-			MethodName: "ListBackups",
-			Handler:    _ControlPlaneService_ListBackups_Handler,
-		},
-		{
-			MethodName: "GetBackup",
-			Handler:    _ControlPlaneService_GetBackup_Handler,
-		},
-		{
-			MethodName: "RestoreBackup",
-			Handler:    _ControlPlaneService_RestoreBackup_Handler,
-		},
-		{
-			MethodName: "GetRestoreOperation",
-			Handler:    _ControlPlaneService_GetRestoreOperation_Handler,
-		},
-		{
-			MethodName: "ListRestoreOperations",
-			Handler:    _ControlPlaneService_ListRestoreOperations_Handler,
-		},
-		{
-			MethodName: "ManageWorkspaceBackup",
-			Handler:    _ControlPlaneService_ManageWorkspaceBackup_Handler,
-		},
-		{
-			MethodName: "GetWorkspaceBackup",
-			Handler:    _ControlPlaneService_GetWorkspaceBackup_Handler,
-		},
-		{
-			MethodName: "ListWorkspaceBackups",
-			Handler:    _ControlPlaneService_ListWorkspaceBackups_Handler,
-		},
-		{
-			MethodName: "ManageWorkspaceRestore",
-			Handler:    _ControlPlaneService_ManageWorkspaceRestore_Handler,
-		},
-		{
-			MethodName: "GetWorkspaceRestore",
-			Handler:    _ControlPlaneService_GetWorkspaceRestore_Handler,
-		},
-		{
-			MethodName: "ListWorkspaceRestores",
-			Handler:    _ControlPlaneService_ListWorkspaceRestores_Handler,
-		},
-		{
-			MethodName: "ManageRuntimeIncident",
-			Handler:    _ControlPlaneService_ManageRuntimeIncident_Handler,
-		},
-		{
-			MethodName: "GetRuntimeIncident",
-			Handler:    _ControlPlaneService_GetRuntimeIncident_Handler,
-		},
-		{
-			MethodName: "ListRuntimeIncidentHistory",
-			Handler:    _ControlPlaneService_ListRuntimeIncidentHistory_Handler,
-		},
-		{
-			MethodName: "ManageWorkspaceMattermostMapping",
-			Handler:    _ControlPlaneService_ManageWorkspaceMattermostMapping_Handler,
-		},
-		{
-			MethodName: "GetWorkspaceMattermostMapping",
-			Handler:    _ControlPlaneService_GetWorkspaceMattermostMapping_Handler,
-		},
-		{
-			MethodName: "ListWorkspaceMattermostMappings",
-			Handler:    _ControlPlaneService_ListWorkspaceMattermostMappings_Handler,
-		},
-		{
-			MethodName: "GetLegacyConfigurationCutover",
-			Handler:    _ControlPlaneService_GetLegacyConfigurationCutover_Handler,
-		},
-		{
-			MethodName: "ListLegacyConfigurationCutovers",
-			Handler:    _ControlPlaneService_ListLegacyConfigurationCutovers_Handler,
-		},
-		{
-			MethodName: "ResolveLegacyConfigurationCutover",
-			Handler:    _ControlPlaneService_ResolveLegacyConfigurationCutover_Handler,
-		},
-		{
-			MethodName: "RegisterArtifact",
-			Handler:    _ControlPlaneService_RegisterArtifact_Handler,
-		},
-		{
-			MethodName: "RecordArtifactScan",
-			Handler:    _ControlPlaneService_RecordArtifactScan_Handler,
-		},
-		{
-			MethodName: "ManageRoleImageRecipe",
-			Handler:    _ControlPlaneService_ManageRoleImageRecipe_Handler,
-		},
-		{
-			MethodName: "GetRoleImageRecipe",
-			Handler:    _ControlPlaneService_GetRoleImageRecipe_Handler,
-		},
-		{
-			MethodName: "ClaimImageBuild",
-			Handler:    _ControlPlaneService_ClaimImageBuild_Handler,
-		},
-		{
-			MethodName: "RenewImageBuild",
-			Handler:    _ControlPlaneService_RenewImageBuild_Handler,
-		},
-		{
-			MethodName: "ReportImageBuildProgress",
-			Handler:    _ControlPlaneService_ReportImageBuildProgress_Handler,
-		},
-		{
-			MethodName: "CompleteImageBuild",
-			Handler:    _ControlPlaneService_CompleteImageBuild_Handler,
-		},
-		{
-			MethodName: "FailImageBuild",
-			Handler:    _ControlPlaneService_FailImageBuild_Handler,
-		},
-		{
-			MethodName: "ManageImageBuild",
-			Handler:    _ControlPlaneService_ManageImageBuild_Handler,
-		},
-		{
-			MethodName: "ClaimImageAdmission",
-			Handler:    _ControlPlaneService_ClaimImageAdmission_Handler,
-		},
-		{
-			MethodName: "RecordImageAdmission",
-			Handler:    _ControlPlaneService_RecordImageAdmission_Handler,
-		},
-		{
-			MethodName: "ClaimImagePromotion",
-			Handler:    _ControlPlaneService_ClaimImagePromotion_Handler,
-		},
-		{
-			MethodName: "AuthorizeImagePromotion",
-			Handler:    _ControlPlaneService_AuthorizeImagePromotion_Handler,
-		},
-		{
-			MethodName: "CompleteImagePromotion",
-			Handler:    _ControlPlaneService_CompleteImagePromotion_Handler,
-		},
-		{
-			MethodName: "GetRoleImageBuild",
-			Handler:    _ControlPlaneService_GetRoleImageBuild_Handler,
-		},
-		{
-			MethodName: "GetRuntimeRevision",
-			Handler:    _ControlPlaneService_GetRuntimeRevision_Handler,
-		},
-		{
-			MethodName: "RecordMemoryEmbedding",
-			Handler:    _ControlPlaneService_RecordMemoryEmbedding_Handler,
-		},
-		{
-			MethodName: "ClaimRuntimeExecution",
-			Handler:    _ControlPlaneService_ClaimRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "SetResourceRetentionPolicy",
-			Handler:    _ControlPlaneService_SetResourceRetentionPolicy_Handler,
-		},
-		{
-			MethodName: "RetireResourceRetentionPolicy",
-			Handler:    _ControlPlaneService_RetireResourceRetentionPolicy_Handler,
-		},
-		{
-			MethodName: "GetResourceRetentionPolicy",
-			Handler:    _ControlPlaneService_GetResourceRetentionPolicy_Handler,
-		},
-		{
-			MethodName: "HoldRuntimeRetention",
-			Handler:    _ControlPlaneService_HoldRuntimeRetention_Handler,
-		},
-		{
-			MethodName: "ReleaseRuntimeRetention",
-			Handler:    _ControlPlaneService_ReleaseRuntimeRetention_Handler,
-		},
-		{
-			MethodName: "GetRuntimeExecution",
-			Handler:    _ControlPlaneService_GetRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "GetRuntimeMaterialization",
-			Handler:    _ControlPlaneService_GetRuntimeMaterialization_Handler,
-		},
-		{
-			MethodName: "AuthorizeRuntimeOutput",
-			Handler:    _ControlPlaneService_AuthorizeRuntimeOutput_Handler,
-		},
-		{
-			MethodName: "RegisterRuntimeOutput",
-			Handler:    _ControlPlaneService_RegisterRuntimeOutput_Handler,
-		},
-		{
-			MethodName: "AdmitRuntimeExecution",
-			Handler:    _ControlPlaneService_AdmitRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "AuthorizeRuntimeRestoreEffect",
-			Handler:    _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler,
-		},
-		{
-			MethodName: "HeartbeatRuntimeExecution",
-			Handler:    _ControlPlaneService_HeartbeatRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "RecordRuntimeIncident",
-			Handler:    _ControlPlaneService_RecordRuntimeIncident_Handler,
-		},
-		{
-			MethodName: "CompleteRuntimeExecution",
-			Handler:    _ControlPlaneService_CompleteRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "CancelRuntimeExecution",
-			Handler:    _ControlPlaneService_CancelRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "RetryRuntimeExecution",
-			Handler:    _ControlPlaneService_RetryRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "ManageRuntimeAction",
-			Handler:    _ControlPlaneService_ManageRuntimeAction_Handler,
-		},
-		{
-			MethodName: "RescheduleRuntimeExecution",
-			Handler:    _ControlPlaneService_RescheduleRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "ExpireRuntimeExecution",
-			Handler:    _ControlPlaneService_ExpireRuntimeExecution_Handler,
-		},
-		{
-			MethodName: "RecordRuntimeArchive",
-			Handler:    _ControlPlaneService_RecordRuntimeArchive_Handler,
-		},
-		{
-			MethodName: "VerifyRuntimeRestore",
-			Handler:    _ControlPlaneService_VerifyRuntimeRestore_Handler,
-		},
-		{
-			MethodName: "BindRuntimeRestoreTarget",
-			Handler:    _ControlPlaneService_BindRuntimeRestoreTarget_Handler,
-		},
-		{
-			MethodName: "CompleteRuntimeRehydrate",
-			Handler:    _ControlPlaneService_CompleteRuntimeRehydrate_Handler,
-		},
-		{
-			MethodName: "AuthorizeRuntimeCleanup",
-			Handler:    _ControlPlaneService_AuthorizeRuntimeCleanup_Handler,
-		},
-		{
-			MethodName: "ConsumeRuntimeCleanupAuthorization",
-			Handler:    _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler,
-		},
-		{
-			MethodName: "ExpireRuntimeCleanupAuthorization",
-			Handler:    _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler,
-		},
-		{
-			MethodName: "ResolveIntegrationSession",
-			Handler:    _ControlPlaneService_ResolveIntegrationSession_Handler,
-		},
-		{
-			MethodName: "SuspendForIntegrationApproval",
-			Handler:    _ControlPlaneService_SuspendForIntegrationApproval_Handler,
-		},
-		{
-			MethodName: "ApproveIntegrationInvocation",
-			Handler:    _ControlPlaneService_ApproveIntegrationInvocation_Handler,
-		},
-		{
-			MethodName: "RejectIntegrationInvocation",
-			Handler:    _ControlPlaneService_RejectIntegrationInvocation_Handler,
-		},
-		{
-			MethodName: "ExpireIntegrationInvocation",
-			Handler:    _ControlPlaneService_ExpireIntegrationInvocation_Handler,
-		},
-		{
-			MethodName: "CancelIntegrationInvocation",
-			Handler:    _ControlPlaneService_CancelIntegrationInvocation_Handler,
-		},
-		{
-			MethodName: "BeginIntegrationExecution",
-			Handler:    _ControlPlaneService_BeginIntegrationExecution_Handler,
-		},
-		{
-			MethodName: "CompleteIntegrationExecution",
-			Handler:    _ControlPlaneService_CompleteIntegrationExecution_Handler,
-		},
-		{
-			MethodName: "FailIntegrationExecution",
-			Handler:    _ControlPlaneService_FailIntegrationExecution_Handler,
-		},
-		{
-			MethodName: "GetIntegrationContinuation",
-			Handler:    _ControlPlaneService_GetIntegrationContinuation_Handler,
-		},
-		{
-			MethodName: "AcknowledgeIntegrationContinuation",
-			Handler:    _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler,
-		},
-		{
-			MethodName: "PrepareLegacyGraphMigration",
-			Handler:    _ControlPlaneService_PrepareLegacyGraphMigration_Handler,
-		},
-		{
-			MethodName: "MaterializeLegacyGraphMigration",
-			Handler:    _ControlPlaneService_MaterializeLegacyGraphMigration_Handler,
-		},
-		{
-			MethodName: "GetLegacyGraphMigration",
-			Handler:    _ControlPlaneService_GetLegacyGraphMigration_Handler,
-		},
-		{
-			MethodName: "AbortLegacyGraphMigration",
-			Handler:    _ControlPlaneService_AbortLegacyGraphMigration_Handler,
-		},
-		{
-			MethodName: "CheckReadiness",
-			Handler:    _ControlPlaneService_CheckReadiness_Handler,
+			Handler:    _PlatformCommandService_ResolveOwnerGate_Handler,
+		},
+		{
+			MethodName: "ChangeArtifactBinding",
+			Handler:    _PlatformCommandService_ChangeArtifactBinding_Handler,
+		},
+		{
+			MethodName: "CreateSchedule",
+			Handler:    _PlatformCommandService_CreateSchedule_Handler,
+		},
+		{
+			MethodName: "UpdateSchedule",
+			Handler:    _PlatformCommandService_UpdateSchedule_Handler,
+		},
+		{
+			MethodName: "SetScheduleEnabled",
+			Handler:    _PlatformCommandService_SetScheduleEnabled_Handler,
+		},
+		{
+			MethodName: "CreateIntegrationConnection",
+			Handler:    _PlatformCommandService_CreateIntegrationConnection_Handler,
+		},
+		{
+			MethodName: "TestIntegrationConnection",
+			Handler:    _PlatformCommandService_TestIntegrationConnection_Handler,
+		},
+		{
+			MethodName: "SetIntegrationConnectionEnabled",
+			Handler:    _PlatformCommandService_SetIntegrationConnectionEnabled_Handler,
+		},
+		{
+			MethodName: "ChangeIntegrationGrant",
+			Handler:    _PlatformCommandService_ChangeIntegrationGrant_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadArtifact",
+			Handler:       _PlatformCommandService_UploadArtifact_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadArtifact",
+			Handler:       _PlatformCommandService_DownloadArtifact_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	SystemAssistantService_GetSystemAssistant_FullMethodName               = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
+	SystemAssistantService_ListAssistantConversations_FullMethodName       = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
+	SystemAssistantService_CreateAssistantConversation_FullMethodName      = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
+	SystemAssistantService_AddAssistantTurn_FullMethodName                 = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
+	SystemAssistantService_ApplyAssistantPlan_FullMethodName               = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
+	SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName = "/controlplane.v1.SystemAssistantService/UpdateAssistantOwnerInstructions"
+	SystemAssistantService_RecoverSystemAssistant_FullMethodName           = "/controlplane.v1.SystemAssistantService/RecoverSystemAssistant"
+)
+
+// SystemAssistantServiceClient is the client API for SystemAssistantService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type SystemAssistantServiceClient interface {
+	GetSystemAssistant(ctx context.Context, in *GetSystemAssistantRequest, opts ...grpc.CallOption) (*GetSystemAssistantResponse, error)
+	ListAssistantConversations(ctx context.Context, in *ListAssistantConversationsRequest, opts ...grpc.CallOption) (*ListAssistantConversationsResponse, error)
+	CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error)
+	AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error)
+	ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error)
+	UpdateAssistantOwnerInstructions(ctx context.Context, in *UpdateAssistantOwnerInstructionsRequest, opts ...grpc.CallOption) (*UpdateAssistantOwnerInstructionsResponse, error)
+	RecoverSystemAssistant(ctx context.Context, in *RecoverSystemAssistantRequest, opts ...grpc.CallOption) (*RecoverSystemAssistantResponse, error)
+}
+
+type systemAssistantServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewSystemAssistantServiceClient(cc grpc.ClientConnInterface) SystemAssistantServiceClient {
+	return &systemAssistantServiceClient{cc}
+}
+
+func (c *systemAssistantServiceClient) GetSystemAssistant(ctx context.Context, in *GetSystemAssistantRequest, opts ...grpc.CallOption) (*GetSystemAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSystemAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_GetSystemAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) ListAssistantConversations(ctx context.Context, in *ListAssistantConversationsRequest, opts ...grpc.CallOption) (*ListAssistantConversationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAssistantConversationsResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_ListAssistantConversations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAssistantConversationResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_CreateAssistantConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddAssistantTurnResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_AddAssistantTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) ApplyAssistantPlan(ctx context.Context, in *ApplyAssistantPlanRequest, opts ...grpc.CallOption) (*ApplyAssistantPlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplyAssistantPlanResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_ApplyAssistantPlan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) UpdateAssistantOwnerInstructions(ctx context.Context, in *UpdateAssistantOwnerInstructionsRequest, opts ...grpc.CallOption) (*UpdateAssistantOwnerInstructionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAssistantOwnerInstructionsResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) RecoverSystemAssistant(ctx context.Context, in *RecoverSystemAssistantRequest, opts ...grpc.CallOption) (*RecoverSystemAssistantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecoverSystemAssistantResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_RecoverSystemAssistant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SystemAssistantServiceServer is the server API for SystemAssistantService service.
+// All implementations must embed UnimplementedSystemAssistantServiceServer
+// for forward compatibility.
+type SystemAssistantServiceServer interface {
+	GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error)
+	ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error)
+	CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error)
+	AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error)
+	ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error)
+	UpdateAssistantOwnerInstructions(context.Context, *UpdateAssistantOwnerInstructionsRequest) (*UpdateAssistantOwnerInstructionsResponse, error)
+	RecoverSystemAssistant(context.Context, *RecoverSystemAssistantRequest) (*RecoverSystemAssistantResponse, error)
+	mustEmbedUnimplementedSystemAssistantServiceServer()
+}
+
+// UnimplementedSystemAssistantServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedSystemAssistantServiceServer struct{}
+
+func (UnimplementedSystemAssistantServiceServer) GetSystemAssistant(context.Context, *GetSystemAssistantRequest) (*GetSystemAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSystemAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) ListAssistantConversations(context.Context, *ListAssistantConversationsRequest) (*ListAssistantConversationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAssistantConversations not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAssistantConversation not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddAssistantTurn not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) ApplyAssistantPlan(context.Context, *ApplyAssistantPlanRequest) (*ApplyAssistantPlanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplyAssistantPlan not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) UpdateAssistantOwnerInstructions(context.Context, *UpdateAssistantOwnerInstructionsRequest) (*UpdateAssistantOwnerInstructionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAssistantOwnerInstructions not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) RecoverSystemAssistant(context.Context, *RecoverSystemAssistantRequest) (*RecoverSystemAssistantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecoverSystemAssistant not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) mustEmbedUnimplementedSystemAssistantServiceServer() {
+}
+func (UnimplementedSystemAssistantServiceServer) testEmbeddedByValue() {}
+
+// UnsafeSystemAssistantServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SystemAssistantServiceServer will
+// result in compilation errors.
+type UnsafeSystemAssistantServiceServer interface {
+	mustEmbedUnimplementedSystemAssistantServiceServer()
+}
+
+func RegisterSystemAssistantServiceServer(s grpc.ServiceRegistrar, srv SystemAssistantServiceServer) {
+	// If the following call panics, it indicates UnimplementedSystemAssistantServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&SystemAssistantService_ServiceDesc, srv)
+}
+
+func _SystemAssistantService_GetSystemAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSystemAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).GetSystemAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_GetSystemAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).GetSystemAssistant(ctx, req.(*GetSystemAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_ListAssistantConversations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAssistantConversationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).ListAssistantConversations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_ListAssistantConversations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).ListAssistantConversations(ctx, req.(*ListAssistantConversationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_CreateAssistantConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAssistantConversationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).CreateAssistantConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_CreateAssistantConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).CreateAssistantConversation(ctx, req.(*CreateAssistantConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_AddAssistantTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddAssistantTurnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).AddAssistantTurn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_AddAssistantTurn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).AddAssistantTurn(ctx, req.(*AddAssistantTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_ApplyAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyAssistantPlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).ApplyAssistantPlan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_ApplyAssistantPlan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).ApplyAssistantPlan(ctx, req.(*ApplyAssistantPlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_UpdateAssistantOwnerInstructions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAssistantOwnerInstructionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantOwnerInstructions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).UpdateAssistantOwnerInstructions(ctx, req.(*UpdateAssistantOwnerInstructionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_RecoverSystemAssistant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverSystemAssistantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).RecoverSystemAssistant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_RecoverSystemAssistant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).RecoverSystemAssistant(ctx, req.(*RecoverSystemAssistantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// SystemAssistantService_ServiceDesc is the grpc.ServiceDesc for SystemAssistantService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.SystemAssistantService",
+	HandlerType: (*SystemAssistantServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetSystemAssistant",
+			Handler:    _SystemAssistantService_GetSystemAssistant_Handler,
+		},
+		{
+			MethodName: "ListAssistantConversations",
+			Handler:    _SystemAssistantService_ListAssistantConversations_Handler,
+		},
+		{
+			MethodName: "CreateAssistantConversation",
+			Handler:    _SystemAssistantService_CreateAssistantConversation_Handler,
+		},
+		{
+			MethodName: "AddAssistantTurn",
+			Handler:    _SystemAssistantService_AddAssistantTurn_Handler,
+		},
+		{
+			MethodName: "ApplyAssistantPlan",
+			Handler:    _SystemAssistantService_ApplyAssistantPlan_Handler,
+		},
+		{
+			MethodName: "UpdateAssistantOwnerInstructions",
+			Handler:    _SystemAssistantService_UpdateAssistantOwnerInstructions_Handler,
+		},
+		{
+			MethodName: "RecoverSystemAssistant",
+			Handler:    _SystemAssistantService_RecoverSystemAssistant_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	RuntimeWorkService_ClaimExecution_FullMethodName                = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
+	RuntimeWorkService_RenewExecution_FullMethodName                = "/controlplane.v1.RuntimeWorkService/RenewExecution"
+	RuntimeWorkService_ReportExecutionProgress_FullMethodName       = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
+	RuntimeWorkService_CompleteExecution_FullMethodName             = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
+	RuntimeWorkService_DelegateExecution_FullMethodName             = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
+	RuntimeWorkService_DeliverCallback_FullMethodName               = "/controlplane.v1.RuntimeWorkService/DeliverCallback"
+	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName          = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
+	RuntimeWorkService_ReportWarmRuntime_FullMethodName             = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
+	RuntimeWorkService_ClaimDueSchedules_FullMethodName             = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
+	RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName = "/controlplane.v1.RuntimeWorkService/MaterializeScheduleOccurrence"
+	RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName    = "/controlplane.v1.RuntimeWorkService/CompleteScheduleOccurrence"
+	RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName  = "/controlplane.v1.RuntimeWorkService/ResolveIntegrationInvocation"
+	RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationInvocation"
+)
+
+// RuntimeWorkServiceClient is the client API for RuntimeWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type RuntimeWorkServiceClient interface {
+	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
+	RenewExecution(ctx context.Context, in *RenewExecutionRequest, opts ...grpc.CallOption) (*RenewExecutionResponse, error)
+	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
+	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
+	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
+	DeliverCallback(ctx context.Context, in *DeliverCallbackRequest, opts ...grpc.CallOption) (*DeliverCallbackResponse, error)
+	ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error)
+	ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error)
+	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
+	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
+	CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error)
+	ResolveIntegrationInvocation(ctx context.Context, in *ResolveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ResolveIntegrationInvocationResponse, error)
+	CompleteIntegrationInvocation(ctx context.Context, in *CompleteIntegrationInvocationRequest, opts ...grpc.CallOption) (*CompleteIntegrationInvocationResponse, error)
+}
+
+type runtimeWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRuntimeWorkServiceClient(cc grpc.ClientConnInterface) RuntimeWorkServiceClient {
+	return &runtimeWorkServiceClient{cc}
+}
+
+func (c *runtimeWorkServiceClient) ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimExecutionResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ClaimExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) RenewExecution(ctx context.Context, in *RenewExecutionRequest, opts ...grpc.CallOption) (*RenewExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewExecutionResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_RenewExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportExecutionProgressResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportExecutionProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteExecutionResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_CompleteExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DelegateExecutionResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_DelegateExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) DeliverCallback(ctx context.Context, in *DeliverCallbackRequest, opts ...grpc.CallOption) (*DeliverCallbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeliverCallbackResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_DeliverCallback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileWarmRuntimeResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReconcileWarmRuntime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportWarmRuntimeResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportWarmRuntime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimDueSchedulesResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ClaimDueSchedules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeScheduleOccurrenceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteScheduleOccurrenceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ResolveIntegrationInvocation(ctx context.Context, in *ResolveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ResolveIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Context, in *CompleteIntegrationInvocationRequest, opts ...grpc.CallOption) (*CompleteIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RuntimeWorkServiceServer is the server API for RuntimeWorkService service.
+// All implementations must embed UnimplementedRuntimeWorkServiceServer
+// for forward compatibility.
+type RuntimeWorkServiceServer interface {
+	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
+	RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error)
+	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
+	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
+	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
+	DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error)
+	ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error)
+	ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error)
+	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
+	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
+	CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error)
+	ResolveIntegrationInvocation(context.Context, *ResolveIntegrationInvocationRequest) (*ResolveIntegrationInvocationResponse, error)
+	CompleteIntegrationInvocation(context.Context, *CompleteIntegrationInvocationRequest) (*CompleteIntegrationInvocationResponse, error)
+	mustEmbedUnimplementedRuntimeWorkServiceServer()
+}
+
+// UnimplementedRuntimeWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRuntimeWorkServiceServer struct{}
+
+func (UnimplementedRuntimeWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportExecutionProgress not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DelegateExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeliverCallback not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileWarmRuntime not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportWarmRuntime not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimDueSchedules not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeScheduleOccurrence not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteScheduleOccurrence not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ResolveIntegrationInvocation(context.Context, *ResolveIntegrationInvocationRequest) (*ResolveIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveIntegrationInvocation not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) CompleteIntegrationInvocation(context.Context, *CompleteIntegrationInvocationRequest) (*CompleteIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteIntegrationInvocation not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) mustEmbedUnimplementedRuntimeWorkServiceServer() {}
+func (UnimplementedRuntimeWorkServiceServer) testEmbeddedByValue()                            {}
+
+// UnsafeRuntimeWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RuntimeWorkServiceServer will
+// result in compilation errors.
+type UnsafeRuntimeWorkServiceServer interface {
+	mustEmbedUnimplementedRuntimeWorkServiceServer()
+}
+
+func RegisterRuntimeWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedRuntimeWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RuntimeWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeWorkService_ClaimExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ClaimExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ClaimExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ClaimExecution(ctx, req.(*ClaimExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_RenewExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).RenewExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_RenewExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).RenewExecution(ctx, req.(*RenewExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReportExecutionProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportExecutionProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReportExecutionProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReportExecutionProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReportExecutionProgress(ctx, req.(*ReportExecutionProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_CompleteExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).CompleteExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_CompleteExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).CompleteExecution(ctx, req.(*CompleteExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_DelegateExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DelegateExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).DelegateExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_DelegateExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).DelegateExecution(ctx, req.(*DelegateExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_DeliverCallback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeliverCallbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).DeliverCallback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_DeliverCallback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).DeliverCallback(ctx, req.(*DeliverCallbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReconcileWarmRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileWarmRuntimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReconcileWarmRuntime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReconcileWarmRuntime(ctx, req.(*ReconcileWarmRuntimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReportWarmRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportWarmRuntimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReportWarmRuntime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReportWarmRuntime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReportWarmRuntime(ctx, req.(*ReportWarmRuntimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ClaimDueSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimDueSchedulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ClaimDueSchedules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ClaimDueSchedules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ClaimDueSchedules(ctx, req.(*ClaimDueSchedulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_MaterializeScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeScheduleOccurrenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).MaterializeScheduleOccurrence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).MaterializeScheduleOccurrence(ctx, req.(*MaterializeScheduleOccurrenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_CompleteScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteScheduleOccurrenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).CompleteScheduleOccurrence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).CompleteScheduleOccurrence(ctx, req.(*CompleteScheduleOccurrenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ResolveIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ResolveIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ResolveIntegrationInvocation(ctx, req.(*ResolveIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_CompleteIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).CompleteIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).CompleteIntegrationInvocation(ctx, req.(*CompleteIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RuntimeWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.RuntimeWorkService",
+	HandlerType: (*RuntimeWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ClaimExecution",
+			Handler:    _RuntimeWorkService_ClaimExecution_Handler,
+		},
+		{
+			MethodName: "RenewExecution",
+			Handler:    _RuntimeWorkService_RenewExecution_Handler,
+		},
+		{
+			MethodName: "ReportExecutionProgress",
+			Handler:    _RuntimeWorkService_ReportExecutionProgress_Handler,
+		},
+		{
+			MethodName: "CompleteExecution",
+			Handler:    _RuntimeWorkService_CompleteExecution_Handler,
+		},
+		{
+			MethodName: "DelegateExecution",
+			Handler:    _RuntimeWorkService_DelegateExecution_Handler,
+		},
+		{
+			MethodName: "DeliverCallback",
+			Handler:    _RuntimeWorkService_DeliverCallback_Handler,
+		},
+		{
+			MethodName: "ReconcileWarmRuntime",
+			Handler:    _RuntimeWorkService_ReconcileWarmRuntime_Handler,
+		},
+		{
+			MethodName: "ReportWarmRuntime",
+			Handler:    _RuntimeWorkService_ReportWarmRuntime_Handler,
+		},
+		{
+			MethodName: "ClaimDueSchedules",
+			Handler:    _RuntimeWorkService_ClaimDueSchedules_Handler,
+		},
+		{
+			MethodName: "MaterializeScheduleOccurrence",
+			Handler:    _RuntimeWorkService_MaterializeScheduleOccurrence_Handler,
+		},
+		{
+			MethodName: "CompleteScheduleOccurrence",
+			Handler:    _RuntimeWorkService_CompleteScheduleOccurrence_Handler,
+		},
+		{
+			MethodName: "ResolveIntegrationInvocation",
+			Handler:    _RuntimeWorkService_ResolveIntegrationInvocation_Handler,
+		},
+		{
+			MethodName: "CompleteIntegrationInvocation",
+			Handler:    _RuntimeWorkService_CompleteIntegrationInvocation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

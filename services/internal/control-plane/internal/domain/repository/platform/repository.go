@@ -1,0 +1,86 @@
+// Package platform определяет transport-neutral порт хранилища control-plane.
+package platform
+
+import (
+	"context"
+	"io"
+	"time"
+
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+)
+
+type BootstrapState struct {
+	Bootstrapped, OnboardingCompleted bool
+	OrganizationRef                   string
+	Assistant                         entity.SystemAssistant
+	ProjectCount                      int32
+	Actor                             entity.User
+}
+
+type Overview struct {
+	ProjectCount, AgentCount, ActiveRunCount, PendingGateCount int32
+	ActiveRuns                                                 []entity.Run
+	PendingGates                                               []entity.OwnerGate
+	RecentArtifacts                                            []entity.Artifact
+}
+
+type Administration struct {
+	Profile, CoreSummary string
+	CoreReady            bool
+	Assistant            entity.SystemAssistant
+	OptionalAdapters     []entity.IntegrationDefinition
+	Incidents            []entity.Incident
+	ObservedAt           time.Time
+}
+
+type ArtifactUpload struct {
+	ProjectRef, RunRef, FileName, MediaType string
+	SizeBytes                               int64
+	Reader                                  io.Reader
+}
+
+type ArtifactDownload struct {
+	Artifact entity.Artifact
+	Reader   io.ReadCloser
+}
+
+type Repository interface {
+	Bootstrap(context.Context) error
+	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
+	GetBootstrapState(context.Context, value.Principal) (BootstrapState, error)
+	GetOverview(context.Context, value.Principal, string) (Overview, error)
+	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
+	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, error)
+	GetProject(context.Context, value.Principal, string) (entity.Project, error)
+	ListMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
+	ListAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)
+	GetAgent(context.Context, value.Principal, string) (entity.Agent, error)
+	ListWorkflows(context.Context, value.Principal, query.Filter) ([]entity.Workflow, string, error)
+	GetWorkflow(context.Context, value.Principal, string) (entity.Workflow, error)
+	ListRuns(context.Context, value.Principal, query.Filter) ([]entity.Run, string, error)
+	GetRun(context.Context, value.Principal, string) (entity.Run, error)
+	GetRunGraph(context.Context, value.Principal, string) (entity.Run, entity.RunGraph, error)
+	ListRunEvents(context.Context, value.Principal, query.Filter) ([]entity.RunEvent, int64, bool, error)
+	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, string, error)
+	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
+	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
+	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
+	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
+	DownloadArtifact(context.Context, value.Principal, string) (ArtifactDownload, error)
+	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
+	ListIntegrationDefinitions(context.Context, value.Principal, string) ([]entity.IntegrationDefinition, error)
+	ListIntegrationConnections(context.Context, value.Principal, query.Filter) ([]entity.IntegrationConnection, string, error)
+	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)
+	GetSystemAssistant(context.Context, value.Principal) (entity.SystemAssistant, error)
+	ListAssistantConversations(context.Context, value.Principal, query.Filter) ([]entity.AssistantConversation, string, error)
+	GetAdministration(context.Context, value.Principal) (Administration, error)
+	ListAuditEvents(context.Context, value.Principal, query.Filter) ([]entity.AuditEvent, string, error)
+	Execute(context.Context, command.Command) (command.Result, error)
+	ReconcileWarmRuntime(context.Context, value.Principal, string) (entity.SystemAssistant, map[string]any, bool, error)
+	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
+	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string) (map[string]any, error)
+	Ready(context.Context) error
+}

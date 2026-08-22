@@ -49,7 +49,6 @@ govulncheck: check-go-toolchain
 gen-openapi: gen-openapi-go gen-openapi-ts
 
 gen-openapi-go: gen-integration-gateway-openapi-go gen-interaction-gateway-openapi-go gen-control-api-gateway-openapi-go
-	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
 
 gen-integration-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/integration-gateway-go.yaml contracts/openapi/integration-gateway/v1/openapi.yaml
@@ -83,7 +82,7 @@ check-control-api-gateway-asyncapi-codegen:
 	./tools/codegen/check-control-api-gateway-asyncapi.sh
 
 gen-openapi-ts:
-	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs
+	cd services/staff/control-center && npm exec -- openapi-ts -f openapi-ts.config.mjs
 
 lint-proto: check-proto-toolchain
 	buf lint

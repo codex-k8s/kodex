@@ -343,10 +343,12 @@ const (
 // владельца. Его первый вызов не требует internal authorization context:
 // transport interceptor проверяет exact mTLS caller, а application credential
 // поступает только в metadata и разрешается сервером в actor/tenant/project.
+// Request может нести project locator, но не авторитетный project scope.
 type AuthorityProofResolverServiceClient interface {
 	// ResolveAuthorityProof возвращает proof только после server-side проверки
 	// actor membership и ownership целевого tenant/project. Request не содержит
-	// actor, tenant, project, SPIFFE ID, audience или permission.
+	// actor, tenant, авторитетный project scope, SPIFFE ID, audience или
+	// permission.
 	ResolveAuthorityProof(ctx context.Context, in *ResolveAuthorityProofRequest, opts ...grpc.CallOption) (*ResolveAuthorityProofResponse, error)
 	// CheckReadiness криптографически проверяет фактически обслуживаемые policy,
 	// proof signer и trust readback, а также доменный read path.
@@ -389,10 +391,12 @@ func (c *authorityProofResolverServiceClient) CheckReadiness(ctx context.Context
 // владельца. Его первый вызов не требует internal authorization context:
 // transport interceptor проверяет exact mTLS caller, а application credential
 // поступает только в metadata и разрешается сервером в actor/tenant/project.
+// Request может нести project locator, но не авторитетный project scope.
 type AuthorityProofResolverServiceServer interface {
 	// ResolveAuthorityProof возвращает proof только после server-side проверки
 	// actor membership и ownership целевого tenant/project. Request не содержит
-	// actor, tenant, project, SPIFFE ID, audience или permission.
+	// actor, tenant, авторитетный project scope, SPIFFE ID, audience или
+	// permission.
 	ResolveAuthorityProof(context.Context, *ResolveAuthorityProofRequest) (*ResolveAuthorityProofResponse, error)
 	// CheckReadiness криптографически проверяет фактически обслуживаемые policy,
 	// proof signer и trust readback, а также доменный read path.

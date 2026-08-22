@@ -1,166 +1,224 @@
 asyncapi: 3.0.0
 info:
-  title: Доменные факты control-plane
-  version: 1.2.0
-  description: >-
-    Утверждённый неизменяемый факт для runtime-controller. Полное состояние
-    остаётся доступно через gRPC-чтение; automation-scheduler использует polling.
+  title: Доменные события web-first control-plane
+  version: 2.0.0
+  description: |
+    Авторитетные безопасные факты универсального control-plane. События
+    фиксируются с бизнес-состоянием в одной PostgreSQL-транзакции, публикуются
+    transactional outbox relay в NATS JetStream и доставляются как минимум
+    один раз. Полные данные и восстановление пропусков доступны только через
+    owner-scoped gRPC control-plane; event payload не является источником
+    полномочий и не содержит секретов, stdout, provider payload или файлов.
 defaultContentType: application/json
 servers:
-  staging:
-    host: nats.mattercodex-staging.svc:4222
-    protocol: nats
-    description: NATS JetStream только с TLS для staging и отдельными учётными данными Vault CSI.
-  production:
+  cluster:
     host: nats.mattercodex-system.svc:4222
     protocol: nats
-    description: NATS JetStream только с TLS; учётные данные доставляются через Vault CSI.
+    description: Внутрикластерный NATS JetStream с TLS и workload identity.
 channels:
-  runtimeConfigurationChanged:
-    address: control_plane.runtime_configuration_changed
+  runEvents:
+    address: control_plane.run.{organizationRef}.{rootRunRef}.events
+    parameters:
+      organizationRef:
+        description: Непрозрачный routing ref организации, назначенный сервером.
+      rootRunRef:
+        description: Непрозрачный routing ref корневого запуска, назначенный сервером.
     messages:
-      runtimeConfigurationChanged:
-        $ref: '#/components/messages/runtimeConfigurationChanged'
+      runEvent:
+        $ref: '#/components/messages/RunEvent'
+  platformEvents:
+    address: control_plane.platform.{organizationRef}.events
+    parameters:
+      organizationRef:
+        description: Непрозрачный routing ref организации, назначенный сервером.
+    messages:
+      platformEvent:
+        $ref: '#/components/messages/PlatformEvent'
 operations:
-  publishRuntimeConfigurationChanged:
+  publishRunEvent:
     action: send
-    channel:
-      $ref: '#/channels/runtimeConfigurationChanged'
-    summary: Уведомить runtime-controller о новой версии агрегата.
-    x-publisher: control-plane
-    x-consumers:
-      - service: runtime-controller
-        purpose: REFRESH_PINNED_RUNTIME_INPUT_BY_GRPC
-        exactEffect: >-
-          Для RUNTIME_REVISION вызвать закреплённый на точной версии
-          ControlPlaneService.GetRuntimeRevision через путь mTLS, прикладного
-          разрешения и локального issuer для конкретной рабочей нагрузки; для
-          остальных агрегатов использовать типизированный GetResource.
-          Атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
-        readiness: >-
-          Подписка запускается только после готовности устойчивого inbox,
-          точного контракта JetStream и защищённого чтения GetRuntimeRevision.
+    channel: { $ref: '#/channels/runEvents' }
+    messages: [{ $ref: '#/channels/runEvents/messages/runEvent' }]
+    summary: Опубликовать очередной факт графа корневого запуска.
+    x-publisher: control-plane-outbox-relay
+    x-transaction: BUSINESS_STATE_AUDIT_IDEMPOTENCY_AND_OUTBOX
     x-delivery:
       mode: AT_LEAST_ONCE
+      orderingKey: organizationRef+rootRunRef
+      sequenceField: sequence
       deduplicationKey: eventId
-      orderingKey: organizationId+eventName+aggregateType+aggregateId
-      sequenceField: eventSequence
-      duplicate: ACK_WITHOUT_EFFECT
-      stale: ACK_WITHOUT_EFFECT
-      gap: RETRY_WITHOUT_ACK
+      maximumPayloadBytes: 65536
+    x-consumers:
+      - service: runtime-controller
+        effect: MATERIALIZE_OR_CANCEL_EXACT_RUNTIME_WORK
+        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+        gap: DO_NOT_ACK_AND_READ_AUTHORITATIVE_EVENTS
+      - service: control-api-gateway
+        effect: FORWARD_TO_AUTHORIZED_RUN_STREAMS
+        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+        gap: READ_CONTROL_PLANE_EVENTS_THEN_RESUME
+        ownership: CONTROL_PLANE_REMAINS_EVENT_STORE_OWNER
+      - service: automation-scheduler
+        effect: UPDATE_TARGET_TERMINAL_OBSERVATION
+        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+  publishPlatformEvent:
+    action: send
+    channel: { $ref: '#/channels/platformEvents' }
+    messages: [{ $ref: '#/channels/platformEvents/messages/platformEvent' }]
+    summary: Опубликовать изменение owner-visible конфигурации платформы.
+    x-publisher: control-plane-outbox-relay
+    x-transaction: BUSINESS_STATE_AUDIT_IDEMPOTENCY_AND_OUTBOX
+    x-delivery:
+      mode: AT_LEAST_ONCE
+      orderingKey: organizationRef
+      sequenceField: sequence
+      deduplicationKey: eventId
+      maximumPayloadBytes: 65536
+    x-consumers:
+      - service: control-api-gateway
+        effect: INVALIDATE_OWNER_SCOPED_READ_MODEL_AND_PUSH_BOUNDED_DELTA
+        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+      - service: runtime-controller
+        effect: REFRESH_PINNED_RUNTIME_CONFIGURATION_WHEN_APPLICABLE
+        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
 components:
   messages:
-    runtimeConfigurationChanged:
-      name: control_plane.runtime_configuration_changed
-      title: Конфигурация среды исполнения изменена
-      payload:
-        $ref: '#/components/schemas/envelope'
+    RunEvent:
+      name: control_plane.run_event
+      title: Событие графа запуска
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/RunEventEnvelope' }
+    PlatformEvent:
+      name: control_plane.platform_event
+      title: Событие конфигурации платформы
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/PlatformEventEnvelope' }
   schemas:
-    envelope:
+    OpaqueRef:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{8,96}$'
+    Timestamp:
+      type: string
+      format: date-time
+    RunEventEnvelope:
       type: object
       additionalProperties: false
       required:
         - eventId
         - eventName
         - eventVersion
-        - schemaVersion
         - occurredAt
-        - aggregateType
-        - aggregateId
+        - organizationRef
+        - rootRunRef
+        - aggregateRef
         - aggregateVersion
-        - eventSequence
-        - correlationId
-        - organizationId
+        - sequence
+        - correlationRef
         - data
       properties:
-        eventId:
-          type: string
-          format: uuid
+        eventId: { type: string, format: uuid }
         eventName:
           type: string
-          const: control_plane.runtime_configuration_changed
-        eventVersion:
-          type: integer
-          const: 1
-        schemaVersion:
-          type: integer
-          const: 1
-        occurredAt:
+          enum:
+            - RUN_CREATED
+            - RUN_STATE_CHANGED
+            - NODE_ADDED
+            - NODE_STATE_CHANGED
+            - EDGE_ADDED
+            - TURN_QUEUED
+            - TURN_STARTED
+            - TURN_PROGRESS
+            - TURN_COMPLETED
+            - DELEGATION_CREATED
+            - CALLBACK_DELIVERED
+            - OWNER_GATE_OPENED
+            - OWNER_GATE_RESOLVED
+            - ARTIFACT_AVAILABLE
+            - INCIDENT_LINKED
+        eventVersion: { type: integer, const: 1 }
+        occurredAt: { $ref: '#/components/schemas/Timestamp' }
+        organizationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef:
+          description: Отсутствует у глобального запуска Системного помощника.
+          $ref: '#/components/schemas/OpaqueRef'
+        rootRunRef: { $ref: '#/components/schemas/OpaqueRef' }
+        aggregateRef: { $ref: '#/components/schemas/OpaqueRef' }
+        aggregateVersion: { type: integer, minimum: 1 }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        correlationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        causationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        data: { $ref: '#/components/schemas/RunEventData' }
+    RunEventData:
+      type: object
+      additionalProperties: false
+      required: [kind, safeSummary]
+      properties:
+        kind:
           type: string
-          format: date-time
-        aggregateType:
+          enum: [RUN, NODE, EDGE, TURN, DELEGATION, CALLBACK, OWNER_GATE, ARTIFACT, INCIDENT]
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        edgeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        gateRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        incidentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state:
           type: string
-          minLength: 2
-          maxLength: 64
-        aggregateId:
-          type: string
-          format: uuid
-        aggregateVersion:
-          type: integer
-          minimum: 1
-        eventSequence:
-          type: integer
-          minimum: 1
-        correlationId:
-          type: string
-          format: uuid
-        causationId:
-          type: string
-          format: uuid
-        organizationId:
-          type: string
-          format: uuid
-        data:
-          $ref: '#/components/schemas/changeReference'
-    changeReference:
+          enum: [QUEUED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, SUCCEEDED, FAILED, CANCELLED]
+        safeSummary: { type: string, maxLength: 2000 }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        retryable: { type: boolean }
+        nextActions:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: { type: string, enum: [CANCEL, RETRY, CONTINUE_SESSION, RESOLVE_GATE, DOWNLOAD_ARTIFACT] }
+    PlatformEventEnvelope:
       type: object
       additionalProperties: false
       required:
-        - projectId
-        - resourceId
-        - resourceKind
-        - resourceState
-        - resourceVersion
+        - eventId
+        - eventName
+        - eventVersion
+        - occurredAt
+        - organizationRef
+        - aggregateRef
+        - aggregateVersion
+        - sequence
+        - correlationRef
+        - data
       properties:
-        projectId:
-          type: string
-          format: uuid
-        resourceId:
-          type: string
-          format: uuid
-        resourceKind:
+        eventId: { type: string, format: uuid }
+        eventName:
           type: string
           enum:
-            - PROJECT
-            - TEAM
-            - CHAT
-            - ROLE
-            - PROMPT_PROFILE
-            - CREDENTIAL_BINDING
-            - REPOSITORY_WORKSPACE
-            - INTEGRATION
-            - RUNTIME_REVISION
-            - SESSION
-            - TURN
-            - SCHEDULE
-        resourceState:
-          type: string
-          enum:
-            - ACTIVE
-            - PAUSED
-            - ARCHIVED
-            - DELETION_PENDING
-            - DELETED
-            - QUEUED
-            - CLAIMED
-            - RUNNING
-            - WAITING_OWNER
-            - WAITING_EXTERNAL
-            - SUCCEEDED
-            - FAILED
-            - CANCELLED
-            - EXPIRED
-            - BLOCKED
-        resourceVersion:
-          type: integer
-          minimum: 1
+            - PROJECT_CHANGED
+            - AGENT_CHANGED
+            - INSTRUCTIONS_PUBLISHED
+            - WORKFLOW_CHANGED
+            - SCHEDULE_CHANGED
+            - INTEGRATION_CONNECTION_CHANGED
+            - INTEGRATION_GRANT_CHANGED
+            - MEMBERSHIP_CHANGED
+            - SYSTEM_ASSISTANT_CHANGED
+        eventVersion: { type: integer, const: 1 }
+        occurredAt: { $ref: '#/components/schemas/Timestamp' }
+        organizationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        aggregateRef: { $ref: '#/components/schemas/OpaqueRef' }
+        aggregateVersion: { type: integer, minimum: 1 }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        correlationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        causationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        data:
+          type: object
+          additionalProperties: false
+          required: [kind, safeSummary]
+          properties:
+            kind:
+              type: string
+              enum: [PROJECT, AGENT, INSTRUCTIONS, WORKFLOW, SCHEDULE, INTEGRATION_CONNECTION, INTEGRATION_GRANT, MEMBERSHIP, SYSTEM_ASSISTANT]
+            state: { type: string, maxLength: 64 }
+            safeSummary: { type: string, maxLength: 1000 }

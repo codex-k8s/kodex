@@ -100,6 +100,7 @@ updated: 2026-07-28
 | `ARCH-MC-008`      | `docs/architecture/attachments-and-artifacts.md`            |
 | `ARCH-MC-009`      | `docs/architecture/automations-and-playbooks.md`            |
 | `ARCH-MC-010`      | `docs/architecture/runtime-controller.md`                   |
+| `ARCH-MC-011`      | `docs/architecture/web-first-platform-reset.md`             |
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `ROAD-MC-001`      | `docs/roadmap/README.md`                                    |

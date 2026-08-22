@@ -2,8 +2,9 @@
 package generated
 
 type ProblemEnvelope struct {
-  ReservedType *ProblemMessageType
-  RequestId string
-  Code string
+  ReservedType string
+  Status int
+  Code *ProblemCode
+  Title string
   Retryable bool
 }

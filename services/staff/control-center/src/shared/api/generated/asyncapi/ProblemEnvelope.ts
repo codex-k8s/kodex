@@ -1,8 +1,9 @@
-import {ProblemMessageType} from './ProblemMessageType';
+import {ProblemCode} from './ProblemCode';
 interface ProblemEnvelope {
-  reservedType: ProblemMessageType;
-  requestId: string;
-  code: string;
+  reservedType: 'PROBLEM';
+  reservedStatus: number;
+  code: ProblemCode;
+  title: string;
   retryable: boolean;
 }
 export { ProblemEnvelope };

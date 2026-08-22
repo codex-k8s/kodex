@@ -1,673 +1,168 @@
-// Package grpc реализует строгий сгенерированный транспорт control-plane.
+// Package grpc реализует внутренний gRPC transport web-first control-plane.
 package grpc
 
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const readinessPermission = "controlplane.readiness.check"
-
-// ReadinessState описывает фактические проверки зависимостей.
-type ReadinessState struct {
-	SchemaVersion  uint64
-	AuthorityReady bool
-	PostgresReady  bool
-	RedisReady     bool
-	OutboxReady    bool
-}
-
-// Readiness проверяет тот же промышленный путь, что используют RPC и ретранслятор.
-type Readiness interface {
-	Check(context.Context) (ReadinessState, error)
-}
-
-// Server реализует generated service без infrastructure orchestration.
 type Server struct {
-	controlplanev1.UnimplementedControlPlaneServiceServer
-	service          *resource.Service
-	readiness        Readiness
-	transitionSigner grantSigner
+	controlplanev1.UnimplementedPlatformQueryServiceServer
+	controlplanev1.UnimplementedPlatformCommandServiceServer
+	controlplanev1.UnimplementedSystemAssistantServiceServer
+	controlplanev1.UnimplementedRuntimeWorkServiceServer
+	service *platformservice.Service
 }
 
-type grantSigner interface {
-	Sign(context.Context, integrationgatewayauth.Claims) (string, error)
+func NewServer(service *platformservice.Service) (*Server, error) {
+	if service == nil {
+		return nil, errors.New("platform service is required")
+	}
+	return &Server{service: service}, nil
 }
 
-// NewServer создаёт транспорт над доменным сервисом.
-func NewServer(service *resource.Service, readiness Readiness, transitionSigner grantSigner) (*Server, error) {
-	if service == nil || readiness == nil || transitionSigner == nil {
-		return nil, errors.New("control-plane gRPC dependencies are required")
+func principal(ctx context.Context, method string) (value.Principal, error) {
+	result, err := authorization.Principal(ctx, method)
+	if err != nil {
+		return value.Principal{}, status.Error(codes.Unauthenticated, "verified authorization context is required")
 	}
-	return &Server{service: service, readiness: readiness, transitionSigner: transitionSigner}, nil
+	return result, nil
 }
 
-const continuationGrantTTL = 8 * 24 * time.Hour
-
-func (server *Server) CreateProject(
-	ctx context.Context,
-	request *controlplanev1.CreateProjectRequest,
-) (*controlplanev1.CreateProjectResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+func mutation(input *controlplanev1.MutationContext) value.Mutation {
+	if input == nil {
+		return value.Mutation{}
 	}
-	spec, err := fromProtoSpec(&controlplanev1.ResourceSpec{
-		Value: &controlplanev1.ResourceSpec_Project{Project: request.GetSpec()},
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
-	}
-	projectSpec, ok := spec.(entity.ProjectSpec)
-	if !ok {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
-	}
-	created, err := server.service.CreateProject(ctx, resource.CreateProjectInput{
-		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		Name: request.GetName(), Spec: projectSpec,
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encoded, err := toProtoResource(created)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.CreateProjectResponse{Project: encoded}, nil
+	return value.Mutation{IdempotencyKey: strings.TrimSpace(input.GetIdempotencyKey()), ExpectedVersion: input.ExpectedVersion}
 }
 
-func (server *Server) UpdateProject(
-	ctx context.Context,
-	request *controlplanev1.UpdateProjectRequest,
-) (*controlplanev1.UpdateProjectResponse, error) {
-	principal, err := authorization.Principal(
-		ctx, controlplanev1.ControlPlaneService_UpdateProject_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+func page(input *controlplanev1.PageRequest) query.Page {
+	if input == nil {
+		return query.Page{Size: 50}
 	}
-	spec, err := fromProtoSpec(&controlplanev1.ResourceSpec{
-		Value: &controlplanev1.ResourceSpec_Project{Project: request.GetSpec()},
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	size := input.GetPageSize()
+	if size == 0 {
+		size = 50
 	}
-	projectSpec, ok := spec.(entity.ProjectSpec)
-	if !ok {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
-	}
-	updated, err := server.service.UpdateProject(ctx, resource.UpdateProjectInput{
-		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		ProjectID: request.GetProjectId(), ExpectedVersion: request.GetExpectedVersion(),
-		Name: request.GetName(), Spec: projectSpec,
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encoded, err := toProtoResource(updated)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.UpdateProjectResponse{Project: encoded}, nil
+	return query.Page{Size: size, Token: input.GetPageToken()}
 }
 
-func (server *Server) DeleteProject(
-	ctx context.Context,
-	request *controlplanev1.DeleteProjectRequest,
-) (*controlplanev1.DeleteProjectResponse, error) {
-	principal, err := authorization.Principal(
-		ctx, controlplanev1.ControlPlaneService_DeleteProject_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+func asMap(input *structpb.Struct) map[string]any {
+	if input == nil {
+		return map[string]any{}
 	}
-	deleted, err := server.service.DeleteProject(ctx, resource.DeleteProjectInput{
-		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		ProjectID: request.GetProjectId(), ExpectedVersion: request.GetExpectedVersion(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encoded, err := toProtoResource(deleted)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.DeleteProjectResponse{Project: encoded}, nil
+	return input.AsMap()
 }
 
-func (server *Server) ListProjects(
-	ctx context.Context,
-	request *controlplanev1.ListProjectsRequest,
-) (*controlplanev1.ListProjectsResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	pageSize := int(request.GetPageSize())
-	if pageSize == 0 {
-		pageSize = 50
-	}
-	found, err := server.service.List(ctx, resource.ListInput{
-		Principal: principal,
-		Filter: query.ResourceFilter{
-			Kind:    enum.KindProject,
-			AfterID: request.GetPageToken(),
-			Limit:   pageSize,
-		},
-		TenantProjects: true,
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response := &controlplanev1.ListProjectsResponse{
-		Projects: make([]*controlplanev1.Resource, 0, len(found)),
-	}
-	for _, item := range found {
-		encoded, err := toProtoResource(item)
-		if err != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+func enumSuffix(value fmt.Stringer, prefix string) string {
+	return strings.TrimPrefix(value.String(), prefix)
+}
+
+func domainProjectPermissions(values []controlplanev1.ProjectPermission) []string {
+	result := make([]string, 0, len(values))
+	for _, item := range values {
+		if item == controlplanev1.ProjectPermission_PROJECT_PERMISSION_UNSPECIFIED {
+			continue
 		}
-		response.Projects = append(response.Projects, encoded)
+		result = append(result, enumSuffix(item, "PROJECT_PERMISSION_"))
 	}
-	if len(found) == pageSize {
-		response.NextPageToken = found[len(found)-1].ID
-	}
-	return response, nil
+	return result
 }
 
-func (server *Server) CreateResource(
-	ctx context.Context,
-	request *controlplanev1.CreateResourceRequest,
-) (*controlplanev1.CreateResourceResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+func runTarget(input *controlplanev1.RunTarget) entity.RunTarget {
+	if input == nil {
+		return entity.RunTarget{}
 	}
-	spec, err := fromProtoSpec(request.GetSpec())
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	switch target := input.Target.(type) {
+	case *controlplanev1.RunTarget_AgentRef:
+		return entity.RunTarget{Type: "AGENT", Ref: target.AgentRef, Name: input.GetDisplayName()}
+	case *controlplanev1.RunTarget_WorkflowRef:
+		return entity.RunTarget{Type: "WORKFLOW", Ref: target.WorkflowRef, Name: input.GetDisplayName()}
+	default:
+		return entity.RunTarget{}
 	}
-	created, err := server.service.Create(ctx, resource.CreateInput{
-		Principal:      principal,
-		IdempotencyKey: request.GetIdempotencyKey(),
-		Kind:           fromProtoKind(request.GetKind()),
-		Name:           request.GetName(),
-		ParentID:       request.GetParentId(),
-		Spec:           spec,
-		TenantProject:  false,
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response, err := toProtoResource(created)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.CreateResourceResponse{Resource: response}, nil
 }
 
-func (server *Server) UpdateResource(
-	ctx context.Context,
-	request *controlplanev1.UpdateResourceRequest,
-) (*controlplanev1.UpdateResourceResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.WorkflowVersion {
+	if input == nil {
+		return nil
 	}
-	spec, err := fromProtoSpec(request.GetSpec())
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	result := &entity.WorkflowVersion{
+		Ref:                input.GetRef(),
+		VersionNumber:      input.GetRevision(),
+		Concurrency:        input.GetMaxConcurrency(),
+		TimeoutSeconds:     int64(input.GetTimeoutSeconds()),
+		CompletionCriteria: input.GetCompletionCriteria(),
 	}
-	updated, err := server.service.Update(ctx, resource.UpdateInput{
-		Principal:           principal,
-		IdempotencyKey:      request.GetIdempotencyKey(),
-		ResourceID:          request.GetResourceId(),
-		ExpectedVersion:     request.GetExpectedVersion(),
-		Name:                request.GetName(),
-		Spec:                spec,
-		DetachGitManagement: request.GetDetachGitManagement(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
+	for _, item := range input.GetInputFields() {
+		result.Inputs = append(result.Inputs, entity.WorkflowInputField{Key: item.GetKey(), Label: item.GetLabel(), Type: item.GetValueType(), Help: item.GetDescription(), Required: item.GetRequired()})
 	}
-	response, err := toProtoResource(updated)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.UpdateResourceResponse{Resource: response}, nil
-}
-
-func (server *Server) TransitionResource(
-	ctx context.Context,
-	request *controlplanev1.TransitionResourceRequest,
-) (*controlplanev1.TransitionResourceResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	updated, err := server.service.Transition(ctx, resource.TransitionInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		ResourceID:      request.GetResourceId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-		Target:          fromProtoState(request.GetTargetState()),
-		ReasonCode:      request.GetReasonCode(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response, err := toProtoResource(updated)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.TransitionResourceResponse{Resource: response}, nil
-}
-
-func (server *Server) DeleteResource(
-	ctx context.Context,
-	request *controlplanev1.DeleteResourceRequest,
-) (*controlplanev1.DeleteResourceResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_DeleteResource_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	deleted, err := server.service.Delete(ctx, resource.DeleteInput{
-		Principal:       principal,
-		IdempotencyKey:  request.GetIdempotencyKey(),
-		ResourceID:      request.GetResourceId(),
-		ExpectedVersion: request.GetExpectedVersion(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response, err := toProtoResource(deleted)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.DeleteResourceResponse{Resource: response}, nil
-}
-
-func (server *Server) GetResource(
-	ctx context.Context,
-	request *controlplanev1.GetResourceRequest,
-) (*controlplanev1.GetResourceResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	found, err := server.service.Get(ctx, resource.GetInput{
-		Principal:       principal,
-		ResourceID:      request.GetResourceId(),
-		Kind:            fromProtoKind(request.GetExpectedKind()),
-		ExpectedVersion: request.GetExpectedVersion(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response, err := toProtoResource(found)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.GetResourceResponse{Resource: response}, nil
-}
-
-func (server *Server) ListResources(
-	ctx context.Context,
-	request *controlplanev1.ListResourcesRequest,
-) (*controlplanev1.ListResourcesResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_ListResources_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	pageSize := int(request.GetPageSize())
-	if pageSize == 0 {
-		pageSize = 50
-	}
-	states := make([]enum.State, 0, len(request.GetStates()))
-	for _, state := range request.GetStates() {
-		states = append(states, fromProtoState(state))
-	}
-	found, err := server.service.List(ctx, resource.ListInput{
-		Principal: principal,
-		Filter: query.ResourceFilter{
-			ParentID: request.GetParentId(),
-			Kind:     fromProtoKind(request.GetKind()),
-			States:   states,
-			AfterID:  request.GetPageToken(),
-			Limit:    pageSize,
-		},
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response := &controlplanev1.ListResourcesResponse{
-		Resources: make([]*controlplanev1.Resource, 0, len(found)),
-	}
-	for _, item := range found {
-		encoded, err := toProtoResource(item)
-		if err != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	for _, item := range input.GetSteps() {
+		result.Steps = append(result.Steps, entity.WorkflowStep{Key: item.GetRef(), Name: item.GetName(), AgentRef: item.GetAgentRef(), Instructions: item.GetPurpose(), HumanGateAfter: item.GetHumanGate()})
+		result.AgentRefs = append(result.AgentRefs, item.GetAgentRef())
+		for _, decision := range item.GetGateDecisions() {
+			result.GateDecisions = append(result.GateDecisions, enumSuffix(decision, "OWNER_GATE_DECISION_"))
 		}
-		response.Resources = append(response.Resources, encoded)
 	}
-	if len(found) == pageSize {
-		response.NextPageToken = found[len(found)-1].ID
-	}
-	return response, nil
+	return result
 }
 
-func (server *Server) EnqueueTurn(
-	ctx context.Context,
-	request *controlplanev1.EnqueueTurnRequest,
-) (*controlplanev1.EnqueueTurnResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
-	)
+func execute(ctx context.Context, service *platformservice.Service, method string, kind command.Kind, requestMutation *controlplanev1.MutationContext, payload any) (command.Result, error) {
+	p, err := principal(ctx, method)
 	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+		return command.Result{}, err
 	}
-	turn, err := server.service.EnqueueTurn(ctx, resource.EnqueueTurnInput{
-		Principal:        principal,
-		IdempotencyKey:   request.GetIdempotencyKey(),
-		SessionID:        request.GetSessionId(),
-		SourceRef:        request.GetSourceRef(),
-		PromptArtifactID: request.GetPromptArtifactId(),
-		ProcessRunID:     request.GetProcessRunId(),
-		InputArtifactIDs: request.GetInputArtifactIds(),
-	})
+	commandMutation := mutation(requestMutation)
+	if commandMutation.IdempotencyKey == "" {
+		commandMutation.IdempotencyKey = "rpc-" + p.CorrelationRef
+		if len(commandMutation.IdempotencyKey) > 128 {
+			commandMutation.IdempotencyKey = commandMutation.IdempotencyKey[:128]
+		}
+	}
+	result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: p, Mutation: commandMutation, Payload: payload})
 	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
+		return command.Result{}, transportError(err)
 	}
-	encoded, err := toProtoResource(turn)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.EnqueueTurnResponse{Turn: encoded}, nil
+	return result, nil
 }
 
-func (server *Server) ClaimTurn(
-	ctx context.Context,
-	request *controlplanev1.ClaimTurnRequest,
-) (*controlplanev1.ClaimTurnResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	claimed, err := server.service.ClaimTurn(ctx, resource.ClaimTurnInput{
-		Principal:      principal,
-		IdempotencyKey: request.GetIdempotencyKey(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encoded, err := toProtoResource(claimed.Turn)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.ClaimTurnResponse{
-		Turn:                encoded,
-		LeaseToken:          claimed.LeaseToken,
-		LeaseExpiresAt:      timestamppb.New(claimed.LeaseExpiresAt),
-		Attempt:             claimed.Attempt,
-		AuthorityGeneration: claimed.AuthorityGeneration,
-	}, nil
-}
-
-func (server *Server) CompleteTurn(
-	ctx context.Context,
-	request *controlplanev1.CompleteTurnRequest,
-) (*controlplanev1.CompleteTurnResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_CompleteTurn_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	turn, err := server.service.CompleteTurn(ctx, resource.CompleteTurnInput{
-		Principal:           principal,
-		IdempotencyKey:      request.GetIdempotencyKey(),
-		TurnID:              request.GetTurnId(),
-		LeaseToken:          request.GetLeaseToken(),
-		ExpectedVersion:     request.GetExpectedVersion(),
-		TerminalState:       fromProtoState(request.GetTerminalState()),
-		Outcome:             request.GetOutcome(),
-		ResultArtifactID:    request.GetResultArtifactId(),
-		Attempt:             request.GetAttempt(),
-		AuthorityGeneration: request.GetAuthorityGeneration(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encoded, err := toProtoResource(turn)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.CompleteTurnResponse{Turn: encoded}, nil
-}
-
-func (server *Server) ClaimDueSchedules(
-	ctx context.Context,
-	request *controlplanev1.ClaimDueSchedulesRequest,
-) (*controlplanev1.ClaimDueSchedulesResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	claimed, err := server.service.ClaimDueSchedules(
-		ctx,
-		resource.ClaimDueSchedulesInput{
-			Principal:      principal,
-			IdempotencyKey: request.GetIdempotencyKey(),
-			Limit:          int(request.GetLimit()),
-		},
-	)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	response := &controlplanev1.ClaimDueSchedulesResponse{
-		Occurrences: make(
-			[]*controlplanev1.ScheduleOccurrence,
-			0,
-			len(claimed.Occurrences),
-		),
-	}
-	for _, occurrence := range claimed.Occurrences {
-		response.Occurrences = append(
-			response.Occurrences,
-			&controlplanev1.ScheduleOccurrence{
-				ScheduleId:           occurrence.ScheduleID,
-				ScheduledFor:         timestamppb.New(occurrence.ScheduledFor),
-				OccurrenceId:         occurrence.OccurrenceID,
-				TargetResourceId:     occurrence.TargetResourceID,
-				TargetKind:           toProtoKind(occurrence.TargetKind),
-				TargetVersion:        occurrence.TargetVersion,
-				EffectiveInputSha256: occurrence.EffectiveInputSHA256,
-				PromptProfileId:      occurrence.PromptProfileID,
-				PromptRevision:       occurrence.PromptRevision,
-				RuntimeRevisionId:    occurrence.RuntimeRevisionID,
-				SessionPolicy:        scheduleSessionPolicy(occurrence.SessionPolicy),
-				RoomId:               occurrence.RoomID,
-				NotificationPolicy:   scheduleNotificationPolicy(occurrence.NotificationPolicy),
-				MaximumExecutionDuration: durationpb.New(
-					occurrence.MaximumExecution,
-				),
-				Coalesce:    occurrence.Coalesce,
-				State:       occurrenceState(occurrence.State),
-				Attempt:     occurrence.Attempt,
-				AvailableAt: timestamppb.New(occurrence.AvailableAt),
-				Outcome:     occurrence.Outcome,
-			},
-		)
-	}
-	return response, nil
-}
-
-func (server *Server) ResolveOwnerGate(
-	ctx context.Context,
-	request *controlplanev1.ResolveOwnerGateRequest,
-) (*controlplanev1.ResolveOwnerGateResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	resolved, err := server.service.ResolveOwnerGate(ctx, resource.ResolveOwnerGateInput{
-		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		OwnerGateID: request.GetOwnerGateId(), ExpectedVersion: request.GetExpectedVersion(),
-		Decision: ownerDecisionString(request.GetDecision()), Reason: request.GetReason(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	encodedGate, err := toProtoResource(resolved.OwnerGate)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	encodedProcess, err := toProtoResource(resolved.Process)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.ResolveOwnerGateResponse{
-		OwnerGate:  encodedGate,
-		ProcessRun: encodedProcess,
-	}, nil
-}
-
-func (server *Server) CheckReadiness(
-	ctx context.Context,
-	_ *controlplanev1.CheckReadinessRequest,
-) (*controlplanev1.CheckReadinessResponse, error) {
-	principal, err := authorization.Principal(
-		ctx,
-		controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	if principal.Permission != readinessPermission {
-		return nil, rpcError(principal.CorrelationID, errs.ErrPermissionDenied)
-	}
-	state, err := server.readiness.Check(ctx)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrUnavailable)
-	}
-	ready := state.AuthorityReady && state.PostgresReady &&
-		state.RedisReady && state.OutboxReady
-	return &controlplanev1.CheckReadinessResponse{
-		Ready:          ready,
-		SchemaVersion:  state.SchemaVersion,
-		AuthorityReady: state.AuthorityReady,
-		PostgresReady:  state.PostgresReady,
-		RedisReady:     state.RedisReady,
-		OutboxReady:    state.OutboxReady,
-	}, nil
-}
-
-func rpcError(correlationID string, err error) error {
-	code := codes.Internal
-	reason := controlplanev1.ErrorReason_ERROR_REASON_INTERNAL
-	message := "internal control-plane failure"
-	safeCode := "INTERNAL"
-	retryable := false
+func transportError(err error) error {
 	switch {
-	case errors.Is(err, errs.ErrInvalidInput):
-		code, reason = codes.InvalidArgument, controlplanev1.ErrorReason_ERROR_REASON_INVALID_REQUEST
-		message, safeCode = "control-plane request is invalid", "INVALID_REQUEST"
-	case errors.Is(err, errs.ErrUnauthenticated):
-		code, reason = codes.Unauthenticated, controlplanev1.ErrorReason_ERROR_REASON_UNAUTHENTICATED
-		message, safeCode = "control-plane authentication required", "UNAUTHENTICATED"
-	case errors.Is(err, errs.ErrPermissionDenied):
-		code, reason = codes.PermissionDenied, controlplanev1.ErrorReason_ERROR_REASON_PERMISSION_DENIED
-		message, safeCode = "control-plane permission denied", "PERMISSION_DENIED"
+	case err == nil:
+		return nil
+	case errors.Is(err, errs.ErrInvalid):
+		return status.Error(codes.InvalidArgument, "request is invalid")
+	case errors.Is(err, errs.ErrUnauthorized):
+		return status.Error(codes.Unauthenticated, "authentication is required")
+	case errors.Is(err, errs.ErrForbidden):
+		return status.Error(codes.PermissionDenied, "operation is not permitted")
 	case errors.Is(err, errs.ErrNotFound):
-		code, reason = codes.NotFound, controlplanev1.ErrorReason_ERROR_REASON_NOT_FOUND
-		message, safeCode = "control-plane resource not found", "NOT_FOUND"
+		return status.Error(codes.NotFound, "resource was not found")
 	case errors.Is(err, errs.ErrVersionMismatch):
-		code, reason = codes.Aborted, controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH
-		message, safeCode, retryable = "control-plane version mismatch", "VERSION_MISMATCH", true
-	case errors.Is(err, errs.ErrIdempotencyConflict):
-		code, reason = codes.AlreadyExists, controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT
-		message, safeCode = "control-plane idempotency conflict", "IDEMPOTENCY_CONFLICT"
-	case errors.Is(err, errs.ErrAborted):
-		code, reason = codes.Aborted, controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT
-		message, safeCode = "control-plane operation aborted", "ABORTED"
-	case errors.Is(err, errs.ErrFailedPrecondition):
-		code, reason = codes.FailedPrecondition, controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT
-		message, safeCode = "control-plane precondition failed", "FAILED_PRECONDITION"
-	case errors.Is(err, errs.ErrDataLoss):
-		code, reason = codes.DataLoss, controlplanev1.ErrorReason_ERROR_REASON_INTERNAL
-		message, safeCode = "control-plane stored data is corrupt", "DATA_LOSS"
-	case errors.Is(err, errs.ErrStateConflict):
-		code, reason = codes.FailedPrecondition, controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT
-		message, safeCode = "control-plane state conflict", "STATE_CONFLICT"
+		return status.Error(codes.Aborted, "resource version is stale")
+	case errors.Is(err, errs.ErrIdempotencyReuse):
+		return status.Error(codes.AlreadyExists, "idempotency key was reused with a different intent")
+	case errors.Is(err, errs.ErrProtected):
+		return status.Error(codes.FailedPrecondition, "protected system resource cannot be changed")
+	case errors.Is(err, errs.ErrConflict):
+		return status.Error(codes.Aborted, "resource state changed")
 	case errors.Is(err, errs.ErrUnavailable):
-		code, reason = codes.Unavailable, controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE
-		message, safeCode, retryable = "control-plane dependency unavailable", "UNAVAILABLE", true
+		return status.Error(codes.Unavailable, "operation is temporarily unavailable")
+	default:
+		return status.Error(codes.Internal, "control-plane operation failed")
 	}
-	if domainSafeCode := errs.SafeCode(err); domainSafeCode != "" {
-		safeCode = domainSafeCode
-	}
-	current := status.New(code, message)
-	withDetail, detailErr := current.WithDetails(&controlplanev1.ErrorDetail{
-		Reason:        reason,
-		Code:          safeCode,
-		CorrelationId: correlationID,
-		Retryable:     retryable,
-	})
-	if detailErr != nil {
-		return current.Err()
-	}
-	return withDetail.Err()
-}
-
-func ownerDecisionString(decision controlplanev1.OwnerGateDecision) string {
-	return trimEnum(decision.String(), "OWNER_GATE_DECISION_")
 }
