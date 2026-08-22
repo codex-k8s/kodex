@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.2
-updated: 2026-08-07
+version: 1.1.3
+updated: 2026-08-23
 ---
 
 # Высокоуровневая архитектура
@@ -16,7 +16,7 @@ flowchart LR
     CC --> CAG[Control API Gateway]
     CAG --> CP[Control Plane]
     MM[Mattermost optional] --> IA[Interaction adapter]
-    IA --> CAG
+    IA -- generated protected gRPC --> CP
     IRA[Internal RPC Authority] -. authorization context .-> CAG
     IRA -. authorization context .-> RC
     IRA -. authorization context .-> MG
@@ -34,7 +34,6 @@ flowchart LR
     MG --> AP[Ручное согласование]
     AR --> CP
     CP --> AB[(Bounded artifact storage)]
-    CP --> IA
     IA --> MM
     RIB[Role Image Builder] --> REG[(OCI Registry)]
     RIB --> ADM[SBOM, scan, sign, admit]

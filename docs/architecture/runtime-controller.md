@@ -4,7 +4,7 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.0.1
 updated: 2026-08-22
 ---
 
@@ -23,7 +23,7 @@ Control-plane выдаёт immutable `RuntimeExecution` с exact:
 - RuntimeRevision version и SHA-256;
 - promoted role image `repository@sha256` и runtime ABI digest;
 - input/result bounds, capabilities и credential bindings;
-- claim generation, fence, expiry и signed workload ticket.
+- claim generation, fence и expiry.
 
 Caller-provided owner/root/parent, role name, prompt и external conversation IDs
 не используются как authority.
@@ -41,8 +41,10 @@ workspace и exact Secret projections. Он не получает namespace-wide
 control-plane database DSN, integration/provider master credentials, registry
 push/admin credential или external channel token.
 
-Protected init проверяет signature/digest/fence и materialize-ит config.
-`agent-runner` claim-ит Turn, запускает provider runtime, передаёт bounded
+Runtime-controller проверяет claimed revision/fence, создаёт immutable input и
+execution-scoped opaque ticket в отдельном Secret и materialize-ит Pod.
+`agent-runner` не claim-ит Turn повторно: он подтверждает уже выданную attempt
+через exact mTLS callback + ticket, запускает provider runtime, передаёт bounded
 progress, обслуживает разрешённые MCP servers/tools и завершает attempt через
 typed RPC. Provider process работает отдельным UID без Kubernetes token и
 authority credential.
@@ -99,7 +101,7 @@ server policy. Controller cleanup не определяет terminal Run сам�
 Base deny-all. Role Pod получает DNS, exact provider egress proxy, exact MCP
 service и только разрешённый project access profile. Admission проверяет exact
 image digest, runtime ABI, container layout, ServiceAccount, volumes, commands,
-resources и signed workload ticket. Mutable image, extra container, broad token,
+resources, immutable input binding и execution ticket Secret. Mutable image, extra container, broad token,
 host access и privileged fallback запрещены.
 
 ## Критерии приёмки
