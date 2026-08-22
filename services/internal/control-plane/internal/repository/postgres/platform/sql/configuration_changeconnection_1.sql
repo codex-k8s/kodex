@@ -1,0 +1,2 @@
+-- name: platform__configuration_changeconnection_1 :one
+INSERT INTO control_plane.integration_connections(ref,organization_id,definition_key,name,state,enabled,credential_materialization_ref,masked_credentials_state,public_configuration,created_by) SELECT $1,$2::uuid,d.stable_key,$3,'NOT_CONNECTED',true,$4,'CONFIGURED',$5,$6::uuid FROM control_plane.integration_definitions d WHERE d.stable_key=$7 AND d.enabled RETURNING ref,definition_key,name,state,masked_credentials_state,enabled,version,public_configuration,created_at,updated_at

@@ -39,7 +39,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	defer func() { _ = tx.Rollback(ctx) }()
 	var storedDigest string
 	var stored []byte
-	err = tx.QueryRow(ctx, `SELECT intent_digest,response_payload FROM control_plane.idempotency_receipts WHERE organization_id=$1::uuid AND actor_id=$2::uuid AND operation=$3 AND idempotency_key=$4 AND expires_at>clock_timestamp() FOR UPDATE`, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifact1, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
 	if err == nil {
 		if storedDigest != mutation.IntentDigest {
 			return entity.Artifact{}, errs.ErrIdempotencyReuse
@@ -65,7 +65,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	var rootRunID, runRef string
 	if input.RunRef != "" {
 		var id string
-		if err := tx.QueryRow(ctx, `SELECT id::text,root_run_id::text,ref FROM control_plane.runs WHERE organization_id=$1::uuid AND project_id=$2::uuid AND ref=$3`, scope.organizationID, projectID, input.RunRef).Scan(&id, &rootRunID, &runRef); err != nil {
+		if err := tx.QueryRow(ctx, queryArtifactsUploadartifact2, scope.organizationID, projectID, input.RunRef).Scan(&id, &rootRunID, &runRef); err != nil {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
 		runID = id
@@ -77,11 +77,11 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	ref, _ := newRef("art")
 	receiptRef, _ := newRef("obj")
 	var item entity.Artifact
-	err = tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,run_id,file_name,media_type,size_bytes,digest,scan_state,object_receipt_ref,preview_state,created_by) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8,$9,$10,$11,$12::uuid) RETURNING ref,file_name,media_type,size_bytes,digest,scan_state,preview_state,version,created_at`, ref, scope.organizationID, projectID, runID, safeFileName(input.FileName), input.MediaType, input.SizeBytes, "sha256:"+hex.EncodeToString(digest[:]), scanState, receiptRef, previewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Version, &item.CreatedAt)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifact3, ref, scope.organizationID, projectID, runID, safeFileName(input.FileName), input.MediaType, input.SizeBytes, "sha256:"+hex.EncodeToString(digest[:]), scanState, receiptRef, previewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Version, &item.CreatedAt)
 	if err != nil {
 		return entity.Artifact{}, mapWriteError(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,body) SELECT id,$2 FROM control_plane.artifacts WHERE ref=$1`, ref, body); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact4, ref, body); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = input.ProjectRef
@@ -90,7 +90,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		item.NextActions = []string{"DOWNLOAD", "BIND"}
 	}
 	auditRef, _ := newRef("aud")
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.audit_events(ref,organization_id,project_id,actor_id,action,resource_kind,resource_ref,outcome,safe_summary,correlation_ref) VALUES($1,$2::uuid,$3::uuid,$4::uuid,'artifact.upload','ARTIFACT',$5,'SUCCEEDED','Файл загружен',$6)`, auditRef, scope.organizationID, projectID, scope.actorID, ref, principal.CorrelationRef); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact5, auditRef, scope.organizationID, projectID, scope.actorID, ref, principal.CorrelationRef); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	if rootRunID != "" {
@@ -101,7 +101,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, err
 	}
 	encoded, _ := json.Marshal(item)
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.idempotency_receipts(organization_id,actor_id,operation,idempotency_key,intent_digest,response_type,response_payload,expires_at) VALUES($1::uuid,$2::uuid,$3,$4,$5,'ARTIFACT',$6,clock_timestamp()+interval '24 hours')`, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact6, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -148,7 +148,7 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 		return platformrepo.ArtifactDownload{}, err
 	}
 	var body []byte
-	if err := repository.pool.QueryRow(ctx, `SELECT c.body FROM control_plane.artifact_content c JOIN control_plane.artifacts a ON a.id=c.artifact_id WHERE a.organization_id=$1::uuid AND a.ref=$2`, scope.organizationID, ref).Scan(&body); err != nil {
+	if err := repository.pool.QueryRow(ctx, queryArtifactsDownloadartifact1, scope.organizationID, ref).Scan(&body); err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
 	}
 	return platformrepo.ArtifactDownload{Artifact: item, Reader: io.NopCloser(bytes.NewReader(body))}, nil
@@ -161,20 +161,20 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 	}
 	var artifactID, projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, `SELECT a.id::text,a.project_id::text,p.ref,a.version FROM control_plane.artifacts a JOIN control_plane.projects p ON p.id=a.project_id WHERE a.organization_id=$1::uuid AND a.ref=$2 AND a.scan_state='CLEAN' FOR UPDATE`, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbinding1, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	if payload.Enabled {
-		if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_bindings(artifact_id,target_kind,target_ref,created_by) SELECT $1::uuid,'KNOWLEDGE',a.ref,$3::uuid FROM control_plane.agents a WHERE a.organization_id=$2::uuid AND a.project_id=$4::uuid AND a.ref=$5 ON CONFLICT DO NOTHING`, artifactID, scope.organizationID, scope.actorID, projectID, payload.AgentRef); err != nil {
+		if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbinding2, artifactID, scope.organizationID, scope.actorID, projectID, payload.AgentRef); err != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	} else {
-		_, _ = tx.Exec(ctx, `DELETE FROM control_plane.artifact_bindings WHERE artifact_id=$1::uuid AND target_kind='KNOWLEDGE' AND target_ref=$2`, artifactID, payload.AgentRef)
+		_, _ = tx.Exec(ctx, queryArtifactsChangeartifactbinding3, artifactID, payload.AgentRef)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.artifacts SET version=version+1 WHERE id=$1::uuid`, artifactID); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbinding4, artifactID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item := entity.Artifact{Ref: payload.ArtifactRef, ProjectRef: projectRef, Version: version + 1}

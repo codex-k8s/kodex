@@ -117,7 +117,7 @@ func connectionState(value string) controlplanev1.ConnectionState {
 	return controlplanev1.ConnectionState(raw)
 }
 func assistantState(value string) controlplanev1.AssistantRuntimeState {
-	mapping := map[string]string{"STARTING": "PROVISIONING", "READY": "READY", "RECOVERING": "RECOVERING", "UNAVAILABLE": "FAILED"}
+	mapping := map[string]string{"STARTING": "PROVISIONING", "READY": "READY", "BUSY": "BUSY", "RECOVERING": "RECOVERING", "UNAVAILABLE": "FAILED"}
 	raw := controlplanev1.AssistantRuntimeState_value["ASSISTANT_RUNTIME_STATE_"+mapping[value]]
 	return controlplanev1.AssistantRuntimeState(raw)
 }
@@ -264,7 +264,9 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 }
 func castAssistant(value entity.SystemAssistant) *controlplanev1.SystemAssistant {
 	summary := "Помощник восстанавливается"
-	if value.Ready {
+	if value.RuntimeState == "BUSY" {
+		summary = "Выполняет команду"
+	} else if value.Ready {
 		summary = "Готов к команде"
 	}
 	return &controlplanev1.SystemAssistant{Ref: value.Ref, Version: value.Version, Name: value.Name, SystemLabel: "Системный · неудаляемый", CorePromptRevision: value.CorePromptRevision, OwnerInstructions: value.OwnerInstructions, OwnerInstructionsRevision: int32(value.Version), RuntimeState: assistantState(value.RuntimeState), RuntimeRevision: value.RuntimeRevision, WarmSessionRef: value.WarmSessionRef, ReadinessSummary: summary, LastHeartbeatAt: optionalTimestamp(value.LastHeartbeatAt), NextActions: nextActions(value.NextActions)}

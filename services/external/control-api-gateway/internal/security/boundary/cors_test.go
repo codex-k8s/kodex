@@ -59,7 +59,7 @@ func TestProjectReferenceBinding(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "HTTP header", method: http.MethodGet, path: "/api/v1/runs", header: projectID, wantBound: true},
-		{name: "realtime query", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, wantBound: true},
+		{name: "run stream uses run eligibility", method: http.MethodGet, path: "/api/v1/runs/run_12345678/stream"},
 		{name: "exact project update path", method: http.MethodPut, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
@@ -67,7 +67,6 @@ func TestProjectReferenceBinding(t *testing.T) {
 		{name: "invalid header", method: http.MethodGet, path: "/api/v1/runs", header: "invalid", wantErr: true},
 		{name: "invalid exact project path", method: http.MethodDelete, path: "/api/v1/projects/invalid", wantErr: true},
 		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
-		{name: "mismatched realtime scope", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
 	}
 	for _, test := range tests {
 		test := test

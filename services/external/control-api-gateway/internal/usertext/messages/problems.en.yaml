@@ -1,0 +1,54 @@
+INTERNAL:
+  other: Internal error
+INVALID_REQUEST:
+  other: Check the request data
+UNAUTHENTICATED:
+  other: Sign in to continue
+PERMISSION_DENIED:
+  other: You do not have permission for this action
+NOT_FOUND:
+  other: The requested resource was not found
+IDEMPOTENCY_CONFLICT:
+  other: A different operation already uses this request key
+VERSION_OR_STATE_CONFLICT:
+  other: The resource changed; review the latest version and try again
+STATE_CONFLICT:
+  other: This action is not available in the current state
+RATE_LIMITED:
+  other: Too many requests; try again shortly
+UNAVAILABLE:
+  other: The service is temporarily unavailable
+DEADLINE_EXCEEDED:
+  other: The operation took too long; try again
+CSRF_REJECTED:
+  other: The session check failed; reload the page and try again
+ORIGIN_REJECTED:
+  other: This website is not allowed to access MatterCodex
+STOPPING:
+  other: The service is restarting; reconnect shortly
+PAYLOAD_TOO_LARGE:
+  other: The uploaded data is too large
+UPSTREAM_PAYLOAD_TOO_LARGE:
+  other: The generated file is too large to download
+RUN_NOT_FOUND:
+  other: The run was not found or is unavailable to you
+RUN_UNAVAILABLE:
+  other: The run stream is temporarily unavailable
+INVALID_RESUME:
+  other: The saved stream position is invalid
+STREAM_UNAVAILABLE:
+  other: Live updates are temporarily unavailable
+GAP_UNRECOVERABLE:
+  other: Some live updates are no longer available; the current state will be loaded again
+CANCELLED_BY_OWNER:
+  other: The run was cancelled by a user
+PROVIDER_AUTH_UNAVAILABLE:
+  other: Model access is not configured or is temporarily unavailable
+PROVIDER_UNAVAILABLE:
+  other: The model provider is temporarily unavailable
+PROVIDER_RESPONSE_INVALID:
+  other: The model provider returned an invalid response
+RUNTIME_UNAVAILABLE:
+  other: The agent runtime is temporarily unavailable
+RUNTIME_LIMIT_EXCEEDED:
+  other: The agent exceeded an execution limit

@@ -215,6 +215,42 @@ func IssuerUnaryClientInterceptor(
 	}
 }
 
+// IssuerStreamClientInterceptor выпускает тот же exact-method контекст до
+// открытия streaming RPC. Один контекст связывает всю ограниченную сессию
+// upload/download; повторное открытие требует нового proof и проходит replay
+// protection проверяющей стороны.
+func IssuerStreamClientInterceptor(
+	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
+	operations OperationResolver,
+	proofs ProofProvider,
+) grpc.StreamClientInterceptor {
+	return func(
+		ctx context.Context,
+		description *grpc.StreamDesc,
+		connection *grpc.ClientConn,
+		method string,
+		streamer grpc.Streamer,
+		options ...grpc.CallOption,
+	) (grpc.ClientStream, error) {
+		operationID, ok := operations.OperationID(method)
+		if !ok {
+			return nil, status.Error(codes.PermissionDenied, "internal RPC operation is not registered")
+		}
+		proof, correlationID, err := proofs.AuthorityProof(ctx, operationID, method)
+		if err != nil {
+			return nil, newLocalAuthorityError(err, correlationID)
+		}
+		issued, err := issuer.IssueAuthorizationContext(ctx, &internalrpcauthorityv1.IssueAuthorizationContextRequest{
+			OperationId: operationID, CorrelationId: correlationID, AuthorityProofCompactJws: proof,
+		})
+		if err != nil {
+			return nil, newLocalAuthorityError(err, correlationID)
+		}
+		ctx = metadata.AppendToOutgoingContext(ctx, AuthorizationMetadata, issued.GetCompactJws())
+		return streamer(ctx, description, connection, method, options...)
+	}
+}
+
 type verifiedContextKey struct{}
 
 // VerifiedAuthorizationContext возвращает проверенный серверным interceptor контекст.

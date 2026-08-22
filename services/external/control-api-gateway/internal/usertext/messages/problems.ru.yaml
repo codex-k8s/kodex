@@ -1,0 +1,54 @@
+INTERNAL:
+  other: Внутренняя ошибка
+INVALID_REQUEST:
+  other: Проверьте данные запроса
+UNAUTHENTICATED:
+  other: Войдите, чтобы продолжить
+PERMISSION_DENIED:
+  other: У вас нет прав на это действие
+NOT_FOUND:
+  other: Запрошенный объект не найден
+IDEMPOTENCY_CONFLICT:
+  other: Этот ключ запроса уже использован для другой операции
+VERSION_OR_STATE_CONFLICT:
+  other: Объект изменился; проверьте актуальную версию и повторите действие
+STATE_CONFLICT:
+  other: Действие недоступно в текущем состоянии
+RATE_LIMITED:
+  other: Слишком много запросов; повторите попытку немного позже
+UNAVAILABLE:
+  other: Сервис временно недоступен
+DEADLINE_EXCEEDED:
+  other: Операция выполнялась слишком долго; повторите попытку
+CSRF_REJECTED:
+  other: Не удалось проверить сессию; перезагрузите страницу и повторите действие
+ORIGIN_REJECTED:
+  other: Этому сайту запрещён доступ к MatterCodex
+STOPPING:
+  other: Сервис перезапускается; подключитесь снова через несколько секунд
+PAYLOAD_TOO_LARGE:
+  other: Загружаемые данные слишком велики
+UPSTREAM_PAYLOAD_TOO_LARGE:
+  other: Созданный файл слишком велик для загрузки
+RUN_NOT_FOUND:
+  other: Запуск не найден или недоступен вам
+RUN_UNAVAILABLE:
+  other: Поток запуска временно недоступен
+INVALID_RESUME:
+  other: Сохранённая позиция потока некорректна
+STREAM_UNAVAILABLE:
+  other: Динамические обновления временно недоступны
+GAP_UNRECOVERABLE:
+  other: Часть обновлений больше недоступна; актуальное состояние будет загружено заново
+CANCELLED_BY_OWNER:
+  other: Запуск отменён пользователем
+PROVIDER_AUTH_UNAVAILABLE:
+  other: Доступ к модели не настроен или временно недоступен
+PROVIDER_UNAVAILABLE:
+  other: Провайдер модели временно недоступен
+PROVIDER_RESPONSE_INVALID:
+  other: Провайдер модели вернул некорректный ответ
+RUNTIME_UNAVAILABLE:
+  other: Среда выполнения агента временно недоступна
+RUNTIME_LIMIT_EXCEEDED:
+  other: Агент превысил ограничение выполнения

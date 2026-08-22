@@ -46,3 +46,18 @@ func TestShutdownUsesIndependentContexts(t *testing.T) {
 		t.Fatalf("shutdown result = %v, second=%v", err, secondRan)
 	}
 }
+
+func TestReadinessSnapshotAndTransitionEdge(t *testing.T) {
+	t.Parallel()
+
+	readiness := NewReadiness()
+	if ready, reason := readiness.Ready(); ready || reason != "starting" {
+		t.Fatalf("initial readiness = %t %q", ready, reason)
+	}
+	if !readiness.Set(true, "ready") || readiness.Set(true, "ready") {
+		t.Fatal("readiness transition edge is incorrect")
+	}
+	if ready, reason := readiness.Ready(); !ready || reason != "ready" {
+		t.Fatalf("updated readiness = %t %q", ready, reason)
+	}
+}

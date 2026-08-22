@@ -365,6 +365,8 @@ message RuntimeSelection {
   string name = 2;
   string revision = 3;
   bool ready = 4;
+  string provider = 5;
+  string model = 6;
 }
 
 message InstructionVersion {
@@ -941,6 +943,22 @@ message RuntimeRevisionSnapshot {
   string input_digest = 14;
   string revision_digest = 15;
   bool system_assistant = 16;
+  repeated DelegationTarget delegation_targets = 17;
+  string callback_edge_ref = 18;
+  repeated SessionContextMessage session_context = 19;
+  google.protobuf.Struct bounded_input = 20;
+}
+
+message DelegationTarget {
+  string ref = 1;
+  string name = 2;
+  string purpose = 3;
+  string role_description = 4;
+}
+
+message SessionContextMessage {
+  string role = 1;
+  string content = 2;
 }
 
 message WorkLease {
@@ -957,11 +975,17 @@ message RenewExecutionRequest { string lease_ref = 1; string fence = 2; int64 ge
 message RenewExecutionResponse { WorkLease lease = 1; }
 message ReportExecutionProgressRequest { string lease_ref = 1; string fence = 2; int64 generation = 3; string progress = 4; }
 message ReportExecutionProgressResponse { Run run = 1; RunNode node = 2; RunEvent event = 3; }
-message CompletedArtifactInput { string file_name = 1; string media_type = 2; int64 size_bytes = 3; string object_receipt_ref = 4; }
-message CompleteExecutionRequest { MutationContext mutation = 1; string lease_ref = 2; string fence = 3; int64 generation = 4; bool success = 5; string result_summary = 6; string safe_error_code = 7; string safe_error_message = 8; repeated CompletedArtifactInput artifacts = 9; }
+message CompletedArtifactInput {
+  string file_name = 1;
+  string media_type = 2;
+  int64 size_bytes = 3;
+  bytes content = 4;
+  string sha256 = 5;
+}
+message CompleteExecutionRequest { MutationContext mutation = 1; string lease_ref = 2; string fence = 3; int64 generation = 4; bool success = 5; string result_summary = 6; string safe_error_code = 7; repeated CompletedArtifactInput artifacts = 8; }
 message CompleteExecutionResponse { Run run = 1; RunGraph graph = 2; }
 message DelegateExecutionRequest { MutationContext mutation = 1; string lease_ref = 2; string fence = 3; int64 generation = 4; string target_agent_ref = 5; string task = 6; google.protobuf.Struct input = 7; }
-message DelegateExecutionResponse { Run child_run = 1; RunGraph root_graph = 2; }
+message DelegateExecutionResponse { Run child_run = 1; RunGraph root_graph = 2; string callback_edge_ref = 3; }
 message DeliverCallbackRequest { MutationContext mutation = 1; string child_run_ref = 2; string callback_edge_ref = 3; }
 message DeliverCallbackResponse { Run parent_run = 1; RunGraph root_graph = 2; bool duplicate = 3; }
 

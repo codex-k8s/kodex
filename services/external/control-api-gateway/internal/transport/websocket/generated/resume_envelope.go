@@ -1,8 +1,7 @@
-
 package generated
 
 type ResumeEnvelope struct {
-  ReservedType string
-  RequestRef string
-  AfterSequence int
+	ReservedType  string
+	RequestRef    string
+	AfterSequence int
 }

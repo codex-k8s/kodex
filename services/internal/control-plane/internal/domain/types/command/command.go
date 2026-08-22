@@ -131,14 +131,15 @@ type LeaseInput struct {
 	Progress                          string
 }
 type CompleteExecutionInput struct {
-	LeaseRef, Fence, ResultSummary, SafeErrorCode, SafeErrorMessage string
-	Generation                                                      int64
-	Success                                                         bool
-	Artifacts                                                       []CompletedArtifact
+	LeaseRef, Fence, ResultSummary, SafeErrorCode string
+	Generation                                    int64
+	Success                                       bool
+	Artifacts                                     []CompletedArtifact
 }
 type CompletedArtifact struct {
-	FileName, MediaType, ObjectReceiptRef string
-	SizeBytes                             int64
+	FileName, MediaType, SHA256 string
+	SizeBytes                   int64
+	Content                     []byte
 }
 type DelegateInput struct {
 	LeaseRef, Fence, TargetAgentRef, Task string

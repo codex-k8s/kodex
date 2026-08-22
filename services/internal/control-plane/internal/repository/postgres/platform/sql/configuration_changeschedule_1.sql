@@ -1,0 +1,2 @@
+-- name: platform__configuration_changeschedule_1 :one
+INSERT INTO control_plane.schedules(ref,organization_id,project_id,name,target_type,target_ref,preset,cron_expression,timezone,input,session_policy,notification_policy,enabled,next_run_at,created_by) VALUES($1,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,true,clock_timestamp()+interval '1 minute',$13::uuid) RETURNING ref,name,preset,cron_expression,timezone,session_policy,notification_policy,enabled,version,next_run_at,last_run_at,created_at,updated_at

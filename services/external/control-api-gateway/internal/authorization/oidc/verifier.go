@@ -27,6 +27,7 @@ const (
 type Config struct {
 	Issuer         string
 	Audience       string
+	JWKSURL        string
 	ConnectAddress string
 	TLSServerName  string
 	CAFile         string
@@ -43,6 +44,7 @@ type Principal struct {
 
 type Verifier struct {
 	verifier  *coreoidc.IDTokenVerifier
+	keys      *boundedKeySet
 	transport *http.Transport
 }
 
@@ -78,9 +80,12 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 		return nil, errors.New("OIDC verifier configuration is invalid")
 	}
 	issuerURL, err := url.Parse(config.Issuer)
+	jwksURL, jwksErr := url.Parse(config.JWKSURL)
 	connectHost, connectPort, connectErr := net.SplitHostPort(config.ConnectAddress)
 	if err != nil || issuerURL.Scheme != "https" || issuerURL.Hostname() == "" || issuerURL.User != nil ||
 		issuerURL.RawQuery != "" || issuerURL.Fragment != "" ||
+		jwksErr != nil || jwksURL.Scheme != "https" || jwksURL.Hostname() != issuerURL.Hostname() ||
+		jwksURL.User != nil || jwksURL.RawQuery != "" || jwksURL.Fragment != "" || jwksURL.Path == "" ||
 		!strings.EqualFold(issuerURL.Hostname(), config.TLSServerName) || connectErr != nil ||
 		connectHost == "" || net.ParseIP(connectHost) != nil || connectPort != "443" {
 		return nil, errors.New("OIDC issuer is not permitted")
@@ -117,14 +122,14 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 			return errors.New("OIDC redirects are forbidden")
 		},
 	}
-	providerContext := coreoidc.ClientContext(ctx, client)
-	provider, err := coreoidc.NewProvider(providerContext, config.Issuer)
-	if err != nil {
+	keys := newBoundedKeySet(client, config.JWKSURL)
+	if err := keys.Refresh(ctx); err != nil {
 		base.CloseIdleConnections()
-		return nil, errors.New("initialize OIDC provider")
+		return nil, errors.New("initialize OIDC signing keys")
 	}
 	return &Verifier{
-		verifier:  provider.VerifierContext(providerContext, &coreoidc.Config{ClientID: config.Audience}),
+		verifier:  coreoidc.NewVerifier(config.Issuer, keys, &coreoidc.Config{ClientID: config.Audience, SupportedSigningAlgs: []string{"RS256"}}),
+		keys:      keys,
 		transport: base,
 	}, nil
 }
@@ -149,6 +154,9 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	if err != nil || token.Expiry.IsZero() {
 		return Principal{}, errors.New("OIDC bearer is invalid")
 	}
+	if deadline, degraded := verifier.keys.DegradedDeadline(); degraded && token.Expiry.After(deadline) {
+		return Principal{}, errors.New("OIDC bearer exceeds the signing-key grace window")
+	}
 	var values claims
 	if token.Claims(&values) != nil || uuid.Validate(values.OrganizationID) != nil ||
 		values.SessionRevision == 0 || !containsWord(values.Scope, ownerScope) ||
@@ -167,6 +175,16 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		Subject: subject, OrganizationID: values.OrganizationID, SessionID: sessionID,
 		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
 	}, nil
+}
+
+// Refresh обновляет JWKS независимо от request/readiness path. При кратком
+// сетевом отказе verifier использует bounded last-known-good, а повреждение или
+// конфликт key material закрывают авторизацию немедленно.
+func (verifier *Verifier) Refresh(ctx context.Context) error {
+	if verifier == nil || verifier.keys == nil {
+		return errors.New("OIDC verifier is unavailable")
+	}
+	return verifier.keys.Refresh(ctx)
 }
 
 func containsWord(words, expected string) bool {

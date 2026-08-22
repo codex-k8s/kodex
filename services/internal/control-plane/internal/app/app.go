@@ -44,7 +44,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return err
 	}
 	defer pool.Close()
-	repository, err := platformrepository.New(pool)
+	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel)
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
@@ -118,7 +118,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, readiness, config),
+		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 	)
 	workerDone := make(chan error, 1)
@@ -206,6 +206,7 @@ func loadServerTLS(config Config) (*tls.Config, error) {
 
 func technicalServer(address string, readiness *serviceruntime.Readiness) *http.Server {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/startupz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
@@ -255,7 +256,7 @@ type readinessPublisher interface {
 	Check(context.Context) error
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, config Config) serviceruntime.Worker {
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -264,9 +265,13 @@ func monitorReadiness(service *platformservice.Service, store readinessStore, pu
 			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
 			cancel()
 			if err == nil {
-				readiness.Set(true, "ready")
+				if readiness.Set(true, "ready") {
+					logger.InfoContext(ctx, "control-plane readiness restored")
+				}
 			} else {
-				readiness.Set(false, "system_assistant_unavailable")
+				if readiness.Set(false, "direct_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "direct_infrastructure")
+				}
 			}
 			select {
 			case <-ctx.Done():

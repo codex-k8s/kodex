@@ -2,30 +2,25 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/app"
 )
 
-var version = "dev"
+var buildVersion = "dev"
 
 func main() {
-	backgroundCtx := context.Background()
-	if err := run(backgroundCtx); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+	lifecycle, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	shutdownBase, cancel := context.WithTimeout(context.WithoutCancel(lifecycle), 30*time.Second)
+	defer cancel()
+	if err := app.Run(lifecycle, shutdownBase, buildVersion); err != nil && !errors.Is(err, context.Canceled) {
+		log.Printf("runtime-controller stopped: %v", err)
 		os.Exit(1)
 	}
-}
-
-func run(backgroundCtx context.Context) error {
-	lifecycleCtx, stop := signal.NotifyContext(
-		backgroundCtx,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-	)
-	defer stop()
-	return app.Run(lifecycleCtx, backgroundCtx, version)
 }

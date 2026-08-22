@@ -1,0 +1,64 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/configuration_changeschedule_1.sql
+	queryConfigurationChangeschedule1 string
+	//go:embed sql/configuration_changeschedule_2.sql
+	queryConfigurationChangeschedule2 string
+	//go:embed sql/configuration_changeschedule_3.sql
+	queryConfigurationChangeschedule3 string
+	//go:embed sql/configuration_changeconnection_1.sql
+	queryConfigurationChangeconnection1 string
+	//go:embed sql/configuration_changeconnection_2.sql
+	queryConfigurationChangeconnection2 string
+	//go:embed sql/configuration_changeconnection_3.sql
+	queryConfigurationChangeconnection3 string
+	//go:embed sql/configuration_changeconnection_4.sql
+	queryConfigurationChangeconnection4 string
+	//go:embed sql/configuration_changeintegrationgrant_1.sql
+	queryConfigurationChangeintegrationgrant1 string
+	//go:embed sql/configuration_changeintegrationgrant_2.sql
+	queryConfigurationChangeintegrationgrant2 string
+	//go:embed sql/configuration_changeintegrationgrant_3.sql
+	queryConfigurationChangeintegrationgrant3 string
+	//go:embed sql/configuration_changeintegrationgrant_4.sql
+	queryConfigurationChangeintegrationgrant4 string
+	//go:embed sql/configuration_createassistantconversation_1.sql
+	queryConfigurationCreateassistantconversation1 string
+	//go:embed sql/configuration_createassistantconversation_2.sql
+	queryConfigurationCreateassistantconversation2 string
+	//go:embed sql/configuration_addassistantturncommand_1.sql
+	queryConfigurationAddassistantturncommand1 string
+	//go:embed sql/configuration_addassistantturncommand_2.sql
+	queryConfigurationAddassistantturncommand2 string
+	//go:embed sql/configuration_addassistantturncommand_3.sql
+	queryConfigurationAddassistantturncommand3 string
+	//go:embed sql/configuration_addassistantturncommand_4.sql
+	queryConfigurationAddassistantturncommand4 string
+	//go:embed sql/configuration_addassistantturncommand_5.sql
+	queryConfigurationAddassistantturncommand5 string
+	//go:embed sql/configuration_addassistantturncommand_6.sql
+	queryConfigurationAddassistantturncommand6 string
+	//go:embed sql/configuration_addassistantturncommand_7.sql
+	queryConfigurationAddassistantturncommand7 string
+	//go:embed sql/configuration_addassistantturncommand_8.sql
+	queryConfigurationAddassistantturncommand8 string
+	//go:embed sql/configuration_addassistantturncommand_9.sql
+	queryConfigurationAddassistantturncommand9 string
+	//go:embed sql/configuration_addassistantturncommand_10.sql
+	queryConfigurationAddassistantturncommand10 string
+	//go:embed sql/configuration_applyassistantplancommand_1.sql
+	queryConfigurationApplyassistantplancommand1 string
+	//go:embed sql/configuration_applyassistantplancommand_2.sql
+	queryConfigurationApplyassistantplancommand2 string
+	//go:embed sql/configuration_auditassistantoperation_1.sql
+	queryConfigurationAuditassistantoperation1 string
+	//go:embed sql/configuration_updateassistantinstructions_1.sql
+	queryConfigurationUpdateassistantinstructions1 string
+	//go:embed sql/configuration_recoverassistant_1.sql
+	queryConfigurationRecoverassistant1 string
+	//go:embed sql/configuration_getassistanttx_1.sql
+	queryConfigurationGetassistanttx1 string
+)

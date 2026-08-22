@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -37,11 +38,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if !ok || payload.WorkloadInstance == "" || payload.Limit < 1 || payload.Limit > 32 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	rows, err := tx.Query(ctx, `SELECT n.id::text,n.ref,n.run_id::text,r.ref,r.root_run_id::text,COALESCE(r.project_id::text,''),COALESCE(p.ref,''),r.session_id::text,s.ref,r.task,a.ref,a.runtime_key,rp.runtime_revision,iv.ref,iv.digest,iv.content,a.capabilities,a.knowledge_artifact_refs,r.input
-		FROM control_plane.run_nodes n JOIN control_plane.runs r ON r.id=n.run_id LEFT JOIN control_plane.projects p ON p.id=r.project_id JOIN control_plane.sessions s ON s.id=r.session_id JOIN control_plane.agents a ON a.id=n.agent_id JOIN control_plane.runtime_profiles rp ON rp.stable_key=a.runtime_key JOIN LATERAL(SELECT i.ref,i.digest,i.content FROM control_plane.instruction_versions i WHERE i.agent_id=a.id AND i.state='PUBLISHED' ORDER BY i.version_number DESC LIMIT 1)iv ON true
-		WHERE n.organization_id=$1::uuid AND n.type='AGENT_EXECUTION' AND n.state='QUEUED' AND r.state IN('RUNNING','QUEUED')
-		AND NOT EXISTS(SELECT 1 FROM control_plane.run_edges e JOIN control_plane.run_nodes dependency ON dependency.id=e.source_node_id WHERE e.target_node_id=n.id AND e.type='WAITING_FOR' AND dependency.state<>'SUCCEEDED')
-		ORDER BY CASE WHEN a.system_key='system-assistant' THEN 0 ELSE 1 END,n.created_at FOR UPDATE OF n SKIP LOCKED LIMIT $2`, scope.organizationID, payload.Limit)
+	if _, err := tx.Exec(ctx, queryRuntimeClaimexecution1, scope.organizationID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	rows, err := tx.Query(ctx, queryRuntimeClaimexecution2, scope.organizationID, payload.Limit)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -49,10 +49,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	for rows.Next() {
-		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef, sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision, instructionRef, instructionDigest, instructions string
+		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef, sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision, provider, model, instructionRef, instructionDigest, instructions, turnRef, stableKey, callbackEdgeRef string
+		var attempt int32
 		var capabilities, knowledge []string
-		var rawInput []byte
-		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID, &projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey, &runtimeRevision, &instructionRef, &instructionDigest, &instructions, &capabilities, &knowledge, &rawInput); err != nil {
+		var rawInput, rawDelegationTargets, rawSessionContext []byte
+		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID, &projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey, &runtimeRevision, &provider, &model, &instructionRef, &instructionDigest, &instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef, &stableKey, &rawDelegationTargets, &callbackEdgeRef, &rawSessionContext); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		fence, err := newRef("fnc")
@@ -63,14 +64,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		leaseRef, _ := newRef("lea")
 		inputDigest := sha256.Sum256(rawInput)
 		var generation int64
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(generation),0)+1 FROM control_plane.runtime_leases WHERE node_id=$1::uuid`, nodeID).Scan(&generation); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeClaimexecution3, nodeID).Scan(&generation); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, `INSERT INTO control_plane.runtime_leases(ref,organization_id,run_id,node_id,workload_instance,fence_digest,generation,state,input_digest,expires_at) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,'CLAIMED',$8,$9)`, leaseRef, scope.organizationID, runID, nodeID, payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation, hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeClaimexecution4, leaseRef, scope.organizationID, runID, nodeID, payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation, hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		if _, err := tx.Exec(ctx, `UPDATE control_plane.run_nodes SET state='RUNNING',started_at=COALESCE(started_at,clock_timestamp()),version=version+1 WHERE id=$1::uuid`, nodeID); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeClaimexecution5, nodeID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, nodeRef, "TURN_STARTED", nodeRef, "", "", "", "Агент начал работу", "RUNNING", "RUNNING")
@@ -79,7 +80,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
-		items = append(items, map[string]any{"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef, "task": task, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt, "agentRef": agentRef, "runtimeKey": runtimeKey, "runtimeRevision": runtimeRevision, "instructionRef": instructionRef, "instructionDigest": instructionDigest, "instructions": instructions, "capabilities": capabilities, "knowledgeArtifactRefs": knowledge, "input": inputMap, "eventRef": event.Ref})
+		var delegationTargets []map[string]string
+		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
+		var sessionContext []map[string]string
+		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
+		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{runtimeRevision, provider, model, hex.EncodeToString(resolvedInstructionsDigest[:]), strings.Join(capabilities, ",")}, "\x00")))
+		items = append(items, map[string]any{"runRef": runRef, "nodeRef": nodeRef, "sessionRef": sessionRef, "turnRef": turnRef, "attempt": attempt, "task": task, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt, "agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey, "runtimeRevision": runtimeRevision, "runtimeProvider": provider, "runtimeModel": model, "instructionRef": instructionRef, "instructionDigest": instructionDigest, "instructions": instructions, "capabilities": capabilities, "knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets, "callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext, "input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]), "revisionDigest": hex.EncodeToString(revisionDigest[:]), "eventRef": event.Ref})
 		if firstRunRef == "" {
 			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
 		}
@@ -97,14 +104,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
 
 func (repository *Repository) lease(ctx context.Context, tx pgx.Tx, scope scope, payload command.LeaseInput, lock bool) (map[string]any, error) {
-	suffix := ""
+	leaseQuery := queryRuntimeLease1
 	if lock {
-		suffix = " FOR UPDATE"
+		leaseQuery = queryRuntimeLeaseForUpdate1
 	}
 	var leaseID, runID, nodeID, rootRunID, projectID, projectRef, runRef, nodeRef, storedDigest, state string
 	var generation int64
 	var expiresAt time.Time
-	err := tx.QueryRow(ctx, `SELECT l.id::text,l.run_id::text,l.node_id::text,r.root_run_id::text,COALESCE(r.project_id::text,''),COALESCE(p.ref,''),r.ref,n.ref,l.fence_digest,l.generation,l.state,l.expires_at FROM control_plane.runtime_leases l JOIN control_plane.runs r ON r.id=l.run_id LEFT JOIN control_plane.projects p ON p.id=r.project_id JOIN control_plane.run_nodes n ON n.id=l.node_id WHERE l.organization_id=$1::uuid AND l.ref=$2`+suffix, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt)
+	err := tx.QueryRow(ctx, leaseQuery, scope.organizationID, payload.LeaseRef).Scan(&leaseID, &runID, &nodeID, &rootRunID, &projectID, &projectRef, &runRef, &nodeRef, &storedDigest, &generation, &state, &expiresAt)
 	if err != nil {
 		return nil, errs.ErrNotFound
 	}
@@ -125,7 +132,7 @@ func (repository *Repository) renewExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	expires := time.Now().UTC().Add(30 * time.Second)
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.runtime_leases SET expires_at=$2,updated_at=clock_timestamp() WHERE id=$1::uuid`, lease["leaseID"], expires); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeRenewexecution1, lease["leaseID"], expires); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	return commandOutcome{result: command.Result{Runtime: map[string]any{"leaseRef": payload.LeaseRef, "fence": payload.Fence, "generation": payload.Generation, "expiresAt": expires}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUNTIME_LEASE", resourceRef: payload.LeaseRef, summary: "Runtime lease renewed"}, nil
@@ -141,7 +148,7 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	progress := truncate(payload.Progress, 2000)
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.run_nodes SET progress_summary=$2,version=version+1 WHERE id=$1::uuid`, lease["nodeID"], progress); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeReportprogress1, lease["nodeID"], progress); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_PROGRESS", stringMap(lease, "nodeRef"), "", "", "", progress, "RUNNING", "RUNNING")
@@ -162,7 +169,7 @@ func stringMap(values map[string]any, key string) string {
 
 func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.CompleteExecutionInput)
-	if !ok {
+	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
@@ -173,59 +180,105 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if !payload.Success {
 		nodeState, runState = "FAILED", "FAILED"
 	}
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.runtime_leases SET state='COMPLETED',updated_at=clock_timestamp() WHERE id=$1::uuid`, lease["leaseID"]); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution1, lease["leaseID"]); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var humanGateAfter bool
 	var turnID, sessionID, targetType string
-	if err := tx.QueryRow(ctx, `UPDATE control_plane.run_nodes SET state=$2,progress_summary=$3,safe_error_code=$4,safe_error_message=$5,finished_at=clock_timestamp(),next_actions=CASE WHEN $2='FAILED' THEN ARRAY['OPEN','RETRY'] ELSE ARRAY['OPEN'] END,version=version+1 WHERE id=$1::uuid RETURNING human_gate_after,COALESCE(turn_id::text,'')`, lease["nodeID"], nodeState, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), truncate(payload.SafeErrorMessage, 2000)).Scan(&humanGateAfter, &turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution2, lease["nodeID"], nodeState, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), "").Scan(&humanGateAfter, &turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if turnID != "" {
-		_, _ = tx.Exec(ctx, `UPDATE control_plane.session_turns SET state=$2,completed_at=clock_timestamp() WHERE id=$1::uuid`, turnID, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success])
+		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution3, turnID, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success])
 	}
-	if err := tx.QueryRow(ctx, `SELECT session_id::text,target_type FROM control_plane.runs WHERE id=$1::uuid`, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution4, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	artifactRefs := []string{}
+	var artifactBytes int64
 	for _, artifact := range payload.Artifacts {
+		projectID := stringMap(lease, "projectID")
+		if projectID == "" || len(payload.Artifacts) > 16 || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName || artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		artifactBytes += artifact.SizeBytes
+		if artifactBytes > maximumArtifactBytes {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		digest := sha256.Sum256(artifact.Content)
+		digestHex := hex.EncodeToString(digest[:])
+		if !strings.EqualFold(strings.TrimSpace(artifact.SHA256), digestHex) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		scanState, previewState := scanArtifactBody(artifact.MediaType, artifact.Content)
+		if scanState != "CLEAN" || previewState != "AVAILABLE" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		ref, _ := newRef("art")
-		digest := sha256.Sum256([]byte(artifact.ObjectReceiptRef))
+		receiptRef, _ := newRef("obj")
 		var artifactID string
-		if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,run_id,node_id,file_name,media_type,size_bytes,digest,scan_state,object_receipt_ref,preview_state,created_by) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6,$7,$8,$9,'PENDING',$10,'UNAVAILABLE',$11::uuid) RETURNING id::text`, ref, scope.organizationID, nullUUID(stringMap(lease, "projectID")), lease["runID"], lease["nodeID"], safeFileName(artifact.FileName), artifact.MediaType, artifact.SizeBytes, "sha256:"+hex.EncodeToString(digest[:]), artifact.ObjectReceiptRef, scope.actorID).Scan(&artifactID); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution5, ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"], artifact.FileName, artifact.MediaType, artifact.SizeBytes, "sha256:"+digestHex, receiptRef, scope.actorID).Scan(&artifactID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution6, artifactID, artifact.Content); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution7, artifactID, stringMap(lease, "runRef"), scope.actorID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", ref, "Файл результата доступен", runState, nodeState); err != nil {
+			return commandOutcome{}, err
+		}
 		artifactRefs = append(artifactRefs, ref)
-		_ = artifactID
 	}
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.runs SET state=$2,result_summary=$3,safe_error_code=$4,safe_error_message=$5,finished_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid AND id<>root_run_id`, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), truncate(payload.SafeErrorMessage, 2000)); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution8, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if payload.Success {
+		var callbackEdgeID, callbackEdgeRef, parentNodeID string
+		err := tx.QueryRow(ctx, queryRuntimeCompleteexecution9, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID)
+		if err == nil {
+			tag, insertErr := tx.Exec(ctx, queryRuntimeCompleteexecution10, lease["runID"], callbackEdgeID)
+			if insertErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if tag.RowsAffected() == 1 {
+				if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecution11, parentNodeID, truncate(payload.ResultSummary, 2000)); updateErr != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", "", callbackEdgeRef, "", "", "Результат дочернего агента доставлен", "RUNNING", ""); eventErr != nil {
+					return commandOutcome{}, eventErr
+				}
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
 		turnRef, _ := newRef("trn")
 		var next int64
-		if err := tx.QueryRow(ctx, `SELECT next_turn_number FROM control_plane.sessions WHERE id=$1::uuid FOR UPDATE`, sessionID).Scan(&next); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution12, sessionID).Scan(&next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO control_plane.session_turns(ref,organization_id,session_id,run_id,turn_number,actor_kind,actor_ref,content,artifact_refs,state,completed_at) SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,'SYSTEM_ASSISTANT',a.ref,$6,$7,$8,clock_timestamp() FROM control_plane.agents a WHERE a.organization_id=$2::uuid AND a.system_key='system-assistant'`, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), artifactRefs, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution13, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), artifactRefs, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_, _ = tx.Exec(ctx, `UPDATE control_plane.sessions SET next_turn_number=next_turn_number+1,version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, sessionID)
-		_, _ = tx.Exec(ctx, `UPDATE control_plane.assistant_conversations SET version=version+1,updated_at=clock_timestamp() WHERE session_id=$1::uuid`, sessionID)
+		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution14, sessionID)
+		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution15, sessionID)
 	}
 	if payload.Success && humanGateAfter {
 		gateNodeRef, _ := newRef("nod")
 		var gateNodeID string
-		if err := tx.QueryRow(ctx, `INSERT INTO control_plane.run_nodes(ref,organization_id,root_run_id,run_id,parent_node_id,type,state,display_name,role,next_actions) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'HUMAN_GATE','WAITING','Требуется решение','Проверка результата',ARRAY['OPEN','RESOLVE_GATE']) RETURNING id::text`, gateNodeRef, scope.organizationID, lease["rootRunID"], lease["runID"], lease["nodeID"]).Scan(&gateNodeID); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution16, gateNodeRef, scope.organizationID, lease["rootRunID"], lease["runID"], lease["nodeID"]).Scan(&gateNodeID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		edgeRef, _ := newRef("edg")
-		_, _ = tx.Exec(ctx, `INSERT INTO control_plane.run_edges(ref,organization_id,root_run_id,source_node_id,target_node_id,type,label) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'WAITING_FOR','Ожидает решения')`, edgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], gateNodeID)
+		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution17, edgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], gateNodeID)
 		gateRef, _ := newRef("gat")
-		if _, err := tx.Exec(ctx, `INSERT INTO control_plane.owner_gates(ref,organization_id,project_id,root_run_id,node_id,title,prompt,context_summary,allowed_decisions,state) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'Проверить результат','Подтвердите продолжение процесса',$6,ARRAY['APPROVE','REJECT','REQUEST_CHANGES','CANCEL'],'OPEN')`, gateRef, scope.organizationID, lease["projectID"], lease["rootRunID"], gateNodeID, truncate(payload.ResultSummary, 1000)); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution18, gateRef, scope.organizationID, lease["projectID"], lease["rootRunID"], gateNodeID, truncate(payload.ResultSummary, 1000)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, `UPDATE control_plane.runs SET state='WAITING_HUMAN',version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, lease["rootRunID"]); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution19, lease["rootRunID"]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		runState = "WAITING_HUMAN"
@@ -234,20 +287,20 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if !payload.Success {
-		if _, err := tx.Exec(ctx, `UPDATE control_plane.runs SET state='FAILED',result_summary=$2,safe_error_code=$3,safe_error_message=$4,finished_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), truncate(payload.SafeErrorMessage, 2000)); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution20, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if !humanGateAfter {
 		var active int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM control_plane.run_nodes WHERE root_run_id=$1::uuid AND type='AGENT_EXECUTION' AND state IN('QUEUED','RUNNING','WAITING')`, lease["rootRunID"]).Scan(&active); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecution21, lease["rootRunID"]).Scan(&active); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if active == 0 {
 			runState = "SUCCEEDED"
-			if _, err := tx.Exec(ctx, `UPDATE control_plane.runs SET state='SUCCEEDED',result_summary=$2,finished_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
+			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecution22, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
-			_, _ = tx.Exec(ctx, `UPDATE control_plane.run_nodes SET state='SUCCEEDED',finished_at=clock_timestamp(),version=version+1 WHERE root_run_id=$1::uuid AND type='ROOT_PROCESS'`, lease["rootRunID"])
+			_, _ = tx.Exec(ctx, queryRuntimeCompleteexecution23, lease["rootRunID"])
 		}
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_COMPLETED", stringMap(lease, "nodeRef"), "", "", "", nonEmptyResult(payload), runState, nodeState)
@@ -266,9 +319,18 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 		return truncate(text, 2000)
 	}
 	if payload.Success {
-		return "Задача выполнена"
+		return "RUN_COMPLETED"
 	}
-	return "Задача завершилась ошибкой"
+	return payload.SafeErrorCode
+}
+
+func runtimeSafeErrorCode(code string) bool {
+	switch code {
+	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED":
+		return true
+	default:
+		return false
+	}
 }
 
 func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -281,43 +343,43 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	var allowed bool
-	if err := tx.QueryRow(ctx, `SELECT 'platform.run.delegate'=ANY(a.capabilities) FROM control_plane.run_nodes n JOIN control_plane.agents a ON a.id=n.agent_id WHERE n.id=$1::uuid`, lease["nodeID"]).Scan(&allowed); err != nil || !allowed {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution1, lease["nodeID"]).Scan(&allowed); err != nil || !allowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	var agentID, agentName, role string
-	if err := tx.QueryRow(ctx, `SELECT a.id::text,a.name,a.role_description FROM control_plane.agents a WHERE a.organization_id=$1::uuid AND a.project_id=$2::uuid AND a.ref=$3 AND a.enabled AND a.state='READY'`, scope.organizationID, lease["projectID"], payload.TargetAgentRef).Scan(&agentID, &agentName, &role); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution2, scope.organizationID, lease["projectID"], payload.TargetAgentRef).Scan(&agentID, &agentName, &role); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	childRef, _ := newRef("run")
 	var sessionID, initiatorID, parentRunID string
-	if err := tx.QueryRow(ctx, `SELECT session_id::text,initiated_by::text,id::text FROM control_plane.runs WHERE id=$1::uuid`, lease["runID"]).Scan(&sessionID, &initiatorID, &parentRunID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution3, lease["runID"]).Scan(&sessionID, &initiatorID, &parentRunID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var childID string
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.runs(ref,organization_id,project_id,session_id,root_run_id,parent_run_id,target_type,target_ref,source,title,task,input,state,initiated_by,started_at) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,'AGENT',$7,'AGENT_DELEGATION',$8,$9,$10,'RUNNING',$11::uuid,clock_timestamp()) RETURNING id::text`, childRef, scope.organizationID, lease["projectID"], sessionID, lease["rootRunID"], parentRunID, payload.TargetAgentRef, agentName+": "+truncate(payload.Task, 100), payload.Task, asJSON(payload.Input), initiatorID).Scan(&childID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution4, childRef, scope.organizationID, lease["projectID"], sessionID, lease["rootRunID"], parentRunID, payload.TargetAgentRef, agentName+": "+truncate(payload.Task, 100), payload.Task, asJSON(payload.Input), initiatorID).Scan(&childID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
 	var turnNumber int64
-	if err := tx.QueryRow(ctx, `SELECT next_turn_number FROM control_plane.sessions WHERE id=$1::uuid FOR UPDATE`, sessionID).Scan(&turnNumber); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution5, sessionID).Scan(&turnNumber); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.session_turns(ref,organization_id,session_id,run_id,turn_number,actor_kind,actor_ref,content,state) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,'AGENT',$6,$7,'QUEUED') RETURNING id::text`, turnRef, scope.organizationID, sessionID, childID, turnNumber, stringMap(lease, "nodeRef"), payload.Task).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution6, turnRef, scope.organizationID, sessionID, childID, turnNumber, stringMap(lease, "nodeRef"), payload.Task).Scan(&turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	_, _ = tx.Exec(ctx, `UPDATE control_plane.sessions SET next_turn_number=next_turn_number+1,version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, sessionID)
+	_, _ = tx.Exec(ctx, queryRuntimeDelegateexecution7, sessionID)
 	nodeRef, _ := newRef("nod")
 	var nodeID string
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.run_nodes(ref,organization_id,root_run_id,run_id,parent_node_id,type,state,display_name,role,agent_id,turn_id,input_summary,next_actions) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'AGENT_EXECUTION','QUEUED',$6,$7,$8::uuid,$9::uuid,$10,ARRAY['OPEN','CANCEL']) RETURNING id::text`, nodeRef, scope.organizationID, lease["rootRunID"], childID, lease["nodeID"], agentName, role, agentID, turnID, truncate(payload.Task, 1000)).Scan(&nodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecution8, nodeRef, scope.organizationID, lease["rootRunID"], childID, lease["nodeID"], agentName, role, agentID, turnID, truncate(payload.Task, 1000)).Scan(&nodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	delegateEdgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.run_edges(ref,organization_id,root_run_id,source_node_id,target_node_id,type,label) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'DELEGATED_TO','Делегировано дочернему агенту')`, delegateEdgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], nodeID); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecution9, delegateEdgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], nodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	callbackEdgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.run_edges(ref,organization_id,root_run_id,source_node_id,target_node_id,type,label) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'CALLBACK_TO','Вернуть результат родителю')`, callbackEdgeRef, scope.organizationID, lease["rootRunID"], nodeID, lease["nodeID"]); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecution10, callbackEdgeRef, scope.organizationID, lease["rootRunID"], nodeID, lease["nodeID"]); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), childRef, "DELEGATION_CREATED", nodeRef, delegateEdgeRef, "", "", "Дочерний агент запущен", "RUNNING", "QUEUED")
@@ -338,19 +400,19 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 	}
 	var childID, rootRunID, projectID, projectRef, parentRunID, resultSummary, edgeID, parentNodeID string
 	var childState string
-	if err := tx.QueryRow(ctx, `SELECT child.id::text,child.root_run_id::text,child.project_id::text,p.ref,child.parent_run_id::text,child.result_summary,child.state,e.id::text,e.target_node_id::text FROM control_plane.runs child JOIN control_plane.projects p ON p.id=child.project_id JOIN control_plane.run_edges e ON e.root_run_id=child.root_run_id AND e.ref=$3 AND e.type='CALLBACK_TO' WHERE child.organization_id=$1::uuid AND child.ref=$2 FOR UPDATE OF child,e`, scope.organizationID, payload.ChildRunRef, payload.CallbackEdgeRef).Scan(&childID, &rootRunID, &projectID, &projectRef, &parentRunID, &resultSummary, &childState, &edgeID, &parentNodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelivercallback1, scope.organizationID, payload.ChildRunRef, payload.CallbackEdgeRef).Scan(&childID, &rootRunID, &projectID, &projectRef, &parentRunID, &resultSummary, &childState, &edgeID, &parentNodeID); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if childState != "SUCCEEDED" {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	tag, err := tx.Exec(ctx, `INSERT INTO control_plane.callback_receipts(child_run_id,callback_edge_id) VALUES($1::uuid,$2::uuid) ON CONFLICT DO NOTHING`, childID, edgeID)
+	tag, err := tx.Exec(ctx, queryRuntimeDelivercallback2, childID, edgeID)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	duplicate := tag.RowsAffected() == 0
 	if !duplicate {
-		if _, err := tx.Exec(ctx, `UPDATE control_plane.run_nodes SET callback_summary=$2,version=version+1 WHERE id=$1::uuid`, parentNodeID, truncate(resultSummary, 2000)); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeDelivercallback3, parentNodeID, truncate(resultSummary, 2000)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", "", payload.CallbackEdgeRef, "", "", "Результат дочернего агента доставлен", "RUNNING", ""); err != nil {

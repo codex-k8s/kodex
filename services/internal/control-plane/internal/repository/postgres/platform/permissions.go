@@ -30,7 +30,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		return nil
 	}
 	var permitted bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM control_plane.memberships WHERE organization_id=$1::uuid AND project_id=$2::uuid AND subject_id=$3::uuid AND active AND $4=ANY(permissions))`, scope.organizationID, projectID, scope.actorID, permission).Scan(&permitted)
+	err = tx.QueryRow(ctx, queryPermissionsAuthorizecommand1, scope.organizationID, projectID, scope.actorID, permission).Scan(&permitted)
 	if err != nil {
 		return errs.ErrUnavailable
 	}
@@ -114,7 +114,7 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 		return nil
 	}
 	var allowed bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM control_plane.memberships WHERE organization_id=$1::uuid AND project_id=$2::uuid AND subject_id=$3::uuid AND active AND $4=ANY(permissions))`, scope.organizationID, projectID, scope.actorID, permission).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermission1, scope.organizationID, projectID, scope.actorID, permission).Scan(&allowed); err != nil {
 		return errs.ErrUnavailable
 	}
 	if !allowed {
@@ -125,15 +125,15 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 
 func projectIDByResource(ctx context.Context, tx pgx.Tx, organizationID, table, ref string) (string, error) {
 	queries := map[string]string{
-		"projects":                `SELECT id::text FROM control_plane.projects WHERE organization_id=$1::uuid AND ref=$2`,
-		"agents":                  `SELECT project_id::text FROM control_plane.agents WHERE organization_id=$1::uuid AND ref=$2 AND project_id IS NOT NULL`,
-		"workflows":               `SELECT project_id::text FROM control_plane.workflows WHERE organization_id=$1::uuid AND ref=$2`,
-		"sessions":                `SELECT project_id::text FROM control_plane.sessions WHERE organization_id=$1::uuid AND ref=$2 AND project_id IS NOT NULL`,
-		"runs":                    `SELECT project_id::text FROM control_plane.runs WHERE organization_id=$1::uuid AND ref=$2 AND project_id IS NOT NULL`,
-		"owner_gates":             `SELECT project_id::text FROM control_plane.owner_gates WHERE organization_id=$1::uuid AND ref=$2`,
-		"artifacts":               `SELECT project_id::text FROM control_plane.artifacts WHERE organization_id=$1::uuid AND ref=$2`,
-		"schedules":               `SELECT project_id::text FROM control_plane.schedules WHERE organization_id=$1::uuid AND ref=$2`,
-		"assistant_conversations": `SELECT project_id::text FROM control_plane.assistant_conversations WHERE organization_id=$1::uuid AND ref=$2 AND project_id IS NOT NULL`,
+		"projects":                queryPermissionsProjectidbyresource1,
+		"agents":                  queryPermissionsProjectidbyresource2,
+		"workflows":               queryPermissionsProjectidbyresource3,
+		"sessions":                queryPermissionsProjectidbyresource4,
+		"runs":                    queryPermissionsProjectidbyresource5,
+		"owner_gates":             queryPermissionsProjectidbyresource6,
+		"artifacts":               queryPermissionsProjectidbyresource7,
+		"schedules":               queryPermissionsProjectidbyresource8,
+		"assistant_conversations": queryPermissionsProjectidbyresource9,
 	}
 	query := queries[table]
 	if query == "" {

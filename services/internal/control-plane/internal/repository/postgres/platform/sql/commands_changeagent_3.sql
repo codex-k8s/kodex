@@ -1,0 +1,2 @@
+-- name: platform__commands_changeagent_3 :one
+UPDATE control_plane.agents a SET enabled=false,state='ARCHIVED',version=version+1,updated_at=clock_timestamp() WHERE a.organization_id=$1::uuid AND a.ref=$2 AND a.version=$3 AND a.system_key IS NULL AND NOT EXISTS(SELECT 1 FROM control_plane.runs r WHERE r.target_ref=a.ref AND r.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')) RETURNING a.project_id::text,a.ref,a.name,a.purpose,a.role_description,a.avatar_url,a.state,a.enabled,a.version,a.created_at,a.updated_at

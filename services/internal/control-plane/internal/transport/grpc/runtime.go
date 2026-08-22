@@ -52,10 +52,36 @@ func castLease(values map[string]any) *controlplanev1.WorkLease {
 }
 
 func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionSnapshot {
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevision"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), AgentRef: mapString(values, "agentRef"), Instructions: mapString(values, "instructions"), InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant" || mapString(values, "agentRef") == "system-assistant"}
-	result.Runtime = &controlplanev1.RuntimeSelection{Ref: mapString(values, "runtimeKey"), Revision: mapString(values, "runtimeRevision"), Ready: true}
+	instructions := mapString(values, "instructions")
+	if instructions == "" {
+		instructions = mapString(values, "corePrompt")
+	}
+	agentRef := mapString(values, "agentRef")
+	if agentRef == "" {
+		agentRef = mapString(values, "assistantRef")
+	}
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevision"), Version: 1, RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	profileRevision := mapString(values, "profileRevision")
+	if profileRevision == "" {
+		profileRevision = mapString(values, "runtimeRevision")
+	}
+	result.Runtime = &controlplanev1.RuntimeSelection{Ref: mapString(values, "runtimeKey"), Revision: profileRevision, Provider: mapString(values, "runtimeProvider"), Model: mapString(values, "runtimeModel"), Ready: true}
 	for _, key := range mapStrings(values, "capabilities") {
 		result.Capabilities = append(result.Capabilities, &controlplanev1.PlatformCapability{Key: key, Name: key})
+	}
+	if targets, ok := values["delegationTargets"].([]map[string]string); ok {
+		for _, target := range targets {
+			result.DelegationTargets = append(result.DelegationTargets, &controlplanev1.DelegationTarget{Ref: target["ref"], Name: target["name"], Purpose: target["purpose"], RoleDescription: target["roleDescription"]})
+		}
+	}
+	if messages, ok := values["sessionContext"].([]map[string]string); ok {
+		for _, message := range messages {
+			result.SessionContext = append(result.SessionContext, &controlplanev1.SessionContextMessage{Role: message["role"], Content: message["content"]})
+		}
+	}
+	result.CallbackEdgeRef = mapString(values, "callbackEdgeRef")
+	if boundedInput, ok := values["input"].(map[string]any); ok {
+		result.BoundedInput = structure(boundedInput)
 	}
 	return result
 }
@@ -72,6 +98,8 @@ func assistantRuntimeState(input controlplanev1.AssistantRuntimeState) string {
 		return "STARTING"
 	case controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY:
 		return "READY"
+	case controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY:
+		return "BUSY"
 	case controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_RECOVERING:
 		return "RECOVERING"
 	case controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_FAILED:
@@ -119,9 +147,9 @@ func (server *Server) ReportExecutionProgress(ctx context.Context, request *cont
 }
 
 func (server *Server) CompleteExecution(ctx context.Context, request *controlplanev1.CompleteExecutionRequest) (*controlplanev1.CompleteExecutionResponse, error) {
-	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), SafeErrorMessage: request.GetSafeErrorMessage()}
+	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	for _, item := range request.GetArtifacts() {
-		payload.Artifacts = append(payload.Artifacts, command.CompletedArtifact{FileName: item.GetFileName(), MediaType: item.GetMediaType(), SizeBytes: item.GetSizeBytes(), ObjectReceiptRef: item.GetObjectReceiptRef()})
+		payload.Artifacts = append(payload.Artifacts, command.CompletedArtifact{FileName: item.GetFileName(), MediaType: item.GetMediaType(), SizeBytes: item.GetSizeBytes(), Content: item.GetContent(), SHA256: item.GetSha256()})
 	}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName, command.CompleteExecution, request.GetMutation(), payload)
 	if err != nil {
@@ -136,7 +164,7 @@ func (server *Server) DelegateExecution(ctx context.Context, request *controlpla
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph)}, nil
+	return &controlplanev1.DelegateExecutionResponse{ChildRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), CallbackEdgeRef: mapString(result.Runtime, "callbackEdgeRef")}, nil
 }
 
 func (server *Server) DeliverCallback(ctx context.Context, request *controlplanev1.DeliverCallbackRequest) (*controlplanev1.DeliverCallbackResponse, error) {

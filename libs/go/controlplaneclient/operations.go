@@ -2,344 +2,99 @@ package controlplaneclient
 
 import controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 
-func AgentRunnerOperations() map[string]string {
-	return map[string]string{
-		"control.agent-runner.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.turn.claim":                  controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
-		"control.agent-runtime-execution.get": controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
-		"control.runtime-execution.progress":  controlplanev1.ControlPlaneService_ReportRuntimeProgress_FullMethodName,
-	}
-}
-
-func AutomationSchedulerReadinessOperations() map[string]string {
-	return map[string]string{
-		"control.automation-scheduler.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-	}
-}
-
-func AutomationSchedulerOperations() map[string]string {
-	return map[string]string{
-		"control.schedule.claim-due":              controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
-		"control.schedule.claim-occurrence":       controlplanev1.ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
-		"control.schedule.materialize-occurrence": controlplanev1.ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
-		"control.schedule.complete-occurrence":    controlplanev1.ControlPlaneService_CompleteScheduleOccurrence_FullMethodName,
-	}
-}
-
-// LegacyDataMigrationOperations выдаёт prerequisite job только owner materializer lifecycle.
-func LegacyDataMigrationOperations() map[string]string {
-	return map[string]string{
-		"control.legacy-data-migration.readiness":    controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.legacy-graph-migration.prepare":     controlplanev1.ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName,
-		"control.legacy-graph-migration.materialize": controlplanev1.ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName,
-		"control.legacy-graph-migration.read":        controlplanev1.ControlPlaneService_GetLegacyGraphMigration_FullMethodName,
-		"control.legacy-graph-migration.abort":       controlplanev1.ControlPlaneService_AbortLegacyGraphMigration_FullMethodName,
-	}
-}
-
-func ArtifactScannerOperations() map[string]string {
-	return map[string]string{
-		"control.artifact-scanner.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.artifact.scan":              controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
-	}
-}
-
-func RoleImageBuilderOperations() map[string]string {
-	return map[string]string{
-		"control.role-image-builder.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.image-build.claim":            controlplanev1.ControlPlaneService_ClaimImageBuild_FullMethodName,
-		"control.image-build.renew":            controlplanev1.ControlPlaneService_RenewImageBuild_FullMethodName,
-		"control.image-build.progress":         controlplanev1.ControlPlaneService_ReportImageBuildProgress_FullMethodName,
-		"control.image-build.complete":         controlplanev1.ControlPlaneService_CompleteImageBuild_FullMethodName,
-		"control.image-build.fail":             controlplanev1.ControlPlaneService_FailImageBuild_FullMethodName,
-	}
-}
-
-func ImageAdmissionOperations() map[string]string {
-	return map[string]string{
-		"control.image-admission.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.image-admission.claim":     controlplanev1.ControlPlaneService_ClaimImageAdmission_FullMethodName,
-		"control.image-admission.record":    controlplanev1.ControlPlaneService_RecordImageAdmission_FullMethodName,
-	}
-}
-
-func ImagePromotionOperations() map[string]string {
-	return map[string]string{
-		"control.image-promotion.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.image-promotion.claim":     controlplanev1.ControlPlaneService_ClaimImagePromotion_FullMethodName,
-		"control.image-promotion.authorize": controlplanev1.ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
-		"control.image-promotion.complete":  controlplanev1.ControlPlaneService_CompleteImagePromotion_FullMethodName,
-	}
-}
-
-func RuntimeControllerOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-controller.readiness":          controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-resource.get":                  controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.runtime-revision.get":                  controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
-		"control.runtime-execution.claim":               controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
-		"control.runtime-execution.get":                 controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
-		"control.runtime-execution.admit":               controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
-		"control.runtime-execution.restore.materialize": controlplanev1.ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
-		"control.runtime-execution.heartbeat":           controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
-		"control.runtime-execution.incident":            controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
-		"control.runtime-execution.complete":            controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
-		"control.runtime-execution.reschedule":          controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
-		"control.runtime-execution.expire":              controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
-		"control.runtime-execution.cleanup.consume":     controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
-	}
-}
-
-// RuntimeRestoreEffectOperations выдаёт S3 restore exchanger только readiness
-// и exact current-generation credential effect authorization.
-func RuntimeRestoreEffectOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-restore-effect.readiness":     controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.restore.credential": controlplanev1.ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
-	}
-}
-
-// RuntimeOwnerOperations возвращает только owner lifecycle full methods.
-func RuntimeOwnerOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-execution.cancel": controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
-		"control.runtime-execution.retry":  controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
-	}
-}
-
-// RuntimeArchiveOperations выдаёт archive worker только readiness и запись archive evidence.
-func RuntimeArchiveOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-archive.readiness":        controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.archive.record": controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
-	}
-}
-
-// RuntimeRestoreVerifierOperations отделяет independent proof от owner/cleanup.
-func RuntimeRestoreVerifierOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-restore-verifier.readiness":   controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.restore.verify":     controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
-		"control.runtime-execution.restore.bind":       controlplanev1.ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName,
-		"control.runtime-execution.rehydrate.complete": controlplanev1.ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName,
-	}
-}
-
-// RuntimeCleanupAuthorizerOperations выдаёт/истекает destructive authorization.
-func RuntimeCleanupAuthorizerOperations() map[string]string {
-	return map[string]string{
-		"control.runtime-cleanup-authorizer.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.cleanup.authorize":  controlplanev1.ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
-		"control.runtime-execution.cleanup.expire":     controlplanev1.ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
-	}
-}
-
-// IntegrationGatewayOperations возвращает только approval/execution full methods.
-func IntegrationGatewayOperations() map[string]string {
-	return map[string]string{
-		"control.integration-gateway.readiness":         controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.integration-session.resolve":           controlplanev1.ControlPlaneService_ResolveIntegrationSession_FullMethodName,
-		"control.integration-continuation.suspend":      controlplanev1.ControlPlaneService_SuspendForIntegrationApproval_FullMethodName,
-		"control.integration-invocation.approve":        controlplanev1.ControlPlaneService_ApproveIntegrationInvocation_FullMethodName,
-		"control.integration-invocation.reject":         controlplanev1.ControlPlaneService_RejectIntegrationInvocation_FullMethodName,
-		"control.integration-invocation.expire":         controlplanev1.ControlPlaneService_ExpireIntegrationInvocation_FullMethodName,
-		"control.integration-invocation.cancel":         controlplanev1.ControlPlaneService_CancelIntegrationInvocation_FullMethodName,
-		"control.integration-execution.begin":           controlplanev1.ControlPlaneService_BeginIntegrationExecution_FullMethodName,
-		"control.integration-execution.complete":        controlplanev1.ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
-		"control.integration-execution.fail":            controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
-		"control.integration.provider-reference.manage": controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
-		"control.integration.provider-reference.get":    controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
-		"control.integration.provider-reference.list":   controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
-		"control.role-definition.git.reconcile":         controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
-		"control.agent.git.reconcile":                   controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
-		"control.instruction-set.git.reconcile":         controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
-		"control.provider-pool.git.reconcile":           controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
-	}
-}
-
-// IntegrationGatewayManagementOperations отделяет owner/effect receipts от
-// agent-session профиля того же deployable. Один full method имеет ровно один
-// purpose в этом client connection.
-func IntegrationGatewayManagementOperations() map[string]string {
-	return map[string]string{
-		"control.integration-gateway.readiness":                controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.integration.provider-reference.manage":        controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
-		"control.integration.provider-reference.readback.get":  controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
-		"control.integration.provider-reference.readback.list": controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
-		"control.integration.provider-pool.manage":             controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName,
-		"control.role-definition.git.reconcile":                controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
-		"control.agent.git.reconcile":                          controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
-		"control.instruction-set.git.reconcile":                controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
-		"control.provider-pool.git.reconcile":                  controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
-	}
-}
-
-// ControlAPIGatewayOperations возвращает закрытый набор owner HTTP/WS mappings.
-// Actor, tenant, project и ownership разрешаются proof resolver на стороне
-// control-plane; adapter не принимает эти значения из HTTP payload.
+// ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
-		"control.readiness.check":                 controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.project.create":                  controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
-		"control.project.list":                    controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
-		"control.project.update":                  controlplanev1.ControlPlaneService_UpdateProject_FullMethodName,
-		"control.project.delete":                  controlplanev1.ControlPlaneService_DeleteProject_FullMethodName,
-		"control.resource.create":                 controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
-		"control.resource.update":                 controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
-		"control.resource.transition":             controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
-		"control.resource.delete":                 controlplanev1.ControlPlaneService_DeleteResource_FullMethodName,
-		"control.access.manage":                   controlplanev1.ControlPlaneService_ManageAccessResource_FullMethodName,
-		"control.access.detach":                   controlplanev1.ControlPlaneService_DetachAccessResource_FullMethodName,
-		"control.access.copy":                     controlplanev1.ControlPlaneService_CopyAccessResource_FullMethodName,
-		"control.resource.get":                    controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.resource.list":                   controlplanev1.ControlPlaneService_ListResources_FullMethodName,
-		"control.resource.search":                 controlplanev1.ControlPlaneService_SearchResources_FullMethodName,
-		"control.audit.list":                      controlplanev1.ControlPlaneService_ListAuditEvents_FullMethodName,
-		"control.runtime-incident.list":           controlplanev1.ControlPlaneService_ListRuntimeIncidents_FullMethodName,
-		"control.diagnostics.get":                 controlplanev1.ControlPlaneService_GetDiagnostics_FullMethodName,
-		"control.owner-session.admit":             controlplanev1.ControlPlaneService_AdmitOwnerSession_FullMethodName,
-		"control.owner-session.revoke":            controlplanev1.ControlPlaneService_RevokeOwnerSession_FullMethodName,
-		"control.gateway-public-tls.prepare":      controlplanev1.ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName,
-		"control.gateway-public-tls.confirm":      controlplanev1.ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName,
-		"control.gateway-public-tls.check":        controlplanev1.ControlPlaneService_CheckGatewayPublicTLS_FullMethodName,
-		"control.schedule.manage":                 controlplanev1.ControlPlaneService_ManageSchedule_FullMethodName,
-		"control.schedule.run-now":                controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
-		"control.schedule.occurrences.list":       controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
-		"control.schedule.recovery.resolve":       controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
-		"control.owner-gate.resolve":              controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
-		"control.backup.list":                     controlplanev1.ControlPlaneService_ListBackups_FullMethodName,
-		"control.backup.get":                      controlplanev1.ControlPlaneService_GetBackup_FullMethodName,
-		"control.backup.restore":                  controlplanev1.ControlPlaneService_RestoreBackup_FullMethodName,
-		"control.restore-operation.get":           controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
-		"control.restore-operation.list":          controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
-		"control.role-image-recipe.manage":        controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
-		"control.role-image-recipe.get":           controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
-		"control.image-build.manage":              controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,
-		"control.image-build.get":                 controlplanev1.ControlPlaneService_GetRoleImageBuild_FullMethodName,
-		"control.role-definition.manage":          controlplanev1.ControlPlaneService_ManageRoleDefinition_FullMethodName,
-		"control.role-definition.get":             controlplanev1.ControlPlaneService_GetRoleDefinition_FullMethodName,
-		"control.role-definition.list":            controlplanev1.ControlPlaneService_ListRoleDefinitions_FullMethodName,
-		"control.role-definition.history":         controlplanev1.ControlPlaneService_ListRoleDefinitionHistory_FullMethodName,
-		"control.agent.manage":                    controlplanev1.ControlPlaneService_ManageAgent_FullMethodName,
-		"control.agent.get":                       controlplanev1.ControlPlaneService_GetAgent_FullMethodName,
-		"control.agent.list":                      controlplanev1.ControlPlaneService_ListAgents_FullMethodName,
-		"control.agent.history":                   controlplanev1.ControlPlaneService_ListAgentHistory_FullMethodName,
-		"control.agent-assignment.manage":         controlplanev1.ControlPlaneService_ManageAgentAssignment_FullMethodName,
-		"control.agent-assignment.get":            controlplanev1.ControlPlaneService_GetAgentAssignment_FullMethodName,
-		"control.agent-assignment.list":           controlplanev1.ControlPlaneService_ListAgentAssignments_FullMethodName,
-		"control.agent-assignment.history":        controlplanev1.ControlPlaneService_ListAgentAssignmentHistory_FullMethodName,
-		"control.instruction-set.manage":          controlplanev1.ControlPlaneService_ManageInstructionSet_FullMethodName,
-		"control.instruction-set.get":             controlplanev1.ControlPlaneService_GetInstructionSet_FullMethodName,
-		"control.instruction-set.list":            controlplanev1.ControlPlaneService_ListInstructionSets_FullMethodName,
-		"control.instruction-set.history":         controlplanev1.ControlPlaneService_ListInstructionSetHistory_FullMethodName,
-		"control.instruction-set.compare":         controlplanev1.ControlPlaneService_CompareInstructionSetVersions_FullMethodName,
-		"control.owner-configuration.catalog":     controlplanev1.ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName,
-		"control.provider-reference.get":          controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
-		"control.provider-reference.list":         controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
-		"control.provider-reference.history":      controlplanev1.ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName,
-		"control.provider-pool.manage":            controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName,
-		"control.provider-pool.get":               controlplanev1.ControlPlaneService_GetProviderPool_FullMethodName,
-		"control.provider-pool.list":              controlplanev1.ControlPlaneService_ListProviderPools_FullMethodName,
-		"control.provider-pool.history":           controlplanev1.ControlPlaneService_ListProviderPoolHistory_FullMethodName,
-		"control.schedule.bind":                   controlplanev1.ControlPlaneService_BindScheduleConfiguration_FullMethodName,
-		"control.schedule.create-from-selections": controlplanev1.ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName,
-		"control.owner-schedule.manage":           controlplanev1.ControlPlaneService_ManageOwnerSchedule_FullMethodName,
-		"control.owner-schedule.get":              controlplanev1.ControlPlaneService_GetOwnerSchedule_FullMethodName,
-		"control.owner-schedule.list":             controlplanev1.ControlPlaneService_ListOwnerSchedules_FullMethodName,
-		"control.run.manage":                      controlplanev1.ControlPlaneService_ManageRun_FullMethodName,
-		"control.run.list":                        controlplanev1.ControlPlaneService_ListOwnerRuns_FullMethodName,
-		"control.run.get":                         controlplanev1.ControlPlaneService_GetRunDetail_FullMethodName,
-		"control.run.timeline":                    controlplanev1.ControlPlaneService_ListRunTimeline_FullMethodName,
-		"control.run.lineage":                     controlplanev1.ControlPlaneService_GetRunLineage_FullMethodName,
-		"control.run.artifacts.list":              controlplanev1.ControlPlaneService_ListRunArtifacts_FullMethodName,
-		"control.workspace-backup.manage":         controlplanev1.ControlPlaneService_ManageWorkspaceBackup_FullMethodName,
-		"control.workspace-backup.get":            controlplanev1.ControlPlaneService_GetWorkspaceBackup_FullMethodName,
-		"control.workspace-backup.list":           controlplanev1.ControlPlaneService_ListWorkspaceBackups_FullMethodName,
-		"control.workspace-restore.manage":        controlplanev1.ControlPlaneService_ManageWorkspaceRestore_FullMethodName,
-		"control.workspace-restore.get":           controlplanev1.ControlPlaneService_GetWorkspaceRestore_FullMethodName,
-		"control.workspace-restore.list":          controlplanev1.ControlPlaneService_ListWorkspaceRestores_FullMethodName,
-		"control.runtime-incident.manage":         controlplanev1.ControlPlaneService_ManageRuntimeIncident_FullMethodName,
-		"control.runtime-incident.get":            controlplanev1.ControlPlaneService_GetRuntimeIncident_FullMethodName,
-		"control.runtime-incident.history":        controlplanev1.ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName,
-		"control.workspace-mapping.get":           controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
-		"control.workspace-mapping.list":          controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
-		"control.legacy-cutover.get":              controlplanev1.ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
-		"control.legacy-cutover.list":             controlplanev1.ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
-		"control.legacy-cutover.resolve":          controlplanev1.ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
+		"platform.query.bootstrap.get":                 controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName,
+		"platform.query.overview.get":                  controlplanev1.PlatformQueryService_GetOverview_FullMethodName,
+		"platform.query.capabilities.list":             controlplanev1.PlatformQueryService_ListPlatformCapabilities_FullMethodName,
+		"platform.query.projects.list":                 controlplanev1.PlatformQueryService_ListProjects_FullMethodName,
+		"platform.query.projects.get":                  controlplanev1.PlatformQueryService_GetProject_FullMethodName,
+		"platform.query.memberships.list":              controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName,
+		"platform.query.agents.list":                   controlplanev1.PlatformQueryService_ListAgents_FullMethodName,
+		"platform.query.agents.get":                    controlplanev1.PlatformQueryService_GetAgent_FullMethodName,
+		"platform.query.workflows.list":                controlplanev1.PlatformQueryService_ListWorkflows_FullMethodName,
+		"platform.query.workflows.get":                 controlplanev1.PlatformQueryService_GetWorkflow_FullMethodName,
+		"platform.query.runs.list":                     controlplanev1.PlatformQueryService_ListRuns_FullMethodName,
+		"platform.query.runs.get":                      controlplanev1.PlatformQueryService_GetRun_FullMethodName,
+		"platform.query.run-graph.get":                 controlplanev1.PlatformQueryService_GetRunGraph_FullMethodName,
+		"platform.query.run-events.list":               controlplanev1.PlatformQueryService_ListRunEvents_FullMethodName,
+		"platform.query.owner-gates.list":              controlplanev1.PlatformQueryService_ListOwnerGates_FullMethodName,
+		"platform.query.owner-gates.get":               controlplanev1.PlatformQueryService_GetOwnerGate_FullMethodName,
+		"platform.query.artifacts.list":                controlplanev1.PlatformQueryService_ListArtifacts_FullMethodName,
+		"platform.query.artifacts.get":                 controlplanev1.PlatformQueryService_GetArtifact_FullMethodName,
+		"platform.query.schedules.list":                controlplanev1.PlatformQueryService_ListSchedules_FullMethodName,
+		"platform.query.integration-definitions.list":  controlplanev1.PlatformQueryService_ListIntegrationDefinitions_FullMethodName,
+		"platform.query.integration-connections.list":  controlplanev1.PlatformQueryService_ListIntegrationConnections_FullMethodName,
+		"platform.query.integration-connections.get":   controlplanev1.PlatformQueryService_GetIntegrationConnection_FullMethodName,
+		"platform.query.administration.get":            controlplanev1.PlatformQueryService_GetAdministration_FullMethodName,
+		"platform.query.audit.list":                    controlplanev1.PlatformQueryService_ListAuditEvents_FullMethodName,
+		"platform.command.onboarding.complete":         controlplanev1.PlatformCommandService_CompleteOnboarding_FullMethodName,
+		"platform.command.projects.create":             controlplanev1.PlatformCommandService_CreateProject_FullMethodName,
+		"platform.command.projects.update":             controlplanev1.PlatformCommandService_UpdateProject_FullMethodName,
+		"platform.command.memberships.add":             controlplanev1.PlatformCommandService_AddProjectMembership_FullMethodName,
+		"platform.command.memberships.change":          controlplanev1.PlatformCommandService_ChangeProjectMembership_FullMethodName,
+		"platform.command.memberships.remove":          controlplanev1.PlatformCommandService_RemoveProjectMembership_FullMethodName,
+		"platform.command.agents.create":               controlplanev1.PlatformCommandService_CreateAgent_FullMethodName,
+		"platform.command.agents.update":               controlplanev1.PlatformCommandService_UpdateAgent_FullMethodName,
+		"platform.command.agents.enable":               controlplanev1.PlatformCommandService_SetAgentEnabled_FullMethodName,
+		"platform.command.agents.archive":              controlplanev1.PlatformCommandService_ArchiveAgent_FullMethodName,
+		"platform.command.instructions.create-draft":   controlplanev1.PlatformCommandService_CreateInstructionDraft_FullMethodName,
+		"platform.command.instructions.validate":       controlplanev1.PlatformCommandService_ValidateInstructionDraft_FullMethodName,
+		"platform.command.instructions.publish":        controlplanev1.PlatformCommandService_PublishInstructionDraft_FullMethodName,
+		"platform.command.instructions.rollback":       controlplanev1.PlatformCommandService_RollbackInstructions_FullMethodName,
+		"platform.command.agent-capabilities.change":   controlplanev1.PlatformCommandService_ChangeAgentCapability_FullMethodName,
+		"platform.command.agent-grants.change":         controlplanev1.PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName,
+		"platform.command.agent-knowledge.change":      controlplanev1.PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName,
+		"platform.command.workflows.create":            controlplanev1.PlatformCommandService_CreateWorkflow_FullMethodName,
+		"platform.command.workflows.update-draft":      controlplanev1.PlatformCommandService_UpdateWorkflowDraft_FullMethodName,
+		"platform.command.workflows.validate":          controlplanev1.PlatformCommandService_ValidateWorkflowDraft_FullMethodName,
+		"platform.command.workflows.publish":           controlplanev1.PlatformCommandService_PublishWorkflowDraft_FullMethodName,
+		"platform.command.workflows.archive":           controlplanev1.PlatformCommandService_ArchiveWorkflow_FullMethodName,
+		"platform.command.runs.launch":                 controlplanev1.PlatformCommandService_LaunchRun_FullMethodName,
+		"platform.command.sessions.add-turn":           controlplanev1.PlatformCommandService_AddSessionTurn_FullMethodName,
+		"platform.command.runs.cancel":                 controlplanev1.PlatformCommandService_CancelRun_FullMethodName,
+		"platform.command.runs.retry":                  controlplanev1.PlatformCommandService_RetryRun_FullMethodName,
+		"platform.command.owner-gates.resolve":         controlplanev1.PlatformCommandService_ResolveOwnerGate_FullMethodName,
+		"platform.command.artifacts.upload":            controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName,
+		"platform.command.artifacts.download":          controlplanev1.PlatformCommandService_DownloadArtifact_FullMethodName,
+		"platform.command.artifact-bindings.change":    controlplanev1.PlatformCommandService_ChangeArtifactBinding_FullMethodName,
+		"platform.command.schedules.create":            controlplanev1.PlatformCommandService_CreateSchedule_FullMethodName,
+		"platform.command.schedules.update":            controlplanev1.PlatformCommandService_UpdateSchedule_FullMethodName,
+		"platform.command.schedules.enable":            controlplanev1.PlatformCommandService_SetScheduleEnabled_FullMethodName,
+		"platform.command.integrations.create":         controlplanev1.PlatformCommandService_CreateIntegrationConnection_FullMethodName,
+		"platform.command.integrations.test":           controlplanev1.PlatformCommandService_TestIntegrationConnection_FullMethodName,
+		"platform.command.integrations.enable":         controlplanev1.PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName,
+		"platform.command.integration-grants.change":   controlplanev1.PlatformCommandService_ChangeIntegrationGrant_FullMethodName,
+		"platform.assistant.get":                       controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName,
+		"platform.assistant.conversations.list":        controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
+		"platform.assistant.conversations.create":      controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
+		"platform.assistant.turns.add":                 controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
+		"platform.assistant.plans.apply":               controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
+		"platform.assistant.owner-instructions.update": controlplanev1.SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName,
+		"platform.assistant.recover":                   controlplanev1.SystemAssistantService_RecoverSystemAssistant_FullMethodName,
 	}
 }
 
-// ControlAPIGatewayProjectRequiredOperations возвращает операции
-// control-plane, для которых browser-selected project locator обязателен.
-// Глобальные owner-session, project lifecycle, readiness и public TLS
-// операции намеренно исключены.
-func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
-	operations := ControlAPIGatewayOperations()
-	for _, operationID := range []string{
-		"control.owner-session.admit",
-		"control.owner-session.revoke",
-		"control.project.create",
-		"control.project.list",
-		"control.project.update",
-		"control.project.delete",
-		"control.diagnostics.get",
-		"control.gateway-public-tls.prepare",
-		"control.gateway-public-tls.confirm",
-		"control.gateway-public-tls.check",
-		"control.readiness.check",
-	} {
-		delete(operations, operationID)
-	}
-	result := make(map[string]struct{}, len(operations))
-	for operationID := range operations {
-		result[operationID] = struct{}{}
-	}
-	return result
-}
-
-func OwnerGateDeliveryOperations() map[string]string {
+func RuntimeOperations() map[string]string {
 	return map[string]string{
-		"control.owner-gate-delivery.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.owner-gate.claim-delivery":     controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.deliver":            controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.expire":             controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
+		"platform.runtime.execution.claim":       controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
+		"platform.runtime.execution.renew":       controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName,
+		"platform.runtime.execution.progress":    controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName,
+		"platform.runtime.execution.complete":    controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
+		"platform.runtime.execution.delegate":    controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
+		"platform.runtime.callback.deliver":      controlplanev1.RuntimeWorkService_DeliverCallback_FullMethodName,
+		"platform.runtime.warm.reconcile":        controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName,
+		"platform.runtime.warm.report":           controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName,
+		"platform.runtime.schedules.claim":       controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName,
+		"platform.runtime.schedules.materialize": controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName,
+		"platform.runtime.schedules.complete":    controlplanev1.RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName,
+		"platform.runtime.integration.resolve":   controlplanev1.RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName,
+		"platform.runtime.integration.complete":  controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
 	}
 }
 
-// InteractionGatewayOperations объединяет два независимых credential contour:
-// server-owned owner-gate delivery и короткоживущий Mattermost event.
-func InteractionGatewayOperations() map[string]string {
-	return map[string]string{
-		"control.owner-gate-delivery.readiness":          controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.owner-gate.claim-delivery":              controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.deliver":                     controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.expire":                      controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
-		"control.interaction.session.create":             controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
-		"control.interaction.session.mcp.bind":           controlplanev1.ControlPlaneService_BindSessionMCP_FullMethodName,
-		"control.interaction.turn.enqueue":               controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
-		"control.interaction.artifact.register":          controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
-		"control.interaction.resource.read":              controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.interaction.conversation.lifecycle":     controlplanev1.ControlPlaneService_ManageConversationLifecycle_FullMethodName,
-		"control.interaction.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
-		"control.interaction.runtime-action.manage":      controlplanev1.ControlPlaneService_ManageRuntimeAction_FullMethodName,
-		"control.interaction.agent-bot.manage":           controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
-		"control.interaction.agent-bot.get":              controlplanev1.ControlPlaneService_GetAgent_FullMethodName,
-		"control.interaction.workspace-mapping.manage":   controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
-		"control.interaction.workspace-mapping.get":      controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
-		"control.interaction.workspace-mapping.list":     controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
-		"control.interaction.delivery.claim":             controlplanev1.ControlPlaneService_ClaimInteractionDelivery_FullMethodName,
-		"control.interaction.delivery.readback.issue":    controlplanev1.ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName,
-		"control.interaction.delivery.readback.validate": controlplanev1.ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName,
-		"control.interaction.delivery.record":            controlplanev1.ControlPlaneService_RecordInteractionDelivery_FullMethodName,
-		"control.runtime-materialization.get":            controlplanev1.ControlPlaneService_GetRuntimeMaterialization_FullMethodName,
-		"control.runtime-output.authorize":               controlplanev1.ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName,
-		"control.runtime-output.register":                controlplanev1.ControlPlaneService_RegisterRuntimeOutput_FullMethodName,
-	}
-}
-
-func MemoryIndexerOperations() map[string]string {
-	return map[string]string{
-		"control.memory-indexer.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.memory.index":             controlplanev1.ControlPlaneService_RecordMemoryEmbedding_FullMethodName,
-	}
-}
+func InteractionGatewayOperations() map[string]string                 { return RuntimeOperations() }
+func IntegrationGatewayOperations() map[string]string                 { return RuntimeOperations() }
+func IntegrationGatewayManagementOperations() map[string]string       { return RuntimeOperations() }
+func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} { return map[string]struct{}{} }

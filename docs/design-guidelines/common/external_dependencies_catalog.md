@@ -33,7 +33,7 @@
 
 | Dependency | Status | Scope | Why |
 |---|---|---|---|
-| `github.com/openai/openai-go/v3` | planned | Agent/OpenAI integration | официальный OpenAI Go SDK для будущего runtime-контура |
+| `github.com/openai/openai-go/v3` | in-use | runtime-controller | официальный OpenAI Go SDK для Responses API, типизированных tools и provider error boundary |
 
 ## Infrastructure and bootstrap tools - in use
 

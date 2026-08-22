@@ -17,14 +17,9 @@ COPY services/internal/runtime-controller/ services/internal/runtime-controller/
 WORKDIR /workspace/services/internal/runtime-controller
 RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" -o /out/runtime-controller ./cmd/runtime-controller \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-archive ./cmd/runtime-archive \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-restore-verifier ./cmd/runtime-restore-verifier \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-rehydrate ./cmd/runtime-rehydrate \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-cleanup-authorizer ./cmd/runtime-cleanup-authorizer \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-credential-broker ./cmd/runtime-credential-broker \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-workload-admission ./cmd/runtime-workload-admission \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-controller-cli ./cmd/cli
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/runtime-controller ./cmd/runtime-controller
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
 COPY --from=build --chmod=0555 /out/ /usr/local/bin/

@@ -104,7 +104,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				writeProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 				return
 			}
-			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
 			writer.Header().Add("Vary", "Access-Control-Request-Method")
 			writer.Header().Add("Vary", "Access-Control-Request-Headers")
@@ -163,7 +163,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 		}
 		var release func()
 		var ok bool
-		if request.URL.Path == "/api/v1/realtime" {
+		if isRealtimePath(request.URL.Path) {
 			release, ok = boundary.limiter.AcquireWebSocket(subjectKey)
 		} else {
 			release, ok = boundary.limiter.AcquireHTTP(subjectKey)
@@ -190,7 +190,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx = context.WithValue(ctx, identityContextKey{}, identity)
-		if request.URL.Path == "/api/v1/realtime" {
+		if isRealtimePath(request.URL.Path) {
 			next.ServeHTTP(writer, request.WithContext(ctx))
 			return
 		}
@@ -202,7 +202,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 
 func allowedPreflight(request *http.Request) bool {
 	switch request.Header.Get("Access-Control-Request-Method") {
-	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete:
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return false
 	}
@@ -234,7 +234,7 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 		headerReference = values[0]
 	}
 	queryReference := ""
-	if request.URL.Path == "/api/v1/realtime" {
+	if isRealtimePath(request.URL.Path) {
 		queryValues := request.URL.Query()["projectId"]
 		if len(queryValues) > 1 {
 			return nil, errors.New("multiple realtime project references are not allowed")
@@ -264,6 +264,10 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 		return ctx, nil
 	}
 	return controlplaneclient.WithProjectReference(ctx, reference)
+}
+
+func isRealtimePath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/runs/") && strings.HasSuffix(path, "/stream")
 }
 
 func exactProjectPathReference(request *http.Request) (string, error) {
@@ -367,8 +371,12 @@ func writeProblem(writer http.ResponseWriter, statusCode int, code string, retry
 		writer.Header().Set("Retry-After", "1")
 	}
 	writer.WriteHeader(statusCode)
+	title := http.StatusText(statusCode)
+	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
+		title = localizer.Localize(code)
+	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type": "https://mattercodex.local/problems/" + code, "title": http.StatusText(statusCode),
+		"type": "https://mattercodex.local/problems/" + code, "title": title,
 		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
 	})
 }

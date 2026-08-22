@@ -29,7 +29,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		ref, _ := newRef("sch")
 		var item entity.Schedule
 		var next *time.Time
-		err := tx.QueryRow(ctx, `INSERT INTO control_plane.schedules(ref,organization_id,project_id,name,target_type,target_ref,preset,cron_expression,timezone,input,session_policy,notification_policy,enabled,next_run_at,created_by) VALUES($1,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12,true,clock_timestamp()+interval '1 minute',$13::uuid) RETURNING ref,name,preset,cron_expression,timezone,session_policy,notification_policy,enabled,version,next_run_at,last_run_at,created_at,updated_at`, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeschedule1, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -46,7 +46,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	var projectID, projectRef string
 	var item entity.Schedule
 	if input.Kind == command.UpdateSchedule {
-		err := tx.QueryRow(ctx, `UPDATE control_plane.schedules s SET name=$4,target_type=$5,target_ref=$6,preset=$7,cron_expression=$8,timezone=$9,input=$10,session_policy=$11,notification_policy=$12,version=version+1,updated_at=clock_timestamp() FROM control_plane.projects p WHERE s.project_id=p.id AND s.organization_id=$1::uuid AND s.ref=$2 AND s.version=$3 RETURNING s.project_id::text,p.ref,s.ref,s.name,s.preset,s.cron_expression,s.timezone,s.session_policy,s.notification_policy,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at`, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeschedule2, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -56,7 +56,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.Target = payload.Target
 		item.Input = payload.Input
 	} else {
-		err := tx.QueryRow(ctx, `UPDATE control_plane.schedules s SET enabled=$4,version=version+1,updated_at=clock_timestamp() FROM control_plane.projects p WHERE s.project_id=p.id AND s.organization_id=$1::uuid AND s.ref=$2 AND s.version=$3 RETURNING s.project_id::text,p.ref,s.ref,s.name,s.preset,s.cron_expression,s.timezone,s.session_policy,s.notification_policy,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at`, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeschedule3, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -89,7 +89,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		ref, _ := newRef("int")
 		var item entity.IntegrationConnection
 		var config []byte
-		err := tx.QueryRow(ctx, `INSERT INTO control_plane.integration_connections(ref,organization_id,definition_key,name,state,enabled,credential_materialization_ref,masked_credentials_state,public_configuration,created_by) SELECT $1,$2::uuid,d.stable_key,$3,'NOT_CONNECTED',true,$4,'CONFIGURED',$5,$6::uuid FROM control_plane.integration_definitions d WHERE d.stable_key=$7 AND d.enabled RETURNING ref,definition_key,name,state,masked_credentials_state,enabled,version,public_configuration,created_at,updated_at`, ref, scope.organizationID, payload.Name, payload.CredentialMaterializationRef, asJSON(payload.PublicConfiguration), scope.actorID, payload.DefinitionKey).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnection1, ref, scope.organizationID, payload.Name, payload.CredentialMaterializationRef, asJSON(payload.PublicConfiguration), scope.actorID, payload.DefinitionKey).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -102,7 +102,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	}
 	var item entity.IntegrationConnection
 	if input.Kind == command.TestConnection {
-		err := tx.QueryRow(ctx, `UPDATE control_plane.integration_connections SET state='DEGRADED',last_test_summary='Adapter test is pending',last_tested_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND ref=$2 AND version=$3 AND enabled RETURNING ref,definition_key,name,state,masked_credentials_state,last_test_summary,enabled,version,last_tested_at,created_at,updated_at`, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnection2, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -114,7 +114,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if payload.Enabled {
 			state = "NOT_CONNECTED"
 		}
-		err := tx.QueryRow(ctx, `UPDATE control_plane.integration_connections SET enabled=$4,state=$5,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND ref=$2 AND version=$3 RETURNING ref,definition_key,name,state,masked_credentials_state,last_test_summary,enabled,version,last_tested_at,created_at,updated_at`, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, state).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangeconnection3, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, state).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -122,7 +122,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !payload.Enabled {
-			_, _ = tx.Exec(ctx, `UPDATE control_plane.integration_grants SET enabled=false,version=version+1,updated_at=clock_timestamp() WHERE connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$1)`, payload.Ref)
+			_, _ = tx.Exec(ctx, queryConfigurationChangeconnection4, payload.Ref)
 		}
 	}
 	item.NextActions = []string{"OPEN", "TEST"}
@@ -142,11 +142,11 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var connectionID, definitionKey string
-	if err := tx.QueryRow(ctx, `SELECT id::text,definition_key FROM control_plane.integration_connections WHERE organization_id=$1::uuid AND ref=$2 AND enabled FOR UPDATE`, scope.organizationID, payload.ConnectionRef).Scan(&connectionID, &definitionKey); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrant1, scope.organizationID, payload.ConnectionRef).Scan(&connectionID, &definitionKey); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	var capabilities []byte
-	if err := tx.QueryRow(ctx, `SELECT capabilities FROM control_plane.integration_definitions WHERE stable_key=$1`, definitionKey).Scan(&capabilities); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrant2, definitionKey).Scan(&capabilities); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var catalog []entity.IntegrationCapability
@@ -165,12 +165,12 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	var grantRef string
 	if payload.Enabled {
 		grantRef, _ = newRef("grt")
-		err := tx.QueryRow(ctx, `INSERT INTO control_plane.integration_grants(ref,organization_id,connection_id,capability_key,target_kind,target_ref,enabled,approval_policy,created_by) VALUES($1,$2::uuid,$3::uuid,$4,$5,$6,true,$7,$8::uuid) ON CONFLICT(connection_id,capability_key,target_kind,target_ref) DO UPDATE SET enabled=true,version=control_plane.integration_grants.version+1,updated_at=clock_timestamp() RETURNING ref`, grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef, approvalPolicy(risk), scope.actorID).Scan(&grantRef)
+		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrant3, grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef, approvalPolicy(risk), scope.actorID).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 	} else {
-		err := tx.QueryRow(ctx, `UPDATE control_plane.integration_grants SET enabled=false,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND connection_id=$2::uuid AND capability_key=$3 AND target_kind=$4 AND target_ref=$5 RETURNING ref`, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef).Scan(&grantRef)
+		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrant4, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, errs.ErrNotFound
 		}
@@ -219,7 +219,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	}
 	sessionRef, _ := newRef("ses")
 	var sessionID string
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.sessions(ref,organization_id,project_id,target_type,target_ref,state,created_by) VALUES($1,$2::uuid,$3::uuid,'SYSTEM_ASSISTANT','system-assistant','ACTIVE',$4::uuid) RETURNING id::text`, sessionRef, scope.organizationID, projectID, scope.actorID).Scan(&sessionID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversation1, sessionRef, scope.organizationID, projectID, scope.actorID).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	ref, _ := newRef("cnv")
@@ -228,7 +228,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 		title = "Новый разговор"
 	}
 	var item entity.AssistantConversation
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.assistant_conversations(ref,organization_id,project_id,session_id,title,state,created_by) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,'ACTIVE',$6::uuid) RETURNING ref,title,state,version,created_at,updated_at`, ref, scope.organizationID, projectID, sessionID, title, scope.actorID).Scan(&item.Ref, &item.Title, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversation2, ref, scope.organizationID, projectID, sessionID, title, scope.actorID).Scan(&item.Ref, &item.Title, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = payload.ProjectRef
@@ -242,14 +242,14 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var runtimeReady bool
-	if err := tx.QueryRow(ctx, `SELECT runtime_state='READY' AND runtime_revision=desired_runtime_revision AND last_heartbeat_at>clock_timestamp()-interval '45 seconds' FROM control_plane.assistant_runtime WHERE organization_id=$1::uuid`, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommand1, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var conversationID, sessionID, sessionRef string
 	var projectID *string
 	var projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, `SELECT c.id::text,c.session_id::text,s.ref,c.project_id::text,COALESCE(p.ref,''),c.version FROM control_plane.assistant_conversations c JOIN control_plane.sessions s ON s.id=c.session_id LEFT JOIN control_plane.projects p ON p.id=c.project_id WHERE c.organization_id=$1::uuid AND c.ref=$2 AND c.state='ACTIVE' FOR UPDATE`, scope.organizationID, payload.ConversationRef).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommand2, scope.organizationID, payload.ConversationRef).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
@@ -257,21 +257,21 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	}
 	turnRef, _ := newRef("trn")
 	var turnNumber int64
-	if err := tx.QueryRow(ctx, `SELECT next_turn_number FROM control_plane.sessions WHERE id=$1::uuid FOR UPDATE`, sessionID).Scan(&turnNumber); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommand3, sessionID).Scan(&turnNumber); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.session_turns(ref,organization_id,session_id,turn_number,actor_kind,actor_ref,content,artifact_refs,state) VALUES($1,$2::uuid,$3::uuid,$4,'USER',$5,$6,$7,'COMPLETED')`, turnRef, scope.organizationID, sessionID, turnNumber, scope.actorRef, payload.Content, payload.ArtifactRefs); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommand4, turnRef, scope.organizationID, sessionID, turnNumber, scope.actorRef, payload.Content, payload.ArtifactRefs); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	_, _ = tx.Exec(ctx, `UPDATE control_plane.sessions SET next_turn_number=next_turn_number+1,version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, sessionID)
+	_, _ = tx.Exec(ctx, queryConfigurationAddassistantturncommand5, sessionID)
 	runRef, _ := newRef("run")
 	var runID string
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.runs(ref,organization_id,project_id,session_id,target_type,target_ref,source,title,task,input,state,initiated_by) VALUES($1,$2::uuid,$3::uuid,$4::uuid,'SYSTEM_ASSISTANT','system-assistant','SYSTEM_ASSISTANT','Команда системному помощнику',$5,'{}','RUNNING',$6::uuid) RETURNING id::text`, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommand6, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	_, _ = tx.Exec(ctx, `UPDATE control_plane.runs SET root_run_id=id,started_at=clock_timestamp() WHERE id=$1::uuid`, runID)
+	_, _ = tx.Exec(ctx, queryConfigurationAddassistantturncommand7, runID)
 	nodeRef, _ := newRef("nod")
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.run_nodes(ref,organization_id,root_run_id,run_id,type,state,display_name,role,agent_id,input_summary,next_actions) SELECT $1,$2::uuid,$3::uuid,$3::uuid,'AGENT_EXECUTION','QUEUED',a.name,a.role_description,a.id,$4,ARRAY['OPEN','CANCEL'] FROM control_plane.agents a WHERE a.organization_id=$2::uuid AND a.system_key='system-assistant'`, nodeRef, scope.organizationID, runID, truncate(payload.Content, 1000)); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommand8, nodeRef, scope.organizationID, runID, truncate(payload.Content, 1000)); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	plan := assistantFallbackPlan(payload.Content, projectRef)
@@ -283,14 +283,14 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		plan.Version = 1
 		plan.CreatedAt = time.Now().UTC()
 		var planID string
-		if err := tx.QueryRow(ctx, `INSERT INTO control_plane.assistant_plans(ref,organization_id,conversation_ref,summary,operations,state) VALUES($1,$2::uuid,$3,$4,$5,'PROPOSED') RETURNING id::text`, planRef, scope.organizationID, payload.ConversationRef, plan.Summary, asJSON(plan.Operations)).Scan(&planID); err != nil {
+		if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommand9, planRef, scope.organizationID, payload.ConversationRef, plan.Summary, asJSON(plan.Operations)).Scan(&planID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		latestPlanID = planID
 	} else {
 		latestPlanID = nil
 	}
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.assistant_conversations SET latest_plan_id=$2::uuid,version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid`, conversationID, latestPlanID); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommand10, conversationID, latestPlanID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	projectValue := ""
@@ -349,7 +349,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	var planID, conversationRef string
 	var raw []byte
 	var version int64
-	if err := tx.QueryRow(ctx, `SELECT id::text,conversation_ref,operations,version FROM control_plane.assistant_plans WHERE organization_id=$1::uuid AND ref=$2 AND state='PROPOSED' FOR UPDATE`, scope.organizationID, payload.PlanRef).Scan(&planID, &conversationRef, &raw, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommand1, scope.organizationID, payload.PlanRef).Scan(&planID, &conversationRef, &raw, &version); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -405,7 +405,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE control_plane.assistant_plans SET state='APPLIED',version=version+1,applied_at=clock_timestamp() WHERE id=$1::uuid`, planID); err != nil {
+	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommand2, planID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, State: "APPLIED", Version: version + 1, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
@@ -418,7 +418,7 @@ func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pg
 	if err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, `INSERT INTO control_plane.audit_events(ref,organization_id,project_id,actor_id,assistant_agent_id,action,resource_kind,resource_ref,outcome,safe_summary,correlation_ref) SELECT $1,$2::uuid,$3::uuid,$4::uuid,a.id,$5,$6,$7,'SUCCEEDED',$8,$9 FROM control_plane.agents a WHERE a.organization_id=$2::uuid AND a.system_key='system-assistant'`, ref, scope.organizationID, nullUUID(outcome.projectID), scope.actorID, "system_assistant."+strings.ToLower(action), outcome.resourceKind, outcome.resourceRef, outcome.summary, "assistant-plan")
+	tag, err := tx.Exec(ctx, queryConfigurationAuditassistantoperation1, ref, scope.organizationID, nullUUID(outcome.projectID), scope.actorID, "system_assistant."+strings.ToLower(action), outcome.resourceKind, outcome.resourceRef, outcome.summary, "assistant-plan")
 	if err != nil || tag.RowsAffected() != 1 {
 		return errs.ErrUnavailable
 	}
@@ -446,7 +446,7 @@ func (repository *Repository) updateAssistantInstructions(ctx context.Context, t
 	}
 	var assistant entity.SystemAssistant
 	var limits []byte
-	err := tx.QueryRow(ctx, `UPDATE control_plane.assistant_runtime SET owner_instructions=$3,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND version=$2 RETURNING stable_key,core_prompt_revision,owner_instructions,runtime_state,runtime_revision,desired_runtime_revision,system_session_ref,resource_limits,last_heartbeat_at,version,updated_at`, scope.organizationID, *input.Mutation.ExpectedVersion, strings.TrimSpace(payload.Instructions)).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt)
+	err := tx.QueryRow(ctx, queryConfigurationUpdateassistantinstructions1, scope.organizationID, *input.Mutation.ExpectedVersion, strings.TrimSpace(payload.Instructions)).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -462,7 +462,7 @@ func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, s
 	if input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	tag, err := tx.Exec(ctx, `UPDATE control_plane.assistant_runtime SET runtime_state='RECOVERING',warm_instance_ref=NULL,last_heartbeat_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND version=$2`, scope.organizationID, *input.Mutation.ExpectedVersion)
+	tag, err := tx.Exec(ctx, queryConfigurationRecoverassistant1, scope.organizationID, *input.Mutation.ExpectedVersion)
 	if err != nil || tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -475,12 +475,12 @@ func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, s
 func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, scope scope) (entity.SystemAssistant, error) {
 	var item entity.SystemAssistant
 	var limits []byte
-	err := tx.QueryRow(ctx, `SELECT a.ref,ar.stable_key,a.name,a.purpose,ar.core_prompt_revision,ar.owner_instructions,ar.runtime_state,ar.runtime_revision,ar.desired_runtime_revision,ar.system_session_ref,ar.resource_limits,ar.last_heartbeat_at,ar.version,ar.updated_at FROM control_plane.assistant_runtime ar JOIN control_plane.agents a ON a.id=ar.agent_id WHERE ar.organization_id=$1::uuid`, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
+	err := tx.QueryRow(ctx, queryConfigurationGetassistanttx1, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
 	if err != nil {
 		return entity.SystemAssistant{}, errs.ErrUnavailable
 	}
 	_ = json.Unmarshal(limits, &item.ResourceLimits)
-	item.Ready = item.RuntimeState == "READY" && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
+	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
 	item.System = true
 	item.Deletable = false
 	return item, nil

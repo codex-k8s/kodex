@@ -2,19 +2,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: mattercodex-system
 resources:
+  - serviceaccount.yaml
   - configmap.yaml
   - deployment.yaml
-  - migration-job.yaml
   - service.yaml
-  - serviceaccounts-rbac.yaml
   - networkpolicy.yaml
   - poddisruptionbudget.yaml
-  - servicemonitor.yaml
-  - prometheusrule.yaml
-  - dashboard.yaml
   - vault-secret-provider-classes.yaml
-  - s3-security-policy.yaml
-  - workload-admission.yaml
-  - credential-authorities.yaml
 components:
   - ../../components/internal-rpc-authority-runtime-controller-issuer

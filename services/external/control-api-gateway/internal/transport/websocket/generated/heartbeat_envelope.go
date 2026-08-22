@@ -1,8 +1,7 @@
-
 package generated
 
 type HeartbeatEnvelope struct {
-  ReservedType string
-  ServerTime string
-  LatestSequence int
+	ReservedType   string
+	ServerTime     string
+	LatestSequence int
 }

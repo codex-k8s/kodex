@@ -1,0 +1,2 @@
+-- name: platform__configuration_updateassistantinstructions_1 :one
+UPDATE control_plane.assistant_runtime SET owner_instructions=$3,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND version=$2 RETURNING stable_key,core_prompt_revision,owner_instructions,runtime_state,runtime_revision,desired_runtime_revision,system_session_ref,resource_limits,last_heartbeat_at,version,updated_at

@@ -1,0 +1,2 @@
+-- name: platform__commands_execute_2 :exec
+INSERT INTO control_plane.audit_events(ref,organization_id,project_id,actor_id,action,resource_kind,resource_ref,outcome,safe_summary,correlation_ref) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,'SUCCEEDED',$8,$9)

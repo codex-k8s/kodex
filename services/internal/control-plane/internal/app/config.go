@@ -29,6 +29,8 @@ type Config struct {
 	NATSReplicas            int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
 	NATSMaxBytes            int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
 	InstanceID              string        `env:"POD_UID"`
+	DefaultRuntimeProvider  string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
+	DefaultRuntimeModel     string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
 	AuthorityVerifierSocket string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID    uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID    uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
@@ -59,6 +61,8 @@ func loadConfig() (Config, error) {
 		NATSStream:              "CONTROL_PLANE",
 		NATSReplicas:            3,
 		NATSMaxBytes:            32 << 30,
+		DefaultRuntimeProvider:  "openai-codex",
+		DefaultRuntimeModel:     "gpt-5",
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
 		StartupTimeout: 20 * time.Second, ReadinessTimeout: 2 * time.Second,
@@ -91,6 +95,7 @@ func (config Config) validate() error {
 		config.PostgresMaxConnections < 2 || config.PostgresMaxConnections > 64 ||
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
+		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.StartupTimeout < time.Second || config.StartupTimeout > time.Minute ||
 		config.ReadinessTimeout < 100*time.Millisecond || config.ReadinessTimeout > 10*time.Second ||
@@ -104,4 +109,16 @@ func (config Config) validate() error {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validRuntimeIdentifier(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for _, character := range value {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') && (character < '0' || character > '9') && character != '.' && character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
 }

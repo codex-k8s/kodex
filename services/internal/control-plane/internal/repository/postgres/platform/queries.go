@@ -26,9 +26,7 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	}
 	var state platformrepo.BootstrapState
 	var bootstrappedAt, onboardingAt *time.Time
-	err = repository.pool.QueryRow(ctx, `SELECT i.bootstrapped_at,i.onboarding_completed_at,
-		(SELECT count(*) FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.lifecycle='ACTIVE')
-		FROM control_plane.installation i WHERE singleton`, scope.organizationID).Scan(&bootstrappedAt, &onboardingAt, &state.ProjectCount)
+	err = repository.pool.QueryRow(ctx, queryQueriesGetbootstrapstate1, scope.organizationID).Scan(&bootstrappedAt, &onboardingAt, &state.ProjectCount)
 	if err != nil {
 		return platformrepo.BootstrapState{}, errs.ErrUnavailable
 	}
@@ -59,11 +57,7 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 		return platformrepo.Overview{}, err
 	}
 	var result platformrepo.Overview
-	err = repository.pool.QueryRow(ctx, `SELECT
-		(SELECT count(*) FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.lifecycle='ACTIVE'),
-		(SELECT count(*) FROM control_plane.agents a WHERE a.organization_id=$1::uuid AND a.system_key IS NULL AND a.state<>'ARCHIVED'),
-		(SELECT count(*) FROM control_plane.runs r WHERE r.organization_id=$1::uuid AND r.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')),
-		(SELECT count(*) FROM control_plane.owner_gates g WHERE g.organization_id=$1::uuid AND g.state='OPEN')`, scope.organizationID).Scan(
+	err = repository.pool.QueryRow(ctx, queryQueriesGetoverview1, scope.organizationID).Scan(
 		&result.ProjectCount, &result.AgentCount, &result.ActiveRunCount, &result.PendingGateCount)
 	if err != nil {
 		return platformrepo.Overview{}, errs.ErrUnavailable
@@ -82,7 +76,7 @@ func (repository *Repository) ListCapabilities(ctx context.Context, principal va
 	if _, err := repository.resolveScope(ctx, principal); err != nil {
 		return nil, err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT stable_key,name,description,risk FROM control_plane.platform_capabilities WHERE enabled ORDER BY name`)
+	rows, err := repository.pool.Query(ctx, queryQueriesListcapabilities1)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -103,10 +97,7 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT p.ref,p.name,p.purpose,p.language,p.lifecycle,p.version,p.created_at,p.updated_at
-		FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.lifecycle<>'ARCHIVED'
-		AND ($2 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$3::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))
-		AND ($4='' OR p.name ILIKE '%'||$4||'%' OR p.purpose ILIKE '%'||$4||'%') ORDER BY p.updated_at DESC LIMIT $5`,
+	rows, err := repository.pool.Query(ctx, queryQueriesListprojects1,
 		scope.organizationID, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
@@ -130,9 +121,7 @@ func (repository *Repository) GetProject(ctx context.Context, principal value.Pr
 		return entity.Project{}, err
 	}
 	var item entity.Project
-	err = repository.pool.QueryRow(ctx, `SELECT p.ref,p.name,p.purpose,p.language,p.lifecycle,p.version,p.created_at,p.updated_at
-		FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.ref=$2
-		AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`,
+	err = repository.pool.QueryRow(ctx, queryQueriesGetproject1,
 		scope.organizationID, ref, scope.role, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Project{}, errs.ErrNotFound
@@ -149,10 +138,7 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT m.ref,p.ref,s.ref,s.display_name,s.email_masked,s.active,m.role,m.permissions,m.active,m.version
-		FROM control_plane.memberships m JOIN control_plane.projects p ON p.id=m.project_id JOIN control_plane.subjects s ON s.id=m.subject_id
-		WHERE m.organization_id=$1::uuid AND p.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships own WHERE own.project_id=p.id AND own.subject_id=$4::uuid AND own.active AND 'MANAGE_MEMBERS'=ANY(own.permissions)))
-		ORDER BY s.display_name LIMIT $5`, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListmemberships1, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -173,13 +159,7 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT a.ref,p.ref,COALESCE(a.system_key,''),a.name,a.purpose,a.role_description,a.avatar_url,a.state,a.enabled,a.version,
-		a.runtime_key,r.name,r.provider,r.model,r.runtime_revision,a.capabilities,a.knowledge_artifact_refs,a.created_at,a.updated_at
-		FROM control_plane.agents a LEFT JOIN control_plane.projects p ON p.id=a.project_id JOIN control_plane.runtime_profiles r ON r.stable_key=a.runtime_key
-		WHERE a.organization_id=$1::uuid AND a.system_key IS NULL AND p.ref=$2 AND a.state<>'ARCHIVED'
-		AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))
-		AND ($5='' OR a.name ILIKE '%'||$5||'%' OR a.purpose ILIKE '%'||$5||'%') AND ($6='' OR a.state=$6)
-		ORDER BY a.updated_at DESC LIMIT $7`, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListagents1, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -206,10 +186,7 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 		return entity.Agent{}, err
 	}
 	var item entity.Agent
-	err = repository.pool.QueryRow(ctx, `SELECT a.ref,COALESCE(p.ref,''),COALESCE(a.system_key,''),a.name,a.purpose,a.role_description,a.avatar_url,a.state,a.enabled,a.version,
-		a.runtime_key,r.name,r.provider,r.model,r.runtime_revision,a.capabilities,a.knowledge_artifact_refs,a.created_at,a.updated_at
-		FROM control_plane.agents a LEFT JOIN control_plane.projects p ON p.id=a.project_id JOIN control_plane.runtime_profiles r ON r.stable_key=a.runtime_key
-		WHERE a.organization_id=$1::uuid AND a.ref=$2 AND (a.system_key='system-assistant' OR $3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=a.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`, scope.organizationID, ref, scope.role, scope.actorID).Scan(
+	err = repository.pool.QueryRow(ctx, queryQueriesGetagent1, scope.organizationID, ref, scope.role, scope.actorID).Scan(
 		&item.Ref, &item.ProjectRef, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Agent{}, errs.ErrNotFound
@@ -242,9 +219,7 @@ func agentActions(agent entity.Agent) []string {
 }
 
 func (repository *Repository) attachInstructions(ctx context.Context, scope scope, agent *entity.Agent) error {
-	rows, err := repository.pool.Query(ctx, `SELECT ref,version_number,state,content,digest,core,COALESCE(parent_ref,''),validation_problems,created_at,published_at
-		FROM control_plane.instruction_versions WHERE organization_id=$1::uuid AND agent_id=(SELECT id FROM control_plane.agents WHERE ref=$2)
-		ORDER BY version_number DESC`, scope.organizationID, agent.Ref)
+	rows, err := repository.pool.Query(ctx, queryQueriesAttachinstructions1, scope.organizationID, agent.Ref)
 	if err != nil {
 		return err
 	}
@@ -268,7 +243,7 @@ func (repository *Repository) attachInstructions(ctx context.Context, scope scop
 }
 
 func (repository *Repository) attachAgentGrants(ctx context.Context, scope scope, agent *entity.Agent) error {
-	rows, err := repository.pool.Query(ctx, `SELECT g.ref FROM control_plane.integration_grants g WHERE g.organization_id=$1::uuid AND g.target_kind='AGENT' AND g.target_ref=$2 AND g.enabled ORDER BY g.ref`, scope.organizationID, agent.Ref)
+	rows, err := repository.pool.Query(ctx, queryQueriesAttachagentgrants1, scope.organizationID, agent.Ref)
 	if err != nil {
 		return err
 	}
@@ -288,10 +263,7 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT w.ref,p.ref,w.name,w.purpose,COALESCE(a.ref,''),w.state,w.version,w.draft_spec,w.published_spec,w.published_version,w.created_at,w.updated_at
-		FROM control_plane.workflows w JOIN control_plane.projects p ON p.id=w.project_id LEFT JOIN control_plane.agents a ON a.id=w.coordinator_agent_id
-		WHERE w.organization_id=$1::uuid AND p.ref=$2 AND w.state<>'ARCHIVED' AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))
-		AND ($5='' OR w.name ILIKE '%'||$5||'%') AND ($6='' OR w.state=$6) ORDER BY w.updated_at DESC LIMIT $7`, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListworkflows1, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -338,7 +310,7 @@ func (repository *Repository) GetWorkflow(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Workflow{}, err
 	}
-	row := repository.pool.QueryRow(ctx, `SELECT w.ref,p.ref,w.name,w.purpose,COALESCE(a.ref,''),w.state,w.version,w.draft_spec,w.published_spec,w.published_version,w.created_at,w.updated_at FROM control_plane.workflows w JOIN control_plane.projects p ON p.id=w.project_id LEFT JOIN control_plane.agents a ON a.id=w.coordinator_agent_id WHERE w.organization_id=$1::uuid AND w.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=w.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`, scope.organizationID, ref, scope.role, scope.actorID)
+	row := repository.pool.QueryRow(ctx, queryQueriesGetworkflow1, scope.organizationID, ref, scope.role, scope.actorID)
 	return scanWorkflow(row)
 }
 
@@ -347,7 +319,7 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, runSelect+` WHERE r.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions))) AND ($5='' OR r.title ILIKE '%'||$5||'%' OR r.task ILIKE '%'||$5||'%') ORDER BY r.created_at DESC LIMIT $6`, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListruns1, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -364,8 +336,6 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	}
 	return result, "", rows.Err()
 }
-
-const runSelect = `SELECT r.ref,COALESCE(p.ref,''),s.ref,root.ref,COALESCE(parent.ref,''),COALESCE(retry.ref,''),r.title,r.task,r.state,r.source,r.result_summary,r.safe_error_code,r.safe_error_message,sub.display_name,r.target_type,r.target_ref,COALESCE(a.name,w.name,sa.name,r.target_ref),r.attempt,r.graph_revision,r.event_sequence,r.version,r.input,r.input_artifact_refs,r.created_at,r.started_at,r.finished_at FROM control_plane.runs r LEFT JOIN control_plane.projects p ON p.id=r.project_id JOIN control_plane.sessions s ON s.id=r.session_id JOIN control_plane.runs root ON root.id=r.root_run_id LEFT JOIN control_plane.runs parent ON parent.id=r.parent_run_id LEFT JOIN control_plane.runs retry ON retry.id=r.retry_of_run_id JOIN control_plane.subjects sub ON sub.id=r.initiated_by LEFT JOIN control_plane.agents a ON r.target_type IN ('AGENT','SYSTEM_ASSISTANT') AND a.ref=r.target_ref LEFT JOIN control_plane.workflows w ON r.target_type='WORKFLOW' AND w.ref=r.target_ref LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.system_key='system-assistant'`
 
 func scanRun(row rowScanner) (entity.Run, error) {
 	var item entity.Run
@@ -406,7 +376,7 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 	if err != nil {
 		return entity.Run{}, err
 	}
-	return scanRun(repository.pool.QueryRow(ctx, runSelect+` WHERE r.organization_id=$1::uuid AND r.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`, scope.organizationID, ref, scope.role, scope.actorID))
+	return scanRun(repository.pool.QueryRow(ctx, queryQueriesGetrun1, scope.organizationID, ref, scope.role, scope.actorID))
 }
 
 func (repository *Repository) GetRunGraph(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
@@ -419,9 +389,7 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, err
 	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
-	rows, err := repository.pool.Query(ctx, `SELECT n.ref,run.ref,COALESCE(parent.ref,''),n.type,n.state,n.display_name,n.role,COALESCE(a.ref,''),COALESCE(t.ref,''),n.attempt,n.input_summary,n.progress_summary,n.integration_names,n.callback_summary,n.safe_error_code,n.safe_error_message,n.next_actions,n.created_at,n.started_at,n.finished_at,
-		COALESCE((SELECT array_agg(ar.ref ORDER BY ar.created_at) FROM control_plane.artifacts ar WHERE ar.node_id=n.id),'{}'),COALESCE((SELECT array_agg(cr.ref ORDER BY cr.created_at) FROM control_plane.runs cr WHERE cr.parent_run_id=n.run_id),'{}')
-		FROM control_plane.run_nodes n JOIN control_plane.runs root ON root.id=n.root_run_id JOIN control_plane.runs run ON run.id=n.run_id LEFT JOIN control_plane.run_nodes parent ON parent.id=n.parent_node_id LEFT JOIN control_plane.agents a ON a.id=n.agent_id LEFT JOIN control_plane.session_turns t ON t.id=n.turn_id WHERE n.organization_id=$1::uuid AND (root.ref=$2 OR EXISTS(SELECT 1 FROM control_plane.run_edges e JOIN control_plane.runs eroot ON eroot.id=e.root_run_id WHERE eroot.ref=$2 AND (e.source_node_id=n.id OR e.target_node_id=n.id))) ORDER BY n.created_at`, scope.organizationID, run.RootRunRef)
+	rows, err := repository.pool.Query(ctx, queryQueriesGetrungraph1, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -433,7 +401,7 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		}
 		graph.Nodes = append(graph.Nodes, n)
 	}
-	edgeRows, err := repository.pool.Query(ctx, `SELECT e.ref,root.ref,s.ref,t.ref,e.type,e.label FROM control_plane.run_edges e JOIN control_plane.runs root ON root.id=e.root_run_id JOIN control_plane.run_nodes s ON s.id=e.source_node_id JOIN control_plane.run_nodes t ON t.id=e.target_node_id WHERE e.organization_id=$1::uuid AND root.ref=$2 ORDER BY e.created_at`, scope.organizationID, run.RootRunRef)
+	edgeRows, err := repository.pool.Query(ctx, queryQueriesGetrungraph2, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -464,7 +432,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	if limit > 500 {
 		limit = 500
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT e.ref,root.ref,e.sequence,e.type,COALESCE(e.node_ref,''),COALESCE(e.edge_ref,''),COALESCE(e.gate_ref,''),COALESCE(e.artifact_ref,''),e.safe_summary,e.safe_progress,COALESCE(e.run_state,''),COALESCE(e.node_state,''),e.occurred_at FROM control_plane.run_events e JOIN control_plane.runs root ON root.id=e.root_run_id WHERE e.organization_id=$1::uuid AND root.ref=$2 AND e.sequence>$3 ORDER BY e.sequence LIMIT $4`, scope.organizationID, run.RootRunRef, filter.AfterSequence, limit)
+	rows, err := repository.pool.Query(ctx, queryQueriesListrunevents1, scope.organizationID, run.RootRunRef, filter.AfterSequence, limit)
 	if err != nil {
 		return nil, 0, false, errs.ErrUnavailable
 	}
@@ -486,7 +454,7 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, gateSelect+` WHERE g.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND ($3='' OR g.state=$3) AND ($4 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=g.project_id AND m.subject_id=$5::uuid AND m.active AND 'VIEW'=ANY(m.permissions))) ORDER BY g.created_at DESC LIMIT $6`, scope.organizationID, filter.ProjectRef, filter.State, scope.role, scope.actorID, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListownergates1, scope.organizationID, filter.ProjectRef, filter.State, scope.role, scope.actorID, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -501,8 +469,6 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 	}
 	return result, "", rows.Err()
 }
-
-const gateSelect = `SELECT g.ref,p.ref,root.ref,n.ref,g.title,g.prompt,g.context_summary,g.allowed_decisions,g.state,COALESCE(g.decision,''),g.decision_comment,COALESCE(s.display_name,''),g.version,g.created_at,g.resolved_at FROM control_plane.owner_gates g JOIN control_plane.projects p ON p.id=g.project_id JOIN control_plane.runs root ON root.id=g.root_run_id JOIN control_plane.run_nodes n ON n.id=g.node_id LEFT JOIN control_plane.subjects s ON s.id=g.resolved_by`
 
 func scanGate(row rowScanner) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
@@ -522,7 +488,7 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	if err != nil {
 		return entity.OwnerGate{}, err
 	}
-	return scanGate(repository.pool.QueryRow(ctx, gateSelect+` WHERE g.organization_id=$1::uuid AND g.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=g.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`, scope.organizationID, ref, scope.role, scope.actorID))
+	return scanGate(repository.pool.QueryRow(ctx, queryQueriesGetownergate1, scope.organizationID, ref, scope.role, scope.actorID))
 }
 
 func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, string, error) {
@@ -530,7 +496,7 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, artifactSelect+` WHERE ar.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND ($3='' OR r.ref=$3) AND ($4 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=ar.project_id AND m.subject_id=$5::uuid AND m.active AND 'VIEW'=ANY(m.permissions))) AND ($6='' OR ar.file_name ILIKE '%'||$6||'%') ORDER BY ar.created_at DESC LIMIT $7`, scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListartifacts1, scope.organizationID, filter.ProjectRef, filter.ResourceRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -545,8 +511,6 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	}
 	return result, "", rows.Err()
 }
-
-const artifactSelect = `SELECT ar.ref,p.ref,COALESCE(r.ref,''),COALESCE(n.ref,''),ar.file_name,ar.media_type,ar.digest,ar.scan_state,ar.preview_state,ar.size_bytes,ar.version,ar.created_at,COALESCE((SELECT array_agg(b.target_kind||':'||b.target_ref ORDER BY b.created_at) FROM control_plane.artifact_bindings b WHERE b.artifact_id=ar.id),'{}') FROM control_plane.artifacts ar JOIN control_plane.projects p ON p.id=ar.project_id LEFT JOIN control_plane.runs r ON r.id=ar.run_id LEFT JOIN control_plane.run_nodes n ON n.id=ar.node_id`
 
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	var item entity.Artifact
@@ -566,7 +530,7 @@ func (repository *Repository) GetArtifact(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Artifact{}, err
 	}
-	return scanArtifact(repository.pool.QueryRow(ctx, artifactSelect+` WHERE ar.organization_id=$1::uuid AND ar.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=ar.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))`, scope.organizationID, ref, scope.role, scope.actorID))
+	return scanArtifact(repository.pool.QueryRow(ctx, queryQueriesGetartifact1, scope.organizationID, ref, scope.role, scope.actorID))
 }
 
 func (repository *Repository) ListSchedules(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Schedule, string, error) {
@@ -574,7 +538,7 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT s.ref,p.ref,s.name,s.target_type,s.target_ref,COALESCE(a.name,w.name,s.target_ref),s.preset,s.cron_expression,s.timezone,s.input,s.session_policy,s.notification_policy,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at FROM control_plane.schedules s JOIN control_plane.projects p ON p.id=s.project_id LEFT JOIN control_plane.agents a ON s.target_type='AGENT' AND a.ref=s.target_ref LEFT JOIN control_plane.workflows w ON s.target_type='WORKFLOW' AND w.ref=s.target_ref WHERE s.organization_id=$1::uuid AND p.ref=$2 AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=s.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions))) ORDER BY s.updated_at DESC LIMIT $5`, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListschedules1, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -602,7 +566,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 	if _, err := repository.resolveScope(ctx, principal); err != nil {
 		return nil, err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT stable_key,name,description,category,optional,enabled,capabilities,configuration_schema FROM control_plane.integration_definitions WHERE ($1='' OR category=$1) ORDER BY category,name`, category)
+	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationdefinitions1, category)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -625,7 +589,7 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, connectionSelect+` WHERE c.organization_id=$1::uuid AND ($2='' OR c.definition_key=$2) ORDER BY c.updated_at DESC LIMIT $3`, scope.organizationID, filter.Category, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationconnections1, scope.organizationID, filter.Category, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -641,8 +605,6 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 	}
 	return result, "", rows.Err()
 }
-
-const connectionSelect = `SELECT c.ref,c.definition_key,d.name,c.name,c.state,c.masked_credentials_state,c.last_test_summary,c.enabled,c.version,c.public_configuration,d.capabilities,c.last_tested_at,c.created_at,c.updated_at FROM control_plane.integration_connections c JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key`
 
 func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	var item entity.IntegrationConnection
@@ -664,7 +626,7 @@ func scanConnection(row rowScanner) (entity.IntegrationConnection, error) {
 	return item, nil
 }
 func (repository *Repository) attachConnection(ctx context.Context, scope scope, item *entity.IntegrationConnection) error {
-	rows, err := repository.pool.Query(ctx, `SELECT g.ref,g.capability_key,g.target_kind,g.target_ref,COALESCE(a.name,w.name,g.target_ref),g.enabled,g.approval_policy,g.version FROM control_plane.integration_grants g LEFT JOIN control_plane.agents a ON g.target_kind='AGENT' AND a.ref=g.target_ref LEFT JOIN control_plane.workflows w ON g.target_kind='WORKFLOW' AND w.ref=g.target_ref WHERE g.organization_id=$1::uuid AND g.connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$2) ORDER BY g.created_at`, scope.organizationID, item.Ref)
+	rows, err := repository.pool.Query(ctx, queryQueriesAttachconnection1, scope.organizationID, item.Ref)
 	if err != nil {
 		return err
 	}
@@ -683,7 +645,7 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
-	item, err := scanConnection(repository.pool.QueryRow(ctx, connectionSelect+` WHERE c.organization_id=$1::uuid AND c.ref=$2`, scope.organizationID, ref))
+	item, err := scanConnection(repository.pool.QueryRow(ctx, queryQueriesGetintegrationconnection1, scope.organizationID, ref))
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
@@ -696,12 +658,12 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 func (repository *Repository) getAssistant(ctx context.Context, scope scope) (entity.SystemAssistant, error) {
 	var item entity.SystemAssistant
 	var limits []byte
-	err := repository.pool.QueryRow(ctx, `SELECT a.ref,ar.stable_key,a.name,a.purpose,ar.core_prompt_revision,ar.owner_instructions,ar.runtime_state,ar.runtime_revision,ar.desired_runtime_revision,ar.system_session_ref,ar.resource_limits,ar.last_heartbeat_at,ar.version,ar.updated_at FROM control_plane.assistant_runtime ar JOIN control_plane.agents a ON a.id=ar.agent_id WHERE ar.organization_id=$1::uuid`, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
+	err := repository.pool.QueryRow(ctx, queryQueriesGetassistant1, scope.organizationID).Scan(&item.Ref, &item.StableKey, &item.Name, &item.Purpose, &item.CorePromptRevision, &item.OwnerInstructions, &item.RuntimeState, &item.RuntimeRevision, &item.DesiredRuntimeRevision, &item.WarmSessionRef, &limits, &item.LastHeartbeatAt, &item.Version, &item.UpdatedAt)
 	if err != nil {
 		return entity.SystemAssistant{}, errs.ErrUnavailable
 	}
 	_ = json.Unmarshal(limits, &item.ResourceLimits)
-	item.Ready = item.RuntimeState == "READY" && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
+	item.Ready = contains([]string{"READY", "BUSY"}, item.RuntimeState) && item.LastHeartbeatAt != nil && time.Since(*item.LastHeartbeatAt) < 45*time.Second
 	item.System = true
 	item.Deletable = false
 	item.NextActions = []string{"OPEN"}
@@ -723,7 +685,7 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT c.ref,c.title,COALESCE(p.ref,''),s.ref,c.state,c.version,c.created_at,c.updated_at FROM control_plane.assistant_conversations c LEFT JOIN control_plane.projects p ON p.id=c.project_id JOIN control_plane.sessions s ON s.id=c.session_id WHERE c.organization_id=$1::uuid AND ($2='' OR p.ref=$2) ORDER BY c.updated_at DESC LIMIT $3`, scope.organizationID, filter.ProjectRef, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListassistantconversations1, scope.organizationID, filter.ProjectRef, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -742,7 +704,7 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	return result, "", rows.Err()
 }
 func (repository *Repository) attachConversation(ctx context.Context, scope scope, item *entity.AssistantConversation) error {
-	rows, err := repository.pool.Query(ctx, `SELECT t.ref,t.actor_kind,COALESCE(s.display_name,a.name,t.actor_ref),t.content,t.state,t.artifact_refs,t.created_at,t.completed_at FROM control_plane.session_turns t LEFT JOIN control_plane.subjects s ON t.actor_kind='USER' AND s.ref=t.actor_ref LEFT JOIN control_plane.agents a ON t.actor_kind<>'USER' AND a.ref=t.actor_ref WHERE t.organization_id=$1::uuid AND t.session_id=(SELECT session_id FROM control_plane.assistant_conversations WHERE ref=$2) ORDER BY t.turn_number`, scope.organizationID, item.Ref)
+	rows, err := repository.pool.Query(ctx, queryQueriesAttachconversation1, scope.organizationID, item.Ref)
 	if err != nil {
 		return errs.ErrUnavailable
 	}
@@ -756,7 +718,7 @@ func (repository *Repository) attachConversation(ctx context.Context, scope scop
 	}
 	var raw []byte
 	var plan entity.AssistantPlan
-	err = repository.pool.QueryRow(ctx, `SELECT p.ref,p.summary,p.state,p.version,p.operations,p.created_at,p.applied_at FROM control_plane.assistant_plans p JOIN control_plane.assistant_conversations c ON c.latest_plan_id=p.id WHERE c.organization_id=$1::uuid AND c.ref=$2`, scope.organizationID, item.Ref).Scan(&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &raw, &plan.CreatedAt, &plan.AppliedAt)
+	err = repository.pool.QueryRow(ctx, queryQueriesAttachconversation2, scope.organizationID, item.Ref).Scan(&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &raw, &plan.CreatedAt, &plan.AppliedAt)
 	if err == nil {
 		_ = json.Unmarshal(raw, &plan.Operations)
 		item.LatestPlan = &plan
@@ -787,7 +749,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, `SELECT e.ref,COALESCE(p.ref,''),s.ref,s.display_name,COALESCE(a.ref,''),e.action,e.resource_kind,e.resource_ref,e.outcome,e.safe_summary,e.correlation_ref,e.occurred_at FROM control_plane.audit_events e LEFT JOIN control_plane.projects p ON p.id=e.project_id JOIN control_plane.subjects s ON s.id=e.actor_id LEFT JOIN control_plane.agents a ON a.id=e.assistant_agent_id WHERE e.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND ($3='' OR e.action=$3) AND ($4='' OR e.outcome=$4) AND ($5 IN ('OWNER','ADMINISTRATOR','AUDITOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=e.project_id AND m.subject_id=$6::uuid AND m.active AND 'VIEW_AUDIT'=ANY(m.permissions))) ORDER BY e.occurred_at DESC LIMIT $7`, scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, scope.role, scope.actorID, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListauditevents1, scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, scope.role, scope.actorID, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}

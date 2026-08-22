@@ -475,7 +475,7 @@ CREATE TABLE control_plane.assistant_runtime (
     core_prompt_ref text NOT NULL REFERENCES control_plane.instruction_versions(ref),
     core_prompt_revision text NOT NULL,
     owner_instructions text NOT NULL DEFAULT '',
-    runtime_state text NOT NULL CHECK (runtime_state IN ('STARTING', 'READY', 'RECOVERING', 'UNAVAILABLE')),
+    runtime_state text NOT NULL CHECK (runtime_state IN ('STARTING', 'READY', 'BUSY', 'RECOVERING', 'UNAVAILABLE')),
     runtime_revision text NOT NULL,
     desired_runtime_revision text NOT NULL,
     system_session_ref text NOT NULL REFERENCES control_plane.sessions(ref),
