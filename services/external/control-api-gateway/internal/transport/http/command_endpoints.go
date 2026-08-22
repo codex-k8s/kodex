@@ -2,7 +2,9 @@ package httptransport
 
 import (
 	"io"
+	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -163,8 +165,6 @@ func (server *Server) CommandAgent(w http.ResponseWriter, r *http.Request, ref g
 		response, err = server.control.Command.ChangeAgentCapability(r.Context(), &controlplanev1.ChangeAgentCapabilityRequest{Mutation: m, AgentRef: ref, CapabilityKey: stringValue(body.CapabilityKey), Enabled: body.Action == generated.AgentCommandActionGRANTCAPABILITY})
 	case generated.AgentCommandActionGRANTINTEGRATION, generated.AgentCommandActionREVOKEINTEGRATION:
 		response, err = server.control.Command.ChangeAgentIntegrationGrant(r.Context(), &controlplanev1.ChangeAgentIntegrationGrantRequest{Mutation: m, AgentRef: ref, GrantRef: stringValue(body.GrantRef), Enabled: body.Action == generated.AgentCommandActionGRANTINTEGRATION})
-	case generated.AgentCommandActionBINDKNOWLEDGE, generated.AgentCommandActionUNBINDKNOWLEDGE:
-		response, err = server.control.Command.ChangeAgentKnowledgeBinding(r.Context(), &controlplanev1.ChangeAgentKnowledgeBindingRequest{Mutation: m, AgentRef: ref, ArtifactRef: stringValue(body.ArtifactRef), Enabled: body.Action == generated.AgentCommandActionBINDKNOWLEDGE})
 	default:
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
@@ -543,65 +543,137 @@ func (server *Server) UploadArtifact(w http.ResponseWriter, r *http.Request, pro
 	if !ok {
 		return
 	}
-	content, err := io.ReadAll(io.LimitReader(r.Body, (16<<20)+1))
-	if err != nil || len(content) > 16<<20 {
+	if r.ContentLength < 0 {
+		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
+		return
+	}
+	if r.ContentLength > 16<<20 {
 		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
 		return
 	}
-	m, _ := requireMutation(w, p.IdempotencyKey, "")
+	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
 	stream, err := server.control.Command.UploadArtifact(r.Context())
-	if err == nil {
-		err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: projectRef, RunRef: stringValue(p.RunRef), FileName: p.XFileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: int64(len(content))}}})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
 	}
-	for offset := 0; err == nil && offset < len(content); offset += 64 << 10 {
-		end := offset + 64<<10
-		if end > len(content) {
-			end = len(content)
+	if err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{Mutation: m, ProjectRef: projectRef, RunRef: stringValue(p.RunRef), FileName: p.XFileName, MediaType: r.Header.Get("Content-Type"), SizeBytes: r.ContentLength}}}); err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	buffer := make([]byte, 64<<10)
+	reader := io.LimitReader(r.Body, (16<<20)+1)
+	var received int64
+	for {
+		count, readErr := reader.Read(buffer)
+		if count > 0 {
+			received += int64(count)
+			if received > r.ContentLength || received > 16<<20 {
+				writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+				return
+			}
+			if err := stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: append([]byte(nil), buffer[:count]...)}}); err != nil {
+				writeRPCProblem(w, err)
+				return
+			}
 		}
-		err = stream.Send(&controlplanev1.UploadArtifactRequest{Part: &controlplanev1.UploadArtifactRequest_Chunk{Chunk: content[offset:end]}})
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
+			return
+		}
 	}
-	var response *controlplanev1.UploadArtifactResponse
-	if err == nil {
-		response, err = stream.CloseAndRecv()
+	if received != r.ContentLength {
+		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+		return
 	}
+	response, err := stream.CloseAndRecv()
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusCreated, response, "artifact", "")
 }
-func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef) {
-	stream, err := server.control.Command.DownloadArtifact(r.Context(), &controlplanev1.DownloadArtifactRequest{ArtifactRef: ref})
+func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
+	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
+	switch p.Purpose {
+	case generated.DOWNLOAD:
+		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD
+	case generated.PREVIEW:
+		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW
+	}
+	stream, err := server.control.Command.DownloadArtifact(r.Context(), &controlplanev1.DownloadArtifactRequest{ArtifactRef: ref, Purpose: purpose})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	var content []byte
-	fileName, mediaType := "artifact", "application/octet-stream"
+	metadata, err := stream.Recv()
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if len(metadata.GetData()) != 0 || metadata.GetSizeBytes() < 0 || metadata.GetSizeBytes() > 16<<20 {
+		writeLocalProblem(w, http.StatusBadGateway, "UPSTREAM_ARTIFACT_METADATA_INVALID", false)
+		return
+	}
+	fileName := safeAttachmentFileName(metadata.GetFileName())
+	mediaType := metadata.GetMediaType()
+	if _, _, parseErr := mime.ParseMediaType(mediaType); parseErr != nil {
+		mediaType = "application/octet-stream"
+	}
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": fileName})
+	if disposition == "" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Type", mediaType)
+	w.Header().Set("Content-Disposition", disposition)
+	w.Header().Set("Content-Length", strconv.FormatInt(metadata.GetSizeBytes(), 10))
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	var written int64
 	for {
 		chunk, recvErr := stream.Recv()
 		if recvErr == io.EOF {
 			break
 		}
 		if recvErr != nil {
-			writeRPCProblem(w, recvErr)
 			return
 		}
-		if len(content)+len(chunk.GetData()) > 16<<20 {
-			writeLocalProblem(w, http.StatusBadGateway, "UPSTREAM_PAYLOAD_TOO_LARGE", false)
+		if chunk.GetFileName() != "" || chunk.GetMediaType() != "" || chunk.GetSizeBytes() != 0 {
 			return
 		}
-		content = append(content, chunk.GetData()...)
-		if chunk.GetFileName() != "" {
-			fileName = chunk.GetFileName()
+		written += int64(len(chunk.GetData()))
+		if written > metadata.GetSizeBytes() || written > 16<<20 {
+			return
 		}
-		if chunk.GetMediaType() != "" {
-			mediaType = chunk.GetMediaType()
+		if len(chunk.GetData()) > 0 {
+			if _, err := w.Write(chunk.GetData()); err != nil {
+				return
+			}
 		}
 	}
-	w.Header().Set("Content-Type", mediaType)
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+strings.ReplaceAll(fileName, "\"", "")+"\"")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	if written != metadata.GetSizeBytes() {
+		return
+	}
+}
+
+func safeAttachmentFileName(value string) string {
+	value = strings.Map(func(character rune) rune {
+		if character < 0x20 || character == 0x7f || character == '/' || character == '\\' {
+			return -1
+		}
+		return character
+	}, value)
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "artifact"
+	}
+	return value
 }

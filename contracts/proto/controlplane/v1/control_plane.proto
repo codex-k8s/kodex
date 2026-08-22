@@ -55,7 +55,6 @@ service PlatformCommandService {
   rpc RollbackInstructions(RollbackInstructionsRequest) returns (RollbackInstructionsResponse);
   rpc ChangeAgentCapability(ChangeAgentCapabilityRequest) returns (ChangeAgentCapabilityResponse);
   rpc ChangeAgentIntegrationGrant(ChangeAgentIntegrationGrantRequest) returns (ChangeAgentIntegrationGrantResponse);
-  rpc ChangeAgentKnowledgeBinding(ChangeAgentKnowledgeBindingRequest) returns (ChangeAgentKnowledgeBindingResponse);
   rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
   rpc UpdateWorkflowDraft(UpdateWorkflowDraftRequest) returns (UpdateWorkflowDraftResponse);
   rpc ValidateWorkflowDraft(ValidateWorkflowDraftRequest) returns (ValidateWorkflowDraftResponse);
@@ -303,6 +302,15 @@ enum ArtifactScanState {
   ARTIFACT_SCAN_STATE_CLEAN = 3;
   ARTIFACT_SCAN_STATE_QUARANTINED = 4;
   ARTIFACT_SCAN_STATE_FAILED = 5;
+}
+
+enum ArtifactSource {
+  ARTIFACT_SOURCE_UNSPECIFIED = 0;
+  ARTIFACT_SOURCE_CONTROL_CENTER = 1;
+  ARTIFACT_SOURCE_AGENT_RESULT = 2;
+  ARTIFACT_SOURCE_INTEGRATION_RESULT = 3;
+  ARTIFACT_SOURCE_KNOWLEDGE_SOURCE = 4;
+  ARTIFACT_SOURCE_INTERACTION_ATTACHMENT = 5;
 }
 
 enum ScheduleState {
@@ -640,7 +648,7 @@ message Artifact {
   string media_type = 7;
   int64 size_bytes = 8;
   ArtifactScanState scan_state = 9;
-  string source = 10;
+  ArtifactSource source = 10;
   int32 revision = 11;
   repeated string agent_bindings = 12;
   bool preview_available = 13;
@@ -1032,16 +1040,6 @@ message ChangeAgentIntegrationGrantRequest {
 message ChangeAgentIntegrationGrantResponse {
   Agent agent = 1;
 }
-message ChangeAgentKnowledgeBindingRequest {
-  MutationContext mutation = 1;
-  string agent_ref = 2;
-  string artifact_ref = 3;
-  bool enabled = 4;
-}
-message ChangeAgentKnowledgeBindingResponse {
-  Agent agent = 1;
-}
-
 message ListWorkflowsRequest {
   string project_ref = 1;
   PageRequest page = 2;
@@ -1237,8 +1235,14 @@ message UploadArtifactRequest {
 message UploadArtifactResponse {
   Artifact artifact = 1;
 }
+enum ArtifactDownloadPurpose {
+  ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED = 0;
+  ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD = 1;
+  ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW = 2;
+}
 message DownloadArtifactRequest {
   string artifact_ref = 1;
+  ArtifactDownloadPurpose purpose = 2;
 }
 message DownloadArtifactResponse {
   bytes data = 1;

@@ -716,7 +716,7 @@ paths:
             schema: { type: string, format: binary }
       responses:
         '201':
-          description: Artifact принят и поставлен на проверку
+          description: Artifact принят и синхронно проверен обязательной встроенной policy
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Artifact' }
@@ -737,7 +737,14 @@ paths:
     get:
       tags: [Artifacts]
       operationId: downloadArtifact
-      parameters: [{ $ref: '#/components/parameters/ArtifactRef' }]
+      parameters:
+        - { $ref: '#/components/parameters/ArtifactRef' }
+        - name: purpose
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [DOWNLOAD, PREVIEW]
       responses:
         '200':
           description: Защищённое содержимое artifact
@@ -1407,10 +1414,9 @@ components:
       additionalProperties: false
       required: [action]
       properties:
-        action: { type: string, enum: [ENABLE, DISABLE, ARCHIVE, GRANT_CAPABILITY, REVOKE_CAPABILITY, GRANT_INTEGRATION, REVOKE_INTEGRATION, BIND_KNOWLEDGE, UNBIND_KNOWLEDGE] }
+        action: { type: string, enum: [ENABLE, DISABLE, ARCHIVE, GRANT_CAPABILITY, REVOKE_CAPABILITY, GRANT_INTEGRATION, REVOKE_INTEGRATION] }
         capabilityKey: { type: string, maxLength: 80 }
         grantRef: { $ref: '#/components/schemas/OpaqueRef' }
-        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
     InstructionCommand:
       type: object
       additionalProperties: false
@@ -1860,7 +1866,7 @@ components:
         mediaType: { type: string, maxLength: 160 }
         sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 104857600 }
         scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
-        source: { type: string, maxLength: 160 }
+        source: { type: string, enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT] }
         revision: { type: integer, minimum: 1 }
         agentBindings: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
         previewAvailable: { type: boolean }

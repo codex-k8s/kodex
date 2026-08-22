@@ -38,14 +38,12 @@ const (
 // Defines values for AgentCommandAction.
 const (
 	AgentCommandActionARCHIVE           AgentCommandAction = "ARCHIVE"
-	AgentCommandActionBINDKNOWLEDGE     AgentCommandAction = "BIND_KNOWLEDGE"
 	AgentCommandActionDISABLE           AgentCommandAction = "DISABLE"
 	AgentCommandActionENABLE            AgentCommandAction = "ENABLE"
 	AgentCommandActionGRANTCAPABILITY   AgentCommandAction = "GRANT_CAPABILITY"
 	AgentCommandActionGRANTINTEGRATION  AgentCommandAction = "GRANT_INTEGRATION"
 	AgentCommandActionREVOKECAPABILITY  AgentCommandAction = "REVOKE_CAPABILITY"
 	AgentCommandActionREVOKEINTEGRATION AgentCommandAction = "REVOKE_INTEGRATION"
-	AgentCommandActionUNBINDKNOWLEDGE   AgentCommandAction = "UNBIND_KNOWLEDGE"
 )
 
 // Defines values for ArtifactScanState.
@@ -55,6 +53,15 @@ const (
 	ArtifactScanStatePENDING     ArtifactScanState = "PENDING"
 	ArtifactScanStateQUARANTINED ArtifactScanState = "QUARANTINED"
 	ArtifactScanStateSCANNING    ArtifactScanState = "SCANNING"
+)
+
+// Defines values for ArtifactSource.
+const (
+	ArtifactSourceAGENTRESULT           ArtifactSource = "AGENT_RESULT"
+	ArtifactSourceCONTROLCENTER         ArtifactSource = "CONTROL_CENTER"
+	ArtifactSourceINTEGRATIONRESULT     ArtifactSource = "INTEGRATION_RESULT"
+	ArtifactSourceINTERACTIONATTACHMENT ArtifactSource = "INTERACTION_ATTACHMENT"
+	ArtifactSourceKNOWLEDGESOURCE       ArtifactSource = "KNOWLEDGE_SOURCE"
 )
 
 // Defines values for AssistantPlanOperationType.
@@ -323,12 +330,12 @@ const (
 
 // Defines values for RunSource.
 const (
-	AGENTDELEGATION RunSource = "AGENT_DELEGATION"
-	CONTROLCENTER   RunSource = "CONTROL_CENTER"
-	INTEGRATION     RunSource = "INTEGRATION"
-	MATTERMOST      RunSource = "MATTERMOST"
-	SCHEDULE        RunSource = "SCHEDULE"
-	SYSTEMASSISTANT RunSource = "SYSTEM_ASSISTANT"
+	RunSourceAGENTDELEGATION RunSource = "AGENT_DELEGATION"
+	RunSourceCONTROLCENTER   RunSource = "CONTROL_CENTER"
+	RunSourceINTEGRATION     RunSource = "INTEGRATION"
+	RunSourceMATTERMOST      RunSource = "MATTERMOST"
+	RunSourceSCHEDULE        RunSource = "SCHEDULE"
+	RunSourceSYSTEMASSISTANT RunSource = "SYSTEM_ASSISTANT"
 )
 
 // Defines values for RunState.
@@ -535,6 +542,12 @@ const (
 	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
+// Defines values for DownloadArtifactParamsPurpose.
+const (
+	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
+	PREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
+)
+
 // Defines values for CommandSystemAssistantJSONBodyAction.
 const (
 	RECOVER CommandSystemAssistantJSONBodyAction = "RECOVER"
@@ -585,7 +598,6 @@ type AgentState string
 // AgentCommand defines model for AgentCommand.
 type AgentCommand struct {
 	Action        AgentCommandAction `json:"action"`
-	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
 	CapabilityKey *string            `json:"capabilityKey,omitempty"`
 	GrantRef      *OpaqueRef         `json:"grantRef,omitempty"`
 }
@@ -629,12 +641,15 @@ type Artifact struct {
 	ScanState        ArtifactScanState `json:"scanState"`
 	SessionRef       *OpaqueRef        `json:"sessionRef,omitempty"`
 	SizeBytes        int64             `json:"sizeBytes"`
-	Source           string            `json:"source"`
+	Source           ArtifactSource    `json:"source"`
 	Version          int64             `json:"version"`
 }
 
 // ArtifactScanState defines model for Artifact.ScanState.
 type ArtifactScanState string
+
+// ArtifactSource defines model for Artifact.Source.
+type ArtifactSource string
 
 // ArtifactBindingInput defines model for ArtifactBindingInput.
 type ArtifactBindingInput struct {
@@ -1620,6 +1635,14 @@ type ChangeArtifactBindingParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DownloadArtifactParams defines parameters for DownloadArtifact.
+type DownloadArtifactParams struct {
+	Purpose DownloadArtifactParamsPurpose `form:"purpose" json:"purpose"`
+}
+
+// DownloadArtifactParamsPurpose defines parameters for DownloadArtifact.
+type DownloadArtifactParamsPurpose string
+
 // ListAssistantConversationsParams defines parameters for ListAssistantConversations.
 type ListAssistantConversationsParams struct {
 	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
@@ -2047,7 +2070,7 @@ type ServerInterface interface {
 	ChangeArtifactBinding(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params ChangeArtifactBindingParams)
 
 	// (GET /api/v1/artifacts/{artifactRef}/content)
-	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef)
+	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params DownloadArtifactParams)
 
 	// (GET /api/v1/assistant-conversations)
 	ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams)
@@ -2853,8 +2876,26 @@ func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *ht
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadArtifactParams
+
+	// ------------- Required query parameter "purpose" -------------
+
+	if paramValue := r.URL.Query().Get("purpose"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "purpose", r.URL.Query(), &params.Purpose)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DownloadArtifact(w, r, artifactRef)
+		siw.Handler.DownloadArtifact(w, r, artifactRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {

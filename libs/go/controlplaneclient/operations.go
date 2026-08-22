@@ -49,7 +49,6 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.instructions.rollback":       controlplanev1.PlatformCommandService_RollbackInstructions_FullMethodName,
 		"platform.command.agent-capabilities.change":   controlplanev1.PlatformCommandService_ChangeAgentCapability_FullMethodName,
 		"platform.command.agent-grants.change":         controlplanev1.PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName,
-		"platform.command.agent-knowledge.change":      controlplanev1.PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName,
 		"platform.command.workflows.create":            controlplanev1.PlatformCommandService_CreateWorkflow_FullMethodName,
 		"platform.command.workflows.update-draft":      controlplanev1.PlatformCommandService_UpdateWorkflowDraft_FullMethodName,
 		"platform.command.workflows.validate":          controlplanev1.PlatformCommandService_ValidateWorkflowDraft_FullMethodName,

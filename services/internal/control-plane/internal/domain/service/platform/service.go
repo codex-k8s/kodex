@@ -2,16 +2,19 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
@@ -186,25 +189,39 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 	if err != nil {
 		return entity.Artifact{}, err
 	}
-	if input.SizeBytes < 0 || input.SizeBytes > 1<<30 || input.Reader == nil || strings.TrimSpace(input.ProjectRef) == "" {
+	if input.SizeBytes < 0 || input.SizeBytes > repository.MaximumArtifactBytes || input.Reader == nil || strings.TrimSpace(input.ProjectRef) == "" {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
+	body, err := io.ReadAll(io.LimitReader(input.Reader, repository.MaximumArtifactBytes+1))
+	if err != nil || int64(len(body)) != input.SizeBytes {
+		return entity.Artifact{}, errs.ErrInvalid
+	}
+	contentDigest := sha256.Sum256(body)
+	input.Digest = "sha256:" + hex.EncodeToString(contentDigest[:])
+	verdict := artifactpolicy.Inspect(input.FileName, input.MediaType, body)
+	input.MediaType = verdict.MediaType
+	input.ScanState = verdict.ScanState
+	input.PreviewState = verdict.PreviewState
+	input.Reader = bytes.NewReader(body)
 	mutation.Operation = "artifact.upload"
 	mutation.IntentDigest = digest(struct {
-		ProjectRef, RunRef, FileName, MediaType string
-		SizeBytes                               int64
-	}{input.ProjectRef, input.RunRef, input.FileName, input.MediaType, input.SizeBytes})
+		ProjectRef, RunRef, FileName, MediaType, Digest string
+		SizeBytes                                       int64
+	}{input.ProjectRef, input.RunRef, input.FileName, input.MediaType, input.Digest, input.SizeBytes})
 	if err := mutation.Validate(); err != nil {
 		return entity.Artifact{}, errs.ErrInvalid
 	}
 	return service.repository.UploadArtifact(ctx, p, mutation, input)
 }
-func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal, ref string) (repository.ArtifactDownload, error) {
+func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal, ref, purpose string) (repository.ArtifactDownload, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return repository.ArtifactDownload{}, err
 	}
-	return service.repository.DownloadArtifact(ctx, p, ref)
+	if purpose != "DOWNLOAD" && purpose != "PREVIEW" {
+		return repository.ArtifactDownload{}, errs.ErrInvalid
+	}
+	return service.repository.DownloadArtifact(ctx, p, ref, purpose)
 }
 func (service *Service) ListSchedules(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Schedule, string, error) {
 	p, err := service.principal(ctx, p)
@@ -365,7 +382,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,
 		command.RollbackInstructions, command.ChangeAgentCapability, command.ChangeAgentGrant,
-		command.ChangeAgentKnowledge, command.CreateWorkflow, command.UpdateWorkflow,
+		command.CreateWorkflow, command.UpdateWorkflow,
 		command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow,
 		command.LaunchRun, command.AddSessionTurn, command.CancelRun, command.RetryRun,
 		command.ResolveOwnerGate, command.ChangeArtifactBinding, command.CreateSchedule,

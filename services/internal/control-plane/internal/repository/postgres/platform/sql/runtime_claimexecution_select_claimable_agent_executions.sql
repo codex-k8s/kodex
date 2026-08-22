@@ -31,7 +31,12 @@ SELECT n.id::text,
            ELSE ''
        END,
        a.capabilities,
-       a.knowledge_artifact_refs,
+       COALESCE((SELECT array_agg(knowledge_artifact.ref ORDER BY knowledge_binding.created_at)
+                 FROM control_plane.artifact_bindings knowledge_binding
+                 JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
+                 WHERE knowledge_binding.target_kind='KNOWLEDGE'
+                   AND knowledge_binding.target_ref=a.ref
+                   AND knowledge_artifact.scan_state='CLEAN'),'{}'),
        r.input,
        n.attempt,
        COALESCE((

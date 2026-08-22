@@ -1011,7 +1011,6 @@ const (
 	PlatformCommandService_RollbackInstructions_FullMethodName            = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
 	PlatformCommandService_ChangeAgentCapability_FullMethodName           = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
 	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
-	PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeAgentKnowledgeBinding"
 	PlatformCommandService_CreateWorkflow_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
 	PlatformCommandService_UpdateWorkflowDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
 	PlatformCommandService_ValidateWorkflowDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
@@ -1054,7 +1053,6 @@ type PlatformCommandServiceClient interface {
 	RollbackInstructions(ctx context.Context, in *RollbackInstructionsRequest, opts ...grpc.CallOption) (*RollbackInstructionsResponse, error)
 	ChangeAgentCapability(ctx context.Context, in *ChangeAgentCapabilityRequest, opts ...grpc.CallOption) (*ChangeAgentCapabilityResponse, error)
 	ChangeAgentIntegrationGrant(ctx context.Context, in *ChangeAgentIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeAgentIntegrationGrantResponse, error)
-	ChangeAgentKnowledgeBinding(ctx context.Context, in *ChangeAgentKnowledgeBindingRequest, opts ...grpc.CallOption) (*ChangeAgentKnowledgeBindingResponse, error)
 	CreateWorkflow(ctx context.Context, in *CreateWorkflowRequest, opts ...grpc.CallOption) (*CreateWorkflowResponse, error)
 	UpdateWorkflowDraft(ctx context.Context, in *UpdateWorkflowDraftRequest, opts ...grpc.CallOption) (*UpdateWorkflowDraftResponse, error)
 	ValidateWorkflowDraft(ctx context.Context, in *ValidateWorkflowDraftRequest, opts ...grpc.CallOption) (*ValidateWorkflowDraftResponse, error)
@@ -1239,16 +1237,6 @@ func (c *platformCommandServiceClient) ChangeAgentIntegrationGrant(ctx context.C
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChangeAgentIntegrationGrantResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *platformCommandServiceClient) ChangeAgentKnowledgeBinding(ctx context.Context, in *ChangeAgentKnowledgeBindingRequest, opts ...grpc.CallOption) (*ChangeAgentKnowledgeBindingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ChangeAgentKnowledgeBindingResponse)
-	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,7 +1475,6 @@ type PlatformCommandServiceServer interface {
 	RollbackInstructions(context.Context, *RollbackInstructionsRequest) (*RollbackInstructionsResponse, error)
 	ChangeAgentCapability(context.Context, *ChangeAgentCapabilityRequest) (*ChangeAgentCapabilityResponse, error)
 	ChangeAgentIntegrationGrant(context.Context, *ChangeAgentIntegrationGrantRequest) (*ChangeAgentIntegrationGrantResponse, error)
-	ChangeAgentKnowledgeBinding(context.Context, *ChangeAgentKnowledgeBindingRequest) (*ChangeAgentKnowledgeBindingResponse, error)
 	CreateWorkflow(context.Context, *CreateWorkflowRequest) (*CreateWorkflowResponse, error)
 	UpdateWorkflowDraft(context.Context, *UpdateWorkflowDraftRequest) (*UpdateWorkflowDraftResponse, error)
 	ValidateWorkflowDraft(context.Context, *ValidateWorkflowDraftRequest) (*ValidateWorkflowDraftResponse, error)
@@ -1565,9 +1552,6 @@ func (UnimplementedPlatformCommandServiceServer) ChangeAgentCapability(context.C
 }
 func (UnimplementedPlatformCommandServiceServer) ChangeAgentIntegrationGrant(context.Context, *ChangeAgentIntegrationGrantRequest) (*ChangeAgentIntegrationGrantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeAgentIntegrationGrant not implemented")
-}
-func (UnimplementedPlatformCommandServiceServer) ChangeAgentKnowledgeBinding(context.Context, *ChangeAgentKnowledgeBindingRequest) (*ChangeAgentKnowledgeBindingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ChangeAgentKnowledgeBinding not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateWorkflow(context.Context, *CreateWorkflowRequest) (*CreateWorkflowResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateWorkflow not implemented")
@@ -1935,24 +1919,6 @@ func _PlatformCommandService_ChangeAgentIntegrationGrant_Handler(srv interface{}
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).ChangeAgentIntegrationGrant(ctx, req.(*ChangeAgentIntegrationGrantRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PlatformCommandService_ChangeAgentKnowledgeBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChangeAgentKnowledgeBindingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PlatformCommandServiceServer).ChangeAgentKnowledgeBinding(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformCommandServiceServer).ChangeAgentKnowledgeBinding(ctx, req.(*ChangeAgentKnowledgeBindingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2369,10 +2335,6 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeAgentIntegrationGrant",
 			Handler:    _PlatformCommandService_ChangeAgentIntegrationGrant_Handler,
-		},
-		{
-			MethodName: "ChangeAgentKnowledgeBinding",
-			Handler:    _PlatformCommandService_ChangeAgentKnowledgeBinding_Handler,
 		},
 		{
 			MethodName: "CreateWorkflow",

@@ -215,7 +215,6 @@ CREATE TABLE control_plane.agents (
     state text NOT NULL CHECK (state IN ('DRAFT', 'READY', 'RUNNING', 'DISABLED', 'ARCHIVED')),
     enabled boolean NOT NULL DEFAULT true,
     capabilities text[] NOT NULL DEFAULT '{}',
-    knowledge_artifact_refs text[] NOT NULL DEFAULT '{}',
     external_identities jsonb NOT NULL DEFAULT '[]'::jsonb,
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     created_by uuid REFERENCES control_plane.subjects(id),
@@ -659,13 +658,18 @@ CREATE TABLE control_plane.artifacts (
     media_type text NOT NULL CHECK (char_length(media_type) BETWEEN 1 AND 255),
     size_bytes bigint NOT NULL CHECK (size_bytes BETWEEN 0 AND 1073741824),
     digest text NOT NULL CHECK (digest ~ '^sha256:[a-f0-9]{64}$'),
-    scan_state text NOT NULL CHECK (scan_state IN ('PENDING', 'CLEAN', 'REJECTED', 'FAILED')),
+    source text NOT NULL CHECK (source IN ('CONTROL_CENTER', 'AGENT_RESULT', 'INTEGRATION_RESULT', 'KNOWLEDGE_SOURCE', 'INTERACTION_ATTACHMENT')),
+    scan_state text NOT NULL CHECK (scan_state IN ('PENDING', 'SCANNING', 'CLEAN', 'QUARANTINED', 'FAILED')),
     object_receipt_ref text NOT NULL,
     preview_state text NOT NULL CHECK (preview_state IN ('AVAILABLE', 'UNAVAILABLE', 'BLOCKED')),
+    revision bigint NOT NULL CHECK (revision > 0),
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
     created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+
+CREATE UNIQUE INDEX artifacts_project_file_revision
+    ON control_plane.artifacts (project_id, file_name, revision);
 
 CREATE TABLE control_plane.artifact_bindings (
     artifact_id uuid NOT NULL REFERENCES control_plane.artifacts(id),
@@ -680,6 +684,26 @@ CREATE TABLE control_plane.artifact_content (
     artifact_id uuid PRIMARY KEY REFERENCES control_plane.artifacts(id) ON DELETE CASCADE,
     body bytea NOT NULL CHECK (octet_length(body) <= 16777216)
 );
+
+CREATE TABLE control_plane.artifact_download_grants (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    artifact_id uuid NOT NULL REFERENCES control_plane.artifacts(id) ON DELETE CASCADE,
+    artifact_version bigint NOT NULL CHECK (artifact_version > 0),
+    subject_id uuid NOT NULL REFERENCES control_plane.subjects(id),
+    purpose text NOT NULL CHECK (purpose IN ('DOWNLOAD', 'PREVIEW')),
+    issued_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz,
+    CHECK (expires_at > issued_at),
+    CHECK (consumed_at IS NULL OR consumed_at >= issued_at)
+);
+
+CREATE INDEX artifact_download_grants_expiry
+    ON control_plane.artifact_download_grants (expires_at)
+    WHERE consumed_at IS NULL;
 
 CREATE TABLE control_plane.schedules (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

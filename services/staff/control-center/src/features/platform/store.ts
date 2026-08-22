@@ -14,6 +14,7 @@ import {
   commandRun,
   commandSchedule,
   commandWorkflow,
+  changeArtifactBinding,
   changeProjectMembership,
   completeOnboarding,
   createAgent,
@@ -25,6 +26,7 @@ import {
   createRun,
   createSchedule,
   createWorkflow,
+  downloadArtifact,
   getAdministration,
   getAgent,
   getBootstrapState,
@@ -60,6 +62,7 @@ import {
   updateSchedule,
   updateSystemAssistantOwnerInstructions,
   updateWorkflowDraft,
+  uploadArtifact,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   AdministrationState,
@@ -102,7 +105,12 @@ import type {
   WorkflowInput,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { asProblem, type AppProblem, unwrap } from "@/shared/api/problem";
+import {
+  asProblem,
+  type AppProblem,
+  normalizeProblem,
+  unwrap,
+} from "@/shared/api/problem";
 import {
   reduceRunEvent,
   type RunEventOutcome,
@@ -489,6 +497,65 @@ export const usePlatformStore = defineStore("platform", () => {
         ).data.items,
       (values) => upsert(artifacts, values),
     );
+  }
+
+  async function uploadProjectArtifact(
+    projectRef: string,
+    file: File,
+  ): Promise<Artifact> {
+    const result = await mutate((headers) =>
+      uploadArtifact({
+        path: { projectRef },
+        body: file,
+        headers: {
+          ...mutationHeaders(headers),
+          "X-File-Name": file.name,
+        },
+        signal: requestSignal(),
+      }),
+    );
+    upsert(artifacts, [result.data]);
+    return result.data;
+  }
+
+  async function changeArtifactAgentBinding(
+    artifact: Artifact,
+    agentRef: string,
+    enabled: boolean,
+  ): Promise<Artifact> {
+    const result = await mutate(
+      (headers) =>
+        changeArtifactBinding({
+          path: { artifactRef: artifact.ref },
+          body: { agentRef, enabled },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      artifact.version,
+    );
+    upsert(artifacts, [result.data]);
+    void loadAgent(agentRef);
+    return result.data;
+  }
+
+  async function downloadArtifactContent(
+    artifactRef: string,
+    purpose: "DOWNLOAD" | "PREVIEW",
+  ): Promise<Blob> {
+    const result = await unwrap(
+      downloadArtifact({
+        path: { artifactRef },
+        query: { purpose },
+        parseAs: "blob",
+        signal: requestSignal(),
+      }),
+    );
+    if (result.data instanceof Blob) return result.data;
+    throw normalizeProblem({
+      status: 502,
+      code: "ARTIFACT_CONTENT_UNAVAILABLE",
+      retryable: true,
+    });
   }
 
   async function loadSchedules(projectRef: string): Promise<void> {
@@ -1149,6 +1216,9 @@ export const usePlatformStore = defineStore("platform", () => {
     loadRun,
     loadGates,
     loadArtifacts,
+    uploadProjectArtifact,
+    changeArtifactAgentBinding,
+    downloadArtifactContent,
     loadSchedules,
     loadIntegrations,
     loadConnection,

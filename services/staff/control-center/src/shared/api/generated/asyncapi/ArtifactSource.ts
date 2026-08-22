@@ -1,0 +1,3 @@
+
+type ArtifactSource = "CONTROL_CENTER" | "AGENT_RESULT" | "INTEGRATION_RESULT" | "KNOWLEDGE_SOURCE" | "INTERACTION_ATTACHMENT";
+export { ArtifactSource };

@@ -576,14 +576,18 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	var item entity.Artifact
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.SizeBytes, &item.Version, &item.CreatedAt, &item.Bindings); err != nil {
+	var canManage bool
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source, &item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt, &item.Bindings, &canManage); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	if item.ScanState == "CLEAN" {
-		item.NextActions = []string{"DOWNLOAD", "BIND"}
+		item.NextActions = []string{"DOWNLOAD"}
+		if canManage {
+			item.NextActions = append(item.NextActions, "BIND")
+		}
 	}
 	return item, nil
 }

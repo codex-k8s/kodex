@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultRuntimeKey    = "builtin-safe-runtime"
-	maximumArtifactBytes = 16 << 20
+	maximumArtifactBytes = platformrepo.MaximumArtifactBytes
 )
 
 type Repository struct {

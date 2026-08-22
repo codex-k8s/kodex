@@ -232,12 +232,65 @@ const ru = {
   },
   files: {
     title: "Файлы и знания",
-    subtitle: "Входные материалы, результаты и знания ИИ-сотрудников",
+    subtitle: "Материалы для ИИ-сотрудников и результаты их работы",
     emptyTitle: "Файлов пока нет",
+    emptyText:
+      "Загрузите входной материал или запустите сотрудника, чтобы получить первый результат.",
+    uploading: "Загружаем…",
+    uploadTooLarge: "Размер файла не должен превышать 16 МБ.",
+    tabs: "Виды файлов",
+    tab: {
+      FILES: "Файлы",
+      KNOWLEDGE: "Источники знаний",
+      RESULTS: "Результаты",
+    },
+    search: "Найти файл",
+    typeFilter: "Фильтр по типу файла",
+    stateFilter: "Фильтр по состоянию проверки",
+    sourceFilter: "Фильтр по источнику",
+    allStates: "Все состояния",
+    allSources: "Все источники",
+    kind: {
+      ALL: "Все типы",
+      TEXT: "Текст и данные",
+      DOCUMENT: "Документы",
+      IMAGE: "Изображения",
+    },
+    source: {
+      CONTROL_CENTER: "Загружен участником",
+      AGENT_RESULT: "Результат запуска",
+      INTEGRATION_RESULT: "Результат интеграции",
+      KNOWLEDGE_SOURCE: "Источник знаний",
+      INTERACTION_ATTACHMENT: "Вложение внешнего канала",
+    },
+    noMatches: "Подходящих файлов нет",
+    noMatchesText: "Измените строку поиска или выбранные фильтры.",
+    list: "Список файлов",
+    file: "Файл",
+    usedBy: "Используется",
+    revision: "Версия",
+    revisionValue: "v{revision}",
+    unit: {
+      BYTE: "{value} Б",
+      KILOBYTE: "{value} КБ",
+      MEGABYTE: "{value} МБ",
+      GIGABYTE: "{value} ГБ",
+    },
+    notBound: "Не используется как знание",
+    details: "Сведения о файле",
+    selectedFile: "Выбранный файл",
     scan: "Проверка",
     size: "Размер",
+    addedAt: "Добавлен",
     preview: "Предпросмотр",
+    openPreview: "Открыть",
+    previewReady: "Предпросмотр готов к безопасной загрузке.",
+    previewUnavailable:
+      "Для этого формата безопасный встроенный предпросмотр недоступен.",
     binding: "Доступ сотрудников",
+    bindingHint:
+      "Выберите сотрудников, которым этот проверенный файл будет доступен как источник знаний.",
+    noAgents: "Сначала создайте ИИ-сотрудника в этом Проекте.",
   },
   automations: {
     title: "Автоматизации",
@@ -427,6 +480,16 @@ const ru = {
     RATE_LIMITED: "Слишком много запросов. Подождите немного.",
     UNAVAILABLE: "Сервис временно недоступен. Core-состояние не потеряно.",
     CSRF_REJECTED: "Защитный контекст сессии устарел. Войдите снова.",
+    CONTENT_LENGTH_REQUIRED:
+      "Не удалось определить размер файла. Выберите файл ещё раз.",
+    CONTENT_LENGTH_MISMATCH:
+      "Файл передан не полностью. Выберите файл и повторите загрузку.",
+    REQUEST_BODY_READ_FAILED:
+      "Не удалось прочитать файл. Выберите файл и повторите загрузку.",
+    UPSTREAM_ARTIFACT_METADATA_INVALID:
+      "Сервис вернул повреждённые сведения о файле. Повторите попытку позже.",
+    ARTIFACT_CONTENT_UNAVAILABLE:
+      "Содержимое файла временно недоступно. Повторите попытку.",
   },
 };
 
@@ -668,13 +731,67 @@ const en = {
     connections: "graph connections",
   },
   files: {
+    ...ru.files,
     title: "Files and knowledge",
-    subtitle: "Input materials, results and AI employee knowledge",
+    subtitle: "Materials for AI employees and the results of their work",
     emptyTitle: "No files yet",
+    emptyText:
+      "Upload source material or run an employee to receive the first result.",
+    uploading: "Uploading…",
+    uploadTooLarge: "The file must not exceed 16 MB.",
+    tabs: "File views",
+    tab: {
+      FILES: "Files",
+      KNOWLEDGE: "Knowledge sources",
+      RESULTS: "Results",
+    },
+    search: "Find a file",
+    typeFilter: "Filter by file type",
+    stateFilter: "Filter by validation state",
+    sourceFilter: "Filter by source",
+    allStates: "All states",
+    allSources: "All sources",
+    kind: {
+      ALL: "All types",
+      TEXT: "Text and data",
+      DOCUMENT: "Documents",
+      IMAGE: "Images",
+    },
+    source: {
+      CONTROL_CENTER: "Uploaded by a member",
+      AGENT_RESULT: "Run result",
+      INTEGRATION_RESULT: "Integration result",
+      KNOWLEDGE_SOURCE: "Knowledge source",
+      INTERACTION_ATTACHMENT: "External channel attachment",
+    },
+    noMatches: "No matching files",
+    noMatchesText: "Change the search text or selected filters.",
+    list: "File list",
+    file: "File",
+    usedBy: "Used by",
+    revision: "Version",
+    revisionValue: "v{revision}",
+    unit: {
+      BYTE: "{value} B",
+      KILOBYTE: "{value} KB",
+      MEGABYTE: "{value} MB",
+      GIGABYTE: "{value} GB",
+    },
+    notBound: "Not used as knowledge",
+    details: "File details",
+    selectedFile: "Selected file",
     scan: "Scan",
     size: "Size",
+    addedAt: "Added",
     preview: "Preview",
+    openPreview: "Open",
+    previewReady: "Preview is ready for secure loading.",
+    previewUnavailable:
+      "A safe built-in preview is unavailable for this format.",
     binding: "Employee access",
+    bindingHint:
+      "Choose the employees who can use this validated file as a knowledge source.",
+    noAgents: "Create an AI employee in this Project first.",
   },
   automations: {
     title: "Automations",
@@ -867,6 +984,16 @@ const en = {
     RATE_LIMITED: "Too many requests. Wait a moment.",
     UNAVAILABLE: "The service is temporarily unavailable. Core state is safe.",
     CSRF_REJECTED: "Session protection context expired. Sign in again.",
+    CONTENT_LENGTH_REQUIRED:
+      "The file size could not be determined. Select the file again.",
+    CONTENT_LENGTH_MISMATCH:
+      "The file was not transferred completely. Select it and retry the upload.",
+    REQUEST_BODY_READ_FAILED:
+      "The file could not be read. Select it and retry the upload.",
+    UPSTREAM_ARTIFACT_METADATA_INVALID:
+      "The service returned invalid file metadata. Try again later.",
+    ARTIFACT_CONTENT_UNAVAILABLE:
+      "The file content is temporarily unavailable. Try again.",
   },
 };
 

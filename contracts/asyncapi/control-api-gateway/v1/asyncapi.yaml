@@ -384,7 +384,7 @@ components:
         mediaType: { type: string, maxLength: 160 }
         sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 1073741824 }
         scanState: { $ref: '#/components/schemas/ArtifactScanState' }
-        source: { type: string, maxLength: 160 }
+        source: { $ref: '#/components/schemas/ArtifactSource' }
         revision: { type: integer, minimum: 1 }
         agentBindings:
           type: array
@@ -400,3 +400,6 @@ components:
     ArtifactScanState:
       type: string
       enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
+    ArtifactSource:
+      type: string
+      enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]

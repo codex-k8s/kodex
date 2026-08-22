@@ -210,7 +210,6 @@
           "platform.assistant.turns.add",
           "platform.command.agent-capabilities.change",
           "platform.command.agent-grants.change",
-          "platform.command.agent-knowledge.change",
           "platform.command.agents.archive",
           "platform.command.agents.create",
           "platform.command.agents.enable",
@@ -619,35 +618,6 @@
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "permission": "platform.command.agent-grants.change",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "project_required": false,
-        "local_caller": {
-          "uid": 10001,
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000
-        },
-        "local_target": {
-          "uid": 10001,
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000
-        }
-      },
-      {
-        "operation_id": "platform.command.agent-knowledge.change",
-        "caller_workload_id": "control-api-gateway",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "target_workload_id": "control-plane",
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "full_method": "/controlplane.v1.PlatformCommandService/ChangeAgentKnowledgeBinding",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "permission": "platform.command.agent-knowledge.change",
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",

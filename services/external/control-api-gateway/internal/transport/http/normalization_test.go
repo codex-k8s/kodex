@@ -35,6 +35,26 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeArtifactSource(t *testing.T) {
+	t.Parallel()
+	value := map[string]any{"source": "ARTIFACT_SOURCE_AGENT_RESULT"}
+	normalize(value)
+	if value["source"] != "AGENT_RESULT" {
+		t.Fatalf("источник artifact не нормализован: %#v", value)
+	}
+}
+
+func TestSafeAttachmentFileNameRemovesHeaderAndPathControls(t *testing.T) {
+	t.Parallel()
+
+	if actual := safeAttachmentFileName(" ../отчёт\r\nX-Test: value\\.pdf "); actual != "..отчётX-Test: value.pdf" {
+		t.Fatalf("небезопасное имя файла нормализовано неверно: %q", actual)
+	}
+	if actual := safeAttachmentFileName("\r\n/\\"); actual != "artifact" {
+		t.Fatalf("пустое имя файла не заменено: %q", actual)
+	}
+}
+
 func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
 	t.Parallel()
 

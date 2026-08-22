@@ -75,10 +75,6 @@ var (
 	queryCommandsChangeagentbindingAppendCapability string
 	//go:embed sql/commands_changeagentbinding_remove_capability.sql
 	queryCommandsChangeagentbindingRemoveCapability string
-	//go:embed sql/commands_changeagentbinding_append_knowledge_artifact.sql
-	queryCommandsChangeagentbindingAppendKnowledgeArtifact string
-	//go:embed sql/commands_changeagentbinding_remove_knowledge_artifact.sql
-	queryCommandsChangeagentbindingRemoveKnowledgeArtifact string
 	//go:embed sql/commands_changeagentbinding_update_agents_version_updated_at.sql
 	queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt string
 	//go:embed sql/commands_changeworkflow_insert_workflows_ref_project_id_purpose.sql

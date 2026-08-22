@@ -25,7 +25,6 @@ const (
 	RollbackInstructions          Kind = "ROLLBACK_INSTRUCTIONS"
 	ChangeAgentCapability         Kind = "CHANGE_AGENT_CAPABILITY"
 	ChangeAgentGrant              Kind = "CHANGE_AGENT_GRANT"
-	ChangeAgentKnowledge          Kind = "CHANGE_AGENT_KNOWLEDGE"
 	CreateWorkflow                Kind = "CREATE_WORKFLOW"
 	UpdateWorkflow                Kind = "UPDATE_WORKFLOW_DRAFT"
 	ValidateWorkflow              Kind = "VALIDATE_WORKFLOW_DRAFT"

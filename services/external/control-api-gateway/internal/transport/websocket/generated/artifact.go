@@ -10,7 +10,7 @@ type Artifact struct {
   MediaType string
   SizeBytes int
   ScanState *ArtifactScanState
-  Source string
+  Source *ArtifactSource
   Revision int
   AgentBindings []string
   PreviewAvailable bool

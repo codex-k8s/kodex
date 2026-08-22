@@ -59,21 +59,32 @@ func (server *Server) DownloadArtifact(request *controlplanev1.DownloadArtifactR
 	if err != nil {
 		return err
 	}
-	download, err := server.service.DownloadArtifact(stream.Context(), p, request.GetArtifactRef())
+	purpose := ""
+	switch request.GetPurpose() {
+	case controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD:
+		purpose = "DOWNLOAD"
+	case controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW:
+		purpose = "PREVIEW"
+	default:
+		return status.Error(codes.InvalidArgument, "artifact download purpose is required")
+	}
+	download, err := server.service.DownloadArtifact(stream.Context(), p, request.GetArtifactRef(), purpose)
 	if err != nil {
 		return transportError(err)
 	}
 	defer download.Reader.Close()
+	if err := stream.Send(&controlplanev1.DownloadArtifactResponse{
+		FileName:  download.Artifact.FileName,
+		MediaType: download.Artifact.MediaType,
+		SizeBytes: download.Artifact.SizeBytes,
+	}); err != nil {
+		return err
+	}
 	chunk := make([]byte, 64<<10)
-	first := true
 	for {
 		count, readErr := download.Reader.Read(chunk)
 		if count > 0 {
 			response := &controlplanev1.DownloadArtifactResponse{Data: append([]byte(nil), chunk[:count]...)}
-			if first {
-				response.FileName, response.MediaType, response.SizeBytes = download.Artifact.FileName, download.Artifact.MediaType, download.Artifact.SizeBytes
-				first = false
-			}
 			if err := stream.Send(response); err != nil {
 				return err
 			}

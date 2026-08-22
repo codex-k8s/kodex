@@ -115,7 +115,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
 		return repository.changeInstructions(ctx, tx, scope, input)
-	case command.ChangeAgentCapability, command.ChangeAgentGrant, command.ChangeAgentKnowledge:
+	case command.ChangeAgentCapability, command.ChangeAgentGrant:
 		return repository.changeAgentBinding(ctx, tx, scope, input)
 	case command.CreateWorkflow, command.UpdateWorkflow, command.ValidateWorkflow, command.PublishWorkflow, command.ArchiveWorkflow:
 		return repository.changeWorkflow(ctx, tx, scope, input)
@@ -471,16 +471,6 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 		}
 	} else if input.Kind == command.ChangeAgentCapability {
 		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingRemoveCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
-		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-	} else if input.Kind == command.ChangeAgentKnowledge && payload.Enabled {
-		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingAppendKnowledgeArtifact, scope.organizationID, payload.AgentRef, payload.BindingRef)
-		if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-	} else if input.Kind == command.ChangeAgentKnowledge {
-		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingRemoveKnowledgeArtifact, scope.organizationID, payload.AgentRef, payload.BindingRef)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -957,6 +947,8 @@ func platformEventKind(eventName string) string {
 		return "PROJECT"
 	case "AGENT_CHANGED":
 		return "AGENT"
+	case "ARTIFACT_CHANGED":
+		return "ARTIFACT"
 	case "INSTRUCTIONS_PUBLISHED":
 		return "INSTRUCTIONS"
 	case "WORKFLOW_CHANGED":

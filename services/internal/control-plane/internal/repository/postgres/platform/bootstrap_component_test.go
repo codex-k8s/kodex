@@ -488,6 +488,61 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || agent.Agent == nil {
 		t.Fatalf("create lifecycle agent: result=%#v err=%v", agent.Agent, err)
 	}
+	uploaded, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "artifact-upload-1"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "support-policy.md", MediaType: "application/octet-stream",
+		SizeBytes: int64(len("# Support policy\n")), Reader: strings.NewReader("# Support policy\n"),
+	})
+	if err != nil || uploaded.ScanState != "CLEAN" || uploaded.MediaType != "text/markdown" || uploaded.Revision != 1 || uploaded.Source != "CONTROL_CENTER" {
+		t.Fatalf("upload knowledge artifact: artifact=%#v err=%v", uploaded, err)
+	}
+	preview, err := service.DownloadArtifact(ctx, owner, uploaded.Ref, "PREVIEW")
+	if err != nil || preview.GrantRef == "" {
+		t.Fatalf("open safe artifact preview: grant=%q err=%v", preview.GrantRef, err)
+	}
+	previewBody, previewReadErr := io.ReadAll(preview.Reader)
+	previewCloseErr := preview.Reader.Close()
+	if previewReadErr != nil || previewCloseErr != nil || string(previewBody) != "# Support policy\n" {
+		t.Fatalf("read safe artifact preview: body=%q read_err=%v close_err=%v", string(previewBody), previewReadErr, previewCloseErr)
+	}
+	quarantined, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "artifact-quarantine-1"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "unsafe.exe", MediaType: "application/octet-stream",
+		SizeBytes: 2, Reader: strings.NewReader("MZ"),
+	})
+	if err != nil || quarantined.ScanState != "QUARANTINED" {
+		t.Fatalf("quarantine executable artifact: artifact=%#v err=%v", quarantined, err)
+	}
+	if _, err := service.DownloadArtifact(ctx, owner, quarantined.Ref, "DOWNLOAD"); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
+	}
+	uploadedVersion := uploaded.Version
+	bound, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-1", ExpectedVersion: &uploadedVersion},
+		Payload:  command.ArtifactBindingInput{ArtifactRef: uploaded.Ref, AgentRef: agent.Agent.Ref, Enabled: true},
+	})
+	if err != nil || bound.Artifact == nil || bound.Artifact.FileName != uploaded.FileName || len(bound.Artifact.Bindings) != 1 || bound.Artifact.Bindings[0] != agent.Agent.Ref {
+		t.Fatalf("bind knowledge artifact: artifact=%#v err=%v", bound.Artifact, err)
+	}
+	boundAgent, err := service.GetAgent(ctx, owner, agent.Agent.Ref)
+	if err != nil || len(boundAgent.KnowledgeArtifactRefs) != 1 || boundAgent.KnowledgeArtifactRefs[0] != uploaded.Ref || boundAgent.Version != agent.Agent.Version+1 {
+		t.Fatalf("read normalized knowledge binding: agent=%#v err=%v", boundAgent, err)
+	}
+	secondRevision, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "artifact-upload-2"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "support-policy.md", MediaType: "text/markdown",
+		SizeBytes: int64(len("# Updated policy\n")), Reader: strings.NewReader("# Updated policy\n"),
+	})
+	if err != nil || secondRevision.Revision != 2 {
+		t.Fatalf("create second artifact revision: artifact=%#v err=%v", secondRevision, err)
+	}
+	if _, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "artifact-content-conflict"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "same.txt", MediaType: "text/plain", SizeBytes: 5, Reader: strings.NewReader("alpha"),
+	}); err != nil {
+		t.Fatalf("create artifact idempotency baseline: %v", err)
+	}
+	if _, err := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "artifact-content-conflict"}, platformrepo.ArtifactUpload{
+		ProjectRef: project.Project.Ref, FileName: "same.txt", MediaType: "text/plain", SizeBytes: 5, Reader: strings.NewReader("bravo"),
+	}); !errors.Is(err, domainerrs.ErrIdempotencyReuse) {
+		t.Fatalf("same artifact key with different content: %v", err)
+	}
 	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-1"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Answer customer", Task: "Prepare an answer about delivery status.",
@@ -503,9 +558,12 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if completed.Graph == nil || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
 		t.Fatalf("completed run left the root graph active: %#v", completed.Graph)
 	}
-	download, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0])
+	download, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0], "DOWNLOAD")
 	if err != nil {
 		t.Fatalf("open generated artifact download: %v", err)
+	}
+	if download.GrantRef == "" {
+		t.Fatal("download must materialize a one-time grant")
 	}
 	body, readErr := io.ReadAll(download.Reader)
 	closeErr := download.Reader.Close()

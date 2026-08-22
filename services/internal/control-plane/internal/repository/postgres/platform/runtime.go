@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/jackc/pgx/v5"
 )
@@ -338,14 +339,14 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if !strings.EqualFold(strings.TrimSpace(artifact.SHA256), digestHex) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		scanState, previewState := scanArtifactBody(artifact.MediaType, artifact.Content)
-		if scanState != "CLEAN" || previewState != "AVAILABLE" {
+		verdict := artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content)
+		if verdict.ScanState != artifactpolicy.ScanClean {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("art")
 		receiptRef, _ := newRef("obj")
 		var artifactID string
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId, ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"], artifact.FileName, artifact.MediaType, artifact.SizeBytes, "sha256:"+digestHex, receiptRef, scope.actorID).Scan(&artifactID); err != nil {
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId, ref, scope.organizationID, projectID, lease["runID"], lease["nodeID"], artifact.FileName, verdict.MediaType, artifact.SizeBytes, "sha256:"+digestHex, verdict.ScanState, receiptRef, verdict.PreviewState, scope.actorID).Scan(&artifactID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId, artifactID, artifact.Content); err != nil {

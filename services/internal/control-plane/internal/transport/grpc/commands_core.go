@@ -149,14 +149,6 @@ func (server *Server) ChangeAgentIntegrationGrant(ctx context.Context, request *
 	return &controlplanev1.ChangeAgentIntegrationGrantResponse{Agent: castAgent(*result.Agent)}, nil
 }
 
-func (server *Server) ChangeAgentKnowledgeBinding(ctx context.Context, request *controlplanev1.ChangeAgentKnowledgeBindingRequest) (*controlplanev1.ChangeAgentKnowledgeBindingResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeAgentKnowledgeBinding_FullMethodName, command.ChangeAgentKnowledge, request.GetMutation(), command.AgentBindingInput{AgentRef: request.GetAgentRef(), BindingRef: request.GetArtifactRef(), Enabled: request.GetEnabled()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.ChangeAgentKnowledgeBindingResponse{Agent: castAgent(*result.Agent)}, nil
-}
-
 func (server *Server) CreateWorkflow(ctx context.Context, request *controlplanev1.CreateWorkflowRequest) (*controlplanev1.CreateWorkflowResponse, error) {
 	payload := command.WorkflowInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Purpose: request.GetPurpose(), CoordinatorAgentRef: request.GetCoordinatorAgentRef()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateWorkflow_FullMethodName, command.CreateWorkflow, request.GetMutation(), payload)

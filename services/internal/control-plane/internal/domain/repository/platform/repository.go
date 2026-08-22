@@ -36,15 +36,19 @@ type Administration struct {
 	ObservedAt           time.Time
 }
 
+const MaximumArtifactBytes int64 = 16 << 20
+
 type ArtifactUpload struct {
-	ProjectRef, RunRef, FileName, MediaType string
-	SizeBytes                               int64
-	Reader                                  io.Reader
+	ProjectRef, RunRef, FileName, MediaType, Digest string
+	ScanState, PreviewState                         string
+	SizeBytes                                       int64
+	Reader                                          io.Reader
 }
 
 type ArtifactDownload struct {
 	Artifact entity.Artifact
 	Reader   io.ReadCloser
+	GrantRef string
 }
 
 // ProofPrincipalInput содержит только проверенный credential subject либо
@@ -98,7 +102,7 @@ type Repository interface {
 	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
-	DownloadArtifact(context.Context, value.Principal, string) (ArtifactDownload, error)
+	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
 	ListIntegrationDefinitions(context.Context, value.Principal, string) ([]entity.IntegrationDefinition, error)
 	ListIntegrationConnections(context.Context, value.Principal, query.Filter) ([]entity.IntegrationConnection, string, error)

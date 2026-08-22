@@ -196,6 +196,7 @@ components:
           enum:
             - PROJECT_CHANGED
             - AGENT_CHANGED
+            - ARTIFACT_CHANGED
             - INSTRUCTIONS_PUBLISHED
             - WORKFLOW_CHANGED
             - SCHEDULE_CHANGED

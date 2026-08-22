@@ -157,10 +157,9 @@ export type AgentInput = {
 };
 
 export type AgentCommand = {
-    action: 'ENABLE' | 'DISABLE' | 'ARCHIVE' | 'GRANT_CAPABILITY' | 'REVOKE_CAPABILITY' | 'GRANT_INTEGRATION' | 'REVOKE_INTEGRATION' | 'BIND_KNOWLEDGE' | 'UNBIND_KNOWLEDGE';
+    action: 'ENABLE' | 'DISABLE' | 'ARCHIVE' | 'GRANT_CAPABILITY' | 'REVOKE_CAPABILITY' | 'GRANT_INTEGRATION' | 'REVOKE_INTEGRATION';
     capabilityKey?: string;
     grantRef?: OpaqueRef;
-    artifactRef?: OpaqueRef;
 };
 
 export type InstructionCommand = {
@@ -528,7 +527,7 @@ export type Artifact = {
     mediaType: string;
     sizeBytes: number;
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
-    source: string;
+    source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;
     agentBindings: Array<OpaqueRef>;
     previewAvailable: boolean;
@@ -2111,7 +2110,7 @@ export type UploadArtifactError = UploadArtifactErrors[keyof UploadArtifactError
 
 export type UploadArtifactResponses = {
     /**
-     * Artifact принят и поставлен на проверку
+     * Artifact принят и синхронно проверен обязательной встроенной policy
      */
     201: Artifact;
 };
@@ -2150,7 +2149,9 @@ export type DownloadArtifactData = {
     path: {
         artifactRef: OpaqueRef;
     };
-    query?: never;
+    query: {
+        purpose: 'DOWNLOAD' | 'PREVIEW';
+    };
     url: '/api/v1/artifacts/{artifactRef}/content';
 };
 

@@ -112,6 +112,11 @@ func scanState(value string) controlplanev1.ArtifactScanState {
 	raw := controlplanev1.ArtifactScanState_value["ARTIFACT_SCAN_STATE_"+value]
 	return controlplanev1.ArtifactScanState(raw)
 }
+
+func artifactSource(value string) controlplanev1.ArtifactSource {
+	raw := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+value]
+	return controlplanev1.ArtifactSource(raw)
+}
 func connectionState(value string) controlplanev1.ConnectionState {
 	if value == "TESTING" {
 		value = "CONNECTING"
@@ -244,7 +249,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
-	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: "CONTROL_CENTER", Revision: int32(value.Version), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions)}
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 	state := "DISABLED"

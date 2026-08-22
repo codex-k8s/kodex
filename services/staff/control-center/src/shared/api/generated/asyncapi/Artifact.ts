@@ -1,4 +1,5 @@
 import {ArtifactScanState} from './ArtifactScanState';
+import {ArtifactSource} from './ArtifactSource';
 import {NextAction} from './NextAction';
 interface Artifact {
   ref: string;
@@ -9,7 +10,7 @@ interface Artifact {
   mediaType: string;
   sizeBytes: number;
   scanState: ArtifactScanState;
-  source: string;
+  source: ArtifactSource;
   revision: number;
   agentBindings: string[];
   previewAvailable: boolean;
