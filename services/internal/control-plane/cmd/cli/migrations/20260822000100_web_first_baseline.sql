@@ -346,12 +346,14 @@ CREATE TABLE control_plane.workflow_versions (
     UNIQUE (workflow_id, digest)
 );
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.protect_immutable_row()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION 'immutable row cannot be changed';
 END;
 $$;
+-- +goose StatementEnd
 
 CREATE TRIGGER protect_workflow_version
 BEFORE UPDATE OR DELETE ON control_plane.workflow_versions
@@ -868,6 +870,7 @@ CREATE TABLE control_plane.outbox_events (
 CREATE INDEX outbox_pending ON control_plane.outbox_events (available_at, created_at)
     WHERE state IN ('PENDING', 'CLAIMED');
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.protect_system_agent()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -884,11 +887,13 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END;
 $$;
+-- +goose StatementEnd
 
 CREATE TRIGGER protect_system_agent
 BEFORE UPDATE OR DELETE ON control_plane.agents
 FOR EACH ROW EXECUTE FUNCTION control_plane.protect_system_agent();
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.protect_core_prompt()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -900,6 +905,7 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END;
 $$;
+-- +goose StatementEnd
 
 CREATE TRIGGER protect_core_prompt
 BEFORE UPDATE OR DELETE ON control_plane.instruction_versions
