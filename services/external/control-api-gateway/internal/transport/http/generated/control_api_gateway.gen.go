@@ -348,6 +348,17 @@ const (
 	RunCommandActionRETRY  RunCommandAction = "RETRY"
 )
 
+// Defines values for RunDeltaState.
+const (
+	RunDeltaStateCANCELLED    RunDeltaState = "CANCELLED"
+	RunDeltaStateCANCELLING   RunDeltaState = "CANCELLING"
+	RunDeltaStateFAILED       RunDeltaState = "FAILED"
+	RunDeltaStateQUEUED       RunDeltaState = "QUEUED"
+	RunDeltaStateRUNNING      RunDeltaState = "RUNNING"
+	RunDeltaStateSUCCEEDED    RunDeltaState = "SUCCEEDED"
+	RunDeltaStateWAITINGHUMAN RunDeltaState = "WAITING_HUMAN"
+)
+
 // Defines values for RunEdgeType.
 const (
 	CALLBACKTO  RunEdgeType = "CALLBACK_TO"
@@ -481,11 +492,11 @@ const (
 
 // Defines values for SystemAssistantRuntimeState.
 const (
-	SystemAssistantRuntimeStateBUSY         SystemAssistantRuntimeState = "BUSY"
-	SystemAssistantRuntimeStateFAILED       SystemAssistantRuntimeState = "FAILED"
-	SystemAssistantRuntimeStatePROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
-	SystemAssistantRuntimeStateREADY        SystemAssistantRuntimeState = "READY"
-	SystemAssistantRuntimeStateRECOVERING   SystemAssistantRuntimeState = "RECOVERING"
+	BUSY         SystemAssistantRuntimeState = "BUSY"
+	FAILED       SystemAssistantRuntimeState = "FAILED"
+	PROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
+	READY        SystemAssistantRuntimeState = "READY"
+	RECOVERING   SystemAssistantRuntimeState = "RECOVERING"
 )
 
 // Defines values for SystemAssistantSystem.
@@ -1162,6 +1173,26 @@ type RunCommand struct {
 // RunCommandAction defines model for RunCommand.Action.
 type RunCommandAction string
 
+// RunDelta defines model for RunDelta.
+type RunDelta struct {
+	ArtifactRefs      []OpaqueRef   `json:"artifactRefs"`
+	FinishedAt        *Timestamp    `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef   `json:"gateRefs"`
+	GraphRevision     int64         `json:"graphRevision"`
+	LastEventSequence int64         `json:"lastEventSequence"`
+	NextActions       []NextAction  `json:"nextActions"`
+	Ref               OpaqueRef     `json:"ref"`
+	ResultSummary     *string       `json:"resultSummary,omitempty"`
+	SafeErrorCode     *string       `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage  *string       `json:"safeErrorMessage,omitempty"`
+	StartedAt         *Timestamp    `json:"startedAt,omitempty"`
+	State             RunDeltaState `json:"state"`
+	Version           int64         `json:"version"`
+}
+
+// RunDeltaState defines model for RunDelta.State.
+type RunDeltaState string
+
 // RunEdge defines model for RunEdge.
 type RunEdge struct {
 	Label         string      `json:"label"`
@@ -1177,19 +1208,25 @@ type RunEdgeType string
 
 // RunEvent defines model for RunEvent.
 type RunEvent struct {
-	ArtifactRef *OpaqueRef         `json:"artifactRef,omitempty"`
-	EdgeRef     *OpaqueRef         `json:"edgeRef,omitempty"`
-	GateRef     *OpaqueRef         `json:"gateRef,omitempty"`
-	NodeRef     *OpaqueRef         `json:"nodeRef,omitempty"`
-	NodeState   *RunEventNodeState `json:"nodeState,omitempty"`
-	OccurredAt  Timestamp          `json:"occurredAt"`
-	Progress    *string            `json:"progress,omitempty"`
-	Ref         OpaqueRef          `json:"ref"`
-	RunRef      OpaqueRef          `json:"runRef"`
-	RunState    *RunEventRunState  `json:"runState,omitempty"`
-	Sequence    int64              `json:"sequence"`
-	Summary     string             `json:"summary"`
-	Type        RunEventType       `json:"type"`
+	Artifact      *Artifact          `json:"artifact,omitempty"`
+	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
+	Edge          *RunEdge           `json:"edge,omitempty"`
+	EdgeRef       *OpaqueRef         `json:"edgeRef,omitempty"`
+	Gate          *OwnerGate         `json:"gate,omitempty"`
+	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
+	GraphRevision int64              `json:"graphRevision"`
+	Node          *RunNode           `json:"node,omitempty"`
+	NodeRef       *OpaqueRef         `json:"nodeRef,omitempty"`
+	NodeState     *RunEventNodeState `json:"nodeState,omitempty"`
+	OccurredAt    Timestamp          `json:"occurredAt"`
+	Progress      *string            `json:"progress,omitempty"`
+	Ref           OpaqueRef          `json:"ref"`
+	Run           RunDelta           `json:"run"`
+	RunRef        OpaqueRef          `json:"runRef"`
+	RunState      *RunEventRunState  `json:"runState,omitempty"`
+	Sequence      int64              `json:"sequence"`
+	Summary       string             `json:"summary"`
+	Type          RunEventType       `json:"type"`
 }
 
 // RunEventNodeState defines model for RunEvent.NodeState.

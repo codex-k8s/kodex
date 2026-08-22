@@ -39,6 +39,7 @@ const artifactList = computed(() =>
   ),
 );
 const selectedRef = ref<string>();
+const openedStreamRef = ref<string>();
 const selectedNode = computed(
   () =>
     graph.value?.nodes.find((n) => n.ref === selectedRef.value) ??
@@ -111,16 +112,25 @@ async function decide(
 function select(node: RunNode) {
   selectedRef.value = node.ref;
 }
-watch(runRef, async (next, previous) => {
-  realtime.closeRun(previous);
+function openCurrentStream(): void {
+  if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
+  const ref = run.value?.rootRunRef ?? runRef.value;
+  realtime.openRun(ref);
+  openedStreamRef.value = ref;
+}
+watch(runRef, async (_next, previous) => {
+  if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
+  else realtime.closeRun(previous);
   await load();
-  realtime.openRun(next);
+  openCurrentStream();
 });
 onMounted(async () => {
   await load();
-  realtime.openRun(runRef.value);
+  openCurrentStream();
 });
-onBeforeUnmount(() => realtime.closeRun(runRef.value));
+onBeforeUnmount(() => {
+  if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
+});
 </script>
 <template>
   <PageFrame
@@ -154,7 +164,7 @@ onBeforeUnmount(() => realtime.closeRun(runRef.value));
         ><span>{{ new Date(run.createdAt).toLocaleString() }}</span
         ><span
           class="live-indicator"
-          :class="`live-indicator--${realtime.state[runRef]?.state ?? 'connecting'}`"
+          :class="`live-indicator--${realtime.state[graph?.runRef ?? runRef]?.state ?? 'connecting'}`"
           >● {{ $t("runs.live") }}</span
         >
       </div>

@@ -29,6 +29,7 @@ channels:
       resume: { $ref: '#/components/messages/Resume' }
       snapshot: { $ref: '#/components/messages/Snapshot' }
       event: { $ref: '#/components/messages/Event' }
+      ready: { $ref: '#/components/messages/Ready' }
       resync: { $ref: '#/components/messages/Resync' }
       heartbeat: { $ref: '#/components/messages/Heartbeat' }
       problem: { $ref: '#/components/messages/Problem' }
@@ -46,6 +47,7 @@ operations:
     messages:
       - { $ref: '#/channels/runStream/messages/snapshot' }
       - { $ref: '#/channels/runStream/messages/event' }
+      - { $ref: '#/channels/runStream/messages/ready' }
       - { $ref: '#/channels/runStream/messages/resync' }
       - { $ref: '#/channels/runStream/messages/heartbeat' }
       - { $ref: '#/channels/runStream/messages/problem' }
@@ -91,6 +93,10 @@ components:
       name: run_event
       contentType: application/json
       payload: { $ref: '#/components/schemas/EventEnvelope' }
+    Ready:
+      name: stream_ready
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/ReadyEnvelope' }
     Resync:
       name: resync_required
       contentType: application/json
@@ -140,6 +146,15 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         event:
           $ref: '#/components/schemas/RunEvent'
+    ReadyEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, requestRef, runRef, latestSequence]
+      properties:
+        type: { type: string, const: STREAM_READY }
+        requestRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        latestSequence: { type: integer, format: int64, minimum: 0 }
     ResyncEnvelope:
       type: object
       additionalProperties: false
@@ -253,10 +268,38 @@ components:
     RunEdgeType:
       type: string
       enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR]
+    RunDelta:
+      type: object
+      additionalProperties: false
+      required: [ref, version, state, graphRevision, lastEventSequence, artifactRefs, gateRefs, nextActions]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/RunState' }
+        graphRevision: { type: integer, format: int64, minimum: 1 }
+        lastEventSequence: { type: integer, format: int64, minimum: 1 }
+        resultSummary: { type: string, maxLength: 4000 }
+        safeErrorCode: { type: string, maxLength: 80 }
+        safeErrorMessage: { type: string, maxLength: 500 }
+        artifactRefs:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/OpaqueRef' }
+        gateRefs:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/OpaqueRef' }
+        startedAt: { $ref: '#/components/schemas/Timestamp' }
+        finishedAt: { $ref: '#/components/schemas/Timestamp' }
+        nextActions:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/NextAction' }
     RunEvent:
       type: object
       additionalProperties: false
-      required: [ref, runRef, sequence, type, summary, occurredAt]
+      required: [ref, runRef, sequence, graphRevision, type, summary, occurredAt, run]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -271,9 +314,89 @@ components:
         runState: { $ref: '#/components/schemas/RunState' }
         nodeState: { $ref: '#/components/schemas/RunNodeState' }
         occurredAt: { $ref: '#/components/schemas/Timestamp' }
+        graphRevision: { type: integer, format: int64, minimum: 1 }
+        run: { $ref: '#/components/schemas/RunDelta' }
+        node: { $ref: '#/components/schemas/RunNode' }
+        edge: { $ref: '#/components/schemas/RunEdge' }
+        gate: { $ref: '#/components/schemas/OwnerGate' }
+        artifact: { $ref: '#/components/schemas/Artifact' }
     RunEventType:
       type: string
       enum: [RUN_CREATED, RUN_STATE_CHANGED, NODE_ADDED, NODE_STATE_CHANGED, EDGE_ADDED, TURN_QUEUED, TURN_STARTED, TURN_PROGRESS, TURN_COMPLETED, DELEGATION_CREATED, CALLBACK_DELIVERED, OWNER_GATE_OPENED, OWNER_GATE_RESOLVED, ARTIFACT_AVAILABLE, INCIDENT_LINKED]
     RunState:
       type: string
       enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED]
+    OwnerGate:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, runRef, nodeRef, title, contextSummary, consequencesSummary, requestedBy, state, allowedDecisions, artifactRefs, openedAt, nextActions]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        title: { type: string, maxLength: 240 }
+        contextSummary: { type: string, maxLength: 4000 }
+        consequencesSummary: { type: string, maxLength: 2000 }
+        requestedBy: { $ref: '#/components/schemas/UserSummary' }
+        state: { $ref: '#/components/schemas/OwnerGateState' }
+        allowedDecisions:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/OwnerGateDecision' }
+        decision: { $ref: '#/components/schemas/OwnerGateDecision' }
+        decisionComment: { type: string, maxLength: 4000 }
+        openedAt: { $ref: '#/components/schemas/Timestamp' }
+        decidedAt: { $ref: '#/components/schemas/Timestamp' }
+        artifactRefs:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/OpaqueRef' }
+        nextActions:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/NextAction' }
+    OwnerGateState:
+      type: string
+      enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED]
+    OwnerGateDecision:
+      type: string
+      enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL]
+    UserSummary:
+      type: object
+      additionalProperties: false
+      required: [ref, displayName]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        displayName: { type: string, maxLength: 160 }
+    Artifact:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, scanState, source, revision, agentBindings, previewAvailable, createdAt, nextActions]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        fileName: { type: string, maxLength: 255 }
+        mediaType: { type: string, maxLength: 160 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 1073741824 }
+        scanState: { $ref: '#/components/schemas/ArtifactScanState' }
+        source: { type: string, maxLength: 160 }
+        revision: { type: integer, minimum: 1 }
+        agentBindings:
+          type: array
+          maxItems: 200
+          items: { type: string, maxLength: 240 }
+        previewAvailable: { type: boolean }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        nextActions:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/NextAction' }
+    ArtifactScanState:
+      type: string
+      enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]

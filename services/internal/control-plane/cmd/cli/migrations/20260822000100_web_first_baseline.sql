@@ -617,6 +617,7 @@ CREATE TABLE control_plane.run_events (
     safe_progress text NOT NULL DEFAULT '' CHECK (char_length(safe_progress) <= 2000),
     run_state text,
     node_state text,
+    safe_delta jsonb NOT NULL CHECK (jsonb_typeof(safe_delta) = 'object' AND octet_length(safe_delta::text) <= 49152),
     correlation_ref text NOT NULL,
     causation_ref text,
     occurred_at timestamptz NOT NULL DEFAULT clock_timestamp(),

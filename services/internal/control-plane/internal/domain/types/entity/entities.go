@@ -107,11 +107,27 @@ type RunNode struct {
 
 type RunEdge struct{ Ref, RunRef, SourceNodeRef, TargetNodeRef, Type, Label string }
 
+type RunDelta struct {
+	Ref, State, ResultSummary, SafeErrorCode, SafeErrorMessage string
+	Version, GraphRevision, EventSequence                      int64
+	ArtifactRefs, GateRefs, NextActions                        []string
+	StartedAt, FinishedAt                                      *time.Time
+}
+
+type RunEventDelta struct {
+	Run      *RunDelta
+	Node     *RunNode
+	Edge     *RunEdge
+	Gate     *OwnerGate
+	Artifact *Artifact
+}
+
 type RunEvent struct {
 	Ref, RunRef, Type, NodeRef, EdgeRef, GateRef, ArtifactRef string
 	Summary, Progress, RunState, NodeState                    string
-	Sequence                                                  int64
+	Sequence, GraphRevision                                   int64
 	OccurredAt                                                time.Time
+	Delta                                                     RunEventDelta
 }
 
 type RunGraph struct {
@@ -123,8 +139,9 @@ type RunGraph struct {
 
 type OwnerGate struct {
 	Ref, ProjectRef, RunRef, NodeRef, Title, Prompt, ContextSummary string
-	State, Decision, DecisionComment, ResolvedByName                string
-	AllowedDecisions, NextActions                                   []string
+	State, Decision, DecisionComment, RequestedByRef                string
+	RequestedByName, ResolvedByName                                 string
+	AllowedDecisions, ArtifactRefs, NextActions                     []string
 	Version                                                         int64
 	CreatedAt                                                       time.Time
 	ResolvedAt                                                      *time.Time

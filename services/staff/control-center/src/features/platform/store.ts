@@ -103,6 +103,10 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem, unwrap } from "@/shared/api/problem";
+import {
+  reduceRunEvent,
+  type RunEventOutcome,
+} from "@/features/platform/run-reducer";
 
 type QueryKey =
   | "bootstrap"
@@ -789,7 +793,8 @@ export const usePlatformStore = defineStore("platform", () => {
       recipe.version,
     );
     upsert(roleImageRecipes, [result.data.recipe]);
-    if (result.data.imageBuild) upsert(roleImageBuilds, [result.data.imageBuild]);
+    if (result.data.imageBuild)
+      upsert(roleImageBuilds, [result.data.imageBuild]);
     return result.data.recipe;
   }
 
@@ -1093,24 +1098,8 @@ export const usePlatformStore = defineStore("platform", () => {
     graphs[graph.runRef] = graph;
   }
 
-  function applyRunEvent(event: RunEvent): "applied" | "duplicate" | "gap" {
-    const graph = graphs[event.runRef];
-    const currentSequence = graph?.sequence ?? 0;
-    if (event.sequence <= currentSequence) return "duplicate";
-    if (event.sequence !== currentSequence + 1) return "gap";
-    const bucket = events[event.runRef] ?? {};
-    bucket[event.sequence] = event;
-    events[event.runRef] = bucket;
-    if (graph) {
-      graph.sequence = event.sequence;
-      if (event.nodeRef && event.nodeState) {
-        const node = graph.nodes.find((item) => item.ref === event.nodeRef);
-        if (node) node.state = event.nodeState;
-      }
-    }
-    const run = runs[event.runRef];
-    if (run && event.runState) run.state = event.runState;
-    return "applied";
+  function applyRunEvent(event: RunEvent): RunEventOutcome {
+    return reduceRunEvent({ runs, graphs, events, gates, artifacts }, event);
   }
 
   const projectList = computed(() => Object.values(projects));

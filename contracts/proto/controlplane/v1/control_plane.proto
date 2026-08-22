@@ -541,6 +541,37 @@ message RunEdge {
   string label = 6;
 }
 
+// RunDelta содержит ограниченный безопасный снимок изменившегося корневого
+// запуска. Поля полномочий и исходный пользовательский ввод сюда не входят.
+message RunDelta {
+  // ref назначается control-plane и используется только как непрозрачная ссылка.
+  string ref = 1;
+  // version — версия агрегата после зафиксированного перехода.
+  int64 version = 2;
+  // state — авторитетное состояние запуска после события.
+  RunState state = 3;
+  // graph_revision — версия материализованного графа после события.
+  int64 graph_revision = 4;
+  // last_event_sequence — непрерывная sequence корневого запуска.
+  int64 last_event_sequence = 5;
+  // result_summary — ограниченное безопасное резюме terminal-результата.
+  string result_summary = 6;
+  // safe_error_code — устойчивый код безопасной пользовательской ошибки.
+  string safe_error_code = 7;
+  // safe_error_message — локализуемое безопасное сообщение без provider payload.
+  string safe_error_message = 8;
+  // artifact_refs перечисляет доступные через отдельный owner API результаты.
+  repeated string artifact_refs = 9;
+  // gate_refs перечисляет долговечные Human Gate корневого запуска.
+  repeated string gate_refs = 10;
+  // started_at задаётся только после фактического начала выполнения.
+  google.protobuf.Timestamp started_at = 11;
+  // finished_at задаётся только для terminal-состояния.
+  google.protobuf.Timestamp finished_at = 12;
+  // next_actions вычислены control-plane с учётом lifecycle и полномочий actor.
+  repeated NextAction next_actions = 13;
+}
+
 message RunEvent {
   string ref = 1;
   string run_ref = 2;
@@ -555,6 +586,18 @@ message RunEvent {
   RunState run_state = 11;
   RunNodeState node_state = 12;
   google.protobuf.Timestamp occurred_at = 13;
+  // graph_revision связывает дельту с авторитетной версией графа.
+  int64 graph_revision = 14;
+  // run — безопасный immutable снимок состояния корневого запуска после события.
+  RunDelta run = 15;
+  // node присутствует, когда событие изменило или добавило вершину графа.
+  RunNode node = 16;
+  // edge присутствует, когда событие добавило неизменяемое ребро графа.
+  RunEdge edge = 17;
+  // gate присутствует для открытия или разрешения Human Gate.
+  OwnerGate gate = 18;
+  // artifact присутствует только как metadata; содержимое читается отдельным API.
+  Artifact artifact = 19;
 }
 
 message RunGraph {

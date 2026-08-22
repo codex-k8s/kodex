@@ -162,10 +162,20 @@ ARTIFACT_BINDING_UPDATED:
   other: File binding updated
 CHILD_AGENT_STARTED:
   other: Child AI employee started
+CHILD_CALLBACK_REGISTERED:
+  other: Child AI employee callback registered
 CHILD_AGENT_RESULT_DELIVERED:
   other: Child AI employee result delivered
 OWNER_DECISION_REQUIRED:
   other: Human decision required
+OWNER_GATE_CANCELLED:
+  other: Human decision cancelled with the run
+RUN_NODE_CANCELLED:
+  other: Execution step cancelled
+ROOT_PROCESS_COMPLETED:
+  other: Root process completed
+OWNER_CHANGES_QUEUED:
+  other: Requested changes queued for the AI employee
 WEB_ONLY_CORE_SUMMARY:
   other: Core features work independently of external integrations
 CAPABILITY_PROJECT_MANAGE_NAME:

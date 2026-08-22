@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { reactive } from "vue";
+import { onScopeDispose, reactive } from "vue";
 
 import type {
   RunEvent,
@@ -42,6 +42,12 @@ interface ResyncWire {
   type: "RESYNC_REQUIRED";
   runRef: string;
   reason: string;
+}
+
+interface ReadyWire {
+  type: "STREAM_READY";
+  runRef: string;
+  latestSequence: number;
 }
 
 interface ProblemWire {
@@ -112,6 +118,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function connect(runRef: string, stream: ActiveStream): void {
     if (stream.stopped) return;
+    if (
+      stream.socket &&
+      (stream.socket.readyState === WebSocket.CONNECTING ||
+        stream.socket.readyState === WebSocket.OPEN)
+    )
+      return;
     if (!navigator.onLine) {
       scheduleReconnect(runRef, stream);
       return;
@@ -130,6 +142,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     }
     stream.socket = socket;
     socket.addEventListener("open", () => {
+      if (stream.socket !== socket || stream.stopped) return;
       const afterSequence = platform.graphs[runRef]?.sequence ?? 0;
       socket.send(
         JSON.stringify({
@@ -141,6 +154,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       state[runRef] = { state: "recovering", attempt: previousAttempt };
     });
     socket.addEventListener("message", (message) => {
+      if (stream.socket !== socket || stream.stopped) return;
       if (typeof message.data !== "string" || message.data.length > 65_536)
         return;
       let envelope: unknown;
@@ -154,23 +168,28 @@ export const useRealtimeStore = defineStore("realtime", () => {
       const type = envelope.type;
       if (type === "GRAPH_SNAPSHOT" && isSnapshotWire(envelope, runRef)) {
         platform.applyRunSnapshot(envelope.snapshot);
-        state[runRef] = { state: "live", attempt: 0 };
+        state[runRef] = { state: "recovering", attempt: previousAttempt };
       } else if (type === "RUN_EVENT" && isEventWire(envelope, runRef)) {
         const outcome = platform.applyRunEvent(envelope.event);
-        if (outcome === "gap") {
+        if (outcome === "gap" || outcome === "invalid") {
           state[runRef] = { state: "recovering", attempt: previousAttempt };
-          socket.close(1012, "GAP_DETECTED");
-        } else if (
-          outcome === "applied" &&
-          [
-            "NODE_ADDED",
-            "EDGE_ADDED",
-            "ARTIFACT_AVAILABLE",
-            "OWNER_GATE_OPENED",
-          ].includes(envelope.event.type)
-        ) {
-          void platform.loadRun(runRef);
+          socket.close(
+            1012,
+            outcome === "gap" ? "GAP_DETECTED" : "INVALID_DELTA",
+          );
         }
+      } else if (
+        type === "STREAM_READY" &&
+        envelope.runRef === runRef &&
+        Number.isSafeInteger(envelope.latestSequence)
+      ) {
+        const ready = envelope as unknown as ReadyWire;
+        if ((platform.graphs[runRef]?.sequence ?? 0) !== ready.latestSequence) {
+          state[runRef] = { state: "recovering", attempt: previousAttempt };
+          socket.close(1012, "READY_SEQUENCE_MISMATCH");
+          return;
+        }
+        state[runRef] = { state: "live", attempt: 0 };
       } else if (
         type === "RESYNC_REQUIRED" &&
         envelope.runRef === runRef &&
@@ -182,7 +201,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
           attempt: previousAttempt,
           problemCode: resync.reason,
         };
-        socket.close(1012, "RESYNC_REQUIRED");
       } else if (type === "HEARTBEAT" && "serverTime" in envelope) {
         state[runRef] = {
           state: "live",
@@ -202,8 +220,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
         };
       }
     });
-    socket.addEventListener("close", () => scheduleReconnect(runRef, stream));
-    socket.addEventListener("error", () => socket.close());
+    socket.addEventListener("close", () => {
+      if (stream.socket !== socket) return;
+      stream.socket = undefined;
+      scheduleReconnect(runRef, stream);
+    });
+    socket.addEventListener("error", () => {
+      if (stream.socket === socket) socket.close();
+    });
   }
 
   function openRun(runRef: string): void {
@@ -227,11 +251,20 @@ export const useRealtimeStore = defineStore("realtime", () => {
     for (const runRef of [...active.keys()]) closeRun(runRef);
   }
 
-  window.addEventListener("online", () => {
+  function handleOnline(): void {
     for (const [runRef, stream] of active) {
-      stream.socket?.close();
+      if (stream.timer !== undefined) {
+        window.clearTimeout(stream.timer);
+        stream.timer = undefined;
+      }
       connect(runRef, stream);
     }
+  }
+
+  window.addEventListener("online", handleOnline);
+  onScopeDispose(() => {
+    window.removeEventListener("online", handleOnline);
+    closeAll();
   });
 
   return { state, openRun, closeRun, closeAll };

@@ -398,6 +398,22 @@ export type RunEdge = {
     label: string;
 };
 
+export type RunDelta = {
+    ref: OpaqueRef;
+    version: number;
+    state: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    graphRevision: number;
+    lastEventSequence: number;
+    resultSummary?: string;
+    safeErrorCode?: string;
+    safeErrorMessage?: string;
+    artifactRefs: Array<OpaqueRef>;
+    gateRefs: Array<OpaqueRef>;
+    startedAt?: Timestamp;
+    finishedAt?: Timestamp;
+    nextActions: Array<NextAction>;
+};
+
 export type RunEvent = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
@@ -412,6 +428,12 @@ export type RunEvent = {
     runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
     nodeState?: 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
     occurredAt: Timestamp;
+    graphRevision: number;
+    run: RunDelta;
+    node?: RunNode;
+    edge?: RunEdge;
+    gate?: OwnerGate;
+    artifact?: Artifact;
 };
 
 export type RunGraph = {

@@ -162,10 +162,20 @@ ARTIFACT_BINDING_UPDATED:
   other: Привязка файла обновлена
 CHILD_AGENT_STARTED:
   other: Дочерний ИИ-сотрудник запущен
+CHILD_CALLBACK_REGISTERED:
+  other: Обратная связь дочернего ИИ-сотрудника зарегистрирована
 CHILD_AGENT_RESULT_DELIVERED:
   other: Результат дочернего ИИ-сотрудника доставлен
 OWNER_DECISION_REQUIRED:
   other: Требуется решение человека
+OWNER_GATE_CANCELLED:
+  other: Решение человека отменено вместе с запуском
+RUN_NODE_CANCELLED:
+  other: Шаг выполнения отменён
+ROOT_PROCESS_COMPLETED:
+  other: Корневой процесс завершён
+OWNER_CHANGES_QUEUED:
+  other: Запрошенные изменения поставлены ИИ-сотруднику в очередь
 WEB_ONLY_CORE_SUMMARY:
   other: Основные функции работают независимо от внешних интеграций
 CAPABILITY_PROJECT_MANAGE_NAME:

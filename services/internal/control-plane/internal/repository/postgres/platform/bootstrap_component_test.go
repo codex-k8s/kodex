@@ -290,6 +290,9 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "SUCCEEDED" {
 		t.Fatalf("resolve terminal owner gate: gate=%#v run=%#v err=%v", resolved.Gate, resolved.Run, err)
 	}
+	if resolved.Graph == nil || graphNodeState(resolved.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+		t.Fatalf("terminal gate did not close the root graph: %#v", resolved.Graph)
+	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-replay", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Replay"},
@@ -317,6 +320,9 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	})
 	if err != nil || changes.Gate == nil || changes.Gate.State != "CHANGES_REQUESTED" || changes.Run == nil || changes.Run.State != "RUNNING" {
 		t.Fatalf("request workflow changes: gate=%#v run=%#v err=%v", changes.Gate, changes.Run, err)
+	}
+	if changes.Graph == nil || graphNodeState(changes.Graph.Nodes, "AGENT_EXECUTION") != "QUEUED" {
+		t.Fatalf("requested changes did not requeue the agent node: %#v", changes.Graph)
 	}
 	reworked := claimAndCompleteRun(t, ctx, service, worker, "gate-change-rework", false)
 	if reworked.Run == nil || reworked.Run.State != "WAITING_HUMAN" || len(reworked.Run.GateRefs) != 2 {
@@ -417,9 +423,27 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		}
 	}
 	completed := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
-	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 4 {
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 4 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
 		t.Fatalf("complete delegation root: run=%#v graph=%#v", completed.Run, completed.Graph)
 	}
+	callbackEdges := 0
+	for _, edge := range completed.Graph.Edges {
+		if edge.Type == "CALLBACK_TO" {
+			callbackEdges++
+		}
+	}
+	if callbackEdges != 2 {
+		t.Fatalf("delegation graph lost callback edges: edges=%#v", completed.Graph.Edges)
+	}
+}
+
+func graphNodeState(nodes []entity.RunNode, nodeType string) string {
+	for _, node := range nodes {
+		if node.Type == nodeType {
+			return node.State
+		}
+	}
+	return ""
 }
 
 func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, key, name string) entity.Agent {
@@ -476,6 +500,9 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct run: run=%#v artifacts=%v", completed.Run, completed.CreatedRefs)
 	}
+	if completed.Graph == nil || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+		t.Fatalf("completed run left the root graph active: %#v", completed.Graph)
+	}
 	download, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0])
 	if err != nil {
 		t.Fatalf("open generated artifact download: %v", err)
@@ -516,6 +543,15 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	for index, event := range events {
 		if event.Sequence != int64(index+1) {
 			t.Fatalf("non-monotonic event sequence at %d: %d", index, event.Sequence)
+		}
+		if event.Delta.Run == nil || event.Delta.Run.Ref != event.RunRef || event.Delta.Run.EventSequence != event.Sequence || event.Delta.Run.GraphRevision != event.GraphRevision {
+			t.Fatalf("event %d does not carry an authoritative run delta: %#v", event.Sequence, event.Delta.Run)
+		}
+		if event.NodeRef != "" && (event.Delta.Node == nil || event.Delta.Node.Ref != event.NodeRef) {
+			t.Fatalf("event %d lost its node delta: node_ref=%s delta=%#v", event.Sequence, event.NodeRef, event.Delta.Node)
+		}
+		if event.EdgeRef != "" && (event.Delta.Edge == nil || event.Delta.Edge.Ref != event.EdgeRef) {
+			t.Fatalf("event %d lost its edge delta: edge_ref=%s delta=%#v", event.Sequence, event.EdgeRef, event.Delta.Edge)
 		}
 	}
 }

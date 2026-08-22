@@ -141,6 +141,16 @@ var (
 	queryCommandsEmitruneventUpdateRunsEventSequenceGraphRevisionUpdatedAt string
 	//go:embed sql/commands_emitrunevent_select_projects_id.sql
 	queryCommandsEmitruneventSelectProjectsId string
+	//go:embed sql/commands_emitrunevent_select_run_delta.sql
+	queryCommandsEmitruneventSelectRunDelta string
+	//go:embed sql/commands_emitrunevent_select_node_delta.sql
+	queryCommandsEmitruneventSelectNodeDelta string
+	//go:embed sql/commands_emitrunevent_select_edge_delta.sql
+	queryCommandsEmitruneventSelectEdgeDelta string
+	//go:embed sql/commands_emitrunevent_select_gate_delta.sql
+	queryCommandsEmitruneventSelectGateDelta string
+	//go:embed sql/commands_emitrunevent_select_artifact_delta.sql
+	queryCommandsEmitruneventSelectArtifactDelta string
 	//go:embed sql/commands_emitrunevent_insert_run_events_event_id_organization_id_root_run_id.sql
 	queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId string
 	//go:embed sql/commands_emitrunevent_insert_outbox_events_event_id_ordering_key_payload.sql
@@ -195,6 +205,8 @@ var (
 	queryCommandsResolvegateRequeuePredecessorNode string
 	//go:embed sql/commands_resolvegate_update_run_nodes_state_finished_at_version.sql
 	queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion string
+	//go:embed sql/commands_resolvegate_update_root_node_state.sql
+	queryCommandsResolvegateUpdateRootNodeState string
 	//go:embed sql/commands_resolvegate_select_active_agent_nodes.sql
 	queryCommandsResolvegateSelectActiveAgentNodes string
 	//go:embed sql/commands_resolvegate_complete_root_run.sql

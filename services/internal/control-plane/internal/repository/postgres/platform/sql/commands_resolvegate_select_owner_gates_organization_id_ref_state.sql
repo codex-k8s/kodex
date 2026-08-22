@@ -8,6 +8,7 @@ SELECT g.id::text,
        g.allowed_decisions,
        gate_node.ref,
        predecessor.id::text,
+       predecessor.ref,
        predecessor.run_id::text,
        run.session_id::text
 FROM control_plane.owner_gates g

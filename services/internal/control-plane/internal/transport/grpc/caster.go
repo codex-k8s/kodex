@@ -204,8 +204,27 @@ func castNode(value entity.RunNode) *controlplanev1.RunNode {
 func castEdge(value entity.RunEdge) *controlplanev1.RunEdge {
 	return &controlplanev1.RunEdge{Ref: value.Ref, RunRef: value.RunRef, SourceNodeRef: value.SourceNodeRef, TargetNodeRef: value.TargetNodeRef, Type: edgeType(value.Type), Label: value.Label}
 }
+func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
+	if value == nil {
+		return nil
+	}
+	return &controlplanev1.RunDelta{Ref: value.Ref, Version: value.Version, State: runState(value.State), GraphRevision: value.GraphRevision, LastEventSequence: value.EventSequence, ResultSummary: value.ResultSummary, SafeErrorCode: value.SafeErrorCode, SafeErrorMessage: value.SafeErrorMessage, ArtifactRefs: value.ArtifactRefs, GateRefs: value.GateRefs, StartedAt: optionalTimestamp(value.StartedAt), FinishedAt: optionalTimestamp(value.FinishedAt), NextActions: nextActions(value.NextActions)}
+}
 func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
-	return &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt)}
+	event := &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt), GraphRevision: value.GraphRevision, Run: castRunDelta(value.Delta.Run)}
+	if value.Delta.Node != nil {
+		event.Node = castNode(*value.Delta.Node)
+	}
+	if value.Delta.Edge != nil {
+		event.Edge = castEdge(*value.Delta.Edge)
+	}
+	if value.Delta.Gate != nil {
+		event.Gate = castGate(*value.Delta.Gate)
+	}
+	if value.Delta.Artifact != nil {
+		event.Artifact = castArtifact(*value.Delta.Artifact)
+	}
+	return event
 }
 func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 	result := &controlplanev1.RunGraph{RunRef: value.RunRef, Revision: value.Revision, Sequence: value.Sequence}
@@ -218,7 +237,11 @@ func castGraph(value entity.RunGraph) *controlplanev1.RunGraph {
 	return result
 }
 func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
-	return &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, DecidedBy: &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), NextActions: nextActions(value.NextActions)}
+	gate := &controlplanev1.OwnerGate{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, NodeRef: value.NodeRef, Title: value.Title, ContextSummary: value.ContextSummary, ConsequencesSummary: value.Prompt, RequestedBy: &controlplanev1.UserSummary{Ref: value.RequestedByRef, DisplayName: value.RequestedByName}, State: gateState(value.State), AllowedDecisions: gateDecisions(value.AllowedDecisions), Decision: gateDecision(value.Decision), DecisionComment: value.DecisionComment, OpenedAt: timestamp(value.CreatedAt), DecidedAt: optionalTimestamp(value.ResolvedAt), ArtifactRefs: value.ArtifactRefs, NextActions: nextActions(value.NextActions)}
+	if value.ResolvedByName != "" {
+		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
+	}
+	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
 	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: "CONTROL_CENTER", Revision: int32(value.Version), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions)}

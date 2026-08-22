@@ -1,2 +1,22 @@
 -- name: platform__queries_listrunevents_select_run_events_organization_id_ref :many
-SELECT e.ref,root.ref,e.sequence,e.type,COALESCE(e.node_ref,''),COALESCE(e.edge_ref,''),COALESCE(e.gate_ref,''),COALESCE(e.artifact_ref,''),e.safe_summary,e.safe_progress,COALESCE(e.run_state,''),COALESCE(e.node_state,''),e.occurred_at FROM control_plane.run_events e JOIN control_plane.runs root ON root.id=e.root_run_id WHERE e.organization_id=$1::uuid AND root.ref=$2 AND e.sequence>$3 ORDER BY e.sequence LIMIT $4
+SELECT event.ref,
+       root.ref,
+       event.sequence,
+       event.type,
+       COALESCE(event.node_ref, ''),
+       COALESCE(event.edge_ref, ''),
+       COALESCE(event.gate_ref, ''),
+       COALESCE(event.artifact_ref, ''),
+       event.safe_summary,
+       event.safe_progress,
+       COALESCE(event.run_state, ''),
+       COALESCE(event.node_state, ''),
+       event.safe_delta,
+       event.occurred_at
+FROM control_plane.run_events event
+JOIN control_plane.runs root ON root.id = event.root_run_id
+WHERE event.organization_id = $1::uuid
+  AND root.ref = $2
+  AND event.sequence > $3
+ORDER BY event.sequence
+LIMIT $4

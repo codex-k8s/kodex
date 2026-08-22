@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 
 import vue from "@vitejs/plugin-vue";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [vue()],
@@ -13,5 +13,11 @@ export default defineConfig({
   build: {
     target: "es2022",
     sourcemap: true,
+  },
+  test: {
+    clearMocks: true,
+    restoreMocks: true,
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
 });

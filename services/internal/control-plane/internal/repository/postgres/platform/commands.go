@@ -848,11 +848,16 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 	}
 	ref, _ := newRef("evt")
 	eventID := uuid.New()
-	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, Summary: summary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC()}
-	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, summary, runState, nodeState, scope.actorRef, event.OccurredAt); err != nil {
+	delta, err := repository.readRunEventDelta(ctx, tx, scope.organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef)
+	if err != nil {
+		return entity.RunEvent{}, err
+	}
+	safeSummary := truncate(summary, 2000)
+	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC(), Delta: delta}
+	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
-	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": summary}
+	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary}
 	for key, value := range map[string]string{"nodeRef": nodeRef, "edgeRef": edgeRef, "gateRef": gateRef, "artifactRef": artifactRef} {
 		if value != "" {
 			data[key] = value
@@ -870,6 +875,80 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
 	return event, nil
+}
+
+func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, organizationID, rootRunID, nodeRef, edgeRef, gateRef, artifactRef string) (entity.RunEventDelta, error) {
+	var run entity.RunDelta
+	if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectRunDelta, organizationID, rootRunID).Scan(
+		&run.Ref, &run.State, &run.ResultSummary, &run.SafeErrorCode, &run.SafeErrorMessage,
+		&run.GraphRevision, &run.EventSequence, &run.Version, &run.ArtifactRefs, &run.GateRefs,
+		&run.StartedAt, &run.FinishedAt,
+	); err != nil {
+		return entity.RunEventDelta{}, fmt.Errorf("read run event delta: %w", errs.ErrUnavailable)
+	}
+	run.ResultSummary = truncate(run.ResultSummary, 4000)
+	run.SafeErrorCode = truncate(run.SafeErrorCode, 80)
+	run.SafeErrorMessage = truncate(run.SafeErrorMessage, 500)
+	run.ArtifactRefs = boundedStrings(run.ArtifactRefs, 200)
+	run.GateRefs = boundedStrings(run.GateRefs, 200)
+	run.NextActions = runActions(run.State)
+	delta := entity.RunEventDelta{Run: &run}
+	if nodeRef != "" {
+		node, err := scanRunNode(tx.QueryRow(ctx, queryCommandsEmitruneventSelectNodeDelta, organizationID, nodeRef))
+		if err != nil {
+			return entity.RunEventDelta{}, fmt.Errorf("read run node event delta: %w", err)
+		}
+		node.InputSummary = truncate(node.InputSummary, 2000)
+		node.ProgressSummary = truncate(node.ProgressSummary, 500)
+		node.CallbackSummary = truncate(node.CallbackSummary, 500)
+		node.SafeErrorCode = truncate(node.SafeErrorCode, 80)
+		node.SafeErrorMessage = truncate(node.SafeErrorMessage, 500)
+		node.IntegrationNames = boundedStrings(node.IntegrationNames, 50)
+		node.ArtifactRefs = boundedStrings(node.ArtifactRefs, 200)
+		node.ChildRunRefs = boundedStrings(node.ChildRunRefs, 200)
+		node.NextActions = boundedStrings(node.NextActions, 12)
+		delta.Node = &node
+	}
+	if edgeRef != "" {
+		var edge entity.RunEdge
+		if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectEdgeDelta, organizationID, edgeRef).Scan(&edge.Ref, &edge.RunRef, &edge.SourceNodeRef, &edge.TargetNodeRef, &edge.Type, &edge.Label); err != nil {
+			return entity.RunEventDelta{}, fmt.Errorf("read run edge event delta: %w", errs.ErrUnavailable)
+		}
+		edge.Label = truncate(edge.Label, 120)
+		delta.Edge = &edge
+	}
+	if gateRef != "" {
+		gate, err := scanGate(tx.QueryRow(ctx, queryCommandsEmitruneventSelectGateDelta, organizationID, gateRef))
+		if err != nil {
+			return entity.RunEventDelta{}, fmt.Errorf("read owner gate event delta: %w", err)
+		}
+		gate.Title = truncate(gate.Title, 240)
+		gate.ContextSummary = truncate(gate.ContextSummary, 4000)
+		gate.Prompt = truncate(gate.Prompt, 2000)
+		gate.DecisionComment = truncate(gate.DecisionComment, 4000)
+		gate.AllowedDecisions = boundedStrings(gate.AllowedDecisions, 4)
+		gate.NextActions = boundedStrings(gate.NextActions, 12)
+		delta.Gate = &gate
+	}
+	if artifactRef != "" {
+		artifact, err := scanArtifact(tx.QueryRow(ctx, queryCommandsEmitruneventSelectArtifactDelta, organizationID, artifactRef))
+		if err != nil {
+			return entity.RunEventDelta{}, fmt.Errorf("read artifact event delta: %w", err)
+		}
+		artifact.FileName = truncate(artifact.FileName, 255)
+		artifact.MediaType = truncate(artifact.MediaType, 160)
+		artifact.Bindings = boundedStrings(artifact.Bindings, 200)
+		artifact.NextActions = boundedStrings(artifact.NextActions, 12)
+		delta.Artifact = &artifact
+	}
+	return delta, nil
+}
+
+func boundedStrings(values []string, maximum int) []string {
+	if len(values) > maximum {
+		values = values[:maximum]
+	}
+	return append([]string(nil), values...)
 }
 
 func platformEventKind(eventName string) string {
@@ -1043,17 +1122,58 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsStateSafeErrorCodeSafeErrorMessage, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID); err != nil {
+		nodeRows, err := tx.Query(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID)
+		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		var cancelledNodeRefs []string
+		for nodeRows.Next() {
+			var ref string
+			if err := nodeRows.Scan(&ref); err != nil {
+				nodeRows.Close()
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			cancelledNodeRefs = append(cancelledNodeRefs, ref)
+		}
+		if err := nodeRows.Err(); err != nil {
+			nodeRows.Close()
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		nodeRows.Close()
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID); err != nil {
+		gateRows, err := tx.Query(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)
+		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		type cancelledGate struct{ gateRef, nodeRef string }
+		var cancelledGates []cancelledGate
+		for gateRows.Next() {
+			var gate cancelledGate
+			if err := gateRows.Scan(&gate.gateRef, &gate.nodeRef); err != nil {
+				gateRows.Close()
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			cancelledGates = append(cancelledGates, gate)
+		}
+		if err := gateRows.Err(); err != nil {
+			gateRows.Close()
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		gateRows.Close()
 		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.RunRef, "RUN_STATE_CHANGED", "", "", "", "", "i18n:RUN_CANCELLED", "CANCELLED", ""); err != nil {
 			return commandOutcome{}, err
+		}
+		for _, nodeRef := range cancelledNodeRefs {
+			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, nodeRef, "NODE_STATE_CHANGED", nodeRef, "", "", "", "i18n:RUN_NODE_CANCELLED", "CANCELLED", "CANCELLED"); err != nil {
+				return commandOutcome{}, err
+			}
+		}
+		for _, gate := range cancelledGates {
+			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, gate.gateRef, "OWNER_GATE_RESOLVED", gate.nodeRef, "", gate.gateRef, "", "i18n:OWNER_GATE_CANCELLED", "CANCELLED", "CANCELLED"); err != nil {
+				return commandOutcome{}, err
+			}
 		}
 		run, graph, err := repository.readRunGraphTx(ctx, tx, scope, payload.RunRef)
 		if err != nil {
@@ -1120,12 +1240,12 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorRunID, sessionID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
-		&predecessorNodeID, &predecessorRunID, &sessionID,
+		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
@@ -1188,6 +1308,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			runState = "SUCCEEDED"
 		}
 	}
+	terminalRootNodeRef := ""
 	if runState == "SUCCEEDED" {
 		if _, err := tx.Exec(ctx, queryCommandsResolvegateCompleteRootRun, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1195,9 +1316,24 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	} else if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
+		if err := tx.QueryRow(ctx, queryCommandsResolvegateUpdateRootNodeState, rootRunID, runState).Scan(&terminalRootNodeRef); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", gateNodeRef, "", payload.GateRef, "", "i18n:OWNER_GATE_RESOLVED", runState, nodeState)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if payload.Decision == "REQUEST_CHANGES" {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, predecessorNodeRef, "NODE_STATE_CHANGED", predecessorNodeRef, "", "", "", "i18n:OWNER_CHANGES_QUEUED", "RUNNING", "QUEUED"); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if terminalRootNodeRef != "" {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, terminalRootNodeRef, "NODE_STATE_CHANGED", terminalRootNodeRef, "", "", "", "i18n:ROOT_PROCESS_COMPLETED", runState, runState); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	runRef, err := mustRunRef(ctx, tx, rootRunID)
 	if err != nil {

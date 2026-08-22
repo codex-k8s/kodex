@@ -363,8 +363,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if payload.Success {
-		var callbackEdgeID, callbackEdgeRef, parentNodeID string
-		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID)
+		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef string
+		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef)
 		if err == nil {
 			tag, insertErr := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, lease["runID"], callbackEdgeID)
 			if insertErr != nil {
@@ -374,7 +374,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 				if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(payload.ResultSummary, 2000)); updateErr != nil {
 					return commandOutcome{}, errs.ErrUnavailable
 				}
-				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", "", callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", ""); eventErr != nil {
+				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", parentNodeRef, callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); eventErr != nil {
 					return commandOutcome{}, eventErr
 				}
 			}
@@ -420,8 +420,12 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, err
 		}
 	}
+	terminalRootNodeRef := ""
 	if !payload.Success {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "FAILED").Scan(&terminalRootNodeRef); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if !humanGateAfter {
@@ -434,7 +438,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
-			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"]); err != nil {
+			if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "SUCCEEDED").Scan(&terminalRootNodeRef); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
@@ -453,6 +457,11 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_COMPLETED", stringMap(lease, "nodeRef"), "", "", "", nonEmptyResult(payload), runState, nodeState)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if terminalRootNodeRef != "" && terminalRootNodeRef != stringMap(lease, "nodeRef") {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), terminalRootNodeRef, "NODE_STATE_CHANGED", terminalRootNodeRef, "", "", "", "i18n:ROOT_PROCESS_COMPLETED", runState, map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success]); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, stringMap(lease, "runRef"))
 	if err != nil {
@@ -535,6 +544,9 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), callbackEdgeRef, "EDGE_ADDED", "", callbackEdgeRef, "", "", "i18n:CHILD_CALLBACK_REGISTERED", "RUNNING", ""); err != nil {
+		return commandOutcome{}, err
+	}
 	child, graph, err := repository.readRunGraphTx(ctx, tx, scope, childRef)
 	if err != nil {
 		return commandOutcome{}, err
@@ -547,9 +559,9 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 	if !ok || payload.ChildRunRef == "" || payload.CallbackEdgeRef == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var childID, rootRunID, projectID, projectRef, parentRunID, resultSummary, edgeID, parentNodeID string
+	var childID, rootRunID, projectID, projectRef, parentRunID, resultSummary, edgeID, parentNodeID, parentNodeRef string
 	var childState string
-	if err := tx.QueryRow(ctx, queryRuntimeDelivercallbackSelectRunsOrganizationIdRef, scope.organizationID, payload.ChildRunRef, payload.CallbackEdgeRef).Scan(&childID, &rootRunID, &projectID, &projectRef, &parentRunID, &resultSummary, &childState, &edgeID, &parentNodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelivercallbackSelectRunsOrganizationIdRef, scope.organizationID, payload.ChildRunRef, payload.CallbackEdgeRef).Scan(&childID, &rootRunID, &projectID, &projectRef, &parentRunID, &resultSummary, &childState, &edgeID, &parentNodeID, &parentNodeRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if childState != "SUCCEEDED" {
@@ -564,7 +576,7 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 		if _, err := tx.Exec(ctx, queryRuntimeDelivercallbackUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(resultSummary, 2000)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", "", payload.CallbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", ""); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", parentNodeRef, payload.CallbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); err != nil {
 			return commandOutcome{}, err
 		}
 	}

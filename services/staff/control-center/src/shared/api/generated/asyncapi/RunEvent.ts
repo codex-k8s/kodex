@@ -1,6 +1,11 @@
 import {RunEventType} from './RunEventType';
 import {RunState} from './RunState';
 import {RunNodeState} from './RunNodeState';
+import {RunDelta} from './RunDelta';
+import {RunNode} from './RunNode';
+import {RunEdge} from './RunEdge';
+import {OwnerGate} from './OwnerGate';
+import {Artifact} from './Artifact';
 interface RunEvent {
   ref: string;
   runRef: string;
@@ -15,5 +20,11 @@ interface RunEvent {
   runState?: RunState;
   nodeState?: RunNodeState;
   occurredAt: string;
+  graphRevision: number;
+  run: RunDelta;
+  node?: RunNode;
+  edge?: RunEdge;
+  gate?: OwnerGate;
+  artifact?: Artifact;
 }
 export { RunEvent };

@@ -1704,10 +1704,28 @@ components:
         targetNodeRef: { $ref: '#/components/schemas/OpaqueRef' }
         type: { type: string, enum: [DELEGATED_TO, CALLBACK_TO, RETRY_OF, CONTINUES, WAITING_FOR] }
         label: { type: string, maxLength: 120 }
+    RunDelta:
+      type: object
+      additionalProperties: false
+      required: [ref, version, state, graphRevision, lastEventSequence, artifactRefs, gateRefs, nextActions]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
+        graphRevision: { type: integer, format: int64, minimum: 1 }
+        lastEventSequence: { type: integer, format: int64, minimum: 1 }
+        resultSummary: { type: string, maxLength: 4000 }
+        safeErrorCode: { type: string, maxLength: 80 }
+        safeErrorMessage: { type: string, maxLength: 500 }
+        artifactRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        gateRefs: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        startedAt: { $ref: '#/components/schemas/Timestamp' }
+        finishedAt: { $ref: '#/components/schemas/Timestamp' }
+        nextActions: { type: array, maxItems: 12, items: { $ref: '#/components/schemas/NextAction' } }
     RunEvent:
       type: object
       additionalProperties: false
-      required: [ref, runRef, sequence, type, summary, occurredAt]
+      required: [ref, runRef, sequence, graphRevision, type, summary, occurredAt, run]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         runRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -1722,6 +1740,12 @@ components:
         runState: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
         nodeState: { type: string, enum: [QUEUED, RUNNING, WAITING, SUCCEEDED, FAILED, CANCELLED, SKIPPED] }
         occurredAt: { $ref: '#/components/schemas/Timestamp' }
+        graphRevision: { type: integer, format: int64, minimum: 1 }
+        run: { $ref: '#/components/schemas/RunDelta' }
+        node: { $ref: '#/components/schemas/RunNode' }
+        edge: { $ref: '#/components/schemas/RunEdge' }
+        gate: { $ref: '#/components/schemas/OwnerGate' }
+        artifact: { $ref: '#/components/schemas/Artifact' }
     RunGraph:
       type: object
       additionalProperties: false

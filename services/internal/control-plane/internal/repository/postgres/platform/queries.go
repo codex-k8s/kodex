@@ -430,8 +430,8 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	for rows.Next() {
-		var n entity.RunNode
-		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
+		n, scanErr := scanRunNode(rows)
+		if scanErr != nil {
 			rows.Close()
 			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 		}
@@ -462,6 +462,17 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	return run, graph, nil
 }
 
+func scanRunNode(row rowScanner) (entity.RunNode, error) {
+	var node entity.RunNode
+	if err := row.Scan(&node.Ref, &node.RunRef, &node.ParentNodeRef, &node.Type, &node.State, &node.DisplayName, &node.Role, &node.AgentRef, &node.TurnRef, &node.Attempt, &node.InputSummary, &node.ProgressSummary, &node.IntegrationNames, &node.CallbackSummary, &node.SafeErrorCode, &node.SafeErrorMessage, &node.NextActions, &node.CreatedAt, &node.StartedAt, &node.FinishedAt, &node.ArtifactRefs, &node.ChildRunRefs); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.RunNode{}, errs.ErrNotFound
+		}
+		return entity.RunNode{}, errs.ErrUnavailable
+	}
+	return node, nil
+}
+
 func (repository *Repository) ListRunEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RunEvent, int64, bool, error) {
 	run, err := repository.GetRun(ctx, principal, filter.ResourceRef)
 	if err != nil {
@@ -486,9 +497,14 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	var result []entity.RunEvent
 	for rows.Next() {
 		var e entity.RunEvent
-		if err := rows.Scan(&e.Ref, &e.RunRef, &e.Sequence, &e.Type, &e.NodeRef, &e.EdgeRef, &e.GateRef, &e.ArtifactRef, &e.Summary, &e.Progress, &e.RunState, &e.NodeState, &e.OccurredAt); err != nil {
+		var delta []byte
+		if err := rows.Scan(&e.Ref, &e.RunRef, &e.Sequence, &e.Type, &e.NodeRef, &e.EdgeRef, &e.GateRef, &e.ArtifactRef, &e.Summary, &e.Progress, &e.RunState, &e.NodeState, &delta, &e.OccurredAt); err != nil {
 			return nil, 0, false, errs.ErrUnavailable
 		}
+		if err := json.Unmarshal(delta, &e.Delta); err != nil || e.Delta.Run == nil {
+			return nil, 0, false, errs.ErrUnavailable
+		}
+		e.GraphRevision = e.Delta.Run.GraphRevision
 		result = append(result, e)
 	}
 	complete := len(result) < int(limit) || len(result) > 0 && result[len(result)-1].Sequence == run.EventSequence
@@ -518,7 +534,7 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 
 func scanGate(row rowScanner) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt); err != nil {
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ArtifactRefs); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.OwnerGate{}, errs.ErrNotFound
 		}
