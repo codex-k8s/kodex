@@ -7,14 +7,15 @@ guard="$repository_root/scripts/check-go-toolchain.sh"
 "$guard" >/dev/null
 
 jq -e '
-  .schema_version == 1 and
+  .schema_version == 2 and
   (.images | length > 0) and
   ([.images[].component] | length == (unique | length)) and
   all(.images[];
     (.component | test("^[a-z0-9-]+$")) and
     (.dockerfile | startswith("services/")) and
     ((has("target") | not) or
-      (.component == "role-image-builder" and .target == "runtime")))
+      (.component == "role-image-builder" and .target == "runtime") or
+      (.component == "image-admission" and .target == "admission-runtime")))
 ' "$repository_root/tools/release/images.json" >/dev/null || {
   printf 'Release image inventory is invalid\n' >&2
   exit 1

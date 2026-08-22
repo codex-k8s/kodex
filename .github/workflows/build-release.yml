@@ -1,4 +1,4 @@
-name: Build exact release
+name: Build exact web-only release
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ permissions:
 jobs:
   build:
     runs-on: mattercodex-build
-    timeout-minutes: 45
+    timeout-minutes: 60
     environment: production-build
     steps:
       - name: Validate requested SHA
@@ -31,7 +31,7 @@ jobs:
           ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Verify checkout
+      - name: Verify checkout and owner gate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -44,23 +44,42 @@ jobs:
             --workflow .github/workflows/build-release.yml --environment production-build \
             --workflow-sha "$WORKFLOW_SHA" --owner-actor-id "$OWNER_ACTOR_ID" \
             --source-sha "$SOURCE_SHA" --mode build --output owner-gate.json
-      - name: Build and publish immutable release
+      - name: Build and publish immutable images
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           BUILDCTL_PATH: /var/run/mattercodex-tools/buildctl
           BUILDKIT_HOST: unix:///var/run/buildkit/buildkitd.sock
-          HTTPS_PROXY: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
-          HTTP_PROXY: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080
-          NO_PROXY: matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000,localhost,127.0.0.1
-        run: tools/release/build-release.sh --source-sha "$SOURCE_SHA" --build-run-id "$GITHUB_RUN_ID" --output release-lock.json
+          REGISTRY_PUSH: ${{ vars.MATTERCODEX_REGISTRY_PUSH }}
+          NODE_PULL: ${{ vars.MATTERCODEX_NODE_PULL }}
+          REPOSITORY_PREFIX: ${{ vars.MATTERCODEX_REPOSITORY_PREFIX }}
+          ADMISSION_TOOLS_IMAGE: ${{ vars.MATTERCODEX_ADMISSION_TOOLS_IMAGE }}
+          HTTPS_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
+          HTTP_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
+          NO_PROXY: ${{ vars.MATTERCODEX_BUILD_NO_PROXY }}
+        run: |
+          arguments=(
+            --source-sha "$SOURCE_SHA"
+            --build-run-id "$GITHUB_RUN_ID"
+            --output release-lock.json
+            --registry-push "$REGISTRY_PUSH"
+            --node-pull "$NODE_PULL"
+            --repository-prefix "${REPOSITORY_PREFIX:-mattercodex}"
+            --admission-tools-image "$ADMISSION_TOOLS_IMAGE"
+          )
+          if [[ -n "${HTTPS_PROXY:-}" ]]; then
+            arguments+=(--build-proxy "$HTTPS_PROXY" --build-no-proxy "$NO_PROXY")
+          fi
+          tools/release/build-release.sh "${arguments[@]}"
       - name: Record and validate release lock
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           sha256sum release-lock.json | awk '{print $1}' > release-lock.sha256
-          tools/release/validate-release-lock.sh --lock release-lock.json --source-sha "$SOURCE_SHA" --sha256 "$(<release-lock.sha256)"
+          tools/release/validate-release-lock.sh \
+            --lock release-lock.json --source-sha "$SOURCE_SHA" \
+            --sha256 "$(<release-lock.sha256)"
       - name: Upload exact release lock
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
