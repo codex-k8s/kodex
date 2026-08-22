@@ -6,7 +6,6 @@ repo_root="$(cd -- "${script_dir}/.." && pwd)"
 generated_paths=(
   "libs/go/internalrpcauth/gen/internalrpcauthority/v1"
   "libs/go/controlplaneapi/gen/controlplane/v1"
-  "libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 )
 temporary_root="$(mktemp -d)"
 

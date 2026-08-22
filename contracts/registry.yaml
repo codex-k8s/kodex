@@ -6,12 +6,6 @@ packages:
     source: contracts/egress/v1/egress-gateway-policy.schema.json
     consumers:
       - egress-gateway
-  - id: interaction-gateway-api-v1
-    format: openapi
-    owner: interaction-gateway
-    source: contracts/openapi/interaction-gateway/v1/openapi.yaml
-    consumers:
-      - interaction-gateway
   - id: control-api-gateway-api-v1
     format: openapi
     owner: control-api-gateway
@@ -28,21 +22,20 @@ packages:
       go: services/external/control-api-gateway/internal/transport/websocket/generated
     consumers:
       - control-api-gateway
-  - id: interaction-gateway-internal-v1
+  - id: integration-gateway-internal-v1
     format: proto
-    owner: interaction-gateway
-    source: contracts/proto/interactiongateway/v1
+    owner: integration-gateway
+    source: contracts/proto/integrationgateway/v1
     generated:
-      go: libs/go/interactiongatewayapi/gen/interactiongateway/v1
+      go: libs/go/integrationgatewayapi/gen/integrationgateway/v1
     consumers:
-      - interaction-gateway
-      - control-api-gateway
+      - integration-gateway
   - id: control-plane-events-v1
     format: asyncapi
     owner: control-plane
     source: contracts/asyncapi/control-plane/v1/asyncapi.yaml
     consumers:
-      - runtime-controller
+      - control-api-gateway
   - id: control-plane-v1
     format: proto
     owner: control-plane
@@ -52,20 +45,16 @@ packages:
     consumers:
       - control-plane
       - control-api-gateway
-      - interaction-gateway
       - runtime-controller
       - automation-scheduler
-      - agent-runner
-      - artifact-scanner
-      - memory-indexer
       - integration-gateway
       - role-image-builder
       - image-admission
       - image-promotion
-  - id: runtime-controller-agent-runner-input-v2
+  - id: runtime-controller-agent-runner-input-v3
     format: json-schema
     owner: runtime-controller
-    source: contracts/runtime-controller/v2/agent-runner-input.schema.json
+    source: contracts/runtime-controller/v3/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner
@@ -77,13 +66,6 @@ packages:
       - control-plane
       - runtime-controller
       - agent-runner
-  - id: legacy-data-migration-reports-v1
-    format: json-schema
-    owner: legacy-data-migration
-    source: contracts/runtime/legacy-data-migration/v1
-    consumers:
-      - legacy-data-migration
-      - sre
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority
@@ -94,10 +76,8 @@ packages:
       - internal-rpc-authority
       - control-plane
       - control-api-gateway
-      - interaction-gateway
       - integration-gateway
       - runtime-controller
-      - agent-runner
       - automation-scheduler
       - role-image-builder
       - image-admission
@@ -110,10 +90,8 @@ packages:
       - internal-rpc-authority
       - control-plane
       - control-api-gateway
-      - interaction-gateway
       - integration-gateway
       - runtime-controller
-      - agent-runner
       - automation-scheduler
   - id: internal-rpc-authority-proof-v1
     format: json-schema

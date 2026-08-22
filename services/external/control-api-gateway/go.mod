@@ -72,8 +72,6 @@ replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/
 
 replace github.com/codex-k8s/matter-codex/libs/go/oidcverifier => ../../../libs/go/oidcverifier
 
-replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
-
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
