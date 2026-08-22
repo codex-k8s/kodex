@@ -2,10 +2,12 @@
 
 package generated
 
-type PlatformStream struct {
-	PlatformInvalidatedEnvelope
-	PlatformReadyEnvelope
-	PlatformResyncEnvelope
-	PlatformHeartbeatEnvelope
-	ProblemEnvelope
+type PlatformStream interface {
+	isPlatformStream()
 }
+
+func (PlatformInvalidatedEnvelope) isPlatformStream() {}
+func (PlatformReadyEnvelope) isPlatformStream()       {}
+func (PlatformResyncEnvelope) isPlatformStream()      {}
+func (PlatformHeartbeatEnvelope) isPlatformStream()   {}
+func (ProblemEnvelope) isPlatformStream()             {}

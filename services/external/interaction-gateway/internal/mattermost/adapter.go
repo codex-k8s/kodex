@@ -249,19 +249,19 @@ func (adapter *Adapter) baseURL(value string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func postedMessage(event *model.WebSocketEvent, channelID, botUserID string) (model.Post, bool) {
+func postedMessage(event *model.WebSocketEvent, channelID, botUserID string) (*model.Post, bool) {
 	if event == nil || event.EventType() != model.WebsocketEventPosted {
-		return model.Post{}, false
+		return nil, false
 	}
 	raw, ok := event.GetData()["post"].(string)
 	if !ok || len(raw) == 0 || len(raw) > 1<<20 {
-		return model.Post{}, false
+		return nil, false
 	}
 	var post model.Post
 	if json.Unmarshal([]byte(raw), &post) != nil || post.Id == "" || post.ChannelId != channelID || post.UserId == "" || post.UserId == botUserID || post.DeleteAt != 0 {
-		return model.Post{}, false
+		return nil, false
 	}
-	return post, true
+	return &post, true
 }
 
 func ParseDecision(message string) controlplanev1.OwnerGateDecision {

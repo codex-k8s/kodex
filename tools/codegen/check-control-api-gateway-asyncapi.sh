@@ -47,3 +47,8 @@ if ! rg -q '^[[:space:]]+type: RunEventType;' "$typescript_generated_dir/RunEven
   echo "RunEvent.type lost its TypeScript wire mapping" >&2
   exit 1
 fi
+if ! rg -q '^type RunStream interface \{' "$generated_dir/run_stream.go" ||
+  ! rg -q '^[[:space:]]+isRunStream\(\)' "$generated_dir/run_stream.go"; then
+  echo "RunStream must remain a closed Go union without embedded JSON fields" >&2
+  exit 1
+fi

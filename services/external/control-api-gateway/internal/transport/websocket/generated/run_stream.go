@@ -2,11 +2,13 @@
 
 package generated
 
-type RunStream struct {
-	SnapshotEnvelope
-	EventEnvelope
-	ReadyEnvelope
-	ResyncEnvelope
-	HeartbeatEnvelope
-	ProblemEnvelope
+type RunStream interface {
+	isRunStream()
 }
+
+func (SnapshotEnvelope) isRunStream()  {}
+func (EventEnvelope) isRunStream()     {}
+func (ReadyEnvelope) isRunStream()     {}
+func (ResyncEnvelope) isRunStream()    {}
+func (HeartbeatEnvelope) isRunStream() {}
+func (ProblemEnvelope) isRunStream()   {}
