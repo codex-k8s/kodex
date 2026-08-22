@@ -21,14 +21,14 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 		t.Fatal("caller-supplied authority header was accepted")
 	}
 
-	request.Header.Set("Origin", "https://control.kodex.works")
+	request.Header.Set("Origin", "https://control.example.test")
 	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
 	called := false
-	boundary := &Boundary{origins: map[string]struct{}{"https://control.kodex.works": {}}}
+	boundary := &Boundary{origins: map[string]struct{}{"https://control.example.test": {}}}
 	response := httptest.NewRecorder()
 	boundary.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
 	if called || response.Code != http.StatusNoContent ||
-		response.Header().Get("Access-Control-Allow-Origin") != "https://control.kodex.works" ||
+		response.Header().Get("Access-Control-Allow-Origin") != "https://control.example.test" ||
 		response.Header().Get("Access-Control-Allow-Credentials") != "true" ||
 		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID" {
 		t.Fatalf("credentialed preflight response is incomplete: status=%d headers=%v", response.Code, response.Header())
@@ -49,7 +49,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 func TestProjectReferenceBinding(t *testing.T) {
 	t.Parallel()
 
-	const projectID = "bf51b17a-94d2-4f7e-a7f4-1b014fceec0d"
+	const projectID = "prj_AQIDBAUGBwgJCgsMDQ4PEBES"
 	tests := []struct {
 		name      string
 		method    string
@@ -66,13 +66,13 @@ func TestProjectReferenceBinding(t *testing.T) {
 		{name: "project collection is unbound", method: http.MethodPost, path: "/api/v1/projects"},
 		{name: "invalid header", method: http.MethodGet, path: "/api/v1/runs", header: "invalid", wantErr: true},
 		{name: "invalid exact project path", method: http.MethodDelete, path: "/api/v1/projects/invalid", wantErr: true},
-		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
+		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "prj_EhEQDw4NDAsKCQgHBgUEAwIB", wantErr: true},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			request := httptest.NewRequest(test.method, "https://control.kodex.works"+test.path, nil)
+			request := httptest.NewRequest(test.method, "https://control.example.test"+test.path, nil)
 			if test.header != "" {
 				request.Header.Set(ProjectReferenceHeader, test.header)
 			}

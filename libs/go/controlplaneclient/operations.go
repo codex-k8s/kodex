@@ -108,5 +108,27 @@ func IntegrationGatewayOperations() map[string]string {
 	}
 }
 
-func InteractionGatewayOperations() map[string]string                 { return map[string]string{} }
-func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} { return map[string]struct{}{} }
+func InteractionGatewayOperations() map[string]string { return map[string]string{} }
+
+// ControlAPIGatewayProjectRequiredOperations возвращает операции, для которых
+// proof обязан содержать повторно проверенную project boundary. Операции над
+// ресурсами вне project route повторно разрешают project по самому opaque ref в
+// control-plane и поэтому не доверяют locator из браузера.
+func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
+	return map[string]struct{}{
+		"platform.query.projects.get":         {},
+		"platform.query.memberships.list":     {},
+		"platform.query.agents.list":          {},
+		"platform.query.workflows.list":       {},
+		"platform.query.artifacts.list":       {},
+		"platform.query.schedules.list":       {},
+		"platform.command.projects.update":    {},
+		"platform.command.memberships.add":    {},
+		"platform.command.memberships.change": {},
+		"platform.command.memberships.remove": {},
+		"platform.command.agents.create":      {},
+		"platform.command.workflows.create":   {},
+		"platform.command.artifacts.upload":   {},
+		"platform.command.schedules.create":   {},
+	}
+}

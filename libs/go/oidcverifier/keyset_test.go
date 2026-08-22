@@ -1,4 +1,4 @@
-package oidc
+package oidcverifier
 
 import (
 	"crypto/rand"

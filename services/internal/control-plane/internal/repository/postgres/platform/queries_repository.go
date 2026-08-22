@@ -13,6 +13,8 @@ var (
 	queryRepositoryBootstrap3 string
 	//go:embed sql/repository_bootstrap_4.sql
 	queryRepositoryBootstrap4 string
+	//go:embed sql/bootstrap_create_system_membership.sql
+	queryRepositoryBootstrapSystemMembership string
 	//go:embed sql/repository_bootstrap_5.sql
 	queryRepositoryBootstrap5 string
 	//go:embed sql/repository_bootstrap_6.sql
@@ -29,20 +31,26 @@ var (
 	queryRepositoryBootstrap11 string
 	//go:embed sql/repository_bootstrap_12.sql
 	queryRepositoryBootstrap12 string
-	//go:embed sql/repository_resolveprincipal_1.sql
+	//go:embed sql/principal_resolve_verified_identity.sql
 	queryRepositoryResolveprincipal1 string
-	//go:embed sql/repository_resolveprincipal_2.sql
-	queryRepositoryResolveprincipal2 string
-	//go:embed sql/repository_resolveprincipal_3.sql
-	queryRepositoryResolveprincipal3 string
-	//go:embed sql/repository_resolveprincipal_4.sql
-	queryRepositoryResolveprincipal4 string
-	//go:embed sql/repository_resolveprincipal_5.sql
-	queryRepositoryResolveprincipal5 string
-	//go:embed sql/repository_resolveprincipal_6.sql
-	queryRepositoryResolveprincipal6 string
-	//go:embed sql/repository_resolveprincipal_7.sql
-	queryRepositoryResolveprincipal7 string
+	//go:embed sql/proof_owner_lock_installation.sql
+	queryRepositoryResolveProofAuthorityOwner1 string
+	//go:embed sql/proof_owner_find_subject.sql
+	queryRepositoryResolveProofAuthorityOwner2 string
+	//go:embed sql/proof_owner_create_subject.sql
+	queryRepositoryResolveProofAuthorityOwner3 string
+	//go:embed sql/proof_owner_create_membership.sql
+	queryRepositoryResolveProofAuthorityOwner4 string
+	//go:embed sql/proof_owner_claim_installation.sql
+	queryRepositoryResolveProofAuthorityOwner5 string
+	//go:embed sql/proof_owner_check_membership.sql
+	queryRepositoryResolveProofAuthorityOwner6 string
+	//go:embed sql/proof_system_resolve_identity.sql
+	queryRepositoryResolveProofAuthoritySystem1 string
+	//go:embed sql/proof_project_authorize_membership.sql
+	queryRepositoryResolveProofAuthorityProject1 string
+	//go:embed sql/proof_next_revision.sql
+	queryRepositoryNextProofRevision1 string
 	//go:embed sql/repository_resolvescope_1.sql
 	queryRepositoryResolvescope1 string
 )

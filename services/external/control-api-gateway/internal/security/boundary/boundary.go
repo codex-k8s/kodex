@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	oidcauth "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/authorization/oidc"
+	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/session"
 	"github.com/google/uuid"
@@ -271,22 +271,33 @@ func isRealtimePath(path string) bool {
 }
 
 func exactProjectPathReference(request *http.Request) (string, error) {
-	if request.Method != http.MethodPut && request.Method != http.MethodDelete {
-		return "", nil
-	}
 	const prefix = "/api/v1/projects/"
 	if !strings.HasPrefix(request.URL.Path, prefix) {
 		return "", nil
 	}
-	reference := strings.TrimPrefix(request.URL.Path, prefix)
-	if reference == "" || strings.Contains(reference, "/") {
+	remainder := strings.TrimPrefix(request.URL.Path, prefix)
+	reference, _, _ := strings.Cut(remainder, "/")
+	if reference == "" {
 		return "", nil
 	}
-	parsed, err := uuid.Parse(reference)
-	if err != nil || parsed.String() != reference {
+	if !validOpaqueProjectReference(reference) {
 		return "", errors.New("invalid project reference in path")
 	}
 	return reference, nil
+}
+
+func validOpaqueProjectReference(reference string) bool {
+	if len(reference) < 13 || len(reference) > 96 || !strings.HasPrefix(reference, "prj_") {
+		return false
+	}
+	for _, character := range strings.TrimPrefix(reference, "prj_") {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '-' || character == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization string) (oidcauth.Principal, string, error) {

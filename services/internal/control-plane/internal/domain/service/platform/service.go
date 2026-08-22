@@ -32,6 +32,14 @@ func (service *Service) Bootstrap(ctx context.Context) error {
 }
 func (service *Service) Ready(ctx context.Context) error { return service.repository.Ready(ctx) }
 
+func (service *Service) ResolveProofAuthority(ctx context.Context, input repository.ProofPrincipalInput) (repository.ProofAuthority, error) {
+	return service.repository.ResolveProofAuthority(ctx, input)
+}
+
+func (service *Service) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {
+	return service.repository.NextAuthorityProofRevision(ctx)
+}
+
 func (service *Service) principal(ctx context.Context, principal value.Principal) (value.Principal, error) {
 	if err := principal.Validate(); err != nil {
 		return value.Principal{}, errs.ErrUnauthorized

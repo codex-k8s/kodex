@@ -64,6 +64,18 @@ spec:
               value: sentry-relay.observability.svc:8443
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "3"
+            - name: CONTROL_PLANE_OIDC_ISSUER
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcIssuer}}
+            - name: CONTROL_PLANE_OIDC_AUDIENCE
+              value: mattercodex-control-api
+            - name: CONTROL_PLANE_OIDC_JWKS_URL
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcJwksUrl}}
+            - name: CONTROL_PLANE_OIDC_CONNECT_ADDRESS
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcConnectAddress}}
+            - name: CONTROL_PLANE_OIDC_TLS_SERVER_NAME
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcTlsServerName}}
+            - name: CONTROL_PLANE_OIDC_CA_FILE
+              value: /var/run/config/mattercodex/control-plane/oidc/ca.pem
             - name: CONTROL_PLANE_IMAGE_POLICY_REVISION
               valueFrom:
                 configMapKeyRef:

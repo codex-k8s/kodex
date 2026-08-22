@@ -34,10 +34,24 @@ func WithApplicationGrant(ctx context.Context, grant string) (context.Context, e
 }
 
 func WithProjectReference(ctx context.Context, reference string) (context.Context, error) {
-	if ctx == nil || uuid.Validate(reference) != nil {
+	if ctx == nil || !validOpaqueReference(reference, "prj") {
 		return nil, errors.New("request project reference is invalid")
 	}
 	return context.WithValue(ctx, projectReferenceContextKey{}, reference), nil
+}
+
+func validOpaqueReference(reference, prefix string) bool {
+	if len(reference) < len(prefix)+9 || len(reference) > 96 || !strings.HasPrefix(reference, prefix+"_") {
+		return false
+	}
+	for _, character := range reference[len(prefix)+1:] {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '-' || character == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 type Config struct {

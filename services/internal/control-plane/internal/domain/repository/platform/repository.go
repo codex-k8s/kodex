@@ -47,8 +47,29 @@ type ArtifactDownload struct {
 	Reader   io.ReadCloser
 }
 
+// ProofPrincipalInput содержит только проверенный credential subject либо
+// стабильную system identity. Ни один идентификатор из browser payload не
+// является authority без повторного разрешения в PostgreSQL.
+type ProofPrincipalInput struct {
+	ExternalActorID  string
+	ExternalTenantID string
+	CallerWorkload   string
+	Operation        string
+	ProjectRef       string
+}
+
+// ProofAuthority — внутренние UUID, которые допускаются wire-контрактом
+// internal-rpc-authority. Opaque refs остаются locator и не попадают в claims.
+type ProofAuthority struct {
+	ActorID, OrganizationID, ProjectID string
+	ActorVersion, OrganizationVersion  uint64
+	ProjectVersion                     uint64
+}
+
 type Repository interface {
 	Bootstrap(context.Context) error
+	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
+	NextAuthorityProofRevision(context.Context) (uint64, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	GetBootstrapState(context.Context, value.Principal) (BootstrapState, error)
 	GetOverview(context.Context, value.Principal, string) (Overview, error)

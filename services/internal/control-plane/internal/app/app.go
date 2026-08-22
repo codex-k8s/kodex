@@ -20,7 +20,10 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
 	platformrepository "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/platform"
 	platformgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
@@ -55,6 +58,24 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := service.Bootstrap(startup); err != nil {
 		return fmt.Errorf("bootstrap platform: %w", err)
 	}
+	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
+		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
+		SignerTrustFile: config.ProofSignerTrustFile,
+		WorkerGrantTrustFiles: map[string]string{
+			"automation-scheduler": config.AutomationGrantTrustFile,
+			"integration-gateway":  config.IntegrationGrantTrustFile,
+			"runtime-controller":   config.RuntimeGrantTrustFile,
+		},
+		OIDC: oidcverifier.Config{
+			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
+			ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,
+			CAFile: config.OIDCCAFile, Timeout: config.ReadinessTimeout,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("construct authority proof resolver: %w", err)
+	}
+	defer proofService.Close()
 	authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
 	if err != nil {
 		return fmt.Errorf("connect authorization verifier: %w", err)
@@ -83,10 +104,15 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct gRPC transport: %w", err)
 	}
+	proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)
+	if err != nil {
+		return fmt.Errorf("construct authority proof transport: %w", err)
+	}
 	tlsConfig, err := loadServerTLS(config)
 	if err != nil {
 		return err
 	}
+	verifiedUnary := authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
 	grpcServer := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
@@ -94,7 +120,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
 				slog.Error("unexpected gRPC failure", "method", method, "code", code.String())
 			})),
-			authorityclient.VerifierUnaryServerInterceptor(authority.Verifier()),
+			routeResolverUnary(verifiedUnary),
 			grpcserver.RejectMalformedUnary,
 		),
 		grpc.ChainStreamInterceptor(
@@ -109,6 +135,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
@@ -119,6 +146,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
 		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
+		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 	)
 	workerDone := make(chan error, 1)
@@ -136,6 +164,43 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		serviceruntime.ShutdownOperation{Name: "workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(workerErr, shutdownErr)
+}
+
+func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		switch info.FullMethod {
+		case internalrpcauthorityv1.AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName,
+			internalrpcauthorityv1.AuthorityProofResolverService_CheckReadiness_FullMethodName:
+			return handler(ctx, request)
+		default:
+			return protected(ctx, request, info, handler)
+		}
+	}
+}
+
+func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(config.OIDCRefreshInterval)
+		defer ticker.Stop()
+		degraded := false
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+				probe, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+				err := service.RefreshOIDC(probe)
+				cancel()
+				if err != nil && !degraded {
+					logger.Warn("OIDC signing-key refresh degraded")
+					degraded = true
+				} else if err == nil && degraded {
+					logger.Info("OIDC signing-key refresh restored")
+					degraded = false
+				}
+			}
+		}
+	}
 }
 
 func readBoundedFile(path string) ([]byte, error) {

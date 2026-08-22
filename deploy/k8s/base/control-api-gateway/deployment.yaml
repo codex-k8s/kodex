@@ -42,12 +42,17 @@ spec:
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.mattercodex.local}
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt}
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json}
-            - {name: CONTROL_API_GATEWAY_OIDC_ISSUER, value: "https://sso.kodex.works/realms/mattercodex"}
+            - name: CONTROL_API_GATEWAY_OIDC_ISSUER
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcIssuer}}
             - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: mattercodex-control-api}
-            - {name: CONTROL_API_GATEWAY_OIDC_JWKS_URL, value: "https://sso.kodex.works/realms/mattercodex/protocol/openid-connect/certs"}
-            - {name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS, value: sso.kodex.works:443}
-            - {name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME, value: sso.kodex.works}
-            - {name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS, value: "https://control.kodex.works"}
+            - name: CONTROL_API_GATEWAY_OIDC_JWKS_URL
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcJwksUrl}}
+            - name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcConnectAddress}}
+            - name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcTlsServerName}}
+            - name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: publicOrigin}}
             - {name: CONTROL_API_GATEWAY_SESSION_TTL, value: 15m}
             - {name: CONTROL_API_GATEWAY_SESSION_PREVIOUS_KEY_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/session/previous.hex}
             - {name: CONTROL_API_GATEWAY_REQUEST_TIMEOUT, value: 15s}
