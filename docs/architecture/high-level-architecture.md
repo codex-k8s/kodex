@@ -12,36 +12,36 @@ updated: 2026-08-07
 
 ```mermaid
 flowchart LR
-    U[Пользователь] --> MM[Mattermost]
     U --> CC[Control Center]
-    MM --> IG[Шлюз взаимодействия]
     CC --> CAG[Control API Gateway]
     CAG --> CP[Control Plane]
-    IG --> CP
+    MM[Mattermost optional] --> IA[Interaction adapter]
+    IA --> CAG
     IRA[Internal RPC Authority] -. authorization context .-> CAG
-    IRA -. authorization context .-> IG
     IRA -. authorization context .-> RC
     IRA -. authorization context .-> MG
     CP --> PG[(PostgreSQL)]
     CP --> OB[(Transactional Outbox)]
     OB --> NATS[NATS JetStream]
     AS[Планировщик автоматизаций] -- generated protected gRPC --> CP
-    NATS --> RC[Контроллер среды выполнения]
+    NATS --> RC[Runtime Controller]
     RC --> K8S[Kubernetes API]
-    K8S --> AR[Pod агента]
+    K8S --> AR[Role image Pod + agent-runner]
     AR --> AI[Поставщик среды выполнения ИИ]
-    AR --> BMCP[Bot Service MCP transport]
-    BMCP --> MG[Шлюз интеграций MCP]
+    AR --> MG[Шлюз интеграций MCP]
     MG --> EG[Platform Egress Gateway]
     EG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
-    AR --> IG
-    IG --> S3
-    IG --> MM
+    AR --> CP
+    CP --> AB[(Bounded artifact storage)]
+    CP --> IA
+    IA --> MM
     RIB[Role Image Builder] --> REG[(OCI Registry)]
-    REG --> RC
+    RIB --> ADM[SBOM, scan, sign, admit]
+    ADM --> REG
+    REG --> K8S
     CP --> OT[OpenTelemetry]
-    IG --> OT
+    CAG --> OT
     RC --> OT
     MG --> OT
 ```
@@ -60,11 +60,12 @@ events одной PostgreSQL-транзакцией.
 аутентифицирует пользователя и преобразует запросы в generated gRPC clients.
 Gateway не читает PostgreSQL Control Plane напрямую.
 
-## Шлюз взаимодействия
+## Interaction adapters
 
-Обрабатывает события Mattermost, резервные slash-команды, интерактивные карточки, диалоги, учетные записи ботов, реакции, доставку файлов и обновления обсуждений.
-
-Шлюз не владеет бизнес-состоянием агента и сессии. Повторная доставка события Mattermost безопасна благодаря идентификаторам `event_id` и `post_id`.
+Обрабатывают входящие сообщения и исходящие delivery attempts подключаемых
+каналов. Они не владеют сессиями, Run, Human Gates, artifacts либо terminal
+outcome. Полностью отключённый Mattermost не влияет на startup и readiness
+web-only профиля.
 
 ## Контроллер среды выполнения
 
@@ -92,7 +93,8 @@ Gateway не читает PostgreSQL Control Plane напрямую.
 - сохраняет архив сессии;
 - корректно завершает дочерние процессы и обрабатывает остановку.
 
-Компонент запуска не содержит бизнес-логику Mattermost, создания проектов и согласований.
+Компонент запуска не содержит бизнес-логику внешних каналов, создания проектов
+и согласований.
 
 ## Шлюз интеграций
 

@@ -1,153 +1,92 @@
 ---
 id: ARCH-MC-007
-title: Среда выполнения и сессии агентов
+title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 0.3.0
-updated: 2026-08-04
+version: 1.0.0
+updated: 2026-08-22
 ---
 
-# Среда выполнения и сессии агентов
+# Runtime, сессии и запуски
 
-## Область сессии
+## Session и Turn
 
-Сессия может быть создана из:
+Session — долговечная последовательная история Agent. Источники создания:
+`CONTROL_CENTER`, `SYSTEM_ASSISTANT`, `SCHEDULE`, `INTEGRATION`,
+`AGENT_DELEGATION` и optional `MATTERMOST`. External conversation binding не
+обязателен.
 
-- обсуждения Mattermost;
-- контекста агента комнаты по умолчанию;
-- `ScheduledRun`;
-- дочернего `ProcessRun`;
-- административного или ручного запуска.
+Turns выполняются FIFO. Enqueue использует semantic idempotency и не допускает
+двух active turns одной Session. Continuation создаёт свежую RuntimeRevision и
+новый role Pod, но сохраняет provider-neutral session history.
 
-`ConversationBinding` необязателен: запуск по расписанию без чата не обязан создавать сообщение Mattermost.
+## Run и execution graph
 
-## Очередь ходов
+Root Run содержит source, initiator, target, input, state, result, usage,
+incidents, graph revision и next event sequence. RunNode представляет root
+process, agent execution, Human Gate или bounded external action. RunEdge имеет
+семантику `DELEGATED_TO`, `CALLBACK_TO`, `RETRY_OF`, `CONTINUES`, `WAITING_FOR`.
 
-- Ходы внутри сессии выполняются в порядке FIFO.
-- Несколько сообщений пользователя создают несколько ходов и не теряются.
-- Запросы делегирования занятому агенту или сессии сохраняются долговечно.
-- Совместимые делегирования из очереди могут объединяться, но промпт сохраняет каждого инициатора и исходную инструкцию.
-- Ход имеет ключ идемпотентности и не выполняется параллельно двумя runners.
-
-## Привязка role-thread/session
-
-- Первый запуск роли внутри процесса фиксирует `AgentDelegation`, Mattermost
-  root post, `AgentSession` и Codex session.
-- Следующий пакет исправлений или повторной проверки передает исходный
-  `delegation_id` в `mattermost_continue_agent_thread`.
-- Продолжение повторно проверяет project, relationship policy, chat
-  membership и точную identity целевой сессии, затем ставит ход в ее FIFO.
-- Новый Mattermost thread и новая Codex session при продолжении не создаются.
-- Остановка target turn переводит связанные незавершенные делегирования в
-  terminal `failed`, чтобы их нельзя было принять за ожидающий callback.
+Tool calls остаются в timeline/detail node и не засоряют основной graph.
+Frontend получает готовые nodes/edges/state/nextActions от control-plane и не
+выводит causality или terminal state локально.
 
 ## RuntimeRevision
 
-Перед каждым ходом вычисляются канонический манифест и хеш из:
+Перед каждым turn/retry/continuation control-plane atomically pin-ит:
 
-- ревизий агента и роли;
-- профиля среды выполнения и конфигурации поставщика;
-- неизменяемого digest образа роли;
-- ревизии учетной записи и авторизации поставщика;
-- прав интеграций и ревизий подключений;
-- версий привязок переменных окружения и секретов;
-- версии `InstructionSet`;
-- переопределений рабочей области и комнаты;
-- класса ресурсов и политики доступа Kubernetes.
+- exact Agent/Workflow/instruction versions;
+- model/provider policy и session affinity;
+- promoted role image digest/runtime ABI;
+- capability и integration grant revisions;
+- knowledge/artifact versions;
+- resource, network и timeout policy;
+- root actor/policy/route and immutable input digest.
 
-Каждый ход получает новый execution-scoped Pod даже при совпавшем хеше.
-Session PVC можно сохранить, но процесс, ServiceAccount, credentials, env, MCP
-client и mounted configuration не переиспользуются. Изменения не прерывают
-выполняющийся ход.
+Mutation любой зависимости влияет только на следующий RuntimeRevision и не
+изменяет уже выполняемую attempt.
 
-`config.toml` и файлы среды выполнения конкретного поставщика генерируются
-перед каждым app-server `thread/start` либо `thread/resume`.
+## Delegation и callback
 
-## Привязка учетной записи модели
+Coordinator использует типизированный MCP tool с target ref из server catalog.
+Control-plane самостоятельно создаёт child Run/node/edge, наследует root actor и
+policy и выдаёт opaque delegation ref. Child terminal result создаёт один FIFO
+callback Turn родительской Session; explicit/fallback paths разделяют одну
+callback receipt.
 
-- Учетная запись выбирается при создании сессии вручную, из фиксированной привязки или пула.
-- Планировщик учитывает состояние авторизации, разрешения, наблюдаемые лимиты и свежесть наблюдения.
-- Идентификатор учетной записи записывается в сессию до первого вызова поставщика.
-- Возобновление использует только эту учетную запись.
-- Повторная авторизация той же логической учетной записи повышает ревизию авторизации и обновляет среду выполнения.
-- Авторизация материализуется в новом immutable Secret. Для замороженной
-  `cluster-admin` зависимости переключение credential и всех точных снимков
-  выполняется одной транзакцией только при отсутствии активного хода.
-- Недоступная учетная запись требует повторной авторизации либо новой сессии с явной передачей контекста.
+## Human Gate
 
-## Блокировка поставщиком
+Gate сохраняется независимо от Pod. Active attempt может быть снята, пока Run
+ожидает человека. Resolution в web либо optional adapter имеет one-winner OCC;
+успех создаёт ровно один continuation с новой RuntimeRevision.
 
-Runner распознаёт подтверждённую cyber-safety блокировку только по закрытому
-структурированному `CodexErrorInfo=cyberPolicy`. Stderr и provider `message`
-остаются bounded diagnostic и не определяют переход. Такая ошибка не
-повторяется автоматически и не обходится переформулировкой запроса: ход и
-сессия переходят в `blocked`, доступный архив сохраняется, а пользователю
-публикуется безопасное объяснение без сырого ответа поставщика.
+## Artifacts и история provider
 
-Заблокированная сессия не принимает новые ходы. Продолжение выполняется в новом обсуждении с измененной постановкой или стратегией задачи. Для разрешенной исследовательской работы владелец отдельно оформляет Trusted Access у поставщика.
+Bounded inputs/results сохраняются через Artifact boundary и связываются с exact
+Session/Turn/Run/node/attempt. Provider rollout/history capture имеет digest и
+provenance и не доверяет caller-provided path. Runtime Pod не получает database
+или broad storage credential.
 
-## Жизненный цикл MCP transport
+## Cancel и retry
 
-- Bot-service ограничивает число одновременно открытых Streamable HTTP
-  transport sessions и очищает их после установленного периода бездействия.
-- Запрос с истекшим или уже закрытым `Mcp-Session-Id` и действующими
-  role-session credentials получает `404 Not Found` по контракту MCP. Клиент
-  инициализирует новую transport session и повторяет tool call.
-- Запрос с чужой credential binding получает `403 Forbidden`, а неверные
-  role-session credentials - `401 Unauthorized`.
-- Очистка MCP transport не закрывает `AgentSession`, Codex session, turn, pod,
-  PVC или рабочую область агента.
+Cancel root Run одной owner-транзакцией закрывает queued/active turns, claims,
+leases, grants, open Gates и non-terminal nodes и публикует ordered events.
+Retry допустимой terminal attempt создаёт новую attempt, RuntimeRevision и
+`RETRY_OF` edge; прежние result/errors остаются доступны.
 
-## Долговечность сессии
+## Realtime
 
-Метаданные сессии хранятся в PostgreSQL. Архив сессии хранится в S3-совместимом хранилище с контрольной суммой и версией. PVC используется как рабочий кэш, а не единственная долговечная копия.
+Каждый graph change резервирует sequence и сохраняет RunEvent + outbox envelope
+одной транзакцией. NATS JetStream доставляет at least once. Gateway отправляет
+browser current snapshot, sequence и ordered deltas; reconnect использует
+`afterSequence`, catch-up и fallback snapshot. Duplicate игнорируется, gap не
+заполняется phantom state.
 
-После каждого хода runner:
+## Retention
 
-1. завершает процесс поставщика;
-2. собирает архив сессии;
-3. загружает неизменяемую версию архива;
-4. атомарно завершает `Turn` и обновляет ссылку на архив сессии;
-5. публикует события результата и outbox.
-
-## Pod lifecycle
-
-- Максимум один активный role Pod на сессию.
-- Каждый RuntimeExecution создаёт новый Pod и execution-scoped ServiceAccount;
-  terminal Pod не становится прогретым successor.
-- Поставленный в очередь ход получает новый admission после закрытия predecessor.
-- Доказанно terminal Pod можно удалить при нехватке ресурсов.
-- Удаление pod не удаляет PVC, архив сессии и очередь ходов.
-- Контроллер среды выполнения восстанавливает pod по желаемому состоянию.
-- Неработающий pod и просроченная аренда автоматически исправляются без дублирования хода.
-- Новый Pod получает fresh RuntimeRevision, точные ревизии provider/GitHub
-  credentials, config, env и MCP clients, не меняя Codex thread binding.
-
-## Хранение и очистка
-
-- Pod и PVC не являются источником истины сессии.
-- Terminal pod удаляется guarded controller path и не определяет срок PVC.
-- PVC становится кандидатом на удаление после 7 суток без активности, но только после успешного сохранения и проверки архива сессии в S3.
-- Сессии с очередью, выполняющимся ходом, ожидающим согласования, внешним обратным вызовом или живой арендой не очищаются.
-- Удаление канала или обсуждения Mattermost сначала переводит привязку в `deletion_pending`; ресурсы удаляются после отсрочки, которую можно отменить восстановлением.
-- Метаданные PostgreSQL и S3-архив имеют отдельную, более длинную политику хранения и не удаляются вместе с PVC.
-
-Полный эксплуатационный контракт и шлюз миграции определены в `docs/operations/runtime-retention.md`.
-
-## Ресурсы
-
-Допуск учитывает доступные ресурсы узла, requests, квоту namespace, ожидающие
-pod и класс ресурсов. При нехватке ресурсов запуск остаётся в очереди с
-понятной причиной. Перед отказом контроллер может удалить самый старый
-доказанно terminal pod, не затрагивая активные сессии и PVC.
-
-## Управление процессами
-
-Runner использует `tini` либо эквивалентный сбор завершенных процессов и передачу сигналов, корректно обрабатывает SIGTERM, дает процессу поставщика период корректного завершения и отправляет структурированный результат остановки.
-
-## Доставка состояния
-
-На ход существует одно стартовое сообщение с действием остановки. После получения лимитов поставщика оно обновляется, а не дублируется. Ход работы публикуется отдельными обновлениями с признаком `notrigger`. Финальный ответ не перезаписывает стартовое сообщение.
-
-Каждый проект имеет служебную комнату `runs`. Один ход представлен одной обновляемой карточкой с состоянием и цветом, учетной записью поставщика, инициаторами, сообщениями-триггерами, рабочим обсуждением и ссылками на все родительские ходы. При объединении нескольких ожидающих запросов происхождение не схлопывается до первого инициатора.
+Control-plane metadata, provider history manifest и Artifacts имеют явную
+retention policy. Execution Pod и ephemeral workspace удаляются только после
+terminal owner state и сохранённого bounded result/history. External channel
+delete не инициирует core cleanup. Long-term external archive backend относится
+к отдельному storage adapter и не обязателен для fresh web-only MVP.

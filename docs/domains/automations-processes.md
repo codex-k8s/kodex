@@ -1,116 +1,69 @@
 ---
 id: DOM-MC-009
-title: Автоматизации и процессы
+title: Процессы и автоматизации
 type: domain
 status: approved
 owner: architect
-version: 1.0.1
-updated: 2026-08-05
+version: 2.0.0
+updated: 2026-08-22
 ---
 
-# Автоматизации и процессы
+# Процессы и автоматизации
 
-## Назначение
+## Workflow
 
-Владеет `Playbook`, `ProcessRun`, графом дочерних запусков, обратными вызовами, ручной приемкой, `AutomationSchedule` и `ScheduledRun`.
+`Workflow` — universal versioned process. Draft содержит name, purpose,
+coordinator, allowed Agents, bounded input form/schema, instructions,
+concurrency, timeout, completion criteria, Human Gates и result schema. После
+validation публикуется immutable Workflow version; Run всегда pin-ит version.
 
-## Правила расписания
+Workflow не предполагает repository, CI/CD, Mattermost room или Kubernetes
+workload. Drag-and-drop BPMN editor не является условием исполнения: authority
+принадлежит server-owned execution graph.
 
-- Часовой пояс обязателен и хранится как имя IANA.
-- Интерфейс предлагает готовые варианты; cron доступен в расширенных настройках.
-- `coalesce` является политикой параллельности по умолчанию.
-- `run_once` является политикой пропущенного запуска по умолчанию.
-- `on_action_or_failure` является политикой уведомлений по умолчанию.
-- «Запустить сейчас» создает отдельный экземпляр и не сдвигает следующий плановый запуск.
+## Delegation и callback
 
-## Результат запуска по расписанию
+Coordinator вызывает типизированный MCP tool. Control-plane проверяет active
+parent attempt, capability, relationship policy, target eligibility и limits,
+после чего одной транзакцией создаёт child Run/node, `DELEGATED_TO` edge,
+RuntimeRevision, task, audit и outbox event.
 
-Результат: `no_action`, `action_taken`, `requires_human`, `failed`.
+Child terminal result создаёт один callback Turn исходной Session и
+`CALLBACK_TO` edge. Explicit и terminal fallback используют одну callback
+receipt. Agent-provided parent/root IDs и упоминание человека не являются
+authority.
 
-`no_action` может не создавать сообщение Mattermost. `requires_human` всегда создаёт доступную ручную приёмку и оставляет запуск в `waiting_owner` до решения корневого инициатора. История и аудит сохраняются для всех результатов.
+## Schedule
 
-Принятие `requires_human`, сохранение закрытого результата и создание одного
-`OwnerGate`, а также переход `RuntimeExecution`, `Turn`, `ScheduledRun`,
-occurrence и `ProcessRun` в ожидание являются одной PostgreSQL-транзакцией.
-Связь проверяет точные tenant, runtime turn/attempt/input, process run, policy
-revision, schedule room и root initiator из сохранённого process context.
-Отсутствующая или несовпадающая связь отклоняется закрыто.
+`Schedule` принадлежит control-plane и запускает Agent или Workflow. Он содержит
+timezone, preset/cron, target version policy, bounded input, session policy,
+concurrency/misfire policy и notification policy. Manual launch имеет отдельный
+source и не создаёт скрытый Schedule.
 
-Карточка внимания не содержит agent summary или prompt: её текст, props,
-payload hash и delivery id формирует сервер. Scheduled gate имеет отдельную
-server-owned привязку к occurrence и точному `RoomID`, поэтому generic MCP не
-может выбрать, переиспользовать или обновить его по caller IDs. Перед внешним
-POST `interaction-gateway` сохраняет claim с lease и монотонным fence;
-конкурентный callback или worker не получает второй claim. Потерянный ответ
-сверяется по server-owned delivery id, а ограниченный worker продвигает весь
-доступный backlog через `SKIP LOCKED`. Scheduler не публикует Mattermost сам.
+Scheduler лишь claim-ит due occurrence и просит control-plane materialize-ить
+Run. Claim связан с workload, schedule, occurrence, version, attempt, immutable
+input digest и fence. Retry создаёт новую attempt; disable/cancel/terminal
+закрывают leases и grants owner-транзакцией.
 
-## Оркестрация процесса
+## Human Gate
 
-- Менеджер является координатором процесса и запускает дочерних агентов только через MCP.
-- Корневой manager создает не более двух отдельных тредов дочернего manager в
-  назначенной рабочей комнате. Дочерний manager запускает рабочих и
-  проверяющих агентов внутри своего треда; один тред является одним unit.
-- Дочерний запуск содержит родителя, назначение, входные данные, контракт завершения и цель обратного вызова.
-- Обратный вызов долговечен, идемпотентен и всегда возвращается менеджеру с исходным инициатором и назначением работы.
-- Родительский процесс не считается завершенным, пока обязательные дочерние запуски и ручные проверки не завершены.
-- Политика ошибки определяет повтор, замену исполнителя, пропуск либо передачу человеку.
-- Перед межкомнатным запуском координатор проверяет каталог и карточку целевого чата; платформа проверяет relationship policy и наследует root initiator.
-- Каждый unit проходит продуктовое, security и архитектурное review на одном
-  SHA. После исправлений все три направления проверяют новый SHA.
-- Перед human gate координатор проверяет GitHub GraphQL `reviewThreads` и не
-  допускает unresolved или молча опущенные замечания.
-- Успешный `mattermost_start_agent_thread` сначала создаёт дочерний тред, ставит запуск целевого агента в долговечную очередь и создаёт предусмотренные платформой событие аудита и служебное сообщение с признаком `notrigger`.
-- Запущенная дочерняя сессия возвращает результат разрешенному координатору через `mattermost_return_to_requester`; обычный callback не упоминает инициатора. Ручной шлюз открывается через `mattermost_request_owner_attention`.
-- Завершенная волна возвращается верхнеуровневому координатору долговечным callback. Следующая волна начинается новым тредом после callback и необходимых решений, а не продолжением в координационной комнате.
+Workflow может открыть долговечный Gate с safe context и recipient policy.
+Состояние живёт независимо от runtime Pod и внешнего канала. Web является
+основной surface; optional adapter конкурирует за ту же one-winner resolution.
 
-## Жизненный цикл ручной приемки
+## События
 
-Жизненный цикл имеет вид:
+`workflow.published`, `schedule.created`, `schedule.changed`,
+`schedule.occurrence_due`, `run.created`, `run.node_added`,
+`run.delegation_created`, `run.callback_delivered`, `owner_gate.opened`,
+`owner_gate.resolved`.
 
-`полный unit -> product + security + architecture review -> исправления ->
-повтор трех review -> human gate -> owner merge`.
+## Критерии приёмки
 
-Автоматически допускается не более пяти циклов. Шестой цикл требует решения
-владельца.
-
-Ручная приемка владельца относится к конкретной версии результата. Изменение после OK отменяет согласование и требует повторного рецензирования и приемки, кроме заранее разрешенных механических изменений.
-
-Открытый `OwnerGate` привязан к треду хода, который запросил внимание.
-Следующее сообщение корневого инициатора в этом треде разрешает только этот
-gate, продолжает тот же `ProcessRun` и сохраняет исходную ревизию политики.
-Ответ в одном треде не разрешает параллельные gate в других тредах процесса.
-Когда в процессе не осталось активных ходов и открытых gate, платформа
-переводит его в терминальное состояние.
-
-Для запроса, созданного итогом автоматизации, решение разрешено только после сохранённого `mattermost_post_id` точной server-owned карточки. Затем оно атомарно переводит точные `ScheduledRun` и occurrence в `succeeded`, задаёт `finished_at` и добавляет audit. Точный replay решения возвращает существующий результат; другой пользователь, канал, корневой тред или новый post после разрешения не создаёт повторного перехода. Гонка доставки и решения имеет два допустимых исхода: решение закрыто отклоняется до delivery proof либо выполняется после его фиксации.
-
-Просрочка lease планировщика сначала в одной owner-транзакции закрывает старый
-`ScheduledRun` и весь связанный session/turn/attempt/process/gate/claim graph,
-отзывает lease и generation grant и сохраняет неизменяемый audit/outbox факт.
-Только после этого допускается новая попытка; старый runner больше не может
-подтвердить результат, а старый graph остаётся доступен в PostgreSQL и audit.
-Та же ограда применяется к timeout, misfire, crash recovery и dead-letter.
-
-Просроченный owner gate не участвует в delivery query. Авторизованный
-`ExpireOwnerGate` reconciler забирает его под PostgreSQL row lock и атомарно
-закрывает gate и связанный turn/process/occurrence/`ScheduledRun` graph. Гонка
-решения владельца с expiry имеет одного победителя. `CHANGES_REQUESTED` —
-отдельный terminal decision: он сохраняет feedback/receipt и тот же root
-`ProcessRun`, закрывает прежнюю attempt и создаёт новую неизменяемую
-revision/input/turn attempt по server-owned continuation policy; это решение
-не отображается как `FAILED`.
-
-Read-only история Control Center читается из PostgreSQL через версионированный OpenAPI endpoint и сгенерированный Vue-клиент. Она показывает как `waiting_owner/open`, так и сохранённое `succeeded/resolved`; обновление после решения идёт по тому же серверному пути, без production-зависимости от browser globals.
-
-## Критерии приемки
-
-- Две реплики планировщика создают один экземпляр расписания.
-- Перезапуск не теряет следующий запуск и не создает повтор.
-- Расписание применяет свежую `RuntimeRevision`.
-- Запуск без чата работает без обсуждения.
-- Менеджер запускает параллельные обсуждения и получает обратные вызовы.
-- Занятый целевой агент сохраняет несколько запросов делегирования без потери инициаторов.
-- Owner gate обязателен для каждого unit.
-- Перед human gate каждый review thread закрыт его автором после проверки нового
-  SHA, а все три направления дали явное подтверждение.
+- coordinator запускает минимум два child Agents и получает каждый callback
+  ровно один раз;
+- live graph показывает server-owned nodes и edges без анализа случайных timeline
+  rows во frontend;
+- Schedule работает без Mattermost и optional notification failure не портит
+  core outcome;
+- cancel/retry изменяет полный граф, а не только root row.

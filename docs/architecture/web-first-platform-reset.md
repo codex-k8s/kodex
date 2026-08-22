@@ -207,7 +207,7 @@ keys сверяет immutable content; расхождение требует con
 
 ## Профили готовности
 
-`web-only` требует PostgreSQL, object storage, NATS, control-plane,
+`web-only` требует PostgreSQL, NATS, control-plane,
 control-api-gateway, runtime-controller, agent-runner capacity, scheduler,
 integration-gateway с пустым catalog и реальный warm assistant. Interaction
 gateway и Mattermost не входят в профиль.

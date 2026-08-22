@@ -4,7 +4,7 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 0.2.1
+version: 1.0.0
 updated: 2026-08-07
 ---
 
@@ -72,25 +72,27 @@ spec:
   healthCheck: {}
 ```
 
-Пакет не содержит значений секретов. Поля проходят проверку JSON Schema. Произвольные действия MCP используют декларативный подход, совместимый по идее с `yaml-mcp-server`, но промышленный шлюз дополнительно обеспечивает разделение организаций, авторизацию, права, аудит и согласования Mattermost.
+Пакет не содержит значений секретов. Поля проходят проверку JSON Schema.
+Декларативные MCP definitions дополняются разделением организаций,
+авторизацией, typed grants, аудитом и server-owned Human Gates, доступными в
+Control Center независимо от interaction adapters.
 
 ## Карта внешних систем
 
 | Система | Роль | Базовый режим |
 | --- | --- | --- |
-| Mattermost | Обсуждения, учетные записи, файлы и согласования | Нативный адаптер |
+| Mattermost | Optional inbound, notifications, result mirror и Human Gate decisions | Typed interaction adapter |
 | OpenAI Codex | Первый поставщик среды выполнения агента | Адаптер поставщика и device-code авторизация |
 | GitHub | Репозитории, Issues, PR и рецензирование | Прямой `gh` или управляемый MCP по политике |
 | Kubernetes | Среда платформы и целевых проектов | Прямой режим только для чтения; изменения через управляемый MCP либо явный профиль администратора |
-| S3 | Файлы, архивы сессий и резервные копии | Адаптер платформы |
 | Электронная почта | Прием и исходящая коммуникация | Управляемый MCP |
 | CRM/1С | Бизнес-операции | Управляемый MCP с согласованиями |
 | OCI registry | Образы платформы и ролей | Адаптер цепочки поставки |
 
 ## Исходящий HTTPS-транспорт platform gateway
 
-Provider и Git clients `integration-gateway`, которым нужен изменяемый SaaS
-address set, используют
+Provider clients role runtime и typed adapters `integration-gateway`, которым
+нужен изменяемый SaaS address set, используют
 `egress-gateway.mattercodex-system.svc.cluster.local:8080` как HTTP proxy.
 Этот же exact URL поддерживает только bodyless `GET /readyz` без query для
 совместимости management readiness: `204` требует фактически ACTIVE policy и

@@ -4,7 +4,7 @@ title: Технологический стек
 type: architecture
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.1.0
 updated: 2026-07-28
 ---
 
@@ -21,9 +21,9 @@ updated: 2026-07-28
 | События         | AsyncAPI               | владелец состояния публикует через outbox                        |
 | Realtime        | WebSockets             | контракт в AsyncAPI, аутентификация через gateway                |
 | Source of truth | PostgreSQL             | forward-only goose, named SQL                                    |
-| Cache           | Redis                  | TTL protobuf snapshot, не источник истины                        |
+| Cache           | Локальный bounded cache; Redis optional | cache не является source of truth                   |
 | Broker          | NATS JetStream         | broker-neutral relay/inbox API                                   |
-| Object storage  | S3-compatible          | controlled upload и immutable object identity                    |
+| Artifact store  | PostgreSQL bounded content port | fresh MVP; S3 adapter допускается позже                 |
 | Runtime         | Kubernetes             | Kustomize base + environment overlays                            |
 | Secrets         | Vault                  | namespace/workload-bound delivery                                |
 | Identity        | Keycloak/OIDC          | внешняя identity не заменяет доменную authorization              |

@@ -15,13 +15,14 @@
 - `context.Background()` создаётся только в `cmd/<service>/main.go`; ниже используется переданный context или производный context.
 - Runtime config читается через `github.com/caarlos0/env/v11`; условно обязательные значения проверяются в `Validate()`.
 
-## HTTP и Mattermost
+## HTTP и interaction adapters
 
 - Slash callback валидирует HTTP method, ограничивает размер form body и проверяет Mattermost slash token без раскрытия значения.
-- Mattermost response строится через typed SDK/model, если библиотека доступна.
+- Ответ подключаемого interaction adapter строится через typed SDK/model, если библиотека доступна.
 - Health/readiness endpoints не зависят от внешней сети и не требуют секретов.
 - `/metrics` отдаётся через Prometheus handler и custom registry.
-- Пользовательские тексты для MVP могут быть constants в Go; при появлении многоязычности или шаблонов их нужно вынести в отдельный слой.
+- Пользовательские тексты хранятся в i18n catalog или embedded template и
+  выбираются по проверенной локали; готовые пользовательские фразы в Go запрещены.
 
 ## SDK и зависимости
 

@@ -9,9 +9,12 @@
 - `docs/guides/repository-structure.md`;
 - `docs/guides/infrastructure.md`.
 
-## Эволюционный переход
+## Целевой reset
 
-Зоны `services/external/**`, `services/internal/**`, `services/jobs/**` и `services/dev/**` остаются целевой структурой deployables. Действующий bot-service сохраняется как compatibility deployable до выделения согласованных сервисных границ. Новый код не должен расширять его без application/domain boundary.
+Зоны `services/external/**`, `services/internal/**`, `services/jobs/**` и
+`services/dev/**` остаются целевой структурой deployables. Legacy bot-service,
+compatibility facade, dual-write и cutover path в fresh-install профиле
+отсутствуют. Mattermost реализуется отдельным необязательным adapter unit.
 
 ## Неизменные правила
 
@@ -22,4 +25,4 @@
 - Один bounded context владеет своими tables, migrations и repositories.
 - Transport/SDK details изолированы в adapters.
 - Source contracts и generated code разделены.
-- Переход выполняется characterization-first и без big-bang rewrite.
+- Fresh install использует единую baseline schema без legacy backfill.

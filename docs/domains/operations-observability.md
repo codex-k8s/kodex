@@ -4,7 +4,7 @@ title: Эксплуатация и наблюдаемость
 type: domain
 status: approved
 owner: architect
-version: 0.2.0
+version: 1.0.0
 updated: 2026-08-04
 ---
 
@@ -31,13 +31,34 @@ updated: 2026-08-04
 - задержка расписания, пропущенные запуски и предотвращение дублей;
 - возраст резервной копии и результат учебного восстановления.
 
-Логи содержат идентификаторы организации, рабочей области, сессии, хода, процесса и корреляции и не содержат секреты или необработанные чувствительные данные.
+Логи содержат только безопасные refs организации, Проекта, Session, Turn,
+Run/node/attempt и correlation и не содержат секреты или необработанные
+чувствительные данные.
 
-Трассировки связывают событие Mattermost, команду, очередь, pod, поставщика модели, MCP-вызов и доставку.
+Трассировки связывают owner либо integration trigger, команду, outbox/event,
+очередь, Run/node/attempt, role Pod, provider, MCP invocation и optional delivery.
 
 ## Эксплуатационное состояние
 
-Control Center показывает безопасный пользовательский и подробный операторский уровни. Карточка ошибки Mattermost содержит краткую причину и следующее действие; внутренняя трассировка стека остается в системе наблюдаемости.
+Control Center показывает безопасный пользовательский и подробный операторский
+уровни. Пользовательская карточка использует стабильный i18n message key,
+локализованное объяснение и server-owned next action; stack trace и raw provider
+output остаются только в защищённом observability contour.
+
+## Health и readiness
+
+- `/healthz` проверяет только жизнь собственного process и не читает сеть.
+- `/readyz` отдаёт уже рассчитанный локальный snapshot и не выполняет новый
+  network call на каждую Kubernetes probe.
+- Unit readiness включает только unit, его sidecars и прямую инфраструктуру:
+  database, broker, cache/local storage и Kubernetes API для controller.
+- Недоступный соседний business service отображается типизированным рабочим
+  `Unavailable` и отдельным incident, но не исключает Pod из endpoints.
+- End-to-end service graph проверяет отдельный smoke/diagnostic contour.
+- Краткий outage и recovery логируются один раз как смена состояния. Одинаковый
+  warning на каждом observer interval запрещён.
+- JWKS/control-plane LKG ограничен двумя минутами без sliding extension; integrity
+  failure, rollback, conflict revision и expiry fail closed немедленно.
 
 ## Capacity control
 

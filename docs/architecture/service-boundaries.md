@@ -52,11 +52,11 @@ runbook и ручная проверка входят в один Issue и од�
 | Компонент                | Тип                             | Владеет                                                                                                                                    | Не владеет                                                              |
 | ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
 | `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot                                            | пользователи, роли, проекты, permissions и transport identity caller    |
-| `control-plane`          | internal service                | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process  |
+| `control-plane`          | internal service                | организации, Проекты, агенты, role image lifecycle, integrations metadata, runtime revisions, sessions, Run graph/events, schedules, memory, gates и artifact metadata | channel transport, Kubernetes resources, MCP execution и AI process  |
 | `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health                                                   | бизнесовая конфигурация, Codex process и пользовательские сообщения     |
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
 | `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
-| `interaction-gateway`    | external gateway                | Mattermost transport, idempotency, cards, bot identities и file delivery                                                                   | sessions, processes, schedules и Kubernetes state                       |
+| `interaction-gateway`    | optional external adapter       | independent inbound/notification/result-mirror/gate-decision deliveries                                                                     | core readiness, sessions, gates, artifacts и terminal Run state          |
 | `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
 | `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
@@ -127,19 +127,10 @@ builder не выдаются.
 context от workload-local `internal-rpc-authority`. Payload и caller-provided
 identifier не являются источником полномочий.
 
-## Работа с legacy
+## Fresh reset
 
-`services/external/bot-service`, текущий `services/jobs/agent-runner`,
-`apps/control-center` и `specs/**` остаются только действующим legacy-контуром
-до cutover. Они:
-
-- не являются примером структуры нового кода;
-- не получают новые продуктовые возможности;
-- меняются только для критического сохранения работоспособности dogfooding;
-- не требуют постоянного compatibility facade в новых unit.
-
-После dark deploy нового контура из #197 отдельная граница #241 материализует
-TLS 1.3 source transport. Затем #196 выполняет backup, dry-run и one-shot
-forward migration; consumer switch остаётся отдельным owner-approved действием.
-Старый transport, credential и client trust выводятся только по #271 после
-authoritative `COMMITTED`, полного readback и проверенного rollback window.
+`apps/control-center`, legacy bot-service, migration/cutover jobs, compatibility
+contracts и dual-write удаляются. `services/jobs/agent-runner` не является
+legacy: это защищённый runtime ABI внутри каждого promoted role image.
+`role-image-builder` и image supply chain также остаются активными обязательными
+unit. Mattermost выносится в optional overlay без core authority.

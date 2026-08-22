@@ -4,114 +4,85 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 0.6.0
-updated: 2026-08-04
+version: 1.0.0
+updated: 2026-08-22
 ---
 
 # Оркестрация среды выполнения
 
-## Назначение
+## Владение
 
-Владеет сессиями, ходами, ревизиями среды выполнения, долговечной очередью, арендой ресурсов, решениями о доступной емкости и сверкой желаемого состояния среды выполнения агентов.
+Control-plane владеет Session, Turn, Run, RunNode, RunEdge, RunEvent,
+RuntimeRevision, execution task, claim/lease, callback receipt, Human Gate и
+terminal outcome. Runtime-controller materialize-ит Kubernetes resources и не
+вычисляет lifecycle из prompt, role name или external thread.
 
-## Состояния
+## Обычный turn
 
-Сессия: `idle`, `queued`, `running`, `waiting_approval`, `waiting_external`, `blocked`, `expired`, `failed`.
+Перед каждым turn/retry/continuation control-plane создаёт immutable
+RuntimeRevision из exact Agent/Workflow/instruction/model/role image/capability/
+grant/knowledge versions и digests. Claim выдаётся только для FIFO head и exact
+attempt/fence.
 
-Ход: `queued`, `claiming`, `running`, `succeeded`, `failed`, `stopped`, `retry_wait`, `blocked`.
+Runtime-controller создаёт новый execution-scoped Pod из exact promoted role
+image. Protected init проверяет signed immutable input и materialize-ит bounded
+config. `agent-runner` запускает provider process, передаёт progress, выполняет
+разрешённые MCP calls, собирает безопасный result и завершает attempt через
+typed RPC. Pod и credential generation закрываются после terminal transition.
 
-Переходы выполняются атомарным сравнением и заменой внутри транзакции, а не присваиванием из транспортного обработчика.
+## Always-hot системный помощник
 
-## Команды
+System assistant использует отдельный warm runtime contract, а не фиктивный
+ready label. Bootstrap создаёт desired state и system Session; reconciler
+materialize-ит exact system role image/revision с resource limits и heartbeat.
+Idle не является active Turn, а turns исполняются последовательно. После
+process/Pod restart warm state восстанавливается до положительной assistant
+readiness. Prompt/runtime revision меняется controlled forward transition.
 
-- поставить ход в очередь;
-- получить ход, обновить пульс, завершить, пометить ошибкой или остановить;
-- создать или освободить среду выполнения сессии;
-- обновить ревизию среды выполнения;
-- повторить ход после временной ошибки;
-- архивировать или восстановить сессию;
-- вытеснить простаивающую среду выполнения;
-- пометить, архивировать или удалить подходящие ресурсы среды выполнения.
-- создать дочернее делегирование и поставить ход целевой сессии в очередь;
-- вернуть долговечный обратный вызов разрешенной исходной сессии;
-- зафиксировать процесс, волну, policy revision и root initiator;
-- зарегистрировать и обновить work claim;
-- запросить внимание инициатора или управляемую синхронизацию.
+Warm Pod не получает database, Kubernetes или secret-store authority.
+Конфигурационные действия идут через session-scoped typed MCP tools и
+полномочия проверенного пользователя.
 
-## Сессии и дочерние обсуждения
+## Execution graph
 
-У сессии есть один основной диалог Mattermost и одна последовательная история поставщика. Сессия может быть связана с несколькими дочерними обсуждениями через `AgentDelegation`, но сообщения этих обсуждений не смешиваются с ее JSONL-историей. Каждый дочерний тред получает отдельную сессию целевого агента.
+Node types: root process, agent execution, Human Gate и bounded external action.
+Edge types: `DELEGATED_TO`, `CALLBACK_TO`, `RETRY_OF`, `CONTINUES`,
+`WAITING_FOR`. Tool calls показываются в node timeline и не становятся каждой
+вершиной основного графа.
 
-`AgentDelegation` используется как для нового дочернего треда, так и для запуска другой роли внутри текущего треда волны. Делегирование хранит исходные session/turn, целевые room/thread/session/turn, стабильный ключ работы, policy revision, root initiator и состояние callback. Для same-thread запуска платформа строит ключ из целевой роли и точного сообщения, поэтому повтор одного MCP-вызова идемпотентен. Домен проверяет разрешенную связь по идентификаторам ролей и capabilities, а не по именам или тексту промпта. Вложенные делегирования образуют дерево одного `ProcessRun`.
+Каждый root Run резервирует непрерывный sequence в той же транзакции, что
+изменяет graph state. RunEvent неизменяем и bounded; duplicate ID+digest
+безопасен, иной digest конфликтен. Frontend получает authoritative snapshot,
+sequence и ordered deltas.
 
-Дочерняя роль обязана завершать работу явным `mattermost_return_to_requester`. Если она пропустила вызов, терминальное завершение хода один раз использует финальный результат как аварийный callback, пока исходная сессия и relationship policy остаются допустимыми. Явный и автоматический пути используют одну запись `CallbackRunID`, поэтому не создают два продолжения координатора.
+## Переходы полного графа
 
-Межкомнатное делегирование роли с `cluster-admin` допускается только для назначения role/chat, уже зафиксированного серверным снимком. Перед созданием делегирования, публикацией целевого треда, постановкой хода и связыванием целевой сессии платформа повторно проверяет точные роль, чат, участника, зависимости, отсутствие отзыва и целостность Kubernetes Secret. Этот путь не создаёт и не расширяет `cluster-admin`-назначения; отсутствие точного снимка закрыто отклоняет запуск до agent runtime side effects.
+- launch создаёт Session/Turn/Run/root node/RuntimeRevision/task/audit/outbox;
+- claim/start связывает exact workload, method, attempt, input digest и fence;
+- delegate наследует server-owned root actor/policy и создаёт child graph;
+- callback допускается один раз для terminal child и живого route;
+- cancel закрывает active claims, leases, grants, gates и nodes одной
+  owner-транзакцией;
+- retry terminal attempt создаёт новый task/grant/revision и lineage edge;
+- lease expiry даёт bounded retry либо terminal failure/dead-letter.
 
-Пользовательские title, message, target chat/agent, work item key, ссылки и audit metadata имеют server-owned UTF-8 byte/rune bounds до storage и dispatcher. `delegation.Title` нормализуется в NFC и становится непрозрачными недоверенными данными: новые значения с Markdown, ссылками, упоминаниями, HTML/code-разделителями, backslash, переводами строк, управляющими, bidi/format и zero-width символами отклоняются до чтения session/token. Допустимый формат `title` явно публикуется в MCP input schema и системном контексте роли; идентификаторы Issue относятся к `work_item_key` и `message`. Ошибка инструмента возвращается как MCP tool error без типизированного нулевого `structuredContent`, поэтому агент не может принять отказ валидации за успешный пустой результат маршрутизации. Каждый из четырёх Mattermost/prompt sink повторно строит единое безопасное представление; legacy row либо проходит ту же нормализацию, либо закрыто отклоняется без вывода исходного значения. В межагентском prompt title передаётся одной JSON-строкой с явной меткой недоверенных данных, а не как инструкция или заголовок секции.
+## Readiness
 
-Для возврата домен до durable transition строит точный callback prompt и две точные audit-публикации, включая окончательные byte chunks, общий предел и deadline/concurrency admission. Обычная роль и роль с `cluster-admin` проходят один безусловный repository path: exact source/child reread, вложенные guards/savepoints, enqueue turn/process/run, запись `CallbackRunID`, ровно две строки `matter_codex_agent_delegation_callback_deliveries` и неизменяемый манифест точного множества входят в одну DB-транзакцию без выхода в базовый pool. Deferred-инвариант миграции `000029` не позволяет зафиксировать `CallbackRunID` без полного манифеста и ровно одной строки каждой обязательной destination; отсутствующая, лишняя, повторная или несовпадающая строка закрыто откатывает всю транзакцию. Старый неполный план без манифеста не дополняется вымышленным аудитом и доступен только для исправления вперёд. Delivery worker захватывает готовую строку через ограниченную lease и `FOR UPDATE SKIP LOCKED`; один destination не отправляется параллельно. Каждая фактическая попытка имеет server-owned deadline и точный source+child binding/revocation fence.
+`/healthz` сообщает только liveness процесса. `/readyz` читает локальный
+рассчитанный snapshot прямых зависимостей: собственный sidecar, PostgreSQL,
+broker, local storage/cache и Kubernetes API для controller. Probe не звонит в
+соседний business service. Межсервисный граф проверяет отдельный diagnostic
+smoke; рабочий RPC возвращает typed `Unavailable`.
 
-Mattermost `pending_post_id` используется только как кратковременная подсказка серверу, а не как недоказанная долговечная гарантия. После timeout, перезапуска процесса или ошибки записи подтверждения адаптер ищет в точном треде пост с детерминированным delivery identity и сверяет channel/root/message и точную проекцию client-owned `matter_codex_*` props. Для Mattermost 11.6 отдельно разрешено только документированное server-owned поле `from_bot` со строковым значением `"true"`; отсутствующее, неверно типизированное или неожиданное server/client поле закрыто отклоняется. Повтор при существующем `CallbackRunID` доставляет только незавершённые строки и возвращает ошибку, пока точный манифест и все обязательные публикации не имеют состояния `delivered`; непустое подмножество не является успехом. Подтверждённая destination не дублируется; revoke/remap оставляет строку `blocked` с безопасным кодом ошибки, а неоднозначный сетевой исход — `pending/confirmation_ambiguous` либо незавершённую lease, если сама БД недоступна.
+Kubernetes API snapshot допускает bounded LKG только для краткой transport
+ошибки. Signature corruption, rollback, revision conflict, key/grace expiry
+закрывают admission сразу. Одинаковый outage и recovery логируются один раз как
+state transition, а не повторяющимся warning.
 
-Окончательная ошибка формирует безопасную классификацию, цепочку запусков и единственное адресное уведомление корневому инициатору. Временные ошибки до исчерпания retry policy обновляют служебные карточки без упоминания человека.
+## Критерии приёмки
 
-## Временные ошибки
-
-Ошибки ресурсов, поставщика и сети классифицируются типизированной политикой. Повтор сохраняет сессию и PVC и использует ограниченную задержку. Ошибки лимитов, авторизации и проверки не маскируются под нехватку ресурсов.
-
-## Адаптер Kubernetes
-
-Адаптер создает ресурсы из типизированных спецификаций. Бизнес-код не формирует YAML или shell. Контроллер среды выполнения идемпотентно сверяет состояние `Pod`, `PVC`, `Secret` и `ServiceAccount` и записывает условие состояния.
-
-Control-plane назначает Session/Turn/attempt/sequence и fresh RuntimeRevision;
-bot-service session API не является источником authority. Входной interaction
-producer передаёт owner-команде только transport-verified actor/route и
-immutable payload lineage. Повтор той же команды возвращает тот же owner tuple
-по semantic idempotency key. Первый runner Pod появляется из durable `PENDING`
-RuntimeExecution до Turn lease, после чего exact runner identity захватывает
-FIFO head, а controller выполняет admission. Payload IDs не назначают actor,
-ownership или lifecycle authority. Terminal handoff сохраняет `BLOCKED`,
-`WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner семантики.
-
-Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision`,
-capacity observation и execution-scoped Pod/ServiceAccount. Warm process reuse
-запрещён: retained PVC сохраняет только session files и Codex rollout, а config,
-env, MCP client и credentials всегда создаются заново. Stale observation не
-допускает execution, но bounded owner reschedule переводит очередь на новую
-attempt без мутации старого снимка.
-
-Terminal transition pin-ит versioned `ResourceRetentionPolicy`, eligibility и
-S3 retain-until. PVC cleanup выполняется двухфазным exact claim/NotFound proof/
-finalize; после cleanup restore source назначается один раз на новую пустую PVC
-generation и публикуется через same-filesystem staging до запуска role Pod.
-Retention берётся из owner-managed `ResourceRetentionPolicy` aggregate со
-stable ID/version/effective values; claim pin-ит snapshot, а все последующие
-terminal/archive/cleanup переходы используют только его.
-
-## Критерии приемки
-
-- Одна сессия выполняет не более одного активного хода.
-- Сообщения из очереди выполняются в порядке `sequence`.
-- Перезапуск bot-service или контроллера не теряет очередь.
-- Устаревшее состояние `running` исправляется по аренде и подтверждениям процесса агента.
-- Недостаток ресурсов не переводит ход в необратимую ошибку.
-- Capacity reconcile может освободить не более одного доказанно terminal role
-  Pod под общей блокировкой ёмкости и повторить расчёт без удаления PVC,
-  сессии либо очереди. Неизвестный, active или несогласованный owner tuple
-  закрыто запрещает вытеснение.
-- Изменение ревизии среды выполнения применяет свежие env, конфигурацию и интеграции к следующему ходу.
-- Для одной сессии существует не более одного активного role Pod; successor всегда получает новый Pod, а terminal Pod не используется повторно.
-- Одна сессия имеет один основной диалог, но может владеть несколькими долговечными ссылками на дочерние обсуждения.
-- Повтор межкомнатного делегирования с тем же ключом не создает второй тред или второй ход.
-- Обратный вызов дочернего агента ставится в очередь исходной сессии и не зависит от имени ее роли.
-- Запуск роли в текущем треде сохраняет тот же долговечный маршрут callback, что и межкомнатное делегирование.
-- Пропущенный явный callback компенсируется одним автоматическим callback из терминального результата без повторного запуска координатора.
-- Маршрут обратного вызова хранит точные исходные сессию и обсуждение координатора: членство координатора в дочернем канале, текстовое упоминание и повторный межкомнатный запуск для возврата не требуются.
-- Один дочерний ход создает не более одного обратного вызова. Новый ход той же дочерней сессии может вернуть новый результат по сохраненному маршруту в ту же исходную сессию; повтор в рамках одного хода остается идемпотентным.
-- Успех callback возвращается только после подтверждения всех строк durable delivery plan; частичный исход наблюдаем и повторяем без дубликатов.
-- PVC не удаляется до проверки S3-архива и истечения периода отсрочки хранения.
-- Удаление канала или обсуждения запускает отсроченную, отменяемую и аудируемую очистку.
-- `waiting_approval` и `waiting_external` защищают сессию от очистки.
-- Запуск и callback без разрешенной relationship policy отклоняются до создания хода.
-- Имя и тип роли не влияют на авторизацию.
+- два normal turns одного Session не выполняются параллельно;
+- normal Agent всегда запускается в собственном role image Pod;
+- assistant first request использует реально обслуживаемый warm runtime;
+- callback, cancel, retry и gate resolution сохраняют согласованный graph;
+- Mattermost outage не влияет на runtime claim и terminal result.

@@ -4,56 +4,69 @@ title: Идентификация и доступ
 type: domain
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-08-22
 ---
 
 # Идентификация и доступ
 
-## Назначение
+## Владение
 
-Владеет `Organization`, сопоставлением учетных записей пользователей, членством, ролями платформы и решениями политик. Обеспечивает изоляцию даже в первом профиле «одна организация на установку».
+Домен владеет `Organization`, `User`, `Membership`, platform role, project
+membership, typed permission policy и audit attribution. MVP создаёт одну
+Organization, но каждый aggregate и query сохраняет tenant boundary.
 
-## В границах
+## Actor boundary
 
-- идентификация OIDC и сопоставление пользователя Mattermost;
-- членство в организации;
-- роли `owner`, `admin`, `operator`, `auditor`, `member`;
-- контекст авторизации для API и MCP;
-- служебные учетные записи и учетные записи сессий;
-- отзыв доступа и аудит решений авторизации.
+- OIDC issuer и subject разрешаются сервером в активного User и Membership.
+- Browser payload не принимает actor, organization, owner, permission или root
+  lineage.
+- Opaque ref является locator, но не authority: ресурс сначала разрешается
+  внутри tenant/project boundary, затем проверяются OCC и idempotency.
+- Скрытый или чужой объект возвращает тот же безопасный результат, что
+  отсутствующий.
+- MCP-инструмент системного или обычного агента действует от имени сохранённого
+  root actor только через signed context и не расширяет его permissions.
 
-Не хранит учетные данные OpenAI, GitHub и API и не управляет паролями или сессиями Mattermost.
+## Роли
+
+Platform roles: `OWNER`, `ADMINISTRATOR`, `OPERATOR`, `MEMBER`, `AUDITOR`.
+Project membership добавляет закрытый набор permissions для configuration,
+launch, gate resolution, artifact и audit operations. Последний active Owner
+защищён от удаления и понижения.
+
+## Межсервисная авторизация
+
+mTLS подтверждает workload transport identity, но каждый privileged RPC также
+требует application credential, exact operation/permission, target binding,
+короткий срок и durable replay protection. Caller-provided project или resource
+ID не заменяет server-owned eligibility.
+
+JWKS и control-plane authorization snapshot допускают bounded last-known-good до
+двух минут от последнего успешного получения. Ошибка повторного получения не
+продлевает окно, а новый token не выдаётся дольше его остатка. Нарушение подписи,
+rollback, conflict revision, истечение ключа или grace закрывают доступ сразу.
 
 ## Инварианты
 
-- Каждый бизнес-объект принадлежит `Organization` либо является объектом системного каталога.
-- Только владелец может назначать администратора платформы.
-- Токен сессии содержит организацию, область агента и сессии, срок действия и возможности.
-- Отключенный субъект не создает новые действия; уже согласованные опасные действия повторно проверяются политикой.
+- disabled User не начинает новый effect;
+- изменение membership и permission фиксирует audit без token/secret;
+- один eligibility rule используется для single, list, search и event path;
+- Mattermost, GitHub и Kubernetes identity являются только external binding и не
+  участвуют в core authority;
+- пользовательский locale хранится как проверенное предпочтение и выбирает i18n
+  сообщения, но не влияет на policy.
 
-## Интерфейсы
+## События
 
-Команды: создать организацию, пригласить или сопоставить участника, изменить роль, отключить субъекта.
+`organization.created`, `membership.changed`, `membership.suspended`,
+`permission.policy_changed`. Payload содержит безопасные refs, version и actor
+attribution и публикуется через transactional outbox.
 
-Запросы: текущий субъект, членство, итоговые права платформы.
+## Критерии приёмки
 
-События: `OrganizationCreated`, `MembershipChanged`, `SubjectDisabled`, `PolicyChanged`.
-
-## Наблюдаемость
-
-- отклоненные действия с указанием причины;
-- недействительные или истекшие учетные записи сессий;
-- изменения административных ролей;
-- ошибки сопоставления OIDC и Mattermost.
-
-## Критерии приемки
-
-- API и MCP отвергают идентификаторы другой организации.
-- Интерфейс не показывает недоступные сущности.
-- Аудит содержит инициатора и результат политики без токена.
-- Две реплики без локального состояния принимают одинаковые решения авторизации.
-
-## Открытое решение
-
-Полноценный общий многоарендный SaaS остается за пределами первого промышленного профиля; схема и контракты не должны блокировать его последующее появление.
+- foreign project/run/session/gate/artifact не читается и не изменяется;
+- system assistant не обходит права пользователя;
+- audit позволяет отличить прямое действие от действия через помощника;
+- token, cookie, JWS/JWK private material и secret value не попадают в ответы,
+  логи, события и frontend.

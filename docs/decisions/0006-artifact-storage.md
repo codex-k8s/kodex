@@ -1,23 +1,38 @@
 ---
 id: ADR-MC-006
-title: S3 как основное хранилище файлов
+title: Bounded artifact storage boundary
 type: decision
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.0.0
+updated: 2026-08-22
 ---
 
-# ADR-MC-006. S3 как основное хранилище файлов
+# ADR-MC-006. Bounded artifact storage boundary
 
 ## Решение
 
-Вложения, результаты агентов, `InstructionSet` и архивы сессий хранятся в S3-совместимом объектном хранилище. Mattermost содержит копию или ссылку доставки, PostgreSQL — метаданные и состояние жизненного цикла.
+Control-plane владеет metadata и lifecycle Artifact. Fresh web-only профиль
+первой версии хранит bounded content в PostgreSQL в той же tenant boundary,
+чтобы upload, generated result и download работали без обязательного внешнего
+object storage. Размер каждого объекта и суммарная транзакция строго ограничены.
 
-Входные файлы проходят хеширование и проверки политики и безопасности до материализации. Агент публикует выходные файлы только через `publish_artifact` из разрешенного исходящего каталога.
+Доступ к content возможен только через специализированные streaming RPC/HTTP
+operations с owner eligibility, scan state и one-time download grant. Browser,
+runtime Pod и optional adapter не получают PostgreSQL DSN или storage locator.
+
+Object storage может быть добавлен как внутренняя реализация artifact content
+port после MVP. Это не меняет `Artifact`, API, grants, provenance или lifecycle и
+не превращает S3 connection в пользовательскую IntegrationDefinition.
+
+Optional Mattermost/result mirror содержит только отдельную доставленную копию
+или ограниченную ссылку и никогда не является источником истины.
 
 ## Последствия
 
-- TTL pod и PVC и срок хранения Mattermost не уничтожают основной результат.
-- Требуются изоляция организаций, сроки хранения, версионирование и согласованность резервных копий.
-- Слишком большой для Mattermost файл можно доставить ограниченной ссылкой с истекающим сроком.
+- web-only installation имеет одну меньшую обязательную infrastructure
+  dependency;
+- large-object/multipart и отдельный object store backend относятся к POST-MVP;
+- PostgreSQL backup включает metadata и bounded content согласованно;
+- runtime and browser traffic остаются bounded streaming и не передают files по
+  WebSocket/domain event.

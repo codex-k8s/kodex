@@ -1,80 +1,75 @@
 ---
 id: DOM-MC-004
-title: Агенты и инструкции
+title: ИИ-сотрудники и инструкции
 type: domain
 status: approved
 owner: architect
-version: 0.4.0
-updated: 2026-07-23
+version: 1.0.0
+updated: 2026-08-22
 ---
 
-# Агенты и инструкции
+# ИИ-сотрудники и инструкции
 
-## Назначение
+## Agent
 
-Описывает переиспользуемые роли, конкретных ИИ-сотрудников, их назначения, промпты и версионируемые наборы инструкций.
+`Agent` принадлежит Project и содержит name, avatar, purpose, role description,
+model/runtime selection, current published instructions, role image binding,
+capabilities, integration grants, knowledge bindings, external identities,
+lifecycle, enabled state и version. Mattermost bot и Git account не обязательны.
 
-## В границах
+## Инструкции
 
-- каталог `RoleDefinition`;
-- учетная запись и представление агента;
-- назначения в рабочие области и комнаты;
-- шаблон промпта и политика локали;
-- `InstructionSet` и его версии;
-- сборка итоговых инструкций;
-- предложения от роли `improver`.
+`InstructionDraft` редактируется, проходит structural/security validation и
+публикуется как immutable `InstructionVersion`. Runtime получает только exact
+published version и provenance. Rollback активирует прежнюю опубликованную
+версию новой auditable командой; history не переписывается.
 
-## Источники инструкций
+Инструкции не могут:
 
-- Git-репозиторий (`AGENTS.md` и связанные документы);
-- Markdown под управлением интерфейса;
-- каталог под управлением GitOps;
-- загруженный набор файлов;
-- знания только для чтения, полученные через интеграцию.
+- назначить actor, permission, root lineage или orchestration authority;
+- добавить capability/grant либо изменить policy;
+- получить secret value;
+- потребовать запуск по display name вместо server-owned catalog ref.
 
-Материализатор среды выполнения создает корневой `AGENTS.md` и связанные файлы независимо от наличия checkout репозитория.
+## Capabilities и MCP
 
-## Сборка промпта
+Capability — закрытая типизированная возможность платформы или integration.
+Разрешённые MCP servers и tools materialize-ятся в свежую RuntimeRevision перед
+каждым turn. MCP сохраняется как стандартный runtime protocol, а типизация
+означает bounded input/output schema и специализированную серверную команду, а
+не замену MCP произвольным внутренним вызовом.
 
-Порядок контекста:
+Делегирование, callback, request sync и owner attention выполняются отдельными
+платформенными MCP tools. Агент выбирает target из авторитетного каталога и
+получает opaque `delegation_ref`; control-plane самостоятельно назначает root,
+parent, child, recipient policy и route.
 
-1. системные требования безопасности и среды выполнения;
-2. шаблон `RoleDefinition`, если задан;
-3. требования локали и коммуникации;
-4. манифест `InstructionSet`;
-5. контекст `Workspace` и `Room`;
-6. справка по интеграциям и инструментам;
-7. манифест вложений;
-8. пользовательская инструкция, расписание или делегирование.
+## System Assistant
 
-Пустой шаблон роли является допустимым режимом прямой пользовательской инструкции.
+Помощник MatterCodex — системный Agent со stable key `system.assistant`.
+Bootstrap создаёт один экземпляр, protected versioned core prompt и owner
+supplement. Domain constraints и команды запрещают delete, archive, disable,
+смену purpose и замену core prompt.
 
-Если `AGENTS.md` не задает язык, выбранная локаль пользователя или рабочей области применяется к ответам, PR, Issues, комментариям, документации и комментариям в коде, где это уместно.
+Помощник использует только allowlisted MCP tools специализированных owner
+commands. Каждая invocation повторно проверяет текущего User и записывает
+двойную атрибуцию. Прямые PostgreSQL, Kubernetes и secret-store credentials ему
+не выдаются.
 
-## Контракт промптов независимой проверки
+## Role image
 
-Шаблон роли, выполняющей независимую или security-проверку, явно требует классифицировать каждое замечание как `Merge blocker`, `MVP follow-up` или `Informational`. Координатор передаёт тот же контракт в каждое такое делегирование и перед слиянием проверяет исходы по GitHub GraphQL `reviewThreads`, а не по плоскому списку комментариев.
+Agent ссылается только на admitted promoted role image digest. Образ определяет
+доступные ОС-пакеты, CLI, языки и прикладное ПО роли. Защищённый
+`matter-codex-agent-runner` и runtime contract добавляются после недоверенного
+installation step и проверяются supply chain admission.
 
-Для `MVP follow-up` шаблон требует до разрешения thread создать Issue с labels `mvp-follow-up` и дополнительным предметным label, оставить в исходном thread URL Issue и объяснить, почему риск не является blocker. Для `Informational` достаточно проверяемого объяснения в thread; `Merge blocker` исправляется в текущем PR.
+## События и критерии приёмки
 
-Выбор шаблона по редактируемому имени или `role_type` является только настройкой данных и не выдаёт полномочий. Возможность оставлять ревью, разрешать thread, запускать волну или сливать определяется версионируемой политикой проекта.
+События: `agent.created`, `agent.updated`, `agent.enabled_changed`,
+`agent.instructions_published`, `agent.instructions_rolled_back`,
+`agent.capability_changed`.
 
-## Improver
-
-Роль `improver` не изменяет основные инструкции напрямую. Один раз вечером она выбирает merged PR без label `improved`, создаёт отдельный PR новой версии инструкций с категориями подтверждающих примеров и после обработки помечает исходные PR. Результат не блокирует независимые волны; слияние собственного PR не запускает новый цикл.
-
-## Внимание инициатора и обратные вызовы
-
-Перед межкомнатным запуском координатор проверяет каталог и карточку целевого чата. Платформа проверяет capability и relationship policy, сохраняет точное сообщение запуска и наследует root initiator. Первый запуск назначенной роли создает долговечное делегирование и фиксирует точные role-thread и Codex session. Каждый следующий пакет исправлений или повторной проверки направляется через `mattermost_continue_agent_thread` по исходному `delegation_id`; создавать для цикла новый тред запрещено. Дочерняя сессия возвращает результат разрешенному координатору через `mattermost_return_to_requester`; обычное завершение, статус и callback не упоминают человека.
-
-Роль с capability `owner_attention.request` может открыть ручной шлюз или сообщить срочный блокер через отдельный MCP-инструмент. Платформа сама уведомляет root initiator после окончательной ошибки. Имя роли, текст промпта и переданное агентом имя пользователя не дают права на уведомление.
-
-## Критерии приемки
-
-- Один `RoleDefinition` переиспользуется несколькими агентами.
-- Каждый агент имеет отдельную учетную запись бота.
-- Инструкции работают без Git-репозитория.
-- Измененная версия применяется со следующего хода.
-- Предпросмотр промпта показывает источники и порядок без значений секретов.
-- Владелец может откатить версию инструкций.
-- Промпты независимой и security-проверки содержат три исхода замечания и доказуемый порядок закрытия `MVP follow-up`.
+- системный помощник не удаляется и не отключается ни одной transport surface;
+- новый turn использует exact published instructions, grants и role image;
+- имя роли, prompt и provider response не дают полномочий;
+- обычный Agent работает без external identity и integration.
