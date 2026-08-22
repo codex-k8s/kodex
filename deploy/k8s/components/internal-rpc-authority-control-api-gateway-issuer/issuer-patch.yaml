@@ -108,14 +108,14 @@ spec:
             periodSeconds: 5
           startupProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: auth-metrics
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 60
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: auth-metrics
             timeoutSeconds: 2
             periodSeconds: 10

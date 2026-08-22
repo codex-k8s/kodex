@@ -69,7 +69,7 @@ spec:
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
           ports: [{name: metrics, containerPort: 9090, protocol: TCP}]
           startupProbe: &technicalProbe
-            httpGet: {path: /livez, port: metrics}
+            httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 30
@@ -79,7 +79,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 2
           livenessProbe:
-            httpGet: {path: /livez, port: metrics}
+            httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 10
             failureThreshold: 3

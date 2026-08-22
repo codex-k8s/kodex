@@ -92,7 +92,7 @@ spec:
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: technical
             timeoutSeconds: 2
             periodSeconds: 10

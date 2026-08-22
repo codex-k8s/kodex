@@ -60,7 +60,29 @@ rg -F -- "--allow-sub 'control_plane.platform.*.events,control_plane.run.*.*.eve
 for deployment in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler role-image-builder image-admission-controller staff-control-center; do
   DEPLOYMENT="$deployment" yq -e 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" >/dev/null ||
     fail "required deployment is absent: $deployment"
+  DEPLOYMENT="$deployment" yq -o=json 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" |
+    jq -e --arg name "$deployment" '
+      .spec.template.spec.containers[] | select(.name == $name) |
+      .startupProbe.httpGet.path == "/healthz" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      .livenessProbe.httpGet.path == "/healthz"
+    ' >/dev/null || fail "application probes do not follow the local snapshot contract: $deployment"
 done
+
+invalid_probe=$(
+  yq -r '
+    select(.kind == "Deployment") |
+    .metadata.name as $deployment |
+    .spec.template.spec.containers[] |
+    select(
+      (.startupProbe.httpGet.path != null and .startupProbe.httpGet.path != "/healthz") or
+      (.readinessProbe.httpGet.path != null and .readinessProbe.httpGet.path != "/readyz") or
+      (.livenessProbe.httpGet.path != null and .livenessProbe.httpGet.path != "/healthz")
+    ) |
+    $deployment + "/" + .name
+  ' "$render_file"
+)
+[[ -z "$invalid_probe" ]] || fail "render contains a probe outside the health/readiness contract: $invalid_probe"
 
 yq -o=json 'select(.kind == "Job" and .metadata.name == "control-plane-migrate")' "$render_file" |
   jq -e '

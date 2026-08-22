@@ -141,7 +141,7 @@ spec:
               protocol: TCP
           startupProbe:
             httpGet:
-              path: /readyz
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 2
