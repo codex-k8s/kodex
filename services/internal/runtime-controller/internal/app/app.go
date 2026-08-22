@@ -18,10 +18,35 @@ import (
 )
 
 const (
-	serviceName = "runtime-controller"
-	issuerUID   = 29001
-	issuerGID   = 29000
+	serviceName                   = "runtime-controller"
+	issuerUID                     = 29001
+	issuerGID                     = 29000
+	kubernetesLastKnownGoodWindow = 2 * time.Minute
 )
+
+type kubernetesReadinessObserver struct {
+	now         func() time.Time
+	lastSuccess time.Time
+	degraded    bool
+}
+
+func newKubernetesReadinessObserver() *kubernetesReadinessObserver {
+	return &kubernetesReadinessObserver{now: time.Now}
+}
+
+func (observer *kubernetesReadinessObserver) Observe(err error) (available, changed, degraded bool) {
+	now := observer.now().UTC()
+	if err == nil {
+		changed = observer.degraded
+		observer.lastSuccess = now
+		observer.degraded = false
+		return true, changed, false
+	}
+	changed = !observer.degraded
+	observer.degraded = true
+	available = !observer.lastSuccess.IsZero() && now.Before(observer.lastSuccess.Add(kubernetesLastKnownGoodWindow))
+	return available, changed, true
+}
 
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
@@ -124,12 +149,23 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.InfrastructureCheckInterval)
 		defer ticker.Stop()
+		kubernetes := newKubernetesReadinessObserver()
 		for {
-			check, cancel := context.WithTimeout(ctx, config.RequestTimeout)
-			authorityErr := control.CheckLocalAuthority(check)
-			kubernetesErr := manager.Check(check)
-			cancel()
-			if authorityErr == nil && kubernetesErr == nil {
+			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RequestTimeout)
+			authorityErr := control.CheckLocalAuthority(authorityCheck)
+			cancelAuthority()
+			kubernetesCheck, cancelKubernetes := context.WithTimeout(ctx, config.RequestTimeout)
+			kubernetesErr := manager.Check(kubernetesCheck)
+			cancelKubernetes()
+			kubernetesAvailable, kubernetesChanged, kubernetesDegraded := kubernetes.Observe(kubernetesErr)
+			if kubernetesChanged {
+				if kubernetesDegraded {
+					logger.WarnContext(ctx, "Kubernetes runtime observation degraded", "error_class", "kubernetes")
+				} else {
+					logger.InfoContext(ctx, "Kubernetes runtime observation restored")
+				}
+			}
+			if authorityErr == nil && kubernetesAvailable {
 				metrics.SetReady(true)
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "runtime readiness restored")
