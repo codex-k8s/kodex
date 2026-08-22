@@ -4,7 +4,7 @@ title: Промпты макетов web-first MatterCodex
 type: product-design
 status: approved
 owner: product
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-22
 ---
 
@@ -13,6 +13,11 @@ updated: 2026-08-22
 Документ — самостоятельный пакет заданий для модели, генерирующей UI-макеты.
 Каждый prompt содержит весь необходимый продуктовый контекст и может быть
 скопирован отдельно. Объединять prompts перед генерацией не нужно.
+
+Утверждённые результаты представлены самостоятельными HTML-макетами. Их
+канонический состав, маршруты и способ локальной сборки зафиксированы в
+[`mockups/index.md`](mockups/index.md). Raster-изображения не являются
+источником реализации.
 
 Промпты задают только продуктовый контекст, информационную архитектуру,
 компоновку, тексты, состояния и требования доступности. Визуальный стиль
@@ -30,33 +35,33 @@ updated: 2026-08-22
 - Внешние системы, включая Mattermost, GitHub и Kubernetes, являются только
   необязательными интеграциями.
 
-## Реестр изображений
+## Реестр HTML-макетов
 
 | ID | Экран | Route | Scope | Desktop | Mobile |
 |---|---|---|---|---|---|
-| `UX-01` | Первичная настройка | `/onboarding` | global | `01_onboarding_desktop.png` | `01_onboarding_mobile.png` |
-| `UX-02` | Помощник MatterCodex | `/assistant` | global и выбранный Проект | `02_system_assistant_desktop.png` | `02_system_assistant_mobile.png` |
-| `UX-03` | Главная | `/` | global | `03_home_desktop.png` | `03_home_mobile.png` |
-| `UX-04` | Проекты | `/projects` | global | `04_projects_desktop.png` | `04_projects_mobile.png` |
-| `UX-05` | Обзор Проекта | `/projects/:projectRef` | project | `05_project_overview_desktop.png` | `05_project_overview_mobile.png` |
-| `UX-06` | ИИ-сотрудники | `/projects/:projectRef/agents` | project | `06_agents_desktop.png` | `06_agents_mobile.png` |
-| `UX-07` | ИИ-сотрудник | `/projects/:projectRef/agents/:agentRef` | project | `07_agent_detail_desktop.png` | `07_agent_detail_mobile.png` |
-| `UX-08` | Процессы | `/projects/:projectRef/workflows` | project | `08_workflows_desktop.png` | `08_workflows_mobile.png` |
-| `UX-09` | Редактор Процесса | `/projects/:projectRef/workflows/:workflowRef` | project | `09_workflow_detail_desktop.png` | `09_workflow_detail_mobile.png` |
-| `UX-10` | Новый запуск | `/projects/:projectRef/runs/new` | project | `10_new_run_desktop.png` | `10_new_run_mobile.png` |
-| `UX-11` | Запуски | `/runs`, `/projects/:projectRef/runs` | global или project | `11_runs_desktop.png` | `11_runs_mobile.png` |
-| `UX-12` | Live Run Workspace | `/runs/:runRef` | global с контекстом Проекта | `12_live_run_desktop.png` | `12_live_run_mobile.png` |
-| `UX-13` | Файлы и знания | `/projects/:projectRef/files` | project | `13_files_knowledge_desktop.png` | `13_files_knowledge_mobile.png` |
-| `UX-14` | Автоматизации | `/projects/:projectRef/automations` | project | `14_automations_desktop.png` | `14_automations_mobile.png` |
-| `UX-15` | Интеграции | `/integrations`, `/integrations/:connectionRef` | global | `15_integrations_desktop.png` | `15_integrations_mobile.png` |
-| `UX-16` | Решения | `/decisions` | global | `16_decisions_desktop.png` | `16_decisions_mobile.png` |
-| `UX-17` | Участники и доступ | `/administration/access`, `/projects/:projectRef/members` | global или project | `17_access_desktop.png` | `17_access_mobile.png` |
-| `UX-18` | Администрирование | `/administration` | global | `18_administration_desktop.png` | `18_administration_mobile.png` |
-| `UX-19` | Аудит и диагностика | `/administration/audit` | global | `19_audit_diagnostics_desktop.png` | `19_audit_diagnostics_mobile.png` |
+| `UX-01` | Первичная настройка | `/onboarding` | global | `01_onboarding_desktop.dc.html` | `01_onboarding_mobile.dc.html` |
+| `UX-02` | Помощник MatterCodex | `/assistant` | global и выбранный Проект | `02_assistant_desktop.dc.html` | `02_assistant_mobile.dc.html` |
+| `UX-03` | Главная | `/` | global | `03_home_desktop.dc.html` | `03_home_mobile.dc.html` |
+| `UX-04` | Проекты | `/projects` | global | `04_projects_desktop.dc.html` | `04_projects_mobile.dc.html` |
+| `UX-05` | Обзор Проекта | `/projects/:projectRef` | project | `05_project_overview_desktop.dc.html` | `05_project_overview_mobile.dc.html` |
+| `UX-06` | ИИ-сотрудники | `/projects/:projectRef/agents` | project | `06_agents_desktop.dc.html` | `06_agents_mobile.dc.html` |
+| `UX-07` | ИИ-сотрудник | `/projects/:projectRef/agents/:agentRef` | project | `07_agent_detail_desktop.dc.html` | `07_agent_detail_mobile.dc.html` |
+| `UX-08` | Процессы | `/projects/:projectRef/workflows` | project | `08_workflows_desktop.dc.html` | `08_workflows_mobile.dc.html` |
+| `UX-09` | Редактор Процесса | `/projects/:projectRef/workflows/:workflowRef` | project | `09_workflow_detail_desktop.dc.html` | `09_workflow_detail_mobile.dc.html` |
+| `UX-10` | Новый запуск | `/projects/:projectRef/runs/new` | project | `10_new_run_desktop.dc.html` | `10_new_run_mobile.dc.html` |
+| `UX-11` | Запуски | `/runs`, `/projects/:projectRef/runs` | global или project | `11_runs_desktop.dc.html` | `11_runs_mobile.dc.html` |
+| `UX-12` | Live Run Workspace | `/runs/:runRef` | global с контекстом Проекта | `12_live_run_desktop.dc.html` | `12_live_run_mobile.dc.html` |
+| `UX-13` | Файлы и знания | `/projects/:projectRef/files` | project | `13_files_knowledge_desktop.dc.html` | `13_files_knowledge_mobile.dc.html` |
+| `UX-14` | Автоматизации | `/projects/:projectRef/automations` | project | `14_automations_desktop.dc.html` | `14_automations_mobile.dc.html` |
+| `UX-15` | Интеграции | `/integrations`, `/integrations/:connectionRef` | global | `15_integrations_desktop.dc.html` | `15_integrations_mobile.dc.html` |
+| `UX-16` | Решения | `/decisions` | global | `16_decisions_desktop.dc.html` | `16_decisions_mobile.dc.html` |
+| `UX-17` | Участники и доступ | `/administration/access`, `/projects/:projectRef/members` | global или project | `17_access_desktop.dc.html` | `17_access_mobile.dc.html` |
+| `UX-18` | Администрирование | `/administration` | global | `18_administration_desktop.dc.html` | `18_administration_mobile.dc.html` |
+| `UX-19` | Аудит и диагностика | `/administration/audit` | global | `19_audit_diagnostics_desktop.dc.html` | `19_audit_diagnostics_mobile.dc.html` |
 
 ## Общие требования к генерации
 
-- Генерировать статичный screenshot интерфейса, а не marketing page и не код.
+- Генерировать самостоятельный статичный HTML-макет интерфейса, а не marketing page и не raster image. Макет должен открываться локально без backend и внешних ресурсов.
 - Язык пользовательского интерфейса — русский.
 - Не показывать raw UUID, digests, provider IDs, Kubernetes locators,
   Mattermost IDs, secret values, stack traces и raw provider responses.
@@ -72,15 +77,16 @@ updated: 2026-08-22
   панели — в последовательные секции или bottom sheet, интерактивные области
   делать удобными для касания.
 - Для каждого экрана предусмотреть loading, empty, error, forbidden, offline,
-  conflict, ongoing operation и ready. В основном изображении показывать
-  указанное ready-состояние; дополнительные изображения перечислены отдельно.
+  conflict, ongoing operation и ready. В основном HTML-макете показывать
+  указанное ready-состояние; дополнительные HTML-состояния перечислены
+  отдельно.
 
 ## UX-01. Первичная настройка
 
 ### Имена файлов
 
-- Desktop: `01_onboarding_desktop.png`
-- Mobile: `01_onboarding_mobile.png`
+- Desktop: `01_onboarding_desktop.dc.html`
+- Mobile: `01_onboarding_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -116,17 +122,17 @@ Touch targets должны быть не менее 44×44, порядок focus
 
 ### Обязательные отдельные состояния
 
-- `01_onboarding_assistant_recovering_desktop.png` — помощник реально
+- `01_onboarding_assistant_recovering_desktop.dc.html` — помощник реально
   восстанавливается, ручная настройка остаётся доступной.
-- `01_onboarding_bootstrap_error_desktop.png` — bootstrap завершился ошибкой с
+- `01_onboarding_bootstrap_error_desktop.dc.html` — bootstrap завершился ошибкой с
   безопасным следующим действием.
 
 ## UX-02. Помощник MatterCodex
 
 ### Имена файлов
 
-- Desktop: `02_system_assistant_desktop.png`
-- Mobile: `02_system_assistant_mobile.png`
+- Desktop: `02_assistant_desktop.dc.html`
+- Mobile: `02_assistant_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -166,20 +172,20 @@ Empty содержит примеры задач. Error указывает то�
 
 ### Обязательные отдельные состояния
 
-- `02_system_assistant_empty_desktop.png` — новый диалог с полезными примерами.
-- `02_system_assistant_action_running_desktop.png` — последовательное выполнение
+- `02_assistant_empty_desktop.dc.html` — новый диалог с полезными примерами.
+- `02_assistant_action_running_desktop.dc.html` — последовательное выполнение
   typed operations.
-- `02_system_assistant_conflict_desktop.png` — plan устарел и должен быть
+- `02_assistant_conflict_desktop.dc.html` — plan устарел и должен быть
   пересобран.
-- `02_system_assistant_recovering_mobile.png` — реальное восстановление warm
+- `02_assistant_recovering_mobile.dc.html` — реальное восстановление warm
   runtime.
 
 ## UX-03. Главная
 
 ### Имена файлов
 
-- Desktop: `03_home_desktop.png`
-- Mobile: `03_home_mobile.png`
+- Desktop: `03_home_desktop.dc.html`
+- Mobile: `03_home_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -217,15 +223,15 @@ Touch targets не менее 44×44, карточки имеют доступн
 
 ### Обязательные отдельные состояния
 
-- `03_home_first_run_empty_desktop.png` — ни одного Проекта.
-- `03_home_offline_mobile.png` — read-only snapshot и понятное восстановление.
+- `03_home_first_run_empty_desktop.dc.html` — ни одного Проекта.
+- `03_home_offline_mobile.dc.html` — read-only snapshot и понятное восстановление.
 
 ## UX-04. Проекты
 
 ### Имена файлов
 
-- Desktop: `04_projects_desktop.png`
-- Mobile: `04_projects_mobile.png`
+- Desktop: `04_projects_desktop.dc.html`
+- Mobile: `04_projects_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -263,15 +269,15 @@ Touch targets не менее 44×44, карточки читаются screen r
 
 ### Обязательные отдельные состояния
 
-- `04_projects_empty_desktop.png` — первый Проект ещё не создан.
-- `04_project_create_mobile.png` — доступная mobile-форма создания.
+- `04_projects_empty_desktop.dc.html` — первый Проект ещё не создан.
+- `04_project_create_mobile.dc.html` — доступная mobile-форма создания.
 
 ## UX-05. Обзор Проекта
 
 ### Имена файлов
 
-- Desktop: `05_project_overview_desktop.png`
-- Mobile: `05_project_overview_mobile.png`
+- Desktop: `05_project_overview_desktop.dc.html`
+- Mobile: `05_project_overview_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -311,15 +317,15 @@ Empty для нового Проекта показывает checklist «Доб
 
 ### Обязательные отдельные состояния
 
-- `05_project_overview_empty_desktop.png` — новый Проект без команды и запусков.
-- `05_project_overview_offline_mobile.png` — сохранённый снимок без live-соединения.
+- `05_project_overview_empty_desktop.dc.html` — новый Проект без команды и запусков.
+- `05_project_overview_offline_mobile.dc.html` — сохранённый снимок без live-соединения.
 
 ## UX-06. ИИ-сотрудники
 
 ### Имена файлов
 
-- Desktop: `06_agents_desktop.png`
-- Mobile: `06_agents_mobile.png`
+- Desktop: `06_agents_desktop.dc.html`
+- Mobile: `06_agents_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -355,15 +361,15 @@ Touch targets не менее 44×44, статусы имеют текст, ка
 
 ### Обязательные отдельные состояния
 
-- `06_agents_empty_desktop.png` — первая команда ещё не создана.
-- `06_agent_create_mobile.png` — mobile-форма создания ИИ-сотрудника.
+- `06_agents_empty_desktop.dc.html` — первая команда ещё не создана.
+- `06_agent_create_mobile.dc.html` — mobile-форма создания ИИ-сотрудника.
 
 ## UX-07. ИИ-сотрудник
 
 ### Имена файлов
 
-- Desktop: `07_agent_detail_desktop.png`
-- Mobile: `07_agent_detail_mobile.png`
+- Desktop: `07_agent_detail_desktop.dc.html`
+- Mobile: `07_agent_detail_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -403,16 +409,16 @@ Touch targets не менее 44×44, editor и ошибки имеют прог
 
 ### Обязательные отдельные состояния
 
-- `07_agent_validation_error_desktop.png` — ошибки validation с сохранённым черновиком.
-- `07_agent_version_conflict_desktop.png` — OCC conflict и сравнение версий.
-- `07_system_assistant_protected_desktop.png` — защищённый core prompt и редактируемое дополнение владельца.
+- `07_agent_validation_error_desktop.dc.html` — ошибки validation с сохранённым черновиком.
+- `07_agent_version_conflict_desktop.dc.html` — OCC conflict и сравнение версий.
+- `07_system_assistant_protected_desktop.dc.html` — защищённый core prompt и редактируемое дополнение владельца.
 
 ## UX-08. Процессы
 
 ### Имена файлов
 
-- Desktop: `08_workflows_desktop.png`
-- Mobile: `08_workflows_mobile.png`
+- Desktop: `08_workflows_desktop.dc.html`
+- Mobile: `08_workflows_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -448,15 +454,15 @@ Touch targets не менее 44×44, карточки имеют полные a
 
 ### Обязательные отдельные состояния
 
-- `08_workflows_empty_desktop.png` — первый Процесс ещё не создан.
-- `08_workflows_draft_mobile.png` — черновик с замечаниями и недоступным запуском.
+- `08_workflows_empty_desktop.dc.html` — первый Процесс ещё не создан.
+- `08_workflows_draft_mobile.dc.html` — черновик с замечаниями и недоступным запуском.
 
 ## UX-09. Редактор Процесса
 
 ### Имена файлов
 
-- Desktop: `09_workflow_detail_desktop.png`
-- Mobile: `09_workflow_detail_mobile.png`
+- Desktop: `09_workflow_detail_desktop.dc.html`
+- Mobile: `09_workflow_detail_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -492,16 +498,16 @@ Touch targets не менее 44×44, reorder доступен без drag gestu
 
 ### Обязательные отдельные состояния
 
-- `09_workflow_validation_errors_desktop.png` — несколько ошибок с привязкой к шагам.
-- `09_workflow_published_desktop.png` — опубликованная версия и доступный запуск.
-- `09_workflow_conflict_mobile.png` — конфликт версий с безопасным выбором.
+- `09_workflow_validation_errors_desktop.dc.html` — несколько ошибок с привязкой к шагам.
+- `09_workflow_published_desktop.dc.html` — опубликованная версия и доступный запуск.
+- `09_workflow_conflict_mobile.dc.html` — конфликт версий с безопасным выбором.
 
 ## UX-10. Новый запуск
 
 ### Имена файлов
 
-- Desktop: `10_new_run_desktop.png`
-- Mobile: `10_new_run_mobile.png`
+- Desktop: `10_new_run_desktop.dc.html`
+- Mobile: `10_new_run_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -539,16 +545,16 @@ Touch targets не менее 44×44, step navigation и errors доступны
 
 ### Обязательные отдельные состояния
 
-- `10_new_run_file_scanning_desktop.png` — файл проверяется, запуск временно недоступен.
-- `10_new_run_invalid_input_mobile.png` — связанные с полями ошибки без потери данных.
-- `10_new_run_launching_desktop.png` — идемпотентное создание запуска.
+- `10_new_run_file_scanning_desktop.dc.html` — файл проверяется, запуск временно недоступен.
+- `10_new_run_invalid_input_mobile.dc.html` — связанные с полями ошибки без потери данных.
+- `10_new_run_launching_desktop.dc.html` — идемпотентное создание запуска.
 
 ## UX-11. Запуски
 
 ### Имена файлов
 
-- Desktop: `11_runs_desktop.png`
-- Mobile: `11_runs_mobile.png`
+- Desktop: `11_runs_desktop.dc.html`
+- Mobile: `11_runs_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -586,15 +592,15 @@ Touch targets не менее 44×44, карточка имеет доступн
 
 ### Обязательные отдельные состояния
 
-- `11_runs_empty_desktop.png` — ещё нет запусков.
-- `11_runs_offline_mobile.png` — последний snapshot и потерянный realtime.
+- `11_runs_empty_desktop.dc.html` — ещё нет запусков.
+- `11_runs_offline_mobile.dc.html` — последний snapshot и потерянный realtime.
 
 ## UX-12. Live Run Workspace
 
 ### Имена файлов
 
-- Desktop: `12_live_run_desktop.png`
-- Mobile: `12_live_run_mobile.png`
+- Desktop: `12_live_run_desktop.dc.html`
+- Mobile: `12_live_run_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -640,18 +646,18 @@ Touch targets не менее 44×44, дерево имеет aria-level/expande
 
 ### Обязательные отдельные состояния
 
-- `12_live_run_gate_open_desktop.png` — открытый Human Gate и приостановленный граф.
-- `12_live_run_failed_retry_desktop.png` — failure, новый attempt и сохранённая lineage.
-- `12_live_run_reconnect_desktop.png` — catch-up после разрыва без phantom nodes.
-- `12_live_run_completed_artifacts_desktop.png` — результат, файлы и продолжение сессии.
-- `12_live_run_large_graph_mobile.png` — большое дерево, collapse и focus выбранной ветки.
+- `12_live_run_gate_open_desktop.dc.html` — открытый Human Gate и приостановленный граф.
+- `12_live_run_failed_retry_desktop.dc.html` — failure, новый attempt и сохранённая lineage.
+- `12_live_run_reconnect_desktop.dc.html` — catch-up после разрыва без phantom nodes.
+- `12_live_run_completed_artifacts_desktop.dc.html` — результат, файлы и продолжение сессии.
+- `12_live_run_large_graph_mobile.dc.html` — большое дерево, collapse и focus выбранной ветки.
 
 ## UX-13. Файлы и знания
 
 ### Имена файлов
 
-- Desktop: `13_files_knowledge_desktop.png`
-- Mobile: `13_files_knowledge_mobile.png`
+- Desktop: `13_files_knowledge_desktop.dc.html`
+- Mobile: `13_files_knowledge_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -687,16 +693,16 @@ Touch targets не менее 44×44, upload доступен без drag gestur
 
 ### Обязательные отдельные состояния
 
-- `13_files_upload_scanning_desktop.png` — upload завершён, scan продолжается.
-- `13_files_quarantine_desktop.png` — изолированный файл и безопасные действия.
-- `13_files_empty_mobile.png` — нет файлов и источников.
+- `13_files_upload_scanning_desktop.dc.html` — upload завершён, scan продолжается.
+- `13_files_quarantine_desktop.dc.html` — изолированный файл и безопасные действия.
+- `13_files_empty_mobile.dc.html` — нет файлов и источников.
 
 ## UX-14. Автоматизации
 
 ### Имена файлов
 
-- Desktop: `14_automations_desktop.png`
-- Mobile: `14_automations_mobile.png`
+- Desktop: `14_automations_desktop.dc.html`
+- Mobile: `14_automations_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -732,16 +738,16 @@ Touch targets не менее 44×44, date/time fields имеют доступн
 
 ### Обязательные отдельные состояния
 
-- `14_automation_create_desktop.png` — полная owner-friendly форма.
-- `14_automation_failed_occurrence_desktop.png` — execution success и отдельная delivery failure.
-- `14_automation_paused_mobile.png` — приостановленное расписание и next action.
+- `14_automation_create_desktop.dc.html` — полная owner-friendly форма.
+- `14_automation_failed_occurrence_desktop.dc.html` — execution success и отдельная delivery failure.
+- `14_automation_paused_mobile.dc.html` — приостановленное расписание и next action.
 
 ## UX-15. Интеграции
 
 ### Имена файлов
 
-- Desktop: `15_integrations_desktop.png`
-- Mobile: `15_integrations_mobile.png`
+- Desktop: `15_integrations_desktop.dc.html`
+- Mobile: `15_integrations_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -779,16 +785,16 @@ Mattermost detail содержит четыре независимых capabilit
 
 ### Обязательные отдельные состояния
 
-- `15_integrations_empty_catalog_desktop.png` — пустой catalog при готовой платформе.
-- `15_integration_test_failed_desktop.png` — неуспешный test без утечки секрета.
-- `15_mattermost_partial_capabilities_desktop.png` — независимые статусы четырёх возможностей.
+- `15_integrations_empty_catalog_desktop.dc.html` — пустой catalog при готовой платформе.
+- `15_integration_test_failed_desktop.dc.html` — неуспешный test без утечки секрета.
+- `15_mattermost_partial_capabilities_desktop.dc.html` — независимые статусы четырёх возможностей.
 
 ## UX-16. Решения
 
 ### Имена файлов
 
-- Desktop: `16_decisions_desktop.png`
-- Mobile: `16_decisions_mobile.png`
+- Desktop: `16_decisions_desktop.dc.html`
+- Mobile: `16_decisions_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -826,16 +832,16 @@ Touch targets не менее 44×44, порядок focus соответств�
 
 ### Обязательные отдельные состояния
 
-- `16_decision_stale_winner_desktop.png` — first valid winner на другой поверхности.
-- `16_decisions_empty_desktop.png` — нет ожидающих Human Gates.
-- `16_decision_resolving_mobile.png` — идемпотентное применение решения.
+- `16_decision_stale_winner_desktop.dc.html` — first valid winner на другой поверхности.
+- `16_decisions_empty_desktop.dc.html` — нет ожидающих Human Gates.
+- `16_decision_resolving_mobile.dc.html` — идемпотентное применение решения.
 
 ## UX-17. Участники и доступ
 
 ### Имена файлов
 
-- Desktop: `17_access_desktop.png`
-- Mobile: `17_access_mobile.png`
+- Desktop: `17_access_desktop.dc.html`
+- Mobile: `17_access_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -871,16 +877,16 @@ Touch targets не менее 44×44, role cards имеют selected semantics, 
 
 ### Обязательные отдельные состояния
 
-- `17_access_invite_desktop.png` — typed role и permission preview.
-- `17_access_last_owner_desktop.png` — защита последнего владельца.
-- `17_access_forbidden_mobile.png` — безопасное отсутствие доступа.
+- `17_access_invite_desktop.dc.html` — typed role и permission preview.
+- `17_access_last_owner_desktop.dc.html` — защита последнего владельца.
+- `17_access_forbidden_mobile.dc.html` — безопасное отсутствие доступа.
 
 ## UX-18. Администрирование
 
 ### Имена файлов
 
-- Desktop: `18_administration_desktop.png`
-- Mobile: `18_administration_mobile.png`
+- Desktop: `18_administration_desktop.dc.html`
+- Mobile: `18_administration_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -918,16 +924,16 @@ Touch targets не менее 44×44, statuses доступны текстом, 
 
 ### Обязательные отдельные состояния
 
-- `18_administration_web_only_desktop.png` — core Ready, все Mattermost capabilities disabled.
-- `18_assistant_recovering_desktop.png` — warm runtime действительно восстанавливается.
-- `18_administration_core_degraded_mobile.png` — core failure отделён от optional failure.
+- `18_administration_web_only_desktop.dc.html` — core Ready, все Mattermost capabilities disabled.
+- `18_assistant_recovering_desktop.dc.html` — warm runtime действительно восстанавливается.
+- `18_administration_core_degraded_mobile.dc.html` — core failure отделён от optional failure.
 
 ## UX-19. Аудит и диагностика
 
 ### Имена файлов
 
-- Desktop: `19_audit_diagnostics_desktop.png`
-- Mobile: `19_audit_diagnostics_mobile.png`
+- Desktop: `19_audit_diagnostics_desktop.dc.html`
+- Mobile: `19_audit_diagnostics_mobile.dc.html`
 
 ### Desktop prompt
 
@@ -967,6 +973,6 @@ Touch targets не менее 44×44, cards имеют полные accessible n
 
 ### Обязательные отдельные состояния
 
-- `19_diagnostics_incident_desktop.png` — core incident с безопасным next action.
-- `19_audit_redacted_desktop.png` — поля скрыты политикой без утечки.
-- `19_audit_empty_mobile.png` — честное пустое состояние.
+- `19_diagnostics_incident_desktop.dc.html` — core incident с безопасным next action.
+- `19_audit_redacted_desktop.dc.html` — поля скрыты политикой без утечки.
+- `19_audit_empty_mobile.dc.html` — честное пустое состояние.
