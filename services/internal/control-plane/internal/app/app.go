@@ -88,18 +88,21 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct role image service: %w", err)
 	}
+	workerGrantTrustFiles := map[string]string{
+		"automation-scheduler": config.AutomationGrantTrustFile,
+		"integration-gateway":  config.IntegrationGrantTrustFile,
+		"runtime-controller":   config.RuntimeGrantTrustFile,
+		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
+		"image-admission":      config.ImageAdmissionGrantTrustFile,
+		"image-promotion":      config.ImagePromotionGrantTrustFile,
+	}
+	if config.InteractionGrantTrustFile != "" {
+		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
+	}
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
-		SignerTrustFile: config.ProofSignerTrustFile,
-		WorkerGrantTrustFiles: map[string]string{
-			"automation-scheduler": config.AutomationGrantTrustFile,
-			"integration-gateway":  config.IntegrationGrantTrustFile,
-			"interaction-gateway":  config.InteractionGrantTrustFile,
-			"runtime-controller":   config.RuntimeGrantTrustFile,
-			"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
-			"image-admission":      config.ImageAdmissionGrantTrustFile,
-			"image-promotion":      config.ImagePromotionGrantTrustFile,
-		},
+		SignerTrustFile:       config.ProofSignerTrustFile,
+		WorkerGrantTrustFiles: workerGrantTrustFiles,
 		OIDC: oidcverifier.Config{
 			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
 			ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,

@@ -1,4 +1,4 @@
-name: Render exact web-only release
+name: Render exact MatterCodex release
 
 on:
   workflow_dispatch:
@@ -15,6 +15,14 @@ on:
         description: Exact SHA-256 of release-lock.json
         required: true
         type: string
+      deployment_profile:
+        description: Deployment profile used by the build
+        required: true
+        default: web-only
+        type: choice
+        options:
+          - web-only
+          - web-with-mattermost
 
 permissions:
   actions: read
@@ -72,7 +80,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ github.token }}
-      - name: Render immutable web-only manifest
+      - name: Render immutable release manifest
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
@@ -83,26 +91,29 @@ jobs:
           OIDC_JWKS_URL: ${{ vars.MATTERCODEX_OIDC_JWKS_URL }}
           OIDC_CONNECT_ADDRESS: ${{ vars.MATTERCODEX_OIDC_CONNECT_ADDRESS }}
           OIDC_TLS_SERVER_NAME: ${{ vars.MATTERCODEX_OIDC_TLS_SERVER_NAME }}
+          KUBERNETES_API_SERVICE_CIDR: ${{ vars.MATTERCODEX_KUBERNETES_API_SERVICE_CIDR }}
+          DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
         run: |
           test "$(<release-artifact/release-lock.sha256)" = "$LOCK_SHA256"
           tools/release/validate-release-lock.sh \
             --lock release-artifact/release-lock.json --source-sha "$SOURCE_SHA" \
-            --sha256 "$LOCK_SHA256"
+            --sha256 "$LOCK_SHA256" --profile "$DEPLOYMENT_PROFILE"
           tools/release/render-web-only.sh \
             --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256" \
-            --output web-only.yaml \
+            --output release.yaml --profile "$DEPLOYMENT_PROFILE" \
             --public-host "$PUBLIC_HOST" --public-origin "$PUBLIC_ORIGIN" \
             --oidc-issuer "$OIDC_ISSUER" --oidc-jwks-url "$OIDC_JWKS_URL" \
             --oidc-connect-address "$OIDC_CONNECT_ADDRESS" \
-            --oidc-tls-server-name "$OIDC_TLS_SERVER_NAME"
-          sha256sum web-only.yaml | awk '{print $1}' > web-only.sha256
+            --oidc-tls-server-name "$OIDC_TLS_SERVER_NAME" \
+            --kubernetes-api-service-cidr "$KUBERNETES_API_SERVICE_CIDR"
+          sha256sum release.yaml | awk '{print $1}' > release.sha256
       - name: Upload render for separate owner deployment
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: web-only-render-${{ inputs.source_sha }}
+          name: ${{ inputs.deployment_profile }}-render-${{ inputs.source_sha }}
           path: |
-            web-only.yaml
-            web-only.sha256
+            release.yaml
+            release.sha256
             owner-gate.json
             build-run-evidence.json
           if-no-files-found: error

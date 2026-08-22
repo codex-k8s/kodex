@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: interaction-gateway
+  labels:
+    app.kubernetes.io/name: interaction-gateway
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: interaction-gateway
+      app.kubernetes.io/component: interaction-adapter
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
+    - port: auth-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s

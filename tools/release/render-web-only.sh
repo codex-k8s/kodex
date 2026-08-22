@@ -2,7 +2,7 @@
 set -euo pipefail
 
 fail() {
-  printf 'Web-only render failed: %s\n' "$*" >&2
+  printf 'Release render failed: %s\n' "$*" >&2
   exit 1
 }
 
@@ -12,7 +12,8 @@ usage() {
     '  --public-host <dns> --public-origin <https://dns>' \
     '  --oidc-issuer <https-url> --oidc-jwks-url <https-url>' \
     '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
-    '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' >&2
+    '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' \
+    '  [--profile <web-only|web-with-mattermost>]' >&2
 }
 
 lock_file=""
@@ -25,6 +26,7 @@ oidc_jwks_url=""
 oidc_connect_address=""
 oidc_tls_server_name=""
 kubernetes_api_service_cidr=""
+profile="web-only"
 
 while (($# > 0)); do
   case "$1" in
@@ -38,12 +40,14 @@ while (($# > 0)); do
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-tls-server-name) oidc_tls_server_name="${2:-}"; shift 2 ;;
     --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
+    --profile) profile="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
+[[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ "$lock_sha256" =~ ^[a-f0-9]{64}$ && "$lock_sha256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'release lock SHA-256 is invalid'
 [[ -n "$output" ]] || fail 'output path is required'
@@ -65,12 +69,12 @@ go run "$repository_root/tools/release/validate-host-cidr.go" "$kubernetes_api_s
   fail 'Kubernetes API Service CIDR is invalid'
 source_sha=$(jq -er '.source_sha' "$lock_file")
 "$script_directory/validate-release-lock.sh" \
-  --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
+  --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" --profile "$profile" >/dev/null
 
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
-rendered="$temporary_directory/web-only.yaml"
-kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$rendered"
+rendered="$temporary_directory/$profile.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
 
 while IFS=$'\t' read -r component pull_ref; do
   COMPONENT="$component" PULL_REF="$pull_ref" yq -i '

@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interaction-gateway
+  labels:
+    app.kubernetes.io/name: interaction-gateway
+    app.kubernetes.io/component: interaction-adapter
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: interaction-gateway
+      app.kubernetes.io/component: interaction-adapter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: interaction-gateway
+        app.kubernetes.io/component: interaction-adapter
+    spec:
+      serviceAccountName: interaction-gateway
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: interaction-gateway
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/interaction-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: interaction-gateway-runtime
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['mattercodex.dev/environment']"
+            - name: INTERACTION_GATEWAY_CREDENTIAL_DIRECTORY
+              value: /var/run/secrets/mattercodex/integration-connections
+            - name: INTERACTION_GATEWAY_INSTANCE_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: INTERACTION_GATEWAY_CONTROL_PLANE_CA_FILE
+              value: /var/run/config/mattercodex/interaction-gateway/control-plane/ca.pem
+            - name: INTERACTION_GATEWAY_CONTROL_PLANE_CERTIFICATE_FILE
+              value: /var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+            - name: INTERACTION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE
+              value: /var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
+            - name: INTERACTION_GATEWAY_APPLICATION_GRANT_FILE
+              value: /var/run/secrets/mattercodex/interaction-gateway/application-grant/application-grant.jws
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/mattercodex/interaction-gateway/observability/otel-ca.pem
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/mattercodex/interaction-gateway/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          startupProbe: &technicalProbe
+            httpGet:
+              path: /healthz
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            <<: *technicalProbe
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "2"
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: workload-tls
+              mountPath: /var/run/secrets/mattercodex/interaction-gateway/workload-tls
+              readOnly: true
+            - name: control-plane-ca
+              mountPath: /var/run/config/mattercodex/interaction-gateway/control-plane
+              readOnly: true
+            - name: application-grant
+              mountPath: /var/run/secrets/mattercodex/interaction-gateway/application-grant
+              readOnly: true
+            - name: otel-ca
+              mountPath: /var/run/config/mattercodex/interaction-gateway/observability
+              readOnly: true
+            - name: integration-credentials
+              mountPath: /var/run/secrets/mattercodex/integration-connections
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/interaction-gateway/observability
+              readOnly: true
+      volumes:
+        - name: workload-tls
+          secret:
+            secretName: internal-rpc-authority-interaction-gateway-workload-tls
+            defaultMode: 0440
+        - name: control-plane-ca
+          configMap:
+            name: mattercodex-internal-ca
+            defaultMode: 0440
+        - name: application-grant
+          emptyDir: {sizeLimit: 1Mi}
+        - name: otel-ca
+          configMap:
+            name: mattercodex-otel-ca
+            defaultMode: 0440
+        - name: integration-credentials
+          secret:
+            secretName: mattercodex-integration-credentials
+            optional: true
+            defaultMode: 0440
+        - name: sentry-dsn
+          secret:
+            secretName: mattercodex-sentry
+            defaultMode: 0440

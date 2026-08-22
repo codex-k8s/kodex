@@ -80,9 +80,6 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		}
 		hosts[host] = struct{}{}
 	}
-	if len(hosts) == 0 {
-		return nil, errConfiguration
-	}
 	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text}, nil
 }
 

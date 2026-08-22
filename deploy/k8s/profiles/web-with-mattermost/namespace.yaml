@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-system
+  labels:
+    kubernetes.io/metadata.name: mattercodex-system
+    mattercodex.dev/tenant-boundary: platform

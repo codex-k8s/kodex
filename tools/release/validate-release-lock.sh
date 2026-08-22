@@ -9,16 +9,19 @@ fail() {
 lock_file=""
 source_sha=""
 expected_sha256=""
+profile="web-only"
 while (($# > 0)); do
   case "$1" in
     --lock) lock_file="${2:-}"; shift 2 ;;
     --source-sha) source_sha="${2:-}"; shift 2 ;;
     --sha256) expected_sha256="${2:-}"; shift 2 ;;
+    --profile) profile="${2:-}"; shift 2 ;;
     *) fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
+[[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'source SHA must be exact lowercase 40-hex'
 [[ "$expected_sha256" =~ ^[a-f0-9]{64}$ && "$expected_sha256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'release lock SHA-256 is invalid'
@@ -26,7 +29,7 @@ actual_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
 [[ "$actual_sha256" == "$expected_sha256" ]] || fail 'release lock SHA-256 mismatch'
 
 manifest=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/images.json
-jq -e --arg source_sha "$source_sha" --slurpfile manifest "$manifest" '
+jq -e --arg source_sha "$source_sha" --arg profile "$profile" --slurpfile manifest "$manifest" '
   def registry_path:
     type == "string" and
     test("^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._/-]*)?$") and
@@ -37,7 +40,7 @@ jq -e --arg source_sha "$source_sha" --slurpfile manifest "$manifest" '
     . != "sha256:0000000000000000000000000000000000000000000000000000000000000000";
   . as $root |
   .schema_version == 2 and
-  .profile == "web-only" and
+  .profile == $profile and
   .source_sha == $source_sha and
   (.build_run_id | type == "string" and test("^(local|[0-9]+)$")) and
   (.registry.push | registry_path) and

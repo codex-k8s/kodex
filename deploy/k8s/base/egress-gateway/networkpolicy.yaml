@@ -33,6 +33,13 @@ spec:
               kubernetes.io/metadata.name: mattercodex-system
           podSelector:
             matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+              app.kubernetes.io/component: interaction-adapter
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
               app.kubernetes.io/name: runtime-controller
               app.kubernetes.io/component: hot-runtime
         - namespaceSelector:

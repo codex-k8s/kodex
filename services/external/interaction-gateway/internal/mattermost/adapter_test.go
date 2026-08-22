@@ -3,10 +3,25 @@ package mattermost
 import (
 	"errors"
 	"testing"
+	"testing/fstest"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/mattermost/mattermost/server/public/model"
 )
+
+func TestEmptyMattermostCatalogKeepsAdapterConstructible(t *testing.T) {
+	t.Parallel()
+	adapter, err := New(Config{
+		CredentialDirectory: "/var/run/secrets/mattercodex/integration-connections",
+		ProxyURL:            "http://egress-gateway.mattercodex-system.svc.cluster.local:8080",
+		Timeout:             10 * time.Second,
+	}, localizerForTest(t))
+	if err != nil || adapter == nil {
+		t.Fatalf("New() error = %v", err)
+	}
+}
 
 func TestParseDecisionUsesBoundedCommands(t *testing.T) {
 	t.Parallel()
@@ -49,4 +64,17 @@ func TestOutcomeDoesNotExposeProviderError(t *testing.T) {
 	if success || code != "INTERACTION_UNAVAILABLE" {
 		t.Fatalf("Outcome() = %v, %q", success, code)
 	}
+}
+
+func localizerForTest(t *testing.T) *texti18n.Localizer {
+	t.Helper()
+	localizer, err := texti18n.New(texti18n.Config{
+		Locale: texti18n.DefaultLocale, MessageFS: fstest.MapFS{
+			"messages.en.yaml": {Data: []byte("READY:\n  other: Ready\n")},
+		}, MessageFiles: []string{"messages.en.yaml"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return localizer
 }

@@ -1,41 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: internal-rpc-authority-readback-attestor-deny-by-default
+  name: interaction-gateway-default-deny
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: internal-rpc-authority-readback-attestor
-  policyTypes:
-    - Ingress
-    - Egress
+      app.kubernetes.io/name: interaction-gateway
+  policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: internal-rpc-authority-readback-attestor-exact-paths
+  name: interaction-gateway-exact-runtime-paths
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: internal-rpc-authority-readback-attestor
-  policyTypes:
-    - Ingress
-    - Egress
+      app.kubernetes.io/name: interaction-gateway
+      app.kubernetes.io/component: interaction-adapter
+  policyTypes: [Ingress, Egress]
   ingress:
-    - from:
-        - podSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - control-api-gateway
-                  - integration-gateway
-                  - interaction-gateway
-                  - control-plane
-                  - internal-rpc-authority-publisher
-      ports:
-        - protocol: TCP
-          port: 8443
     - from:
         - namespaceSelector:
             matchLabels:
@@ -44,8 +27,8 @@ spec:
             matchLabels:
               app.kubernetes.io/name: prometheus
       ports:
-        - protocol: TCP
-          port: 9090
+        - {protocol: TCP, port: 9090}
+        - {protocol: TCP, port: 9091}
   egress:
     - to:
         - namespaceSelector:
@@ -55,17 +38,26 @@ spec:
             matchLabels:
               k8s-app: kube-dns
       ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
     - to:
-        - podSelector:
+        - namespaceSelector:
             matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-postgresql
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
       ports:
-        - protocol: TCP
-          port: 5432
+        - {protocol: TCP, port: 8443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+      ports:
+        - {protocol: TCP, port: 8080}
     - to:
         - namespaceSelector:
             matchLabels:
@@ -74,8 +66,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: opentelemetry-collector
       ports:
-        - protocol: TCP
-          port: 4317
+        - {protocol: TCP, port: 4317}
     - to:
         - namespaceSelector:
             matchLabels:
@@ -84,5 +75,4 @@ spec:
             matchLabels:
               app.kubernetes.io/name: sentry-relay
       ports:
-        - protocol: TCP
-          port: 8443
+        - {protocol: TCP, port: 8443}

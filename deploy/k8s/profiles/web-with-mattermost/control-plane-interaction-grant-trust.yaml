@@ -1,0 +1,17 @@
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: control-plane-interaction-grant-trust
+spec:
+  provider: vault
+  parameters:
+    roleName: control-plane
+    audience: vault
+    vaultAddress: https://vault.mattercodex-system.svc:8200
+    vaultTLSServerName: vault.mattercodex-system.svc.cluster.local
+    vaultSkipTLSVerify: "false"
+    objects: |
+      - objectName: "interaction-gateway.platform-worker.public.jwk"
+        secretPath: "kv/data/mattercodex/platform-worker-grants/interaction-gateway"
+        secretKey: "public-jwk"
+        filePermission: 288

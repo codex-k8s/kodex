@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  template:
+    spec:
+      containers:
+        - name: control-plane
+          env:
+            - name: CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/interaction-grant-trust/interaction-gateway.platform-worker.public.jwk
+          volumeMounts:
+            - name: interaction-grant-trust
+              mountPath: /var/run/config/mattercodex/control-plane/interaction-grant-trust
+              readOnly: true
+      volumes:
+        - name: interaction-grant-trust
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-interaction-grant-trust

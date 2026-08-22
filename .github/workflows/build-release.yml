@@ -1,4 +1,4 @@
-name: Build exact web-only release
+name: Build exact MatterCodex release
 
 on:
   workflow_dispatch:
@@ -7,6 +7,14 @@ on:
         description: Exact lowercase 40-hex Git SHA
         required: true
         type: string
+      deployment_profile:
+        description: Deployment profile
+        required: true
+        default: web-only
+        type: choice
+        options:
+          - web-only
+          - web-with-mattermost
 
 permissions:
   actions: read
@@ -54,6 +62,7 @@ jobs:
           NODE_PULL: ${{ vars.MATTERCODEX_NODE_PULL }}
           REPOSITORY_PREFIX: ${{ vars.MATTERCODEX_REPOSITORY_PREFIX }}
           ADMISSION_TOOLS_IMAGE: ${{ vars.MATTERCODEX_ADMISSION_TOOLS_IMAGE }}
+          DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
           REGISTRY_DOCKER_CONFIG_JSON: ${{ secrets.MATTERCODEX_RELEASE_REGISTRY_DOCKER_CONFIG_JSON }}
           HTTPS_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
           HTTP_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
@@ -73,6 +82,7 @@ jobs:
             --node-pull "$NODE_PULL"
             --repository-prefix "${REPOSITORY_PREFIX:-mattercodex}"
             --admission-tools-image "$ADMISSION_TOOLS_IMAGE"
+            --profile "$DEPLOYMENT_PROFILE"
           )
           if [[ -n "${HTTPS_PROXY:-}" ]]; then
             arguments+=(--build-proxy "$HTTPS_PROXY" --build-no-proxy "$NO_PROXY")
@@ -82,11 +92,12 @@ jobs:
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
         run: |
           sha256sum release-lock.json | awk '{print $1}' > release-lock.sha256
           tools/release/validate-release-lock.sh \
             --lock release-lock.json --source-sha "$SOURCE_SHA" \
-            --sha256 "$(<release-lock.sha256)"
+            --sha256 "$(<release-lock.sha256)" --profile "$DEPLOYMENT_PROFILE"
       - name: Upload exact release lock
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

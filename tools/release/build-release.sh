@@ -12,7 +12,7 @@ usage() {
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
     '  --admission-tools-image <repository@sha256:digest>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
-    '  [--build-run-id <digits>]' >&2
+    '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' >&2
 }
 
 source_sha=""
@@ -24,6 +24,7 @@ admission_tools_image=""
 build_proxy=""
 build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
+profile="web-only"
 
 while (($# > 0)); do
   case "$1" in
@@ -36,6 +37,7 @@ while (($# > 0)); do
     --build-proxy) build_proxy="${2:-}"; shift 2 ;;
     --build-no-proxy) build_no_proxy="${2:-}"; shift 2 ;;
     --build-run-id) build_run_id="${2:-}"; shift 2 ;;
+    --profile) profile="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -47,6 +49,7 @@ valid_registry_path() {
 }
 
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'source SHA must be exact lowercase 40-hex'
+[[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ -n "$output" ]] || fail 'output path is required'
 valid_registry_path "$registry_push" || fail 'registry push path is invalid'
 valid_registry_path "$node_pull" || fail 'node pull path is invalid'
@@ -183,7 +186,7 @@ done < <(jq -r '.images[].component' "$manifest")
 
 admission_tools_digest=${admission_tools_image##*@}
 jq -n \
-  --arg profile web-only \
+  --arg profile "$profile" \
   --arg source_sha "$source_sha" \
   --arg build_run_id "$build_run_id" \
   --arg registry_push "$registry_push" \

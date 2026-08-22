@@ -49,8 +49,25 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
 fi
-if rg -ni 'bot-service|legacy-data-migration|interaction-gateway|mattermost' "$render_file" >/dev/null; then
-  fail 'web-only render contains a retired or optional interaction unit'
+if rg -ni 'bot-service|legacy-data-migration|mattermostMode' "$render_file" >/dev/null; then
+  fail 'web-only render contains a retired interaction unit'
+fi
+if yq -e '
+  select(
+    (.kind == "Deployment" or .kind == "Service" or .kind == "ServiceAccount" or
+     .kind == "PodDisruptionBudget" or .kind == "ServiceMonitor" or
+     .kind == "SecretProviderClass") and
+    (.metadata.name | test("(^|-)interaction-gateway($|-)|[Mm]attermost"))
+  )
+' "$render_file" >/dev/null 2>&1; then
+  fail 'web-only render materializes the optional interaction adapter'
+fi
+if yq -e '
+  select(.kind == "Deployment" and .metadata.name == "control-plane") |
+  any(.spec.template.spec.containers[] | select(.name == "control-plane") | .env[]?;
+    .name == "CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE")
+' "$render_file" >/dev/null 2>&1; then
+  fail 'web-only control-plane requires optional interaction grant trust'
 fi
 
 rg -F -- "--allow-sub 'control_plane.platform.*.events,control_plane.run.*.*.events' --deny-pub '>'" \
@@ -186,4 +203,41 @@ expected_egress_digest=$(yq -r '
 ' "$render_file")
 test "$actual_egress_digest" = "$expected_egress_digest" || fail 'egress policy digest expectation is inconsistent'
 
-printf 'Web-only release tests passed\n'
+mattermost_lock="$temporary_directory/web-with-mattermost-lock.json"
+mattermost_render="$temporary_directory/web-with-mattermost.yaml"
+jq '.profile = "web-with-mattermost"' "$lock_file" >"$mattermost_lock"
+mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
+"$repository_root/tools/release/validate-release-lock.sh" \
+  --lock "$mattermost_lock" --source-sha "$source_sha" --sha256 "$mattermost_lock_sha256" \
+  --profile web-with-mattermost >/dev/null
+"$repository_root/tools/release/render-web-only.sh" \
+  --lock "$mattermost_lock" --lock-sha256 "$mattermost_lock_sha256" --output "$mattermost_render" \
+  --profile web-with-mattermost \
+  --public-host console.example.test --public-origin https://console.example.test \
+  --oidc-issuer https://identity.example.test/realms/mattercodex \
+  --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
+  --oidc-connect-address identity.example.test:443 \
+  --oidc-tls-server-name identity.example.test \
+  --kubernetes-api-service-cidr 10.96.0.1/32 >/dev/null
+
+yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gateway")' "$mattermost_render" |
+  jq -e '
+    .spec.template.spec.containers as $containers |
+    any($containers[]; .name == "interaction-gateway" and
+      .startupProbe.httpGet.path == "/healthz" and
+      .readinessProbe.httpGet.path == "/readyz" and
+      .livenessProbe.httpGet.path == "/healthz") and
+    any($containers[]; .name == "internal-rpc-authority-issuer") and
+    any($containers[]; .name == "platform-worker-grant-agent")
+  ' >/dev/null || fail 'Mattermost profile does not materialize the optional adapter boundary'
+if rg -ni 'bot-service|legacy-data-migration|interaction-gateway-postgresql|mattermostMode' "$mattermost_render" >/dev/null; then
+  fail 'Mattermost profile contains a retired core dependency'
+fi
+yq -o=json 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths")' "$mattermost_render" |
+  jq -e '
+    any(.spec.ingress[].from[]?;
+      .podSelector.matchLabels."app.kubernetes.io/name" == "interaction-gateway" and
+      .podSelector.matchLabels."app.kubernetes.io/component" == "interaction-adapter")
+  ' >/dev/null || fail 'Mattermost adapter is not an exact egress-gateway client'
+
+printf 'Web-only and optional Mattermost release tests passed\n'

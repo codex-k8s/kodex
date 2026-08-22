@@ -32,6 +32,7 @@ spec:
                 values:
                   - control-api-gateway
                   - integration-gateway
+                  - interaction-gateway
                   - control-plane
                   - internal-rpc-authority-restore-operator
       ports: [{protocol: TCP, port: 8443}]
