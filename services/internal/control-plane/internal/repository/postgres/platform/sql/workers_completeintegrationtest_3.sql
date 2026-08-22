@@ -1,2 +1,0 @@
--- name: platform__workers_completeintegrationtest_3 :one
-UPDATE control_plane.integration_connections SET state=$2,masked_credentials_state=$3,last_test_summary=$4,last_tested_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE id=$1::uuid AND enabled RETURNING ref,definition_key,name,state,masked_credentials_state,last_test_summary,enabled,version,last_tested_at,created_at,updated_at

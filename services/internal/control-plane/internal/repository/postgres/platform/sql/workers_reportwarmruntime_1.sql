@@ -1,2 +1,0 @@
--- name: platform__workers_reportwarmruntime_1 :one
-UPDATE control_plane.assistant_runtime SET runtime_state=$4,runtime_revision=$3,warm_instance_ref=$2,last_heartbeat_at=clock_timestamp(),version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1::uuid AND desired_runtime_revision=$3 AND (warm_instance_ref IS NULL OR warm_instance_ref=$2) RETURNING stable_key,core_prompt_revision,owner_instructions,runtime_state,runtime_revision,desired_runtime_revision,system_session_ref,resource_limits,last_heartbeat_at,version,updated_at

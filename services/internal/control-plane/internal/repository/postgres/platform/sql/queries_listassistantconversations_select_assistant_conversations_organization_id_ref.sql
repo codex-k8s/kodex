@@ -1,0 +1,2 @@
+-- name: platform__queries_listassistantconversations_select_assistant_conversations_organization_id_ref :many
+SELECT c.ref,c.title,COALESCE(p.ref,''),s.ref,c.state,c.version,c.created_at,c.updated_at FROM control_plane.assistant_conversations c LEFT JOIN control_plane.projects p ON p.id=c.project_id JOIN control_plane.sessions s ON s.id=c.session_id WHERE c.organization_id=$1::uuid AND ($2='' OR p.ref=$2) ORDER BY c.updated_at DESC LIMIT $3

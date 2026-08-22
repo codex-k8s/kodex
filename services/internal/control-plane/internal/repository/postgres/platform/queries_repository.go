@@ -3,56 +3,56 @@ package platform
 import _ "embed"
 
 var (
-	//go:embed sql/repository_ready_1.sql
-	queryRepositoryReady1 string
-	//go:embed sql/repository_bootstrap_1.sql
-	queryRepositoryBootstrap1 string
-	//go:embed sql/repository_bootstrap_2.sql
-	queryRepositoryBootstrap2 string
-	//go:embed sql/repository_bootstrap_3.sql
-	queryRepositoryBootstrap3 string
-	//go:embed sql/repository_bootstrap_4.sql
-	queryRepositoryBootstrap4 string
+	//go:embed sql/repository_ready_select_installation_singleton.sql
+	queryRepositoryReadySelectInstallationSingleton string
+	//go:embed sql/repository_bootstrap_select_installation_singleton.sql
+	queryRepositoryBootstrapSelectInstallationSingleton string
+	//go:embed sql/repository_bootstrap_insert_organizations_ref_name.sql
+	queryRepositoryBootstrapInsertOrganizationsRefName string
+	//go:embed sql/repository_bootstrap_insert_owner_claim_contracts_organization_id_stable_key_state.sql
+	queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState string
+	//go:embed sql/repository_bootstrap_insert_subjects_ref_issuer_display_name.sql
+	queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName string
 	//go:embed sql/bootstrap_create_system_membership.sql
 	queryRepositoryBootstrapSystemMembership string
-	//go:embed sql/repository_bootstrap_5.sql
-	queryRepositoryBootstrap5 string
-	//go:embed sql/repository_bootstrap_6.sql
-	queryRepositoryBootstrap6 string
-	//go:embed sql/repository_bootstrap_7.sql
-	queryRepositoryBootstrap7 string
-	//go:embed sql/repository_bootstrap_8.sql
-	queryRepositoryBootstrap8 string
-	//go:embed sql/repository_bootstrap_9.sql
-	queryRepositoryBootstrap9 string
-	//go:embed sql/repository_bootstrap_10.sql
-	queryRepositoryBootstrap10 string
-	//go:embed sql/repository_bootstrap_11.sql
-	queryRepositoryBootstrap11 string
-	//go:embed sql/repository_bootstrap_12.sql
-	queryRepositoryBootstrap12 string
+	//go:embed sql/repository_bootstrap_insert_platform_capabilities_stable_key_name_description.sql
+	queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription string
+	//go:embed sql/repository_bootstrap_insert_runtime_profiles_stable_key_provider_runtime_revision.sql
+	queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision string
+	//go:embed sql/repository_bootstrap_insert_integration_definitions_stable_key_description_capabilities.sql
+	queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities string
+	//go:embed sql/repository_bootstrap_insert_agents_ref_system_key_purpose.sql
+	queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose string
+	//go:embed sql/repository_bootstrap_insert_instruction_versions_ref_agent_id_state.sql
+	queryRepositoryBootstrapInsertInstructionVersionsRefAgentIdState string
+	//go:embed sql/repository_bootstrap_insert_sessions_ref_target_type_state.sql
+	queryRepositoryBootstrapInsertSessionsRefTargetTypeState string
+	//go:embed sql/repository_bootstrap_insert_assistant_runtime_organization_id_stable_key_core_prompt_revision.sql
+	queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision string
+	//go:embed sql/repository_bootstrap_update_installation_bootstrapped_at.sql
+	queryRepositoryBootstrapUpdateInstallationBootstrappedAt string
 	//go:embed sql/principal_resolve_verified_identity.sql
-	queryRepositoryResolveprincipal1 string
+	queryResolveVerifiedPrincipal string
 	//go:embed sql/proof_owner_lock_installation.sql
-	queryRepositoryResolveProofAuthorityOwner1 string
+	queryLockInstallationOwnerClaim string
 	//go:embed sql/proof_owner_find_subject.sql
-	queryRepositoryResolveProofAuthorityOwner2 string
+	queryFindInstallationOwnerSubject string
 	//go:embed sql/proof_owner_create_subject.sql
-	queryRepositoryResolveProofAuthorityOwner3 string
+	queryCreateInstallationOwnerSubject string
 	//go:embed sql/proof_owner_create_membership.sql
-	queryRepositoryResolveProofAuthorityOwner4 string
+	queryCreateInstallationOwnerMembership string
 	//go:embed sql/proof_owner_claim_installation.sql
-	queryRepositoryResolveProofAuthorityOwner5 string
+	queryClaimInstallationOwnership string
 	//go:embed sql/proof_owner_check_membership.sql
-	queryRepositoryResolveProofAuthorityOwner6 string
+	queryCheckInstallationOwnerMembership string
 	//go:embed sql/proof_system_resolve_identity.sql
-	queryRepositoryResolveProofAuthoritySystem1 string
+	queryResolveSystemWorkloadIdentity string
 	//go:embed sql/proof_project_authorize_membership.sql
-	queryRepositoryResolveProofAuthorityProject1 string
+	queryAuthorizeProjectMembership string
 	//go:embed sql/proof_next_revision.sql
-	queryRepositoryNextProofRevision1 string
+	queryNextAuthorityProofRevision string
 	//go:embed sql/proof_worker_grant_accept_high_watermark.sql
 	queryAcceptWorkerGrantHighWatermark string
-	//go:embed sql/repository_resolvescope_1.sql
-	queryRepositoryResolvescope1 string
+	//go:embed sql/repository_resolvescope_select_memberships_organization_id_subject_id_active.sql
+	queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive string
 )

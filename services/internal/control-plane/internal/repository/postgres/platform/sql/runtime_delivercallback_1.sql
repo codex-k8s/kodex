@@ -1,2 +1,0 @@
--- name: platform__runtime_delivercallback_1 :one
-SELECT child.id::text,child.root_run_id::text,child.project_id::text,p.ref,child.parent_run_id::text,child.result_summary,child.state,e.id::text,e.target_node_id::text FROM control_plane.runs child JOIN control_plane.projects p ON p.id=child.project_id JOIN control_plane.run_edges e ON e.root_run_id=child.root_run_id AND e.ref=$3 AND e.type='CALLBACK_TO' WHERE child.organization_id=$1::uuid AND child.ref=$2 FOR UPDATE OF child,e

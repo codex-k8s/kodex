@@ -43,7 +43,7 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string)
 
 func (repository *Repository) Ready(ctx context.Context) error {
 	var schemaVersion int
-	if err := repository.pool.QueryRow(ctx, queryRepositoryReady1).Scan(&schemaVersion); err != nil {
+	if err := repository.pool.QueryRow(ctx, queryRepositoryReadySelectInstallationSingleton).Scan(&schemaVersion); err != nil {
 		return errors.New("control-plane schema is unavailable")
 	}
 	if schemaVersion != 1 {
@@ -59,7 +59,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var bootstrappedAt *time.Time
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrap1).Scan(&bootstrappedAt); err != nil {
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectInstallationSingleton).Scan(&bootstrappedAt); err != nil {
 		return errors.New("lock installation bootstrap")
 	}
 	if bootstrappedAt != nil {
@@ -70,15 +70,15 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	var organizationID string
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrap2, organizationRef).Scan(&organizationID); err != nil {
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertOrganizationsRefName, organizationRef).Scan(&organizationID); err != nil {
 		return errors.New("create bootstrap organization")
 	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap3, organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState, organizationID); err != nil {
 		return errors.New("create owner claim contract")
 	}
 	systemDigest := sha256.Sum256([]byte("mattercodex-system-subject"))
 	var systemSubjectID string
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrap4,
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName,
 		organizationID, hex.EncodeToString(systemDigest[:])).Scan(&systemSubjectID); err != nil {
 		return errors.New("create system subject")
 	}
@@ -96,13 +96,13 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		{"platform.integration.grant", "Интеграции", "Выдача типизированных grants", "HIGH"},
 	}
 	for _, capability := range capabilities {
-		if _, err := tx.Exec(ctx, queryRepositoryBootstrap5,
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription,
 			capability.key, capability.name, capability.description, capability.risk); err != nil {
 			return errors.New("seed platform capability")
 		}
 	}
 	limits, _ := json.Marshal(map[string]any{"cpu": "1000m", "memory": "2Gi", "maxConcurrentTurns": 1})
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap6, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
 		return errors.New("seed runtime profile")
 	}
 	definitions := []struct {
@@ -115,7 +115,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	}
 	for _, definition := range definitions {
 		capabilityJSON, _ := json.Marshal(definition.capabilities)
-		if _, err := tx.Exec(ctx, queryRepositoryBootstrap7,
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertIntegrationDefinitionsStableKeyDescriptionCapabilities,
 			definition.key, definition.name, definition.description, definition.category, capabilityJSON); err != nil {
 			return errors.New("seed integration definition")
 		}
@@ -125,7 +125,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	var agentID string
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrap8,
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAgentsRefSystemKeyPurpose,
 		agentRef, organizationID, defaultRuntimeKey).Scan(&agentID); err != nil {
 		return errors.New("create system assistant")
 	}
@@ -134,7 +134,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	promptDigest := sha256.Sum256([]byte(corePrompt))
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap9,
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertInstructionVersionsRefAgentIdState,
 		promptRef, organizationID, agentID, corePrompt, hex.EncodeToString(promptDigest[:])); err != nil {
 		return errors.New("create system assistant core prompt")
 	}
@@ -142,15 +142,15 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap10,
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertSessionsRefTargetTypeState,
 		systemSessionRef, organizationID, systemSubjectID); err != nil {
 		return errors.New("create system assistant warm session")
 	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap11,
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision,
 		organizationID, agentID, promptRef, corePromptRevision, systemSessionRef, limits); err != nil {
 		return errors.New("create system assistant runtime contract")
 	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrap12); err != nil {
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapUpdateInstallationBootstrappedAt); err != nil {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
@@ -163,7 +163,7 @@ func (repository *Repository) ResolvePrincipal(ctx context.Context, principal va
 		return value.Principal{}, errs.ErrForbidden
 	}
 	var actorRef, organizationRef string
-	if err := repository.pool.QueryRow(ctx, queryRepositoryResolveprincipal1, principal.ActorID, principal.AuthorityTenant).Scan(&actorRef, &organizationRef); errors.Is(err, pgx.ErrNoRows) {
+	if err := repository.pool.QueryRow(ctx, queryResolveVerifiedPrincipal, principal.ActorID, principal.AuthorityTenant).Scan(&actorRef, &organizationRef); errors.Is(err, pgx.ErrNoRows) {
 		return value.Principal{}, errs.ErrForbidden
 	} else if err != nil {
 		return value.Principal{}, errs.ErrUnavailable
@@ -183,7 +183,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		}
 		var authority platformrepo.ProofAuthority
 		var updatedAt time.Time
-		if err := repository.pool.QueryRow(ctx, queryRepositoryResolveProofAuthoritySystem1).Scan(
+		if err := repository.pool.QueryRow(ctx, queryResolveSystemWorkloadIdentity).Scan(
 			&authority.ActorID, &authority.OrganizationID, &updatedAt, &authority.OrganizationVersion,
 		); errors.Is(err, pgx.ErrNoRows) {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
@@ -203,7 +203,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	defer func() { _ = tx.Rollback(ctx) }()
 	var authority platformrepo.ProofAuthority
 	var authorityTenant, claimState string
-	if err := tx.QueryRow(ctx, queryRepositoryResolveProofAuthorityOwner1).Scan(
+	if err := tx.QueryRow(ctx, queryLockInstallationOwnerClaim).Scan(
 		&authority.OrganizationID, &authority.OrganizationVersion, &authorityTenant, &claimState,
 	); err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
@@ -212,7 +212,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	actorDigest := sha256.Sum256([]byte(input.ExternalTenantID + "\x00" + input.ExternalActorID))
-	err = tx.QueryRow(ctx, queryRepositoryResolveProofAuthorityOwner2, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
+	err = tx.QueryRow(ctx, queryFindInstallationOwnerSubject, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if claimState != "PENDING_CLAIM" {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
@@ -221,7 +221,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		if refErr != nil {
 			return platformrepo.ProofAuthority{}, refErr
 		}
-		if err := tx.QueryRow(ctx, queryRepositoryResolveProofAuthorityOwner3,
+		if err := tx.QueryRow(ctx, queryCreateInstallationOwnerSubject,
 			actorRef, authority.OrganizationID, hex.EncodeToString(actorDigest[:])).Scan(&authority.ActorID); err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
@@ -229,11 +229,11 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		if refErr != nil {
 			return platformrepo.ProofAuthority{}, refErr
 		}
-		if _, err := tx.Exec(ctx, queryRepositoryResolveProofAuthorityOwner4,
+		if _, err := tx.Exec(ctx, queryCreateInstallationOwnerMembership,
 			membershipRef, authority.OrganizationID, authority.ActorID, allPermissions()); err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryRepositoryResolveProofAuthorityOwner5,
+		if _, err := tx.Exec(ctx, queryClaimInstallationOwnership,
 			authority.OrganizationID, authority.ActorID, input.ExternalTenantID); err != nil {
 			return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 		}
@@ -242,11 +242,11 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
 	}
 	var active bool
-	if err := tx.QueryRow(ctx, queryRepositoryResolveProofAuthorityOwner6, authority.OrganizationID, authority.ActorID).Scan(&active); err != nil || !active {
+	if err := tx.QueryRow(ctx, queryCheckInstallationOwnerMembership, authority.OrganizationID, authority.ActorID).Scan(&active); err != nil || !active {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	if input.ProjectRef != "" {
-		if err := tx.QueryRow(ctx, queryRepositoryResolveProofAuthorityProject1,
+		if err := tx.QueryRow(ctx, queryAuthorizeProjectMembership,
 			input.ProjectRef, authority.OrganizationID, authority.ActorID).Scan(&authority.ProjectID, &authority.ProjectVersion); errors.Is(err, pgx.ErrNoRows) {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
 		} else if err != nil {
@@ -262,7 +262,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 
 func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (uint64, error) {
 	var revision uint64
-	if err := repository.pool.QueryRow(ctx, queryRepositoryNextProofRevision1).Scan(&revision); err != nil {
+	if err := repository.pool.QueryRow(ctx, queryNextAuthorityProofRevision).Scan(&revision); err != nil {
 		return 0, errs.ErrUnavailable
 	}
 	if revision == 0 || revision > 9007199254740991 {
@@ -291,7 +291,7 @@ func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platf
 
 func (repository *Repository) resolveScope(ctx context.Context, principal value.Principal) (scope, error) {
 	var result scope
-	err := repository.pool.QueryRow(ctx, queryRepositoryResolvescope1, principal.ActorID, principal.AuthorityTenant).Scan(
+	err := repository.pool.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, principal.ActorID, principal.AuthorityTenant).Scan(
 		&result.organizationID, &result.organizationRef, &result.actorID, &result.actorRef, &result.actorName, &result.role)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return scope{}, errs.ErrForbidden

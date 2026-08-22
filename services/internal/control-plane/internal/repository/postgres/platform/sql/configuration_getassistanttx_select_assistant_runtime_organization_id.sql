@@ -1,0 +1,2 @@
+-- name: platform__configuration_getassistanttx_select_assistant_runtime_organization_id :one
+SELECT a.ref,ar.stable_key,a.name,a.purpose,ar.core_prompt_revision,ar.owner_instructions,ar.runtime_state,ar.runtime_revision,ar.desired_runtime_revision,ar.system_session_ref,ar.resource_limits,ar.last_heartbeat_at,ar.version,ar.updated_at FROM control_plane.assistant_runtime ar JOIN control_plane.agents a ON a.id=ar.agent_id WHERE ar.organization_id=$1::uuid

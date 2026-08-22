@@ -1,2 +1,0 @@
--- name: platform__runtime_reportprogress_1 :exec
-UPDATE control_plane.run_nodes SET progress_summary=$2,version=version+1 WHERE id=$1::uuid

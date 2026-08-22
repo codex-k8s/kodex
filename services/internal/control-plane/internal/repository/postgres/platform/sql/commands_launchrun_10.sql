@@ -1,2 +1,0 @@
--- name: platform__commands_launchrun_10 :exec
-UPDATE control_plane.run_nodes SET workflow_step_key=$2,human_gate_after=$3 WHERE id=$1::uuid

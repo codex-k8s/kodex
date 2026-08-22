@@ -30,7 +30,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		return nil
 	}
 	var permitted bool
-	err = tx.QueryRow(ctx, queryPermissionsAuthorizecommand1, scope.organizationID, projectID, scope.actorID, permission).Scan(&permitted)
+	err = tx.QueryRow(ctx, queryPermissionsAuthorizecommandSelectMembershipsOrganizationIdProjectIdSubjectId, scope.organizationID, projectID, scope.actorID, permission).Scan(&permitted)
 	if err != nil {
 		return errs.ErrUnavailable
 	}
@@ -114,7 +114,7 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 		return nil
 	}
 	var allowed bool
-	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermission1, scope.organizationID, projectID, scope.actorID, permission).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, queryPermissionsRequireprojectpermissionSelectMembershipsOrganizationIdProjectIdSubjectId, scope.organizationID, projectID, scope.actorID, permission).Scan(&allowed); err != nil {
 		return errs.ErrUnavailable
 	}
 	if !allowed {
@@ -125,15 +125,15 @@ func requireProjectPermission(ctx context.Context, tx pgx.Tx, scope scope, proje
 
 func projectIDByResource(ctx context.Context, tx pgx.Tx, organizationID, table, ref string) (string, error) {
 	queries := map[string]string{
-		"projects":                queryPermissionsProjectidbyresource1,
-		"agents":                  queryPermissionsProjectidbyresource2,
-		"workflows":               queryPermissionsProjectidbyresource3,
-		"sessions":                queryPermissionsProjectidbyresource4,
-		"runs":                    queryPermissionsProjectidbyresource5,
-		"owner_gates":             queryPermissionsProjectidbyresource6,
-		"artifacts":               queryPermissionsProjectidbyresource7,
-		"schedules":               queryPermissionsProjectidbyresource8,
-		"assistant_conversations": queryPermissionsProjectidbyresource9,
+		"projects":                queryPermissionsProjectidbyresourceSelectProjectsOrganizationIdRef,
+		"agents":                  queryPermissionsProjectidbyresourceSelectAgentsOrganizationIdRef,
+		"workflows":               queryPermissionsProjectidbyresourceSelectWorkflowsOrganizationIdRef,
+		"sessions":                queryPermissionsProjectidbyresourceSelectSessionsOrganizationIdRef,
+		"runs":                    queryPermissionsProjectidbyresourceSelectRunsOrganizationIdRef,
+		"owner_gates":             queryPermissionsProjectidbyresourceSelectOwnerGatesOrganizationIdRef,
+		"artifacts":               queryPermissionsProjectidbyresourceSelectArtifactsOrganizationIdRef,
+		"schedules":               queryPermissionsProjectidbyresourceSelectSchedulesOrganizationIdRef,
+		"assistant_conversations": queryPermissionsProjectidbyresourceSelectAssistantConversationsOrganizationIdRef,
 	}
 	query := queries[table]
 	if query == "" {

@@ -1,2 +1,0 @@
--- name: platform__commands_changeworkflow_1 :one
-INSERT INTO control_plane.workflows(ref,organization_id,project_id,name,purpose,coordinator_agent_id,state,draft_spec,created_by) VALUES($1,$2::uuid,$3::uuid,$4,$5,(SELECT id FROM control_plane.agents WHERE organization_id=$2::uuid AND ref=$6 AND project_id=$3::uuid),'DRAFT',$7,$8::uuid) RETURNING ref,name,purpose,state,version,created_at,updated_at

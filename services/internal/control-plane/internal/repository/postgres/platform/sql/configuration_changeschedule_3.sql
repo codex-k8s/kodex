@@ -1,2 +1,0 @@
--- name: platform__configuration_changeschedule_3 :one
-UPDATE control_plane.schedules s SET enabled=$4,version=version+1,updated_at=clock_timestamp() FROM control_plane.projects p WHERE s.project_id=p.id AND s.organization_id=$1::uuid AND s.ref=$2 AND s.version=$3 RETURNING s.project_id::text,p.ref,s.ref,s.name,s.preset,s.cron_expression,s.timezone,s.session_policy,s.notification_policy,s.enabled,s.version,s.next_run_at,s.last_run_at,s.created_at,s.updated_at

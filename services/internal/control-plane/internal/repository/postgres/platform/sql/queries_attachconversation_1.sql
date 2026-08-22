@@ -1,2 +1,0 @@
--- name: platform__queries_attachconversation_1 :many
-SELECT t.ref,t.actor_kind,COALESCE(s.display_name,a.name,t.actor_ref),t.content,t.state,t.artifact_refs,t.created_at,t.completed_at FROM control_plane.session_turns t LEFT JOIN control_plane.subjects s ON t.actor_kind='USER' AND s.ref=t.actor_ref LEFT JOIN control_plane.agents a ON t.actor_kind<>'USER' AND a.ref=t.actor_ref WHERE t.organization_id=$1::uuid AND t.session_id=(SELECT session_id FROM control_plane.assistant_conversations WHERE ref=$2) ORDER BY t.turn_number

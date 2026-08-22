@@ -39,7 +39,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	defer func() { _ = tx.Rollback(ctx) }()
 	var storedDigest string
 	var stored []byte
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifact1, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey).Scan(&storedDigest, &stored)
 	if err == nil {
 		if storedDigest != mutation.IntentDigest {
 			return entity.Artifact{}, errs.ErrIdempotencyReuse
@@ -65,7 +65,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	var rootRunID, runRef string
 	if input.RunRef != "" {
 		var id string
-		if err := tx.QueryRow(ctx, queryArtifactsUploadartifact2, scope.organizationID, projectID, input.RunRef).Scan(&id, &rootRunID, &runRef); err != nil {
+		if err := tx.QueryRow(ctx, queryArtifactsUploadartifactSelectRunsOrganizationIdProjectIdRef, scope.organizationID, projectID, input.RunRef).Scan(&id, &rootRunID, &runRef); err != nil {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
 		runID = id
@@ -77,11 +77,11 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	ref, _ := newRef("art")
 	receiptRef, _ := newRef("obj")
 	var item entity.Artifact
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifact3, ref, scope.organizationID, projectID, runID, safeFileName(input.FileName), input.MediaType, input.SizeBytes, "sha256:"+hex.EncodeToString(digest[:]), scanState, receiptRef, previewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Version, &item.CreatedAt)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName, ref, scope.organizationID, projectID, runID, safeFileName(input.FileName), input.MediaType, input.SizeBytes, "sha256:"+hex.EncodeToString(digest[:]), scanState, receiptRef, previewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Version, &item.CreatedAt)
 	if err != nil {
 		return entity.Artifact{}, mapWriteError(err)
 	}
-	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact4, ref, body); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId, ref, body); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = input.ProjectRef
@@ -90,7 +90,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		item.NextActions = []string{"DOWNLOAD", "BIND"}
 	}
 	auditRef, _ := newRef("aud")
-	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact5, auditRef, scope.organizationID, projectID, scope.actorID, ref, principal.CorrelationRef); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertAuditEventsRefProjectIdAction, auditRef, scope.organizationID, projectID, scope.actorID, ref, principal.CorrelationRef); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	if rootRunID != "" {
@@ -101,7 +101,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, err
 	}
 	encoded, _ := json.Marshal(item)
-	if _, err := tx.Exec(ctx, queryArtifactsUploadartifact6, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey, mutation.IntentDigest, encoded); err != nil {
 		return entity.Artifact{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -148,7 +148,7 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 		return platformrepo.ArtifactDownload{}, err
 	}
 	var body []byte
-	if err := repository.pool.QueryRow(ctx, queryArtifactsDownloadartifact1, scope.organizationID, ref).Scan(&body); err != nil {
+	if err := repository.pool.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactContentOrganizationIdRef, scope.organizationID, ref).Scan(&body); err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
 	}
 	return platformrepo.ArtifactDownload{Artifact: item, Reader: io.NopCloser(bytes.NewReader(body))}, nil
@@ -161,20 +161,20 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 	}
 	var artifactID, projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbinding1, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectArtifactsOrganizationIdRefScanState, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	if payload.Enabled {
-		if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbinding2, artifactID, scope.organizationID, scope.actorID, projectID, payload.AgentRef); err != nil {
+		if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingInsertArtifactBindingsArtifactIdTargetRef, artifactID, scope.organizationID, scope.actorID, projectID, payload.AgentRef); err != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	} else {
-		_, _ = tx.Exec(ctx, queryArtifactsChangeartifactbinding3, artifactID, payload.AgentRef)
+		_, _ = tx.Exec(ctx, queryArtifactsChangeartifactbindingDeleteArtifactBindingsArtifactIdTargetKindTargetRef, artifactID, payload.AgentRef)
 	}
-	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbinding4, artifactID); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingUpdateArtifactsVersion, artifactID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item := entity.Artifact{Ref: payload.ArtifactRef, ProjectRef: projectRef, Version: version + 1}

@@ -1,2 +1,0 @@
--- name: platform__queries_attachconnection_1 :many
-SELECT g.ref,g.capability_key,g.target_kind,g.target_ref,COALESCE(a.name,w.name,g.target_ref),g.enabled,g.approval_policy,g.version FROM control_plane.integration_grants g LEFT JOIN control_plane.agents a ON g.target_kind='AGENT' AND a.ref=g.target_ref LEFT JOIN control_plane.workflows w ON g.target_kind='WORKFLOW' AND w.ref=g.target_ref WHERE g.organization_id=$1::uuid AND g.connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$2) ORDER BY g.created_at

@@ -1,2 +1,0 @@
--- name: platform__commands_addsessionturn_2 :one
-SELECT r.root_run_id::text FROM control_plane.runs r JOIN control_plane.sessions s ON s.id=r.session_id WHERE r.organization_id=$1::uuid AND r.ref=$2 AND s.ref=$3

@@ -18,7 +18,7 @@ type OutboxItem struct {
 
 func (repository *Repository) CheckOutbox(ctx context.Context) error {
 	var table string
-	if err := repository.pool.QueryRow(ctx, queryOutboxCheckoutbox1).Scan(&table); err != nil || table == "" {
+	if err := repository.pool.QueryRow(ctx, queryOutboxCheckOutboxTable).Scan(&table); err != nil || table == "" {
 		return errors.New("control-plane outbox is unavailable")
 	}
 	return nil
@@ -32,7 +32,7 @@ func (repository *Repository) ClaimOutbox(ctx context.Context, instance string, 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := repository.pool.Query(ctx, queryOutboxClaimoutbox1, limit, instance+":"+leaseToken, leaseDuration.String())
+	rows, err := repository.pool.Query(ctx, queryOutboxClaimPublishableEvents, limit, instance+":"+leaseToken, leaseDuration.String())
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -54,7 +54,7 @@ func (repository *Repository) ClaimOutbox(ctx context.Context, instance string, 
 
 func (repository *Repository) MarkOutboxPublished(ctx context.Context, item OutboxItem, receipt eventing.PublishReceipt) error {
 	value := fmt.Sprintf("%s:%d:%t", receipt.Stream, receipt.Sequence, receipt.Duplicate)
-	tag, err := repository.pool.Exec(ctx, queryOutboxMarkoutboxpublished1, item.EventID, item.LeaseToken, value)
+	tag, err := repository.pool.Exec(ctx, queryOutboxMarkoutboxpublishedUpdateOutboxEventsStateBrokerReceiptPublishedAt, item.EventID, item.LeaseToken, value)
 	if err != nil || tag.RowsAffected() != 1 {
 		return errs.ErrConflict
 	}
@@ -66,7 +66,7 @@ func (repository *Repository) MarkOutboxFailed(ctx context.Context, item OutboxI
 	if item.Attempts >= 100 {
 		state = "DEAD_LETTER"
 	}
-	tag, err := repository.pool.Exec(ctx, queryOutboxMarkoutboxfailed1, item.EventID, item.LeaseToken, state, retryAfter.String())
+	tag, err := repository.pool.Exec(ctx, queryOutboxMarkoutboxfailedUpdateOutboxEventsStateAvailableAtLeaseOwner, item.EventID, item.LeaseToken, state, retryAfter.String())
 	if err != nil || tag.RowsAffected() != 1 {
 		return errs.ErrConflict
 	}

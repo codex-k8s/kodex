@@ -38,7 +38,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	}
 	var storedDigest string
 	var storedPayload []byte
-	err = tx.QueryRow(ctx, queryCommandsExecute1, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
+	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
 	if err == nil {
 		if storedDigest != input.Mutation.IntentDigest {
 			return command.Result{}, errs.ErrIdempotencyReuse
@@ -72,7 +72,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	} else {
 		project = nil
 	}
-	if _, err = tx.Exec(ctx, queryCommandsExecute2, auditRef, scope.organizationID, project, scope.actorID, input.Mutation.Operation, outcome.resourceKind, outcome.resourceRef, outcome.summary, input.Principal.CorrelationRef); err != nil {
+	if _, err = tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction, auditRef, scope.organizationID, project, scope.actorID, input.Mutation.Operation, outcome.resourceKind, outcome.resourceRef, outcome.summary, input.Principal.CorrelationRef); err != nil {
 		return command.Result{}, errs.ErrUnavailable
 	}
 	if outcome.platformEvent != "" {
@@ -84,7 +84,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err != nil {
 		return command.Result{}, errs.ErrConflict
 	}
-	if _, err = tx.Exec(ctx, queryCommandsExecute3, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey, input.Mutation.IntentDigest, string(input.Kind), encoded); err != nil {
+	if _, err = tx.Exec(ctx, queryCommandsExecuteInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey, input.Mutation.IntentDigest, string(input.Kind), encoded); err != nil {
 		return command.Result{}, errs.ErrConflict
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -145,7 +145,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 }
 
 func (repository *Repository) completeOnboarding(ctx context.Context, tx pgx.Tx, scope scope) (commandOutcome, error) {
-	if _, err := tx.Exec(ctx, queryCommandsCompleteonboarding1); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsCompleteonboardingUpdateInstallationOnboardingCompletedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	return commandOutcome{result: command.Result{CreatedRefs: []string{scope.organizationRef}}, resourceKind: "INSTALLATION", resourceRef: scope.organizationRef, summary: "Первичная настройка завершена", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
@@ -165,12 +165,12 @@ func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scop
 		language = "ru"
 	}
 	var item entity.Project
-	err = tx.QueryRow(ctx, queryCommandsCreateproject1, ref, scope.organizationID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), language, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+	err = tx.QueryRow(ctx, queryCommandsCreateprojectInsertProjectsRefNameLanguage, ref, scope.organizationID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), language, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
 	membershipRef, _ := newRef("mem")
-	if _, err = tx.Exec(ctx, queryCommandsCreateproject2, membershipRef, scope.organizationID, ref, scope.actorID, allPermissions()); err != nil {
+	if _, err = tx.Exec(ctx, queryCommandsCreateprojectInsertMembershipsRefProjectIdRole, membershipRef, scope.organizationID, ref, scope.actorID, allPermissions()); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.NextActions = []string{"OPEN", "EDIT"}
@@ -184,7 +184,7 @@ func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scop
 	}
 	var item entity.Project
 	var projectID string
-	err := tx.QueryRow(ctx, queryCommandsUpdateproject1, scope.organizationID, input.Ref, *mutation.ExpectedVersion, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), input.Language).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+	err := tx.QueryRow(ctx, queryCommandsUpdateprojectUpdateProjectsNamePurposeLanguage, scope.organizationID, input.Ref, *mutation.ExpectedVersion, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), input.Language).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.Language, &item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
@@ -208,7 +208,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 	switch input.Kind {
 	case command.AddMembership:
 		ref, _ := newRef("mem")
-		err := tx.QueryRow(ctx, queryCommandsChangemembership1, ref, scope.organizationID, projectID, payload.UserRef, payload.Role, payload.Permissions).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		err := tx.QueryRow(ctx, queryCommandsChangemembershipInsertMembershipsRefProjectIdRole, ref, scope.organizationID, projectID, payload.UserRef, payload.Role, payload.Permissions).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -217,7 +217,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if input.Mutation.ExpectedVersion == nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryCommandsChangemembership2, scope.organizationID, payload.MembershipRef, *input.Mutation.ExpectedVersion, payload.Role, payload.Permissions, payload.Active).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		err := tx.QueryRow(ctx, queryCommandsChangemembershipUpdateMembershipsRolePermissionsActive, scope.organizationID, payload.MembershipRef, *input.Mutation.ExpectedVersion, payload.Role, payload.Permissions, payload.Active).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -228,7 +228,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if input.Mutation.ExpectedVersion == nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryCommandsChangemembership3, scope.organizationID, payload.MembershipRef, projectID, *input.Mutation.ExpectedVersion, scope.actorID).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		err := tx.QueryRow(ctx, queryCommandsChangemembershipUpdateMembershipsActiveVersionUpdatedAt, scope.organizationID, payload.MembershipRef, projectID, *input.Mutation.ExpectedVersion, scope.actorID).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -256,14 +256,14 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	ref, _ := newRef("agt")
 	var agentID string
 	var item entity.Agent
-	err := tx.QueryRow(ctx, queryCommandsCreateagent1, ref, scope.organizationID, projectID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+	err := tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
 	instructionRef, _ := newRef("ins")
 	digest := sha256.Sum256([]byte(input.Instructions))
 	publishedAt := time.Now().UTC()
-	if _, err = tx.Exec(ctx, queryCommandsCreateagent2, instructionRef, scope.organizationID, agentID, input.Instructions, hex.EncodeToString(digest[:]), scope.actorID, publishedAt); err != nil {
+	if _, err = tx.Exec(ctx, queryCommandsCreateagentInsertInstructionVersionsRefAgentIdState, instructionRef, scope.organizationID, agentID, input.Instructions, hex.EncodeToString(digest[:]), scope.actorID, publishedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = input.ProjectRef
@@ -288,7 +288,7 @@ func mapWriteError(err error) error {
 }
 func mustProjectID(ctx context.Context, tx pgx.Tx, organizationID, ref string) string {
 	var id string
-	if tx.QueryRow(ctx, queryCommandsMustprojectid1, organizationID, ref).Scan(&id) != nil {
+	if tx.QueryRow(ctx, queryCommandsMustprojectidSelectProjectsOrganizationIdRefLifecycle, organizationID, ref).Scan(&id) != nil {
 		return ""
 	}
 	return id
@@ -303,7 +303,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	var projectID string
 	switch input.Kind {
 	case command.UpdateAgent:
-		err := tx.QueryRow(ctx, queryCommandsChangeagent1, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryCommandsChangeagentUpdateAgentsNamePurposeRoleDescription, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Purpose, payload.RoleDescription, payload.AvatarURL, payload.RuntimeRef).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -315,7 +315,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 		if payload.Enabled {
 			state = "READY"
 		}
-		err := tx.QueryRow(ctx, queryCommandsChangeagent2, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, state).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryCommandsChangeagentEnableAgent, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, state).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -323,7 +323,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ArchiveAgent:
-		err := tx.QueryRow(ctx, queryCommandsChangeagent3, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryCommandsChangeagentArchiveAgent, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&projectID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -331,7 +331,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	}
-	_ = tx.QueryRow(ctx, queryCommandsChangeagent4, item.Ref).Scan(&item.ProjectRef, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs)
+	_ = tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs)
 	item.NextActions = agentActions(item)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "Агент обновлён", platformEvent: "AGENT_CHANGED"}, nil
 }
@@ -343,7 +343,7 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 	}
 	var agentID, projectID, projectRef, systemKey string
 	var agentVersion int64
-	if err := tx.QueryRow(ctx, queryCommandsChangeinstructions1, scope.organizationID, payload.Ref).Scan(&agentID, &projectID, &projectRef, &systemKey, &agentVersion); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectAgentsOrganizationIdRef, scope.organizationID, payload.Ref).Scan(&agentID, &projectID, &projectRef, &systemKey, &agentVersion); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if systemKey != "" {
@@ -358,18 +358,18 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		var number int32
-		if err := tx.QueryRow(ctx, queryCommandsChangeinstructions2, agentID).Scan(&number); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextDraftVersion, agentID).Scan(&number); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		ref, _ := newRef("ins")
 		digest := sha256.Sum256([]byte(payload.Instructions))
-		if _, err := tx.Exec(ctx, queryCommandsChangeinstructions3, ref, scope.organizationID, agentID, number, payload.Instructions, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsInsertDraftVersion, ref, scope.organizationID, agentID, number, payload.Instructions, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.ValidateInstructions:
 		var content string
 		var ref string
-		if err := tx.QueryRow(ctx, queryCommandsChangeinstructions4, agentID).Scan(&ref, &content); errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectCurrentDraft, agentID).Scan(&ref, &content); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		state := "VALID"
@@ -378,11 +378,11 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 			state = "INVALID"
 			problems = append(problems, "Инструкции должны содержать не менее 20 символов")
 		}
-		if _, err := tx.Exec(ctx, queryCommandsChangeinstructions5, ref, state, asJSON(problems)); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateInstructionVersionsStateValidationProblems, ref, state, asJSON(problems)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	case command.PublishInstructions:
-		tag, err := tx.Exec(ctx, queryCommandsChangeinstructions6, agentID)
+		tag, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateInstructionVersionsStatePublishedAt, agentID)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -391,18 +391,18 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 		}
 	case command.RollbackInstructions:
 		var content string
-		if err := tx.QueryRow(ctx, queryCommandsChangeinstructions7, agentID, payload.Instructions).Scan(&content); errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectInstructionVersionsAgentIdRefState, agentID, payload.Instructions).Scan(&content); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		var number int32
-		_ = tx.QueryRow(ctx, queryCommandsChangeinstructions8, agentID).Scan(&number)
+		_ = tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextRollbackVersion, agentID).Scan(&number)
 		ref, _ := newRef("ins")
 		digest := sha256.Sum256([]byte(content))
-		if _, err := tx.Exec(ctx, queryCommandsChangeinstructions9, ref, scope.organizationID, agentID, number, content, hex.EncodeToString(digest[:]), payload.Instructions, scope.actorID); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsInsertRollbackVersion, ref, scope.organizationID, agentID, number, content, hex.EncodeToString(digest[:]), payload.Instructions, scope.actorID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 	}
-	if _, err := tx.Exec(ctx, queryCommandsChangeinstructions10, agentID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateAgentsVersionUpdatedAt, agentID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	agent := entity.Agent{Ref: payload.Ref, ProjectRef: projectRef, Version: agentVersion + 1}
@@ -416,7 +416,7 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	}
 	var projectID, projectRef string
 	var current int64
-	if err := tx.QueryRow(ctx, queryCommandsChangeagentbinding1, scope.organizationID, payload.AgentRef).Scan(&projectID, &projectRef, &current); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectAgentsOrganizationIdRef, scope.organizationID, payload.AgentRef).Scan(&projectID, &projectRef, &current); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if current != *input.Mutation.ExpectedVersion {
@@ -428,25 +428,25 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	}
 	if input.Kind == command.ChangeAgentGrant {
 		if payload.Enabled {
-			tag, err := tx.Exec(ctx, queryCommandsChangeagentbinding2, scope.organizationID, payload.BindingRef, payload.AgentRef)
+			tag, err := tx.Exec(ctx, queryCommandsChangeagentbindingEnableIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
 			if err != nil || tag.RowsAffected() != 1 {
 				return commandOutcome{}, errs.ErrNotFound
 			}
 		} else {
-			_, _ = tx.Exec(ctx, queryCommandsChangeagentbinding3, scope.organizationID, payload.BindingRef, payload.AgentRef)
+			_, _ = tx.Exec(ctx, queryCommandsChangeagentbindingRevokeIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
 		}
 	} else if payload.Enabled {
-		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbinding4, column, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
+		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbindingAppendAgentBinding, column, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else {
-		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbinding5, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
+		_, err := tx.Exec(ctx, fmt.Sprintf(queryCommandsChangeagentbindingRemoveAgentBinding, column, column), scope.organizationID, payload.AgentRef, payload.BindingRef)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	}
-	if _, err := tx.Exec(ctx, queryCommandsChangeagentbinding6, scope.organizationID, payload.AgentRef); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsChangeagentbindingUpdateAgentsVersionUpdatedAt, scope.organizationID, payload.AgentRef); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	agent := entity.Agent{Ref: payload.AgentRef, ProjectRef: projectRef, Version: current + 1}
@@ -470,7 +470,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		}
 		var item entity.Workflow
 		raw := asJSON(draft)
-		err := tx.QueryRow(ctx, queryCommandsChangeworkflow1, ref, scope.organizationID, projectID, payload.Name, payload.Purpose, payload.CoordinatorAgentRef, raw, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryCommandsChangeworkflowInsertWorkflowsRefProjectIdPurpose, ref, scope.organizationID, projectID, payload.Name, payload.Purpose, payload.CoordinatorAgentRef, raw, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -485,7 +485,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 	}
 	var workflowID, projectID, projectRef, state string
 	var version int64
-	if err := tx.QueryRow(ctx, queryCommandsChangeworkflow2, scope.organizationID, payload.Ref).Scan(&workflowID, &projectID, &projectRef, &state, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangeworkflowSelectWorkflowsOrganizationIdRef, scope.organizationID, payload.Ref).Scan(&workflowID, &projectID, &projectRef, &state, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -496,13 +496,13 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		if payload.Draft == nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		_, err := tx.Exec(ctx, queryCommandsChangeworkflow3, workflowID, asJSON(payload.Draft))
+		_, err := tx.Exec(ctx, queryCommandsChangeworkflowUpdateWorkflowsDraftSpecStateVersion, workflowID, asJSON(payload.Draft))
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	case command.ValidateWorkflow:
 		var raw []byte
-		if err := tx.QueryRow(ctx, queryCommandsChangeworkflow4, workflowID).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowSelectDraftForValidation, workflowID).Scan(&raw); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		var draft entity.WorkflowVersion
@@ -510,7 +510,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		if draft.Concurrency < 1 || draft.TimeoutSeconds < 1 || len(draft.Steps) == 0 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		_, err := tx.Exec(ctx, queryCommandsChangeworkflow5, workflowID)
+		_, err := tx.Exec(ctx, queryCommandsChangeworkflowMarkWorkflowValid, workflowID)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -520,19 +520,19 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		}
 		var raw []byte
 		var next int32
-		if err := tx.QueryRow(ctx, queryCommandsChangeworkflow6, workflowID).Scan(&raw, &next); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowSelectDraftForPublish, workflowID).Scan(&raw, &next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		digest := sha256.Sum256(raw)
 		versionRef, _ := newRef("wfv")
-		if _, err := tx.Exec(ctx, queryCommandsChangeworkflow7, versionRef, scope.organizationID, workflowID, next, raw, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangeworkflowInsertWorkflowVersionsRefWorkflowIdSpec, versionRef, scope.organizationID, workflowID, next, raw, hex.EncodeToString(digest[:]), scope.actorID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
-		if _, err := tx.Exec(ctx, queryCommandsChangeworkflow8, workflowID, raw, next); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangeworkflowUpdateWorkflowsPublishedSpecPublishedVersionState, workflowID, raw, next); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	case command.ArchiveWorkflow:
-		tag, err := tx.Exec(ctx, queryCommandsChangeworkflow9, workflowID)
+		tag, err := tx.Exec(ctx, queryCommandsChangeworkflowArchiveWorkflow, workflowID)
 		if err != nil || tag.RowsAffected() != 1 {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -561,11 +561,11 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var workflowSpec []byte
 	switch payload.Target.Type {
 	case "AGENT":
-		if err := tx.QueryRow(ctx, queryCommandsLaunchrun1, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 	case "WORKFLOW":
-		if err := tx.QueryRow(ctx, queryCommandsLaunchrun2, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName, &workflowSpec); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName, &workflowSpec); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 	default:
@@ -575,10 +575,10 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		if err := tx.QueryRow(ctx, queryCommandsLaunchrun3, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, scope.actorID).Scan(&sessionID); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, scope.actorID).Scan(&sessionID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrun4, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {
+	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	runRef, _ := newRef("run")
@@ -588,23 +588,23 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	rawInput := asJSON(payload.Input)
 	var runID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrun5, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, payload.ArtifactRefs, scope.actorID).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, payload.ArtifactRefs, scope.actorID).Scan(&runID); err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
-	if _, err := tx.Exec(ctx, queryCommandsLaunchrun6, runID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrun7, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, payload.Task, payload.ArtifactRefs).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, payload.Task, payload.ArtifactRefs).Scan(&turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryCommandsLaunchrun8, sessionID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	rootNodeRef, _ := newRef("nod")
 	var rootNodeID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrun9, rootNodeRef, scope.organizationID, runID, title, turnID, truncate(payload.Task, 500)).Scan(&rootNodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunNodesRefRootRunIdType, rootNodeRef, scope.organizationID, runID, title, turnID, truncate(payload.Task, 500)).Scan(&rootNodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if payload.Target.Type == "AGENT" {
@@ -629,7 +629,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 			}
 			nodeIDs[step.Key] = nodeID
 			nodeRefs[step.Key] = nodeRef
-			if _, err := tx.Exec(ctx, queryCommandsLaunchrun10, nodeID, step.Key, step.HumanGateAfter); err != nil {
+			if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, step.Key, step.HumanGateAfter); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
@@ -640,14 +640,14 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 					return commandOutcome{}, errs.ErrInvalid
 				}
 				edgeRef, _ := newRef("edg")
-				if _, err := tx.Exec(ctx, queryCommandsLaunchrun11, edgeRef, scope.organizationID, runID, sourceID, targetID); err != nil {
+				if _, err := tx.Exec(ctx, queryCommandsLaunchrunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, runID, sourceID, targetID); err != nil {
 					return commandOutcome{}, errs.ErrUnavailable
 				}
 				_ = nodeRefs
 			}
 		}
 	}
-	if _, err := tx.Exec(ctx, queryCommandsLaunchrun12, runID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "Запуск создан", "RUNNING", "RUNNING"); err != nil {
@@ -662,16 +662,16 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {
 	var agentID, role string
-	if err := tx.QueryRow(ctx, queryCommandsInsertagentnode1, scope.organizationID, agentRef).Scan(&agentID, &role); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsInsertagentnodeSelectAgentsOrganizationIdRefState, scope.organizationID, agentRef).Scan(&agentID, &role); err != nil {
 		return "", "", errs.ErrInvalid
 	}
 	nodeRef, _ := newRef("nod")
 	var nodeID string
-	if err := tx.QueryRow(ctx, queryCommandsInsertagentnode2, nodeRef, scope.organizationID, rootRunID, runID, parentNodeID, displayName, role, agentID, turnID, truncate(summary, 1000)).Scan(&nodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsInsertagentnodeInsertRunNodesRefRootRunIdParentNodeId, nodeRef, scope.organizationID, rootRunID, runID, parentNodeID, displayName, role, agentID, turnID, truncate(summary, 1000)).Scan(&nodeID); err != nil {
 		return "", "", errs.ErrUnavailable
 	}
 	edgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, queryCommandsInsertagentnode3, edgeRef, scope.organizationID, rootRunID, parentNodeID, nodeID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsInsertagentnodeInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, rootRunID, parentNodeID, nodeID); err != nil {
 		return "", "", errs.ErrUnavailable
 	}
 	return nodeID, nodeRef, nil
@@ -687,7 +687,7 @@ func truncate(value string, maximum int) string {
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
 	var sequence int64
-	if err := tx.QueryRow(ctx, queryCommandsEmitplatformevent1).Scan(&sequence); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsEmitplatformeventUpdateInstallationPlatformSequence).Scan(&sequence); err != nil {
 		return errs.ErrUnavailable
 	}
 	eventID := uuid.New()
@@ -696,7 +696,7 @@ func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, 
 		payload["projectRef"] = projectRef
 	}
 	subject := "control_plane.platform." + scope.organizationRef + ".events"
-	if _, err := tx.Exec(ctx, queryCommandsEmitplatformevent2, eventID, subject, "platform:"+scope.organizationRef, sequence, asJSON(payload)); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsEmitplatformeventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "platform:"+scope.organizationRef, sequence, asJSON(payload)); err != nil {
 		return errs.ErrUnavailable
 	}
 	return nil
@@ -706,11 +706,11 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 	var sequence, version int64
 	var rootRef, projectRef string
 	var projectValue any
-	if err := tx.QueryRow(ctx, queryCommandsEmitrunevent1, rootRunID).Scan(&rootRef, &sequence, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsEmitruneventUpdateRunsEventSequenceGraphRevisionUpdatedAt, rootRunID).Scan(&rootRef, &sequence, &version); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
 	if projectID != "" {
-		if err := tx.QueryRow(ctx, queryCommandsEmitrunevent2, projectID).Scan(&projectRef); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsEmitruneventSelectProjectsId, projectID).Scan(&projectRef); err != nil {
 			return entity.RunEvent{}, errs.ErrUnavailable
 		}
 		projectValue = projectID
@@ -718,7 +718,7 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 	ref, _ := newRef("evt")
 	eventID := uuid.New()
 	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, Summary: summary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC()}
-	if _, err := tx.Exec(ctx, queryCommandsEmitrunevent3, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, summary, runState, nodeState, scope.actorRef, event.OccurredAt); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, summary, runState, nodeState, scope.actorRef, event.OccurredAt); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
 	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": summary}
@@ -735,7 +735,7 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 		payload["projectRef"] = projectRef
 	}
 	subject := "control_plane.run." + scope.organizationRef + "." + rootRef + ".events"
-	if _, err := tx.Exec(ctx, queryCommandsEmitrunevent4, eventID, subject, "run:"+rootRef, sequence, asJSON(payload)); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertOutboxEventsEventIdOrderingKeyPayload, eventID, subject, "run:"+rootRef, sequence, asJSON(payload)); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
 	return event, nil
@@ -800,12 +800,12 @@ func eventKind(eventType string) string {
 }
 
 func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, scope scope, runRef string) (entity.Run, entity.RunGraph, error) {
-	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraph1, scope.organizationID, runRef))
+	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraphSelectRunsOrganizationIdRef, scope.organizationID, runRef))
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
-	rows, err := tx.Query(ctx, queryCommandsReadrungraphtx1, scope.organizationID, runRef)
+	rows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunNodesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -817,7 +817,7 @@ func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, sco
 		}
 		graph.Nodes = append(graph.Nodes, n)
 	}
-	edgeRows, err := tx.Query(ctx, queryCommandsReadrungraphtx2, scope.organizationID, runRef)
+	edgeRows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunEdgesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -838,7 +838,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var projectID, projectRef, targetType, targetRef string
-	if err := tx.QueryRow(ctx, queryCommandsAddsessionturn1, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "Продолжение сессии", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, ArtifactRefs: payload.ArtifactRefs}
@@ -851,16 +851,16 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	}
 	if outcome.result.Run != nil && payload.RunRef != "" {
 		var previousRootID, newRootID, previousNodeID, newNodeID string
-		if err := tx.QueryRow(ctx, queryCommandsAddsessionturn2, scope.organizationID, payload.RunRef, payload.SessionRef).Scan(&previousRootID); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef, payload.SessionRef).Scan(&previousRootID); err != nil {
 			return commandOutcome{}, errs.ErrNotFound
 		}
-		if err := tx.QueryRow(ctx, queryCommandsAddsessionturn3, outcome.result.Run.Ref).Scan(&newRootID); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectRunsRef, outcome.result.Run.Ref).Scan(&newRootID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_ = tx.QueryRow(ctx, queryCommandsAddsessionturn4, previousRootID).Scan(&previousNodeID)
-		_ = tx.QueryRow(ctx, queryCommandsAddsessionturn5, newRootID).Scan(&newNodeID)
+		_ = tx.QueryRow(ctx, queryCommandsAddsessionturnSelectPreviousRootNode, previousRootID).Scan(&previousNodeID)
+		_ = tx.QueryRow(ctx, queryCommandsAddsessionturnSelectContinuationRootNode, newRootID).Scan(&newNodeID)
 		edgeRef, _ := newRef("edg")
-		if _, err := tx.Exec(ctx, queryCommandsAddsessionturn6, edgeRef, scope.organizationID, newRootID, previousNodeID, newNodeID); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsAddsessionturnInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, previousNodeID, newNodeID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "Сессия продолжена", "QUEUED", ""); err != nil {
@@ -885,7 +885,7 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	var runID, rootRunID, projectID, projectRef, state string
 	var version int64
 	var attempt int32
-	if err := tx.QueryRow(ctx, queryCommandsChangerun1, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsOrganizationIdRef, scope.organizationID, payload.RunRef).Scan(&runID, &rootRunID, &projectID, &projectRef, &state, &version, &attempt); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
@@ -895,12 +895,12 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if !contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"}, state) {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		if _, err := tx.Exec(ctx, queryCommandsChangerun2, rootRunID); err != nil {
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsStateSafeErrorCodeSafeErrorMessage, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_, _ = tx.Exec(ctx, queryCommandsChangerun3, rootRunID)
-		_, _ = tx.Exec(ctx, queryCommandsChangerun4, rootRunID)
-		_, _ = tx.Exec(ctx, queryCommandsChangerun5, rootRunID, scope.actorID)
+		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID)
+		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID)
+		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)
 		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.RunRef, "RUN_STATE_CHANGED", "", "", "", "", "Запуск отменён", "CANCELLED", ""); err != nil {
 			return commandOutcome{}, err
 		}
@@ -916,7 +916,7 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	var targetType, targetRef, title, task, sessionRef, source string
 	var raw []byte
 	var artifacts []string
-	if err := tx.QueryRow(ctx, queryCommandsChangerun6, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &artifacts); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &artifacts); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var launchInput map[string]any
@@ -929,12 +929,12 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, err
 	}
 	var newRunID, newRootID, newRootNodeID, oldRootNodeID string
-	_ = tx.QueryRow(ctx, queryCommandsChangerun7, outcome.result.Run.Ref).Scan(&newRunID, &newRootID)
-	_, _ = tx.Exec(ctx, queryCommandsChangerun8, newRunID, runID, attempt+1)
-	_ = tx.QueryRow(ctx, queryCommandsChangerun9, rootRunID).Scan(&oldRootNodeID)
-	_ = tx.QueryRow(ctx, queryCommandsChangerun10, newRootID).Scan(&newRootNodeID)
+	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectRunsRef, outcome.result.Run.Ref).Scan(&newRunID, &newRootID)
+	_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1)
+	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID)
+	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID)
 	edgeRef, _ := newRef("edg")
-	if _, err := tx.Exec(ctx, queryCommandsChangerun11, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "Создана повторная попытка", "QUEUED", ""); err != nil {
@@ -963,7 +963,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	var gateID, nodeID, rootRunID, projectID, projectRef string
 	var version int64
 	var allowed []string
-	err := tx.QueryRow(ctx, queryCommandsResolvegate1, scope.organizationID, payload.GateRef).Scan(&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed)
+	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -976,7 +976,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if !contains(allowed, payload.Decision) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	if _, err := tx.Exec(ctx, queryCommandsResolvegate2, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	nodeState := "SUCCEEDED"
@@ -985,10 +985,10 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		nodeState = "FAILED"
 		runState = "FAILED"
 	}
-	if _, err := tx.Exec(ctx, queryCommandsResolvegate3, nodeID, nodeState); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion, nodeID, nodeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryCommandsResolvegate4, rootRunID, runState); err != nil {
+	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", "", "", payload.GateRef, "", "Решение принято", runState, nodeState)
@@ -1005,6 +1005,6 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 
 func mustRunRef(ctx context.Context, tx pgx.Tx, id string) string {
 	var ref string
-	_ = tx.QueryRow(ctx, queryCommandsMustrunref1, id).Scan(&ref)
+	_ = tx.QueryRow(ctx, queryCommandsMustrunrefSelectRunsId, id).Scan(&ref)
 	return ref
 }

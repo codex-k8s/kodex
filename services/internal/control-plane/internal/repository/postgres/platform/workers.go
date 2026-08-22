@@ -29,7 +29,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var assistant entity.SystemAssistant
 	var limits []byte
 	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef, warmInstance, runtimeKey, profileRevision, provider, model string
-	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntime1, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model)
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
@@ -41,7 +41,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	stale := assistant.LastHeartbeatAt == nil || time.Since(*assistant.LastHeartbeatAt) > 45*time.Second
 	required := !contains([]string{"READY", "BUSY"}, assistant.RuntimeState) || assistant.RuntimeRevision != assistant.DesiredRuntimeRevision || warmInstance != instance || stale
 	if required {
-		if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntime2, scope.organizationID, instance); err != nil {
+		if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeUpdateAssistantRuntimeRuntimeStateWarmInstanceRefVersion, scope.organizationID, instance); err != nil {
 			return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 		}
 		assistant.RuntimeState = "RECOVERING"
@@ -61,7 +61,7 @@ func (repository *Repository) reportWarmRuntime(ctx context.Context, tx pgx.Tx, 
 	}
 	var assistant entity.SystemAssistant
 	var limits []byte
-	err := tx.QueryRow(ctx, queryWorkersReportwarmruntime1, scope.organizationID, payload.WorkloadInstance, payload.RuntimeRevision, payload.State).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt)
+	err := tx.QueryRow(ctx, queryWorkersReportwarmruntimeUpdateAssistantRuntimeRuntimeStateRuntimeRevisionWarmInstanceRef, scope.organizationID, payload.WorkloadInstance, payload.RuntimeRevision, payload.State).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -84,7 +84,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, queryWorkersClaimdueschedules1, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimdueschedulesSelectSchedulesOrganizationId, scope.organizationID, limit)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -113,7 +113,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
 		expires := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedules2, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, leaseRef, hex.EncodeToString(digest[:]), instance, expires); err != nil {
+		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, leaseRef, hex.EncodeToString(digest[:]), instance, expires); err != nil {
 			return nil, mapWriteError(err)
 		}
 		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": item.scheduledFor, "leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires, "scheduleVersion": item.version})
@@ -132,7 +132,7 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	var occurrenceID, scheduleID, projectID, projectRef, state, storedDigest, targetType, targetRef, name string
 	var generation int64
 	var expires time.Time
-	err := tx.QueryRow(ctx, queryWorkersChangeoccurrence1, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name)
+	err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -145,7 +145,7 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var scheduleInput []byte
-		if err := tx.QueryRow(ctx, queryWorkersChangeoccurrence2, scheduleID).Scan(&scheduleInput); err != nil {
+		if err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectSchedulesId, scheduleID).Scan(&scheduleInput); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		var data map[string]any
@@ -158,8 +158,8 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, err
 		}
 		var runID string
-		_ = tx.QueryRow(ctx, queryWorkersChangeoccurrence3, outcome.result.Run.Ref).Scan(&runID)
-		_, _ = tx.Exec(ctx, queryWorkersChangeoccurrence4, occurrenceID, runID)
+		_ = tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectRunsRef, outcome.result.Run.Ref).Scan(&runID)
+		_, _ = tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion, occurrenceID, runID)
 		outcome.resourceKind = "SCHEDULE_OCCURRENCE"
 		outcome.resourceRef = payload.OccurrenceRef
 		outcome.summary = "Schedule occurrence materialized"
@@ -172,10 +172,10 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	if strings.ToUpper(payload.Outcome) != "SUCCEEDED" {
 		outcomeState = "FAILED"
 	}
-	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrence5, occurrenceID, outcomeState); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateVersionUpdatedAt, occurrenceID, outcomeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrence6, scheduleID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateSchedulesLastRunAtNextRunAtVersion, scheduleID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	schedule := entity.Schedule{Ref: mustScheduleRef(ctx, tx, scheduleID), ProjectRef: projectRef}
@@ -184,7 +184,7 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 
 func mustScheduleRef(ctx context.Context, tx pgx.Tx, id string) string {
 	var ref string
-	_ = tx.QueryRow(ctx, queryWorkersMustscheduleref1, id).Scan(&ref)
+	_ = tx.QueryRow(ctx, queryWorkersMustschedulerefSelectSchedulesId, id).Scan(&ref)
 	return ref
 }
 
@@ -198,10 +198,10 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtests1, scope.organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsExpireStaleTestLeases, scope.organizationID); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationtests2, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationtestsSelectIntegrationConnectionTestsOrganizationIdState, scope.organizationID, limit)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -230,7 +230,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationtests3, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsClaimTestLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -252,7 +252,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
 	var generation int64
 	var expiresAt time.Time
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtest1, scope.organizationID, payload.TestRef).Scan(&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef).Scan(&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(payload.Fence))
@@ -266,11 +266,11 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 			credentials = "INVALID"
 		}
 	}
-	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtest2, testID, nextTest, truncate(payload.ResultSummary, 1000), payload.SafeErrorCode); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionTestsStateResultSummarySafeErrorCode, testID, nextTest, truncate(payload.ResultSummary, 1000), payload.SafeErrorCode); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var item entity.IntegrationConnection
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtest3, connectionID, nextConnection, credentials, truncate(payload.ResultSummary, 1000)).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionsStateMaskedCredentialsStateLastTestSummary, connectionID, nextConnection, credentials, truncate(payload.ResultSummary, 1000)).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	item.NextActions = []string{"OPEN", "TEST"}
@@ -292,7 +292,7 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 		return nil, errs.ErrInvalid
 	}
 	var runID, nodeID, connectionID, grantID, projectID string
-	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocation1, scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"]).Scan(&runID, &nodeID, &connectionID, &grantID, &projectID)
+	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef, scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"]).Scan(&runID, &nodeID, &connectionID, &grantID, &projectID)
 	if err != nil {
 		return nil, errs.ErrForbidden
 	}
@@ -300,7 +300,7 @@ func (repository *Repository) ResolveIntegrationInvocation(ctx context.Context, 
 	inputDigest := sha256.Sum256(encodedInput)
 	intentDigest := sha256.Sum256([]byte(strings.Join([]string{input["connection_ref"], input["capability_key"], hex.EncodeToString(inputDigest[:])}, "\x00")))
 	var resolvedRef string
-	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocation2, invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"], input["idempotency_key"], hex.EncodeToString(intentDigest[:]), hex.EncodeToString(inputDigest[:]), encodedInput).Scan(&resolvedRef); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId, invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"], input["idempotency_key"], hex.EncodeToString(intentDigest[:]), hex.EncodeToString(inputDigest[:]), encodedInput).Scan(&resolvedRef); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
 		}
@@ -322,10 +322,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocations1, scope.organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocations2, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -354,7 +354,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocations3, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -375,7 +375,7 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 		return nil, err
 	}
 	var state, resultSummary, safeErrorCode string
-	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocation1, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode); err != nil {
+	if err := repository.pool.QueryRow(ctx, queryWorkersGetintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, ref).Scan(&state, &resultSummary, &safeErrorCode); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrNotFound
 		}
@@ -395,7 +395,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	var invocationID, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var generation int64
 	var expiresAt time.Time
-	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocation1, scope.organizationID, payload.InvocationRef).Scan(&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt)
+	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef).Scan(&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -407,7 +407,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if !payload.Success {
 		next = "FAILED"
 	}
-	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocation2, invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100)); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocationUpdateIntegrationInvocationsStateResultSummarySafeErrorCode, invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100)); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")

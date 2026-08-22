@@ -1,2 +1,0 @@
--- name: platform__runtime_completeexecution_23 :exec
-UPDATE control_plane.run_nodes SET state='SUCCEEDED',finished_at=clock_timestamp(),version=version+1 WHERE root_run_id=$1::uuid AND type='ROOT_PROCESS'

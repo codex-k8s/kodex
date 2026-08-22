@@ -1,2 +1,0 @@
--- name: platform__commands_launchrun_11 :exec
-INSERT INTO control_plane.run_edges(ref,organization_id,root_run_id,source_node_id,target_node_id,type,label) VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'WAITING_FOR','Ожидает завершения')

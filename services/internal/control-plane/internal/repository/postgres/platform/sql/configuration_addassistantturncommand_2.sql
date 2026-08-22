@@ -1,2 +1,0 @@
--- name: platform__configuration_addassistantturncommand_2 :one
-SELECT c.id::text,c.session_id::text,s.ref,c.project_id::text,COALESCE(p.ref,''),c.version FROM control_plane.assistant_conversations c JOIN control_plane.sessions s ON s.id=c.session_id LEFT JOIN control_plane.projects p ON p.id=c.project_id WHERE c.organization_id=$1::uuid AND c.ref=$2 AND c.state='ACTIVE' FOR UPDATE
