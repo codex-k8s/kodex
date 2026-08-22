@@ -180,7 +180,10 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 		value, _ = value[field].(map[string]any)
 	}
 	if pageField != "" {
-		items, _ := value[pageField].([]any)
+		items := []any{}
+		if present, ok := value[pageField].([]any); ok {
+			items = present
+		}
 		output := map[string]any{"items": items}
 		if pageValue, ok := value["page"].(map[string]any); ok {
 			if next, ok := pageValue["nextPageToken"].(string); ok && next != "" {
@@ -292,7 +295,49 @@ func normalize(value any) {
 		} else if _, hasDraft := current["draftVersion"]; hasDraft {
 			flattenWorkflow(current)
 		}
+		ensureRequiredCollections(current)
 	}
+}
+
+func ensureRequiredCollections(value map[string]any) {
+	for _, key := range requiredCollectionKeys(value) {
+		if _, exists := value[key]; !exists {
+			value[key] = []any{}
+		}
+	}
+	if _, isStep := value["position"]; isStep {
+		if _, exists := value["parallel"]; !exists {
+			value["parallel"] = false
+		}
+		if _, exists := value["parallelGroup"]; !exists {
+			value["parallelGroup"] = float64(0)
+		}
+		if _, exists := value["expectedResult"]; !exists {
+			value["expectedResult"] = ""
+		}
+		if _, exists := value["humanGate"]; !exists {
+			value["humanGate"] = false
+		}
+	}
+}
+
+func requiredCollectionKeys(value map[string]any) []string {
+	keys := []string{}
+	if _, isStep := value["position"]; isStep {
+		keys = append(keys, "gateDecisions", "requiredCapabilityKeys")
+	}
+	if _, isAgent := value["roleDescription"]; isAgent {
+		keys = append(keys, "capabilities", "integrations", "knowledgeArtifactRefs", "nextActions")
+	}
+	if _, isMembership := value["platformRole"]; isMembership {
+		keys = append(keys, "permissions", "nextActions")
+	}
+	if _, isGraph := value["sequence"]; isGraph {
+		if _, hasRevision := value["revision"]; hasRevision {
+			keys = append(keys, "nodes", "edges")
+		}
+	}
+	return keys
 }
 
 func target(value map[string]any) (string, any, bool) {
@@ -313,6 +358,11 @@ func flattenWorkflow(value map[string]any) {
 	for _, key := range []string{"revision", "coordinatorAgentRef", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
 		if item, exists := version[key]; exists {
 			value[key] = item
+		}
+	}
+	for _, key := range []string{"steps", "validationMessages", "nextActions"} {
+		if _, exists := value[key]; !exists {
+			value[key] = []any{}
 		}
 	}
 	delete(value, "publishedVersion")
