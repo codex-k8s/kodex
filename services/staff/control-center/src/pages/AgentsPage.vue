@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { isAgentDraftComplete } from "@/features/platform/agent-form";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -36,6 +37,7 @@ const form = reactive({
   initialInstructions: "",
   runtimeRef: "",
 });
+const formReady = computed(() => isAgentDraftComplete(form));
 
 function openDialog(): void {
   form.runtimeRef ||= runtimes.value[0]?.ref ?? "";
@@ -180,7 +182,7 @@ onMounted(
           class="button button--primary"
           form="agent-form"
           type="submit"
-          :disabled="busy"
+          :disabled="busy || !formReady"
         >
           {{ $t("common.create") }}
         </button></template

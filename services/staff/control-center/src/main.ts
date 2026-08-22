@@ -4,6 +4,7 @@ import { createApp } from "vue";
 import App from "@/App.vue";
 import { i18n } from "@/app/i18n";
 import { router } from "@/app/router";
+import { installSessionGuard } from "@/app/router/session-guard";
 import "@/app/styles/base.css";
 import { useSessionStore } from "@/features/session/store";
 import { useRealtimeStore } from "@/features/realtime/store";
@@ -19,9 +20,10 @@ async function bootstrap(): Promise<void> {
   const pinia = createPinia();
   app.use(pinia);
   app.use(i18n);
+  const session = useSessionStore(pinia);
+  installSessionGuard(router, session);
   app.use(router);
   await router.isReady();
-  const session = useSessionStore(pinia);
   setUnauthorizedHandler(() => {
     session.invalidate();
     useRealtimeStore(pinia).closeAll();

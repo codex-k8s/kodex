@@ -260,6 +260,29 @@ export const usePlatformStore = defineStore("platform", () => {
     upsert(target, values);
   }
 
+  function replaceScoped<T extends { ref: string }>(
+    target: Record<string, T>,
+    values: T[],
+    belongsToScope: (value: T) => boolean,
+  ): void {
+    const currentRefs = new Set(values.map((value) => value.ref));
+    for (const [ref, value] of Object.entries(target)) {
+      if (belongsToScope(value) && !currentRefs.has(ref))
+        Reflect.deleteProperty(target, ref);
+    }
+    upsert(target, values);
+  }
+
+  function replaceByKey<T>(
+    target: Record<string, T>,
+    values: T[],
+    key: (value: T) => string,
+  ): void {
+    for (const current of Object.keys(target))
+      Reflect.deleteProperty(target, current);
+    for (const value of values) target[key(value)] = value;
+  }
+
   async function loadBootstrap(): Promise<void> {
     await query(
       "bootstrap",
@@ -302,7 +325,7 @@ export const usePlatformStore = defineStore("platform", () => {
             listProjects({ query: { pageSize: 100 }, signal: requestSignal() }),
           )
         ).data.items,
-      (values) => upsert(projects, values),
+      (values) => replace(projects, values),
     );
   }
 
@@ -334,7 +357,12 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(agents, values),
+      (values) =>
+        replaceScoped(
+          agents,
+          values,
+          (agent) => agent.projectRef === projectRef,
+        ),
     );
   }
 
@@ -359,9 +387,7 @@ export const usePlatformStore = defineStore("platform", () => {
       async () =>
         (await unwrap(listRoleEnvironments({ signal: requestSignal() }))).data
           .items,
-      (values) => {
-        for (const value of values) roleEnvironments[value.key] = value;
-      },
+      (values) => replaceByKey(roleEnvironments, values, (value) => value.key),
     );
   }
 
@@ -384,7 +410,12 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(roleImageRecipes, values),
+      (values) =>
+        replaceScoped(
+          roleImageRecipes,
+          values,
+          (recipe) => recipe.projectRef === projectRef,
+        ),
     );
   }
 
@@ -423,7 +454,12 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(workflows, values),
+      (values) =>
+        replaceScoped(
+          workflows,
+          values,
+          (workflow) => workflow.projectRef === projectRef,
+        ),
     );
   }
 
@@ -457,7 +493,11 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(runs, values),
+      (values) => {
+        if (projectRef)
+          replaceScoped(runs, values, (run) => run.projectRef === projectRef);
+        else replace(runs, values);
+      },
     );
   }
 
@@ -515,7 +555,17 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(gates, values),
+      (values) => {
+        if (runRef)
+          replaceScoped(gates, values, (gate) => gate.runRef === runRef);
+        else if (projectRef)
+          replaceScoped(
+            gates,
+            values,
+            (gate) => gate.projectRef === projectRef,
+          );
+        else replace(gates, values);
+      },
     );
   }
 
@@ -532,7 +582,12 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(artifacts, values),
+      (values) =>
+        replaceScoped(
+          artifacts,
+          values,
+          (artifact) => artifact.projectRef === projectRef,
+        ),
     );
   }
 
@@ -607,7 +662,12 @@ export const usePlatformStore = defineStore("platform", () => {
             }),
           )
         ).data.items,
-      (values) => upsert(schedules, values),
+      (values) =>
+        replaceScoped(
+          schedules,
+          values,
+          (schedule) => schedule.projectRef === projectRef,
+        ),
     );
   }
 
@@ -625,8 +685,8 @@ export const usePlatformStore = defineStore("platform", () => {
         };
       },
       (value) => {
-        for (const item of value.definitions) definitions[item.key] = item;
-        upsert(connections, value.connections);
+        replaceByKey(definitions, value.definitions, (item) => item.key);
+        replace(connections, value.connections);
       },
     );
   }
@@ -668,7 +728,7 @@ export const usePlatformStore = defineStore("platform", () => {
       },
       (value) => {
         assistant.value = value.assistant;
-        upsert(conversations, value.conversations);
+        replace(conversations, value.conversations);
       },
     );
   }
