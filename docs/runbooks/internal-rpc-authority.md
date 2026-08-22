@@ -4,8 +4,8 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.1.5
-updated: 2026-08-20
+version: 1.2.0
+updated: 2026-08-23
 ---
 
 # Диагностика и восстановление internal-rpc-authority
@@ -207,10 +207,8 @@ evidence.
 ## Миграции
 
 Задача миграции запускается до rollout и использует отдельный ServiceAccount и
-Secret с DSN. В активной фазе прототипа тяжёлая PostgreSQL integration suite не
-входит в обязательный baseline и не запускается этим runbook. Полный
-поддерживаемый disposable-контур будет введён отдельной owner-approved волной:
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+Secret с DSN. До rollout выполняется поддерживаемый disposable PostgreSQL
+component-контур из `GOV-DOC-003`; он не использует DSN живой среды.
 
 Перед staging владелец отдельно утверждает фактическую миграционную проверку и
 одноразовое окружение. Production CLI не предоставляет `down`: откат схемы

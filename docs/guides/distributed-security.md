@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.3.1
-updated: 2026-08-07
+version: 1.4.0
+updated: 2026-08-23
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -558,14 +558,11 @@ MatterCodex выбирает формат проверок по `GOV-DOC-003`, �
 - соответствие исправления всем системным аналогам, а не одной отмеченной
   строке.
 
-В активном профиле `Prototype` таким доказательством служат production diff,
-сквозная карта, статический разбор, сборка и ручной сценарий; отсутствие
-integration/E2E/contract/deploy/render/lifecycle suite либо полного coverage
-не является security finding. Небольшой быстрый unit-тест сохраняется только
-для сложной чистой или security-critical логики. Достижимый fail-open path,
-ошибка authority либо нарушение границы доверия остаются блокером независимо
-от наличия тестового контура. Полный контур будет введён отдельной волной
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+В `Web-first baseline` доказательство включает production diff, сквозную карту,
+unit/component negative tests, exact environment render и ручной сценарий.
+Достижимый fail-open path, ошибка authority либо нарушение границы доверия
+остаются блокером независимо от наличия теста. Отсутствие разрешённой live или
+disposable среды фиксируется как `NOT RUN` и не ослабляет статический finding.
 
 Статус `resolved` у review thread подтверждает завершение обсуждения, но не
 заменяет проверку diff и фактического пути отказа.

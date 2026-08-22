@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.3.0
-updated: 2026-07-31
+version: 1.4.0
+updated: 2026-08-23
 ---
 
 # Серверная разработка на Go
@@ -690,17 +690,12 @@ error-логирования и Sentry reporting для unary gRPC. Ожидае
 
 Обязательный профиль линтеров, сборок и тестов определяется `GOV-DOC-003`.
 Локальный результат привязывается к точному SHA и не выдается за GitHub CI.
-В активной фазе `Prototype` выполняются быстрые
-компиляция/сборка/форматирование/diff. Небольшой unit-тест добавляется только
-для действительно сложной чистой либо security-critical логики; простому
-composition/config/transport glue тест ради покрытия не нужен.
-
-Отсутствие полного test coverage, integration/E2E,
-contract/deploy/render/lifecycle/oracle suites и общего baseline до
-завершения прототипа не блокирует Go unit и не является review finding.
-Полная поддерживаемая стратегия будет отдельной owner-approved волной после
-готовности прототипа:
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+В `Web-first baseline` выполняются сборка, unit, disposable PostgreSQL
+component, contract/codegen, security и render-проверки всей применимой
+области. Простой composition/config/transport glue не получает тест ради
+покрытия; security-critical и lifecycle логика получает воспроизводимый
+положительный и отрицательный контур. Незапущенная проверка указывается как
+`NOT RUN`, ошибка существующей обязательной оснастки — как `FAIL`.
 
 Связанные документы: `REPO-DOC-001`, `GO-DOC-002`, `GO-DOC-003`,
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `GUIDE-DOC-003`,
