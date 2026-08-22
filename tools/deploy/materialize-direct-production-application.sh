@@ -736,7 +736,7 @@ else
     --allow-pub '$JS.API.STREAM.CREATE.CONTROL_PLANE,$JS.API.STREAM.INFO.CONTROL_PLANE' \
     --allow-sub '_INBOX.>' >/dev/null
   "$nsc_bin" -H "$NSC_HOME" add user -a applications -n control-api-gateway \
-    --allow-sub 'control_plane.run.*.*.events' --deny-pub '>' >/dev/null
+    --allow-sub 'control_plane.platform.*.events,control_plane.run.*.*.events' --deny-pub '>' >/dev/null
   mkdir -p "$(dirname -- "$(value_path Secret control-plane-nats user.creds)")" \
     "$(dirname -- "$(value_path Secret control-plane-nats-bootstrap user.creds)")" \
     "$(dirname -- "$(value_path Secret control-api-gateway-nats user.creds)")"
@@ -763,7 +763,7 @@ for name in control-plane-nats control-plane-nats-bootstrap control-api-gateway-
         '$JS.API.STREAM.CREATE.CONTROL_PLANE,$JS.API.STREAM.INFO.CONTROL_PLANE' '_INBOX.>' '' '' ;;
     control-api-gateway-nats)
       node "$helper" validate-nats-creds "$creds" control-api-gateway '' \
-        'control_plane.run.*.*.events' '>' '' ;;
+        'control_plane.platform.*.events,control_plane.run.*.*.events' '>' '' ;;
   esac
 done
 node "$helper" validate-nats-server "$temporary_directory/internal/operator.jwt" \

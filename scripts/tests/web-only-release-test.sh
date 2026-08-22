@@ -53,10 +53,38 @@ if rg -ni 'bot-service|legacy-data-migration|interaction-gateway|mattermost' "$r
   fail 'web-only render contains a retired or optional interaction unit'
 fi
 
+rg -F -- "--allow-sub 'control_plane.platform.*.events,control_plane.run.*.*.events' --deny-pub '>'" \
+  "$repository_root/tools/deploy/materialize-direct-production-application.sh" >/dev/null ||
+  fail 'control API NATS credential does not authorize both platform and run streams'
+
 for deployment in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler role-image-builder image-admission-controller staff-control-center; do
   DEPLOYMENT="$deployment" yq -e 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" >/dev/null ||
     fail "required deployment is absent: $deployment"
 done
+
+yq -o=json 'select(.kind == "Job" and .metadata.name == "control-plane-migrate")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "migrate") |
+    .command == ["/usr/local/bin/control-plane-cli"] and
+    .args == ["up"] and
+    any(.env[]; .name == "CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE" and
+      .value == "/var/run/secrets/mattercodex/control-plane/postgres-migration/dsn")
+  ' >/dev/null || fail 'fresh control-plane migration command is inconsistent with the CLI contract'
+
+yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-api-gateway")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "control-api-gateway") |
+    (.volumeMounts | map(.name)) as $mounts |
+    all(["nats-client-tls", "nats-credential", "nats-ca"][]; . as $name | $mounts | index($name) != null)
+  ' >/dev/null || fail 'control API realtime NATS materials are not mounted'
+
+yq -o=json '
+  select(.kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths")
+' "$render_file" | jq -e '
+  any(.spec.egress[];
+    any(.to[]?; .podSelector.matchLabels."app.kubernetes.io/name" == "mattercodex-nats") and
+    any(.ports[]?; .protocol == "TCP" and .port == 4222))
+' >/dev/null || fail 'control API realtime NATS egress is absent'
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$render_file" |
   jq -e '

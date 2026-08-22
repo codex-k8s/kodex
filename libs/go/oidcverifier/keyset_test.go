@@ -45,6 +45,36 @@ func TestBoundedKeySetStopsAfterLastKnownGoodWindow(t *testing.T) {
 	}
 }
 
+func TestBoundedKeySetRepeatedFailuresDoNotExtendLastKnownGoodWindow(t *testing.T) {
+	t.Parallel()
+
+	body := testJWKS(t, "key-1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write(body)
+	}))
+	startedAt := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
+	now := startedAt
+	set := newBoundedKeySet(server.Client(), server.URL)
+	set.now = func() time.Time { return now }
+	if err := set.Refresh(t.Context()); err != nil {
+		server.Close()
+		t.Fatalf("initial refresh: %v", err)
+	}
+	server.Close()
+
+	expectedDeadline := startedAt.Add(lastKnownGoodWindow)
+	for _, elapsed := range []time.Duration{30 * time.Second, 90 * time.Second, 119 * time.Second} {
+		now = startedAt.Add(elapsed)
+		if err := set.Refresh(t.Context()); err == nil {
+			t.Fatal("network failure was not reported")
+		}
+		deadline, degraded := set.DegradedDeadline()
+		if !degraded || !deadline.Equal(expectedDeadline) {
+			t.Fatalf("failure extended last-known-good deadline to %v", deadline)
+		}
+	}
+}
+
 func TestBoundedKeySetFailsClosedOnMalformedSnapshot(t *testing.T) {
 	t.Parallel()
 

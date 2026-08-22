@@ -363,7 +363,7 @@ node "$repository_root/tools/deploy/direct-production-material-helper.mjs" valid
   '$JS.API.STREAM.CREATE.CONTROL_PLANE,$JS.API.STREAM.INFO.CONTROL_PLANE' '_INBOX.>' '' ''
 node "$repository_root/tools/deploy/direct-production-material-helper.mjs" validate-nats-creds \
   "$temporary_directory/control-api-gateway-nats.creds" control-api-gateway '' \
-  'control_plane.run.*.*.events' '>' ''
+  'control_plane.platform.*.events,control_plane.run.*.*.events' '>' ''
 jq -er '.[] | select(.kind=="Secret" and .metadata.name=="control-plane-postgres-runtime") | .data.dsn' "$material_json" |
   base64 -d >"$temporary_directory/postgres-dsn"
 grep -Eq '^postgresql://[^:]+:[a-f0-9]{64}@control-plane-postgresql-rw\.mattercodex-system\.svc\.cluster\.local:5432/control_plane\?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/control-plane/postgres/ca\.pem&options=-c%20role%3Dcontrol_plane_runtime$' \
