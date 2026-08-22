@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,16 +23,22 @@ type commandOutcome struct {
 	projectID, projectRef, resourceKind, resourceRef, summary, platformEvent string
 }
 
+const defaultAgentRunConcurrency = 8
+
 func (repository *Repository) Execute(ctx context.Context, input command.Command) (command.Result, error) {
 	scope, err := repository.resolveScope(ctx, input.Principal)
 	if err != nil {
 		return command.Result{}, err
 	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
-		return command.Result{}, errs.ErrUnavailable
+		return command.Result{}, fmt.Errorf("begin command transaction: %w", errs.ErrUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
+		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
+		return command.Result{}, fmt.Errorf("lock command idempotency scope: %w", errs.ErrUnavailable)
+	}
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
 	}
@@ -52,7 +59,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return result, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return command.Result{}, errs.ErrUnavailable
+		return command.Result{}, fmt.Errorf("read idempotency receipt: %w", errs.ErrUnavailable)
 	}
 	outcome, err := repository.applyCommand(ctx, tx, scope, input)
 	if err != nil {
@@ -72,7 +79,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		project = nil
 	}
 	if _, err = tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction, auditRef, scope.organizationID, project, scope.actorID, input.Mutation.Operation, outcome.resourceKind, outcome.resourceRef, outcome.summary, input.Principal.CorrelationRef); err != nil {
-		return command.Result{}, errs.ErrUnavailable
+		return command.Result{}, fmt.Errorf("insert command audit event: %w", errs.ErrUnavailable)
 	}
 	if outcome.platformEvent != "" {
 		if err := repository.emitPlatformEvent(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary); err != nil {
@@ -84,10 +91,10 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, errs.ErrConflict
 	}
 	if _, err = tx.Exec(ctx, queryCommandsExecuteInsertIdempotencyReceiptsOrganizationIdOperationIntentDigest, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey, input.Mutation.IntentDigest, string(input.Kind), encoded); err != nil {
-		return command.Result{}, errs.ErrConflict
+		return command.Result{}, fmt.Errorf("insert command idempotency receipt: %w", errs.ErrConflict)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return command.Result{}, errs.ErrConflict
+		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
 	return outcome.result, nil
 }
@@ -351,7 +358,9 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	}
-	_ = tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs)
+	if err := tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	item.NextActions = agentActions(item)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "i18n:AGENT_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
@@ -415,7 +424,9 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		var number int32
-		_ = tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextRollbackVersion, agentID).Scan(&number)
+		if err := tx.QueryRow(ctx, queryCommandsChangeinstructionsSelectNextRollbackVersion, agentID).Scan(&number); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		ref, _ := newRef("ins")
 		digest := sha256.Sum256([]byte(content))
 		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsInsertRollbackVersion, ref, scope.organizationID, agentID, number, content, hex.EncodeToString(digest[:]), payload.Instructions, scope.actorID); err != nil {
@@ -449,7 +460,9 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 				return commandOutcome{}, errs.ErrNotFound
 			}
 		} else {
-			_, _ = tx.Exec(ctx, queryCommandsChangeagentbindingRevokeIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
+			if _, err := tx.Exec(ctx, queryCommandsChangeagentbindingRevokeIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
 		}
 	} else if input.Kind == command.ChangeAgentCapability && payload.Enabled {
 		_, err := tx.Exec(ctx, queryCommandsChangeagentbindingAppendCapability, scope.organizationID, payload.AgentRef, payload.BindingRef)
@@ -663,7 +676,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	var targetName string
 	var workflowSpec []byte
-	runConcurrency := int32(1)
+	runConcurrency := int32(defaultAgentRunConcurrency)
 	switch payload.Target.Type {
 	case "AGENT":
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
@@ -690,10 +703,10 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 			return commandOutcome{}, err
 		}
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+			return commandOutcome{}, fmt.Errorf("insert run session: %w", errs.ErrUnavailable)
 		}
 	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {
-		return commandOutcome{}, errs.ErrConflict
+		return commandOutcome{}, fmt.Errorf("resolve continuation session: %w", errs.ErrConflict)
 	}
 	runRef, _ := newRef("run")
 	title := strings.TrimSpace(payload.Title)
@@ -701,29 +714,33 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		title = targetName + ": " + truncate(payload.Task, 120)
 	}
 	rawInput := asJSON(payload.Input)
+	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
+	if artifactRefs == nil {
+		artifactRefs = []string{}
+	}
 	var runID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, payload.ArtifactRefs, scope.actorID, runConcurrency).Scan(&runID); err != nil {
-		return commandOutcome{}, mapWriteError(err)
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, artifactRefs, scope.actorID, runConcurrency).Scan(&runID); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert launched run: %w", mapWriteError(err))
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, payload.Task, payload.ArtifactRefs).Scan(&turnID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, payload.Task, artifactRefs).Scan(&turnID); err != nil {
+		return commandOutcome{}, fmt.Errorf("insert initial session turn: %w", errs.ErrUnavailable)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("advance run session: %w", errs.ErrUnavailable)
 	}
 	rootNodeRef, _ := newRef("nod")
 	var rootNodeID string
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunNodesRefRootRunIdType, rootNodeRef, scope.organizationID, runID, title, turnID, truncate(payload.Task, 500)).Scan(&rootNodeID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("insert root process node: %w", errs.ErrUnavailable)
 	}
 	if payload.Target.Type == "AGENT" {
 		if _, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, payload.Target.Ref, targetName, turnID, payload.Task); err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, fmt.Errorf("insert direct agent execution node: %w", err)
 		}
 	} else {
 		var version entity.WorkflowVersion
@@ -762,14 +779,14 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return commandOutcome{}, fmt.Errorf("start launched run: %w", errs.ErrUnavailable)
 	}
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "i18n:RUN_CREATED", "RUNNING", "RUNNING"); err != nil {
-		return commandOutcome{}, err
+		return commandOutcome{}, fmt.Errorf("emit launched run event: %w", err)
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
 	if err != nil {
-		return commandOutcome{}, err
+		return commandOutcome{}, fmt.Errorf("read launched run graph: %w", err)
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
 }
@@ -777,16 +794,16 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {
 	var agentID, role string
 	if err := tx.QueryRow(ctx, queryCommandsInsertagentnodeSelectAgentsOrganizationIdRefState, scope.organizationID, agentRef).Scan(&agentID, &role); err != nil {
-		return "", "", errs.ErrInvalid
+		return "", "", fmt.Errorf("resolve agent execution target: %w", errs.ErrInvalid)
 	}
 	nodeRef, _ := newRef("nod")
 	var nodeID string
 	if err := tx.QueryRow(ctx, queryCommandsInsertagentnodeInsertRunNodesRefRootRunIdParentNodeId, nodeRef, scope.organizationID, rootRunID, runID, parentNodeID, displayName, role, agentID, turnID, truncate(summary, 1000)).Scan(&nodeID); err != nil {
-		return "", "", errs.ErrUnavailable
+		return "", "", fmt.Errorf("insert agent execution node: %w", errs.ErrUnavailable)
 	}
 	edgeRef, _ := newRef("edg")
 	if _, err := tx.Exec(ctx, queryCommandsInsertagentnodeInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, rootRunID, parentNodeID, nodeID); err != nil {
-		return "", "", errs.ErrUnavailable
+		return "", "", fmt.Errorf("insert process-to-agent edge: %w", errs.ErrUnavailable)
 	}
 	return nodeID, nodeRef, nil
 }
@@ -916,33 +933,43 @@ func eventKind(eventType string) string {
 func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, scope scope, runRef string) (entity.Run, entity.RunGraph, error) {
 	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraphSelectRunsOrganizationIdRef, scope.organizationID, runRef))
 	if err != nil {
-		return entity.Run{}, entity.RunGraph{}, err
+		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("read run snapshot: %w", err)
 	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
 	rows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunNodesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {
-		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("query run graph nodes: %w", errs.ErrUnavailable)
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var n entity.RunNode
 		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
-			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+			rows.Close()
+			return entity.Run{}, entity.RunGraph{}, fmt.Errorf("scan run graph node: %w", errs.ErrUnavailable)
 		}
 		graph.Nodes = append(graph.Nodes, n)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("iterate run graph nodes: %w", errs.ErrUnavailable)
+	}
+	rows.Close()
 	edgeRows, err := tx.Query(ctx, queryCommandsReadrungraphtxSelectRunEdgesOrganizationIdRootRunIdRef, scope.organizationID, runRef)
 	if err != nil {
-		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("query run graph edges: %w", errs.ErrUnavailable)
 	}
-	defer edgeRows.Close()
 	for edgeRows.Next() {
 		var e entity.RunEdge
 		if err := edgeRows.Scan(&e.Ref, &e.RunRef, &e.SourceNodeRef, &e.TargetNodeRef, &e.Type, &e.Label); err != nil {
-			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+			edgeRows.Close()
+			return entity.Run{}, entity.RunGraph{}, fmt.Errorf("scan run graph edge: %w", errs.ErrUnavailable)
 		}
 		graph.Edges = append(graph.Edges, e)
 	}
+	if err := edgeRows.Err(); err != nil {
+		edgeRows.Close()
+		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("iterate run graph edges: %w", errs.ErrUnavailable)
+	}
+	edgeRows.Close()
 	return run, graph, nil
 }
 
@@ -971,8 +998,12 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 		if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectRunsRef, outcome.result.Run.Ref).Scan(&newRootID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_ = tx.QueryRow(ctx, queryCommandsAddsessionturnSelectPreviousRootNode, previousRootID).Scan(&previousNodeID)
-		_ = tx.QueryRow(ctx, queryCommandsAddsessionturnSelectContinuationRootNode, newRootID).Scan(&newNodeID)
+		if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectPreviousRootNode, previousRootID).Scan(&previousNodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectContinuationRootNode, newRootID).Scan(&newNodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		edgeRef, _ := newRef("edg")
 		if _, err := tx.Exec(ctx, queryCommandsAddsessionturnInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, previousNodeID, newNodeID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1012,9 +1043,15 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsStateSafeErrorCodeSafeErrorMessage, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID)
-		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID)
-		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.RunRef, "RUN_STATE_CHANGED", "", "", "", "", "i18n:RUN_CANCELLED", "CANCELLED", ""); err != nil {
 			return commandOutcome{}, err
 		}
@@ -1043,10 +1080,18 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, err
 	}
 	var newRunID, newRootID, newRootNodeID, oldRootNodeID string
-	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectRunsRef, outcome.result.Run.Ref).Scan(&newRunID, &newRootID)
-	_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1)
-	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID)
-	_ = tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID)
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsRef, outcome.result.Run.Ref).Scan(&newRunID, &newRootID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRunsRetryOfRunIdAttempt, newRunID, runID, attempt+1); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectPreviousRootNode, rootRunID).Scan(&oldRootNodeID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRetryRootNode, newRootID).Scan(&newRootNodeID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	edgeRef, _ := newRef("edg")
 	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1074,10 +1119,14 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if nextState == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var gateID, nodeID, rootRunID, projectID, projectRef string
+	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
+	var predecessorNodeID, predecessorRunID, sessionID string
 	var version int64
 	var allowed []string
-	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed)
+	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
+		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
+		&predecessorNodeID, &predecessorRunID, &sessionID,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -1095,30 +1144,81 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	}
 	nodeState := "SUCCEEDED"
 	runState := "RUNNING"
-	if payload.Decision == "REJECT" || payload.Decision == "CANCEL" {
+	if payload.Decision == "REJECT" {
 		nodeState = "FAILED"
 		runState = "FAILED"
+	} else if payload.Decision == "CANCEL" {
+		nodeState = "CANCELLED"
+		runState = "CANCELLED"
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion, nodeID, nodeState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
+	if payload.Decision == "REQUEST_CHANGES" {
+		comment := strings.TrimSpace(payload.Comment)
+		if comment == "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		turnRef, err := newRef("trn")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		var turnID string
+		if err := tx.QueryRow(ctx, queryCommandsResolvegateInsertChangeRequestTurn, turnRef, scope.organizationID,
+			sessionID, predecessorRunID, scope.actorRef, truncate(comment, 2000)).Scan(&turnID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateChangeRequestSession, sessionID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		tag, err := tx.Exec(ctx, queryCommandsResolvegateRequeuePredecessorNode, predecessorNodeID, turnID, truncate(comment, 1000))
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrConflict
+		}
+	}
+	if payload.Decision == "APPROVE" {
+		var active int
+		if err := tx.QueryRow(ctx, queryCommandsResolvegateSelectActiveAgentNodes, rootRunID).Scan(&active); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if active == 0 {
+			runState = "SUCCEEDED"
+		}
+	}
+	if runState == "SUCCEEDED" {
+		if _, err := tx.Exec(ctx, queryCommandsResolvegateCompleteRootRun, rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	} else if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", "", "", payload.GateRef, "", "i18n:OWNER_GATE_RESOLVED", runState, nodeState)
+	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", gateNodeRef, "", payload.GateRef, "", "i18n:OWNER_GATE_RESOLVED", runState, nodeState)
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, mustRunRef(ctx, tx, rootRunID))
+	runRef, err := mustRunRef(ctx, tx, rootRunID)
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	gate := entity.OwnerGate{Ref: payload.GateRef, RunRef: run.RootRunRef, ProjectRef: projectRef, State: nextState, Decision: payload.Decision, DecisionComment: payload.Comment, Version: version + 1}
+	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	gate, err := scanGate(tx.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId,
+		scope.organizationID, payload.GateRef, scope.role, scope.actorID))
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	return commandOutcome{result: command.Result{Gate: &gate, Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "OWNER_GATE", resourceRef: payload.GateRef, summary: "i18n:OWNER_GATE_RESOLVED"}, nil
 }
 
-func mustRunRef(ctx context.Context, tx pgx.Tx, id string) string {
+func mustRunRef(ctx context.Context, tx pgx.Tx, id string) (string, error) {
 	var ref string
-	_ = tx.QueryRow(ctx, queryCommandsMustrunrefSelectRunsId, id).Scan(&ref)
-	return ref
+	if err := tx.QueryRow(ctx, queryCommandsMustrunrefSelectRunsId, id).Scan(&ref); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	return ref, nil
 }

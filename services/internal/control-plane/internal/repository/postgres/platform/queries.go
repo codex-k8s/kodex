@@ -376,7 +376,7 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 func scanRun(row rowScanner) (entity.Run, error) {
 	var item entity.Run
 	var input []byte
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.CreatedAt, &item.StartedAt, &item.FinishedAt); err != nil {
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &item.CreatedAt, &item.StartedAt, &item.FinishedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Run{}, errs.ErrNotFound
 		}
@@ -429,26 +429,36 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var n entity.RunNode
 		if err := rows.Scan(&n.Ref, &n.RunRef, &n.ParentNodeRef, &n.Type, &n.State, &n.DisplayName, &n.Role, &n.AgentRef, &n.TurnRef, &n.Attempt, &n.InputSummary, &n.ProgressSummary, &n.IntegrationNames, &n.CallbackSummary, &n.SafeErrorCode, &n.SafeErrorMessage, &n.NextActions, &n.CreatedAt, &n.StartedAt, &n.FinishedAt, &n.ArtifactRefs, &n.ChildRunRefs); err != nil {
+			rows.Close()
 			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 		}
 		graph.Nodes = append(graph.Nodes, n)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+	}
+	rows.Close()
 	edgeRows, err := repository.pool.Query(ctx, queryQueriesGetrungraphSelectRunEdgesOrganizationIdRef, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
-	defer edgeRows.Close()
 	for edgeRows.Next() {
 		var e entity.RunEdge
 		if err := edgeRows.Scan(&e.Ref, &e.RunRef, &e.SourceNodeRef, &e.TargetNodeRef, &e.Type, &e.Label); err != nil {
+			edgeRows.Close()
 			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 		}
 		graph.Edges = append(graph.Edges, e)
 	}
+	if err := edgeRows.Err(); err != nil {
+		edgeRows.Close()
+		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+	}
+	edgeRows.Close()
 	return run, graph, nil
 }
 

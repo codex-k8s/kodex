@@ -315,7 +315,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if turnID != "" {
-		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt, turnID, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success])
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionTurnsStateCompletedAt, turnID, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -389,8 +391,12 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), artifactRefs, map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID)
-		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID)
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if payload.Success && humanGateAfter {
 		gateNodeRef, _ := newRef("nod")
@@ -399,7 +405,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		edgeRef, _ := newRef("edg")
-		_, _ = tx.Exec(ctx, queryRuntimeCompleteexecutionInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], gateNodeID)
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, lease["rootRunID"], lease["nodeID"], gateNodeID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		gateRef, _ := newRef("gat")
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, gateRef, scope.organizationID, lease["projectID"], lease["rootRunID"], gateNodeID, truncate(payload.ResultSummary, 1000)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -426,7 +434,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
-			_, _ = tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"])
+			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"]); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
 		}
 	}
 	if runState == "SUCCEEDED" || runState == "FAILED" {
@@ -505,7 +515,9 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, childID, turnNumber, stringMap(lease, "nodeRef"), payload.Task).Scan(&turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	_, _ = tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID)
+	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	nodeRef, _ := newRef("nod")
 	var nodeID string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId, nodeRef, scope.organizationID, lease["rootRunID"], childID, lease["nodeID"], agentName, role, agentID, turnID, truncate(payload.Task, 1000)).Scan(&nodeID); err != nil {
@@ -556,7 +568,10 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 			return commandOutcome{}, err
 		}
 	}
-	parentRef := mustRunRef(ctx, tx, parentRunID)
+	parentRef, err := mustRunRef(ctx, tx, parentRunID)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	parent, graph, err := repository.readRunGraphTx(ctx, tx, scope, parentRef)
 	if err != nil {
 		return commandOutcome{}, err

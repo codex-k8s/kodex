@@ -172,7 +172,9 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	} else {
-		_, _ = tx.Exec(ctx, queryArtifactsChangeartifactbindingDeleteArtifactBindingsArtifactIdTargetKindTargetRef, artifactID, payload.AgentRef)
+		if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingDeleteArtifactBindingsArtifactIdTargetKindTargetRef, artifactID, payload.AgentRef); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingUpdateArtifactsVersion, artifactID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable

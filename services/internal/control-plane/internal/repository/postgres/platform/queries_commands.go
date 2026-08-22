@@ -5,6 +5,8 @@ import _ "embed"
 var (
 	//go:embed sql/commands_getrunforgraph_select_runs_organization_id_ref.sql
 	queryCommandsGetrunforgraphSelectRunsOrganizationIdRef string
+	//go:embed sql/commands_execute_lock_idempotency_scope.sql
+	queryCommandsExecuteLockIdempotencyScope string
 	//go:embed sql/commands_execute_select_idempotency_receipts_organization_id_actor_id_operation.sql
 	queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation string
 	//go:embed sql/commands_execute_insert_audit_events_ref_project_id_action.sql
@@ -185,8 +187,18 @@ var (
 	queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState string
 	//go:embed sql/commands_resolvegate_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment string
+	//go:embed sql/commands_resolvegate_insert_change_request_turn.sql
+	queryCommandsResolvegateInsertChangeRequestTurn string
+	//go:embed sql/commands_resolvegate_update_change_request_session.sql
+	queryCommandsResolvegateUpdateChangeRequestSession string
+	//go:embed sql/commands_resolvegate_requeue_predecessor_node.sql
+	queryCommandsResolvegateRequeuePredecessorNode string
 	//go:embed sql/commands_resolvegate_update_run_nodes_state_finished_at_version.sql
 	queryCommandsResolvegateUpdateRunNodesStateFinishedAtVersion string
+	//go:embed sql/commands_resolvegate_select_active_agent_nodes.sql
+	queryCommandsResolvegateSelectActiveAgentNodes string
+	//go:embed sql/commands_resolvegate_complete_root_run.sql
+	queryCommandsResolvegateCompleteRootRun string
 	//go:embed sql/commands_resolvegate_update_runs_state_version_updated_at.sql
 	queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt string
 	//go:embed sql/commands_mustrunref_select_runs_id.sql

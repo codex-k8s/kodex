@@ -452,7 +452,11 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, mustRunRef(ctx, tx, runID))
+	runRef, err := mustRunRef(ctx, tx, runID)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}

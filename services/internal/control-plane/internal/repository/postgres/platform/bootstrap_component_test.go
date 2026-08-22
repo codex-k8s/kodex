@@ -2,16 +2,22 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
+	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/systemassistant"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -86,6 +92,468 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant proposes and applies typed plan", func(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
+	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
+		testDirectRunLifecycle(t, ctx, repository)
+	})
+	t.Run("provider neutral nested delegation", func(t *testing.T) {
+		testNestedDelegation(t, ctx, repository)
+	})
+	t.Run("human gate resolves once and completes root", func(t *testing.T) {
+		testHumanGateLifecycle(t, ctx, repository)
+	})
+	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
+		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
+	})
+}
+
+func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.projects.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct idempotency service: %v", err)
+	}
+	projectCommand := command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "idempotency-project-1"}, Payload: command.ProjectInput{
+			Name: "Procurement", Purpose: "Coordinate supplier selection", Language: "en",
+		}}
+	first, err := service.Execute(ctx, projectCommand)
+	if err != nil || first.Project == nil {
+		t.Fatalf("create idempotent project: result=%#v err=%v", first.Project, err)
+	}
+	replayed, err := service.Execute(ctx, projectCommand)
+	if err != nil || replayed.Project == nil || replayed.Project.Ref != first.Project.Ref {
+		t.Fatalf("replay identical project intent: result=%#v err=%v", replayed.Project, err)
+	}
+	different := projectCommand
+	different.Payload = command.ProjectInput{Name: "Different project", Purpose: "Different intent", Language: "en"}
+	if _, err := service.Execute(ctx, different); !errors.Is(err, domainerrs.ErrIdempotencyReuse) {
+		t.Fatalf("reuse idempotency key with different intent: %v", err)
+	}
+	projectVersion := first.Project.Version
+	updated, err := service.Execute(ctx, command.Command{Kind: command.UpdateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "idempotency-project-update", ExpectedVersion: &projectVersion},
+		Payload:  command.ProjectInput{Ref: first.Project.Ref, Name: "Supplier procurement", Purpose: "Select and onboard suppliers", Language: "en"},
+	})
+	if err != nil || updated.Project == nil || updated.Project.Version != projectVersion+1 {
+		t.Fatalf("update project with current version: result=%#v err=%v", updated.Project, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "idempotency-project-stale-update", ExpectedVersion: &projectVersion},
+		Payload:  command.ProjectInput{Ref: first.Project.Ref, Name: "Stale update", Purpose: "Must not apply", Language: "en"},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("accept stale project version: %v", err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, first.Project.Ref, "concurrent-run-agent", "Procurement analyst")
+	type runResult struct {
+		result command.Result
+		err    error
+	}
+	sharedCommand := command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "concurrent-same-intent-run"}, Payload: command.LaunchRunInput{
+			ProjectRef: first.Project.Ref, Title: "Evaluate shared supplier", Task: "Evaluate the same bounded supplier profile.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Input: map[string]any{"supplier": "shared"},
+		}}
+	sharedResults := make(chan runResult, 2)
+	for range 2 {
+		go func() {
+			result, executeErr := service.Execute(ctx, sharedCommand)
+			sharedResults <- runResult{result: result, err: executeErr}
+		}()
+	}
+	sharedRuns := make([]entity.Run, 0, 2)
+	for range 2 {
+		outcome := <-sharedResults
+		if outcome.err != nil || outcome.result.Run == nil {
+			t.Fatalf("create same-intent concurrent run: result=%#v err=%v", outcome.result.Run, outcome.err)
+		}
+		sharedRuns = append(sharedRuns, *outcome.result.Run)
+	}
+	if sharedRuns[0].Ref != sharedRuns[1].Ref {
+		t.Fatalf("same idempotency scope created different runs: %s %s", sharedRuns[0].Ref, sharedRuns[1].Ref)
+	}
+	sharedVersion := sharedRuns[0].Version
+	if cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "concurrent-same-intent-cancel", ExpectedVersion: &sharedVersion},
+		Payload:  command.RunCommandInput{RunRef: sharedRuns[0].Ref, Reason: "Component test cleanup"},
+	}); err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("cancel same-intent concurrent run: run=%#v err=%v", cancelled.Run, err)
+	}
+	results := make(chan runResult, 2)
+	for index := 1; index <= 2; index++ {
+		index := index
+		go func() {
+			result, executeErr := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+				Mutation: value.Mutation{IdempotencyKey: "concurrent-run-" + leftPad(index, 2)}, Payload: command.LaunchRunInput{
+					ProjectRef: first.Project.Ref, Title: "Evaluate supplier " + leftPad(index, 2), Task: "Evaluate the bounded supplier profile.",
+					Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Input: map[string]any{"supplier": index},
+				}})
+			results <- runResult{result: result, err: executeErr}
+		}()
+	}
+	createdRuns := make([]entity.Run, 0, 2)
+	for range 2 {
+		outcome := <-results
+		if outcome.err != nil || outcome.result.Run == nil {
+			t.Fatalf("create concurrent run: result=%#v err=%v", outcome.result.Run, outcome.err)
+		}
+		createdRuns = append(createdRuns, *outcome.result.Run)
+	}
+	if createdRuns[0].Ref == createdRuns[1].Ref {
+		t.Fatalf("concurrent run creation returned duplicate ref %s", createdRuns[0].Ref)
+	}
+	for index := range createdRuns {
+		version := createdRuns[index].Version
+		cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "concurrent-run-cancel-" + leftPad(index+1, 2), ExpectedVersion: &version},
+			Payload:  command.RunCommandInput{RunRef: createdRuns[index].Ref, Reason: "Component test cleanup"},
+		})
+		if err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+			t.Fatalf("cancel concurrent run %d: run=%#v err=%v", index+1, cancelled.Run, err)
+		}
+	}
+}
+
+func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.owner_gates.resolve",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct gate service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-project-1"}, Payload: command.ProjectInput{
+			Name: "Legal review", Purpose: "Review business documents", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create gate project: result=%#v err=%v", project.Project, err)
+	}
+	reviewer := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "gate-reviewer", "Legal reviewer")
+	draft := entity.WorkflowVersion{Ref: "draft", Name: "Contract review", Purpose: "Prepare a contract recommendation",
+		CoordinatorAgentRef: reviewer.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600,
+		CompletionCriteria: "A recommendation is approved by the owner", ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "review", Position: 1, Name: "Review contract", AgentRef: reviewer.Ref,
+			Instructions: "Review the contract and prepare a recommendation.", TimeoutSeconds: 900,
+			ExpectedResult: "A bounded recommendation", HumanGateAfter: true, GateDecisions: []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}}},
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-workflow-create"}, Payload: command.WorkflowInput{
+			ProjectRef: project.Project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: reviewer.Ref, Draft: &draft,
+		}})
+	if err != nil || created.Workflow == nil {
+		t.Fatalf("create gate workflow: result=%#v err=%v", created.Workflow, err)
+	}
+	workflowVersion := created.Workflow.Version
+	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-workflow-validate", ExpectedVersion: &workflowVersion},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref},
+	})
+	if err != nil || validated.Workflow == nil || validated.Workflow.State != "VALID" {
+		t.Fatalf("validate gate workflow: result=%#v err=%v", validated.Workflow, err)
+	}
+	workflowVersion = validated.Workflow.Version
+	published, err := service.Execute(ctx, command.Command{Kind: command.PublishWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-workflow-publish", ExpectedVersion: &workflowVersion},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref},
+	})
+	if err != nil || published.Workflow == nil || published.Workflow.State != "PUBLISHED" {
+		t.Fatalf("publish gate workflow: result=%#v err=%v", published.Workflow, err)
+	}
+	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-run-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Review supplier contract", Task: "Review the attached supplier terms.",
+			Target: entity.RunTarget{Type: "WORKFLOW", Ref: published.Workflow.Ref}, Input: map[string]any{"contract": "supplier-terms"},
+		}})
+	if err != nil || launched.Run == nil {
+		t.Fatalf("launch gate workflow: run=%#v err=%v", launched.Run, err)
+	}
+	waiting := claimAndCompleteRun(t, ctx, service, worker, "gate-review", false)
+	if waiting.Run == nil || waiting.Run.State != "WAITING_HUMAN" || len(waiting.Run.GateRefs) != 1 {
+		t.Fatalf("open owner gate: run=%#v event=%#v", waiting.Run, waiting.Event)
+	}
+	gateRef := waiting.Run.GateRefs[0]
+	gateVersion := int64(1)
+	resolved, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-approve", ExpectedVersion: &gateVersion},
+		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Approved for use"},
+	})
+	if err != nil || resolved.Gate == nil || resolved.Gate.State != "APPROVED" || resolved.Run == nil || resolved.Run.State != "SUCCEEDED" {
+		t.Fatalf("resolve terminal owner gate: gate=%#v run=%#v err=%v", resolved.Gate, resolved.Run, err)
+	}
+	_, err = service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-replay", ExpectedVersion: &gateVersion},
+		Payload:  command.GateResolutionInput{GateRef: gateRef, Decision: "APPROVE", Comment: "Replay"},
+	})
+	if err == nil {
+		t.Fatal("replayed owner gate resolution was accepted")
+	}
+	changeRun, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-change-run-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Review revised supplier contract", Task: "Review the revised supplier terms.",
+			Target: entity.RunTarget{Type: "WORKFLOW", Ref: published.Workflow.Ref}, Input: map[string]any{"contract": "supplier-terms-revised"},
+		}})
+	if err != nil || changeRun.Run == nil {
+		t.Fatalf("launch change-request workflow: run=%#v err=%v", changeRun.Run, err)
+	}
+	changeWaiting := claimAndCompleteRun(t, ctx, service, worker, "gate-change-review", false)
+	if changeWaiting.Run == nil || changeWaiting.Run.State != "WAITING_HUMAN" || len(changeWaiting.Run.GateRefs) != 1 {
+		t.Fatalf("open change-request gate: run=%#v", changeWaiting.Run)
+	}
+	changeGateVersion := int64(1)
+	changes, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-changes", ExpectedVersion: &changeGateVersion},
+		Payload: command.GateResolutionInput{GateRef: changeWaiting.Run.GateRefs[0], Decision: "REQUEST_CHANGES",
+			Comment: "Add the termination risk and propose a mitigation."},
+	})
+	if err != nil || changes.Gate == nil || changes.Gate.State != "CHANGES_REQUESTED" || changes.Run == nil || changes.Run.State != "RUNNING" {
+		t.Fatalf("request workflow changes: gate=%#v run=%#v err=%v", changes.Gate, changes.Run, err)
+	}
+	reworked := claimAndCompleteRun(t, ctx, service, worker, "gate-change-rework", false)
+	if reworked.Run == nil || reworked.Run.State != "WAITING_HUMAN" || len(reworked.Run.GateRefs) != 2 {
+		t.Fatalf("open gate after requested changes: run=%#v", reworked.Run)
+	}
+	secondGateVersion := int64(1)
+	finalGateRef := reworked.Run.GateRefs[len(reworked.Run.GateRefs)-1]
+	final, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "gate-resolve-rework", ExpectedVersion: &secondGateVersion},
+		Payload:  command.GateResolutionInput{GateRef: finalGateRef, Decision: "APPROVE", Comment: "Rework approved"},
+	})
+	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
+		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
+	}
+}
+
+func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct delegation service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-project-1"}, Payload: command.ProjectInput{
+			Name: "Content operations", Purpose: "Prepare and review business content", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create delegation project: result=%#v err=%v", project.Project, err)
+	}
+	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-coordinator", "Content coordinator")
+	firstChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-researcher", "Research specialist")
+	secondChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-editor", "Content editor")
+	coordinatorVersion := coordinator.Version
+	capability, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-capability-1", ExpectedVersion: &coordinatorVersion},
+		Payload:  command.AgentBindingInput{AgentRef: coordinator.Ref, BindingRef: "platform.run.delegate", Enabled: true},
+	})
+	if err != nil || capability.Agent == nil {
+		t.Fatalf("grant delegation capability: result=%#v err=%v", capability.Agent, err)
+	}
+	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-launch-1"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Prepare campaign brief", Task: "Coordinate research and editing.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: coordinator.Ref}, Input: map[string]any{"campaign": "Autumn"},
+		}})
+	if err != nil || launched.Run == nil {
+		t.Fatalf("launch delegation coordinator: run=%#v err=%v", launched.Run, err)
+	}
+	coordinatorClaim, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-coordinator-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(coordinatorClaim.RuntimeItems) != 1 {
+		t.Fatalf("claim delegation coordinator: claims=%d err=%v", len(coordinatorClaim.RuntimeItems), err)
+	}
+	coordinatorLease := coordinatorClaim.RuntimeItems[0]
+	delegations := []struct {
+		key   string
+		agent entity.Agent
+	}{
+		{key: "delegation-first", agent: firstChild},
+		{key: "delegation-second", agent: secondChild},
+	}
+	children := make([]command.Result, 0, len(delegations))
+	for _, item := range delegations {
+		delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: item.key}, Payload: command.DelegateInput{
+				LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
+				Generation: coordinatorLease["generation"].(int64), TargetAgentRef: item.agent.Ref,
+				Task: "Complete the assigned part of the campaign brief.", Input: map[string]any{"part": item.key},
+			}})
+		if err != nil || delegated.Run == nil || stringMap(delegated.Runtime, "callbackEdgeRef") == "" {
+			t.Fatalf("delegate %s child: run=%#v runtime=%v err=%v", item.key, delegated.Run, delegated.Runtime, err)
+		}
+		children = append(children, delegated)
+	}
+	claimedChildren, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-children-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 2}})
+	if err != nil || len(claimedChildren.RuntimeItems) != 2 {
+		t.Fatalf("claim delegated children: claims=%d err=%v", len(claimedChildren.RuntimeItems), err)
+	}
+	for index, lease := range claimedChildren.RuntimeItems {
+		completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
+	}
+	for index, child := range children {
+		callback, err := service.Execute(ctx, command.Command{Kind: command.DeliverCallback, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: "delegation-callback-replay-" + leftPad(index+1, 2)},
+			Payload:  command.CallbackInput{ChildRunRef: child.Run.Ref, CallbackEdgeRef: stringMap(child.Runtime, "callbackEdgeRef")},
+		})
+		if err != nil || !callback.Duplicate {
+			t.Fatalf("deduplicate child callback %d: duplicate=%v err=%v", index+1, callback.Duplicate, err)
+		}
+	}
+	completed := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 4 {
+		t.Fatalf("complete delegation root: run=%#v graph=%#v", completed.Run, completed.Graph)
+	}
+}
+
+func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, key, name string) entity.Agent {
+	t.Helper()
+	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.AgentInput{
+			ProjectRef: projectRef, Name: name, Purpose: "Complete a bounded business task", RoleDescription: name,
+			Instructions: "Complete only the assigned task and return a concise, verifiable result.",
+		}})
+	if err != nil || result.Agent == nil {
+		t.Fatalf("create %s: result=%#v err=%v", key, result.Agent, err)
+	}
+	return *result.Agent
+}
+
+func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
+	}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct lifecycle service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-project-1"}, Payload: command.ProjectInput{
+			Name: "Customer support", Purpose: "Resolve customer requests", Language: "en",
+		}})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create lifecycle project: result=%#v err=%v", project.Project, err)
+	}
+	agent, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-agent-1"}, Payload: command.AgentInput{
+			ProjectRef: project.Project.Ref, Name: "Support specialist", Purpose: "Prepare customer responses",
+			RoleDescription: "Customer support specialist", Instructions: "Analyze the request and prepare a clear, safe customer response.",
+		}})
+	if err != nil || agent.Agent == nil {
+		t.Fatalf("create lifecycle agent: result=%#v err=%v", agent.Agent, err)
+	}
+	launch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-1"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Answer customer", Task: "Prepare an answer about delivery status.",
+			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, Input: map[string]any{"ticket": "SUP-42"},
+		}})
+	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || len(launch.Graph.Nodes) != 2 {
+		t.Fatalf("launch direct run: run=%#v graph=%#v err=%v", launch.Run, launch.Graph, err)
+	}
+	completed := claimAndCompleteRun(t, ctx, service, worker, "lifecycle-first", true)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
+		t.Fatalf("complete direct run: run=%#v artifacts=%v", completed.Run, completed.CreatedRefs)
+	}
+	download, err := service.DownloadArtifact(ctx, owner, completed.CreatedRefs[0])
+	if err != nil {
+		t.Fatalf("open generated artifact download: %v", err)
+	}
+	body, readErr := io.ReadAll(download.Reader)
+	closeErr := download.Reader.Close()
+	if readErr != nil || closeErr != nil || string(body) != "Customer response is ready.\n" {
+		t.Fatalf("download generated artifact: body=%q read_err=%v close_err=%v", string(body), readErr, closeErr)
+	}
+	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-continuation-1"}, Payload: command.SessionTurnInput{
+			SessionRef: launch.Run.SessionRef, RunRef: launch.Run.Ref, Task: "Add a concise follow-up for the customer.",
+		}})
+	if err != nil || continued.Run == nil || continued.Graph == nil || continued.Run.State != "RUNNING" {
+		t.Fatalf("continue session: run=%#v graph=%#v err=%v", continued.Run, continued.Graph, err)
+	}
+	continuedVersion := continued.Run.Version
+	cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-cancel-1", ExpectedVersion: &continuedVersion},
+		Payload:  command.RunCommandInput{RunRef: continued.Run.Ref, Reason: "No longer needed"},
+	})
+	if err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("cancel continued run: run=%#v err=%v", cancelled.Run, err)
+	}
+	cancelledVersion := cancelled.Run.Version
+	retried, err := service.Execute(ctx, command.Command{Kind: command.RetryRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-retry-1", ExpectedVersion: &cancelledVersion},
+		Payload:  command.RunCommandInput{RunRef: cancelled.Run.Ref, Reason: "Retry with the same bounded input"},
+	})
+	if err != nil || retried.Run == nil || retried.Graph == nil || retried.Run.Attempt != 2 || retried.Run.RetryOfRunRef != cancelled.Run.Ref {
+		t.Fatalf("retry cancelled run: run=%#v graph=%#v err=%v", retried.Run, retried.Graph, err)
+	}
+	completedRetry := claimAndCompleteRun(t, ctx, service, worker, "lifecycle-retry", false)
+	events, currentSequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completedRetry.Run.Ref, Limit: 100})
+	if err != nil || !complete || len(events) == 0 || currentSequence != events[len(events)-1].Sequence {
+		t.Fatalf("read retry event stream: events=%d sequence=%d complete=%v err=%v", len(events), currentSequence, complete, err)
+	}
+	for index, event := range events {
+		if event.Sequence != int64(index+1) {
+			t.Fatalf("non-monotonic event sequence at %d: %d", index, event.Sequence)
+		}
+	}
+}
+
+func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, key string, artifact bool) command.Result {
+	t.Helper()
+	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: key + "-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(claimed.RuntimeItems) != 1 {
+		t.Fatalf("claim %s execution: claims=%d err=%v", key, len(claimed.RuntimeItems), err)
+	}
+	return completeClaimedExecution(t, ctx, service, worker, claimed.RuntimeItems[0], key, artifact)
+}
+
+func completeClaimedExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool) command.Result {
+	t.Helper()
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: key + "-progress"}, Payload: command.LeaseInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Progress: "Preparing the result",
+		}}); err != nil {
+		t.Fatalf("report %s progress: %v", key, err)
+	}
+	artifacts := []command.CompletedArtifact{}
+	if artifact {
+		content := []byte("Customer response is ready.\n")
+		digest := sha256.Sum256(content)
+		artifacts = append(artifacts, command.CompletedArtifact{FileName: "customer-response.txt", MediaType: "text/plain",
+			SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content)), Content: content})
+	}
+	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+			Success: true, ResultSummary: "Customer response prepared", Artifacts: artifacts,
+		}})
+	if err != nil {
+		t.Fatalf("complete %s execution: %v", key, err)
+	}
+	return completed
 }
 
 func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository *Repository) {
