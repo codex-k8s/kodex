@@ -26,7 +26,9 @@ data:
   buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
   trustedRoleBaseRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner
   trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  builderSHA256: "995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe"
   frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  toolchainSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   roleRuntimeContractRevision: "1"
   roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   scannerIdentity: mattercodex-image-scanner

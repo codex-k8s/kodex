@@ -16,11 +16,17 @@ source_sha=$(git -C "$repository_root" rev-parse HEAD)
 jq -n --arg source_sha "$source_sha" \
   --slurpfile manifest "$repository_root/tools/release/images.json" '
   {schema_version:2,profile:"web-only",source_sha:$source_sha,build_run_id:"local",
-   registry:{push:"registry.example.test:5000",node_pull:"registry.example.test:5001",repository_prefix:"mattercodex"},
+   registry:{push:"registry.example.test",node_pull:"registry.example.test:5001",repository_prefix:"mattercodex"},
    external_images:[{
      component:"admission-tools",
      pull_ref:"registry.example.test/tools/admission@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
      digest:"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
+   role_image_input:{
+     repository:"mattercodex/role-image-inputs",
+     manifest_digest:"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     payload_sha256:"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+     source_sha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+     pull_ref:"registry.example.test:5001/mattercodex/role-image-inputs@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
    images:[$manifest[0].images[] | {
      component:.component,
      repository:("mattercodex/" + .component),
@@ -59,5 +65,38 @@ yq -e '
   (.data.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
   .data.pullRegistryHost == "registry.example.test:5001"
 ' "$render_file" >/dev/null || fail 'role image release policy was not materialized'
+
+role_environment_catalog=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments") | .data."catalog.json"' "$render_file")
+jq -e '
+  .schemaVersion == 1 and (.environments | length) == 2 and
+  .environments[0].key == "standard" and .environments[1].key == "documents" and
+  (.environments[0].baseImageDigest | test("^sha256:[a-f0-9]{64}$")) and
+  (.environments[1].baseImageDigest | test("^sha256:[a-f0-9]{64}$")) and
+  (.context.contextRef | contains("mattercodex/role-image-inputs@sha256:"))
+' <<<"$role_environment_catalog" >/dev/null || fail 'role environment catalog was not materialized'
+
+yq -o=json 'select(.kind == "Job" and .metadata.name == "release-artifact-materializer")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[0].env as $env |
+    ($env[] | select(.name == "RELEASE_SOURCE_REGISTRY").value) == "registry.example.test" and
+    ($env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value | startswith("registry.example.test/mattercodex/agent-runner@sha256:")) and
+    ($env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-base-documents@sha256:")) and
+    ($env[] | select(.name == "ROLE_IMAGE_INPUT_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-image-inputs@sha256:"))
+  ' >/dev/null || fail 'release artifact materializer was not pinned to the lock'
+
+egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$render_file")
+jq -e 'any(.spec.destinations[]; .hostname == "registry.example.test" and .port == 443)' \
+  <<<"$egress_policy" >/dev/null || fail 'release registry was not added to bounded egress policy'
+printf '%s' "$egress_policy" >"$temporary_directory/egress-policy.json"
+actual_egress_digest=$(
+  cd -- "$repository_root/services/external/egress-gateway"
+  GOWORK=off go run ./cmd/policy-digest "$temporary_directory/egress-policy.json"
+)
+expected_egress_digest=$(yq -r '
+  select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
+  .spec.template.spec.containers[] | select(.name == "egress-gateway") |
+  .env[] | select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST").value
+' "$render_file")
+test "$actual_egress_digest" = "$expected_egress_digest" || fail 'egress policy digest expectation is inconsistent'
 
 printf 'Web-only release tests passed\n'

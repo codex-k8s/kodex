@@ -52,7 +52,7 @@ done
 [[ "$oidc_tls_server_name" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] ||
   fail 'OIDC TLS server name is invalid'
 
-for command_name in kubectl yq jq sha256sum; do
+for command_name in go kubectl yq jq sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -79,9 +79,15 @@ done < <(jq -r '.images[] | [.component,.pull_ref] | @tsv' "$lock_file")
 registry_push=$(jq -er '.registry.push' "$lock_file")
 node_pull=$(jq -er '.registry.node_pull' "$lock_file")
 repository_prefix=$(jq -er '.registry.repository_prefix' "$lock_file")
+release_source_registry=${registry_push%%/*}
+release_source_hostname=${release_source_registry%:443}
 pull_registry_host=${node_pull%%/*}
 agent_runner_ref=$(jq -er '.images[] | select(.component == "agent-runner") | .pull_ref' "$lock_file")
 agent_runner_digest=$(jq -er '.images[] | select(.component == "agent-runner") | .digest' "$lock_file")
+role_base_documents_digest=$(jq -er '.images[] | select(.component == "role-base-documents") | .digest' "$lock_file")
+role_input_manifest_digest=$(jq -er '.role_image_input.manifest_digest' "$lock_file")
+role_input_payload_sha256=$(jq -er '.role_image_input.payload_sha256' "$lock_file")
+role_input_source_sha256=$(jq -er '.role_image_input.source_sha256' "$lock_file")
 authority_ref=$(jq -er '.images[] | select(.component == "internal-rpc-authority") | .pull_ref' "$lock_file")
 admission_ref=$(jq -er '.images[] | select(.component == "image-admission") | .pull_ref' "$lock_file")
 admission_tools_ref=$(jq -er '.external_images[] | select(.component == "admission-tools") | .pull_ref' "$lock_file")
@@ -134,12 +140,14 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.pullRegistryHost = strenv(PULL_REGISTRY_HOST) |
     .data.pullCredentialGeneration = "1" |
     .data.nodeReadbackImage = strenv(AGENT_RUNNER_REF) |
-    .data.roleImageInputRepository = (strenv(REGISTRY_PUSH) + "/" + strenv(REPOSITORY_PREFIX) + "/role-image-inputs") |
+    .data.roleImageInputRepository = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs" |
     .data.policyRevision = "1" |
     .data.policySHA256 = strenv(LOCK_DIGEST) |
-    .data.trustedRoleBaseRepository = (strenv(NODE_PULL) + "/" + strenv(REPOSITORY_PREFIX) + "/agent-runner") |
+    .data.trustedRoleBaseRepository = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner" |
     .data.trustedRoleBaseDigest = strenv(AGENT_RUNNER_DIGEST) |
+    .data.builderSHA256 = "995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
+    .data.toolchainSHA256 = strenv(LOCK_DIGEST) |
     .data.roleRuntimeContractRevision = "1" |
     .data.roleRuntimeContractSHA256 = strenv(LOCK_DIGEST)
   ) |
@@ -148,6 +156,90 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
     .spec.template.metadata.annotations."mattercodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
+  )
+' "$rendered"
+
+role_environment_catalog=$(jq -cn \
+  --arg source_revision "$source_sha" \
+  --arg source_sha256 "$role_input_source_sha256" \
+  --arg manifest_digest "$role_input_manifest_digest" \
+  --arg payload_sha256 "$role_input_payload_sha256" \
+  --arg agent_runner_digest "$agent_runner_digest" \
+  --arg documents_digest "$role_base_documents_digest" '
+  {schemaVersion:1,
+   context:{sourceRef:"urn:mattercodex:release-source",sourceRevision:$source_revision,
+     sourceSha256:$source_sha256,
+     contextRef:("oci://mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs@" + $manifest_digest),
+     contextSha256:$payload_sha256},
+   environments:[
+     {key:"standard",nameMessageKey:"role-environments.standard.name",
+      descriptionMessageKey:"role-environments.standard.description",unavailableMessageKey:"",
+      softwareMessageKeys:["role-environments.software.base"],recommended:true,available:true,
+      customInstallationAllowed:false,
+      baseImageReference:"mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
+      baseImageDigest:$agent_runner_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]},
+     {key:"documents",nameMessageKey:"role-environments.documents.name",
+      descriptionMessageKey:"role-environments.documents.description",unavailableMessageKey:"",
+      softwareMessageKeys:["role-environments.software.base","role-environments.software.pdf",
+        "role-environments.software.ocr","role-environments.software.office"],recommended:false,available:true,
+      customInstallationAllowed:false,
+      baseImageReference:"mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-base-documents",
+      baseImageDigest:$documents_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]}]}')
+ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" yq -i '
+  with(select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments");
+    .data."catalog.json" = strenv(ROLE_ENVIRONMENT_CATALOG)
+  )
+' "$rendered"
+
+agent_runner_source_ref="$registry_push/$repository_prefix/agent-runner@$agent_runner_digest"
+role_base_documents_source_ref="$registry_push/$repository_prefix/role-base-documents@$role_base_documents_digest"
+role_image_input_source_ref="$registry_push/$repository_prefix/role-image-inputs@$role_input_manifest_digest"
+RELEASE_SOURCE_REGISTRY="$release_source_registry" \
+SOURCE_SHA="$source_sha" \
+AGENT_RUNNER_SOURCE_REF="$agent_runner_source_ref" \
+AGENT_RUNNER_DIGEST="$agent_runner_digest" \
+ROLE_BASE_DOCUMENTS_SOURCE_REF="$role_base_documents_source_ref" \
+ROLE_BASE_DOCUMENTS_DIGEST="$role_base_documents_digest" \
+ROLE_IMAGE_INPUT_SOURCE_REF="$role_image_input_source_ref" \
+ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
+  with(select(.kind == "Job" and .metadata.name == "release-artifact-materializer");
+    (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_REGISTRY").value) = strenv(RELEASE_SOURCE_REGISTRY) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_SHA").value) = strenv(SOURCE_SHA) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value) = strenv(AGENT_RUNNER_SOURCE_REF) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "AGENT_RUNNER_DIGEST").value) = strenv(AGENT_RUNNER_DIGEST) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value) = strenv(ROLE_BASE_DOCUMENTS_SOURCE_REF) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_BASE_DOCUMENTS_DIGEST").value) = strenv(ROLE_BASE_DOCUMENTS_DIGEST) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_IMAGE_INPUT_SOURCE_REF").value) = strenv(ROLE_IMAGE_INPUT_SOURCE_REF) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_IMAGE_INPUT_MANIFEST_DIGEST").value) = strenv(ROLE_IMAGE_INPUT_MANIFEST_DIGEST)
+  )
+' "$rendered"
+
+egress_revision="release-${source_sha:0:12}"
+egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$rendered" |
+  jq -cS --arg revision "$egress_revision" --arg hostname "$release_source_hostname" '
+    .metadata.revision = $revision |
+    .spec.destinations = ((.spec.destinations + [{hostname:$hostname,port:443}]) | unique_by(.hostname) | sort_by(.hostname))
+  ')
+egress_policy_file="$temporary_directory/egress-policy.json"
+printf '%s' "$egress_policy" >"$egress_policy_file"
+egress_policy_digest=$(
+  cd -- "$repository_root/services/external/egress-gateway"
+  GOWORK=off go run ./cmd/policy-digest "$egress_policy_file"
+)
+egress_policy_name="egress-gateway-policy-${egress_policy_digest:0:12}"
+EGRESS_POLICY="$egress_policy" EGRESS_REVISION="$egress_revision" EGRESS_DIGEST="$egress_policy_digest" \
+EGRESS_POLICY_NAME="$egress_policy_name" yq -i '
+  with(select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-")));
+    .metadata.name = strenv(EGRESS_POLICY_NAME) |
+    .data."policy.json" = strenv(EGRESS_POLICY)
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "egress-gateway");
+    .spec.template.metadata.annotations."mattercodex.dev/egress-policy-sha256" = strenv(EGRESS_DIGEST) |
+    (.spec.template.spec.volumes[] | select(.name == "policy").configMap.name) = strenv(EGRESS_POLICY_NAME) |
+    (.spec.template.spec.containers[] | select(.name == "egress-gateway").env[] |
+      select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_REVISION").value) = strenv(EGRESS_REVISION) |
+    (.spec.template.spec.containers[] | select(.name == "egress-gateway").env[] |
+      select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST").value) = strenv(EGRESS_DIGEST)
   )
 ' "$rendered"
 

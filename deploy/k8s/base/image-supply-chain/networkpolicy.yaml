@@ -108,10 +108,48 @@ spec:
         - podSelector:
             matchLabels:
               mattercodex.dev/image-admission-phase: promote
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/release-artifact-materializer: "true"
       ports:
         - protocol: TCP
           port: 5003
   egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: release-artifact-materializer-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: release-artifact-materializer
+      app.kubernetes.io/component: release-bootstrap
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: promotion
+      ports: [{protocol: TCP, port: 5003}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: vault}
+      ports: [{protocol: TCP, port: 8200}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

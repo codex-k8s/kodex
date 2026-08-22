@@ -11,6 +11,7 @@
     {"component":"automation-scheduler","dockerfile":"services/jobs/automation-scheduler/Dockerfile"},
     {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"runtime"},
     {"component":"image-admission","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-runtime"},
-    {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"}
+    {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"},
+    {"component":"role-base-documents","dockerfile":"services/jobs/agent-runner/role-base-documents.Dockerfile"}
   ]
 }

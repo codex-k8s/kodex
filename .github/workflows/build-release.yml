@@ -54,10 +54,17 @@ jobs:
           NODE_PULL: ${{ vars.MATTERCODEX_NODE_PULL }}
           REPOSITORY_PREFIX: ${{ vars.MATTERCODEX_REPOSITORY_PREFIX }}
           ADMISSION_TOOLS_IMAGE: ${{ vars.MATTERCODEX_ADMISSION_TOOLS_IMAGE }}
+          REGISTRY_DOCKER_CONFIG_JSON: ${{ secrets.MATTERCODEX_RELEASE_REGISTRY_DOCKER_CONFIG_JSON }}
           HTTPS_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
           HTTP_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
           NO_PROXY: ${{ vars.MATTERCODEX_BUILD_NO_PROXY }}
         run: |
+          umask 077
+          registry_docker_config=$(mktemp -d)
+          trap 'rm -rf -- "$registry_docker_config"' EXIT
+          test -n "$REGISTRY_DOCKER_CONFIG_JSON"
+          printf '%s' "$REGISTRY_DOCKER_CONFIG_JSON" >"$registry_docker_config/config.json"
+          export DOCKER_CONFIG="$registry_docker_config"
           arguments=(
             --source-sha "$SOURCE_SHA"
             --build-run-id "$GITHUB_RUN_ID"

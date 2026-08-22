@@ -35,6 +35,13 @@ spec:
             matchLabels:
               app.kubernetes.io/name: runtime-controller
               app.kubernetes.io/component: hot-runtime
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: release-artifact-materializer
+              app.kubernetes.io/component: release-bootstrap
       ports:
         - {protocol: TCP, port: 8080}
     - from:

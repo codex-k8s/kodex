@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - admission-policy.yaml
+  - role-environments.yaml
   - serviceaccount.yaml
   - registry.yaml
   - staging-read-registry.yaml
@@ -14,6 +15,8 @@ resources:
   - admission-authority-secret-provider-classes.yaml
   - cleanup.yaml
   - node-pull-readback.yaml
+  - release-artifact-materializer.yaml
+  - release-artifact-materializer-secrets.yaml
   - networkpolicy.yaml
 configMapGenerator:
   - name: mattercodex-buildkit-config
@@ -29,5 +32,8 @@ configMapGenerator:
   - name: mattercodex-registry-readiness
     files:
       - registry-readiness.sh
+  - name: mattercodex-release-artifact-materializer
+    files:
+      - release-artifact-materializer.sh
 generatorOptions:
   disableNameSuffixHash: true

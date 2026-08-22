@@ -48,6 +48,7 @@ spec:
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.crt}
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.key}
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PULL_DOCKER_CONFIG, value: /var/run/secrets/mattercodex/role-image-builder/base-pull/config.json}
+            - {name: ROLE_IMAGE_BUILDER_ALLOWED_ROLE_BASE_IMAGES_FILE, value: /var/run/config/mattercodex/role-image-builder/role-environments/catalog.json}
             - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
             - name: ROLE_IMAGE_BUILDER_INPUT_REPOSITORY
@@ -102,6 +103,7 @@ spec:
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/role-image-builder/application-grant, readOnly: true}
             - {name: otel-ca, mountPath: /var/run/config/mattercodex/role-image-builder/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/role-image-builder/observability, readOnly: true}
+            - {name: role-environments, mountPath: /var/run/config/mattercodex/role-image-builder/role-environments, readOnly: true}
       volumes:
         - name: work
           emptyDir: {sizeLimit: 2Gi}
@@ -133,3 +135,10 @@ spec:
           configMap: {name: mattercodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn
           secret: {secretName: mattercodex-sentry, defaultMode: 0440}
+        - name: role-environments
+          configMap:
+            name: mattercodex-role-environments
+            defaultMode: 0440
+            items:
+              - key: catalog.json
+                path: catalog.json

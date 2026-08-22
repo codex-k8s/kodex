@@ -50,6 +50,9 @@ valid_registry_path() {
 [[ -n "$output" ]] || fail 'output path is required'
 valid_registry_path "$registry_push" || fail 'registry push path is invalid'
 valid_registry_path "$node_pull" || fail 'node pull path is invalid'
+registry_push_host=${registry_push%%/*}
+[[ "$registry_push_host" == *.* && ("$registry_push_host" != *:* || "$registry_push_host" == *:443) ]] ||
+  fail 'registry push endpoint must use external HTTPS port 443'
 [[ "$repository_prefix" =~ ^[a-z0-9][a-z0-9._/-]*$ && "$repository_prefix" != */ && "$repository_prefix" != *//* ]] ||
   fail 'repository prefix is invalid'
 [[ "$admission_tools_image" =~ ^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$ ]] ||
@@ -65,7 +68,7 @@ if [[ -n "$build_proxy" || -n "$build_no_proxy" ]]; then
     fail 'build proxy environment does not match the explicit release configuration'
 fi
 
-for command_name in git jq sha256sum tar; do
+for command_name in git go jq sha256sum tar; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -130,6 +133,10 @@ while IFS=$'\t' read -r component dockerfile target; do
   component_options=()
   if [[ "$component" == image-admission ]]; then
     component_options=(--opt "build-arg:ADMISSION_TOOLS_IMAGE=$admission_tools_image")
+  elif [[ "$component" == role-base-documents ]]; then
+    agent_runner_digest=$(jq -r '."containerimage.digest" // empty' "$metadata_directory/agent-runner.json")
+    [[ "$agent_runner_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'agent-runner digest is unavailable for role base'
+    component_options=(--opt "build-arg:AGENT_RUNNER_IMAGE=$registry_push/$repository_prefix/agent-runner@$agent_runner_digest")
   fi
   "$buildctl_path" --addr "$buildkit_host" build \
     --frontend dockerfile.v0 \
@@ -144,6 +151,20 @@ while IFS=$'\t' read -r component dockerfile target; do
     --output "type=image,name=$destination,push=true" \
     --metadata-file "$metadata_directory/$component.json"
 done < <(jq -r '.images[] | [.component, .dockerfile, (.target // "")] | @tsv' "$manifest")
+
+role_image_input_result="$temporary_directory/role-image-input.json"
+(
+  cd -- "$repository_root/tools/release/role-image-input-publisher"
+  GOWORK=off go run . \
+    --repository "$registry_push/$repository_prefix/role-image-inputs" \
+    --source-sha "$source_sha" >"$role_image_input_result"
+)
+role_image_input_manifest_digest=$(jq -er '.manifestDigest' "$role_image_input_result")
+role_image_input_payload_sha256=$(jq -er '.payloadSha256' "$role_image_input_result")
+role_image_input_source_sha256=$(jq -er '.sourceSha256' "$role_image_input_result")
+[[ "$role_image_input_manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'role image input manifest digest is invalid'
+[[ "$role_image_input_payload_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'role image input payload digest is invalid'
+[[ "$role_image_input_source_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'role image input source digest is invalid'
 
 images_json="$temporary_directory/images.json"
 printf '[]' >"$images_json"
@@ -170,9 +191,16 @@ jq -n \
   --arg repository_prefix "$repository_prefix" \
   --arg admission_tools_ref "$admission_tools_image" \
   --arg admission_tools_digest "$admission_tools_digest" \
+  --arg role_input_repository "$repository_prefix/role-image-inputs" \
+  --arg role_input_manifest_digest "$role_image_input_manifest_digest" \
+  --arg role_input_payload_sha256 "$role_image_input_payload_sha256" \
+  --arg role_input_source_sha256 "$role_image_input_source_sha256" \
+  --arg role_input_pull_ref "$node_pull/$repository_prefix/role-image-inputs@$role_image_input_manifest_digest" \
   --slurpfile images "$images_json" \
   '{schema_version:2,profile:$profile,source_sha:$source_sha,build_run_id:$build_run_id,
     registry:{push:$registry_push,node_pull:$node_pull,repository_prefix:$repository_prefix},
     external_images:[{component:"admission-tools",pull_ref:$admission_tools_ref,digest:$admission_tools_digest}],
+    role_image_input:{repository:$role_input_repository,manifest_digest:$role_input_manifest_digest,
+      payload_sha256:$role_input_payload_sha256,source_sha256:$role_input_source_sha256,pull_ref:$role_input_pull_ref},
     images:$images[0]}' | jq -S . >"$output"
 printf 'Release lock created: %s\n' "$output"

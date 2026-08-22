@@ -41,6 +41,7 @@ jq -e --arg source_sha "$source_sha" --slurpfile manifest "$manifest" '
   .source_sha == $source_sha and
   (.build_run_id | type == "string" and test("^(local|[0-9]+)$")) and
   (.registry.push | registry_path) and
+  (.registry.push | split("/")[0] | test("^[a-z0-9][a-z0-9.-]*[a-z0-9](?::443)?$") and contains(".")) and
   (.registry.node_pull | registry_path) and
   (.registry.repository_prefix | type == "string" and test("^[a-z0-9][a-z0-9._/-]*$") and (endswith("/") | not)) and
   ($manifest[0].schema_version == 2) and
@@ -58,7 +59,14 @@ jq -e --arg source_sha "$source_sha" --slurpfile manifest "$manifest" '
   (.external_images[0].digest | digest) and
   (.external_images[0].pull_ref | type == "string" and
     test("^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$")) and
-  ($root.external_images[0].pull_ref | endswith("@" + $root.external_images[0].digest))
+  ($root.external_images[0].pull_ref | endswith("@" + $root.external_images[0].digest)) and
+  (.role_image_input.repository == (.registry.repository_prefix + "/role-image-inputs")) and
+  (.role_image_input.manifest_digest | digest) and
+  (.role_image_input.payload_sha256 | type == "string" and test("^[a-f0-9]{64}$") and
+    . != "0000000000000000000000000000000000000000000000000000000000000000") and
+  (.role_image_input.source_sha256 | type == "string" and test("^[a-f0-9]{64}$") and
+    . != "0000000000000000000000000000000000000000000000000000000000000000") and
+  (.role_image_input.pull_ref == ($root.registry.node_pull + "/" + .role_image_input.repository + "@" + .role_image_input.manifest_digest))
 ' "$lock_file" >/dev/null || fail 'release lock schema or provenance is invalid'
 
 printf 'Release lock validation completed\n'
