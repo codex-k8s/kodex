@@ -12,19 +12,20 @@ import (
 	"strings"
 	"time"
 
+	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/systemassistant"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/usertext"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	corePromptRevision   = "system-assistant-core-v1"
-	corePrompt           = `Ты — встроенный Системный помощник MatterCodex. Помогай проверенному пользователю безопасно настраивать проекты, агентов, workflows, интеграции, разрешения и расписания. Любое изменение сначала представь как типизированный план, затем выполняй только специализированной командой control-plane в пределах полномочий пользователя. Никогда не обращайся напрямую к PostgreSQL, Kubernetes, secret storage или произвольному внешнему API. Не запрашивай и не показывай секретные значения.`
 	defaultRuntimeKey    = "builtin-safe-runtime"
 	maximumArtifactBytes = 16 << 20
 )
@@ -33,7 +34,15 @@ type Repository struct {
 	pool                   *pgxpool.Pool
 	defaultRuntimeProvider string
 	defaultRuntimeModel    string
+	texts                  *texti18n.Localizer
+	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
+}
+
+// ProviderCredentialConfig содержит только безопасную identity неизменяемой
+// Kubernetes Secret revision. Значение credential в control-plane не попадает.
+type ProviderCredentialConfig struct {
+	SecretName, SecretUID, SecretResourceVersion, ContentSHA256 string
 }
 
 // RoleImageConfig связывает supply-chain lifecycle с точной policy, runtime ABI
@@ -53,7 +62,11 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string)
 	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" {
 		return nil, errors.New("PostgreSQL pool is required")
 	}
-	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel}, nil
+	texts, err := usertext.New()
+	if err != nil {
+		return nil, errors.New("load control-plane user text catalog")
+	}
+	return &Repository{pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel, texts: texts}, nil
 }
 
 func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error {
@@ -76,6 +89,34 @@ func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error 
 	return nil
 }
 
+func (repository *Repository) ConfigureProviderCredential(config ProviderCredentialConfig) error {
+	if !validDNSLabel(config.SecretName) || uuid.Validate(config.SecretUID) != nil ||
+		config.SecretResourceVersion == "" || len(config.SecretResourceVersion) > 128 ||
+		len(config.ContentSHA256) != sha256.Size*2 {
+		return errors.New("provider credential metadata is invalid")
+	}
+	for _, character := range config.ContentSHA256 {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return errors.New("provider credential metadata is invalid")
+		}
+	}
+	repository.providerCredential = config
+	return nil
+}
+
+func validDNSLabel(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, character := range value {
+		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
+		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
+
 func (repository *Repository) Ready(ctx context.Context) error {
 	var schemaVersion int
 	if err := repository.pool.QueryRow(ctx, queryRepositoryReadySelectInstallationSingleton).Scan(&schemaVersion); err != nil {
@@ -88,6 +129,9 @@ func (repository *Repository) Ready(ctx context.Context) error {
 }
 
 func (repository *Repository) Bootstrap(ctx context.Context) error {
+	if repository.providerCredential.SecretName == "" {
+		return errors.New("provider credential metadata is required")
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return errors.New("begin bootstrap transaction")
@@ -140,6 +184,34 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
 		return errors.New("seed runtime profile")
 	}
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertProviderDefinition); err != nil {
+		return errors.New("seed provider definition")
+	}
+	providerAccountRef, err := newRef("pacc")
+	if err != nil {
+		return err
+	}
+	var providerAccountID string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderAccount,
+		providerAccountRef, organizationID, systemSubjectID).Scan(&providerAccountID); err != nil {
+		return errors.New("seed provider account")
+	}
+	providerCredentialRef, err := newRef("pcr")
+	if err != nil {
+		return err
+	}
+	var providerCredentialID string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderCredentialRevision,
+		providerCredentialRef, organizationID, providerAccountID,
+		repository.providerCredential.SecretName, repository.providerCredential.SecretUID,
+		repository.providerCredential.SecretResourceVersion, repository.providerCredential.ContentSHA256,
+	).Scan(&providerCredentialID); err != nil {
+		return errors.New("seed provider credential revision")
+	}
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapActivateProviderCredentialRevision,
+		providerAccountID, providerCredentialID); err != nil {
+		return errors.New("activate provider credential revision")
+	}
 	roleRef, err := newRef("role")
 	if err != nil {
 		return err
@@ -177,6 +249,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	corePrompt := systemassistant.CorePrompt()
 	promptDigest := sha256.Sum256([]byte(corePrompt))
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertInstructionVersionsRefAgentIdState,
 		promptRef, organizationID, agentID, corePrompt, hex.EncodeToString(promptDigest[:])); err != nil {
@@ -187,17 +260,25 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertSessionsRefTargetTypeState,
-		systemSessionRef, organizationID, systemSubjectID); err != nil {
+		systemSessionRef, organizationID, providerAccountID, systemSubjectID); err != nil {
 		return errors.New("create system assistant warm session")
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision,
-		organizationID, agentID, promptRef, corePromptRevision, systemSessionRef, limits); err != nil {
+		organizationID, agentID, promptRef, systemassistant.CorePromptRevision, systemSessionRef, limits); err != nil {
 		return errors.New("create system assistant runtime contract")
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapUpdateInstallationBootstrappedAt); err != nil {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
+}
+
+func defaultProviderAccountID(ctx context.Context, tx pgx.Tx, organizationID string) (string, error) {
+	var providerAccountID string
+	if err := tx.QueryRow(ctx, queryRepositorySelectDefaultProviderAccount, organizationID).Scan(&providerAccountID); err != nil {
+		return "", errs.ErrUnavailable
+	}
+	return providerAccountID, nil
 }
 
 type scope struct{ organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string }

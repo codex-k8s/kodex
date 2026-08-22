@@ -61,7 +61,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return errors.New("Codex authentication snapshot is invalid; use codex login --device-auth outside the runtime")
 	}
 	authDigest := sha256.Sum256(auth)
-	expectedDigest, err := readProviderDigest(input.ProviderAuthSHA256File)
+	expectedDigest, err := pinnedProviderDigest(input)
 	if err != nil || hex.EncodeToString(authDigest[:]) != expectedDigest {
 		return errors.New("Codex authentication snapshot does not match the pinned provider account")
 	}
@@ -113,6 +113,14 @@ func readProviderDigest(path string) (string, error) {
 	value := strings.TrimSpace(string(raw))
 	if len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "" {
 		return "", errors.New("provider authentication digest is invalid")
+	}
+	return value, nil
+}
+
+func pinnedProviderDigest(input model.Input) (string, error) {
+	value, err := readProviderDigest(input.ProviderAuthSHA256File)
+	if err != nil || value != input.ProviderCredentialSHA256 {
+		return "", errors.New("provider authentication revision does not match RuntimeRevision")
 	}
 	return value, nil
 }

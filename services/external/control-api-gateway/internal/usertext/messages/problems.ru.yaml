@@ -60,6 +60,8 @@ SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
   other: Встроенный неудаляемый помощник с типизированными MCP-инструментами
 DEFAULT_RUNTIME_NAME:
   other: Базовая среда
+DEFAULT_PROVIDER_ACCOUNT_NAME:
+  other: Основная учётная запись модели
 INSTALLATION_OWNER_NAME:
   other: Владелец установки
 SYSTEM_ASSISTANT_COMMAND:

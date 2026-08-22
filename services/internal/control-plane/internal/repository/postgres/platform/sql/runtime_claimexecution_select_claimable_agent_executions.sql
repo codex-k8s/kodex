@@ -14,6 +14,15 @@ SELECT n.id::text,
        rp.runtime_revision,
        rp.provider,
        rp.model,
+       pa.id::text,
+       pa.ref,
+       pcr.id::text,
+       pcr.ref,
+       pcr.revision_number,
+       pcr.secret_name,
+       pcr.secret_uid::text,
+       pcr.secret_resource_version,
+       pcr.content_sha256,
        iv.ref,
        iv.digest,
        iv.content || CASE
@@ -104,6 +113,14 @@ JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
+JOIN control_plane.provider_accounts pa
+  ON pa.id = s.provider_account_id
+ AND pa.organization_id = r.organization_id
+ AND pa.state = 'AUTHORIZED'
+ AND pa.enabled
+JOIN control_plane.provider_credential_revisions pcr
+  ON pcr.id = pa.current_credential_revision_id
+ AND pcr.organization_id = r.organization_id
 JOIN control_plane.agents a ON a.id = n.agent_id
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
 JOIN control_plane.runtime_profiles rp ON rp.stable_key = a.runtime_key

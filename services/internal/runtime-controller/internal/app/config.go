@@ -43,7 +43,6 @@ type Config struct {
 	PromotedRoleImageRepository    string        `env:"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY"`
 	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
-	ProviderAuthSecret             string        `env:"RUNTIME_CONTROLLER_PROVIDER_AUTH_SECRET"`
 	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
 	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
 	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
@@ -74,8 +73,8 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		ProviderAuthSecret:          "runtime-provider-auth", ProviderHTTPSProxy: "http://egress-gateway.mattercodex-system.svc:8080",
-		StorageClass: "runtime-session", SessionPVCSize: "20Gi",
+		ProviderHTTPSProxy:          "http://egress-gateway.mattercodex-system.svc:8080",
+		StorageClass:                "runtime-session", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
 		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
@@ -111,7 +110,7 @@ func (config Config) validate() error {
 	}
 	proxy, proxyErr := url.Parse(config.ProviderHTTPSProxy)
 	if !validDNSLabel(config.CallbackClientCASecret) || !validDNSLabel(config.CallbackClientTLSSecret) ||
-		!validDNSLabel(config.ProviderAuthSecret) || !validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
+		!validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
 		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
 		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
 		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {

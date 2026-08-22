@@ -109,6 +109,67 @@ CREATE TABLE control_plane.platform_capabilities (
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
 );
 
+CREATE TABLE control_plane.provider_definitions (
+    stable_key text PRIMARY KEY CHECK (stable_key ~ '^[a-z][a-z0-9_-]{1,95}$'),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    adapter_key text NOT NULL UNIQUE CHECK (adapter_key ~ '^[a-z][a-z0-9_-]{1,95}$'),
+    capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
+    enabled boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0)
+);
+
+CREATE TABLE control_plane.provider_accounts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    definition_key text NOT NULL REFERENCES control_plane.provider_definitions(stable_key),
+    stable_key text NOT NULL CHECK (stable_key ~ '^[a-z][a-z0-9_-]{1,95}$'),
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),
+    external_account_masked text NOT NULL DEFAULT '' CHECK (char_length(external_account_masked) <= 320),
+    state text NOT NULL CHECK (state IN ('PENDING_AUTHORIZATION', 'AUTHORIZED', 'REAUTHORIZATION_REQUIRED', 'REVOKED')),
+    enabled boolean NOT NULL DEFAULT true,
+    current_credential_revision_id uuid,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_by uuid NOT NULL REFERENCES control_plane.subjects(id),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (organization_id, stable_key),
+    UNIQUE (organization_id, name)
+);
+
+CREATE TABLE control_plane.provider_credential_revisions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    provider_account_id uuid NOT NULL REFERENCES control_plane.provider_accounts(id),
+    revision_number bigint NOT NULL CHECK (revision_number > 0),
+    secret_name text NOT NULL CHECK (secret_name ~ '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' AND char_length(secret_name) <= 63),
+    secret_uid uuid NOT NULL,
+    secret_resource_version text NOT NULL CHECK (char_length(secret_resource_version) BETWEEN 1 AND 128),
+    content_sha256 text NOT NULL CHECK (content_sha256 ~ '^[a-f0-9]{64}$'),
+    observed_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (provider_account_id, revision_number),
+    UNIQUE (provider_account_id, secret_uid, secret_resource_version)
+);
+
+ALTER TABLE control_plane.provider_accounts
+    ADD CONSTRAINT provider_accounts_current_credential_revision_fk
+    FOREIGN KEY (current_credential_revision_id) REFERENCES control_plane.provider_credential_revisions(id);
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.protect_provider_credential_revision()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'provider credential revision is immutable';
+END;
+$$;
+-- +goose StatementEnd
+
+CREATE TRIGGER protect_provider_credential_revision
+BEFORE UPDATE OR DELETE ON control_plane.provider_credential_revisions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_provider_credential_revision();
+
 CREATE TABLE control_plane.runtime_profiles (
     stable_key text PRIMARY KEY,
     name text NOT NULL,
@@ -366,6 +427,7 @@ CREATE TABLE control_plane.sessions (
     project_id uuid REFERENCES control_plane.projects(id),
     target_type text NOT NULL CHECK (target_type IN ('AGENT', 'WORKFLOW', 'SYSTEM_ASSISTANT')),
     target_ref text NOT NULL,
+    provider_account_id uuid NOT NULL REFERENCES control_plane.provider_accounts(id),
     state text NOT NULL CHECK (state IN ('ACTIVE', 'CLOSED')),
     next_turn_number bigint NOT NULL DEFAULT 1 CHECK (next_turn_number > 0),
     version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -373,6 +435,22 @@ CREATE TABLE control_plane.sessions (
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.protect_session_provider_account()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.provider_account_id IS DISTINCT FROM OLD.provider_account_id THEN
+        RAISE EXCEPTION 'session provider account is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+-- +goose StatementEnd
+
+CREATE TRIGGER protect_session_provider_account
+BEFORE UPDATE OF provider_account_id ON control_plane.sessions
+FOR EACH ROW EXECUTE FUNCTION control_plane.protect_session_provider_account();
 
 CREATE TABLE control_plane.runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -473,12 +551,21 @@ CREATE TABLE control_plane.runtime_revisions (
     role_definition_id uuid NOT NULL REFERENCES control_plane.role_definitions(id),
     role_image_recipe_id uuid REFERENCES control_plane.role_image_recipes(id),
     role_image_artifact_id uuid REFERENCES control_plane.image_artifacts(id),
+    provider_account_id uuid NOT NULL REFERENCES control_plane.provider_accounts(id),
+    provider_credential_revision_id uuid NOT NULL REFERENCES control_plane.provider_credential_revisions(id),
     generation bigint NOT NULL CHECK (generation > 0),
     attempt integer NOT NULL CHECK (attempt > 0),
     runtime_profile_key text NOT NULL REFERENCES control_plane.runtime_profiles(stable_key),
     runtime_profile_revision text NOT NULL,
     provider text NOT NULL,
     model text NOT NULL,
+    provider_account_ref text NOT NULL,
+    provider_credential_revision_ref text NOT NULL,
+    provider_credential_revision_number bigint NOT NULL CHECK (provider_credential_revision_number > 0),
+    provider_secret_name text NOT NULL CHECK (provider_secret_name ~ '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$' AND char_length(provider_secret_name) <= 63),
+    provider_secret_uid uuid NOT NULL,
+    provider_secret_resource_version text NOT NULL CHECK (char_length(provider_secret_resource_version) BETWEEN 1 AND 128),
+    provider_credential_sha256 text NOT NULL CHECK (provider_credential_sha256 ~ '^[a-f0-9]{64}$'),
     instruction_ref text NOT NULL,
     instruction_digest text NOT NULL CHECK (instruction_digest ~ '^[a-f0-9]{64}$'),
     input_digest text NOT NULL CHECK (input_digest ~ '^[a-f0-9]{64}$'),

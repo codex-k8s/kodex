@@ -21,9 +21,23 @@ SELECT a.ref,
        profile.runtime_revision,
        profile.provider,
        profile.model,
-       role_definition.ref
+       role_definition.ref,
+       provider_account.ref,
+       credential.ref,
+       credential.revision_number,
+       credential.secret_name,
+       credential.secret_uid::text,
+       credential.secret_resource_version,
+       credential.content_sha256
 FROM control_plane.assistant_runtime ar
 JOIN control_plane.agents a ON a.id = ar.agent_id
+JOIN control_plane.sessions session ON session.ref = ar.system_session_ref
+JOIN control_plane.provider_accounts provider_account
+  ON provider_account.id = session.provider_account_id
+ AND provider_account.state = 'AUTHORIZED'
+ AND provider_account.enabled
+JOIN control_plane.provider_credential_revisions credential
+  ON credential.id = provider_account.current_credential_revision_id
 JOIN control_plane.role_definitions role_definition ON role_definition.id = a.role_definition_id
 JOIN control_plane.instruction_versions instruction ON instruction.ref = ar.core_prompt_ref
 JOIN control_plane.runtime_profiles profile ON profile.stable_key = a.runtime_key

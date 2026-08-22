@@ -55,6 +55,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef string
 		var sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision string
 		var provider, model, instructionRef, instructionDigest, instructions, turnRef string
+		var providerAccountID, providerAccountRef, providerCredentialID, providerCredentialRef string
+		var providerSecretName, providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256 string
+		var providerCredentialRevisionNumber int64
 		var stableKey, callbackEdgeRef, turnID, agentID, roleDefinitionID, roleDefinitionRef string
 		var roleImageRecipeID, roleImageRecipeRef, roleImageArtifactID, roleImageArtifactRef string
 		var imageReference, imageManifestDigest, roleRuntimeContractSHA256 string
@@ -64,7 +67,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext []byte
 		if err := rows.Scan(&nodeID, &nodeRef, &runID, &runRef, &rootRunID, &projectID,
 			&projectRef, &sessionID, &sessionRef, &task, &agentRef, &runtimeKey,
-			&runtimeRevision, &provider, &model, &instructionRef, &instructionDigest,
+			&runtimeRevision, &provider, &model, &providerAccountID, &providerAccountRef,
+			&providerCredentialID, &providerCredentialRef, &providerCredentialRevisionNumber,
+			&providerSecretName, &providerSecretUID, &providerSecretResourceVersion,
+			&providerCredentialSHA256, &instructionRef, &instructionDigest,
 			&instructions, &capabilities, &knowledge, &rawInput, &attempt, &turnRef,
 			&stableKey, &rawIntegrationGrants, &rawDelegationTargets, &callbackEdgeRef,
 			&rawSessionContext, &turnID, &agentID, &roleDefinitionID, &roleDefinitionRef,
@@ -98,6 +104,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
 		revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
 			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
+			providerAccountRef, providerCredentialRef, providerSecretName,
+			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
 			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
 			integrationGrantsDigestHex, string(rawDelegationTargets), string(rawSessionContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
@@ -114,7 +122,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
 			"runtimeModel": model, "instructionRef": instructionRef,
-			"instructionDigest": instructionDigest, "instructions": instructions,
+			"providerAccountRef":               providerAccountRef,
+			"providerCredentialRevisionRef":    providerCredentialRef,
+			"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
+			"providerSecretName":               providerSecretName,
+			"providerSecretUID":                providerSecretUID,
+			"providerSecretResourceVersion":    providerSecretResourceVersion,
+			"providerCredentialSHA256":         providerCredentialSHA256,
+			"instructionDigest":                instructionDigest, "instructions": instructions,
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
 			"knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets,
 			"callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext,
@@ -134,8 +149,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err := tx.QueryRow(ctx, queryRuntimeClaimExecutionInsertRuntimeRevision,
 			revisionRef, scope.organizationID, projectID, rootRunID, runID, nodeID,
 			sessionID, turnID, agentID, roleDefinitionID, roleImageRecipeID,
-			roleImageArtifactID, generation, attempt, runtimeKey, runtimeRevision,
-			provider, model, instructionRef, resolvedInstructionsDigestHex,
+			roleImageArtifactID, providerAccountID, providerCredentialID,
+			generation, attempt, runtimeKey, runtimeRevision, provider, model,
+			providerAccountRef, providerCredentialRef, providerCredentialRevisionNumber,
+			providerSecretName, providerSecretUID, providerSecretResourceVersion,
+			providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
 			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
 			imageReference, imageManifestDigest, roleRuntimeContractRevision,
 			roleRuntimeContractSHA256, revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {

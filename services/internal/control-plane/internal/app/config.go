@@ -14,73 +14,77 @@ import (
 )
 
 type Config struct {
-	GRPCListen                     string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
-	TechnicalListen                string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
-	ServerCertificateFile          string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
-	ServerPrivateKeyFile           string        `env:"CONTROL_PLANE_TLS_PRIVATE_KEY_FILE"`
-	ClientCAFile                   string        `env:"CONTROL_PLANE_TLS_CLIENT_CA_FILE"`
-	PostgresDSNFile                string        `env:"CONTROL_PLANE_POSTGRES_DSN_FILE"`
-	PostgresCAFile                 string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
-	PostgresTLSServerName          string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
-	PostgresMaxConnections         int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
-	NATSURL                        string        `env:"CONTROL_PLANE_NATS_URL"`
-	NATSTLSServerName              string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
-	NATSCAFile                     string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
-	NATSCertificateFile            string        `env:"CONTROL_PLANE_NATS_CERTIFICATE_FILE"`
-	NATSPrivateKeyFile             string        `env:"CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"`
-	NATSCredentialsFile            string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
-	NATSStream                     string        `env:"CONTROL_PLANE_NATS_STREAM"`
-	NATSReplicas                   int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
-	NATSMaxBytes                   int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
-	InstanceID                     string        `env:"POD_UID"`
-	DefaultRuntimeProvider         string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
-	DefaultRuntimeModel            string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
-	AuthorityVerifierSocket        string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
-	AuthorityVerifierUID           uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
-	AuthorityVerifierGID           uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
-	AuthorityPolicyFile            string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
-	ProofSignerFile                string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
-	ProofSignerTrustFile           string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
-	AutomationGrantTrustFile       string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
-	IntegrationGrantTrustFile      string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
-	RuntimeGrantTrustFile          string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
-	RoleImageBuilderGrantTrustFile string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
-	ImageAdmissionGrantTrustFile   string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
-	ImagePromotionGrantTrustFile   string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
-	LeaseSigningKeyFile            string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
-	ImagePolicyRevision            uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
-	ImagePolicySHA256              string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
-	ImageBuildLeaseDuration        time.Duration `env:"CONTROL_PLANE_IMAGE_BUILD_LEASE_DURATION"`
-	ImageAdmissionClaimTTL         time.Duration `env:"CONTROL_PLANE_IMAGE_ADMISSION_CLAIM_TTL"`
-	ImagePromotionClaimTTL         time.Duration `env:"CONTROL_PLANE_IMAGE_PROMOTION_CLAIM_TTL"`
-	ImageMaximumAttempts           uint32        `env:"CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS"`
-	StagingImageRepository         string        `env:"CONTROL_PLANE_STAGING_IMAGE_REPOSITORY"`
-	PromotedImageRepository        string        `env:"CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY"`
-	RoleImageInputRepository       string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
-	RoleEnvironmentCatalogFile     string        `env:"CONTROL_PLANE_ROLE_ENVIRONMENT_CATALOG_FILE"`
-	RoleImageBuilderSHA256         string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_SHA256"`
-	RoleImageFrontendSHA256        string        `env:"CONTROL_PLANE_ROLE_IMAGE_FRONTEND_SHA256"`
-	RoleImageToolchainSHA256       string        `env:"CONTROL_PLANE_ROLE_IMAGE_TOOLCHAIN_SHA256"`
-	TrustedRoleBaseRepository      string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
-	TrustedRoleBaseDigest          string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
-	DefaultRoleImageReference      string        `env:"CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"`
-	RoleRuntimeContractRevision    uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
-	RoleRuntimeContractSHA256      string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
-	OIDCIssuer                     string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
-	OIDCAudience                   string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
-	OIDCJWKSURL                    string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
-	OIDCConnectAddress             string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
-	OIDCTLSServerName              string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
-	OIDCCAFile                     string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
-	OIDCRefreshInterval            time.Duration `env:"CONTROL_PLANE_OIDC_REFRESH_INTERVAL"`
-	StartupTimeout                 time.Duration `env:"CONTROL_PLANE_STARTUP_TIMEOUT"`
-	ReadinessTimeout               time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
-	ReadinessInterval              time.Duration `env:"CONTROL_PLANE_READINESS_INTERVAL"`
-	ShutdownTimeout                time.Duration `env:"CONTROL_PLANE_SHUTDOWN_TIMEOUT"`
-	RelayPollInterval              time.Duration `env:"CONTROL_PLANE_RELAY_POLL_INTERVAL"`
-	RelayLeaseDuration             time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
-	RelayPublishTimeout            time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
-	RelayFinalizeTimeout           time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
+	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
+	TechnicalListen                 string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
+	ServerCertificateFile           string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
+	ServerPrivateKeyFile            string        `env:"CONTROL_PLANE_TLS_PRIVATE_KEY_FILE"`
+	ClientCAFile                    string        `env:"CONTROL_PLANE_TLS_CLIENT_CA_FILE"`
+	PostgresDSNFile                 string        `env:"CONTROL_PLANE_POSTGRES_DSN_FILE"`
+	PostgresCAFile                  string        `env:"CONTROL_PLANE_POSTGRES_CA_FILE"`
+	PostgresTLSServerName           string        `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME"`
+	PostgresMaxConnections          int32         `env:"CONTROL_PLANE_POSTGRES_MAX_CONNECTIONS"`
+	NATSURL                         string        `env:"CONTROL_PLANE_NATS_URL"`
+	NATSTLSServerName               string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
+	NATSCAFile                      string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
+	NATSCertificateFile             string        `env:"CONTROL_PLANE_NATS_CERTIFICATE_FILE"`
+	NATSPrivateKeyFile              string        `env:"CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"`
+	NATSCredentialsFile             string        `env:"CONTROL_PLANE_NATS_CREDENTIALS_FILE"`
+	NATSStream                      string        `env:"CONTROL_PLANE_NATS_STREAM"`
+	NATSReplicas                    int           `env:"CONTROL_PLANE_NATS_REPLICAS"`
+	NATSMaxBytes                    int64         `env:"CONTROL_PLANE_NATS_MAX_BYTES"`
+	InstanceID                      string        `env:"POD_UID"`
+	DefaultRuntimeProvider          string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_PROVIDER"`
+	DefaultRuntimeModel             string        `env:"CONTROL_PLANE_DEFAULT_RUNTIME_MODEL"`
+	DefaultProviderSecretName       string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME"`
+	DefaultProviderSecretUID        string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID"`
+	DefaultProviderSecretVersion    string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION"`
+	DefaultProviderCredentialSHA256 string        `env:"CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"`
+	AuthorityVerifierSocket         string        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_SOCKET"`
+	AuthorityVerifierUID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_UID"`
+	AuthorityVerifierGID            uint32        `env:"CONTROL_PLANE_AUTHORITY_VERIFIER_GID"`
+	AuthorityPolicyFile             string        `env:"CONTROL_PLANE_AUTHORITY_POLICY_FILE"`
+	ProofSignerFile                 string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_SIGNER_FILE"`
+	ProofSignerTrustFile            string        `env:"CONTROL_PLANE_AUTHORITY_PROOF_TRUST_FILE"`
+	AutomationGrantTrustFile        string        `env:"CONTROL_PLANE_AUTOMATION_GRANT_TRUST_FILE"`
+	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
+	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
+	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
+	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
+	ImagePromotionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE"`
+	LeaseSigningKeyFile             string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
+	ImagePolicyRevision             uint64        `env:"CONTROL_PLANE_IMAGE_POLICY_REVISION"`
+	ImagePolicySHA256               string        `env:"CONTROL_PLANE_IMAGE_POLICY_SHA256"`
+	ImageBuildLeaseDuration         time.Duration `env:"CONTROL_PLANE_IMAGE_BUILD_LEASE_DURATION"`
+	ImageAdmissionClaimTTL          time.Duration `env:"CONTROL_PLANE_IMAGE_ADMISSION_CLAIM_TTL"`
+	ImagePromotionClaimTTL          time.Duration `env:"CONTROL_PLANE_IMAGE_PROMOTION_CLAIM_TTL"`
+	ImageMaximumAttempts            uint32        `env:"CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS"`
+	StagingImageRepository          string        `env:"CONTROL_PLANE_STAGING_IMAGE_REPOSITORY"`
+	PromotedImageRepository         string        `env:"CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY"`
+	RoleImageInputRepository        string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
+	RoleEnvironmentCatalogFile      string        `env:"CONTROL_PLANE_ROLE_ENVIRONMENT_CATALOG_FILE"`
+	RoleImageBuilderSHA256          string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_SHA256"`
+	RoleImageFrontendSHA256         string        `env:"CONTROL_PLANE_ROLE_IMAGE_FRONTEND_SHA256"`
+	RoleImageToolchainSHA256        string        `env:"CONTROL_PLANE_ROLE_IMAGE_TOOLCHAIN_SHA256"`
+	TrustedRoleBaseRepository       string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
+	TrustedRoleBaseDigest           string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
+	DefaultRoleImageReference       string        `env:"CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"`
+	RoleRuntimeContractRevision     uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256       string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
+	OIDCIssuer                      string        `env:"CONTROL_PLANE_OIDC_ISSUER"`
+	OIDCAudience                    string        `env:"CONTROL_PLANE_OIDC_AUDIENCE"`
+	OIDCJWKSURL                     string        `env:"CONTROL_PLANE_OIDC_JWKS_URL"`
+	OIDCConnectAddress              string        `env:"CONTROL_PLANE_OIDC_CONNECT_ADDRESS"`
+	OIDCTLSServerName               string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
+	OIDCCAFile                      string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
+	OIDCRefreshInterval             time.Duration `env:"CONTROL_PLANE_OIDC_REFRESH_INTERVAL"`
+	StartupTimeout                  time.Duration `env:"CONTROL_PLANE_STARTUP_TIMEOUT"`
+	ReadinessTimeout                time.Duration `env:"CONTROL_PLANE_READINESS_TIMEOUT"`
+	ReadinessInterval               time.Duration `env:"CONTROL_PLANE_READINESS_INTERVAL"`
+	ShutdownTimeout                 time.Duration `env:"CONTROL_PLANE_SHUTDOWN_TIMEOUT"`
+	RelayPollInterval               time.Duration `env:"CONTROL_PLANE_RELAY_POLL_INTERVAL"`
+	RelayLeaseDuration              time.Duration `env:"CONTROL_PLANE_RELAY_LEASE_DURATION"`
+	RelayPublishTimeout             time.Duration `env:"CONTROL_PLANE_RELAY_PUBLISH_TIMEOUT"`
+	RelayFinalizeTimeout            time.Duration `env:"CONTROL_PLANE_RELAY_FINALIZE_TIMEOUT"`
 }
 
 func loadConfig() (Config, error) {
@@ -154,6 +158,9 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
+		!validDNSLabel(config.DefaultProviderSecretName) || !validUUID(config.DefaultProviderSecretUID) ||
+		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
+		!validSHA256(config.DefaultProviderCredentialSHA256) ||
 		config.ImagePolicyRevision == 0 || !validSHA256(config.ImagePolicySHA256) ||
 		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
 		config.ImageAdmissionClaimTTL < time.Minute || config.ImageAdmissionClaimTTL > time.Hour ||
@@ -188,6 +195,37 @@ func (config Config) validate() error {
 		return errors.New("control-plane authority socket directory is invalid")
 	}
 	return nil
+}
+
+func validDNSLabel(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, character := range value {
+		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
+		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, character := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if character != '-' {
+				return false
+			}
+			continue
+		}
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validSHA256(value string) bool {

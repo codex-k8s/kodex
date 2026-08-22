@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -227,8 +228,12 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 		projectID = nil
 	}
 	sessionRef, _ := newRef("ses")
+	providerAccountID, err := defaultProviderAccountID(ctx, tx, scope.organizationID)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	var sessionID string
-	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, scope.actorID).Scan(&sessionID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	ref, _ := newRef("cnv")
@@ -283,7 +288,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandInsertRunNodesRefRootRunIdType, nodeRef, scope.organizationID, runID, truncate(payload.Content, 1000)); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	plan := assistantFallbackPlan(payload.Content, projectRef)
+	plan := repository.assistantFallbackPlan(payload.Content, projectRef)
 	var latestPlanID any
 	if plan != nil {
 		planRef, _ := newRef("pln")
@@ -318,20 +323,27 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant, Plan: plan}, projectID: projectValue, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED"}, nil
 }
 
-func assistantFallbackPlan(content, projectRef string) *entity.AssistantPlan {
+func (repository *Repository) assistantFallbackPlan(content, projectRef string) *entity.AssistantPlan {
 	normalized := strings.ToLower(strings.TrimSpace(content))
+	locale := texti18n.RussianLocale
+	if strings.Contains(normalized, "create project") || strings.Contains(normalized, "create agent") {
+		locale = texti18n.DefaultLocale
+	}
+	t := func(messageID string, data map[string]any) string {
+		return repository.texts.Localize(locale, messageID, data)
+	}
 	name := quotedName(content)
 	if strings.Contains(normalized, "создай проект") || strings.Contains(normalized, "create project") {
 		if name == "" {
-			name = "Новый проект"
+			name = t("ASSISTANT_DEFAULT_PROJECT_NAME", nil)
 		}
-		return &entity.AssistantPlan{Summary: "Создать проект «" + name + "»", Operations: []entity.AssistantPlanOperation{{Key: "create-project", Type: "CREATE_PROJECT", Summary: "Создать универсальный проект", TargetKind: "PROJECT", Input: map[string]any{"name": name, "purpose": "Создано системным помощником", "language": "ru"}}}}
+		return &entity.AssistantPlan{Summary: t("ASSISTANT_PLAN_CREATE_PROJECT", map[string]any{"Name": name}), Operations: []entity.AssistantPlanOperation{{Key: "create-project", Type: "CREATE_PROJECT", Summary: t("ASSISTANT_PLAN_CREATE_PROJECT_OPERATION", nil), TargetKind: "PROJECT", Input: map[string]any{"name": name, "purpose": t("ASSISTANT_CREATED_PROJECT_PURPOSE", nil), "language": locale}}}}
 	}
 	if projectRef != "" && (strings.Contains(normalized, "создай агента") || strings.Contains(normalized, "create agent")) {
 		if name == "" {
-			name = "Новый сотрудник"
+			name = t("ASSISTANT_DEFAULT_AGENT_NAME", nil)
 		}
-		return &entity.AssistantPlan{Summary: "Создать агента «" + name + "»", Operations: []entity.AssistantPlanOperation{{Key: "create-agent", Type: "CREATE_AGENT", Summary: "Создать агента в выбранном проекте", TargetKind: "AGENT", Input: map[string]any{"projectRef": projectRef, "name": name, "purpose": "Помощь команде", "roleDescription": "Выполняй поручения в рамках проекта", "instructions": "Уточняй ожидаемый результат, выполняй задачу последовательно и возвращай проверяемый итог."}}}}
+		return &entity.AssistantPlan{Summary: t("ASSISTANT_PLAN_CREATE_AGENT", map[string]any{"Name": name}), Operations: []entity.AssistantPlanOperation{{Key: "create-agent", Type: "CREATE_AGENT", Summary: t("ASSISTANT_PLAN_CREATE_AGENT_OPERATION", nil), TargetKind: "AGENT", Input: map[string]any{"projectRef": projectRef, "name": name, "purpose": t("ASSISTANT_CREATED_AGENT_PURPOSE", nil), "roleDescription": t("ASSISTANT_CREATED_AGENT_ROLE", nil), "instructions": t("ASSISTANT_CREATED_AGENT_INSTRUCTIONS", nil)}}}}
 	}
 	return nil
 }

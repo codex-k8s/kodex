@@ -30,7 +30,10 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var limits []byte
 	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef string
 	var warmInstance, runtimeKey, profileRevision, provider, model, roleDefinitionRef string
-	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model, &roleDefinitionRef)
+	var providerAccountRef, providerCredentialRef, providerSecretName string
+	var providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256 string
+	var providerCredentialRevisionNumber int64
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&assistant.Ref, &assistant.StableKey, &assistant.Name, &assistant.Purpose, &assistant.CorePromptRevision, &ownerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &systemSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &promptRef, &promptDigest, &promptContent, &warmInstance, &runtimeKey, &profileRevision, &provider, &model, &roleDefinitionRef, &providerAccountRef, &providerCredentialRef, &providerCredentialRevisionNumber, &providerSecretName, &providerSecretUID, &providerSecretResourceVersion, &providerCredentialSHA256)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
@@ -54,6 +57,8 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	}
 	revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
 		assistant.DesiredRuntimeRevision, profileRevision, provider, model, promptDigest,
+		providerAccountRef, providerCredentialRef, providerSecretName, providerSecretUID,
+		providerSecretResourceVersion, providerCredentialSHA256,
 		ownerInstructions, roleDefinitionRef, repository.roleImages.DefaultImageReference,
 		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractSHA256,
 	}, "\x00")))
@@ -64,7 +69,14 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
 		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
-		"corePromptDigest": promptDigest, "corePrompt": promptContent,
+		"providerAccountRef":               providerAccountRef,
+		"providerCredentialRevisionRef":    providerCredentialRef,
+		"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
+		"providerSecretName":               providerSecretName,
+		"providerSecretUID":                providerSecretUID,
+		"providerSecretResourceVersion":    providerSecretResourceVersion,
+		"providerCredentialSHA256":         providerCredentialSHA256,
+		"corePromptDigest":                 promptDigest, "corePrompt": promptContent,
 		"ownerInstructions": ownerInstructions, "instructions": resolvedInstructions,
 		"resourceLimits": assistant.ResourceLimits, "directSecretAccess": false,
 		"roleDefinitionRef":           roleDefinitionRef,

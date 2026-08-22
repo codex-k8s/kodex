@@ -18,7 +18,6 @@ data:
   RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt"
   RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key"
   RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE: "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws"
-  RUNTIME_CONTROLLER_PROVIDER_AUTH_SECRET: "runtime-provider-auth"
   RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY: "http://egress-gateway.mattercodex-system.svc:8080"
   RUNTIME_CONTROLLER_STORAGE_CLASS: "runtime-session"
   RUNTIME_CONTROLLER_SESSION_PVC_SIZE: "20Gi"

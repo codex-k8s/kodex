@@ -685,7 +685,11 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	var sessionID string
 	if sessionRef == "" {
 		sessionRef, _ = newRef("ses")
-		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, scope.actorID).Scan(&sessionID); err != nil {
+		providerAccountID, err := defaultProviderAccountID(ctx, tx, scope.organizationID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {

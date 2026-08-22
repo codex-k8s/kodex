@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	RunnerInputSchemaV3      = "mattercodex.agent-runner-input.v3"
+	RunnerInputSchemaV4      = "mattercodex.agent-runner-input.v4"
 	RunnerModeTurn           = "TURN"
 	RunnerModeWarm           = "WARM"
 	MaximumRunnerInputBytes  = 2 << 20
@@ -94,6 +94,10 @@ type RunnerInput struct {
 	Capabilities                []string                 `json:"capabilities,omitempty"`
 	Provider                    string                   `json:"provider"`
 	Model                       string                   `json:"model"`
+	ProviderAccountRef          string                   `json:"provider_account_ref"`
+	ProviderCredentialRef       string                   `json:"provider_credential_revision_ref"`
+	ProviderCredentialRevision  int64                    `json:"provider_credential_revision"`
+	ProviderCredentialSHA256    string                   `json:"provider_credential_sha256"`
 	CodexSandbox                string                   `json:"codex_sandbox"`
 	CodexApprovalPolicy         string                   `json:"codex_approval_policy"`
 	CodexSessionID              string                   `json:"codex_session_id,omitempty"`
@@ -108,7 +112,7 @@ type RunnerInput struct {
 }
 
 func (input RunnerInput) Validate() error {
-	if input.Schema != RunnerInputSchemaV3 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV4 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -116,6 +120,9 @@ func (input RunnerInput) Validate() error {
 		input.RoleRuntimeContractRevision == 0 || !sha256Pattern.MatchString(input.RoleRuntimeContractSHA256) ||
 		strings.TrimSpace(input.Instructions) == "" || len(input.Instructions) > 1<<20 ||
 		input.Provider == "" || len(input.Provider) > 64 || input.Model == "" || len(input.Model) > 128 ||
+		!opaqueReferencePattern.MatchString(input.ProviderAccountRef) ||
+		!opaqueReferencePattern.MatchString(input.ProviderCredentialRef) ||
+		input.ProviderCredentialRevision < 1 || !sha256Pattern.MatchString(input.ProviderCredentialSHA256) ||
 		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
 		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never") ||
 		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||

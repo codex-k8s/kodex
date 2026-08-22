@@ -62,9 +62,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	manager, err := workload.InCluster(workload.Config{
 		Environment: config.Environment, Namespace: config.Namespace, ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
-		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderAuthSecret: config.ProviderAuthSecret,
-		ProviderHTTPSProxy: config.ProviderHTTPSProxy,
-		StorageClass:       config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
+		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
+		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
 		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256, TurnCPUMilli: config.TurnCPUMilli, TurnMemoryBytes: config.TurnMemoryBytes,
 	})

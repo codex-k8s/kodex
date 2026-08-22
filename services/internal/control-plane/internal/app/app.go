@@ -52,6 +52,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
+	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
+		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
+		SecretResourceVersion: config.DefaultProviderSecretVersion,
+		ContentSHA256:         config.DefaultProviderCredentialSHA256,
+	}); err != nil {
+		return fmt.Errorf("configure default provider credential: %w", err)
+	}
 	leaseSigningKey, err := readBoundedFile(config.LeaseSigningKeyFile)
 	if err != nil {
 		return fmt.Errorf("read role image lease signing key: %w", err)

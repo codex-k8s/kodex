@@ -68,6 +68,15 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.ImageManifestDigest = mapString(values, "imageManifestDigest")
 	result.RoleRuntimeContractRevision = uint64(mapInt64(values, "roleRuntimeContractRevision"))
 	result.RoleRuntimeContractSha256 = mapString(values, "roleRuntimeContractSHA256")
+	result.ProviderCredential = &controlplanev1.ProviderCredentialBinding{
+		AccountRef:            mapString(values, "providerAccountRef"),
+		CredentialRevisionRef: mapString(values, "providerCredentialRevisionRef"),
+		CredentialRevision:    mapInt64(values, "providerCredentialRevisionNumber"),
+		SecretName:            mapString(values, "providerSecretName"),
+		SecretUid:             mapString(values, "providerSecretUID"),
+		SecretResourceVersion: mapString(values, "providerSecretResourceVersion"),
+		ContentSha256:         mapString(values, "providerCredentialSHA256"),
+	}
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {
 		profileRevision = mapString(values, "runtimeRevision")

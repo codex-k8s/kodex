@@ -54,7 +54,7 @@ func readProviderAuthentication(input model.Input) ([]byte, error) {
 		return nil, ErrProviderAuthentication
 	}
 	auth, err := os.ReadFile(input.ProviderAuthFile)
-	expectedDigest, digestErr := readProviderDigest(input.ProviderAuthSHA256File)
+	expectedDigest, digestErr := pinnedProviderDigest(input)
 	if err != nil || digestErr != nil || validateProviderAuthenticationPayload(auth, expectedDigest) != nil {
 		return nil, ErrProviderAuthentication
 	}
@@ -179,7 +179,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err != nil {
 		return err
 	}
-	expectedDigest, err := readProviderDigest(request.Input.ProviderAuthSHA256File)
+	expectedDigest, err := pinnedProviderDigest(request.Input)
 	if err != nil {
 		return err
 	}

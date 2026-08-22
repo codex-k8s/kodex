@@ -74,11 +74,11 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	if err != nil || response.GetDesiredRevision() == nil {
 		return errors.New("reconcile system assistant warm runtime")
 	}
-	input, err := runtime.manager.BuildWarmInput(response.GetDesiredRevision())
+	input, providerBinding, err := runtime.manager.BuildWarmInput(response.GetDesiredRevision())
 	if err != nil {
 		return err
 	}
-	ready, err := runtime.manager.EnsureWarm(request, input)
+	ready, err := runtime.manager.EnsureWarm(request, input, providerBinding)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (runtime *runtime) claim(ctx context.Context) error {
 		return err
 	}
 	for _, execution := range response.GetExecutions() {
-		input, buildErr := runtime.manager.BuildTurnInput(execution)
+		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
 		if buildErr != nil {
 			runtime.failClaim(ctx, input, execution, "RUNTIME_REVISION_INVALID")
 			continue
@@ -157,7 +157,7 @@ func (runtime *runtime) claim(ctx context.Context) error {
 				continue
 			}
 			_ = runtime.reportWarm(ctx, input.RuntimeRevisionRef, controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_BUSY, "")
-		} else if err := runtime.manager.EnsureTurn(ctx, input); err != nil {
+		} else if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
 			<-runtime.capacity
 			runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 			continue

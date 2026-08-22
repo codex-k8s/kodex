@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -39,11 +40,17 @@ const (
 type Config struct {
 	Environment, Namespace, ControllerPodUID, ControllerPodIP              string
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret string
-	ProviderAuthSecret, StorageClass, SessionPVCSize, RunnerServiceAccount string
+	StorageClass, SessionPVCSize, RunnerServiceAccount                     string
 	ProviderHTTPSProxy                                                     string
 	PromotedRoleImageRepository, RoleRuntimeContractSHA256                 string
 	RoleRuntimeContractRevision                                            uint64
 	TurnCPUMilli, TurnMemoryBytes                                          int64
+}
+
+// ProviderSecretBinding остаётся только внутри trusted runtime-controller и
+// не сериализуется в runtime.json, доступный role image.
+type ProviderSecretBinding struct {
+	Name, UID, ResourceVersion, ContentSHA256 string
 }
 
 type Manager struct {
@@ -70,7 +77,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 	if client == nil || err != nil || pvcRequest.Sign() <= 0 || config.Namespace == "" ||
 		config.ControllerPodUID == "" || net.ParseIP(config.ControllerPodIP) == nil ||
 		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
-		config.CallbackClientTLSSecret == "" || config.ProviderAuthSecret == "" ||
+		config.CallbackClientTLSSecret == "" ||
 		config.ProviderHTTPSProxy == "" ||
 		config.StorageClass == "" || config.RunnerServiceAccount == "" ||
 		config.PromotedRoleImageRepository == "" || config.RoleRuntimeContractRevision == 0 ||
@@ -137,10 +144,10 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 	return result
 }
 
-func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecution) (runtimecontract.RunnerInput, error) {
+func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecution) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
 	if execution == nil || execution.GetRun() == nil || execution.GetNode() == nil || execution.GetRevision() == nil ||
 		execution.GetRevision().GetRuntime() == nil || execution.GetLease() == nil {
-		return runtimecontract.RunnerInput{}, errors.New("claimed execution is incomplete")
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("claimed execution is incomplete")
 	}
 	revision := execution.GetRevision()
 	input := manager.baseInput(revision, runtimecontract.RunnerModeTurn)
@@ -152,27 +159,39 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		input.BoundedInput = revision.GetBoundedInput().AsMap()
 	}
 	manager.addCatalog(&input, revision)
-	return input, input.Validate()
+	binding, err := providerSecretBinding(revision)
+	if err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
+	return input, binding, input.Validate()
 }
 
-func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RunnerInput, error) {
+func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
 	if revision == nil || revision.GetRuntime() == nil || !revision.GetSystemAssistant() {
-		return runtimecontract.RunnerInput{}, errors.New("warm runtime revision is invalid")
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("warm runtime revision is invalid")
 	}
 	input := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
 	input.SessionRef, input.AgentRef = revision.GetSessionRef(), revision.GetAgentRef()
 	manager.addCatalog(&input, revision)
-	return input, input.Validate()
+	binding, err := providerSecretBinding(revision)
+	if err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
+	return input, binding, input.Validate()
 }
 
 func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapshot, mode string) runtimecontract.RunnerInput {
 	return runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV3, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV4, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
 		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
-		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
+		ProviderAccountRef:         revision.GetProviderCredential().GetAccountRef(),
+		ProviderCredentialRef:      revision.GetProviderCredential().GetCredentialRevisionRef(),
+		ProviderCredentialRevision: revision.GetProviderCredential().GetCredentialRevision(),
+		ProviderCredentialSHA256:   revision.GetProviderCredential().GetContentSha256(),
+		CodexSandbox:               "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
 			CAFile: "/var/run/config/mattercodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/mattercodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/mattercodex/runtime/callback-client/tls.key"},
@@ -180,6 +199,16 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ProviderAuthFile:    "/var/run/secrets/mattercodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/var/run/secrets/mattercodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.matter-codex/outbox", CodexHome: "/tmp/codex-home",
 	}
+}
+
+func providerSecretBinding(revision *controlplanev1.RuntimeRevisionSnapshot) (ProviderSecretBinding, error) {
+	binding := revision.GetProviderCredential()
+	if binding == nil || !validDNSLabel(binding.GetSecretName()) || binding.GetSecretUid() == "" ||
+		binding.GetSecretResourceVersion() == "" || len(binding.GetContentSha256()) != sha256.Size*2 {
+		return ProviderSecretBinding{}, errors.New("provider credential binding is invalid")
+	}
+	return ProviderSecretBinding{Name: binding.GetSecretName(), UID: binding.GetSecretUid(),
+		ResourceVersion: binding.GetSecretResourceVersion(), ContentSHA256: binding.GetContentSha256()}, nil
 }
 
 func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision *controlplanev1.RuntimeRevisionSnapshot) {
@@ -203,9 +232,12 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 	}
 }
 
-func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput) error {
+func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding) error {
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || manager.validateImage(input) != nil {
 		return errors.New("runtime turn input is invalid")
+	}
+	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
+		return err
 	}
 	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
 		return err
@@ -219,7 +251,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token); err != nil {
 		return err
 	}
-	pod := manager.runtimePod(input, secretName, podName, "turn")
+	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
 	_, err = manager.client.CoreV1().Pods(manager.config.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
@@ -234,9 +266,12 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	return nil
 }
 
-func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.RunnerInput) (bool, error) {
+func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding) (bool, error) {
 	if input.Mode != runtimecontract.RunnerModeWarm || input.Validate() != nil || manager.validateImage(input) != nil {
 		return false, errors.New("warm runtime input is invalid")
+	}
+	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
+		return false, err
 	}
 	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
 		return false, err
@@ -258,7 +293,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token); ticketErr != nil {
 			return false, ticketErr
 		}
-		pod := manager.runtimePod(input, secretName, podName, "warm")
+		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
 		existing, err = manager.client.CoreV1().Pods(manager.config.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 		if err != nil && !apierrors.IsAlreadyExists(err) {
 			return false, errors.New("create warm runtime pod")
@@ -409,7 +444,7 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 	return nil
 }
 
-func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, ticketSecret, podName, mode string) *corev1.Pod {
+func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, ticketSecret, podName, mode string) *corev1.Pod {
 	roleArgs := []string{"runtime-session"}
 	if mode == "warm" {
 		roleArgs = []string{"runtime-warm"}
@@ -419,7 +454,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, ticketSecr
 		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
-		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.ProviderAuthSecret, DefaultMode: int32Pointer(0o400)}}},
+		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerBinding.Name, DefaultMode: int32Pointer(0o400)}}},
 		{Name: "provider-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
@@ -455,6 +490,26 @@ func (manager *Manager) validateImage(input runtimecontract.RunnerInput) error {
 	return nil
 }
 
+func (manager *Manager) validateProviderSecret(ctx context.Context, input runtimecontract.RunnerInput, binding ProviderSecretBinding) error {
+	if !validDNSLabel(binding.Name) || binding.UID == "" || binding.ResourceVersion == "" ||
+		binding.ContentSHA256 != input.ProviderCredentialSHA256 {
+		return errors.New("provider credential binding is invalid")
+	}
+	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, binding.Name, metav1.GetOptions{})
+	if err != nil || secret.Immutable == nil || !*secret.Immutable || string(secret.UID) != binding.UID ||
+		secret.ResourceVersion != binding.ResourceVersion {
+		return errors.New("provider credential revision is unavailable")
+	}
+	authentication := secret.Data["auth.json"]
+	digestFile := strings.TrimSpace(string(secret.Data["auth.sha256"]))
+	digest := sha256.Sum256(authentication)
+	actual := hex.EncodeToString(digest[:])
+	if len(authentication) == 0 || len(authentication) > 1<<20 || digestFile != actual || actual != binding.ContentSHA256 {
+		return errors.New("provider credential revision digest is invalid")
+	}
+	return nil
+}
+
 func podReady(pod *corev1.Pod) bool {
 	if pod == nil {
 		return false
@@ -486,6 +541,19 @@ func int64Pointer(value int64) *int64                            { return &value
 func int32Pointer(value int32) *int32                            { return &value }
 func boolPointer(value bool) *bool                               { return &value }
 func quantityPointer(value resource.Quantity) *resource.Quantity { return &value }
+
+func validDNSLabel(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, character := range value {
+		valid := character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '-'
+		if !valid || character == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
 
 func restrictedSecurityContext(uid int64) *corev1.SecurityContext {
 	return &corev1.SecurityContext{RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(uid), RunAsGroup: int64Pointer(uid), AllowPrivilegeEscalation: boolPointer(false), ReadOnlyRootFilesystem: boolPointer(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}

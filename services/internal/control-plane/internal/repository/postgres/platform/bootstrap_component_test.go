@@ -19,6 +19,8 @@ var (
 	bootstrapComponentDeleteSystemAssistantQuery string
 	//go:embed sql/bootstrap_component_replace_core_prompt.sql
 	bootstrapComponentReplaceCorePromptQuery string
+	//go:embed sql/bootstrap_component_replace_session_provider_account.sql
+	bootstrapComponentReplaceSessionProviderAccountQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -37,6 +39,14 @@ func TestBootstrapComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
+	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
+		SecretName:            "runtime-provider-openai-default-r1",
+		SecretUID:             "10000000-0000-4000-8000-000000000001",
+		SecretResourceVersion: "1",
+		ContentSHA256:         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	}); err != nil {
+		t.Fatalf("configure provider credential: %v", err)
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)
@@ -45,9 +55,10 @@ func TestBootstrapComponent(t *testing.T) {
 	assertBootstrapReadback(t, ctx, pool)
 
 	for name, query := range map[string]string{
-		"disable system assistant": bootstrapComponentDisableSystemAssistantQuery,
-		"delete system assistant":  bootstrapComponentDeleteSystemAssistantQuery,
-		"replace core prompt":      bootstrapComponentReplaceCorePromptQuery,
+		"disable system assistant":         bootstrapComponentDisableSystemAssistantQuery,
+		"delete system assistant":          bootstrapComponentDeleteSystemAssistantQuery,
+		"replace core prompt":              bootstrapComponentReplaceCorePromptQuery,
+		"replace session provider account": bootstrapComponentReplaceSessionProviderAccountQuery,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := pool.Exec(ctx, query); err == nil {
@@ -61,18 +72,23 @@ func TestBootstrapComponent(t *testing.T) {
 func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	var organizationCount, ownerContractCount, systemAssistantCount, corePromptCount int
-	var assistantRuntimeCount, capabilityCount, integrationDefinitionCount, completedBootstrapCount int
+	var assistantRuntimeCount, capabilityCount, integrationDefinitionCount int
+	var providerDefinitionCount, providerAccountCount, providerCredentialRevisionCount, completedBootstrapCount int
 	if err := pool.QueryRow(ctx, bootstrapComponentReadbackQuery).Scan(
 		&organizationCount, &ownerContractCount, &systemAssistantCount, &corePromptCount,
-		&assistantRuntimeCount, &capabilityCount, &integrationDefinitionCount, &completedBootstrapCount,
+		&assistantRuntimeCount, &capabilityCount, &integrationDefinitionCount,
+		&providerDefinitionCount, &providerAccountCount, &providerCredentialRevisionCount,
+		&completedBootstrapCount,
 	); err != nil {
 		t.Fatalf("read bootstrap state: %v", err)
 	}
 	if organizationCount != 1 || ownerContractCount != 1 || systemAssistantCount != 1 ||
 		corePromptCount != 1 || assistantRuntimeCount != 1 || capabilityCount != 8 ||
-		integrationDefinitionCount != 3 || completedBootstrapCount != 1 {
-		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d completed=%d",
+		integrationDefinitionCount != 3 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
+		providerCredentialRevisionCount != 1 || completedBootstrapCount != 1 {
+		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d provider_definitions=%d provider_accounts=%d provider_credentials=%d completed=%d",
 			organizationCount, ownerContractCount, systemAssistantCount, corePromptCount,
-			assistantRuntimeCount, capabilityCount, integrationDefinitionCount, completedBootstrapCount)
+			assistantRuntimeCount, capabilityCount, integrationDefinitionCount, providerDefinitionCount,
+			providerAccountCount, providerCredentialRevisionCount, completedBootstrapCount)
 	}
 }

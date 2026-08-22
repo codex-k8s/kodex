@@ -60,6 +60,8 @@ SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
   other: Built-in non-removable assistant with typed MCP tools
 DEFAULT_RUNTIME_NAME:
   other: Default runtime
+DEFAULT_PROVIDER_ACCOUNT_NAME:
+  other: Default model account
 INSTALLATION_OWNER_NAME:
   other: Installation owner
 SYSTEM_ASSISTANT_COMMAND:

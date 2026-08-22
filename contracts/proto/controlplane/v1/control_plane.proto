@@ -1418,6 +1418,19 @@ message RuntimeRevisionSnapshot {
   string image_manifest_digest = 25;
   uint64 role_runtime_contract_revision = 26;
   string role_runtime_contract_sha256 = 27;
+  // Внутренняя неизменяемая привязка credential revision. Она не входит в
+  // browser/OpenAPI contracts и не содержит secret value.
+  ProviderCredentialBinding provider_credential = 28;
+}
+
+message ProviderCredentialBinding {
+  string account_ref = 1;
+  string credential_revision_ref = 2;
+  int64 credential_revision = 3;
+  string secret_name = 4;
+  string secret_uid = 5;
+  string secret_resource_version = 6;
+  string content_sha256 = 7;
 }
 
 message DelegationTarget {

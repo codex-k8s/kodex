@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mattercodex:contract:runtime:agent-runner-input:v3",
-  "title": "MatterCodex immutable agent runner input v3",
+  "$id": "urn:mattercodex:contract:runtime:agent-runner-input:v4",
+  "title": "MatterCodex immutable agent runner input v4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,6 +21,10 @@
     "instructions",
     "provider",
     "model",
+    "provider_account_ref",
+    "provider_credential_revision_ref",
+    "provider_credential_revision",
+    "provider_credential_sha256",
     "codex_sandbox",
     "codex_approval_policy",
     "callback_url",
@@ -33,7 +37,7 @@
     "codex_home"
   ],
   "properties": {
-    "schema": {"const": "mattercodex.agent-runner-input.v3"},
+    "schema": {"const": "mattercodex.agent-runner-input.v4"},
     "mode": {"enum": ["TURN", "WARM"]},
     "workload_instance": {"type": "string", "minLength": 1, "maxLength": 128},
     "run_ref": {"$ref": "#/$defs/opaque_ref"},
@@ -87,6 +91,10 @@
     },
     "provider": {"type": "string", "minLength": 1, "maxLength": 64},
     "model": {"type": "string", "minLength": 1, "maxLength": 128},
+    "provider_account_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision": {"type": "integer", "minimum": 1},
+    "provider_credential_sha256": {"$ref": "#/$defs/sha256"},
     "codex_sandbox": {"enum": ["read-only", "workspace-write"]},
     "codex_approval_policy": {"enum": ["untrusted", "on-request", "never"]},
     "codex_session_id": {"type": "string", "maxLength": 255},

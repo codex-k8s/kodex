@@ -366,7 +366,7 @@ func verifyAccountPin(input model.Input) error {
 		return errors.New("Codex authentication snapshot metadata is invalid")
 	}
 	digest := sha256.New()
-	expectedDigest, expectedErr := readProviderDigest(input.ProviderAuthSHA256File)
+	expectedDigest, expectedErr := pinnedProviderDigest(input)
 	if _, err := io.Copy(digest, io.LimitReader(file, 1<<20+1)); err != nil || expectedErr != nil ||
 		hex.EncodeToString(digest.Sum(nil)) != expectedDigest {
 		return errors.New("Codex authentication snapshot does not match the pinned provider account")

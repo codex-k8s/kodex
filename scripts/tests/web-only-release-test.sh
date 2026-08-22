@@ -46,7 +46,7 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
   --oidc-tls-server-name identity.example.test \
   --kubernetes-api-service-cidr 10.96.0.1/32 >/dev/null
 
-if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works' "$render_file" >/dev/null; then
+if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
 fi
 if rg -ni 'bot-service|legacy-data-migration|interaction-gateway|mattermost' "$render_file" >/dev/null; then
@@ -57,6 +57,28 @@ for deployment in control-plane control-api-gateway runtime-controller integrati
   DEPLOYMENT="$deployment" yq -e 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" >/dev/null ||
     fail "required deployment is absent: $deployment"
 done
+
+yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$render_file" |
+  jq -e '
+    (.spec.template.spec.containers[] | select(.name == "control-plane") | .env) as $env |
+    def source($name): first($env[] | select(.name == $name) | .valueFrom.configMapKeyRef.name);
+    source("CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME") == "runtime-provider-openai-default-metadata" and
+    source("CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID") == "runtime-provider-openai-default-metadata" and
+    source("CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION") == "runtime-provider-openai-default-metadata" and
+    source("CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256") == "runtime-provider-openai-default-metadata"
+  ' >/dev/null || fail 'control-plane provider credential metadata binding is incomplete'
+
+test -f "$repository_root/contracts/runtime-controller/v4/agent-runner-input.schema.json" ||
+  fail 'runtime input v4 schema is absent'
+test ! -e "$repository_root/contracts/runtime-controller/v3" ||
+  fail 'retired runtime input v3 contract remains'
+jq -e '
+  .properties.schema.const == "mattercodex.agent-runner-input.v4" and
+  (.required | index("provider_account_ref") != null) and
+  (.required | index("provider_credential_revision_ref") != null) and
+  (.required | index("provider_credential_sha256") != null)
+' "$repository_root/contracts/runtime-controller/v4/agent-runner-input.schema.json" >/dev/null ||
+  fail 'runtime input v4 provider affinity contract is incomplete'
 
 api_policy_matches=$(yq -e '
   select(.kind == "NetworkPolicy" and

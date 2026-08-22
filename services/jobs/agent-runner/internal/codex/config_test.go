@@ -23,7 +23,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	}
 	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
 		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
-		ProviderAuthSHA256File: digestFile}
+		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 	if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 		t.Fatalf("PrepareHomeWithAuth() error = %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 			}
 			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
 				CodexApprovalPolicy: "never", CodexSandbox: sandbox,
-				ProviderAuthSHA256File: digestFile}
+				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 				t.Fatal(err)
 			}
