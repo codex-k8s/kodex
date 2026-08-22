@@ -98,7 +98,7 @@ yq -e '
   .jobs.build."runs-on" == "mattercodex-build"
 ' "$repository_root/.github/workflows/build-release.yml" >/dev/null
 yq -e '
-  .jobs.deploy."runs-on" == "mattercodex-deploy"
+  .jobs.render."runs-on" == "mattercodex-deploy"
 ' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null
 
 grep -Fq '!has(object.spec.runnerGroup)' "$repository_root/infra/arc/namespace-rbac.yaml"
@@ -123,9 +123,7 @@ if rg -q '\.items \| length == 1 and all\(\.items\[\]' "$bootstrap"; then
   printf 'ARC readback reuses an object path after switching jq context to its items array\n' >&2
   exit 1
 fi
-if rg -U -q 'auth can-i[^\n]*(\n[^\n]*){0,2}\| grep -qx no' \
-  "$bootstrap" "$repository_root/infra/direct-production/bootstrap.sh" \
-  "$repository_root/tools/deploy/direct-production.sh"; then
+if rg -U -q 'auth can-i[^\n]*(\n[^\n]*){0,2}\| grep -qx no' "$bootstrap"; then
   printf 'Expected Kubernetes authorization denial still relies on a pipefail pipeline\n' >&2
   exit 1
 fi

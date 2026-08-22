@@ -28,7 +28,7 @@ while IFS=$'\t' read -r component dockerfile; do
   }
 done < <(jq -r '.images[] | [.component,.dockerfile] | @tsv' "$repository_root/tools/release/images.json")
 
-if rg -q 'bot-service|legacy-data-migration|interaction-gateway' \
+if rg -q 'bot-service|legacy-data-migration' \
   "$repository_root/tools/release/images.json" "$repository_root/Makefile"; then
   printf 'Retired unit returned to an active entrypoint\n' >&2
   exit 1

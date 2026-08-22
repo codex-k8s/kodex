@@ -61,10 +61,11 @@ fi
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
-for command_name in kubectl helm sha256sum awk grep jq yq rg stat curl; do
+command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
+[[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
+for command_name in helm sha256sum awk grep jq yq rg stat curl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)

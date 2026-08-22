@@ -54,7 +54,6 @@ type ReconcilerConfig struct {
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedSessionUser  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -98,19 +97,8 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 	if err := parseEnvironment(&config); err != nil {
 		return ReconcilerConfig{}, err
 	}
-	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if err != nil {
+	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return ReconcilerConfig{}, err
-	}
-	if backend == secretBackendDirectProductionPrototype {
-		if err := validatePrototypeKubernetesBoundary(
-			config.KubernetesAPIAddress,
-			config.KubernetesAPITLSServerName,
-			config.KubernetesAPICAFile,
-			config.KubernetesAPITokenFile,
-		); err != nil {
-			return ReconcilerConfig{}, err
-		}
 	}
 	if !runtimeUUIDPattern.MatchString(config.HolderID) ||
 		config.AllowedCallerSPIFFEID == "" ||
@@ -187,12 +175,6 @@ func RunDatabaseCredentialReconciler(
 		config.SourceRevision,
 		config.SourceDigest,
 	)
-	backend, _ := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if backend == secretBackendDirectProductionPrototype {
-		// Owner materializer уже создал exact g3/g4/g5 credentials и PostgreSQL
-		// principals; runtime подтверждает и продвигает этот immutable набор.
-		baseline = registered
-	}
 	credentialService, err := service.NewDatabaseCredentialLifecycle(
 		config.HolderID,
 		config.LeaseDuration,

@@ -70,10 +70,6 @@ if yq -e '
   fail 'web-only control-plane requires optional interaction grant trust'
 fi
 
-rg -F -- "--allow-sub 'control_plane.platform.*.events,control_plane.run.*.*.events' --deny-pub '>'" \
-  "$repository_root/tools/deploy/materialize-direct-production-application.sh" >/dev/null ||
-  fail 'control API NATS credential does not authorize both platform and run streams'
-
 for deployment in control-plane control-api-gateway runtime-controller integration-gateway automation-scheduler role-image-builder image-admission-controller staff-control-center; do
   DEPLOYMENT="$deployment" yq -e 'select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT))' "$render_file" >/dev/null ||
     fail "required deployment is absent: $deployment"

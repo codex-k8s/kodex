@@ -38,7 +38,6 @@ type PublisherConfig struct {
 	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	PodUID                       string        `env:"POD_UID"`
 	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -102,19 +101,8 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	if err := parseEnvironment(&config); err != nil {
 		return PublisherConfig{}, err
 	}
-	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if err != nil {
+	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return PublisherConfig{}, err
-	}
-	if backend == secretBackendDirectProductionPrototype {
-		if err := validatePrototypeKubernetesBoundary(
-			config.KubernetesAPIAddress,
-			config.KubernetesAPITLSServerName,
-			config.KubernetesAPICAFile,
-			config.KubernetesAPITokenFile,
-		); err != nil {
-			return PublisherConfig{}, err
-		}
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return PublisherConfig{}, errors.New("publisher listen address is invalid")

@@ -5,6 +5,7 @@ import "testing"
 func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-control-api-gateway",
@@ -14,25 +15,27 @@ func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 	}
 }
 
-func TestApplyWorkloadProfileBindsDirectDeliveryWithoutVaultEnvironment(t *testing.T) {
+func TestApplyWorkloadProfileBindsInteractionGatewayPaths(t *testing.T) {
 	config := Config{
-		Mode:              ModeIssuer,
-		SecretBackend:     string(secretBackendDirectProductionPrototype),
-		DeploymentProfile: directProductionPrototypeProfile,
-		WorkloadID:        "automation-scheduler",
-		WorkloadSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
+		WorkloadID:       "interaction-gateway",
+		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
 	}
 	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply direct delivery profile: %v", err)
+		t.Fatalf("apply interaction gateway profile: %v", err)
 	}
-	if config.VaultAuthRole != "internal-rpc-authority-automation-scheduler" {
-		t.Fatal("direct delivery did not bind canonical workload identity")
+	if config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential" ||
+		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack" {
+		t.Fatal("interaction gateway Vault paths are not pinned")
 	}
 }
 
 func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-integration-gateway",
@@ -49,6 +52,7 @@ func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "automation-scheduler",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
 		VaultAuthRole:    "internal-rpc-authority-automation-scheduler",
@@ -93,6 +97,7 @@ func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			config := Config{
 				Mode:             test.mode,
+				SecretBackend:    string(secretBackendVault),
 				WorkloadID:       test.workloadID,
 				WorkloadSPIFFEID: test.spiffeID,
 				VaultAuthRole:    test.vaultRole,
@@ -128,15 +133,6 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 				WorkloadID:       "integration-gateway",
 				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 				VaultAuthRole:    "internal-rpc-authority-integration-gateway",
-			},
-		},
-		{
-			name: "removed interaction issuer",
-			config: Config{
-				Mode:             ModeIssuer,
-				WorkloadID:       "interaction-gateway",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
-				VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
 			},
 		},
 		{

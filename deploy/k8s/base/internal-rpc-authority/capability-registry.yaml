@@ -10,37 +10,6 @@ spec:
       backend: vault
       fallbackAllowed: false
       semantics: VAULT_KV_V2_AND_DATABASE_STATIC_ROLES
-    direct-production-single-node-prototype:
-      backend: direct-production-kubernetes-file
-      fallbackAllowed: false
-      namespace: mattercodex-system
-      logicalPathRegistry: deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml
-      materialPolicy: infra/direct-production/internal-rpc-authority-prototype-material-policy.json
-      publisher:
-        operations:
-          - get
-          - update
-        resourceNamesFromClosedRegistry: true
-        createListWatchOrDeleteAllowed: false
-        requireResourceVersionCas: true
-        requireSemanticVersionDigestAndReadback: true
-      workload:
-        delivery: EXACT_READ_ONLY_SECRET_FILES
-        kubernetesSecretApiAllowed: false
-        primaryDocumentCount: 4
-        resolverAdditionalDocumentCount: 2
-      databaseCredentialReconciler:
-        credentialSecretGenerations:
-          - 1
-          - 2
-          - 3
-          - 4
-          - 5
-        stateSecretName: internal-rpc-authority-prototype-static-role-state
-        requireRegisteredSetSourceRevisionAndDigest: true
-        requireMonotonicGenerationReadback: true
-        retiredSecretMustBeAbsent: true
-        createListWatchOrDeleteAllowed: false
   artifact:
     repository: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority
     imageReferencePolicy: DIGEST_ONLY

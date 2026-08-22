@@ -28,7 +28,6 @@ type Config struct {
 	Mode                             Mode
 	ServiceName                      string
 	SecretBackend                    string `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	DeploymentProfile                string `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	WorkloadID                       string `env:"INTERNAL_RPC_AUTHORITY_WORKLOAD_ID"`
 	SocketPath                       string
 	ExpectedProcessUID               uint32
@@ -246,6 +245,14 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-credential",
 				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-ack",
 			},
+			"interaction-gateway": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+				vaultRole:                 "internal-rpc-authority-interaction-gateway",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
+			},
 			"runtime-controller": {
 				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
 				vaultRole:                 "internal-rpc-authority-runtime-controller",
@@ -271,19 +278,12 @@ func applyWorkloadProfile(config *Config) error {
 	if !ok || config.WorkloadSPIFFEID != profile.spiffeID {
 		return errors.New("authority workload profile is not registered")
 	}
-	backend := secretBackendVault
-	if config.SecretBackend != "" || config.DeploymentProfile != "" {
-		selected, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-		if err != nil {
-			return err
-		}
-		backend = selected
+	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
+		return err
 	}
-	if backend == secretBackendVault && config.VaultAuthRole != profile.vaultRole {
+	if config.VaultAuthRole != profile.vaultRole {
 		return errors.New("authority workload profile is not registered")
 	}
-	// Direct delivery не использует Vault, но сохраняет каноническую identity
-	// профиля для общей валидации и диагностического readback.
 	config.VaultAuthRole = profile.vaultRole
 	config.ReadbackCredentialVaultPath = profile.readbackCredentialPath
 	config.ReadbackPossessionVaultPath = profile.readbackPossessionPath
@@ -295,7 +295,7 @@ func applyWorkloadProfile(config *Config) error {
 
 // Validate проверяет точные пути, идентичности и ограниченные интервалы.
 func (config Config) Validate() error {
-	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
+	backend, err := selectSecretBackend(config.SecretBackend)
 	if err != nil {
 		return err
 	}
