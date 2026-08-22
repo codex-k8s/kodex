@@ -147,6 +147,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.completeIntegrationConnectionTest(ctx, tx, scope, input)
 	case command.CompleteIntegrationInvocation:
 		return repository.completeIntegrationInvocation(ctx, tx, scope, input)
+	case command.CompleteInteractionDelivery:
+		return repository.completeInteractionDelivery(ctx, tx, scope, input)
+	case command.AcceptInteractionMessage:
+		return repository.acceptInteractionMessage(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -1637,6 +1641,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if _, err := tx.Exec(ctx, queryInteractionCancelPendingGateDeliveries, pgx.StrictNamedArgs{"gate_id": gateID}); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	nodeState := "SUCCEEDED"
 	runState := "RUNNING"
 	if payload.Decision == "REJECT" {
@@ -1694,6 +1701,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, runState) {
 		if err := tx.QueryRow(ctx, queryCommandsResolvegateUpdateRootNodeState, rootRunID, runState).Scan(&terminalRootNodeRef); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := repository.enqueueTerminalInteractionDeliveries(ctx, tx, scope, projectID, rootRunID); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", gateNodeRef, "", payload.GateRef, "", "i18n:OWNER_GATE_RESOLVED", runState, nodeState)

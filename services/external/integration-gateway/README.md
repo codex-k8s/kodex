@@ -6,8 +6,9 @@
 влияет на readiness.
 
 Юнит не предоставляет универсальный proxy. Встроенный закрытый реестр
-поддерживает GitHub repository read, Kubernetes workload read и независимые
-Mattermost notification/result mirror operations. Credential material читается
+поддерживает GitHub repository read и Kubernetes workload read. Mattermost
+interaction capabilities обслуживает отдельный необязательный
+`interaction-gateway`. Credential material читается
 только из server-mounted файлов по выданной control-plane ссылке и никогда не
 возвращается в API, логи или результат.
 

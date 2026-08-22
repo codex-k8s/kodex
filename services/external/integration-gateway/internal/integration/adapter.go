@@ -12,22 +12,18 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/credentialfs"
 )
 
 const maximumResponseBytes = 64 << 10
 
-var (
-	credentialRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,96}$`)
-	dnsLabelPattern      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
-)
+var dnsLabelPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
 
 type Config struct {
 	CredentialDirectory, ProxyURL, AllowedHosts string
@@ -110,10 +106,10 @@ type SafeError struct{ Code string }
 func (err *SafeError) Error() string { return err.Code }
 
 type Adapter struct {
-	credentialDirectory string
-	proxyURL            *url.URL
-	allowedHosts        map[string]struct{}
-	timeout             time.Duration
+	credentials  *credentialfs.Store
+	proxyURL     *url.URL
+	allowedHosts map[string]struct{}
+	timeout      time.Duration
 }
 
 func New(config Config) (*Adapter, error) {
@@ -121,7 +117,8 @@ func New(config Config) (*Adapter, error) {
 	if err != nil || proxy.Scheme != "http" || proxy.Host == "" {
 		return nil, errors.New("integration adapter proxy is invalid")
 	}
-	if !filepath.IsAbs(config.CredentialDirectory) || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
+	credentials, err := credentialfs.New(config.CredentialDirectory)
+	if err != nil || config.Timeout < time.Second || config.Timeout > 2*time.Minute {
 		return nil, errors.New("integration adapter configuration is invalid")
 	}
 	hosts := map[string]struct{}{"api.github.com": {}}
@@ -135,7 +132,7 @@ func New(config Config) (*Adapter, error) {
 		}
 		hosts[host] = struct{}{}
 	}
-	return &Adapter{credentialDirectory: filepath.Clean(config.CredentialDirectory), proxyURL: proxy, allowedHosts: hosts, timeout: config.Timeout}, nil
+	return &Adapter{credentials: credentials, proxyURL: proxy, allowedHosts: hosts, timeout: config.Timeout}, nil
 }
 
 func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Request {
@@ -202,8 +199,6 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (string, e
 		return adapter.readGitHubRepository(ctx, request)
 	case "kubernetes.workload.read":
 		return adapter.readKubernetesWorkload(ctx, request)
-	case "mattermost.notifications", "mattermost.result_mirror":
-		return adapter.sendMattermostMessage(ctx, request)
 	default:
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -254,34 +249,6 @@ func (adapter *Adapter) readKubernetesWorkload(ctx context.Context, request Requ
 		return "", err
 	}
 	return projectKubernetesWorkload(body, namespace, name)
-}
-
-func (adapter *Adapter) sendMattermostMessage(ctx context.Context, request Request) (string, error) {
-	base, err := adapter.configuredBaseURL(request, "base_url")
-	if err != nil {
-		return "", err
-	}
-	team, teamOK := boundedString(request.Configuration, "team_name", 64)
-	channel, channelOK := boundedString(request.Configuration, "channel_name", 64)
-	message, messageOK := boundedString(request.Input, "message", 4000)
-	if !teamOK || !channelOK || !messageOK || !dnsLabelPattern.MatchString(team) || !dnsLabelPattern.MatchString(channel) {
-		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
-	}
-	channelBody, err := adapter.call(ctx, request, http.MethodGet, base+"/api/v4/teams/name/"+url.PathEscape(team)+"/channels/name/"+url.PathEscape(channel), nil, nil)
-	if err != nil {
-		return "", err
-	}
-	var channelResult struct {
-		ID string `json:"id"`
-	}
-	if json.Unmarshal(channelBody, &channelResult) != nil || channelResult.ID == "" || len(channelResult.ID) > 64 {
-		return "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-	}
-	payload, _ := json.Marshal(map[string]string{"channel_id": channelResult.ID, "message": message})
-	if _, err := adapter.call(ctx, request, http.MethodPost, base+"/api/v4/posts", payload, nil); err != nil {
-		return "", err
-	}
-	return "MATTERMOST_DELIVERY_ACCEPTED", nil
 }
 
 func (adapter *Adapter) configuredBaseURL(request Request, key string) (string, error) {
@@ -358,28 +325,9 @@ func (adapter *Adapter) loadCA(ref string) (*x509.CertPool, error) {
 }
 
 func (adapter *Adapter) readCredential(ref, name string) ([]byte, error) {
-	if !credentialRefPattern.MatchString(ref) {
-		return nil, errors.New("credential reference is invalid")
-	}
-	root, err := filepath.EvalSymlinks(adapter.credentialDirectory)
+	raw, err := adapter.credentials.Read(ref, name)
 	if err != nil {
-		return nil, errors.New("credential root is unavailable")
-	}
-	resolved, err := filepath.EvalSymlinks(filepath.Join(root, ref, name))
-	if err != nil {
-		return nil, errors.New("credential file is unavailable")
-	}
-	relative, err := filepath.Rel(root, resolved)
-	if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
-		return nil, errors.New("credential file escapes root")
-	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 || info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("credential file is unsafe")
-	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil || len(raw) == 0 || len(raw) > 1<<20 {
-		return nil, errors.New("read credential file")
+		return nil, err
 	}
 	return bytes.TrimSpace(raw), nil
 }

@@ -409,6 +409,23 @@ func (service *Service) GetIntegrationInvocation(ctx context.Context, p value.Pr
 	}
 	return service.repository.GetIntegrationInvocation(ctx, p, ref)
 }
+func (service *Service) ListInteractionSources(ctx context.Context, p value.Principal) ([]map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return service.repository.ListInteractionSources(ctx, p)
+}
+func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 32 {
+		return nil, errs.ErrInvalid
+	}
+	return service.repository.ClaimInteractionDeliveries(ctx, p, instance, limit)
+}
 
 func knownCommand(kind command.Kind) bool {
 	switch kind {
@@ -429,7 +446,8 @@ func knownCommand(kind command.Kind) bool {
 		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
 		command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback, command.ReportWarmRuntime,
 		command.MaterializeOccurrence, command.CompleteOccurrence, command.CompleteConnectionTest,
-		command.CompleteIntegrationInvocation:
+		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
+		command.AcceptInteractionMessage:
 		return true
 	default:
 		return false

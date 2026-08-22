@@ -151,7 +151,14 @@ func IntegrationGatewayOperations() map[string]string {
 	}
 }
 
-func InteractionGatewayOperations() map[string]string { return map[string]string{} }
+func InteractionGatewayOperations() map[string]string {
+	return map[string]string{
+		"platform.interactions.sources.list":        controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
+		"platform.interactions.deliveries.claim":    controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
+		"platform.interactions.deliveries.complete": controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
+		"platform.interactions.messages.accept":     controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
+	}
+}
 
 // ControlAPIGatewayProjectRequiredOperations возвращает операции, для которых
 // proof обязан содержать повторно проверенную project boundary. Операции над

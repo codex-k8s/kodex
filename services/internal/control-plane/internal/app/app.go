@@ -94,6 +94,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		WorkerGrantTrustFiles: map[string]string{
 			"automation-scheduler": config.AutomationGrantTrustFile,
 			"integration-gateway":  config.IntegrationGrantTrustFile,
+			"interaction-gateway":  config.InteractionGrantTrustFile,
 			"runtime-controller":   config.RuntimeGrantTrustFile,
 			"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
 			"image-admission":      config.ImageAdmissionGrantTrustFile,
@@ -172,6 +173,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
 	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
 	listener, err := net.Listen("tcp", config.GRPCListen)

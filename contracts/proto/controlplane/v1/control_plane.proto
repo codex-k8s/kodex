@@ -121,6 +121,16 @@ service RuntimeWorkService {
   rpc CompleteIntegrationInvocation(CompleteIntegrationInvocationRequest) returns (CompleteIntegrationInvocationResponse);
 }
 
+// InteractionWorkService обслуживает только необязательные каналы общения.
+// Внешние channel/user/post ID являются locator metadata и никогда не
+// определяют organization, Project, target или право Human Gate.
+service InteractionWorkService {
+  rpc ListInteractionSources(ListInteractionSourcesRequest) returns (ListInteractionSourcesResponse);
+  rpc ClaimInteractionDeliveries(ClaimInteractionDeliveriesRequest) returns (ClaimInteractionDeliveriesResponse);
+  rpc CompleteInteractionDelivery(CompleteInteractionDeliveryRequest) returns (CompleteInteractionDeliveryResponse);
+  rpc AcceptInteractionMessage(AcceptInteractionMessageRequest) returns (AcceptInteractionMessageResponse);
+}
+
 message MutationContext {
   string idempotency_key = 1;
   optional int64 expected_version = 2;
@@ -1854,4 +1864,80 @@ message CompleteIntegrationInvocationRequest {
 message CompleteIntegrationInvocationResponse {
   Run run = 1;
   RunGraph graph = 2;
+}
+
+message InteractionSource {
+  string connection_ref = 1;
+  string credential_materialization_ref = 2;
+  string base_url = 3;
+  string team_name = 4;
+  string channel_name = 5;
+  string locale = 6;
+  repeated string enabled_capabilities = 7;
+}
+message ListInteractionSourcesRequest {}
+message ListInteractionSourcesResponse {
+  repeated InteractionSource sources = 1;
+}
+
+message InteractionDeliveryClaim {
+  string delivery_ref = 1;
+  string connection_ref = 2;
+  string credential_materialization_ref = 3;
+  string base_url = 4;
+  string team_name = 5;
+  string channel_name = 6;
+  string locale = 7;
+  string capability_key = 8;
+  string message_key = 9;
+  google.protobuf.Struct template_data = 10;
+  WorkLease lease = 11;
+}
+message ClaimInteractionDeliveriesRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimInteractionDeliveriesResponse {
+  repeated InteractionDeliveryClaim claims = 1;
+}
+message CompleteInteractionDeliveryRequest {
+  MutationContext mutation = 1;
+  string delivery_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  bool success = 6;
+  string external_post_ref = 7;
+  string external_thread_ref = 8;
+  string safe_error_code = 9;
+}
+message CompleteInteractionDeliveryResponse {
+  string delivery_ref = 1;
+  string state = 2;
+  bool core_run_affected = 3;
+}
+
+enum InteractionMessageOutcome {
+  INTERACTION_MESSAGE_OUTCOME_UNSPECIFIED = 0;
+  INTERACTION_MESSAGE_OUTCOME_IGNORED = 1;
+  INTERACTION_MESSAGE_OUTCOME_RUN_STARTED = 2;
+  INTERACTION_MESSAGE_OUTCOME_GATE_RESOLVED = 3;
+  INTERACTION_MESSAGE_OUTCOME_STALE = 4;
+  INTERACTION_MESSAGE_OUTCOME_DUPLICATE = 5;
+}
+message AcceptInteractionMessageRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string external_event_ref = 3;
+  string external_post_ref = 4;
+  string external_root_post_ref = 5;
+  string external_channel_ref = 6;
+  string external_user_digest = 7;
+  string message = 8;
+  OwnerGateDecision decision = 9;
+}
+message AcceptInteractionMessageResponse {
+  InteractionMessageOutcome outcome = 1;
+  string message_key = 2;
+  string accepted_resource_ref = 3;
 }

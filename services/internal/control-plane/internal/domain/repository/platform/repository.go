@@ -125,5 +125,7 @@ type Repository interface {
 	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)
 	ClaimIntegrationInvocations(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	GetIntegrationInvocation(context.Context, value.Principal, string) (map[string]any, error)
+	ListInteractionSources(context.Context, value.Principal) ([]map[string]any, error)
+	ClaimInteractionDeliveries(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	Ready(context.Context) error
 }

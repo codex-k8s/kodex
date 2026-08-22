@@ -409,8 +409,19 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		gateRef, _ := newRef("gat")
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, gateRef, scope.organizationID, lease["projectID"], lease["rootRunID"], gateNodeID, truncate(payload.ResultSummary, 1000)); err != nil {
+		var gateID string
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertOwnerGatesRefProjectIdNodeId, pgx.StrictNamedArgs{
+			"gate_ref":        gateRef,
+			"organization_id": scope.organizationID,
+			"project_id":      lease["projectID"],
+			"root_run_id":     lease["rootRunID"],
+			"node_id":         gateNodeID,
+			"context_summary": truncate(payload.ResultSummary, 1000),
+		}).Scan(&gateID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := repository.enqueueGateInteractionDeliveries(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), gateID); err != nil {
+			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateVersionUpdatedAt, lease["rootRunID"]); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -452,6 +463,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if err := repository.enqueueTerminalInteractionDeliveries(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID")); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_COMPLETED", stringMap(lease, "nodeRef"), "", "", "", nonEmptyResult(payload), runState, nodeState)

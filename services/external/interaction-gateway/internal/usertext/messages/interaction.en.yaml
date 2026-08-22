@@ -1,0 +1,36 @@
+MATTERMOST_RUN_NOTIFICATION:
+  other: |-
+    MatterCodex: “{{.title}}”
+    State: {{.state}}
+MATTERMOST_RUN_RESULT:
+  other: |-
+    MatterCodex: result for “{{.title}}”
+    {{.result}}
+    Files: {{.artifactCount}}
+MATTERMOST_GATE_REQUEST:
+  other: |-
+    MatterCodex: {{.title}}
+    {{.context}}
+
+    Reply in this thread with “approve”, “reject”, “changes: comment”, or “cancel”.
+MATTERMOST_RUN_ACCEPTED:
+  other: Task accepted. Progress and results are available in Control Center.
+MATTERMOST_GATE_RESOLVED:
+  other: Decision accepted. The process continued exactly once.
+MATTERMOST_GATE_STALE:
+  other: This decision was already made elsewhere. Open Control Center for the current state.
+MATTERMOST_GATE_COMMAND_HELP:
+  other: >-
+    Reply with “approve”, “reject”, “changes: comment”, or “cancel”.
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: This connection does not have exactly one inbound message target.
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: This message was already processed.
+RUN_STATE_SUCCEEDED:
+  other: succeeded
+RUN_STATE_FAILED:
+  other: failed
+RUN_STATE_CANCELLED:
+  other: cancelled
+RUN_STATE_RUNNING:
+  other: running

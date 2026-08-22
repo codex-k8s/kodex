@@ -63,6 +63,8 @@ const (
 	CompleteOccurrence            Kind = "COMPLETE_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
+	CompleteInteractionDelivery   Kind = "COMPLETE_INTERACTION_DELIVERY"
+	AcceptInteractionMessage      Kind = "ACCEPT_INTERACTION_MESSAGE"
 )
 
 type Command struct {
@@ -174,6 +176,15 @@ type IntegrationConnectionTestInput struct {
 	TestRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string
 	Generation                                             int64
 	Success                                                bool
+}
+type InteractionDeliveryInput struct {
+	DeliveryRef, LeaseRef, Fence, ExternalPostRef, ExternalThreadRef, SafeErrorCode string
+	Generation                                                                      int64
+	Success                                                                         bool
+}
+type InteractionMessageInput struct {
+	ConnectionRef, ExternalEventRef, ExternalPostRef, ExternalRootPostRef string
+	ExternalChannelRef, ExternalUserDigest, Message, Decision             string
 }
 
 type Result struct {

@@ -6,6 +6,7 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/credentialfs v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
@@ -48,6 +49,8 @@ require (
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+
+replace github.com/codex-k8s/matter-codex/libs/go/credentialfs => ../../../libs/go/credentialfs
 
 replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
 

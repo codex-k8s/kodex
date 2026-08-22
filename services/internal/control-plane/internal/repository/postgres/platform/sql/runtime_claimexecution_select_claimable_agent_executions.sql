@@ -66,6 +66,12 @@ SELECT n.id::text,
              AND integration_grant.target_kind = 'AGENT'
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
+             AND integration_grant.capability_key NOT IN (
+                 'mattermost.inbound',
+                 'mattermost.notifications',
+                 'mattermost.result_mirror',
+                 'mattermost.gate_decisions'
+             )
              AND connection.enabled
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),

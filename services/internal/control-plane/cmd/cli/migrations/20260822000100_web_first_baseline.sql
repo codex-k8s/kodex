@@ -811,6 +811,68 @@ CREATE TABLE control_plane.integration_grants (
     UNIQUE (connection_id, capability_key, target_kind, target_ref)
 );
 
+CREATE TABLE control_plane.interaction_deliveries (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid NOT NULL REFERENCES control_plane.projects(id),
+    connection_id uuid NOT NULL REFERENCES control_plane.integration_connections(id),
+    grant_id uuid NOT NULL REFERENCES control_plane.integration_grants(id),
+    root_run_id uuid NOT NULL REFERENCES control_plane.runs(id),
+    gate_id uuid REFERENCES control_plane.owner_gates(id),
+    capability_key text NOT NULL CHECK (capability_key IN ('mattermost.notifications', 'mattermost.result_mirror', 'mattermost.gate_decisions')),
+    message_key text NOT NULL CHECK (message_key ~ '^[A-Z0-9_]{3,96}$'),
+    template_data jsonb NOT NULL CHECK (jsonb_typeof(template_data) = 'object' AND octet_length(template_data::text) <= 16384),
+    state text NOT NULL CHECK (state IN ('DUE', 'CLAIMED', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    attempt integer NOT NULL DEFAULT 0 CHECK (attempt BETWEEN 0 AND 10),
+    lease_ref text UNIQUE,
+    fence_digest text CHECK (fence_digest IS NULL OR fence_digest ~ '^[a-f0-9]{64}$'),
+    generation bigint NOT NULL DEFAULT 0 CHECK (generation >= 0),
+    workload_instance text,
+    lease_expires_at timestamptz,
+    available_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    external_post_ref text CHECK (external_post_ref IS NULL OR char_length(external_post_ref) BETWEEN 1 AND 128),
+    external_thread_ref text CHECK (external_thread_ref IS NULL OR char_length(external_thread_ref) BETWEEN 1 AND 128),
+    safe_error_code text NOT NULL DEFAULT '' CHECK (char_length(safe_error_code) <= 96),
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    completed_at timestamptz,
+    CHECK ((state = 'CLAIMED' AND lease_ref IS NOT NULL AND fence_digest IS NOT NULL AND workload_instance IS NOT NULL AND lease_expires_at IS NOT NULL) OR
+           (state <> 'CLAIMED' AND lease_ref IS NULL AND fence_digest IS NULL AND workload_instance IS NULL AND lease_expires_at IS NULL)),
+    CHECK ((capability_key = 'mattermost.gate_decisions' AND gate_id IS NOT NULL) OR
+           (capability_key <> 'mattermost.gate_decisions' AND gate_id IS NULL))
+);
+
+CREATE UNIQUE INDEX interaction_deliveries_effect
+    ON control_plane.interaction_deliveries (
+        connection_id,
+        capability_key,
+        root_run_id,
+        COALESCE(gate_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    );
+
+CREATE INDEX interaction_deliveries_due
+    ON control_plane.interaction_deliveries (available_at, created_at)
+    WHERE state IN ('DUE', 'FAILED');
+
+CREATE TABLE control_plane.interaction_message_receipts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ref text NOT NULL UNIQUE CHECK (ref ~ '^[A-Za-z0-9_-]{8,96}$'),
+    organization_id uuid NOT NULL REFERENCES control_plane.organizations(id),
+    project_id uuid REFERENCES control_plane.projects(id),
+    connection_id uuid NOT NULL REFERENCES control_plane.integration_connections(id),
+    grant_id uuid REFERENCES control_plane.integration_grants(id),
+    root_run_id uuid REFERENCES control_plane.runs(id),
+    gate_id uuid REFERENCES control_plane.owner_gates(id),
+    external_event_digest text NOT NULL CHECK (external_event_digest ~ '^[a-f0-9]{64}$'),
+    external_user_digest text NOT NULL CHECK (external_user_digest ~ '^[a-f0-9]{64}$'),
+    outcome text NOT NULL CHECK (outcome IN ('IGNORED', 'RUN_STARTED', 'GATE_RESOLVED', 'STALE')),
+    decision text CHECK (decision IS NULL OR decision IN ('APPROVE', 'REJECT', 'REQUEST_CHANGES', 'CANCEL')),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (connection_id, external_event_digest)
+);
+
 CREATE TABLE control_plane.assistant_runtime (
     organization_id uuid PRIMARY KEY REFERENCES control_plane.organizations(id),
     agent_id uuid NOT NULL UNIQUE REFERENCES control_plane.agents(id),

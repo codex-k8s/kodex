@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/matter-codex/libs/go/credentialfs"
 )
 
 func TestEmptyConnectionCatalogKeepsAdapterConstructible(t *testing.T) {
@@ -46,7 +48,11 @@ func TestReadCredentialAllowsProjectedSymlinkInsideRoot(t *testing.T) {
 	if err := os.Symlink(filepath.Join("..", "..data", "token"), filepath.Join(binding, "token")); err != nil {
 		t.Fatal(err)
 	}
-	adapter := &Adapter{credentialDirectory: root}
+	credentials, err := credentialfs.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := &Adapter{credentials: credentials}
 	value, err := adapter.readCredential("github-main", "token")
 	if err != nil || string(value) != "secret-value" {
 		t.Fatalf("readCredential() = %q, %v", value, err)

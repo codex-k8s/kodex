@@ -1,0 +1,36 @@
+MATTERMOST_RUN_NOTIFICATION:
+  other: |-
+    MatterCodex: «{{.title}}»
+    Состояние: {{.state}}
+MATTERMOST_RUN_RESULT:
+  other: |-
+    MatterCodex: результат «{{.title}}»
+    {{.result}}
+    Файлов: {{.artifactCount}}
+MATTERMOST_GATE_REQUEST:
+  other: |-
+    MatterCodex: {{.title}}
+    {{.context}}
+
+    Ответьте в этой ветке: «одобрить», «отклонить», «изменения: комментарий» или «отменить».
+MATTERMOST_RUN_ACCEPTED:
+  other: Задание принято. Выполнение и результат доступны в Control Center.
+MATTERMOST_GATE_RESOLVED:
+  other: Решение принято. Процесс продолжен ровно один раз.
+MATTERMOST_GATE_STALE:
+  other: Это решение уже принято в другой поверхности. Откройте актуальное состояние в Control Center.
+MATTERMOST_GATE_COMMAND_HELP:
+  other: >-
+    Ответьте «одобрить», «отклонить», «изменения: комментарий» или «отменить».
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: Для этого подключения не настроен единственный получатель входящих сообщений.
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: Это сообщение уже обработано.
+RUN_STATE_SUCCEEDED:
+  other: завершено
+RUN_STATE_FAILED:
+  other: ошибка
+RUN_STATE_CANCELLED:
+  other: отменено
+RUN_STATE_RUNNING:
+  other: выполняется

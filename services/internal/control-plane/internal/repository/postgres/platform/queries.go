@@ -1028,7 +1028,41 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}
-	result := platformrepo.Administration{Profile: "WEB_ONLY", CoreReady: assistant.Ready, CoreSummary: "i18n:WEB_ONLY_CORE_SUMMARY", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
+	profile := "WEB_ONLY"
+	var activeAdapters int
+	if err := repository.pool.QueryRow(ctx, queryInteractionCountActiveAdapters, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+	}).Scan(&activeAdapters); err != nil {
+		return platformrepo.Administration{}, errs.ErrUnavailable
+	}
+	if activeAdapters > 0 {
+		profile = "WEB_WITH_OPTIONAL_ADAPTERS"
+	}
+	result := platformrepo.Administration{Profile: profile, CoreReady: assistant.Ready, CoreSummary: "i18n:WEB_ONLY_CORE_SUMMARY", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
+	incidentRows, err := repository.pool.Query(ctx, queryInteractionListFailedIncidents, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+	})
+	if err != nil {
+		return platformrepo.Administration{}, errs.ErrUnavailable
+	}
+	defer incidentRows.Close()
+	for incidentRows.Next() {
+		var incident entity.Incident
+		var safeErrorCode string
+		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &safeErrorCode, &incident.CreatedAt); err != nil {
+			return platformrepo.Administration{}, errs.ErrUnavailable
+		}
+		incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
+		incident.Severity = "WARNING"
+		incident.State = "RECOVERING"
+		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_FAILED"
+		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RETRYING"
+		incident.CoreAffected = false
+		result.Incidents = append(result.Incidents, incident)
+	}
+	if err := incidentRows.Err(); err != nil {
+		return platformrepo.Administration{}, errs.ErrUnavailable
+	}
 	return result, nil
 }
 func (repository *Repository) ListAuditEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AuditEvent, string, error) {

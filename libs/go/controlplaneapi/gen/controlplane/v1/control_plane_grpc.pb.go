@@ -3816,3 +3816,228 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
+
+const (
+	InteractionWorkService_ListInteractionSources_FullMethodName      = "/controlplane.v1.InteractionWorkService/ListInteractionSources"
+	InteractionWorkService_ClaimInteractionDeliveries_FullMethodName  = "/controlplane.v1.InteractionWorkService/ClaimInteractionDeliveries"
+	InteractionWorkService_CompleteInteractionDelivery_FullMethodName = "/controlplane.v1.InteractionWorkService/CompleteInteractionDelivery"
+	InteractionWorkService_AcceptInteractionMessage_FullMethodName    = "/controlplane.v1.InteractionWorkService/AcceptInteractionMessage"
+)
+
+// InteractionWorkServiceClient is the client API for InteractionWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// InteractionWorkService обслуживает только необязательные каналы общения.
+// Внешние channel/user/post ID являются locator metadata и никогда не
+// определяют organization, Project, target или право Human Gate.
+type InteractionWorkServiceClient interface {
+	ListInteractionSources(ctx context.Context, in *ListInteractionSourcesRequest, opts ...grpc.CallOption) (*ListInteractionSourcesResponse, error)
+	ClaimInteractionDeliveries(ctx context.Context, in *ClaimInteractionDeliveriesRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveriesResponse, error)
+	CompleteInteractionDelivery(ctx context.Context, in *CompleteInteractionDeliveryRequest, opts ...grpc.CallOption) (*CompleteInteractionDeliveryResponse, error)
+	AcceptInteractionMessage(ctx context.Context, in *AcceptInteractionMessageRequest, opts ...grpc.CallOption) (*AcceptInteractionMessageResponse, error)
+}
+
+type interactionWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewInteractionWorkServiceClient(cc grpc.ClientConnInterface) InteractionWorkServiceClient {
+	return &interactionWorkServiceClient{cc}
+}
+
+func (c *interactionWorkServiceClient) ListInteractionSources(ctx context.Context, in *ListInteractionSourcesRequest, opts ...grpc.CallOption) (*ListInteractionSourcesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInteractionSourcesResponse)
+	err := c.cc.Invoke(ctx, InteractionWorkService_ListInteractionSources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *interactionWorkServiceClient) ClaimInteractionDeliveries(ctx context.Context, in *ClaimInteractionDeliveriesRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimInteractionDeliveriesResponse)
+	err := c.cc.Invoke(ctx, InteractionWorkService_ClaimInteractionDeliveries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *interactionWorkServiceClient) CompleteInteractionDelivery(ctx context.Context, in *CompleteInteractionDeliveryRequest, opts ...grpc.CallOption) (*CompleteInteractionDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteInteractionDeliveryResponse)
+	err := c.cc.Invoke(ctx, InteractionWorkService_CompleteInteractionDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *interactionWorkServiceClient) AcceptInteractionMessage(ctx context.Context, in *AcceptInteractionMessageRequest, opts ...grpc.CallOption) (*AcceptInteractionMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptInteractionMessageResponse)
+	err := c.cc.Invoke(ctx, InteractionWorkService_AcceptInteractionMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// InteractionWorkServiceServer is the server API for InteractionWorkService service.
+// All implementations must embed UnimplementedInteractionWorkServiceServer
+// for forward compatibility.
+//
+// InteractionWorkService обслуживает только необязательные каналы общения.
+// Внешние channel/user/post ID являются locator metadata и никогда не
+// определяют organization, Project, target или право Human Gate.
+type InteractionWorkServiceServer interface {
+	ListInteractionSources(context.Context, *ListInteractionSourcesRequest) (*ListInteractionSourcesResponse, error)
+	ClaimInteractionDeliveries(context.Context, *ClaimInteractionDeliveriesRequest) (*ClaimInteractionDeliveriesResponse, error)
+	CompleteInteractionDelivery(context.Context, *CompleteInteractionDeliveryRequest) (*CompleteInteractionDeliveryResponse, error)
+	AcceptInteractionMessage(context.Context, *AcceptInteractionMessageRequest) (*AcceptInteractionMessageResponse, error)
+	mustEmbedUnimplementedInteractionWorkServiceServer()
+}
+
+// UnimplementedInteractionWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedInteractionWorkServiceServer struct{}
+
+func (UnimplementedInteractionWorkServiceServer) ListInteractionSources(context.Context, *ListInteractionSourcesRequest) (*ListInteractionSourcesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInteractionSources not implemented")
+}
+func (UnimplementedInteractionWorkServiceServer) ClaimInteractionDeliveries(context.Context, *ClaimInteractionDeliveriesRequest) (*ClaimInteractionDeliveriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimInteractionDeliveries not implemented")
+}
+func (UnimplementedInteractionWorkServiceServer) CompleteInteractionDelivery(context.Context, *CompleteInteractionDeliveryRequest) (*CompleteInteractionDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteInteractionDelivery not implemented")
+}
+func (UnimplementedInteractionWorkServiceServer) AcceptInteractionMessage(context.Context, *AcceptInteractionMessageRequest) (*AcceptInteractionMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptInteractionMessage not implemented")
+}
+func (UnimplementedInteractionWorkServiceServer) mustEmbedUnimplementedInteractionWorkServiceServer() {
+}
+func (UnimplementedInteractionWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeInteractionWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to InteractionWorkServiceServer will
+// result in compilation errors.
+type UnsafeInteractionWorkServiceServer interface {
+	mustEmbedUnimplementedInteractionWorkServiceServer()
+}
+
+func RegisterInteractionWorkServiceServer(s grpc.ServiceRegistrar, srv InteractionWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedInteractionWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&InteractionWorkService_ServiceDesc, srv)
+}
+
+func _InteractionWorkService_ListInteractionSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInteractionSourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionWorkServiceServer).ListInteractionSources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionWorkService_ListInteractionSources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionWorkServiceServer).ListInteractionSources(ctx, req.(*ListInteractionSourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InteractionWorkService_ClaimInteractionDeliveries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimInteractionDeliveriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionWorkServiceServer).ClaimInteractionDeliveries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionWorkServiceServer).ClaimInteractionDeliveries(ctx, req.(*ClaimInteractionDeliveriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InteractionWorkService_CompleteInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteInteractionDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionWorkServiceServer).CompleteInteractionDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionWorkServiceServer).CompleteInteractionDelivery(ctx, req.(*CompleteInteractionDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InteractionWorkService_AcceptInteractionMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptInteractionMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionWorkServiceServer).AcceptInteractionMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionWorkService_AcceptInteractionMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionWorkServiceServer).AcceptInteractionMessage(ctx, req.(*AcceptInteractionMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// InteractionWorkService_ServiceDesc is the grpc.ServiceDesc for InteractionWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var InteractionWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.InteractionWorkService",
+	HandlerType: (*InteractionWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListInteractionSources",
+			Handler:    _InteractionWorkService_ListInteractionSources_Handler,
+		},
+		{
+			MethodName: "ClaimInteractionDeliveries",
+			Handler:    _InteractionWorkService_ClaimInteractionDeliveries_Handler,
+		},
+		{
+			MethodName: "CompleteInteractionDelivery",
+			Handler:    _InteractionWorkService_CompleteInteractionDelivery_Handler,
+		},
+		{
+			MethodName: "AcceptInteractionMessage",
+			Handler:    _InteractionWorkService_AcceptInteractionMessage_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
