@@ -387,7 +387,7 @@ func writeProblem(writer http.ResponseWriter, statusCode int, code string, retry
 		title = localizer.Localize(code)
 	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type": "https://mattercodex.local/problems/" + code, "title": title,
+		"type": "urn:mattercodex:problem:" + strings.ToLower(code), "title": title,
 		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
 	})
 }

@@ -94,10 +94,10 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	if rootRunID != "" {
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, ref, "ARTIFACT_AVAILABLE", "", "", "", ref, "Файл доступен", "", ""); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, ref, "ARTIFACT_AVAILABLE", "", "", "", ref, "i18n:ARTIFACT_AVAILABLE", "", ""); err != nil {
 			return entity.Artifact{}, err
 		}
-	} else if err := repository.emitPlatformEvent(ctx, tx, scope, "AGENT_CHANGED", input.ProjectRef, ref, "Файл доступен"); err != nil {
+	} else if err := repository.emitPlatformEvent(ctx, tx, scope, "AGENT_CHANGED", input.ProjectRef, ref, "i18n:ARTIFACT_AVAILABLE"); err != nil {
 		return entity.Artifact{}, err
 	}
 	encoded, _ := json.Marshal(item)
@@ -178,7 +178,7 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item := entity.Artifact{Ref: payload.ArtifactRef, ProjectRef: projectRef, Version: version + 1}
-	return commandOutcome{result: command.Result{Artifact: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "ARTIFACT", resourceRef: payload.ArtifactRef, summary: "Привязка файла обновлена", platformEvent: "AGENT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Artifact: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "ARTIFACT", resourceRef: payload.ArtifactRef, summary: "i18n:ARTIFACT_BINDING_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
 var _ = uuid.Nil

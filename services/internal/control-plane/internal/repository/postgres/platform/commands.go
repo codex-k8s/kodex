@@ -147,7 +147,7 @@ func (repository *Repository) completeOnboarding(ctx context.Context, tx pgx.Tx,
 	if _, err := tx.Exec(ctx, queryCommandsCompleteonboardingUpdateInstallationOnboardingCompletedAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	return commandOutcome{result: command.Result{CreatedRefs: []string{scope.organizationRef}}, resourceKind: "INSTALLATION", resourceRef: scope.organizationRef, summary: "Первичная настройка завершена", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{CreatedRefs: []string{scope.organizationRef}}, resourceKind: "INSTALLATION", resourceRef: scope.organizationRef, summary: "i18n:ONBOARDING_COMPLETED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scope scope, payload any) (commandOutcome, error) {
@@ -173,7 +173,7 @@ func (repository *Repository) createProject(ctx context.Context, tx pgx.Tx, scop
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.NextActions = []string{"OPEN", "EDIT"}
-	return commandOutcome{result: command.Result{Project: &item}, projectID: mustProjectID(ctx, tx, scope.organizationID, ref), projectRef: ref, resourceKind: "PROJECT", resourceRef: ref, summary: "Проект создан", platformEvent: "PROJECT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Project: &item}, projectID: mustProjectID(ctx, tx, scope.organizationID, ref), projectRef: ref, resourceKind: "PROJECT", resourceRef: ref, summary: "i18n:PROJECT_CREATED", platformEvent: "PROJECT_CHANGED"}, nil
 }
 
 func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scope scope, mutation value.Mutation, payload any) (commandOutcome, error) {
@@ -191,7 +191,7 @@ func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scop
 		return commandOutcome{}, mapWriteError(err)
 	}
 	item.NextActions = []string{"OPEN", "EDIT"}
-	return commandOutcome{result: command.Result{Project: &item}, projectID: projectID, projectRef: item.Ref, resourceKind: "PROJECT", resourceRef: item.Ref, summary: "Проект обновлён", platformEvent: "PROJECT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Project: &item}, projectID: projectID, projectRef: item.Ref, resourceKind: "PROJECT", resourceRef: item.Ref, summary: "i18n:PROJECT_UPDATED", platformEvent: "PROJECT_CHANGED"}, nil
 }
 
 func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -236,7 +236,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		}
 	}
 	item.ProjectRef = payload.ProjectRef
-	return commandOutcome{result: command.Result{Membership: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "MEMBERSHIP", resourceRef: item.Ref, summary: "Доступ к проекту обновлён", platformEvent: "MEMBERSHIP_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Membership: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "MEMBERSHIP", resourceRef: item.Ref, summary: "i18n:PROJECT_ACCESS_UPDATED", platformEvent: "MEMBERSHIP_CHANGED"}, nil
 }
 
 func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope scope, payload any) (commandOutcome, error) {
@@ -290,7 +290,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	item.RuntimeKey = runtimeKey
 	item.PublishedInstructions = &entity.InstructionVersion{Ref: instructionRef, VersionNumber: 1, State: "PUBLISHED", Content: input.Instructions, Digest: hex.EncodeToString(digest[:]), CreatedAt: publishedAt, PublishedAt: &publishedAt}
 	item.NextActions = agentActions(item)
-	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "Агент создан и готов к запуску", platformEvent: "AGENT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "i18n:AGENT_CREATED_READY", platformEvent: "AGENT_CHANGED"}, nil
 }
 
 func mapWriteError(err error) error {
@@ -353,7 +353,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	_ = tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs)
 	item.NextActions = agentActions(item)
-	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "Агент обновлён", platformEvent: "AGENT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "i18n:AGENT_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
 func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -396,7 +396,7 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 		problems := []string{}
 		if len(strings.TrimSpace(content)) < 20 {
 			state = "INVALID"
-			problems = append(problems, "Инструкции должны содержать не менее 20 символов")
+			problems = append(problems, "i18n:INSTRUCTIONS_TOO_SHORT")
 		}
 		if _, err := tx.Exec(ctx, queryCommandsChangeinstructionsUpdateInstructionVersionsStateValidationProblems, ref, state, asJSON(problems)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -426,7 +426,7 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	agent := entity.Agent{Ref: payload.Ref, ProjectRef: projectRef, Version: agentVersion + 1}
-	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "INSTRUCTIONS", resourceRef: payload.Ref, summary: "Инструкции агента обновлены", platformEvent: "INSTRUCTIONS_PUBLISHED"}, nil
+	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "INSTRUCTIONS", resourceRef: payload.Ref, summary: "i18n:AGENT_INSTRUCTIONS_UPDATED", platformEvent: "INSTRUCTIONS_PUBLISHED"}, nil
 }
 
 func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -478,7 +478,7 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	agent := entity.Agent{Ref: payload.AgentRef, ProjectRef: projectRef, Version: current + 1}
-	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "Разрешения агента обновлены", platformEvent: "AGENT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "i18n:AGENT_PERMISSIONS_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
 func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -509,7 +509,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		item.CoordinatorAgentRef = payload.CoordinatorAgentRef
 		item.Draft = &draft
 		item.NextActions = []string{"OPEN", "EDIT"}
-		return commandOutcome{result: command.Result{Workflow: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "WORKFLOW", resourceRef: ref, summary: "Workflow создан", platformEvent: "WORKFLOW_CHANGED"}, nil
+		return commandOutcome{result: command.Result{Workflow: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "WORKFLOW", resourceRef: ref, summary: "i18n:WORKFLOW_CREATED", platformEvent: "WORKFLOW_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -594,7 +594,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 	if readErr != nil {
 		return commandOutcome{}, readErr
 	}
-	return commandOutcome{result: command.Result{Workflow: &workflow}, projectID: projectID, projectRef: projectRef, resourceKind: "WORKFLOW", resourceRef: payload.Ref, summary: "Workflow обновлён", platformEvent: "WORKFLOW_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Workflow: &workflow}, projectID: projectID, projectRef: projectRef, resourceKind: "WORKFLOW", resourceRef: payload.Ref, summary: "i18n:WORKFLOW_UPDATED", platformEvent: "WORKFLOW_CHANGED"}, nil
 }
 
 func validWorkflowVersion(version entity.WorkflowVersion) bool {
@@ -760,14 +760,14 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "Запуск создан", "RUNNING", "RUNNING"); err != nil {
+	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "RUN_CREATED", rootNodeRef, "", "", "", "i18n:RUN_CREATED", "RUNNING", "RUNNING"); err != nil {
 		return commandOutcome{}, err
 	}
 	run, graph, err := repository.readRunGraphTx(ctx, tx, scope, runRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "Запуск создан"}, nil
+	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
 }
 
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {
@@ -951,7 +951,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	if err := tx.QueryRow(ctx, queryCommandsAddsessionturnSelectSessionsOrganizationIdRefState, scope.organizationID, payload.SessionRef).Scan(&projectID, &projectRef, &targetType, &targetRef); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
-	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "Продолжение сессии", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, ArtifactRefs: payload.ArtifactRefs}
+	launch := command.LaunchRunInput{ProjectRef: projectRef, Title: "i18n:SESSION_CONTINUATION", Task: payload.Task, SessionRef: payload.SessionRef, Source: "CONTROL_CENTER", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, ArtifactRefs: payload.ArtifactRefs}
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = launch
@@ -973,7 +973,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 		if _, err := tx.Exec(ctx, queryCommandsAddsessionturnInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, previousNodeID, newNodeID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "Сессия продолжена", "QUEUED", ""); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:SESSION_CONTINUED", "QUEUED", ""); err != nil {
 			return commandOutcome{}, err
 		}
 		continuedRun, graph, err := repository.readRunGraphTx(ctx, tx, scope, outcome.result.Run.Ref)
@@ -983,7 +983,7 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 		outcome.result.Run = &continuedRun
 		outcome.result.Graph = &graph
 	}
-	outcome.summary = "Сессия продолжена"
+	outcome.summary = "i18n:SESSION_CONTINUED"
 	return outcome, nil
 }
 
@@ -1011,14 +1011,14 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt, rootRunID)
 		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID)
 		_, _ = tx.Exec(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.RunRef, "RUN_STATE_CHANGED", "", "", "", "", "Запуск отменён", "CANCELLED", ""); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.RunRef, "RUN_STATE_CHANGED", "", "", "", "", "i18n:RUN_CANCELLED", "CANCELLED", ""); err != nil {
 			return commandOutcome{}, err
 		}
 		run, graph, err := repository.readRunGraphTx(ctx, tx, scope, payload.RunRef)
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "Запуск отменён"}, nil
+		return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: projectRef, resourceKind: "RUN", resourceRef: payload.RunRef, summary: "i18n:RUN_CANCELLED"}, nil
 	}
 	if !contains([]string{"FAILED", "CANCELLED"}, state) {
 		return commandOutcome{}, errs.ErrConflict
@@ -1047,7 +1047,7 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	if _, err := tx.Exec(ctx, queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, newRootID, oldRootNodeID, newRootNodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "Создана повторная попытка", "QUEUED", ""); err != nil {
+	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, newRootID, edgeRef, "EDGE_ADDED", "", edgeRef, "", "", "i18n:RUN_RETRY_CREATED", "QUEUED", ""); err != nil {
 		return commandOutcome{}, err
 	}
 	retryRun, graph, err := repository.readRunGraphTx(ctx, tx, scope, outcome.result.Run.Ref)
@@ -1056,7 +1056,7 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	outcome.result.Run = &retryRun
 	outcome.result.Graph = &graph
-	outcome.summary = "Создана новая попытка"
+	outcome.summary = "i18n:RUN_RETRY_CREATED"
 	return outcome, nil
 }
 
@@ -1101,7 +1101,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateRunsStateVersionUpdatedAt, rootRunID, runState); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", "", "", payload.GateRef, "", "Решение принято", runState, nodeState)
+	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.GateRef, "OWNER_GATE_RESOLVED", "", "", payload.GateRef, "", "i18n:OWNER_GATE_RESOLVED", runState, nodeState)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1110,7 +1110,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	gate := entity.OwnerGate{Ref: payload.GateRef, RunRef: run.RootRunRef, ProjectRef: projectRef, State: nextState, Decision: payload.Decision, DecisionComment: payload.Comment, Version: version + 1}
-	return commandOutcome{result: command.Result{Gate: &gate, Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "OWNER_GATE", resourceRef: payload.GateRef, summary: "Human Gate разрешён"}, nil
+	return commandOutcome{result: command.Result{Gate: &gate, Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "OWNER_GATE", resourceRef: payload.GateRef, summary: "i18n:OWNER_GATE_RESOLVED"}, nil
 }
 
 func mustRunRef(ctx context.Context, tx pgx.Tx, id string) string {

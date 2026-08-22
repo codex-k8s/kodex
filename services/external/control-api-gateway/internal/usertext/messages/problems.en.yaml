@@ -82,3 +82,159 @@ RUN_TURN_STARTED:
   other: The AI employee started working
 ROLE_IMAGE_RECIPE_CHANGED:
   other: The role environment configuration was updated
+ROLE_IMAGE_BUILD_COMPLETED:
+  other: The role environment image was built
+ONBOARDING_COMPLETED:
+  other: Initial setup is complete
+PROJECT_CREATED:
+  other: Project created
+PROJECT_UPDATED:
+  other: Project updated
+PROJECT_ACCESS_UPDATED:
+  other: Project access updated
+AGENT_CREATED_READY:
+  other: AI employee created and ready to run
+AGENT_UPDATED:
+  other: AI employee updated
+AGENT_INSTRUCTIONS_UPDATED:
+  other: AI employee instructions updated
+AGENT_PERMISSIONS_UPDATED:
+  other: AI employee permissions updated
+INSTRUCTIONS_TOO_SHORT:
+  other: Instructions must contain at least 20 characters
+WORKFLOW_CREATED:
+  other: Workflow created
+WORKFLOW_UPDATED:
+  other: Workflow updated
+RUN_CREATED:
+  other: Run created
+RUN_CANCELLED:
+  other: Run cancelled
+RUN_RETRY_CREATED:
+  other: New attempt created
+SESSION_CONTINUATION:
+  other: Session continuation
+SESSION_CONTINUED:
+  other: Session continued
+OWNER_GATE_RESOLVED:
+  other: Decision recorded
+SCHEDULE_CREATED:
+  other: Schedule created
+SCHEDULE_UPDATED:
+  other: Schedule updated
+SCHEDULED_RUN_TASK:
+  other: Scheduled run
+INTEGRATION_CONNECTION_CREATED:
+  other: Integration connection created
+INTEGRATION_CONNECTION_UPDATED:
+  other: Integration connection updated
+INTEGRATION_GRANT_UPDATED:
+  other: Integration permission updated
+NEW_ASSISTANT_CONVERSATION:
+  other: New conversation
+ASSISTANT_CONVERSATION_CREATED:
+  other: Assistant conversation created
+ASSISTANT_TURN_QUEUED:
+  other: Assistant command queued
+ASSISTANT_TURN_ACCEPTED:
+  other: Assistant command accepted
+ASSISTANT_PLAN_APPLIED:
+  other: Assistant plan applied
+ASSISTANT_INSTRUCTIONS_UPDATED:
+  other: Assistant instruction supplement updated
+ASSISTANT_RECOVERY_REQUESTED:
+  other: Assistant recovery requested
+ASSISTANT_RECOVERING:
+  other: Assistant is recovering
+ASSISTANT_EXECUTING:
+  other: Executing the command
+ASSISTANT_READY:
+  other: Ready for a command
+SYSTEM_ASSISTANT_LABEL:
+  other: System · non-removable
+ARTIFACT_AVAILABLE:
+  other: File available
+RESULT_ARTIFACT_AVAILABLE:
+  other: Result file available
+ARTIFACT_BINDING_UPDATED:
+  other: File binding updated
+CHILD_AGENT_STARTED:
+  other: Child AI employee started
+CHILD_AGENT_RESULT_DELIVERED:
+  other: Child AI employee result delivered
+OWNER_DECISION_REQUIRED:
+  other: Human decision required
+WEB_ONLY_CORE_SUMMARY:
+  other: Core features work independently of external integrations
+CAPABILITY_PROJECT_MANAGE_NAME:
+  other: Manage projects
+CAPABILITY_PROJECT_MANAGE_DESCRIPTION:
+  other: Create and configure projects
+CAPABILITY_AGENT_MANAGE_NAME:
+  other: Manage AI employees
+CAPABILITY_AGENT_MANAGE_DESCRIPTION:
+  other: Configure AI employees and instructions
+CAPABILITY_RUN_LAUNCH_NAME:
+  other: Launch work
+CAPABILITY_RUN_LAUNCH_DESCRIPTION:
+  other: Launch AI employees and workflows
+CAPABILITY_RUN_DELEGATE_NAME:
+  other: Delegation
+CAPABILITY_RUN_DELEGATE_DESCRIPTION:
+  other: Launch child AI employees in the execution graph
+CAPABILITY_GATE_RESOLVE_NAME:
+  other: Human decisions
+CAPABILITY_GATE_RESOLVE_DESCRIPTION:
+  other: Resolve Human Gates
+CAPABILITY_ARTIFACT_MANAGE_NAME:
+  other: Files
+CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Read and create result files
+CAPABILITY_SCHEDULE_MANAGE_NAME:
+  other: Automations
+CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Manage schedules
+CAPABILITY_INTEGRATION_GRANT_NAME:
+  other: Integrations
+CAPABILITY_INTEGRATION_GRANT_DESCRIPTION:
+  other: Assign typed integration permissions
+INTEGRATION_CATEGORY_DEVELOPMENT:
+  other: Development
+INTEGRATION_CATEGORY_INFRASTRUCTURE:
+  other: Infrastructure
+INTEGRATION_CATEGORY_COMMUNICATIONS:
+  other: Communications
+INTEGRATION_GITHUB_DESCRIPTION:
+  other: Repositories, issues, and pull requests
+INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
+  other: Read repository
+INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
+  other: Read an allowed repository
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
+  other: Change pull request
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
+  other: Create and update pull requests
+INTEGRATION_KUBERNETES_DESCRIPTION:
+  other: Observe and perform limited workload operations
+INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
+  other: Observe workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
+  other: Read allowed workloads
+INTEGRATION_MATTERMOST_DESCRIPTION:
+  other: Optional inbound messages, notifications, result mirroring, and decisions
+INTEGRATION_MATTERMOST_INBOUND_NAME:
+  other: Inbound messages
+INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION:
+  other: Create tasks from Mattermost
+INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME:
+  other: Notifications
+INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION:
+  other: Send notifications
+INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME:
+  other: Result mirror
+INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION:
+  other: Publish safe summaries
+INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
+  other: Human Gate decisions
+INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
+  other: Accept the first valid decision

@@ -82,3 +82,159 @@ RUN_TURN_STARTED:
   other: ИИ-сотрудник начал работу
 ROLE_IMAGE_RECIPE_CHANGED:
   other: Конфигурация среды роли обновлена
+ROLE_IMAGE_BUILD_COMPLETED:
+  other: Образ среды роли собран
+ONBOARDING_COMPLETED:
+  other: Первичная настройка завершена
+PROJECT_CREATED:
+  other: Проект создан
+PROJECT_UPDATED:
+  other: Проект обновлён
+PROJECT_ACCESS_UPDATED:
+  other: Доступ к проекту обновлён
+AGENT_CREATED_READY:
+  other: ИИ-сотрудник создан и готов к запуску
+AGENT_UPDATED:
+  other: ИИ-сотрудник обновлён
+AGENT_INSTRUCTIONS_UPDATED:
+  other: Инструкции ИИ-сотрудника обновлены
+AGENT_PERMISSIONS_UPDATED:
+  other: Разрешения ИИ-сотрудника обновлены
+INSTRUCTIONS_TOO_SHORT:
+  other: Инструкции должны содержать не менее 20 символов
+WORKFLOW_CREATED:
+  other: Workflow создан
+WORKFLOW_UPDATED:
+  other: Workflow обновлён
+RUN_CREATED:
+  other: Запуск создан
+RUN_CANCELLED:
+  other: Запуск отменён
+RUN_RETRY_CREATED:
+  other: Создана новая попытка
+SESSION_CONTINUATION:
+  other: Продолжение сессии
+SESSION_CONTINUED:
+  other: Сессия продолжена
+OWNER_GATE_RESOLVED:
+  other: Решение принято
+SCHEDULE_CREATED:
+  other: Расписание создано
+SCHEDULE_UPDATED:
+  other: Расписание обновлено
+SCHEDULED_RUN_TASK:
+  other: Запуск по расписанию
+INTEGRATION_CONNECTION_CREATED:
+  other: Подключение интеграции создано
+INTEGRATION_CONNECTION_UPDATED:
+  other: Подключение интеграции обновлено
+INTEGRATION_GRANT_UPDATED:
+  other: Разрешение интеграции обновлено
+NEW_ASSISTANT_CONVERSATION:
+  other: Новый разговор
+ASSISTANT_CONVERSATION_CREATED:
+  other: Разговор с помощником создан
+ASSISTANT_TURN_QUEUED:
+  other: Команда помощнику поставлена в очередь
+ASSISTANT_TURN_ACCEPTED:
+  other: Команда помощнику принята
+ASSISTANT_PLAN_APPLIED:
+  other: План помощника применён
+ASSISTANT_INSTRUCTIONS_UPDATED:
+  other: Дополнение к инструкциям помощника обновлено
+ASSISTANT_RECOVERY_REQUESTED:
+  other: Восстановление помощника запрошено
+ASSISTANT_RECOVERING:
+  other: Помощник восстанавливается
+ASSISTANT_EXECUTING:
+  other: Выполняет команду
+ASSISTANT_READY:
+  other: Готов к команде
+SYSTEM_ASSISTANT_LABEL:
+  other: Системный · неудаляемый
+ARTIFACT_AVAILABLE:
+  other: Файл доступен
+RESULT_ARTIFACT_AVAILABLE:
+  other: Файл результата доступен
+ARTIFACT_BINDING_UPDATED:
+  other: Привязка файла обновлена
+CHILD_AGENT_STARTED:
+  other: Дочерний ИИ-сотрудник запущен
+CHILD_AGENT_RESULT_DELIVERED:
+  other: Результат дочернего ИИ-сотрудника доставлен
+OWNER_DECISION_REQUIRED:
+  other: Требуется решение человека
+WEB_ONLY_CORE_SUMMARY:
+  other: Основные функции работают независимо от внешних интеграций
+CAPABILITY_PROJECT_MANAGE_NAME:
+  other: Управление проектами
+CAPABILITY_PROJECT_MANAGE_DESCRIPTION:
+  other: Создание и настройка проектов
+CAPABILITY_AGENT_MANAGE_NAME:
+  other: Управление ИИ-сотрудниками
+CAPABILITY_AGENT_MANAGE_DESCRIPTION:
+  other: Настройка ИИ-сотрудников и инструкций
+CAPABILITY_RUN_LAUNCH_NAME:
+  other: Запуск работы
+CAPABILITY_RUN_LAUNCH_DESCRIPTION:
+  other: Запуск ИИ-сотрудников и workflows
+CAPABILITY_RUN_DELEGATE_NAME:
+  other: Делегирование
+CAPABILITY_RUN_DELEGATE_DESCRIPTION:
+  other: Запуск дочерних ИИ-сотрудников в графе выполнения
+CAPABILITY_GATE_RESOLVE_NAME:
+  other: Решения человека
+CAPABILITY_GATE_RESOLVE_DESCRIPTION:
+  other: Принятие решений по Human Gate
+CAPABILITY_ARTIFACT_MANAGE_NAME:
+  other: Файлы
+CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Чтение и создание файлов результата
+CAPABILITY_SCHEDULE_MANAGE_NAME:
+  other: Автоматизации
+CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Управление расписаниями
+CAPABILITY_INTEGRATION_GRANT_NAME:
+  other: Интеграции
+CAPABILITY_INTEGRATION_GRANT_DESCRIPTION:
+  other: Выдача типизированных разрешений интеграций
+INTEGRATION_CATEGORY_DEVELOPMENT:
+  other: Разработка
+INTEGRATION_CATEGORY_INFRASTRUCTURE:
+  other: Инфраструктура
+INTEGRATION_CATEGORY_COMMUNICATIONS:
+  other: Коммуникации
+INTEGRATION_GITHUB_DESCRIPTION:
+  other: Репозитории, issues и pull requests
+INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
+  other: Чтение репозитория
+INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
+  other: Читать разрешённый репозиторий
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
+  other: Изменение pull request
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
+  other: Создавать и изменять pull requests
+INTEGRATION_KUBERNETES_DESCRIPTION:
+  other: Наблюдение и ограниченные операции с workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
+  other: Наблюдение за workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
+  other: Читать разрешённые workloads
+INTEGRATION_MATTERMOST_DESCRIPTION:
+  other: Необязательные входящие сообщения, уведомления, зеркало результатов и решения
+INTEGRATION_MATTERMOST_INBOUND_NAME:
+  other: Входящие сообщения
+INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION:
+  other: Создавать задания из Mattermost
+INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME:
+  other: Уведомления
+INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION:
+  other: Отправлять уведомления
+INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME:
+  other: Зеркало результатов
+INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION:
+  other: Публиковать безопасные итоги
+INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
+  other: Решения Human Gate
+INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
+  other: Принимать первое действительное решение

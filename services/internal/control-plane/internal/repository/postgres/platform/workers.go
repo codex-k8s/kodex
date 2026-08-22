@@ -178,7 +178,7 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 		_ = json.Unmarshal(scheduleInput, &data)
 		nested := input
 		nested.Kind = command.LaunchRun
-		nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: "Запуск по расписанию", Source: "SCHEDULE", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: data}
+		nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: "i18n:SCHEDULED_RUN_TASK", Source: "SCHEDULE", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: data}
 		outcome, err := repository.launchRun(ctx, tx, scope, nested)
 		if err != nil {
 			return commandOutcome{}, err

@@ -38,7 +38,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.Input = payload.Input
 		item.NextRunAt = next
 		item.NextActions = []string{"OPEN", "EDIT", "DISABLE"}
-		return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "SCHEDULE", resourceRef: ref, summary: "Расписание создано", platformEvent: "SCHEDULE_CHANGED"}, nil
+		return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "SCHEDULE", resourceRef: ref, summary: "i18n:SCHEDULE_CREATED", platformEvent: "SCHEDULE_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -71,7 +71,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	} else {
 		item.NextActions = append(item.NextActions, "ENABLE")
 	}
-	return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE", resourceRef: item.Ref, summary: "Расписание обновлено", platformEvent: "SCHEDULE_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE", resourceRef: item.Ref, summary: "i18n:SCHEDULE_UPDATED", platformEvent: "SCHEDULE_CHANGED"}, nil
 }
 
 func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -95,7 +95,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		}
 		_ = json.Unmarshal(config, &item.PublicConfiguration)
 		item.NextActions = []string{"OPEN", "TEST", "DISABLE"}
-		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: ref, summary: "Подключение интеграции создано", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: ref, summary: "i18n:INTEGRATION_CONNECTION_CREATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -135,7 +135,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	if item.State != "TESTING" {
 		item.NextActions = append(item.NextActions, "TEST")
 	}
-	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "Подключение интеграции обновлено", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CONNECTION_UPDATED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 }
 
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -185,7 +185,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		}
 	}
 	connection := entity.IntegrationConnection{Ref: payload.ConnectionRef}
-	return commandOutcome{result: command.Result{Connection: &connection}, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "Grant интеграции обновлён", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Connection: &connection}, resourceKind: "INTEGRATION_GRANT", resourceRef: grantRef, summary: "i18n:INTEGRATION_GRANT_UPDATED", platformEvent: "INTEGRATION_GRANT_CHANGED"}, nil
 }
 func approvalPolicy(risk string) string {
 	if risk == "HIGH" {
@@ -234,7 +234,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	ref, _ := newRef("cnv")
 	title := strings.TrimSpace(payload.Title)
 	if title == "" {
-		title = "Новый разговор"
+		title = "i18n:NEW_ASSISTANT_CONVERSATION"
 	}
 	var item entity.AssistantConversation
 	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertAssistantConversationsRefProjectIdTitle, ref, scope.organizationID, projectID, sessionID, title, scope.actorID).Scan(&item.Ref, &item.Title, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
@@ -242,7 +242,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	}
 	item.ProjectRef = payload.ProjectRef
 	item.SessionRef = sessionRef
-	return commandOutcome{result: command.Result{Conversation: &item}, projectID: stringValue(projectID), projectRef: payload.ProjectRef, resourceKind: "ASSISTANT_CONVERSATION", resourceRef: ref, summary: "Разговор с помощником создан", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Conversation: &item}, projectID: stringValue(projectID), projectRef: payload.ProjectRef, resourceKind: "ASSISTANT_CONVERSATION", resourceRef: ref, summary: "i18n:ASSISTANT_CONVERSATION_CREATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -306,7 +306,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if projectID != nil {
 		projectValue = *projectID
 	}
-	if _, err := repository.emitRunEvent(ctx, tx, scope, projectValue, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "Команда помощнику поставлена в очередь", "RUNNING", "QUEUED"); err != nil {
+	if _, err := repository.emitRunEvent(ctx, tx, scope, projectValue, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
 	conversation := entity.AssistantConversation{Ref: payload.ConversationRef, ProjectRef: projectRef, SessionRef: sessionRef, State: "ACTIVE", Version: version + 1, LatestPlan: plan}
@@ -315,7 +315,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant, Plan: plan}, projectID: projectValue, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "Команда помощнику принята"}, nil
+	return commandOutcome{result: command.Result{Conversation: &conversation, Assistant: &assistant, Plan: plan}, projectID: projectValue, projectRef: projectRef, resourceKind: "ASSISTANT_TURN", resourceRef: turnRef, summary: "i18n:ASSISTANT_TURN_ACCEPTED"}, nil
 }
 
 func assistantFallbackPlan(content, projectRef string) *entity.AssistantPlan {
@@ -419,7 +419,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	}
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, State: "APPLIED", Version: version + 1, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
 	conversation := entity.AssistantConversation{Ref: conversationRef}
-	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "План помощника применён", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome, action string) error {
@@ -465,7 +465,7 @@ func (repository *Repository) updateAssistantInstructions(ctx context.Context, t
 	_ = json.Unmarshal(limits, &assistant.ResourceLimits)
 	assistant.System = true
 	assistant.Deletable = false
-	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "Дополнение к инструкциям помощника обновлено", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:ASSISTANT_INSTRUCTIONS_UPDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	if input.Mutation.ExpectedVersion == nil {
@@ -479,7 +479,7 @@ func (repository *Repository) recoverAssistant(ctx context.Context, tx pgx.Tx, s
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "Восстановление помощника запрошено", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:ASSISTANT_RECOVERY_REQUESTED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 func (repository *Repository) getAssistantTx(ctx context.Context, tx pgx.Tx, scope scope) (entity.SystemAssistant, error) {
 	var item entity.SystemAssistant

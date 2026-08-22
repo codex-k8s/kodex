@@ -777,7 +777,7 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	if err != nil {
 		return platformrepo.Administration{}, err
 	}
-	result := platformrepo.Administration{Profile: "WEB_ONLY", CoreReady: assistant.Ready, CoreSummary: "Core работает независимо от внешних интеграций", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
+	result := platformrepo.Administration{Profile: "WEB_ONLY", CoreReady: assistant.Ready, CoreSummary: "i18n:WEB_ONLY_CORE_SUMMARY", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
 	return result, nil
 }
 func (repository *Repository) ListAuditEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AuditEvent, string, error) {

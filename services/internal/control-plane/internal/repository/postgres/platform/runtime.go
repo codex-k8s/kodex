@@ -298,7 +298,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactBindingsArtifactIdTargetRef, artifactID, stringMap(lease, "runRef"), scope.actorID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", ref, "Файл результата доступен", runState, nodeState); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, stringMap(lease, "rootRunID"), ref, "ARTIFACT_AVAILABLE", stringMap(lease, "nodeRef"), "", "", ref, "i18n:RESULT_ARTIFACT_AVAILABLE", runState, nodeState); err != nil {
 			return commandOutcome{}, err
 		}
 		artifactRefs = append(artifactRefs, ref)
@@ -318,7 +318,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 				if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(payload.ResultSummary, 2000)); updateErr != nil {
 					return commandOutcome{}, errs.ErrUnavailable
 				}
-				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", "", callbackEdgeRef, "", "", "Результат дочернего агента доставлен", "RUNNING", ""); eventErr != nil {
+				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", "", callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", ""); eventErr != nil {
 					return commandOutcome{}, eventErr
 				}
 			}
@@ -354,7 +354,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		runState = "WAITING_HUMAN"
-		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), gateRef, "OWNER_GATE_OPENED", gateNodeRef, edgeRef, gateRef, "", "Требуется решение человека", runState, "WAITING"); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), gateRef, "OWNER_GATE_OPENED", gateNodeRef, edgeRef, gateRef, "", "i18n:OWNER_DECISION_REQUIRED", runState, "WAITING"); err != nil {
 			return commandOutcome{}, err
 		}
 	}
@@ -465,7 +465,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionInsertCallbackEdge, callbackEdgeRef, scope.organizationID, lease["rootRunID"], nodeID, lease["nodeID"]); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), childRef, "DELEGATION_CREATED", nodeRef, delegateEdgeRef, "", "", "Дочерний агент запущен", "RUNNING", "QUEUED")
+	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), childRef, "DELEGATION_CREATED", nodeRef, delegateEdgeRef, "", "", "i18n:CHILD_AGENT_STARTED", "RUNNING", "QUEUED")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -498,7 +498,7 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 		if _, err := tx.Exec(ctx, queryRuntimeDelivercallbackUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(resultSummary, 2000)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", "", payload.CallbackEdgeRef, "", "", "Результат дочернего агента доставлен", "RUNNING", ""); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", "", payload.CallbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", ""); err != nil {
 			return commandOutcome{}, err
 		}
 	}

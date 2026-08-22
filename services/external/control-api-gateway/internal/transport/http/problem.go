@@ -3,6 +3,7 @@ package httptransport
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -49,7 +50,7 @@ func writeLocalProblem(writer http.ResponseWriter, statusCode int, code string, 
 		title = localizer.Localize(code)
 	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type":  "https://mattercodex.local/problems/" + code,
+		"type":  "urn:mattercodex:problem:" + strings.ToLower(code),
 		"title": title, "status": statusCode, "code": code,
 		"correlationId": uuid.NewString(), "retryable": retryable,
 	})

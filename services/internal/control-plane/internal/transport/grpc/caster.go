@@ -282,13 +282,13 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	return result
 }
 func castAssistant(value entity.SystemAssistant) *controlplanev1.SystemAssistant {
-	summary := "Помощник восстанавливается"
+	summary := "i18n:ASSISTANT_RECOVERING"
 	if value.RuntimeState == "BUSY" {
-		summary = "Выполняет команду"
+		summary = "i18n:ASSISTANT_EXECUTING"
 	} else if value.Ready {
-		summary = "Готов к команде"
+		summary = "i18n:ASSISTANT_READY"
 	}
-	return &controlplanev1.SystemAssistant{Ref: value.Ref, Version: value.Version, Name: value.Name, SystemLabel: "Системный · неудаляемый", CorePromptRevision: value.CorePromptRevision, OwnerInstructions: value.OwnerInstructions, OwnerInstructionsRevision: int32(value.Version), RuntimeState: assistantState(value.RuntimeState), RuntimeRevision: value.RuntimeRevision, WarmSessionRef: value.WarmSessionRef, ReadinessSummary: summary, LastHeartbeatAt: optionalTimestamp(value.LastHeartbeatAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.SystemAssistant{Ref: value.Ref, Version: value.Version, Name: value.Name, SystemLabel: "i18n:SYSTEM_ASSISTANT_LABEL", CorePromptRevision: value.CorePromptRevision, OwnerInstructions: value.OwnerInstructions, OwnerInstructionsRevision: int32(value.Version), RuntimeState: assistantState(value.RuntimeState), RuntimeRevision: value.RuntimeRevision, WarmSessionRef: value.WarmSessionRef, ReadinessSummary: summary, LastHeartbeatAt: optionalTimestamp(value.LastHeartbeatAt), NextActions: nextActions(value.NextActions)}
 }
 func castAudit(value entity.AuditEvent) *controlplanev1.AuditEvent {
 	return &controlplanev1.AuditEvent{Ref: value.Ref, ProjectRef: value.ProjectRef, Initiator: &controlplanev1.UserSummary{Ref: value.ActorRef, DisplayName: value.ActorName}, Executor: value.AssistantRef, Source: "CONTROL_CENTER", Action: value.Action, ResourceType: value.ResourceKind, ResourceRef: value.ResourceRef, Outcome: value.Outcome, SafeSummary: value.Summary, OccurredAt: timestamp(value.OccurredAt)}

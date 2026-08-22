@@ -97,9 +97,9 @@ type profile struct {
 }
 
 func main() {
-	output := flag.String("output", "", "путь итогового authority-policy.json")
-	oidcIssuer := flag.String("oidc-issuer", "", "точный OIDC issuer текущей установки")
-	oidcAudience := flag.String("oidc-audience", "mattercodex-control-api", "точный OIDC audience Control Center")
+	output := flag.String("output", "", "path to the resulting authority-policy.json")
+	oidcIssuer := flag.String("oidc-issuer", "", "exact OIDC issuer for this installation")
+	oidcAudience := flag.String("oidc-audience", "mattercodex-control-api", "exact Control Center OIDC audience")
 	flag.Parse()
 	if *output == "" || *oidcIssuer == "" || *oidcAudience == "" {
 		fatal("output path, OIDC issuer and audience are required")

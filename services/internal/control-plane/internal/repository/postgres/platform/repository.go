@@ -121,14 +121,14 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("create system subject membership")
 	}
 	capabilities := []struct{ key, name, description, risk string }{
-		{"platform.project.manage", "Управление проектами", "Создание и настройка проектов", "LOW"},
-		{"platform.agent.manage", "Управление агентами", "Настройка агентов и инструкций", "MEDIUM"},
-		{"platform.run.launch", "Запуск работы", "Запуск агентов и workflows", "MEDIUM"},
-		{"platform.run.delegate", "Делегирование", "Запуск дочерних агентов через server-owned edge", "MEDIUM"},
-		{"platform.gate.resolve", "Решения человека", "Разрешение Human Gate", "HIGH"},
-		{"platform.artifact.manage", "Файлы", "Чтение и создание artifacts", "MEDIUM"},
-		{"platform.schedule.manage", "Автоматизации", "Управление schedules", "HIGH"},
-		{"platform.integration.grant", "Интеграции", "Выдача типизированных grants", "HIGH"},
+		{"platform.project.manage", "i18n:CAPABILITY_PROJECT_MANAGE_NAME", "i18n:CAPABILITY_PROJECT_MANAGE_DESCRIPTION", "LOW"},
+		{"platform.agent.manage", "i18n:CAPABILITY_AGENT_MANAGE_NAME", "i18n:CAPABILITY_AGENT_MANAGE_DESCRIPTION", "MEDIUM"},
+		{"platform.run.launch", "i18n:CAPABILITY_RUN_LAUNCH_NAME", "i18n:CAPABILITY_RUN_LAUNCH_DESCRIPTION", "MEDIUM"},
+		{"platform.run.delegate", "i18n:CAPABILITY_RUN_DELEGATE_NAME", "i18n:CAPABILITY_RUN_DELEGATE_DESCRIPTION", "MEDIUM"},
+		{"platform.gate.resolve", "i18n:CAPABILITY_GATE_RESOLVE_NAME", "i18n:CAPABILITY_GATE_RESOLVE_DESCRIPTION", "HIGH"},
+		{"platform.artifact.manage", "i18n:CAPABILITY_ARTIFACT_MANAGE_NAME", "i18n:CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION", "MEDIUM"},
+		{"platform.schedule.manage", "i18n:CAPABILITY_SCHEDULE_MANAGE_NAME", "i18n:CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION", "HIGH"},
+		{"platform.integration.grant", "i18n:CAPABILITY_INTEGRATION_GRANT_NAME", "i18n:CAPABILITY_INTEGRATION_GRANT_DESCRIPTION", "HIGH"},
 	}
 	for _, capability := range capabilities {
 		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertPlatformCapabilitiesStableKeyNameDescription,
@@ -153,9 +153,9 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		key, name, description, category string
 		capabilities                     []entity.IntegrationCapability
 	}{
-		{"github", "GitHub", "Репозитории, issues и pull requests", "Разработка", []entity.IntegrationCapability{{Key: "github.repository.read", Name: "Чтение репозитория", Description: "Читать разрешённый репозиторий", Risk: "LOW"}, {Key: "github.pull_request.write", Name: "Изменение pull request", Description: "Создавать и изменять pull requests", Risk: "HIGH"}}},
-		{"kubernetes", "Kubernetes", "Наблюдение и ограниченные операции workloads", "Инфраструктура", []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "Наблюдение workloads", Description: "Читать разрешённые workloads", Risk: "MEDIUM"}}},
-		{"mattermost", "Mattermost", "Необязательные входящие сообщения, уведомления, зеркало и решения", "Коммуникации", []entity.IntegrationCapability{{Key: "mattermost.inbound", Name: "Входящие сообщения", Description: "Создавать задания из Mattermost", Risk: "MEDIUM"}, {Key: "mattermost.notifications", Name: "Уведомления", Description: "Отправлять уведомления", Risk: "LOW"}, {Key: "mattermost.result_mirror", Name: "Зеркало результатов", Description: "Публиковать безопасные итоги", Risk: "LOW"}, {Key: "mattermost.gate_decisions", Name: "Решения Human Gate", Description: "Принимать first-winner решения", Risk: "HIGH"}}},
+		{"github", "GitHub", "i18n:INTEGRATION_GITHUB_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_DEVELOPMENT", []entity.IntegrationCapability{{Key: "github.repository.read", Name: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_NAME", Description: "i18n:INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION", Risk: "LOW"}, {Key: "github.pull_request.write", Name: "i18n:INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME", Description: "i18n:INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION", Risk: "HIGH"}}},
+		{"kubernetes", "Kubernetes", "i18n:INTEGRATION_KUBERNETES_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_INFRASTRUCTURE", []entity.IntegrationCapability{{Key: "kubernetes.workload.read", Name: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME", Description: "i18n:INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION", Risk: "MEDIUM"}}},
+		{"mattermost", "Mattermost", "i18n:INTEGRATION_MATTERMOST_DESCRIPTION", "i18n:INTEGRATION_CATEGORY_COMMUNICATIONS", []entity.IntegrationCapability{{Key: "mattermost.inbound", Name: "i18n:INTEGRATION_MATTERMOST_INBOUND_NAME", Description: "i18n:INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION", Risk: "MEDIUM"}, {Key: "mattermost.notifications", Name: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION", Risk: "LOW"}, {Key: "mattermost.result_mirror", Name: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME", Description: "i18n:INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION", Risk: "LOW"}, {Key: "mattermost.gate_decisions", Name: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME", Description: "i18n:INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION", Risk: "HIGH"}}},
 	}
 	for _, definition := range definitions {
 		capabilityJSON, _ := json.Marshal(definition.capabilities)
