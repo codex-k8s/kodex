@@ -194,9 +194,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, nextActions]
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/Membership' } }
+                  nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [Projects]
@@ -206,10 +207,95 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MembershipInput' }
+            schema: { $ref: '#/components/schemas/ProjectMembershipCreateInput' }
       responses:
         '201':
           description: Участник добавлен
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Membership' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/administration/members:
+    get:
+      tags: [Administration]
+      operationId: listPlatformMemberships
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Участники организации и их platform roles
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextActions]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Membership' } }
+                  nextPageToken: { type: string, maxLength: 512 }
+                  nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Administration]
+      operationId: addPlatformMembership
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformMembershipCreateInput' }
+      responses:
+        '201':
+          description: Участник организации добавлен
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Membership' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/administration/membership-candidates:
+    get:
+      tags: [Administration]
+      operationId: listPlatformMembershipCandidates
+      parameters: [{ $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Проверенные пользователи, которых можно добавить в организацию
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/UserSummary' } }
+                  nextPageToken: { type: string, maxLength: 512 }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/administration/members/{membershipRef}:
+    parameters: [{ $ref: '#/components/parameters/MembershipRef' }]
+    patch:
+      tags: [Administration]
+      operationId: changePlatformMembership
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformMembershipChangeInput' }
+      responses:
+        '200':
+          description: Platform role изменена
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Membership' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Administration]
+      operationId: removePlatformMembership
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Участие в организации отозвано
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Membership' }
@@ -243,7 +329,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MembershipInput' }
+            schema: { $ref: '#/components/schemas/ProjectMembershipChangeInput' }
       responses:
         '200':
           description: Доступ изменён
@@ -1382,14 +1468,33 @@ components:
         active: { type: boolean }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
-    MembershipInput:
+    ProjectMembershipCreateInput:
       type: object
       additionalProperties: false
-      required: [userRef, platformRole, permissions, active]
+      required: [userRef, permissions]
+      properties:
+        userRef: { $ref: '#/components/schemas/OpaqueRef' }
+        permissions: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, enum: [VIEW, MANAGE, MANAGE_MEMBERS, MANAGE_AGENTS, MANAGE_WORKFLOWS, LAUNCH_RUNS, CANCEL_RUNS, RESOLVE_GATES, MANAGE_ARTIFACTS, MANAGE_SCHEDULES, MANAGE_INTEGRATIONS, VIEW_AUDIT] } }
+    ProjectMembershipChangeInput:
+      type: object
+      additionalProperties: false
+      required: [permissions, active]
+      properties:
+        permissions: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, enum: [VIEW, MANAGE, MANAGE_MEMBERS, MANAGE_AGENTS, MANAGE_WORKFLOWS, LAUNCH_RUNS, CANCEL_RUNS, RESOLVE_GATES, MANAGE_ARTIFACTS, MANAGE_SCHEDULES, MANAGE_INTEGRATIONS, VIEW_AUDIT] } }
+        active: { type: boolean }
+    PlatformMembershipCreateInput:
+      type: object
+      additionalProperties: false
+      required: [userRef, platformRole]
       properties:
         userRef: { $ref: '#/components/schemas/OpaqueRef' }
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
-        permissions: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, enum: [VIEW, MANAGE, MANAGE_MEMBERS, MANAGE_AGENTS, MANAGE_WORKFLOWS, LAUNCH_RUNS, CANCEL_RUNS, RESOLVE_GATES, MANAGE_ARTIFACTS, MANAGE_SCHEDULES, MANAGE_INTEGRATIONS, VIEW_AUDIT] } }
+    PlatformMembershipChangeInput:
+      type: object
+      additionalProperties: false
+      required: [platformRole, active]
+      properties:
+        platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         active: { type: boolean }
     InstructionVersion:
       type: object

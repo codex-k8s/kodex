@@ -206,6 +206,9 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 				output["nextPageToken"] = next
 			}
 		}
+		if nextActions, ok := value["nextActions"].([]any); ok {
+			output["nextActions"] = nextActions
+		}
 		value = output
 	}
 	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
@@ -404,7 +407,7 @@ func targetProto(kind, reference string) *controlplanev1.RunTarget {
 	return result
 }
 
-func permissions(values []generated.MembershipInputPermissions) []controlplanev1.ProjectPermission {
+func permissions[T ~string](values []T) []controlplanev1.ProjectPermission {
 	result := make([]controlplanev1.ProjectPermission, 0, len(values))
 	for _, item := range values {
 		if value, ok := controlplanev1.ProjectPermission_value["PROJECT_PERMISSION_"+string(item)]; ok {
@@ -414,8 +417,8 @@ func permissions(values []generated.MembershipInputPermissions) []controlplanev1
 	return result
 }
 
-func platformRole(value generated.MembershipInputPlatformRole) controlplanev1.PlatformRole {
-	return controlplanev1.PlatformRole(controlplanev1.PlatformRole_value["PLATFORM_ROLE_"+string(value)])
+func platformRole(value string) controlplanev1.PlatformRole {
+	return controlplanev1.PlatformRole(controlplanev1.PlatformRole_value["PLATFORM_ROLE_"+value])
 }
 
 func gateDecision(value string) controlplanev1.OwnerGateDecision {

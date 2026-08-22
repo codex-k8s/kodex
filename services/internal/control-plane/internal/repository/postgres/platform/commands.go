@@ -107,6 +107,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createProject(ctx, tx, scope, input.Payload)
 	case command.UpdateProject:
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
+	case command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership:
+		return repository.changePlatformMembership(ctx, tx, scope, input)
 	case command.AddMembership, command.ChangeMembership, command.RemoveMembership:
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
@@ -203,30 +205,88 @@ func (repository *Repository) updateProject(ctx context.Context, tx pgx.Tx, scop
 
 func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.MembershipInput)
-	if !ok || payload.ProjectRef == "" {
+	if !ok || payload.ProjectRef == "" || (input.Kind != command.RemoveMembership && !validProjectPermissions(payload.Permissions)) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
 	if projectID == "" {
 		return commandOutcome{}, errs.ErrNotFound
 	}
+	if input.Kind != command.RemoveMembership {
+		var allowed bool
+		if err := tx.QueryRow(ctx, queryProjectMembershipCanGrant, pgx.StrictNamedArgs{
+			"actor_platform_role":   scope.role,
+			"organization_id":       scope.organizationID,
+			"project_id":            projectID,
+			"actor_id":              scope.actorID,
+			"requested_permissions": payload.Permissions,
+		}).Scan(&allowed); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !allowed {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+	}
 	var item entity.Membership
 	switch input.Kind {
 	case command.AddMembership:
-		ref, _ := newRef("mem")
-		err := tx.QueryRow(ctx, queryCommandsChangemembershipInsertMembershipsRefProjectIdRole, ref, scope.organizationID, projectID, payload.UserRef, payload.Role, payload.Permissions).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		if payload.UserRef == "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		ref, err := newRef("mem")
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		err = tx.QueryRow(ctx, queryProjectMembershipInsert, pgx.StrictNamedArgs{
+			"membership_ref":  ref,
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"user_ref":        payload.UserRef,
+			"permissions":     payload.Permissions,
+		}).Scan(
+			&item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
+			&item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version,
+		)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		}
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
-		item.User.Ref = payload.UserRef
 	case command.ChangeMembership:
-		if input.Mutation.ExpectedVersion == nil {
+		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryCommandsChangemembershipUpdateMembershipsRolePermissionsActive, scope.organizationID, payload.MembershipRef, *input.Mutation.ExpectedVersion, payload.Role, payload.Permissions, payload.Active).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		var membershipID, subjectID string
+		err := tx.QueryRow(ctx, queryProjectMembershipResolveForUpdate, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"membership_ref":  payload.MembershipRef,
+		}).Scan(
+			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
+			&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions,
+			&item.Active, &item.Version,
+		)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if item.Version != *input.Mutation.ExpectedVersion {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if subjectID == scope.actorID && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		err = tx.QueryRow(ctx, queryProjectMembershipUpdate, pgx.StrictNamedArgs{
+			"membership_id":    membershipID,
+			"organization_id":  scope.organizationID,
+			"project_id":       projectID,
+			"expected_version": *input.Mutation.ExpectedVersion,
+			"permissions":      payload.Permissions,
+			"active":           payload.Active,
+		}).Scan(&item.Ref, &item.Permissions, &item.Active, &item.Version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -234,19 +294,222 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, mapWriteError(err)
 		}
 	case command.RemoveMembership:
-		if input.Mutation.ExpectedVersion == nil {
+		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		err := tx.QueryRow(ctx, queryCommandsChangemembershipUpdateMembershipsActiveVersionUpdatedAt, scope.organizationID, payload.MembershipRef, projectID, *input.Mutation.ExpectedVersion, scope.actorID).Scan(&item.Ref, &item.Role, &item.Permissions, &item.Active, &item.Version)
+		var membershipID, subjectID string
+		err := tx.QueryRow(ctx, queryProjectMembershipResolveForUpdate, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"membership_ref":  payload.MembershipRef,
+		}).Scan(
+			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName,
+			&item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions,
+			&item.Active, &item.Version,
+		)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrConflict
+			return commandOutcome{}, errs.ErrNotFound
 		}
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if item.Version != *input.Mutation.ExpectedVersion {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if subjectID == scope.actorID {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		err = tx.QueryRow(ctx, queryProjectMembershipDeactivate, pgx.StrictNamedArgs{
+			"membership_id":    membershipID,
+			"organization_id":  scope.organizationID,
+			"project_id":       projectID,
+			"expected_version": *input.Mutation.ExpectedVersion,
+		}).Scan(&item.Ref, &item.Permissions, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
 	}
 	item.ProjectRef = payload.ProjectRef
+	item.NextActions = projectMembershipActions(scope, item)
 	return commandOutcome{result: command.Result{Membership: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "MEMBERSHIP", resourceRef: item.Ref, summary: "i18n:PROJECT_ACCESS_UPDATED", platformEvent: "MEMBERSHIP_CHANGED"}, nil
+}
+
+func (repository *Repository) changePlatformMembership(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	payload, ok := input.Payload.(command.PlatformMembershipInput)
+	if !ok {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if input.Kind != command.RemovePlatformMembership && !validPlatformRole(payload.Role) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if scope.role != "OWNER" && payload.Role == "OWNER" {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	var item entity.Membership
+	var membershipID, subjectID string
+	switch input.Kind {
+	case command.AddPlatformMembership:
+		if payload.UserRef == "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		ref, err := newRef("mem")
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		err = tx.QueryRow(ctx, queryPlatformMembershipInsert, pgx.StrictNamedArgs{
+			"membership_ref":  ref,
+			"organization_id": scope.organizationID,
+			"user_ref":        payload.UserRef,
+			"platform_role":   payload.Role,
+		}).Scan(
+			&item.Ref, &subjectID, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
+			&item.User.Active, &item.Role, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+	case command.ChangePlatformMembership:
+		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		err := tx.QueryRow(ctx, queryPlatformMembershipResolveForUpdate, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"membership_ref":  payload.MembershipRef,
+		}).Scan(
+			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
+			&item.User.Active, &item.Role, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if item.Version != *input.Mutation.ExpectedVersion {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if scope.role != "OWNER" && item.Role == "OWNER" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		if subjectID == scope.actorID && !payload.Active {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		if err := repository.protectLastOwner(ctx, tx, scope.organizationID, membershipID, item, payload.Role, payload.Active); err != nil {
+			return commandOutcome{}, err
+		}
+		err = tx.QueryRow(ctx, queryPlatformMembershipUpdate, pgx.StrictNamedArgs{
+			"membership_id":    membershipID,
+			"organization_id":  scope.organizationID,
+			"expected_version": *input.Mutation.ExpectedVersion,
+			"platform_role":    payload.Role,
+			"active":           payload.Active,
+		}).Scan(&item.Ref, &item.Role, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+	case command.RemovePlatformMembership:
+		if input.Mutation.ExpectedVersion == nil || payload.MembershipRef == "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		err := tx.QueryRow(ctx, queryPlatformMembershipResolveForUpdate, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"membership_ref":  payload.MembershipRef,
+		}).Scan(
+			&membershipID, &subjectID, &item.Ref, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked,
+			&item.User.Active, &item.Role, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if item.Version != *input.Mutation.ExpectedVersion {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
+		if (scope.role != "OWNER" && item.Role == "OWNER") || subjectID == scope.actorID {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		if err := repository.protectLastOwner(ctx, tx, scope.organizationID, membershipID, item, item.Role, false); err != nil {
+			return commandOutcome{}, err
+		}
+		err = tx.QueryRow(ctx, queryPlatformMembershipDeactivate, pgx.StrictNamedArgs{
+			"membership_id":    membershipID,
+			"organization_id":  scope.organizationID,
+			"expected_version": *input.Mutation.ExpectedVersion,
+		}).Scan(&item.Ref, &item.Role, &item.Active, &item.Version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+	}
+	if !item.Active {
+		if _, err := tx.Exec(ctx, queryPlatformMembershipDeactivateProjects, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"subject_id":      subjectID,
+		}); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
+	item.Permissions = []string{}
+	item.NextActions = platformMembershipActions(scope, item)
+	return commandOutcome{result: command.Result{Membership: &item}, resourceKind: "PLATFORM_MEMBERSHIP", resourceRef: item.Ref, summary: "i18n:PLATFORM_ACCESS_UPDATED", platformEvent: "PLATFORM_MEMBERSHIP_CHANGED"}, nil
+}
+
+func (repository *Repository) protectLastOwner(ctx context.Context, tx pgx.Tx, organizationID, membershipID string, current entity.Membership, nextRole string, nextActive bool) error {
+	if current.Role != "OWNER" || !current.Active || (nextRole == "OWNER" && nextActive) {
+		return nil
+	}
+	var remaining int
+	if err := tx.QueryRow(ctx, queryPlatformMembershipCountOtherActiveOwners, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"membership_id":   membershipID,
+	}).Scan(&remaining); err != nil {
+		return errs.ErrUnavailable
+	}
+	if remaining == 0 {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func validPlatformRole(role string) bool {
+	switch role {
+	case "OWNER", "ADMINISTRATOR", "OPERATOR", "MEMBER", "AUDITOR":
+		return true
+	default:
+		return false
+	}
+}
+
+func validProjectPermissions(permissions []string) bool {
+	if len(permissions) == 0 || len(permissions) > len(allPermissions()) {
+		return false
+	}
+	allowed := make(map[string]struct{}, len(allPermissions()))
+	for _, permission := range allPermissions() {
+		allowed[permission] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(permissions))
+	for _, permission := range permissions {
+		if _, ok := allowed[permission]; !ok {
+			return false
+		}
+		if _, duplicate := seen[permission]; duplicate {
+			return false
+		}
+		seen[permission] = struct{}{}
+	}
+	_, canView := seen["VIEW"]
+	return canView
 }
 
 func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope scope, payload any) (commandOutcome, error) {
@@ -1011,6 +1274,8 @@ func platformEventKind(eventName string) string {
 		return "INTEGRATION_GRANT"
 	case "MEMBERSHIP_CHANGED":
 		return "MEMBERSHIP"
+	case "PLATFORM_MEMBERSHIP_CHANGED":
+		return "PLATFORM_MEMBERSHIP"
 	case "SYSTEM_ASSISTANT_CHANGED":
 		return "SYSTEM_ASSISTANT"
 	case "ROLE_IMAGE_RECIPE_CHANGED":

@@ -4,6 +4,7 @@ import { computed, reactive, ref } from "vue";
 import { requestSignal } from "@/shared/api/client";
 import {
   addAssistantTurn,
+  addPlatformMembership,
   addProjectMembership,
   addSessionTurn,
   applyAssistantPlan,
@@ -16,6 +17,7 @@ import {
   commandWorkflow,
   changeArtifactBinding,
   changeIntegrationGrant,
+  changePlatformMembership,
   changeProjectMembership,
   completeOnboarding,
   createAgent,
@@ -47,6 +49,8 @@ import {
   listIntegrationDefinitions,
   listOwnerGates,
   listPlatformCapabilities,
+  listPlatformMembershipCandidates,
+  listPlatformMemberships,
   listProjectMembershipCandidates,
   listProjectMemberships,
   listProjects,
@@ -59,6 +63,7 @@ import {
   listWorkflows,
   resolveOwnerGate,
   removeProjectMembership,
+  removePlatformMembership,
   updateAgent,
   updateProject,
   updateRoleImageRecipe,
@@ -83,12 +88,16 @@ import type {
   IntegrationGrantInput,
   IntegrationDefinition,
   Membership,
-  MembershipInput,
+  NextAction,
   Overview,
   OwnerGate,
   PlatformCapability,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
   Project,
   ProjectInput,
+  ProjectMembershipChangeInput,
+  ProjectMembershipCreateInput,
   RoleEnvironment,
   RoleEnvironmentSelection,
   RoleImageBuild,
@@ -143,6 +152,8 @@ type QueryKey =
   | "schedules"
   | "integrations"
   | "assistant"
+  | "platformMembers"
+  | "platformMemberCandidates"
   | "members"
   | "memberCandidates"
   | "administration"
@@ -189,6 +200,12 @@ export const usePlatformStore = defineStore("platform", () => {
   const connections = reactive<Record<string, IntegrationConnection>>({});
   const memberships = reactive<Record<string, Membership>>({});
   const membershipCandidates = reactive<Record<string, UserSummary>>({});
+  const platformMemberships = reactive<Record<string, Membership>>({});
+  const platformMembershipCandidates = reactive<Record<string, UserSummary>>(
+    {},
+  );
+  const platformMembershipActions = ref<NextAction[]>([]);
+  const projectMembershipActions = ref<NextAction[]>([]);
   const conversations = reactive<Record<string, AssistantConversation>>({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
@@ -667,8 +684,11 @@ export const usePlatformStore = defineStore("platform", () => {
               signal: requestSignal(),
             }),
           )
-        ).data.items,
-      (values) => replace(memberships, values),
+        ).data,
+      (value) => {
+        replace(memberships, value.items);
+        projectMembershipActions.value = value.nextActions;
+      },
     );
   }
 
@@ -694,7 +714,7 @@ export const usePlatformStore = defineStore("platform", () => {
 
   async function saveMembership(
     projectRef: string,
-    input: MembershipInput,
+    input: ProjectMembershipCreateInput & { active: boolean },
     current?: Membership,
   ): Promise<Membership> {
     const result = current
@@ -702,7 +722,10 @@ export const usePlatformStore = defineStore("platform", () => {
           (headers) =>
             changeProjectMembership({
               path: { projectRef, membershipRef: current.ref },
-              body: input,
+              body: {
+                permissions: [...input.permissions],
+                active: input.active,
+              } satisfies ProjectMembershipChangeInput,
               headers: versionedHeaders(headers),
               signal: requestSignal(),
             }),
@@ -711,12 +734,98 @@ export const usePlatformStore = defineStore("platform", () => {
       : await mutate((headers) =>
           addProjectMembership({
             path: { projectRef },
-            body: input,
+            body: {
+              userRef: input.userRef,
+              permissions: [...input.permissions],
+            } satisfies ProjectMembershipCreateInput,
             headers: mutationHeaders(headers),
             signal: requestSignal(),
           }),
         );
     memberships[result.data.ref] = result.data;
+    return result.data;
+  }
+
+  async function loadPlatformMembers(): Promise<void> {
+    await query(
+      "platformMembers",
+      async () =>
+        (
+          await unwrap(
+            listPlatformMemberships({
+              query: { pageSize: 100 },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (value) => {
+        replace(platformMemberships, value.items);
+        platformMembershipActions.value = value.nextActions;
+      },
+    );
+  }
+
+  async function loadPlatformMembershipCandidates(search = ""): Promise<void> {
+    await query(
+      "platformMemberCandidates",
+      async () =>
+        (
+          await unwrap(
+            listPlatformMembershipCandidates({
+              query: { query: search, pageSize: 100 },
+              signal: requestSignal(),
+            }),
+          )
+        ).data.items,
+      (values) => replace(platformMembershipCandidates, values),
+    );
+  }
+
+  async function savePlatformMembership(
+    input: PlatformMembershipCreateInput & { active: boolean },
+    current?: Membership,
+  ): Promise<Membership> {
+    const result = current
+      ? await mutate(
+          (headers) =>
+            changePlatformMembership({
+              path: { membershipRef: current.ref },
+              body: {
+                platformRole: input.platformRole,
+                active: input.active,
+              } satisfies PlatformMembershipChangeInput,
+              headers: versionedHeaders(headers),
+              signal: requestSignal(),
+            }),
+          current.version,
+        )
+      : await mutate((headers) =>
+          addPlatformMembership({
+            body: {
+              userRef: input.userRef,
+              platformRole: input.platformRole,
+            } satisfies PlatformMembershipCreateInput,
+            headers: mutationHeaders(headers),
+            signal: requestSignal(),
+          }),
+        );
+    platformMemberships[result.data.ref] = result.data;
+    return result.data;
+  }
+
+  async function revokePlatformMembership(
+    membership: Membership,
+  ): Promise<Membership> {
+    const result = await mutate(
+      (headers) =>
+        removePlatformMembership({
+          path: { membershipRef: membership.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    );
+    platformMemberships[result.data.ref] = result.data;
     return result.data;
   }
 
@@ -1297,6 +1406,11 @@ export const usePlatformStore = defineStore("platform", () => {
         add("projects", loadProjects);
         if (projectRef) add("members", () => loadMembers(projectRef));
         break;
+      case "PLATFORM_MEMBERSHIP":
+        add("platformMembers", loadPlatformMembers);
+        add("projects", loadProjects);
+        if (projectRef) add("members", () => loadMembers(projectRef));
+        break;
       case "SYSTEM_ASSISTANT":
         add("bootstrap", loadBootstrap);
         add("assistant", loadAssistant);
@@ -1362,6 +1476,8 @@ export const usePlatformStore = defineStore("platform", () => {
       connections,
       memberships,
       membershipCandidates,
+      platformMemberships,
+      platformMembershipCandidates,
       conversations,
     ]) {
       for (const key of Object.keys(target))
@@ -1375,6 +1491,8 @@ export const usePlatformStore = defineStore("platform", () => {
     overview.value = undefined;
     administration.value = undefined;
     capabilities.value = [];
+    platformMembershipActions.value = [];
+    projectMembershipActions.value = [];
     assistant.value = undefined;
     auditEvents.value = [];
     selectProjectRef(undefined);
@@ -1406,6 +1524,10 @@ export const usePlatformStore = defineStore("platform", () => {
     connections,
     memberships,
     membershipCandidates,
+    platformMemberships,
+    platformMembershipCandidates,
+    platformMembershipActions,
+    projectMembershipActions,
     conversations,
     assistant,
     auditEvents,
@@ -1440,6 +1562,10 @@ export const usePlatformStore = defineStore("platform", () => {
     loadMembershipCandidates,
     saveMembership,
     revokeMembership,
+    loadPlatformMembers,
+    loadPlatformMembershipCandidates,
+    savePlatformMembership,
+    revokePlatformMembership,
     loadAdministration,
     loadAudit,
     loadCapabilities,

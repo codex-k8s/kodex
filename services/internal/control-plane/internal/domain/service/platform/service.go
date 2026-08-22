@@ -107,6 +107,20 @@ func (service *Service) GetProject(ctx context.Context, p value.Principal, ref s
 	}
 	return service.repository.GetProject(ctx, p, ref)
 }
+func (service *Service) ListPlatformMemberships(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListPlatformMemberships(ctx, p, filter)
+}
+func (service *Service) ListPlatformMembershipCandidates(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.User, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListPlatformMembershipCandidates(ctx, p, filter)
+}
 func (service *Service) ListMemberships(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Membership, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -399,6 +413,7 @@ func (service *Service) GetIntegrationInvocation(ctx context.Context, p value.Pr
 func knownCommand(kind command.Kind) bool {
 	switch kind {
 	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject,
+		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,

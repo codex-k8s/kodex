@@ -58,17 +58,61 @@ func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref 
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+func (server *Server) AddPlatformMembership(w http.ResponseWriter, r *http.Request, p generated.AddPlatformMembershipParams) {
+	body, ok := decodeJSON[generated.PlatformMembershipCreateInput](w, r)
+	if !ok {
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, "")
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.AddPlatformMembership(r.Context(), &controlplanev1.AddPlatformMembershipRequest{Mutation: m, UserRef: body.UserRef, Role: platformRole(string(body.PlatformRole))})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusCreated, response, "membership", "")
+}
+func (server *Server) ChangePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef generated.MembershipRef, p generated.ChangePlatformMembershipParams) {
+	body, ok := decodeJSON[generated.PlatformMembershipChangeInput](w, r)
+	if !ok {
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.ChangePlatformMembership(r.Context(), &controlplanev1.ChangePlatformMembershipRequest{Mutation: m, MembershipRef: membershipRef, Role: platformRole(string(body.PlatformRole)), Active: body.Active})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "membership", "")
+}
+func (server *Server) RemovePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef generated.MembershipRef, p generated.RemovePlatformMembershipParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RemovePlatformMembership(r.Context(), &controlplanev1.RemovePlatformMembershipRequest{Mutation: m, MembershipRef: membershipRef})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "membership", "")
+}
 func (server *Server) AddProjectMembership(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.AddProjectMembershipParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.MembershipInput](w, r)
+	body, ok := decodeJSON[generated.ProjectMembershipCreateInput](w, r)
 	if !ok {
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.AddProjectMembership(r.Context(), &controlplanev1.AddProjectMembershipRequest{Mutation: m, ProjectRef: ref, UserRef: body.UserRef, Role: platformRole(body.PlatformRole), Permissions: permissions(body.Permissions)})
+	response, err := server.control.Command.AddProjectMembership(r.Context(), &controlplanev1.AddProjectMembershipRequest{Mutation: m, ProjectRef: ref, UserRef: body.UserRef, Permissions: permissions(body.Permissions)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -80,7 +124,7 @@ func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	body, ok := decodeJSON[generated.MembershipInput](w, r)
+	body, ok := decodeJSON[generated.ProjectMembershipChangeInput](w, r)
 	if !ok {
 		return
 	}
@@ -88,7 +132,7 @@ func (server *Server) ChangeProjectMembership(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ChangeProjectMembership(r.Context(), &controlplanev1.ChangeProjectMembershipRequest{Mutation: m, ProjectRef: projectRef, MembershipRef: membershipRef, Role: platformRole(body.PlatformRole), Permissions: permissions(body.Permissions), Active: body.Active})
+	response, err := server.control.Command.ChangeProjectMembership(r.Context(), &controlplanev1.ChangeProjectMembershipRequest{Mutation: m, ProjectRef: projectRef, MembershipRef: membershipRef, Permissions: permissions(body.Permissions), Active: body.Active})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

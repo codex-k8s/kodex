@@ -191,31 +191,6 @@ const (
 	MembershipPlatformRoleOWNER         MembershipPlatformRole = "OWNER"
 )
 
-// Defines values for MembershipInputPermissions.
-const (
-	MembershipInputPermissionsCANCELRUNS         MembershipInputPermissions = "CANCEL_RUNS"
-	MembershipInputPermissionsLAUNCHRUNS         MembershipInputPermissions = "LAUNCH_RUNS"
-	MembershipInputPermissionsMANAGE             MembershipInputPermissions = "MANAGE"
-	MembershipInputPermissionsMANAGEAGENTS       MembershipInputPermissions = "MANAGE_AGENTS"
-	MembershipInputPermissionsMANAGEARTIFACTS    MembershipInputPermissions = "MANAGE_ARTIFACTS"
-	MembershipInputPermissionsMANAGEINTEGRATIONS MembershipInputPermissions = "MANAGE_INTEGRATIONS"
-	MembershipInputPermissionsMANAGEMEMBERS      MembershipInputPermissions = "MANAGE_MEMBERS"
-	MembershipInputPermissionsMANAGESCHEDULES    MembershipInputPermissions = "MANAGE_SCHEDULES"
-	MembershipInputPermissionsMANAGEWORKFLOWS    MembershipInputPermissions = "MANAGE_WORKFLOWS"
-	MembershipInputPermissionsRESOLVEGATES       MembershipInputPermissions = "RESOLVE_GATES"
-	MembershipInputPermissionsVIEW               MembershipInputPermissions = "VIEW"
-	MembershipInputPermissionsVIEWAUDIT          MembershipInputPermissions = "VIEW_AUDIT"
-)
-
-// Defines values for MembershipInputPlatformRole.
-const (
-	MembershipInputPlatformRoleADMINISTRATOR MembershipInputPlatformRole = "ADMINISTRATOR"
-	MembershipInputPlatformRoleAUDITOR       MembershipInputPlatformRole = "AUDITOR"
-	MembershipInputPlatformRoleMEMBER        MembershipInputPlatformRole = "MEMBER"
-	MembershipInputPlatformRoleOPERATOR      MembershipInputPlatformRole = "OPERATOR"
-	MembershipInputPlatformRoleOWNER         MembershipInputPlatformRole = "OWNER"
-)
-
 // Defines values for NextAction.
 const (
 	NextActionADDTURN            NextAction = "ADD_TURN"
@@ -277,6 +252,24 @@ const (
 	OwnerGateStateREJECTED         OwnerGateState = "REJECTED"
 )
 
+// Defines values for PlatformMembershipChangeInputPlatformRole.
+const (
+	PlatformMembershipChangeInputPlatformRoleADMINISTRATOR PlatformMembershipChangeInputPlatformRole = "ADMINISTRATOR"
+	PlatformMembershipChangeInputPlatformRoleAUDITOR       PlatformMembershipChangeInputPlatformRole = "AUDITOR"
+	PlatformMembershipChangeInputPlatformRoleMEMBER        PlatformMembershipChangeInputPlatformRole = "MEMBER"
+	PlatformMembershipChangeInputPlatformRoleOPERATOR      PlatformMembershipChangeInputPlatformRole = "OPERATOR"
+	PlatformMembershipChangeInputPlatformRoleOWNER         PlatformMembershipChangeInputPlatformRole = "OWNER"
+)
+
+// Defines values for PlatformMembershipCreateInputPlatformRole.
+const (
+	ADMINISTRATOR PlatformMembershipCreateInputPlatformRole = "ADMINISTRATOR"
+	AUDITOR       PlatformMembershipCreateInputPlatformRole = "AUDITOR"
+	MEMBER        PlatformMembershipCreateInputPlatformRole = "MEMBER"
+	OPERATOR      PlatformMembershipCreateInputPlatformRole = "OPERATOR"
+	OWNER         PlatformMembershipCreateInputPlatformRole = "OWNER"
+)
+
 // Defines values for ProjectLanguage.
 const (
 	ProjectLanguageEn ProjectLanguage = "en"
@@ -293,6 +286,38 @@ const (
 const (
 	ProjectInputLanguageEn ProjectInputLanguage = "en"
 	ProjectInputLanguageRu ProjectInputLanguage = "ru"
+)
+
+// Defines values for ProjectMembershipChangeInputPermissions.
+const (
+	ProjectMembershipChangeInputPermissionsCANCELRUNS         ProjectMembershipChangeInputPermissions = "CANCEL_RUNS"
+	ProjectMembershipChangeInputPermissionsLAUNCHRUNS         ProjectMembershipChangeInputPermissions = "LAUNCH_RUNS"
+	ProjectMembershipChangeInputPermissionsMANAGE             ProjectMembershipChangeInputPermissions = "MANAGE"
+	ProjectMembershipChangeInputPermissionsMANAGEAGENTS       ProjectMembershipChangeInputPermissions = "MANAGE_AGENTS"
+	ProjectMembershipChangeInputPermissionsMANAGEARTIFACTS    ProjectMembershipChangeInputPermissions = "MANAGE_ARTIFACTS"
+	ProjectMembershipChangeInputPermissionsMANAGEINTEGRATIONS ProjectMembershipChangeInputPermissions = "MANAGE_INTEGRATIONS"
+	ProjectMembershipChangeInputPermissionsMANAGEMEMBERS      ProjectMembershipChangeInputPermissions = "MANAGE_MEMBERS"
+	ProjectMembershipChangeInputPermissionsMANAGESCHEDULES    ProjectMembershipChangeInputPermissions = "MANAGE_SCHEDULES"
+	ProjectMembershipChangeInputPermissionsMANAGEWORKFLOWS    ProjectMembershipChangeInputPermissions = "MANAGE_WORKFLOWS"
+	ProjectMembershipChangeInputPermissionsRESOLVEGATES       ProjectMembershipChangeInputPermissions = "RESOLVE_GATES"
+	ProjectMembershipChangeInputPermissionsVIEW               ProjectMembershipChangeInputPermissions = "VIEW"
+	ProjectMembershipChangeInputPermissionsVIEWAUDIT          ProjectMembershipChangeInputPermissions = "VIEW_AUDIT"
+)
+
+// Defines values for ProjectMembershipCreateInputPermissions.
+const (
+	CANCELRUNS         ProjectMembershipCreateInputPermissions = "CANCEL_RUNS"
+	LAUNCHRUNS         ProjectMembershipCreateInputPermissions = "LAUNCH_RUNS"
+	MANAGE             ProjectMembershipCreateInputPermissions = "MANAGE"
+	MANAGEAGENTS       ProjectMembershipCreateInputPermissions = "MANAGE_AGENTS"
+	MANAGEARTIFACTS    ProjectMembershipCreateInputPermissions = "MANAGE_ARTIFACTS"
+	MANAGEINTEGRATIONS ProjectMembershipCreateInputPermissions = "MANAGE_INTEGRATIONS"
+	MANAGEMEMBERS      ProjectMembershipCreateInputPermissions = "MANAGE_MEMBERS"
+	MANAGESCHEDULES    ProjectMembershipCreateInputPermissions = "MANAGE_SCHEDULES"
+	MANAGEWORKFLOWS    ProjectMembershipCreateInputPermissions = "MANAGE_WORKFLOWS"
+	RESOLVEGATES       ProjectMembershipCreateInputPermissions = "RESOLVE_GATES"
+	VIEW               ProjectMembershipCreateInputPermissions = "VIEW"
+	VIEWAUDIT          ProjectMembershipCreateInputPermissions = "VIEW_AUDIT"
 )
 
 // Defines values for RoleEnvironmentPlatformArchitecture.
@@ -933,20 +958,6 @@ type MembershipPermissions string
 // MembershipPlatformRole defines model for Membership.PlatformRole.
 type MembershipPlatformRole string
 
-// MembershipInput defines model for MembershipInput.
-type MembershipInput struct {
-	Active       bool                         `json:"active"`
-	Permissions  []MembershipInputPermissions `json:"permissions"`
-	PlatformRole MembershipInputPlatformRole  `json:"platformRole"`
-	UserRef      OpaqueRef                    `json:"userRef"`
-}
-
-// MembershipInputPermissions defines model for MembershipInput.Permissions.
-type MembershipInputPermissions string
-
-// MembershipInputPlatformRole defines model for MembershipInput.PlatformRole.
-type MembershipInputPlatformRole string
-
 // NextAction defines model for NextAction.
 type NextAction string
 
@@ -1005,6 +1016,24 @@ type PlatformCapability struct {
 	Name                        string `json:"name"`
 }
 
+// PlatformMembershipChangeInput defines model for PlatformMembershipChangeInput.
+type PlatformMembershipChangeInput struct {
+	Active       bool                                      `json:"active"`
+	PlatformRole PlatformMembershipChangeInputPlatformRole `json:"platformRole"`
+}
+
+// PlatformMembershipChangeInputPlatformRole defines model for PlatformMembershipChangeInput.PlatformRole.
+type PlatformMembershipChangeInputPlatformRole string
+
+// PlatformMembershipCreateInput defines model for PlatformMembershipCreateInput.
+type PlatformMembershipCreateInput struct {
+	PlatformRole PlatformMembershipCreateInputPlatformRole `json:"platformRole"`
+	UserRef      OpaqueRef                                 `json:"userRef"`
+}
+
+// PlatformMembershipCreateInputPlatformRole defines model for PlatformMembershipCreateInput.PlatformRole.
+type PlatformMembershipCreateInputPlatformRole string
+
 // Problem defines model for Problem.
 type Problem struct {
 	ActualVersion *int64             `json:"actualVersion,omitempty"`
@@ -1049,6 +1078,24 @@ type ProjectInput struct {
 
 // ProjectInputLanguage defines model for ProjectInput.Language.
 type ProjectInputLanguage string
+
+// ProjectMembershipChangeInput defines model for ProjectMembershipChangeInput.
+type ProjectMembershipChangeInput struct {
+	Active      bool                                      `json:"active"`
+	Permissions []ProjectMembershipChangeInputPermissions `json:"permissions"`
+}
+
+// ProjectMembershipChangeInputPermissions defines model for ProjectMembershipChangeInput.Permissions.
+type ProjectMembershipChangeInputPermissions string
+
+// ProjectMembershipCreateInput defines model for ProjectMembershipCreateInput.
+type ProjectMembershipCreateInput struct {
+	Permissions []ProjectMembershipCreateInputPermissions `json:"permissions"`
+	UserRef     OpaqueRef                                 `json:"userRef"`
+}
+
+// ProjectMembershipCreateInputPermissions defines model for ProjectMembershipCreateInput.Permissions.
+type ProjectMembershipCreateInputPermissions string
 
 // ProjectPage defines model for ProjectPage.
 type ProjectPage struct {
@@ -1633,6 +1680,39 @@ type SessionRef = OpaqueRef
 // WorkflowRef defines model for WorkflowRef.
 type WorkflowRef = OpaqueRef
 
+// ListPlatformMembershipsParams defines parameters for ListPlatformMemberships.
+type ListPlatformMembershipsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// AddPlatformMembershipParams defines parameters for AddPlatformMembership.
+type AddPlatformMembershipParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RemovePlatformMembershipParams defines parameters for RemovePlatformMembership.
+type RemovePlatformMembershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ChangePlatformMembershipParams defines parameters for ChangePlatformMembership.
+type ChangePlatformMembershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListPlatformMembershipCandidatesParams defines parameters for ListPlatformMembershipCandidates.
+type ListPlatformMembershipCandidatesParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // UpdateAgentParams defines parameters for UpdateAgent.
 type UpdateAgentParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -1997,6 +2077,12 @@ type CommandWorkflowParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// AddPlatformMembershipJSONRequestBody defines body for AddPlatformMembership for application/json ContentType.
+type AddPlatformMembershipJSONRequestBody = PlatformMembershipCreateInput
+
+// ChangePlatformMembershipJSONRequestBody defines body for ChangePlatformMembership for application/json ContentType.
+type ChangePlatformMembershipJSONRequestBody = PlatformMembershipChangeInput
+
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = AgentInput
 
@@ -2040,10 +2126,10 @@ type UpdateProjectJSONRequestBody = ProjectInput
 type CreateAgentJSONRequestBody = AgentInput
 
 // AddProjectMembershipJSONRequestBody defines body for AddProjectMembership for application/json ContentType.
-type AddProjectMembershipJSONRequestBody = MembershipInput
+type AddProjectMembershipJSONRequestBody = ProjectMembershipCreateInput
 
 // ChangeProjectMembershipJSONRequestBody defines body for ChangeProjectMembership for application/json ContentType.
-type ChangeProjectMembershipJSONRequestBody = MembershipInput
+type ChangeProjectMembershipJSONRequestBody = ProjectMembershipChangeInput
 
 // CreateRoleImageRecipeJSONRequestBody defines body for CreateRoleImageRecipe for application/json ContentType.
 type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
@@ -2092,6 +2178,21 @@ type ServerInterface interface {
 
 	// (GET /api/v1/administration)
 	GetAdministration(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/administration/members)
+	ListPlatformMemberships(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipsParams)
+
+	// (POST /api/v1/administration/members)
+	AddPlatformMembership(w http.ResponseWriter, r *http.Request, params AddPlatformMembershipParams)
+
+	// (DELETE /api/v1/administration/members/{membershipRef})
+	RemovePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef MembershipRef, params RemovePlatformMembershipParams)
+
+	// (PATCH /api/v1/administration/members/{membershipRef})
+	ChangePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef MembershipRef, params ChangePlatformMembershipParams)
+
+	// (GET /api/v1/administration/membership-candidates)
+	ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipCandidatesParams)
 
 	// (GET /api/v1/agents/{agentRef})
 	GetAgent(w http.ResponseWriter, r *http.Request, agentRef AgentRef)
@@ -2315,6 +2416,379 @@ func (siw *ServerInterfaceWrapper) GetAdministration(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAdministration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlatformMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListPlatformMemberships(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPlatformMembershipsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageSize", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageToken", r.URL.Query(), &params.PageToken)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlatformMemberships(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddPlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) AddPlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddPlatformMembershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddPlatformMembership(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemovePlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) RemovePlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemovePlatformMembershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemovePlatformMembership(w, r, membershipRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangePlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) ChangePlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangePlatformMembershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangePlatformMembership(w, r, membershipRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlatformMembershipCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPlatformMembershipCandidatesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "query", r.URL.Query(), &params.Query)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageSize", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "pageToken", r.URL.Query(), &params.PageToken)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlatformMembershipCandidates(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7040,6 +7514,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/administration", wrapper.GetAdministration)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/administration/members", wrapper.ListPlatformMemberships)
+	m.HandleFunc("POST "+options.BaseURL+"/api/v1/administration/members", wrapper.AddPlatformMembership)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.RemovePlatformMembership)
+	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.ChangePlatformMembership)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/administration/membership-candidates", wrapper.ListPlatformMembershipCandidates)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.GetAgent)
 	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.UpdateAgent)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/agents/{agentRef}/commands", wrapper.CommandAgent)

@@ -19,6 +19,10 @@ service PlatformQueryService {
   rpc ListRuntimeSelections(ListRuntimeSelectionsRequest) returns (ListRuntimeSelectionsResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  // ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
+  rpc ListPlatformMemberships(ListPlatformMembershipsRequest) returns (ListPlatformMembershipsResponse);
+  // ListPlatformMembershipCandidates возвращает OIDC subjects без organization membership; locator не является authority.
+  rpc ListPlatformMembershipCandidates(ListPlatformMembershipCandidatesRequest) returns (ListPlatformMembershipCandidatesResponse);
   rpc ListProjectMemberships(ListProjectMembershipsRequest) returns (ListProjectMembershipsResponse);
   rpc ListProjectMembershipCandidates(ListProjectMembershipCandidatesRequest) returns (ListProjectMembershipCandidatesResponse);
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
@@ -45,6 +49,12 @@ service PlatformCommandService {
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
+  // AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
+  rpc AddPlatformMembership(AddPlatformMembershipRequest) returns (AddPlatformMembershipResponse);
+  // ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
+  rpc ChangePlatformMembership(ChangePlatformMembershipRequest) returns (ChangePlatformMembershipResponse);
+  // RemovePlatformMembership отзывает organization access и атомарно приостанавливает project memberships.
+  rpc RemovePlatformMembership(RemovePlatformMembershipRequest) returns (RemovePlatformMembershipResponse);
   rpc AddProjectMembership(AddProjectMembershipRequest) returns (AddProjectMembershipResponse);
   rpc ChangeProjectMembership(ChangeProjectMembershipRequest) returns (ChangeProjectMembershipResponse);
   rpc RemoveProjectMembership(RemoveProjectMembershipRequest) returns (RemoveProjectMembershipResponse);
@@ -923,6 +933,77 @@ message UpdateProjectResponse {
   Project project = 1;
 }
 
+// ListPlatformMembershipsRequest ограничивает размер авторитетного organization-scoped списка.
+message ListPlatformMembershipsRequest {
+  // page задаёт только bounded pagination и не выбирает organization.
+  PageRequest page = 1;
+}
+// ListPlatformMembershipsResponse содержит platform roles и назначенные сервером next actions.
+message ListPlatformMembershipsResponse {
+  // memberships не включает project memberships и системные identities.
+  repeated Membership memberships = 1;
+  // page содержит непрозрачный cursor следующей страницы.
+  PageInfo page = 2;
+  // next_actions назначается control-plane и разрешает organization-scoped CTA без локального вывода полномочий.
+  repeated NextAction next_actions = 3;
+}
+// ListPlatformMembershipCandidatesRequest ищет только уже проверенные OIDC identities без membership.
+message ListPlatformMembershipCandidatesRequest {
+  // page задаёт bounded pagination.
+  PageRequest page = 1;
+  // query сопоставляется только с безопасными display fields внутри organization.
+  string query = 2;
+}
+// ListPlatformMembershipCandidatesResponse не выдаёт внутренние UUID или OIDC subject identifiers.
+message ListPlatformMembershipCandidatesResponse {
+  // users содержит только opaque refs и безопасные display fields.
+  repeated UserSummary users = 1;
+  // page содержит непрозрачный cursor следующей страницы.
+  PageInfo page = 2;
+}
+// AddPlatformMembershipRequest создаёт отдельное organization membership с server-owned owner scope.
+message AddPlatformMembershipRequest {
+  // mutation задаёт idempotency key; actor и organization выводятся из signed context.
+  MutationContext mutation = 1;
+  // user_ref выбирается из ListPlatformMembershipCandidates и остаётся только locator.
+  string user_ref = 2;
+  // role проверяется по полномочиям actor; Administrator не может назначить Owner.
+  PlatformRole role = 3;
+}
+// AddPlatformMembershipResponse возвращает авторитетный versioned readback.
+message AddPlatformMembershipResponse {
+  // membership содержит актуальную role, version и next actions.
+  Membership membership = 1;
+}
+// ChangePlatformMembershipRequest изменяет существующее organization membership по OCC.
+message ChangePlatformMembershipRequest {
+  // mutation содержит idempotency key и expected version.
+  MutationContext mutation = 1;
+  // membership_ref разрешается только внутри organization до проверки expected version.
+  string membership_ref = 2;
+  // role не позволяет обходить защиту Owner и полномочия actor.
+  PlatformRole role = 3;
+  // active=false атомарно приостанавливает project memberships того же User.
+  bool active = 4;
+}
+// ChangePlatformMembershipResponse возвращает победившее авторитетное состояние.
+message ChangePlatformMembershipResponse {
+  // membership содержит новую version и допустимые следующие действия.
+  Membership membership = 1;
+}
+// RemovePlatformMembershipRequest отзывает активное organization membership по OCC.
+message RemovePlatformMembershipRequest {
+  // mutation содержит idempotency key и expected version.
+  MutationContext mutation = 1;
+  // membership_ref разрешается server-side и не доказывает владение.
+  string membership_ref = 2;
+}
+// RemovePlatformMembershipResponse возвращает inactive membership вместо скрытого удаления истории.
+message RemovePlatformMembershipResponse {
+  // membership содержит inactive readback и новую version.
+  Membership membership = 1;
+}
+
 message ListProjectMembershipsRequest {
   string project_ref = 1;
   PageRequest page = 2;
@@ -930,6 +1011,7 @@ message ListProjectMembershipsRequest {
 message ListProjectMembershipsResponse {
   repeated Membership memberships = 1;
   PageInfo page = 2;
+  repeated NextAction next_actions = 3;
 }
 message ListProjectMembershipCandidatesRequest {
   string project_ref = 1;
@@ -944,7 +1026,8 @@ message AddProjectMembershipRequest {
   MutationContext mutation = 1;
   string project_ref = 2;
   string user_ref = 3;
-  PlatformRole role = 4;
+  reserved 4;
+  reserved "role";
   repeated ProjectPermission permissions = 5;
 }
 message AddProjectMembershipResponse {
@@ -954,7 +1037,8 @@ message ChangeProjectMembershipRequest {
   MutationContext mutation = 1;
   string project_ref = 2;
   string membership_ref = 3;
-  PlatformRole role = 4;
+  reserved 4;
+  reserved "role";
   repeated ProjectPermission permissions = 5;
   bool active = 6;
 }

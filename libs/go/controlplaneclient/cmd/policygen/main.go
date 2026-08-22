@@ -118,7 +118,7 @@ func main() {
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 	}
-	value := document{Version: 1, PolicyRevision: 32, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 33, Policy: policy{
 		TrustDomain: "mattercodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}

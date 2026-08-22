@@ -103,6 +103,38 @@ func (server *Server) GetProject(ctx context.Context, request *controlplanev1.Ge
 	return &controlplanev1.GetProjectResponse{Project: castProject(item)}, nil
 }
 
+func (server *Server) ListPlatformMemberships(ctx context.Context, request *controlplanev1.ListPlatformMembershipsRequest) (*controlplanev1.ListPlatformMembershipsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListPlatformMemberships_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListPlatformMemberships(ctx, p, query.Filter{Page: page(request.GetPage())})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListPlatformMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
+	for _, item := range items {
+		response.Memberships = append(response.Memberships, castMembership(item))
+	}
+	return response, nil
+}
+
+func (server *Server) ListPlatformMembershipCandidates(ctx context.Context, request *controlplanev1.ListPlatformMembershipCandidatesRequest) (*controlplanev1.ListPlatformMembershipCandidatesResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListPlatformMembershipCandidates(ctx, p, query.Filter{Query: request.GetQuery(), Page: page(request.GetPage())})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListPlatformMembershipCandidatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Users = append(response.Users, castUser(item))
+	}
+	return response, nil
+}
+
 func (server *Server) ListProjectMemberships(ctx context.Context, request *controlplanev1.ListProjectMembershipsRequest) (*controlplanev1.ListProjectMembershipsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName)
 	if err != nil {
@@ -112,7 +144,7 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
 	for _, item := range items {
 		response.Memberships = append(response.Memberships, castMembership(item))
 	}

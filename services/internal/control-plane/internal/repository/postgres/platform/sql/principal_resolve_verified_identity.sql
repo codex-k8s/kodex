@@ -7,5 +7,8 @@ WHERE s.id = $1::uuid
   AND s.active
   AND EXISTS (
       SELECT 1 FROM control_plane.memberships m
-      WHERE m.organization_id = o.id AND m.subject_id = s.id AND m.active
+      WHERE m.organization_id = o.id
+        AND m.subject_id = s.id
+        AND m.project_id IS NULL
+        AND m.active
   )

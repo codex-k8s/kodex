@@ -19,33 +19,35 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformQueryService_GetBootstrapState_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
-	PlatformQueryService_GetPlatformEventCursor_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
-	PlatformQueryService_GetOverview_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOverview"
-	PlatformQueryService_ListPlatformCapabilities_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
-	PlatformQueryService_ListRuntimeSelections_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
-	PlatformQueryService_ListProjects_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListProjects"
-	PlatformQueryService_GetProject_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetProject"
-	PlatformQueryService_ListProjectMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
-	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
-	PlatformQueryService_ListAgents_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListAgents"
-	PlatformQueryService_GetAgent_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetAgent"
-	PlatformQueryService_ListWorkflows_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListWorkflows"
-	PlatformQueryService_GetWorkflow_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetWorkflow"
-	PlatformQueryService_ListRuns_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ListRuns"
-	PlatformQueryService_GetRun_FullMethodName                          = "/controlplane.v1.PlatformQueryService/GetRun"
-	PlatformQueryService_GetRunGraph_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetRunGraph"
-	PlatformQueryService_ListRunEvents_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListRunEvents"
-	PlatformQueryService_ListOwnerGates_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
-	PlatformQueryService_GetOwnerGate_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
-	PlatformQueryService_ListArtifacts_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListArtifacts"
-	PlatformQueryService_GetArtifact_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetArtifact"
-	PlatformQueryService_ListSchedules_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListSchedules"
-	PlatformQueryService_ListIntegrationDefinitions_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
-	PlatformQueryService_ListIntegrationConnections_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
-	PlatformQueryService_GetIntegrationConnection_FullMethodName        = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
-	PlatformQueryService_GetAdministration_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetAdministration"
-	PlatformQueryService_ListAuditEvents_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
+	PlatformQueryService_GetBootstrapState_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetPlatformEventCursor_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
+	PlatformQueryService_GetOverview_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetOverview"
+	PlatformQueryService_ListPlatformCapabilities_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListRuntimeSelections_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
+	PlatformQueryService_ListProjects_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_GetProject_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetProject"
+	PlatformQueryService_ListPlatformMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
+	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
+	PlatformQueryService_ListProjectMemberships_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
+	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
+	PlatformQueryService_ListAgents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAgents"
+	PlatformQueryService_GetAgent_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListWorkflows_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListWorkflows"
+	PlatformQueryService_GetWorkflow_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetWorkflow"
+	PlatformQueryService_ListRuns_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListRuns"
+	PlatformQueryService_GetRun_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetRun"
+	PlatformQueryService_GetRunGraph_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRunGraph"
+	PlatformQueryService_ListRunEvents_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRunEvents"
+	PlatformQueryService_ListOwnerGates_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_GetOwnerGate_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
+	PlatformQueryService_ListArtifacts_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListArtifacts"
+	PlatformQueryService_GetArtifact_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_ListSchedules_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_ListIntegrationDefinitions_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
+	PlatformQueryService_ListIntegrationConnections_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
+	PlatformQueryService_GetIntegrationConnection_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetAdministration_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetAdministration"
+	PlatformQueryService_ListAuditEvents_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -59,6 +61,10 @@ type PlatformQueryServiceClient interface {
 	ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
+	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
+	ListPlatformMemberships(ctx context.Context, in *ListPlatformMembershipsRequest, opts ...grpc.CallOption) (*ListPlatformMembershipsResponse, error)
+	// ListPlatformMembershipCandidates возвращает OIDC subjects без organization membership; locator не является authority.
+	ListPlatformMembershipCandidates(ctx context.Context, in *ListPlatformMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListPlatformMembershipCandidatesResponse, error)
 	ListProjectMemberships(ctx context.Context, in *ListProjectMembershipsRequest, opts ...grpc.CallOption) (*ListProjectMembershipsResponse, error)
 	ListProjectMembershipCandidates(ctx context.Context, in *ListProjectMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
@@ -153,6 +159,26 @@ func (c *platformQueryServiceClient) GetProject(ctx context.Context, in *GetProj
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetProjectResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_GetProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListPlatformMemberships(ctx context.Context, in *ListPlatformMembershipsRequest, opts ...grpc.CallOption) (*ListPlatformMembershipsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPlatformMembershipsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListPlatformMemberships_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListPlatformMembershipCandidates(ctx context.Context, in *ListPlatformMembershipCandidatesRequest, opts ...grpc.CallOption) (*ListPlatformMembershipCandidatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPlatformMembershipCandidatesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -370,6 +396,10 @@ type PlatformQueryServiceServer interface {
 	ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
+	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
+	ListPlatformMemberships(context.Context, *ListPlatformMembershipsRequest) (*ListPlatformMembershipsResponse, error)
+	// ListPlatformMembershipCandidates возвращает OIDC subjects без organization membership; locator не является authority.
+	ListPlatformMembershipCandidates(context.Context, *ListPlatformMembershipCandidatesRequest) (*ListPlatformMembershipCandidatesResponse, error)
 	ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error)
 	ListProjectMembershipCandidates(context.Context, *ListProjectMembershipCandidatesRequest) (*ListProjectMembershipCandidatesResponse, error)
 	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
@@ -420,6 +450,12 @@ func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *Li
 }
 func (UnimplementedPlatformQueryServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListPlatformMemberships(context.Context, *ListPlatformMembershipsRequest) (*ListPlatformMembershipsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPlatformMemberships not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListPlatformMembershipCandidates(context.Context, *ListPlatformMembershipCandidatesRequest) (*ListPlatformMembershipCandidatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPlatformMembershipCandidates not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjectMemberships(context.Context, *ListProjectMembershipsRequest) (*ListProjectMembershipsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjectMemberships not implemented")
@@ -624,6 +660,42 @@ func _PlatformQueryService_GetProject_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).GetProject(ctx, req.(*GetProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListPlatformMemberships_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlatformMembershipsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListPlatformMemberships(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListPlatformMemberships_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListPlatformMemberships(ctx, req.(*ListPlatformMembershipsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListPlatformMembershipCandidates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlatformMembershipCandidatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListPlatformMembershipCandidates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListPlatformMembershipCandidates(ctx, req.(*ListPlatformMembershipCandidatesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1024,6 +1096,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetProject_Handler,
 		},
 		{
+			MethodName: "ListPlatformMemberships",
+			Handler:    _PlatformQueryService_ListPlatformMemberships_Handler,
+		},
+		{
+			MethodName: "ListPlatformMembershipCandidates",
+			Handler:    _PlatformQueryService_ListPlatformMembershipCandidates_Handler,
+		},
+		{
 			MethodName: "ListProjectMemberships",
 			Handler:    _PlatformQueryService_ListProjectMemberships_Handler,
 		},
@@ -1112,6 +1192,9 @@ const (
 	PlatformCommandService_CompleteOnboarding_FullMethodName              = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
 	PlatformCommandService_CreateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateProject"
 	PlatformCommandService_UpdateProject_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_AddPlatformMembership_FullMethodName           = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
+	PlatformCommandService_ChangePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
+	PlatformCommandService_RemovePlatformMembership_FullMethodName        = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
 	PlatformCommandService_AddProjectMembership_FullMethodName            = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
 	PlatformCommandService_ChangeProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
 	PlatformCommandService_RemoveProjectMembership_FullMethodName         = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
@@ -1154,6 +1237,12 @@ type PlatformCommandServiceClient interface {
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
+	// AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
+	AddPlatformMembership(ctx context.Context, in *AddPlatformMembershipRequest, opts ...grpc.CallOption) (*AddPlatformMembershipResponse, error)
+	// ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
+	ChangePlatformMembership(ctx context.Context, in *ChangePlatformMembershipRequest, opts ...grpc.CallOption) (*ChangePlatformMembershipResponse, error)
+	// RemovePlatformMembership отзывает organization access и атомарно приостанавливает project memberships.
+	RemovePlatformMembership(ctx context.Context, in *RemovePlatformMembershipRequest, opts ...grpc.CallOption) (*RemovePlatformMembershipResponse, error)
 	AddProjectMembership(ctx context.Context, in *AddProjectMembershipRequest, opts ...grpc.CallOption) (*AddProjectMembershipResponse, error)
 	ChangeProjectMembership(ctx context.Context, in *ChangeProjectMembershipRequest, opts ...grpc.CallOption) (*ChangeProjectMembershipResponse, error)
 	RemoveProjectMembership(ctx context.Context, in *RemoveProjectMembershipRequest, opts ...grpc.CallOption) (*RemoveProjectMembershipResponse, error)
@@ -1221,6 +1310,36 @@ func (c *platformCommandServiceClient) UpdateProject(ctx context.Context, in *Up
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateProjectResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) AddPlatformMembership(ctx context.Context, in *AddPlatformMembershipRequest, opts ...grpc.CallOption) (*AddPlatformMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddPlatformMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_AddPlatformMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ChangePlatformMembership(ctx context.Context, in *ChangePlatformMembershipRequest, opts ...grpc.CallOption) (*ChangePlatformMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangePlatformMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangePlatformMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RemovePlatformMembership(ctx context.Context, in *RemovePlatformMembershipRequest, opts ...grpc.CallOption) (*RemovePlatformMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePlatformMembershipResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RemovePlatformMembership_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1576,6 +1695,12 @@ type PlatformCommandServiceServer interface {
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
+	// AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
+	AddPlatformMembership(context.Context, *AddPlatformMembershipRequest) (*AddPlatformMembershipResponse, error)
+	// ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
+	ChangePlatformMembership(context.Context, *ChangePlatformMembershipRequest) (*ChangePlatformMembershipResponse, error)
+	// RemovePlatformMembership отзывает organization access и атомарно приостанавливает project memberships.
+	RemovePlatformMembership(context.Context, *RemovePlatformMembershipRequest) (*RemovePlatformMembershipResponse, error)
 	AddProjectMembership(context.Context, *AddProjectMembershipRequest) (*AddProjectMembershipResponse, error)
 	ChangeProjectMembership(context.Context, *ChangeProjectMembershipRequest) (*ChangeProjectMembershipResponse, error)
 	RemoveProjectMembership(context.Context, *RemoveProjectMembershipRequest) (*RemoveProjectMembershipResponse, error)
@@ -1627,6 +1752,15 @@ func (UnimplementedPlatformCommandServiceServer) CreateProject(context.Context, 
 }
 func (UnimplementedPlatformCommandServiceServer) UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) AddPlatformMembership(context.Context, *AddPlatformMembershipRequest) (*AddPlatformMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddPlatformMembership not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangePlatformMembership(context.Context, *ChangePlatformMembershipRequest) (*ChangePlatformMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangePlatformMembership not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RemovePlatformMembership(context.Context, *RemovePlatformMembershipRequest) (*RemovePlatformMembershipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemovePlatformMembership not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) AddProjectMembership(context.Context, *AddProjectMembershipRequest) (*AddProjectMembershipResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddProjectMembership not implemented")
@@ -1799,6 +1933,60 @@ func _PlatformCommandService_UpdateProject_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).UpdateProject(ctx, req.(*UpdateProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_AddPlatformMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPlatformMembershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).AddPlatformMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_AddPlatformMembership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).AddPlatformMembership(ctx, req.(*AddPlatformMembershipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ChangePlatformMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangePlatformMembershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ChangePlatformMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ChangePlatformMembership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ChangePlatformMembership(ctx, req.(*ChangePlatformMembershipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RemovePlatformMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePlatformMembershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RemovePlatformMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RemovePlatformMembership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RemovePlatformMembership(ctx, req.(*RemovePlatformMembershipRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2397,6 +2585,18 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateProject",
 			Handler:    _PlatformCommandService_UpdateProject_Handler,
+		},
+		{
+			MethodName: "AddPlatformMembership",
+			Handler:    _PlatformCommandService_AddPlatformMembership_Handler,
+		},
+		{
+			MethodName: "ChangePlatformMembership",
+			Handler:    _PlatformCommandService_ChangePlatformMembership_Handler,
+		},
+		{
+			MethodName: "RemovePlatformMembership",
+			Handler:    _PlatformCommandService_RemovePlatformMembership_Handler,
 		},
 		{
 			MethodName: "AddProjectMembership",

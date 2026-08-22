@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 32,
+  "policy_revision": 33,
   "policy": {
     "trust_domain": "mattercodex.local",
     "default_decision": "DENY",
@@ -229,6 +229,9 @@
           "platform.command.memberships.change",
           "platform.command.memberships.remove",
           "platform.command.onboarding.complete",
+          "platform.command.organization-memberships.add",
+          "platform.command.organization-memberships.change",
+          "platform.command.organization-memberships.remove",
           "platform.command.owner-gates.resolve",
           "platform.command.projects.create",
           "platform.command.projects.update",
@@ -258,6 +261,8 @@
           "platform.query.integration-definitions.list",
           "platform.query.membership-candidates.list",
           "platform.query.memberships.list",
+          "platform.query.organization-membership-candidates.list",
+          "platform.query.organization-memberships.list",
           "platform.query.overview.get",
           "platform.query.owner-gates.get",
           "platform.query.owner-gates.list",
@@ -1190,6 +1195,93 @@
         }
       },
       {
+        "operation_id": "platform.command.organization-memberships.add",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/AddPlatformMembership",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.command.organization-memberships.add",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.command.organization-memberships.change",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ChangePlatformMembership",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.command.organization-memberships.change",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.command.organization-memberships.remove",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/RemovePlatformMembership",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.command.organization-memberships.remove",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
         "operation_id": "platform.command.owner-gates.resolve",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
@@ -2019,6 +2111,64 @@
           "DOMAIN_STATE"
         ],
         "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.query.organization-membership-candidates.list",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.query.organization-membership-candidates.list",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        }
+      },
+      {
+        "operation_id": "platform.query.organization-memberships.list",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/ListPlatformMemberships",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "permission": "platform.query.organization-memberships.list",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,

@@ -21,12 +21,28 @@ var (
 	queryCommandsCreateprojectInsertMembershipsRefProjectIdRole string
 	//go:embed sql/commands_updateproject_update_projects_name_purpose_language.sql
 	queryCommandsUpdateprojectUpdateProjectsNamePurposeLanguage string
-	//go:embed sql/commands_changemembership_insert_memberships_ref_project_id_role.sql
-	queryCommandsChangemembershipInsertMembershipsRefProjectIdRole string
-	//go:embed sql/commands_changemembership_update_memberships_role_permissions_active.sql
-	queryCommandsChangemembershipUpdateMembershipsRolePermissionsActive string
-	//go:embed sql/commands_changemembership_update_memberships_active_version_updated_at.sql
-	queryCommandsChangemembershipUpdateMembershipsActiveVersionUpdatedAt string
+	//go:embed sql/project_membership__insert.sql
+	queryProjectMembershipInsert string
+	//go:embed sql/project_membership__resolve_for_update.sql
+	queryProjectMembershipResolveForUpdate string
+	//go:embed sql/project_membership__can_grant.sql
+	queryProjectMembershipCanGrant string
+	//go:embed sql/project_membership__update.sql
+	queryProjectMembershipUpdate string
+	//go:embed sql/project_membership__deactivate.sql
+	queryProjectMembershipDeactivate string
+	//go:embed sql/platform_membership__insert.sql
+	queryPlatformMembershipInsert string
+	//go:embed sql/platform_membership__resolve_for_update.sql
+	queryPlatformMembershipResolveForUpdate string
+	//go:embed sql/platform_membership__count_other_active_owners.sql
+	queryPlatformMembershipCountOtherActiveOwners string
+	//go:embed sql/platform_membership__update.sql
+	queryPlatformMembershipUpdate string
+	//go:embed sql/platform_membership__deactivate.sql
+	queryPlatformMembershipDeactivate string
+	//go:embed sql/platform_membership__deactivate_projects.sql
+	queryPlatformMembershipDeactivateProjects string
 	//go:embed sql/commands_createagent_insert_agents_ref_project_id_purpose.sql
 	queryCommandsCreateagentInsertAgentsRefProjectIdPurpose string
 	//go:embed sql/commands_createagent_select_role_definitions_organization_id_project_id_ref.sql

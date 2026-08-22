@@ -17,10 +17,14 @@ var (
 	queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId string
 	//go:embed sql/queries_getproject_select_projects_organization_id_ref_project_id.sql
 	queryQueriesGetprojectSelectProjectsOrganizationIdRefProjectId string
-	//go:embed sql/queries_listmemberships_select_memberships_organization_id_ref_project_id.sql
-	queryQueriesListmembershipsSelectMembershipsOrganizationIdRefProjectId string
-	//go:embed sql/queries_listmembershipcandidates_select_subjects_organization_id_project_ref.sql
-	queryQueriesListmembershipcandidatesSelectSubjectsOrganizationIdProjectRef string
+	//go:embed sql/platform_membership__list.sql
+	queryPlatformMembershipList string
+	//go:embed sql/platform_membership__list_candidates.sql
+	queryPlatformMembershipListCandidates string
+	//go:embed sql/project_membership__list.sql
+	queryProjectMembershipList string
+	//go:embed sql/project_membership__list_candidates.sql
+	queryProjectMembershipListCandidates string
 	//go:embed sql/queries_listagents_select_agents_organization_id_ref_project_id.sql
 	queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId string
 	//go:embed sql/queries_getagent_select_agents_organization_id_ref_system_key.sql

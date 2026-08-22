@@ -401,19 +401,38 @@ const ru = {
   access: {
     title: "Участники и доступ",
     subtitle: "Роли и типизированные полномочия в Проекте",
+    organizationTitle: "Участники организации",
+    organizationSubtitle:
+      "Платформенные роли определяют базовый доступ, а разрешения Проекта назначаются отдельно",
+    organizationScope: "Доступ к организации",
+    organizationScopeHint:
+      "Здесь назначается платформенная роль. Доступ к конкретной работе настраивается внутри Проекта.",
+    projectScope: "Доступ к Проекту",
+    projectScopeHint:
+      "Здесь назначаются только полномочия Проекта; платформенная роль наследуется из организации.",
     member: "Участник",
     role: "Роль",
     permissions: "Полномочия",
     add: "Добавить участника",
+    addOrganization: "Добавить в организацию",
+    active: "Доступ активен",
     project: "Проект",
     chooseProject: "Выберите Проект для управления доступом",
     chooseProjectText:
       "Внутренние идентификаторы вводить не нужно — выберите Проект из доступного списка.",
     emptyTitle: "В Проекте нет доступных участий",
+    emptyText:
+      "Добавьте участника организации и выдайте ему полномочия этого Проекта.",
+    organizationEmptyTitle: "В организации пока нет участников",
+    organizationEmptyText:
+      "После первого безопасно отклонённого SSO-входа пользователь появится среди кандидатов.",
     chooseMember: "Выберите пользователя",
     noCandidates: "Нет пользователей для добавления",
     noCandidatesText:
-      "Пользователь должен один раз войти через SSO. До назначения доступа платформа покажет ему безопасный отказ, после чего он появится в этом списке.",
+      "Сначала добавьте пользователя в организацию, затем он появится среди кандидатов Проекта.",
+    noOrganizationCandidatesText:
+      "Пользователь должен один раз войти через SSO. До назначения доступа платформа покажет безопасный отказ, после чего он появится здесь.",
+    permissionCount: "Полномочий Проекта: {count}",
     edit: "Изменить доступ",
     revoke: "Отозвать доступ",
     roles: {
@@ -967,19 +986,38 @@ const en = {
   access: {
     title: "Members and access",
     subtitle: "Roles and typed permissions in a Project",
+    organizationTitle: "Organization members",
+    organizationSubtitle:
+      "Platform roles define base access, while Project permissions are assigned separately",
+    organizationScope: "Organization access",
+    organizationScopeHint:
+      "Assign a platform role here. Access to specific work is configured inside each Project.",
+    projectScope: "Project access",
+    projectScopeHint:
+      "Only Project permissions are assigned here; the platform role comes from the organization.",
     member: "Member",
     role: "Role",
     permissions: "Permissions",
     add: "Add member",
+    addOrganization: "Add to organization",
+    active: "Access is active",
     project: "Project",
     chooseProject: "Choose a Project to manage access",
     chooseProjectText:
       "No internal identifiers are needed — choose a Project from the available list.",
     emptyTitle: "No accessible memberships in this Project",
+    emptyText:
+      "Add an organization member and grant permissions for this Project.",
+    organizationEmptyTitle: "No organization members yet",
+    organizationEmptyText:
+      "After a user's first safely denied SSO sign-in, they appear as a candidate.",
     chooseMember: "Choose a user",
     noCandidates: "No users can be added yet",
     noCandidatesText:
-      "A user must sign in through SSO once. The platform denies access safely until a membership is assigned, then the user appears in this list.",
+      "Add the user to the organization first; they will then appear as a Project candidate.",
+    noOrganizationCandidatesText:
+      "A user must sign in through SSO once. Access is denied safely until membership is assigned, after which the user appears here.",
+    permissionCount: "Project permissions: {count}",
     edit: "Change access",
     revoke: "Revoke access",
     roles: {

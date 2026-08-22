@@ -40,8 +40,35 @@ func (server *Server) UpdateProject(ctx context.Context, request *controlplanev1
 	return &controlplanev1.UpdateProjectResponse{Project: castProject(*result.Project)}, nil
 }
 
+func (server *Server) AddPlatformMembership(ctx context.Context, request *controlplanev1.AddPlatformMembershipRequest) (*controlplanev1.AddPlatformMembershipResponse, error) {
+	payload := command.PlatformMembershipInput{UserRef: request.GetUserRef(), Role: enumSuffix(request.GetRole(), "PLATFORM_ROLE_"), Active: true}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddPlatformMembership_FullMethodName, command.AddPlatformMembership, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.AddPlatformMembershipResponse{Membership: castMembership(*result.Membership)}, nil
+}
+
+func (server *Server) ChangePlatformMembership(ctx context.Context, request *controlplanev1.ChangePlatformMembershipRequest) (*controlplanev1.ChangePlatformMembershipResponse, error) {
+	payload := command.PlatformMembershipInput{MembershipRef: request.GetMembershipRef(), Role: enumSuffix(request.GetRole(), "PLATFORM_ROLE_"), Active: request.GetActive()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangePlatformMembership_FullMethodName, command.ChangePlatformMembership, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ChangePlatformMembershipResponse{Membership: castMembership(*result.Membership)}, nil
+}
+
+func (server *Server) RemovePlatformMembership(ctx context.Context, request *controlplanev1.RemovePlatformMembershipRequest) (*controlplanev1.RemovePlatformMembershipResponse, error) {
+	payload := command.PlatformMembershipInput{MembershipRef: request.GetMembershipRef()}
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RemovePlatformMembership_FullMethodName, command.RemovePlatformMembership, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RemovePlatformMembershipResponse{Membership: castMembership(*result.Membership)}, nil
+}
+
 func (server *Server) AddProjectMembership(ctx context.Context, request *controlplanev1.AddProjectMembershipRequest) (*controlplanev1.AddProjectMembershipResponse, error) {
-	payload := command.MembershipInput{ProjectRef: request.GetProjectRef(), UserRef: request.GetUserRef(), Role: enumSuffix(request.GetRole(), "PLATFORM_ROLE_"), Permissions: domainProjectPermissions(request.GetPermissions()), Active: true}
+	payload := command.MembershipInput{ProjectRef: request.GetProjectRef(), UserRef: request.GetUserRef(), Permissions: domainProjectPermissions(request.GetPermissions()), Active: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddProjectMembership_FullMethodName, command.AddMembership, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -50,7 +77,7 @@ func (server *Server) AddProjectMembership(ctx context.Context, request *control
 }
 
 func (server *Server) ChangeProjectMembership(ctx context.Context, request *controlplanev1.ChangeProjectMembershipRequest) (*controlplanev1.ChangeProjectMembershipResponse, error) {
-	payload := command.MembershipInput{ProjectRef: request.GetProjectRef(), MembershipRef: request.GetMembershipRef(), Role: enumSuffix(request.GetRole(), "PLATFORM_ROLE_"), Permissions: domainProjectPermissions(request.GetPermissions()), Active: request.GetActive()}
+	payload := command.MembershipInput{ProjectRef: request.GetProjectRef(), MembershipRef: request.GetMembershipRef(), Permissions: domainProjectPermissions(request.GetPermissions()), Active: request.GetActive()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_ChangeProjectMembership_FullMethodName, command.ChangeMembership, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

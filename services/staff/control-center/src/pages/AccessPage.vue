@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import type {
   Membership,
-  MembershipInput,
+  PlatformMembershipCreateInput,
+  ProjectMembershipCreateInput,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -14,33 +15,59 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
+type ProjectPermission = ProjectMembershipCreateInput["permissions"][number];
+type PlatformRole = PlatformMembershipCreateInput["platformRole"];
+
+interface AccessForm {
+  userRef: string;
+  platformRole: PlatformRole;
+  permissions: ProjectPermission[];
+  active: boolean;
+}
+
 const platform = usePlatformStore();
 const route = useRoute();
-const router = useRouter();
 const projectRef = computed(() =>
-  typeof route.params.projectRef === "string"
-    ? route.params.projectRef
-    : typeof route.query.projectRef === "string"
-      ? route.query.projectRef
-      : "",
+  typeof route.params.projectRef === "string" ? route.params.projectRef : "",
 );
-const list = computed(() => Object.values(platform.memberships));
-const candidates = computed(() => Object.values(platform.membershipCandidates));
-const project = computed(() => platform.projects[projectRef.value]);
-const canAdd = computed(
-  () => project.value?.nextActions.includes("MANAGE_MEMBERS") ?? false,
+const organizationScope = computed(() => projectRef.value === "");
+const list = computed(() =>
+  Object.values(
+    organizationScope.value
+      ? platform.platformMemberships
+      : platform.memberships,
+  ),
+);
+const candidates = computed(() =>
+  Object.values(
+    organizationScope.value
+      ? platform.platformMembershipCandidates
+      : platform.membershipCandidates,
+  ),
+);
+const listKey = computed(() =>
+  organizationScope.value ? "platformMembers" : "members",
+);
+const candidateKey = computed(() =>
+  organizationScope.value ? "platformMemberCandidates" : "memberCandidates",
+);
+const canAdd = computed(() =>
+  (organizationScope.value
+    ? platform.platformMembershipActions
+    : platform.projectMembershipActions
+  ).includes("MANAGE_MEMBERS"),
 );
 const selected = ref<Membership>();
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
-const form = reactive<MembershipInput>({
+const form = reactive<AccessForm>({
   userRef: "",
   platformRole: "MEMBER",
   permissions: ["VIEW"],
   active: true,
 });
-const permissions: MembershipInput["permissions"] = [
+const permissions: ProjectPermission[] = [
   "VIEW",
   "MANAGE",
   "MANAGE_MEMBERS",
@@ -54,15 +81,6 @@ const permissions: MembershipInput["permissions"] = [
   "MANAGE_INTEGRATIONS",
   "VIEW_AUDIT",
 ];
-
-function chooseProject(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value;
-  void router.push(
-    value
-      ? { path: "/administration/access", query: { projectRef: value } }
-      : "/administration/access",
-  );
-}
 
 function edit(membership: Membership): void {
   selected.value = membership;
@@ -86,7 +104,11 @@ function add(): void {
   });
   problem.value = undefined;
   dialog.value = true;
-  void platform.loadMembershipCandidates(projectRef.value);
+  if (organizationScope.value) {
+    void platform.loadPlatformMembershipCandidates();
+  } else {
+    void platform.loadMembershipCandidates(projectRef.value);
+  }
 }
 
 function closeDialog(): void {
@@ -95,25 +117,46 @@ function closeDialog(): void {
   problem.value = undefined;
 }
 
-function togglePermission(
-  permission: MembershipInput["permissions"][number],
-): void {
+function togglePermission(permission: ProjectPermission): void {
   const index = form.permissions.indexOf(permission);
   if (index >= 0) form.permissions.splice(index, 1);
   else form.permissions.push(permission);
 }
 
+async function load(): Promise<void> {
+  if (organizationScope.value) {
+    await platform.loadPlatformMembers();
+  } else {
+    await platform.loadMembers(projectRef.value);
+  }
+}
+
 async function submit(): Promise<void> {
-  if (!projectRef.value || !form.userRef) return;
+  if (!form.userRef || (!organizationScope.value && !projectRef.value)) return;
   busy.value = true;
   problem.value = undefined;
   try {
-    await platform.saveMembership(
-      projectRef.value,
-      { ...form, permissions: [...form.permissions] },
-      selected.value,
-    );
-    await platform.loadMembers(projectRef.value);
+    if (organizationScope.value) {
+      await platform.savePlatformMembership(
+        {
+          userRef: form.userRef,
+          platformRole: form.platformRole,
+          active: form.active,
+        },
+        selected.value,
+      );
+    } else {
+      await platform.saveMembership(
+        projectRef.value,
+        {
+          userRef: form.userRef,
+          permissions: [...form.permissions],
+          active: form.active,
+        },
+        selected.value,
+      );
+    }
+    await load();
     closeDialog();
   } catch (error) {
     problem.value = asProblem(error);
@@ -123,12 +166,15 @@ async function submit(): Promise<void> {
 }
 
 async function revoke(membership: Membership): Promise<void> {
-  if (!projectRef.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
-    await platform.revokeMembership(projectRef.value, membership);
-    await platform.loadMembers(projectRef.value);
+    if (organizationScope.value) {
+      await platform.revokePlatformMembership(membership);
+    } else {
+      await platform.revokeMembership(projectRef.value, membership);
+    }
+    await load();
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -136,50 +182,62 @@ async function revoke(membership: Membership): Promise<void> {
   }
 }
 
-watch(
-  projectRef,
-  (value) => {
-    if (value) void platform.loadMembers(value);
-  },
-  { immediate: true },
-);
-onMounted(() => void platform.loadProjects());
+watch(projectRef, () => void load());
+onMounted(() => void load());
 </script>
 
 <template>
-  <PageFrame :title="$t('access.title')" :subtitle="$t('access.subtitle')">
+  <PageFrame
+    :title="$t(organizationScope ? 'access.organizationTitle' : 'access.title')"
+    :subtitle="
+      $t(organizationScope ? 'access.organizationSubtitle' : 'access.subtitle')
+    "
+  >
     <template #actions>
       <button
-        v-if="projectRef && canAdd"
+        v-if="canAdd"
         class="button button--primary"
         type="button"
         @click="add"
       >
-        {{ $t("access.add") }}
+        {{ $t(organizationScope ? "access.addOrganization" : "access.add") }}
       </button>
     </template>
-    <section v-if="!route.params.projectRef" class="panel project-choice">
-      <label class="field"
-        ><span>{{ $t("access.project") }}</span
-        ><select :value="projectRef" @change="chooseProject">
-          <option value="">{{ $t("app.chooseProject") }}</option>
-          <option
-            v-for="project in platform.projectList"
-            :key="project.ref"
-            :value="project.ref"
-          >
-            {{ project.name }}
-          </option>
-        </select></label
-      >
+    <section class="scope-summary" aria-live="polite">
+      <strong>{{
+        $t(
+          organizationScope
+            ? "access.organizationScope"
+            : "access.projectScope",
+        )
+      }}</strong>
+      <span>{{
+        $t(
+          organizationScope
+            ? "access.organizationScopeHint"
+            : "access.projectScopeHint",
+        )
+      }}</span>
     </section>
     <AsyncState
-      v-if="projectRef"
-      :loading="platform.loading.members"
-      :problem="platform.problems.members"
+      :loading="platform.loading[listKey]"
+      :problem="platform.problems[listKey]"
       :empty="list.length === 0"
-      :empty-title="$t('access.emptyTitle')"
-      @retry="platform.loadMembers(projectRef)"
+      :empty-title="
+        $t(
+          organizationScope
+            ? 'access.organizationEmptyTitle'
+            : 'access.emptyTitle',
+        )
+      "
+      :empty-text="
+        $t(
+          organizationScope
+            ? 'access.organizationEmptyText'
+            : 'access.emptyText',
+        )
+      "
+      @retry="load"
     >
       <div class="entity-list">
         <article
@@ -192,6 +250,13 @@ onMounted(() => void platform.loadProjects());
             <p>
               {{ membership.user.emailHint }} ·
               {{ $t(`access.roles.${membership.platformRole}`) }}
+            </p>
+            <p v-if="!organizationScope" class="secondary">
+              {{
+                $t("access.permissionCount", {
+                  count: membership.permissions.length,
+                })
+              }}
             </p>
           </div>
           <StatusBadge :state="membership.active ? 'ACTIVE' : 'DISABLED'" />
@@ -216,15 +281,18 @@ onMounted(() => void platform.loadProjects());
         </article>
       </div>
     </AsyncState>
-    <section v-else class="empty-state">
-      <div class="empty-state__icon" aria-hidden="true">+</div>
-      <h2>{{ $t("access.chooseProject") }}</h2>
-      <p>{{ $t("access.chooseProjectText") }}</p>
-    </section>
     <ProblemNotice v-if="problem && !dialog" :problem="problem" compact />
     <ModalDialog
       v-if="dialog"
-      :title="$t(selected ? 'access.edit' : 'access.add')"
+      :title="
+        $t(
+          selected
+            ? 'access.edit'
+            : organizationScope
+              ? 'access.addOrganization'
+              : 'access.add',
+        )
+      "
       :busy="busy"
       @close="closeDialog"
       ><form id="membership-form" class="form-grid" @submit.prevent="submit">
@@ -235,12 +303,18 @@ onMounted(() => void platform.loadProjects());
         <AsyncState
           v-else
           class="field--wide candidate-state"
-          :loading="platform.loading.memberCandidates"
-          :problem="platform.problems.memberCandidates"
+          :loading="platform.loading[candidateKey]"
+          :problem="platform.problems[candidateKey]"
           :empty="candidates.length === 0"
           :empty-title="$t('access.noCandidates')"
-          :empty-text="$t('access.noCandidatesText')"
-          @retry="platform.loadMembershipCandidates(projectRef)"
+          :empty-text="
+            $t(
+              organizationScope
+                ? 'access.noOrganizationCandidatesText'
+                : 'access.noCandidatesText',
+            )
+          "
+          @retry="add"
         >
           <label class="field field--wide"
             ><span>{{ $t("access.member") }}</span
@@ -257,7 +331,7 @@ onMounted(() => void platform.loadProjects());
             </select></label
           >
         </AsyncState>
-        <label class="field field--wide"
+        <label v-if="organizationScope" class="field field--wide"
           ><span>{{ $t("access.role") }}</span
           ><select v-model="form.platformRole">
             <option value="OWNER">{{ $t("access.roles.OWNER") }}</option>
@@ -269,16 +343,21 @@ onMounted(() => void platform.loadProjects());
             <option value="AUDITOR">{{ $t("access.roles.AUDITOR") }}</option>
           </select></label
         >
-        <fieldset class="permission-grid field--wide">
+        <fieldset v-else class="permission-grid field--wide">
           <legend>{{ $t("access.permissions") }}</legend>
           <label v-for="permission in permissions" :key="permission"
             ><input
               type="checkbox"
               :checked="form.permissions.includes(permission)"
+              :disabled="permission === 'VIEW'"
               @change="togglePermission(permission)"
             />{{ $t(`access.permission.${permission}`) }}</label
           >
         </fieldset>
+        <label v-if="selected" class="field field--wide inline-control"
+          ><input v-model="form.active" type="checkbox" />
+          <span>{{ $t("access.active") }}</span></label
+        >
         <ProblemNotice
           v-if="problem"
           class="field--wide"
@@ -308,9 +387,14 @@ onMounted(() => void platform.loadProjects());
 </template>
 
 <style scoped>
-.project-choice {
-  max-width: 520px;
+.scope-summary {
+  display: grid;
+  gap: 4px;
   margin-bottom: 18px;
+}
+.scope-summary span,
+.secondary {
+  color: var(--text-secondary);
 }
 .candidate-state {
   min-height: 92px;
@@ -322,13 +406,15 @@ onMounted(() => void platform.loadProjects());
   border: 0;
   padding: 0;
 }
-.permission-grid label {
+.permission-grid label,
+.inline-control {
   display: flex;
   gap: 8px;
   align-items: flex-start;
   font-weight: 400;
 }
-.permission-grid input {
+.permission-grid input,
+.inline-control input {
   width: auto;
   min-height: auto;
 }

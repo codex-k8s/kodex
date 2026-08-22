@@ -92,6 +92,8 @@ type Repository interface {
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
+	ListPlatformMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
+	ListPlatformMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)
 	ListMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
 	ListMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)
 	ListAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)

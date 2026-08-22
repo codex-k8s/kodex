@@ -66,6 +66,7 @@ type PlatformKind =
   | "INTEGRATION_CONNECTION"
   | "INTEGRATION_GRANT"
   | "MEMBERSHIP"
+  | "PLATFORM_MEMBERSHIP"
   | "SYSTEM_ASSISTANT"
   | "ROLE_IMAGE_RECIPE";
 
@@ -86,6 +87,7 @@ const platformKinds = new Set<PlatformKind>([
   "INTEGRATION_CONNECTION",
   "INTEGRATION_GRANT",
   "MEMBERSHIP",
+  "PLATFORM_MEMBERSHIP",
   "SYSTEM_ASSISTANT",
   "ROLE_IMAGE_RECIPE",
 ]);
@@ -114,6 +116,10 @@ export function reducePlatformSequence(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isActiveSocket(stream: ActiveStream, socket: WebSocket): boolean {
+  return stream.socket === socket && !stream.stopped;
 }
 
 function isSnapshotWire(
@@ -403,7 +409,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
               attempt: previousAttempt,
             });
             await platform.reloadPlatformState();
-            if (stream.socket === socket && !stream.stopped)
+            if (isActiveSocket(stream, socket))
               platformSequence.value = Number(envelope.currentSequence);
             return;
           }
@@ -429,7 +435,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
               return;
             }
             await platform.reloadPlatformKind(invalidation.kind);
-            if (stream.socket === socket && !stream.stopped)
+            if (isActiveSocket(stream, socket))
               platformSequence.value = invalidation.sequence;
             return;
           }

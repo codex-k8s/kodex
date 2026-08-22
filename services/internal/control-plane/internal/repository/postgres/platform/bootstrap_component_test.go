@@ -231,19 +231,33 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("unknown OIDC subject received authority before membership: %v", err)
 	}
+	organizationCandidates, _, err := service.ListPlatformMembershipCandidates(ctx, owner, query.Filter{Query: "Alex", Page: query.Page{Size: 20}})
+	if err != nil || len(organizationCandidates) != 1 || organizationCandidates[0].DisplayName != candidateInput.ExternalDisplayName || organizationCandidates[0].EmailMasked != candidateInput.ExternalEmailHint {
+		t.Fatalf("list organization membership candidate: candidates=%#v err=%v", organizationCandidates, err)
+	}
+	organizationMember, err := service.Execute(ctx, command.Command{
+		Kind: command.AddPlatformMembership, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "organization-membership-candidate-add"},
+		Payload: command.PlatformMembershipInput{UserRef: organizationCandidates[0].Ref, Role: "OPERATOR", Active: true},
+	})
+	if err != nil || organizationMember.Membership == nil || !organizationMember.Membership.Active || organizationMember.Membership.Role != "OPERATOR" {
+		t.Fatalf("add organization membership: membership=%#v err=%v", organizationMember.Membership, err)
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, candidateInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("organization member received project authority before project membership: %v", err)
+	}
 	candidates, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
-	if err != nil || len(candidates) != 1 || candidates[0].DisplayName != candidateInput.ExternalDisplayName || candidates[0].EmailMasked != candidateInput.ExternalEmailHint {
-		t.Fatalf("list membership candidate: candidates=%#v err=%v", candidates, err)
+	if err != nil || len(candidates) != 1 || candidates[0].Ref != organizationCandidates[0].Ref {
+		t.Fatalf("list project membership candidate: candidates=%#v err=%v", candidates, err)
 	}
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.AddMembership, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-system-subject-rejected"},
-		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: "sys_platform", Role: "OPERATOR", Permissions: []string{"VIEW"}, Active: true},
+		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: "sys_platform", Permissions: []string{"VIEW"}, Active: true},
 	}); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("system subject accepted as project member: %v", err)
 	}
 	added, err := service.Execute(ctx, command.Command{
 		Kind: command.AddMembership, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-candidate-add"},
-		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: candidates[0].Ref, Role: "OPERATOR", Permissions: []string{"VIEW", "MANAGE_MEMBERS"}, Active: true},
+		Payload: command.MembershipInput{ProjectRef: projectRef, UserRef: candidates[0].Ref, Permissions: []string{"VIEW", "MANAGE_MEMBERS"}, Active: true},
 	})
 	if err != nil || added.Membership == nil || !added.Membership.Active {
 		t.Fatalf("add project membership: membership=%#v err=%v", added.Membership, err)
@@ -276,6 +290,110 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	foreignInput.ProjectRef = foreign.Project.Ref
 	if _, err := repository.ResolveProofAuthority(ctx, foreignInput); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("candidate received foreign project authority: %v", err)
+	}
+	foreignVersion := added.Membership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "membership-foreign-ref-change", ExpectedVersion: &foreignVersion},
+		Payload:  command.MembershipInput{ProjectRef: foreign.Project.Ref, MembershipRef: added.Membership.Ref, Permissions: []string{"VIEW"}, Active: true},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("foreign project membership ref was not hidden: %v", err)
+	}
+	platformMemberships, _, err := service.ListPlatformMemberships(ctx, owner, query.Filter{Page: query.Page{Size: 20}})
+	if err != nil || len(platformMemberships) != 2 {
+		t.Fatalf("list organization memberships: memberships=%#v err=%v", platformMemberships, err)
+	}
+	var ownerMembership entity.Membership
+	for _, membership := range platformMemberships {
+		if membership.Role == "OWNER" {
+			ownerMembership = membership
+		}
+	}
+	if ownerMembership.Ref == "" {
+		t.Fatal("installation owner membership missing")
+	}
+	administratorInput := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000004", ExternalTenantID: ownerInput.ExternalTenantID,
+		ExternalDisplayName: "Jamie Rivera", ExternalEmailHint: "j***@example.test",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.organization-memberships.change",
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, administratorInput); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("unknown administrator candidate received authority: %v", err)
+	}
+	administratorCandidates, _, err := service.ListPlatformMembershipCandidates(ctx, owner, query.Filter{Query: "Jamie", Page: query.Page{Size: 20}})
+	if err != nil || len(administratorCandidates) != 1 {
+		t.Fatalf("list administrator candidate: candidates=%#v err=%v", administratorCandidates, err)
+	}
+	administratorMembership, err := service.Execute(ctx, command.Command{
+		Kind: command.AddPlatformMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "organization-membership-administrator-add"},
+		Payload:  command.PlatformMembershipInput{UserRef: administratorCandidates[0].Ref, Role: "ADMINISTRATOR", Active: true},
+	})
+	if err != nil || administratorMembership.Membership == nil {
+		t.Fatalf("add administrator membership: membership=%#v err=%v", administratorMembership.Membership, err)
+	}
+	administrator := resolvedTestPrincipal(t, ctx, repository, administratorInput, "control-api-gateway")
+	ownerVersionForAdministrator := ownerMembership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangePlatformMembership, Principal: administrator,
+		Mutation: value.Mutation{IdempotencyKey: "administrator-owner-change", ExpectedVersion: &ownerVersionForAdministrator},
+		Payload:  command.PlatformMembershipInput{MembershipRef: ownerMembership.Ref, Role: "MEMBER", Active: true},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("administrator changed owner membership: %v", err)
+	}
+	organizationVersionForAdministrator := organizationMember.Membership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangePlatformMembership, Principal: administrator,
+		Mutation: value.Mutation{IdempotencyKey: "administrator-owner-grant", ExpectedVersion: &organizationVersionForAdministrator},
+		Payload:  command.PlatformMembershipInput{MembershipRef: organizationMember.Membership.Ref, Role: "OWNER", Active: true},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("administrator granted owner role: %v", err)
+	}
+	selfVersion := added.Membership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeMembership, Principal: candidate,
+		Mutation: value.Mutation{IdempotencyKey: "project-membership-self-change", ExpectedVersion: &selfVersion},
+		Payload:  command.MembershipInput{ProjectRef: projectRef, MembershipRef: added.Membership.Ref, Permissions: []string{"VIEW"}, Active: true},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("project member changed own permissions: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.AddMembership, Principal: candidate,
+		Mutation: value.Mutation{IdempotencyKey: "project-membership-overgrant"},
+		Payload:  command.MembershipInput{ProjectRef: projectRef, UserRef: administratorMembership.Membership.User.Ref, Permissions: []string{"VIEW", "LAUNCH_RUNS"}, Active: true},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("project manager granted permission it does not hold: %v", err)
+	}
+	ownerVersion := ownerMembership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangePlatformMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "membership-last-owner-demotion", ExpectedVersion: &ownerVersion},
+		Payload:  command.PlatformMembershipInput{MembershipRef: ownerMembership.Ref, Role: "MEMBER", Active: true},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("last owner demotion was not rejected: %v", err)
+	}
+	organizationVersion := organizationMember.Membership.Version
+	suspended, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangePlatformMembership, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "organization-membership-suspend", ExpectedVersion: &organizationVersion},
+		Payload:  command.PlatformMembershipInput{MembershipRef: organizationMember.Membership.Ref, Role: "OPERATOR", Active: false},
+	})
+	if err != nil || suspended.Membership == nil || suspended.Membership.Active {
+		t.Fatalf("suspend organization membership: membership=%#v err=%v", suspended.Membership, err)
+	}
+	withoutProject := candidateInput
+	withoutProject.ProjectRef = ""
+	if _, err := repository.ResolveProofAuthority(ctx, withoutProject); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("suspended organization member retained authority: %v", err)
+	}
+	projectMemberships, _, err := service.ListMemberships(ctx, owner, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list project memberships after organization suspension: %v", err)
+	}
+	for _, membership := range projectMemberships {
+		if membership.Ref == added.Membership.Ref && membership.Active {
+			t.Fatal("project membership remained active after organization suspension")
+		}
 	}
 }
 

@@ -98,10 +98,23 @@ export type Membership = {
     nextActions: Array<NextAction>;
 };
 
-export type MembershipInput = {
+export type ProjectMembershipCreateInput = {
+    userRef: OpaqueRef;
+    permissions: Array<'VIEW' | 'MANAGE' | 'MANAGE_MEMBERS' | 'MANAGE_AGENTS' | 'MANAGE_WORKFLOWS' | 'LAUNCH_RUNS' | 'CANCEL_RUNS' | 'RESOLVE_GATES' | 'MANAGE_ARTIFACTS' | 'MANAGE_SCHEDULES' | 'MANAGE_INTEGRATIONS' | 'VIEW_AUDIT'>;
+};
+
+export type ProjectMembershipChangeInput = {
+    permissions: Array<'VIEW' | 'MANAGE' | 'MANAGE_MEMBERS' | 'MANAGE_AGENTS' | 'MANAGE_WORKFLOWS' | 'LAUNCH_RUNS' | 'CANCEL_RUNS' | 'RESOLVE_GATES' | 'MANAGE_ARTIFACTS' | 'MANAGE_SCHEDULES' | 'MANAGE_INTEGRATIONS' | 'VIEW_AUDIT'>;
+    active: boolean;
+};
+
+export type PlatformMembershipCreateInput = {
     userRef: OpaqueRef;
     platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
-    permissions: Array<'VIEW' | 'MANAGE' | 'MANAGE_MEMBERS' | 'MANAGE_AGENTS' | 'MANAGE_WORKFLOWS' | 'LAUNCH_RUNS' | 'CANCEL_RUNS' | 'RESOLVE_GATES' | 'MANAGE_ARTIFACTS' | 'MANAGE_SCHEDULES' | 'MANAGE_INTEGRATIONS' | 'VIEW_AUDIT'>;
+};
+
+export type PlatformMembershipChangeInput = {
+    platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
     active: boolean;
 };
 
@@ -1143,13 +1156,14 @@ export type ListProjectMembershipsResponses = {
      */
     200: {
         items: Array<Membership>;
+        nextActions: Array<NextAction>;
     };
 };
 
 export type ListProjectMembershipsResponse = ListProjectMembershipsResponses[keyof ListProjectMembershipsResponses];
 
 export type AddProjectMembershipData = {
-    body: MembershipInput;
+    body: ProjectMembershipCreateInput;
     headers: {
         'Idempotency-Key': string;
         'X-CSRF-Token': string;
@@ -1178,6 +1192,163 @@ export type AddProjectMembershipResponses = {
 };
 
 export type AddProjectMembershipResponse = AddProjectMembershipResponses[keyof AddProjectMembershipResponses];
+
+export type ListPlatformMembershipsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/members';
+};
+
+export type ListPlatformMembershipsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPlatformMembershipsError = ListPlatformMembershipsErrors[keyof ListPlatformMembershipsErrors];
+
+export type ListPlatformMembershipsResponses = {
+    /**
+     * Участники организации и их platform roles
+     */
+    200: {
+        items: Array<Membership>;
+        nextPageToken?: string;
+        nextActions: Array<NextAction>;
+    };
+};
+
+export type ListPlatformMembershipsResponse = ListPlatformMembershipsResponses[keyof ListPlatformMembershipsResponses];
+
+export type AddPlatformMembershipData = {
+    body: PlatformMembershipCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/administration/members';
+};
+
+export type AddPlatformMembershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type AddPlatformMembershipError = AddPlatformMembershipErrors[keyof AddPlatformMembershipErrors];
+
+export type AddPlatformMembershipResponses = {
+    /**
+     * Участник организации добавлен
+     */
+    201: Membership;
+};
+
+export type AddPlatformMembershipResponse = AddPlatformMembershipResponses[keyof AddPlatformMembershipResponses];
+
+export type ListPlatformMembershipCandidatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/administration/membership-candidates';
+};
+
+export type ListPlatformMembershipCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListPlatformMembershipCandidatesError = ListPlatformMembershipCandidatesErrors[keyof ListPlatformMembershipCandidatesErrors];
+
+export type ListPlatformMembershipCandidatesResponses = {
+    /**
+     * Проверенные пользователи, которых можно добавить в организацию
+     */
+    200: {
+        items: Array<UserSummary>;
+        nextPageToken?: string;
+    };
+};
+
+export type ListPlatformMembershipCandidatesResponse = ListPlatformMembershipCandidatesResponses[keyof ListPlatformMembershipCandidatesResponses];
+
+export type RemovePlatformMembershipData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        membershipRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/members/{membershipRef}';
+};
+
+export type RemovePlatformMembershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RemovePlatformMembershipError = RemovePlatformMembershipErrors[keyof RemovePlatformMembershipErrors];
+
+export type RemovePlatformMembershipResponses = {
+    /**
+     * Участие в организации отозвано
+     */
+    200: Membership;
+};
+
+export type RemovePlatformMembershipResponse = RemovePlatformMembershipResponses[keyof RemovePlatformMembershipResponses];
+
+export type ChangePlatformMembershipData = {
+    body: PlatformMembershipChangeInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        membershipRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/administration/members/{membershipRef}';
+};
+
+export type ChangePlatformMembershipErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ChangePlatformMembershipError = ChangePlatformMembershipErrors[keyof ChangePlatformMembershipErrors];
+
+export type ChangePlatformMembershipResponses = {
+    /**
+     * Platform role изменена
+     */
+    200: Membership;
+};
+
+export type ChangePlatformMembershipResponse = ChangePlatformMembershipResponses[keyof ChangePlatformMembershipResponses];
 
 export type ListProjectMembershipCandidatesData = {
     body?: never;
@@ -1247,7 +1418,7 @@ export type RemoveProjectMembershipResponses = {
 export type RemoveProjectMembershipResponse = RemoveProjectMembershipResponses[keyof RemoveProjectMembershipResponses];
 
 export type ChangeProjectMembershipData = {
-    body: MembershipInput;
+    body: ProjectMembershipChangeInput;
     headers: {
         'If-Match': string;
         'Idempotency-Key': string;

@@ -13,6 +13,7 @@ const (
   PlatformEventNameIntegrationConnectionChanged
   PlatformEventNameIntegrationGrantChanged
   PlatformEventNameMembershipChanged
+  PlatformEventNamePlatformMembershipChanged
   PlatformEventNameSystemAssistantChanged
   PlatformEventNameRoleImageRecipeChanged
 )
@@ -25,7 +26,7 @@ func (op PlatformEventName) Value() any {
 	return PlatformEventNameValues[op]
 }
 
-var PlatformEventNameValues = []any{"PROJECT_CHANGED","AGENT_CHANGED","ARTIFACT_CHANGED","INSTRUCTIONS_PUBLISHED","WORKFLOW_CHANGED","SCHEDULE_CHANGED","INTEGRATION_CONNECTION_CHANGED","INTEGRATION_GRANT_CHANGED","MEMBERSHIP_CHANGED","SYSTEM_ASSISTANT_CHANGED","ROLE_IMAGE_RECIPE_CHANGED"}
+var PlatformEventNameValues = []any{"PROJECT_CHANGED","AGENT_CHANGED","ARTIFACT_CHANGED","INSTRUCTIONS_PUBLISHED","WORKFLOW_CHANGED","SCHEDULE_CHANGED","INTEGRATION_CONNECTION_CHANGED","INTEGRATION_GRANT_CHANGED","MEMBERSHIP_CHANGED","PLATFORM_MEMBERSHIP_CHANGED","SYSTEM_ASSISTANT_CHANGED","ROLE_IMAGE_RECIPE_CHANGED"}
 var ValuesToPlatformEventName = map[any]PlatformEventName{
   PlatformEventNameValues[PlatformEventNameProjectChanged]: PlatformEventNameProjectChanged,
   PlatformEventNameValues[PlatformEventNameAgentChanged]: PlatformEventNameAgentChanged,
@@ -36,6 +37,7 @@ var ValuesToPlatformEventName = map[any]PlatformEventName{
   PlatformEventNameValues[PlatformEventNameIntegrationConnectionChanged]: PlatformEventNameIntegrationConnectionChanged,
   PlatformEventNameValues[PlatformEventNameIntegrationGrantChanged]: PlatformEventNameIntegrationGrantChanged,
   PlatformEventNameValues[PlatformEventNameMembershipChanged]: PlatformEventNameMembershipChanged,
+  PlatformEventNameValues[PlatformEventNamePlatformMembershipChanged]: PlatformEventNamePlatformMembershipChanged,
   PlatformEventNameValues[PlatformEventNameSystemAssistantChanged]: PlatformEventNameSystemAssistantChanged,
   PlatformEventNameValues[PlatformEventNameRoleImageRecipeChanged]: PlatformEventNameRoleImageRecipeChanged,
 }

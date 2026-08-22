@@ -59,6 +59,22 @@ func (server *Server) GetProject(w http.ResponseWriter, r *http.Request, ref gen
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+func (server *Server) ListPlatformMemberships(w http.ResponseWriter, r *http.Request, p generated.ListPlatformMembershipsParams) {
+	response, err := server.control.Query.ListPlatformMemberships(r.Context(), &controlplanev1.ListPlatformMembershipsRequest{Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "memberships")
+}
+func (server *Server) ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request, p generated.ListPlatformMembershipCandidatesParams) {
+	response, err := server.control.Query.ListPlatformMembershipCandidates(r.Context(), &controlplanev1.ListPlatformMembershipCandidatesRequest{Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "users")
+}
 func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {
