@@ -420,6 +420,7 @@ components:
         edge: { $ref: '#/components/schemas/RunEdge' }
         gate: { $ref: '#/components/schemas/OwnerGate' }
         artifact: { $ref: '#/components/schemas/Artifact' }
+        incident: { $ref: '#/components/schemas/Incident' }
     RunEventType:
       type: string
       enum: [RUN_CREATED, RUN_STATE_CHANGED, NODE_ADDED, NODE_STATE_CHANGED, EDGE_ADDED, TURN_QUEUED, TURN_STARTED, TURN_PROGRESS, TURN_COMPLETED, DELEGATION_CREATED, CALLBACK_DELIVERED, OWNER_GATE_OPENED, OWNER_GATE_RESOLVED, ARTIFACT_AVAILABLE, INCIDENT_LINKED]
@@ -503,3 +504,24 @@ components:
     ArtifactSource:
       type: string
       enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]
+    Incident:
+      type: object
+      additionalProperties: false
+      required: [ref, category, severity, state, safeSummary, safeNextStep, coreAffected, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        category: { type: string, maxLength: 80 }
+        severity: { $ref: '#/components/schemas/IncidentSeverity' }
+        state: { $ref: '#/components/schemas/IncidentState' }
+        safeSummary: { type: string, maxLength: 1000 }
+        safeNextStep: { type: string, maxLength: 1000 }
+        coreAffected: { type: boolean }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    IncidentSeverity:
+      type: string
+      enum: [INFO, WARNING, ERROR, CRITICAL]
+    IncidentState:
+      type: string
+      enum: [OPEN, RECOVERING, RESOLVED]

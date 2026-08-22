@@ -1831,6 +1831,7 @@ components:
         startedAt: { $ref: '#/components/schemas/Timestamp' }
         finishedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Incident' } }
     RunNode:
       type: object
       additionalProperties: false
@@ -1911,6 +1912,7 @@ components:
         edge: { $ref: '#/components/schemas/RunEdge' }
         gate: { $ref: '#/components/schemas/OwnerGate' }
         artifact: { $ref: '#/components/schemas/Artifact' }
+        incident: { $ref: '#/components/schemas/Incident' }
     RunGraph:
       type: object
       additionalProperties: false

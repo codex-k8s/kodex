@@ -40,6 +40,7 @@ const artifactList = computed(() =>
     (a) => a.runRef === runRef.value || a.runRef === run.value?.rootRunRef,
   ),
 );
+const incidentList = computed(() => run.value?.incidents ?? []);
 const selectedRef = ref<string>();
 const openedStreamRef = ref<string>();
 const selectedNode = computed(
@@ -370,6 +371,26 @@ onBeforeUnmount(() => {
         </aside>
       </div>
       <section v-if="run" class="run-bottom">
+        <article class="panel run-incidents" aria-live="polite">
+          <h2>{{ $t("runs.incidents") }}</h2>
+          <div v-if="incidentList.length" class="incident-list">
+            <article
+              v-for="incident in incidentList"
+              :key="incident.ref"
+              class="incident-row"
+            >
+              <div>
+                <strong>{{ incident.safeSummary }}</strong>
+                <p>{{ incident.safeNextStep }}</p>
+                <small v-if="!incident.coreAffected">
+                  {{ $t("runs.coreUnaffected") }}
+                </small>
+              </div>
+              <StatusBadge :state="incident.severity" />
+            </article>
+          </div>
+          <p v-else>{{ $t("runs.noIncidents") }}</p>
+        </article>
         <article class="panel">
           <h2>{{ $t("runs.artifacts") }}</h2>
           <div v-if="artifactList.length" class="artifact-list">
@@ -419,6 +440,26 @@ onBeforeUnmount(() => {
   margin: -10px 0 16px;
   color: var(--muted);
   font-size: 0.86rem;
+}
+.incident-list {
+  display: grid;
+  gap: 8px;
+}
+.incident-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+.incident-row p {
+  margin: 4px 0;
+}
+.incident-row small {
+  color: var(--muted);
 }
 .live-indicator {
   margin-left: auto;

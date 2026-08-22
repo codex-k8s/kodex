@@ -1207,6 +1207,10 @@ func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, 
 }
 
 func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, summary, runState, nodeState string) (entity.RunEvent, error) {
+	return repository.emitRunEventWithIncident(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, nil, summary, runState, nodeState)
+}
+
+func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, summary, runState, nodeState string) (entity.RunEvent, error) {
 	var sequence, version int64
 	var rootRef, projectRef string
 	var projectValue any
@@ -1225,8 +1229,14 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 	if err != nil {
 		return entity.RunEvent{}, err
 	}
+	incidentRef := ""
+	if incident != nil {
+		incidentCopy := *incident
+		delta.Incident = &incidentCopy
+		incidentRef = incident.Ref
+	}
 	safeSummary := truncate(summary, 2000)
-	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC(), Delta: delta}
+	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, OccurredAt: time.Now().UTC(), Delta: delta}
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt); err != nil {
 		return entity.RunEvent{}, errs.ErrUnavailable
 	}
@@ -1235,6 +1245,9 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 		if value != "" {
 			data[key] = value
 		}
+	}
+	if incidentRef != "" {
+		data["incidentRef"] = incidentRef
 	}
 	if state := eventRunState(runState); state != "" {
 		data["state"] = state

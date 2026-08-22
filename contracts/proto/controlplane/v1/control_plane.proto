@@ -543,6 +543,10 @@ message Run {
   // retry_of_run_ref — server-owned predecessor attempt. Это opaque readback,
   // а не authority и не принимается ни одной mutation-командой.
   string retry_of_run_ref = 24;
+  // incidents содержит только безопасные диагностические проекции этого root
+  // Run. Optional delivery failure не изменяет core state и имеет
+  // core_affected=false.
+  repeated Incident incidents = 25;
 }
 
 message RunNode {
@@ -636,6 +640,9 @@ message RunEvent {
   OwnerGate gate = 18;
   // artifact присутствует только как metadata; содержимое читается отдельным API.
   Artifact artifact = 19;
+  // incident присутствует для безопасной диагностической проекции; secret и
+  // сырой ответ внешнего provider в событие не попадают.
+  Incident incident = 20;
 }
 
 message RunGraph {

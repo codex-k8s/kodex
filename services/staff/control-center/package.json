@@ -15,7 +15,7 @@
     "test:unit": "vitest run",
     "test:e2e:auth": "playwright test --config playwright.auth.config.ts",
     "test:e2e": "playwright test",
-    "test:e2e:check": "tsc --noEmit -p tsconfig.e2e.json && MATTERCODEX_E2E_CHECK_ONLY=1 playwright test --list && MATTERCODEX_E2E_CHECK_ONLY=1 playwright test --config playwright.auth.config.ts --list",
+    "test:e2e:check": "tsc --noEmit -p tsconfig.e2e.json && MATTERCODEX_E2E_CHECK_ONLY=1 MATTERCODEX_E2E_PROFILE=web-only playwright test --list && MATTERCODEX_E2E_CHECK_ONLY=1 MATTERCODEX_E2E_PROFILE=mattermost playwright test --list && MATTERCODEX_E2E_CHECK_ONLY=1 playwright test --config playwright.auth.config.ts --list",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -29,6 +29,8 @@ var (
 	queryInteractionCancelPendingGateDeliveries string
 	//go:embed sql/interaction_list_failed_incidents.sql
 	queryInteractionListFailedIncidents string
+	//go:embed sql/interaction_list_run_incidents.sql
+	queryInteractionListRunIncidents string
 	//go:embed sql/interaction_count_active_adapters.sql
 	queryInteractionCountActiveAdapters string
 )

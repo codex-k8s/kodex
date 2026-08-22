@@ -40,6 +40,18 @@ STREAM_UNAVAILABLE:
   other: Live updates are temporarily unavailable
 GAP_UNRECOVERABLE:
   other: Some live updates are no longer available; the current state will be loaded again
+INTERACTION_DELIVERY_FAILED:
+  other: A message could not be delivered to an optional external channel
+INTERACTION_DELIVERY_RETRYING:
+  other: Delivery will be retried automatically; the core run is unaffected
+INTERACTION_DELIVERY_RETRY_EXHAUSTED:
+  other: Automatic retries are exhausted; check the connection in Integrations
+INTERACTION_DELIVERY_RECOVERED:
+  other: Delivery to the external channel has recovered
+INTERACTION_DELIVERY_RECOVERY_COMPLETE:
+  other: No action is required; the core run remained available
+INTERACTION_DELIVERY_SUCCEEDED:
+  other: The message was delivered to the external channel
 CANCELLED_BY_OWNER:
   other: The run was cancelled by a user
 PROVIDER_AUTH_UNAVAILABLE:

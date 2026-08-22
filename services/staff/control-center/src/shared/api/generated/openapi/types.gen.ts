@@ -389,6 +389,7 @@ export type Run = {
     startedAt?: Timestamp;
     finishedAt?: Timestamp;
     nextActions: Array<NextAction>;
+    incidents?: Array<Incident>;
 };
 
 export type RunNode = {
@@ -461,6 +462,7 @@ export type RunEvent = {
     edge?: RunEdge;
     gate?: OwnerGate;
     artifact?: Artifact;
+    incident?: Incident;
 };
 
 export type RunGraph = {

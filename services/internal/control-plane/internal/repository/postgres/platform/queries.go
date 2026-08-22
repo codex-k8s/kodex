@@ -480,6 +480,11 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 
 type rowScanner interface{ Scan(...any) error }
 
+type queryRunner interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 func scanWorkflow(row rowScanner) (entity.Workflow, error) {
 	var item entity.Workflow
 	var draft, published []byte
@@ -579,20 +584,68 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 	if err != nil {
 		return entity.Run{}, err
 	}
-	return scanRun(repository.pool.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID))
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return entity.Run{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	item, err := repository.readRunWithIncidents(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.Run{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.Run{}, errs.ErrUnavailable
+	}
+	return item, nil
+}
+
+func (repository *Repository) readRunWithIncidents(ctx context.Context, runner queryRunner, scope scope, ref string) (entity.Run, error) {
+	item, err := scanRun(runner.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID))
+	if err != nil {
+		return entity.Run{}, err
+	}
+	rows, err := runner.Query(ctx, queryInteractionListRunIncidents, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"run_ref":         ref,
+		"platform_role":   scope.role,
+		"actor_id":        scope.actorID,
+	})
+	if err != nil {
+		return entity.Run{}, errs.ErrUnavailable
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var incident entity.Incident
+		var deliveryState string
+		var attempt int
+		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
+			return entity.Run{}, errs.ErrUnavailable
+		}
+		incident = projectInteractionIncident(incident, deliveryState, attempt)
+		item.Incidents = append(item.Incidents, incident)
+	}
+	if err := rows.Err(); err != nil {
+		return entity.Run{}, errs.ErrUnavailable
+	}
+	return item, nil
 }
 
 func (repository *Repository) GetRunGraph(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
-	run, err := repository.GetRun(ctx, principal, ref)
-	if err != nil {
-		return entity.Run{}, entity.RunGraph{}, err
-	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	run, err := repository.readRunWithIncidents(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
-	rows, err := repository.pool.Query(ctx, queryQueriesGetrungraphSelectArtifactsNodeIdRef, scope.organizationID, run.RootRunRef)
+	rows, err := tx.Query(ctx, queryQueriesGetrungraphSelectArtifactsNodeIdRef, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -609,7 +662,7 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	rows.Close()
-	edgeRows, err := repository.pool.Query(ctx, queryQueriesGetrungraphSelectRunEdgesOrganizationIdRef, scope.organizationID, run.RootRunRef)
+	edgeRows, err := tx.Query(ctx, queryQueriesGetrungraphSelectRunEdgesOrganizationIdRef, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -626,6 +679,9 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	edgeRows.Close()
+	if err := tx.Commit(ctx); err != nil {
+		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
+	}
 	return run, graph, nil
 }
 
@@ -641,11 +697,16 @@ func scanRunNode(row rowScanner) (entity.RunNode, error) {
 }
 
 func (repository *Repository) ListRunEvents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RunEvent, int64, bool, error) {
-	run, err := repository.GetRun(ctx, principal, filter.ResourceRef)
+	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, 0, false, err
 	}
-	scope, err := repository.resolveScope(ctx, principal)
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, 0, false, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	run, err := repository.readRunWithIncidents(ctx, tx, scope, filter.ResourceRef)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -656,7 +717,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	if limit > 500 {
 		limit = 500
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListruneventsSelectRunEventsOrganizationIdRef, scope.organizationID, run.RootRunRef, filter.AfterSequence, limit)
+	rows, err := tx.Query(ctx, queryQueriesListruneventsSelectRunEventsOrganizationIdRef, scope.organizationID, run.RootRunRef, filter.AfterSequence, limit)
 	if err != nil {
 		return nil, 0, false, errs.ErrUnavailable
 	}
@@ -671,11 +732,21 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		if err := json.Unmarshal(delta, &e.Delta); err != nil || e.Delta.Run == nil {
 			return nil, 0, false, errs.ErrUnavailable
 		}
+		if e.Delta.Incident != nil {
+			e.IncidentRef = e.Delta.Incident.Ref
+		}
 		e.GraphRevision = e.Delta.Run.GraphRevision
 		result = append(result, e)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, false, errs.ErrUnavailable
+	}
+	rows.Close()
 	complete := len(result) < int(limit) || len(result) > 0 && result[len(result)-1].Sequence == run.EventSequence
-	return result, run.EventSequence, complete, rows.Err()
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, false, errs.ErrUnavailable
+	}
+	return result, run.EventSequence, complete, nil
 }
 
 func (repository *Repository) ListOwnerGates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OwnerGate, string, error) {
@@ -1048,16 +1119,12 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	defer incidentRows.Close()
 	for incidentRows.Next() {
 		var incident entity.Incident
-		var safeErrorCode string
-		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &safeErrorCode, &incident.CreatedAt); err != nil {
+		var deliveryState string
+		var attempt int
+		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
 			return platformrepo.Administration{}, errs.ErrUnavailable
 		}
-		incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
-		incident.Severity = "WARNING"
-		incident.State = "RECOVERING"
-		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_FAILED"
-		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RETRYING"
-		incident.CoreAffected = false
+		incident = projectInteractionIncident(incident, deliveryState, attempt)
 		result.Incidents = append(result.Incidents, incident)
 	}
 	if err := incidentRows.Err(); err != nil {

@@ -55,7 +55,7 @@ SELECT
     c.public_configuration->>'base_url',
     c.public_configuration->>'team_name',
     c.public_configuration->>'channel_name',
-    o.locale,
+    project.language,
     claimed.capability_key,
     claimed.message_key,
     claimed.template_data,
@@ -65,5 +65,5 @@ SELECT
     claimed.lease_expires_at
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
-JOIN control_plane.organizations o ON o.id = claimed.organization_id
+JOIN control_plane.projects project ON project.id = claimed.project_id
 ORDER BY claimed.created_at

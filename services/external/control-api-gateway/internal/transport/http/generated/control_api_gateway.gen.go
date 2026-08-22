@@ -1228,6 +1228,7 @@ type Run struct {
 	CurrentActivity   *string      `json:"currentActivity,omitempty"`
 	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
 	GraphRevision     int64        `json:"graphRevision"`
+	Incidents         *[]Incident  `json:"incidents,omitempty"`
 	Initiator         UserSummary  `json:"initiator"`
 	InputSummary      *string      `json:"inputSummary,omitempty"`
 	LastEventSequence int64        `json:"lastEventSequence"`
@@ -1306,6 +1307,7 @@ type RunEvent struct {
 	Gate          *OwnerGate         `json:"gate,omitempty"`
 	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
 	GraphRevision int64              `json:"graphRevision"`
+	Incident      *Incident          `json:"incident,omitempty"`
 	Node          *RunNode           `json:"node,omitempty"`
 	NodeRef       *OpaqueRef         `json:"nodeRef,omitempty"`
 	NodeState     *RunEventNodeState `json:"nodeState,omitempty"`

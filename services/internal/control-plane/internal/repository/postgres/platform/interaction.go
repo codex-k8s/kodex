@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
@@ -14,6 +15,31 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
+
+const maximumInteractionDeliveryAttempts = 10
+
+func projectInteractionIncident(incident entity.Incident, deliveryState string, attempt int) entity.Incident {
+	incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
+	incident.CoreAffected = false
+	switch {
+	case deliveryState == "SUCCEEDED":
+		incident.Severity = "INFO"
+		incident.State = "RESOLVED"
+		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_RECOVERED"
+		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RECOVERY_COMPLETE"
+	case attempt >= maximumInteractionDeliveryAttempts:
+		incident.Severity = "ERROR"
+		incident.State = "OPEN"
+		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_FAILED"
+		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RETRY_EXHAUSTED"
+	default:
+		incident.Severity = "WARNING"
+		incident.State = "RECOVERING"
+		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_FAILED"
+		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RETRYING"
+	}
+	return incident
+}
 
 func (repository *Repository) ListInteractionSources(ctx context.Context, principal value.Principal) ([]map[string]any, error) {
 	scope, err := repository.resolveScope(ctx, principal)
@@ -104,13 +130,14 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	}
 	var deliveryID, projectID, projectRef, rootRunID, runRef, gateID, capabilityKey string
 	var attempt int
+	var createdAt time.Time
 	err := tx.QueryRow(ctx, queryInteractionCompleteDeliveryResolve, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"delivery_ref":    payload.DeliveryRef,
 		"lease_ref":       payload.LeaseRef,
 		"fence":           payload.Fence,
 		"generation":      payload.Generation,
-	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt)
+	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt, &createdAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -133,10 +160,24 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	if payload.Success {
 		messageKey = "i18n:INTERACTION_DELIVERY_SUCCEEDED"
 	}
+	var event *entity.RunEvent
+	if !payload.Success || attempt > 1 {
+		incident := projectInteractionIncident(entity.Incident{
+			Ref: deliveryRef, ProjectRef: projectRef, RunRef: runRef, CreatedAt: createdAt,
+		}, state, attempt)
+		emitted, emitErr := repository.emitRunEventWithIncident(
+			ctx, tx, scope, projectID, rootRunID, deliveryRef, "INCIDENT_LINKED",
+			"", "", "", "", &incident, incident.SafeSummary, "", "",
+		)
+		if emitErr != nil {
+			return commandOutcome{}, emitErr
+		}
+		event = &emitted
+	}
 	return commandOutcome{
 		result: command.Result{Runtime: map[string]any{
 			"deliveryRef": deliveryRef, "state": state, "coreRunAffected": false,
-		}},
+		}, Event: event},
 		projectID: projectID, projectRef: projectRef, resourceKind: "INTERACTION_DELIVERY",
 		resourceRef: payload.DeliveryRef, summary: messageKey,
 	}, nil

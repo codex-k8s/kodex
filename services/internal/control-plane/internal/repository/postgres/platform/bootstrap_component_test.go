@@ -36,6 +36,8 @@ var (
 	bootstrapComponentReplaceSessionProviderAccountQuery string
 	//go:embed testdata/sql/bootstrap_component_connect_integration.sql
 	bootstrapComponentConnectIntegrationQuery string
+	//go:embed testdata/sql/bootstrap_component_make_interaction_delivery_due.sql
+	bootstrapComponentMakeInteractionDeliveryDueQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -112,6 +114,116 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("integration configuration and grants", func(t *testing.T) {
 		testIntegrationConfigurationAndGrants(t, ctx, repository, pool)
 	})
+	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
+		testOptionalInteractionIncident(t, ctx, repository, pool)
+	})
+}
+
+func testOptionalInteractionIncident(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
+	}, "control-api-gateway")
+	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
+	}, "runtime-controller")
+	interactionWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.deliveries.claim",
+	}, "interaction-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct optional interaction service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-project-create"},
+		Payload: command.ProjectInput{Name: "Customer success", Purpose: "Prepare customer updates", Language: "en"},
+	})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create interaction project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "interaction-agent-create", "Customer success specialist")
+	connection, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-connection-create"},
+		Payload: command.ConnectionInput{DefinitionKey: "mattermost", Name: "Optional customer channel", PublicConfiguration: map[string]any{
+			"base_url": "https://mattermost.example.test", "team_name": "customer-success", "channel_name": "ai-results",
+		}},
+	})
+	if err != nil || connection.Connection == nil {
+		t.Fatalf("create Mattermost connection: connection=%#v err=%v", connection.Connection, err)
+	}
+	var connectedVersion int64
+	if err := pool.QueryRow(ctx, bootstrapComponentConnectIntegrationQuery, connection.Connection.Ref).Scan(&connectedVersion); err != nil {
+		t.Fatalf("materialize connected Mattermost fixture: %v", err)
+	}
+	granted, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-notification-grant", ExpectedVersion: &connectedVersion},
+		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref, CapabilityKey: "mattermost.notifications", AgentRef: agent.Ref, Enabled: true},
+	})
+	if err != nil || granted.Connection == nil || len(granted.Connection.Grants) != 1 {
+		t.Fatalf("grant Mattermost notification: connection=%#v err=%v", granted.Connection, err)
+	}
+	launched, err := service.Execute(ctx, command.Command{
+		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-run-launch"},
+		Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Prepare account update", Task: "Prepare a concise account update.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
+	})
+	if err != nil || launched.Run == nil {
+		t.Fatalf("launch interaction run: run=%#v err=%v", launched.Run, err)
+	}
+	completed := claimAndCompleteRun(t, ctx, service, runtimeWorker, "interaction-run", false)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
+		t.Fatalf("complete interaction run: run=%#v", completed.Run)
+	}
+	claims, err := service.ClaimInteractionDeliveries(ctx, interactionWorker, "interaction-component", 1)
+	if err != nil || len(claims) != 1 {
+		t.Fatalf("claim optional delivery: claims=%#v err=%v", claims, err)
+	}
+	claim := claims[0]
+	failed, err := service.Execute(ctx, command.Command{
+		Kind: command.CompleteInteractionDelivery, Principal: interactionWorker,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-delivery-failed"},
+		Payload: command.InteractionDeliveryInput{
+			DeliveryRef: stringMap(claim, "deliveryRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"),
+			Generation: claim["generation"].(int64), Success: false, SafeErrorCode: "INTERACTION_UNAVAILABLE",
+		},
+	})
+	if err != nil || failed.Event == nil || failed.Event.Type != "INCIDENT_LINKED" || failed.Event.Delta.Incident == nil || failed.Event.Delta.Incident.CoreAffected {
+		t.Fatalf("record optional delivery incident: event=%#v err=%v", failed.Event, err)
+	}
+	readback, err := service.GetRun(ctx, owner, completed.Run.Ref)
+	if err != nil || readback.State != "SUCCEEDED" || len(readback.Incidents) != 1 || readback.Incidents[0].State != "RECOVERING" || readback.Incidents[0].CoreAffected {
+		t.Fatalf("optional failure changed core run or lost incident: run=%#v err=%v", readback, err)
+	}
+	events, sequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completed.Run.Ref, Limit: 100})
+	if err != nil || !complete || len(events) == 0 || events[len(events)-1].Type != "INCIDENT_LINKED" || events[len(events)-1].IncidentRef != readback.Incidents[0].Ref || sequence != events[len(events)-1].Sequence {
+		t.Fatalf("read incident from resumable stream: events=%#v sequence=%d complete=%v err=%v", events, sequence, complete, err)
+	}
+	if _, err := pool.Exec(ctx, bootstrapComponentMakeInteractionDeliveryDueQuery, stringMap(claim, "deliveryRef")); err != nil {
+		t.Fatalf("make failed delivery retryable: %v", err)
+	}
+	retryClaims, err := service.ClaimInteractionDeliveries(ctx, interactionWorker, "interaction-component", 1)
+	if err != nil || len(retryClaims) != 1 {
+		t.Fatalf("claim optional delivery retry: claims=%#v err=%v", retryClaims, err)
+	}
+	retry := retryClaims[0]
+	recovered, err := service.Execute(ctx, command.Command{
+		Kind: command.CompleteInteractionDelivery, Principal: interactionWorker,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-delivery-recovered"},
+		Payload: command.InteractionDeliveryInput{
+			DeliveryRef: stringMap(retry, "deliveryRef"), LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"),
+			Generation: retry["generation"].(int64), Success: true, ExternalPostRef: "post-component-001",
+		},
+	})
+	if err != nil || recovered.Event == nil || recovered.Event.Delta.Incident == nil || recovered.Event.Delta.Incident.State != "RESOLVED" {
+		t.Fatalf("resolve optional delivery incident: event=%#v err=%v", recovered.Event, err)
+	}
+	readback, err = service.GetRun(ctx, owner, completed.Run.Ref)
+	if err != nil || readback.State != "SUCCEEDED" || len(readback.Incidents) != 1 || readback.Incidents[0].State != "RESOLVED" {
+		t.Fatalf("read recovered optional delivery: run=%#v err=%v", readback, err)
+	}
 }
 
 func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

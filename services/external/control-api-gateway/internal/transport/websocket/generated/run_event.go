@@ -21,4 +21,5 @@ type RunEvent struct {
   Edge *RunEdge
   Gate *OwnerGate
   Artifact *Artifact
+  Incident *Incident
 }

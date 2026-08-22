@@ -41,6 +41,7 @@ function isConsistent(event: RunEvent): boolean {
     return false;
   if (event.gateRef && (!event.gate || event.gate.ref !== event.gateRef))
     return false;
+  if (event.type === "INCIDENT_LINKED" && !event.incident) return false;
   return !(
     event.artifactRef &&
     (!event.artifact || event.artifact.ref !== event.artifactRef)
@@ -83,6 +84,11 @@ export function reduceRunEvent(
     run.startedAt = event.run.startedAt;
     run.finishedAt = event.run.finishedAt;
     run.nextActions = event.run.nextActions;
+    if (event.incident) {
+      const incidents = run.incidents ?? [];
+      replaceOrAppend(incidents, event.incident);
+      run.incidents = incidents;
+    }
   }
 
   graph.revision = event.graphRevision;

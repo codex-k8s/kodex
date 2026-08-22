@@ -137,8 +137,38 @@ session continuation, typed assistant action и audit, nested workflow с дву
 дочерними агентами, Human Gate one-winner, WebSocket reconnect/catch-up,
 cancel/retry lineage, mobile navigation и работу core без integrations.
 
+Для optional-Mattermost профиля disposable installation заранее получает два
+Mattermost connection без grant к тестовым ресурсам:
+
+- рабочее подключение с фактически материализованным credential и включёнными
+  `mattermost.notifications`/`mattermost.result_mirror`;
+- outage-подключение, последний authoritative test которого был успешным, но
+  его endpoint во время сценария фактически недоступен.
+
+Оба подключения остаются необязательными для core readiness. Для независимого
+readback публикации используется отдельный токен disposable Mattermost только
+на чтение тестового канала. Значение находится в regular non-symlink файле с
+mode `0600`, не передаётся через env и не выводится в reporter:
+
+```bash
+export MATTERCODEX_E2E_PROFILE='mattermost'
+export MATTERCODEX_E2E_RESOURCE_PREFIX='<unique-lowercase-slug>'
+export MATTERCODEX_E2E_MATTERMOST_ORIGIN='https://<disposable-mattermost-origin>'
+export MATTERCODEX_E2E_MATTERMOST_TOKEN_FILE='<owner-only-token-file>'
+export MATTERCODEX_E2E_MATTERMOST_TEAM_NAME='<test-team-name>'
+export MATTERCODEX_E2E_MATTERMOST_CHANNEL_NAME='<test-channel-name>'
+export MATTERCODEX_E2E_MATTERMOST_HEALTHY_CONNECTION='<exact-control-center-name>'
+export MATTERCODEX_E2E_MATTERMOST_OUTAGE_CONNECTION='<exact-control-center-name>'
+npm run test:e2e
+```
+
+Сценарий выдаёт точные grants созданному ИИ-сотруднику, проверяет реальный post
+и result mirror через Mattermost API, отдельный `INCIDENT_LINKED` при outage и
+неизменное состояние `SUCCEEDED` core Run.
+
 `npm run test:e2e:check` выполняет TypeScript-проверку и перечисляет тесты без
-сети, browser binary и credentials. Это не считается фактическим E2E PASS.
+сети, browser binary и credentials для обоих профилей. Это не считается
+фактическим E2E PASS.
 
 ## Codegen и быстрые проверки
 

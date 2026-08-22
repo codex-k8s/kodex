@@ -6,6 +6,7 @@ import {RunNode} from './RunNode';
 import {RunEdge} from './RunEdge';
 import {OwnerGate} from './OwnerGate';
 import {Artifact} from './Artifact';
+import {Incident} from './Incident';
 interface RunEvent {
   ref: string;
   runRef: string;
@@ -26,5 +27,6 @@ interface RunEvent {
   edge?: RunEdge;
   gate?: OwnerGate;
   artifact?: Artifact;
+  incident?: Incident;
 }
 export { RunEvent };

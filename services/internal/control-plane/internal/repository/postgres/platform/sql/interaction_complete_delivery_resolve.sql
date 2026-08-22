@@ -7,7 +7,8 @@ SELECT
     run.ref,
     COALESCE(d.gate_id::text, ''),
     d.capability_key,
-    d.attempt
+    d.attempt,
+    d.created_at
 FROM control_plane.interaction_deliveries d
 JOIN control_plane.projects project ON project.id = d.project_id
 JOIN control_plane.runs run ON run.id = d.root_run_id

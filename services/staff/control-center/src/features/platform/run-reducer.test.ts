@@ -165,4 +165,56 @@ describe("reduceRunEvent", () => {
     expect(state.graphs[rootRunRef]?.sequence).toBe(1);
     expect(state.events[rootRunRef]).toEqual({});
   });
+
+  it("добавляет и обновляет server-owned инцидент необязательной доставки", () => {
+    const state = projection();
+    const event: RunEvent = {
+      ref: "event_incident02",
+      runRef: rootRunRef,
+      sequence: 2,
+      graphRevision: 3,
+      type: "INCIDENT_LINKED",
+      summary: "Доставка во внешний канал не выполнена",
+      occurredAt,
+      run: {
+        ref: rootRunRef,
+        version: 2,
+        state: "RUNNING",
+        graphRevision: 3,
+        lastEventSequence: 2,
+        artifactRefs: [],
+        gateRefs: [],
+        nextActions: ["OPEN", "CANCEL"],
+      },
+      incident: {
+        ref: "delivery_0001",
+        projectRef: "project_0001",
+        runRef: rootRunRef,
+        category: "OPTIONAL_INTERACTION_DELIVERY",
+        severity: "WARNING",
+        state: "RECOVERING",
+        safeSummary: "Доставка во внешний канал не выполнена",
+        safeNextStep: "Доставка будет повторена автоматически",
+        coreAffected: false,
+        createdAt: occurredAt,
+      },
+    };
+
+    expect(reduceRunEvent(state, event)).toBe("applied");
+    expect(state.runs[rootRunRef]?.incidents).toEqual([event.incident]);
+
+    event.ref = "event_incident03";
+    event.sequence = 3;
+    event.graphRevision = 4;
+    event.run.version = 3;
+    event.run.graphRevision = 4;
+    event.run.lastEventSequence = 3;
+    if (event.incident) {
+      event.incident.state = "RESOLVED";
+      event.incident.severity = "INFO";
+    }
+    expect(reduceRunEvent(state, event)).toBe("applied");
+    expect(state.runs[rootRunRef]?.incidents).toHaveLength(1);
+    expect(state.runs[rootRunRef]?.incidents?.[0]?.state).toBe("RESOLVED");
+  });
 });

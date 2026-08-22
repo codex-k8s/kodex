@@ -40,6 +40,18 @@ STREAM_UNAVAILABLE:
   other: Динамические обновления временно недоступны
 GAP_UNRECOVERABLE:
   other: Часть обновлений больше недоступна; актуальное состояние будет загружено заново
+INTERACTION_DELIVERY_FAILED:
+  other: Не удалось доставить сообщение в необязательный внешний канал
+INTERACTION_DELIVERY_RETRYING:
+  other: Доставка будет автоматически повторена; основной запуск не затронут
+INTERACTION_DELIVERY_RETRY_EXHAUSTED:
+  other: Автоматические попытки исчерпаны; проверьте подключение в разделе интеграций
+INTERACTION_DELIVERY_RECOVERED:
+  other: Доставка во внешний канал восстановлена
+INTERACTION_DELIVERY_RECOVERY_COMPLETE:
+  other: Дополнительных действий не требуется; основной запуск оставался доступен
+INTERACTION_DELIVERY_SUCCEEDED:
+  other: Сообщение доставлено во внешний канал
 CANCELLED_BY_OWNER:
   other: Запуск отменён пользователем
 PROVIDER_AUTH_UNAVAILABLE:

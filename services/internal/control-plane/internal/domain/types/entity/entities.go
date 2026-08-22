@@ -93,6 +93,7 @@ type Run struct {
 	GraphRevision, EventSequence, Version                                int64
 	Input                                                                map[string]any
 	InputArtifactRefs, ArtifactRefs, GateRefs, NextActions               []string
+	Incidents                                                            []Incident
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
 }
@@ -122,14 +123,15 @@ type RunEventDelta struct {
 	Edge     *RunEdge
 	Gate     *OwnerGate
 	Artifact *Artifact
+	Incident *Incident
 }
 
 type RunEvent struct {
-	Ref, RunRef, Type, NodeRef, EdgeRef, GateRef, ArtifactRef string
-	Summary, Progress, RunState, NodeState                    string
-	Sequence, GraphRevision                                   int64
-	OccurredAt                                                time.Time
-	Delta                                                     RunEventDelta
+	Ref, RunRef, Type, NodeRef, EdgeRef, GateRef, ArtifactRef, IncidentRef string
+	Summary, Progress, RunState, NodeState                                 string
+	Sequence, GraphRevision                                                int64
+	OccurredAt                                                             time.Time
+	Delta                                                                  RunEventDelta
 }
 
 type RunGraph struct {
