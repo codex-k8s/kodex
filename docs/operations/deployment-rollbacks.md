@@ -4,82 +4,55 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.6.0
-updated: 2026-08-09
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # Развертывание и откат
 
-## Direct-production single-node prototype
+## Release contract
 
-В профиле `direct-production single-node prototype` staging отсутствует. До
-cutover новый контур разворачивается только dark в `mattercodex-system`, а
-legacy-контур `matter-kodex-prod` остаётся пользовательским и не изменяется.
-Build и deploy запускаются только через `workflow_dispatch` для exact SHA и
-проверенного release lock. Rollback выбирает ранее сохранённый exact lock и не
-выполняет schema down, удаление PVC или изменение legacy traffic. Процедура и
-bounded smoke определены в `RUN-MC-015`.
+Один release lock связывает exact Git SHA, профиль и immutable digest каждого
+image. Render проверяет отсутствие placeholder, zero digest и mutable tag.
+Порядок развертывания:
 
-Build и deploy jobs доступны только через non-default runner group, закреплённый
-owner bootstrap за exact workflow path на full merged SHA. Workflow проверяет
-собственный `workflow_dispatch`, exact workflow path/ref `main`, текущий run/head
-SHA, main-only Environment, а также immutable `actor` и `triggering_actor` против
-owner-controlled Actions variable; затем сохраняет безопасное gate evidence и
-передаёт его production script. Caller-controlled значение `approved` не
-используется. Такая граница работает и для private repository, где тариф может
-не предоставлять required reviewers.
+1. прямые stateful dependencies и security infrastructure;
+2. fresh database migration и NATS stream bootstrap;
+3. `control-plane` и локальный authority path;
+4. runtime, scheduler и integration worker;
+5. API gateway и Control Center;
+6. optional interaction adapter выбранного профиля;
+7. отдельный service-graph smoke.
 
-## Процесс
+Kubernetes readiness не используется как distributed dependency graph. При
+недоступном соседнем сервисе рабочий запрос получает типизированный
+`Unavailable` либо HTTP `502/503/504`, а Pod остаётся готовым, если его локальные
+инварианты соблюдены.
 
-1. Автоматические проверки PR и три параллельных направления review.
-2. Повторные циклы review до отсутствия замечаний.
-3. Ручная приемка владельцем и отдельное решение о слиянии.
-4. Неизменяемые образы, SBOM, проверка, подпись и происхождение.
-5. Развертывание в кандидатном окружении.
-6. Расширяющие миграции и заполнение данных.
-7. Дымовые, сквозные проверки и анализ.
-8. Ручной допуск промышленного развертывания.
-9. Продвижение того же дайджеста через GitOps.
-10. Проверки после развертывания и период наблюдения.
-11. Периодический `improver` по отдельному Issue анализирует замечания принятых
-    результатов и предлагает изменения инструкций.
-12. Результат `improver` проходит тот же трехсторонний review и human gate.
+## Откат приложения
 
-## Активные агенты
+Откат выполняется только на предыдущий полный release lock совместимого fresh
+schema/runtime ABI. Нельзя смешивать images из разных lock. Перед откатом
+проверяются:
 
-Перед изменением agent-runner/runtime-controller/image:
+- совместимость единственной baseline и текущей forward-only schema;
+- RuntimeRevision и role-image ABI;
+- NATS subject/event contract;
+- authority policy/source revision;
+- отсутствие активной destructive migration.
 
-- платформа публикует уведомление о технических работах;
-- проверяет активные ходы;
-- после уведомления повторно проверяет, не появился ли новый ход;
-- ожидает завершения или явно останавливает только согласованные запуски;
-- архивы сессий сохраняются до пересоздания pod.
+Database `down`, удаление PVC, очистка event store и ротация секретов не являются
+частью обычного application rollback. Если schema уже несовместима с прежним
+image, используется новый исправляющий release, а не ручное изменение БД.
 
-Обратно совместимое развертывание платформы управления может выполняться поочередно без остановки pod агентов, если это допускает матрица совместимости контрактов и версий.
+## Fresh reset
 
-## Стратегии
+Полный reset допустим только для новой установки по `runbooks/fresh-install.md`.
+Он уничтожает данные и не является rollback. Агент не выполняет reset, merge или
+deployment без отдельного подтверждения владельца.
 
-- Обычное поочередное обновление Deployment для простых сервисов без локального состояния.
-- Argo Rollouts с blue-green или canary для рискованных сервисов взаимодействия и управления.
-- Предварительные дымовые проверки до переключения трафика.
-- Автоматическая остановка по анализу готовности, ошибок и задержек.
+## Evidence
 
-Reference: https://argoproj.github.io/argo-rollouts/concepts/
-
-## База данных
-
-Откат схемы не является штатным способом. Изменения проектируются так, чтобы предыдущая версия приложения работала на расширенной схеме в течение окна отката.
-
-Миграции `000025_cluster_admin_freeze.sql`, `000026_cluster_admin_session_key_inventory.sql`, `000027_cluster_admin_delivery_fences.sql`, `000028_agent_delegation_callback_outbox.sql`, `000029_agent_delegation_callback_plan_manifest.sql`, `000031_cluster_admin_session_bootstrap.sql`, `000032_prompt_github_identity_hygiene.sql` и `000033_prompt_github_identity_residuals.sql` являются forward-only. Физический `down` для каждой закрыто завершается ошибкой, сохраняет последнюю применённую `goose` version и физически оставляет объекты заморозки, глобальный инвентарь `session_key`, scoped delivery fence, центральный trigger, durable callback delivery plan/state, immutable manifest точного множества, атомарный bootstrap новой сессии уже замороженной роли и очистку исторических identity placeholders. После такого отказа повторный `up` является безопасным no-op и не создаёт дублирующие триггеры, fence, delivery rows, manifests или записи инвентаря.
-
-Откат приложения разрешён только на заранее проверенный exact N-1 SHA/дайджест, чей reader и runtime DML доказанно совместимы с расширенной схемой `000025`–`000029` и `000031`–`000033`. Старому процессу передают только отдельный runtime DML login; migration/schema-owner DSN нельзя использовать как fallback. Перед переключением повторяют adversarial проверку runtime-атрибутов, видимости profiles/roles, запрета DDL/TEMP/disable-trigger, отсутствия расширения frozen state, запрета повторного использования frozen `session_key`, сохранения scoped publish fence и неизменности callback outbox/manifest. Откат не удаляет `000027`–`000029` и `000031`–`000033`, не восстанавливает identity placeholders, не отключает triggers/functions, не изменяет незавершённые delivery rows и не отменяет меры PR #74/#75. Exact N-1 reader игнорирует добавочные таблицы и функции, но не подтверждает callback delivery; во время такого отката маршрут `mattermost_return_to_requester` должен быть отключён либо трафик должен оставаться на новой версии. Накопленные outbox, manifests, fence и revocations сохраняются для исправления вперёд. Если exact N-1 не прошёл этот шлюз, допустимо только исправление вперёд.
-
-Если upgrade `25 -> 26` останавливается с `MCV26_DUPLICATE_SESSION_KEY_GROUPS`, версия и схема остаются на `25`. Остановите записи, устраните legacy-дубликаты офлайн через внутренние surrogate row ID и проверяйте результат только агрегатами. Значения `session_key`, `role_id` и другие идентификаторы нельзя выводить в консоль, журналы или тикеты. После обезличенного подтверждения нулевого числа групп повторите upgrade.
-
-Порядок: `расширение -> развертывание совместимого кода -> заполнение -> переключение чтения и записи -> последующее сужение`.
-
-Смена PostgreSQL image для существующего PVC требует отдельного окна с резервной копией и проверкой collation/B-tree. Неявное изменение блокируется установщиком; порядок переключения, `REINDEX`, `amcheck` и отката определен в `docs/runbooks/postgres-image-change.md`.
-
-## Подтверждения отката
-
-Выпуск хранит дайджесты образов, Git SHA, версию миграций, ревизию конфигурации, результаты дымовых проверок, согласующего и цель отката. Доказательство для `000025`–`000029` и `000031`–`000033` отдельно фиксирует отказ каждого `down`, неизменную `goose` version, наличие fence/outbox/manifest/triggers/functions и отсутствие восстановленных identity placeholders после отката приложения, а также успешный повторный `up`. Откат завершается проверкой очереди, callback delivery states, событий Mattermost, авторизации поставщиков, возобновления сессий и запусков по расписанию.
+Отчёт фиксирует profile, base/head SHA, release-lock digest, применённую schema,
+результаты readiness и service-graph smoke, а также `PASS`, `FAIL`, `NOT RUN`.
+Отсутствующий CI или live test не обозначается как успешный.

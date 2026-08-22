@@ -1,326 +1,80 @@
 ---
 id: SVC-MC-005
-title: Runtime controller
+title: runtime-controller
 type: service
 status: approved
-owner: backend
-version: 2.3.0
-updated: 2026-08-10
+owner: developer
+version: 2.0.0
+updated: 2026-08-23
 ---
 
-# Runtime controller
+# runtime-controller
 
-`runtime-controller` материализует назначенный `control-plane` immutable
-`RuntimeRevision` в session PVC, immutable ConfigMap/credential projections и
-role-image Pod. Он не запускает Codex, не меняет доменные настройки и не
-выводит tenant, actor, access profile или credentials из payload.
+`runtime-controller` материализует server-owned execution attempts в
+Kubernetes. Он не владеет Project, Agent, Session, Turn, Run lifecycle,
+Human Gate, integration grant или terminal result.
 
-## Исполняемые режимы
+## Кто запускает агентов
 
-- `runtime-controller` — durable claim/admission recovery, capacity,
-  Kubernetes reconcile, heartbeat, runner handoff, retention и inbox;
-- `runtime-archive` — детерминированный versioned S3 archive от отдельной
-  identity `runtime-archive`;
-- `runtime-restore-verifier` — независимый exact-version restore proof;
-- `runtime-rehydrate` — fail-closed восстановление очищенной session в новый
-  PVC до создания Pod;
-- `runtime-cleanup-authorizer` — owner-locked bounded cleanup claim;
-- `runtime-credential-broker snapshot|s3-archive|s3-restore` — unprivileged
-  mTLS client, передающий signed workload ticket отдельной authority;
-- `runtime-credential-broker serve-snapshot|serve-s3-archive|serve-s3-restore`
-  — раздельные trusted materializer/exchangers с server-derived spec,
-  STS tags/policy, immutable one-time receipt и exact readback;
-- `runtime-credential-broker copy-credential` — execution-scoped one-time Pod
-  с 600-секундным Kubernetes token и Role только на exact source/destination;
-- `runtime-workload-admission` — fail-closed TLS admission webhook с
-  Ed25519 full-tuple verification, exact immutable Pod spec readback и
-  PostgreSQL one-time replay receipt;
-- `runtime-controller-cli migrate up|status|version` — forward-only схема
-  durable inbox/projection.
+1. `control-plane` создаёт immutable `RuntimeRevision` и выдаёт exact attempt.
+2. `runtime-controller` claim-ит работу и проверяет fence/generation.
+3. Для обычного turn создаётся новый Pod из exact promoted role image.
+4. Защищённый `agent-runner` внутри image запускает provider runtime и MCP.
+5. Terminal handoff проверяется control-plane; только после readback Pod
+   удаляется. Retry/continuation получают новую attempt и новый Pod.
 
-В exact Wave A профиле `direct-production-single-node-prototype` режимы archive,
-restore, rehydrate и S3 credential exchange отключены selector
-`RUNTIME_ARCHIVE_RESTORE_CAPABILITY=disabled`. Controller и admission закрыто
-отклоняют их, а render не создаёт соответствующие workload, identity, RBAC,
-Secret, egress и readiness ожидания. Возврат capability вынесен в #310; наличие
-скомпилированного provider-кода не включает этот path.
+Каждая роль может использовать свой Docker image с собственными утилитами,
+пакетами и программным окружением. `role-image-builder` собирает этот image через
+rootless BuildKit, а image admission проверяет provenance, SBOM, vulnerability
+policy, signature, promotion и runtime ABI. Controller допускает только
+`repository@sha256` из настроенного promoted repository.
 
-Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
-per-job `Role` только на exact journal. Controller, долговечный materializer и
-routine broker Jobs не читают Secret и не создают/bind-ят `cluster-admin`
-authority. Materializer может только создавать fail-closed
-admission-ограниченные execution resources; Secret читает и создаёт one-time
-copy identity, а full Pod/Secret spec и replay проверяет независимый webhook.
-Vault/STS разделены между
-archive/restore exchangers. Vault выдаёт broker только public keys с именем
-`public-key.hex` (раздельные admission/archive/restore verifier),
-`kms-key-arn`, `archive-role-arn` и
-`restore-role-arn`; значения в manifests,
-документацию и диагностику не выводятся.
-Authority server Secrets `runtime-workload-materializer-tls`,
-`runtime-s3-archive-exchanger-tls`, `runtime-s3-restore-exchanger-tls` и
-client Secrets `<broker-service-account>-mtls` содержат только ключи
-`ca.pem`, `tls.crt`, `tls.key`; server/client certificates имеют раздельные
-SPIFFE identities и не переиспользуются между archive и restore.
+## Runtime contract
 
-## Reconcile и recovery
+Канонический input — `mattercodex.agent-runner-input.v4`, схема находится в
+`contracts/runtime-controller/v4/agent-runner-input.schema.json`, типы — в
+`libs/go/runtimecontract`. Input связывает organization/project/agent/session/
+turn/run/node/attempt, revision digest, role image digest, bounded input,
+capabilities и credential references. Payload не назначает owner или lineage.
 
-`ClaimRuntimeExecution` сначала фиксирует authoritative PostgreSQL `PENDING`.
-Сразу после него создаётся journal с исходным tuple и idempotency keys — до
-revision hydration, capacity и следующего Kubernetes effect. Если Create
-journal не состоялся, новый server-owned claim key возвращает только тот же
-exact session/turn/attempt/grant/revision/input `PENDING` без второго перехода.
-После crash/defer controller повторно получает exact RuntimeRevision,
-проверяет immutable organization/provider quota snapshot и replay-ит тот же
-`AdmitRuntimeExecution` до материализации PVC, ConfigMap, credential broker или
-Pod. Для restore эта owner transaction сверяет current operation/generation с
-durable revoke watermark и одноразово потребляет generation. До journal/PVC/Pod
-controller отдельно расходует durable `KUBERNETES_MATERIALIZATION` effect slot,
-а `runtime-s3-restore-exchanger` непосредственно перед Vault/STS — отдельный
-`S3_CREDENTIAL` slot через exact mTLS/application grant/issuer profile. Оба пути
-при каждом replay снова сверяют current generation/digest и watermark; signed
-restore ticket принимается только в `ADMITTED`, а Bind — только для уже consumed
-current generation. Lease token восстанавливается только из owner receipt
-и не сохраняется в Kubernetes Secret, ConfigMap, annotation, log или metric.
+Protected init/runner входят в trusted runtime ABI role image. Provider process
+работает без Kubernetes token и authority credential. Role Pod не получает
+control-plane DSN, registry writer/admin, secret-store authority, Mattermost
+token или managed integration credentials.
 
-Для target Agent-графа Issue #234 поля `RoleID` и `PromptProfileID` указывают
-не на изменяемые legacy `RoleSpec`/`PromptProfileSpec`, а на server-owned
-immutable derived projection control-plane. Runtime-controller читает её тем же
-`GetResource(kind,id,expected_version)` path; control-plane сверяет exact
-source Agent/InstructionSet version и digest и не предоставляет projection
-никакого mutation API. `ProviderCredentialBindingID` остаётся непустым и
-указывает на выбранный из exact ProviderPool snapshot действующий
-`CredentialBinding`; поэтому существующая materialization и credential
-validation не получают caller fallback и не требуют второго авторитетного
-источника.
-Derived Prompt содержит exact CLEAN content Artifact ID/version/digest;
-`ClaimRuntimeExecution` возвращает его тем же materialization contract как
-`AGENTS.md`. `RuntimeRevision.Components` при этом ограничен уже принимаемыми
-runtime-controller kinds, а target Agent/RoleDefinition/InstructionSet/Pool/
-Assignment tuple остаётся top-level version-pinned readback и входит в
-effective digest.
+## MCP
 
-Этот consumer contract не означает готовность Mattermost producer #235:
-runtime-controller не выполняет Team/bot effect, не подписывает
-`ProviderEffectReadbackReceipt` и не вызывает mapping/bot RPC control-plane.
-Эти signer/call-site/readiness обязанности остаются в interaction-gateway
-Issue #235 после rebase на принятый #234.
+MCP не заменяется generic RPC. RuntimeRevision материализует только разрешённые
+типизированные MCP servers/tools. Platform MCP tools отображаются в
+специализированные control-plane commands; managed integration MCP выполняется
+`integration-gateway`. Secret values и raw provider/tool payload не входят в
+domain events или browser stream.
 
-Capacity учитывает durable pending/admitted/running journals, Pod requests,
-organization limit, server-owned provider binding и свежую observation,
-`ResourceQuota` и node pressure. Unknown/stale остаётся queued. Старейший
-доказанно terminal idle Pod можно удалить один раз и пересчитать допуск; PVC
-не затрагивается.
+## System assistant
 
-Role image запускает `agent-runner runtime-session`. Источник
-`mattercodex.agent-runner-input.v2` содержит exact execution/revision/input,
-Session/Turn/attempt, provider binding, Codex policy, materializations,
-control-plane/interaction-gateway/MCP TLS bindings и пути immutable execution
-credentials. Для повторной доставки частично опубликованного terminal owner
-добавляет exact `codex_delivery_recovery_source_execution_id`; локальный
-journal без этого server-owned marker либо marker без retained journal закрыто
-останавливают запуск до provider effect. Kubernetes materialization начинается
-только с `ADMITTED` owner readback и lease. Restore ticket дополнительно
-проверяется независимым пересчётом полного private source tuple; digest из
-snapshot не принимается как доказательство сам по себе. Identity
-runtime-controller не подменяет runner.
-Terminal Pod phase не завершает turn: runner обязан записать signed v2 envelope
-в controller-owned ConfigMap. Exit без handoff создаёт incident.
-Role Pod становится Ready только после materialization, Turn claim,
-RuntimeExecution admission и MCP initialize по
-тому же TLS 1.3/mTLS exact SNI/CA/client certificate + bearer пути, который
-использует turn. Периодический readback и каждый successor повторяют
-barrier; credential digest либо peer mismatch снимает readiness до claim.
+Системный помощник использует отдельный always-hot Pod. Reconciler поддерживает
+exact desired prompt/runtime revision, heartbeat и resource limits. Idle не
+является активным Turn; turns идут FIFO. После process/Pod restart warm runtime
+восстанавливается до положительной assistant readiness. Этот Pod не получает
+DB, Kubernetes или secret-store authority.
 
-Successor использует новый execution-scoped Pod и свежие immutable
-RuntimeRevision, ConfigMap, authority/credential snapshots; retained session
-PVC сохраняет Codex state. Старые mounted credentials и MCP client не
-переиспользуются. Прямой Kubernetes access profile runner закрыто запрещён:
-кластерные действия проходят только через специализированные MCP boundaries.
-Каждый role Pod получает отдельный `runtime-access-*` ServiceAccount и exact
-handoff Role/RoleBinding; общая identity между параллельными execution
-запрещена. Vault role `internal-rpc-authority-agent-runner` допускает только
-этот префикс в `mattercodex-system`. Удаление Pod проверяет exact lineage и с
-UID/resourceVersion preconditions удаляет execution-scoped ServiceAccount и
-handoff RBAC.
+## Health и readiness
 
-## Session archive и cleanup
+- `/healthz` проверяет только жизнь процесса;
+- `/readyz` читает локальный snapshot;
+- control-plane, provider, integration и interaction gateways не входят в
+  Kubernetes readiness;
+- недоступный рабочий сосед возвращает typed `Unavailable`;
+- Kubernetes observation может использовать bounded LKG только при transport
+  failure; digest/signature/revision conflict или expiry закрывают путь сразу;
+- отказ и восстановление логируются один раз как переход состояния.
 
-Archive замораживает quiesced PVC в неизменяемый CSI clone, открывает дерево
-fd-relative с `openat2` `BENEATH|NO_SYMLINKS`, отклоняет symlink, hardlink и
-device и только затем строит deterministic tar. S3 использует KMS encryption,
-COMPLIANCE Object Lock не менее 90 суток, exact execution key
-`archive.tar.gz`, SHA-256 и ненулевой `VersionId`;
-exact `HeadObject` и `GetObjectRetention` подтверждают version/checksum/
-provenance/mode/retain-until на новом и idempotent existing path.
-Archive, restore и rehydrate используют разные short-lived execution/action
-STS Secrets, выдаваемые после проверки подписанного workload ticket: immutable
-Secret UID/resourceVersion, exact session tags, inline
-policy/readback digests и срок не более 15 минут входят в credential snapshot.
-До успешного `Secret Create` durable credential effect отсутствует: crash
-безопасно получает новый short-lived STS grant. `AlreadyExists` и lost response
-проходят action-specific one-time readback Pod с exact `resourceNames`, UID,
-`resourceVersion`, tuple, digest и expiry. Long-lived exchanger не имеет
-`secrets/get`, а controller читает только immutable owner receipt.
-Vault bootstrap role может только вызвать `AssumeRole`/`TagSession` для
-закреплённой archive либо restore execution role. Только trusted action
-exchanger выводит inline policy и session tags из owner-signed ticket и
-передаёт их в exact STS `AssumeRole` через TLS endpoint S3 boundary;
-unprivileged broker не получает generic STS authority.
-IAM source запрещает List/Delete/Bypass, cross-tenant prefix и insecure
-transport; startup проверяет versioning, Object Lock, KMS, public-access block
-и фактический запрет List.
-Archive и restore используют независимые Ed25519 issuer/audience/public trust,
-ServiceAccount, Vault bootstrap role/config и разрешённый target role ARN;
-bootstrap identity одной операции не может assume role другой.
-
-### Direct-production MinIO identity provider
-
-Только deployment profile `direct-production-single-node-prototype` принимает
-backend `internal-minio-service-account`; остальные профили принимают только
-`vault-aws`. Старое имя `direct-production-s3-sts`, `static`, пустой direct
-backend и несовпадающие profile/backend закрыто отклоняются. Worker в этом же
-профиле принимает только `RUNTIME_S3_STORAGE_BACKEND=direct-production-minio`;
-обычный профиль сохраняет `aws` и обязательный STS session token.
-
-Archive и restore exchanger используют разные owner-generated MinIO
-management identities. Они передаются только файлами
-`minio-management-access-key-id` и
-`minio-management-secret-access-key`; это не root и не workload credential.
-`RUNTIME_S3_MINIO_PARENT_USER` обязан быть ровно
-`runtime-s3-archive-management` либо `runtime-s3-restore-management` для
-соответствующего action и закрепляет ожидаемого parent, а
-`RUNTIME_S3_MINIO_ADMIN_ENDPOINT`,
-`RUNTIME_S3_MINIO_ADMIN_TLS_SERVER_NAME` и `RUNTIME_S3_CA_FILE` задают один
-HTTPS/TLS 1.3 endpoint с exact SNI/CA. Management policy содержит только
-`admin:CreateServiceAccount`, `admin:ListServiceAccounts` и
-`admin:RemoveServiceAccount` для собственного parent; `admin:*`, управление
-чужим `TargetUser`, users/groups/policies/config и root credential запрещены.
-Adapter намеренно вызывает только:
-
-- `PUT /minio/admin/v3/add-service-account` без `targetUser`;
-- `GET /minio/admin/v3/info-service-account?accessKey=<exact-child>`;
-- `DELETE /minio/admin/v3/delete-service-account?accessKey=<exact-child>`.
-
-Для каждого exact `execution_id/attempt/action` HMAC из owner-generated файла
-`minio-identity-signing-key` детерминированно выводит отдельную пару child
-access/secret и подписывает durable record; значения в record, metadata,
-ошибки и логи не попадают. Expiration всегда задаётся сервером как 900 секунд.
-Caller policy JSON не является authority: adapter повторно строит canonical
-policy из verified `Execution` и сверяет bytes/digest. Archive и restore имеют
-разные parent profile; policy разрешает только exact bucket и object key,
-restore — exact `VersionId`, а запись — только с `aws:kms`, exact
-`s3:x-amz-server-side-encryption-aws-kms-key-id` и `COMPLIANCE`. List, delete,
-bypass и insecure transport запрещены; MinIO policy не получает `kms:*`.
-
-Durable state хранится только в заранее созданных mutable aggregate Secret
-`runtime-s3-archive-minio-identity-records` и
-`runtime-s3-restore-minio-identity-records`, ключ `state.json`, annotations
-`runtime.mattercodex.dev/state-kind=minio-service-account-records` и
-`runtime.mattercodex.dev/action=<archive|restore>`. Exchanger нужны только
-`get/update` с `resourceNames` своего Secret; create/list/watch и доступ ко
-второму action запрещены. CAS использует `resourceVersion`, record связывает
-execution/workload/attempt/action/source, input и policy digests, grant/version/
-fence, parent, child ID, generation, issued/expires/status и HMAC signature.
-Restart повторно получает тот же child только после полного MinIO readback;
-unknown, expiry, parent/policy/metadata/generation mismatch и rollback закрыты.
-Retry сначала удаляет прежний child и подтверждает `NotFound`; `Revoke`
-успешен только после того же readback. Отдельный terminal без новой attempt
-пока не имеет controller→exchanger revoke command и поэтому остаётся явным
-integration blocker, а не скрытым успешным cleanup.
-
-Direct worker получает пустой `session-token`,
-`RUNTIME_S3_KMS_KEY_ARN` как доменный proof identifier и отдельный exact
-`RUNTIME_S3_MINIO_KMS_KEY_ID` как фактический MinIO/KMS header. Readiness
-проверяет `GetBucketVersioning`, `GetBucketObjectLockConfiguration`,
-`GetBucketEncryption`, `GetBucketPolicyStatus` (bucket не public) и запрет
-`ListObjectsV2`. Provider readiness создаёт deny-all probe на 60 секунд,
-выполняет add/info/delete и подтверждает `NotFound`; workload credential при
-этом не сохраняется.
-
-[`RELEASE.2025-10-15T17-29-55Z`](https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z), commit
-`9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, является первой версией с
-исправлением
-[CVE-2025-62506/GHSA-jjjj-jwhf-8rgr](https://github.com/minio/minio/security/advisories/GHSA-jjjj-jwhf-8rgr),
-но на текущую дату уже не
-является допустимым production pin: последующие official advisories требуют
-как минимум
-[`RELEASE.2026-04-14T21-32-45Z`](https://github.com/minio/minio/security/advisories/GHSA-xh8f-g2qw-gcm7).
-Последняя community release
-осталась на 2025-10-15, community repository архивирован, а требуемый 2026 tag
-и официальный public image/digest отсутствуют. Поэтому SRE не может безопасно
-заменить foundation image из публичного community source. До появления
-owner-provided supported MinIO/AIStor distribution entitlement и exact image
-digest foundation update блокирован. Сторонний image/digest, самостоятельная
-подмена несуществующего tag и уязвимый `RELEASE.2025-09-07T16-13-09Z`
-запрещены.
-
-PVC cleanup не использует journal `LastTransition` и не имеет собственного
-TTL. Authoritative owner transaction pin-ит `ResourceRetentionPolicy` id,
-version, durations, `pvc_cleanup_eligible_at` и `archive_retain_until` при
-terminal transition. Authorizer под session/full graph lock проверяет именно
-этот снимок, terminal graph, archive/proof и отсутствие work/hold, затем pin-ит
-`ACTIVE` claim к exact PVC name/UID/resourceVersion на 15 минут и блокирует
-новый claim. Controller удаляет PVC с UID/resourceVersion preconditions,
-подтверждает `NotFound` и idempotent finalize передаёт exact timestamp и proof
-digest. Client grace и delete-before-claim отсутствуют.
-
-Следующий turn после `CONSUMED` cleanup получает одноразовое owner assignment
-к exact source archive. `runtime-rehydrate` bind-ит assignment к новой пустой
-PVC generation/name/UID/resourceVersion, восстанавливает во временное дерево
-на том же filesystem, sync-ит regular files/marker/directories снизу вверх и
-parent вокруг atomic rename `session/`, после чего
-owner переводит assignment в `CONSUMED`. Повтор для live наполненной PVC или
-другого UID закрыто отклоняется; crash оставляет только удаляемый staging, но
-не частичное final tree. Role Pod до proof не создаётся.
-
-## Быстрые проверки Prototype
+## Локальная проверка
 
 ```bash
 cd services/internal/runtime-controller
-gofmt -w .
-go vet ./...
-go test ./...
-go build ./...
+GOWORK=off go test ./...
 ```
 
-Итоговый environment render не сохраняет Kubernetes API маршруты в base:
-
-```bash
-KUBERNETES_API_CIDRS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh)"
-KUBERNETES_API_PORTS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh --output ports)"
-scripts/render-runtime-controller.sh \
-  --environment staging \
-  --controller-image-ref mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:<digest> \
-  --authority-image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
-  --registry-pull-host registry-pull.<environment-domain> \
-  --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
-  --kubernetes-api-ports "$KUBERNETES_API_PORTS" \
-  > /tmp/runtime-controller-staging.yaml
-```
-
-Renderer fail-closed требует exact Service/EndpointSlice CIDR/ports и внешний
-node-reachable pull DNS, материализует его как exact escaped repository в
-`ValidatingAdmissionPolicy`, затем добавляет отдельные policy для controller,
-workers и access profiles.
-Render и deploy в этом unit не выполняются.
-
-## Ручная проверка владельца
-
-1. Сверить `PENDING` journal до revision/capacity и crash recovery через тот же
-   idempotency tuple без lease Secret.
-2. Проверить exact runner input, handoff, archive-gated warm reuse и incident
-   при выходе Pod без handoff.
-3. Проверить capacity defer для organization/provider stale/limit и oldest-idle
-   eviction без PVC delete.
-4. Завершить turn и проследить archive → restore proof → owner cleanup claim →
-   exact delete/NotFound → consume.
-5. После cleanup запустить новый turn и подтвердить rehydrate exact S3 version
-   в новый PVC до Pod start.
-6. Убедиться, что routine controller не создаёт admin binding/Secret, archive
-   identity отделена, а S3 List/Delete/cross-tenant закрыты.
-7. Проверить `/readyz`, exact StreamInfo/ConsumerInfo, inbox blockage/dead-letter
-   metrics, dashboard и alerts с абсолютными `runbook_url`.
-
-Миграция, render, применение Kubernetes ресурсов и deploy требуют отдельного
-владельческого шлюза.
+Deployment: `deploy/k8s/base/runtime-controller`. Нормативная архитектура:
+`docs/architecture/runtime-controller.md`.

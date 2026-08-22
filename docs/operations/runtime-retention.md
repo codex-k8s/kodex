@@ -1,144 +1,53 @@
 ---
 id: OPS-MC-008
-title: Хранение и очистка ресурсов сессий
+title: Хранение и очистка runtime-ресурсов
 type: operations
 status: approved
 owner: sre
-version: 0.5.0
-updated: 2026-08-04
+version: 1.0.0
+updated: 2026-08-23
 ---
 
-# Хранение и очистка ресурсов сессий
+# Хранение и очистка runtime-ресурсов
 
-## Цель
+## Владелец lifecycle
 
-Поды и PVC являются рабочим кэшем, а не единственным хранилищем сессии. Очистка должна освобождать кластерный диск, не терять очередь, историю Codex, результаты, вложения и ожидающие решения человека.
+Control-plane владеет Session, Turn, Run graph, attempts, leases, artifacts и
+retention policy. Runtime-controller удаляет Kubernetes workload только после
+authoritative terminal/cancel readback и успешного signed handoff. Наличие или
+удаление внешнего Mattermost thread не влияет на core lifecycle.
 
-## Уровни хранения
+## Обычный turn
 
-| Ресурс | Назначение | Правило по умолчанию |
-| --- | --- | --- |
-| Pod сессии | Прогретый процесс и рабочее окружение | Удаляется после 4 часов простоя. |
-| Job, ConfigMap и временный Secret хода | Запуск и доставка конфигурации | Удаляются через 24 часа после терминального состояния и сохранения диагностики. |
-| PVC сессии | Рабочая копия репозитория и локального состояния | Становится кандидатом на удаление после 7 суток без активности и только после проверенного архива. |
-| Архив сессии в S3 | История Codex и долговечное состояние | Хранится минимум 90 суток после закрытия или по политике рабочей области. |
-| Метаданные PostgreSQL и аудит | Очередь, связи, решения и доказательства | Хранятся по политике аудита; удаление не связано с TTL pod/PVC. |
+Каждый обычный turn выполняется новым Pod exact promoted role image. После
+terminal transition:
 
-Значения задаются версионируемой `ResourceRetentionPolicy` на уровне организации или рабочей области. Более короткий срок для PVC не может обходить обязательную проверку архива и защиту активной работы.
+1. runner завершает child processes и формирует bounded terminal manifest;
+2. control-plane проверяет attempt/fence/digests и атомарно фиксирует terminal
+   state, artifacts, events, audit и закрытие grants/leases;
+3. runtime-controller подтверждает terminal readback и удаляет Pod;
+4. session PVC сохраняется до отдельной retention decision.
 
-Новый Project получает approved default `prototype-testing-v1` version 1 в
-той же owner transaction, что и сам aggregate. Дальше только закрытые
-`SetResourceRetentionPolicy`, `GetResourceRetentionPolicy` и
-`RetireResourceRetentionPolicy` принимают exact operator SPIFFE/permission,
-expected version, idempotency key и reason. Set атомарно retires current и
-создаёт монотонную next version; уже созданные execution сохраняют собственный
-pin. Missing current, unknown scope или version mismatch всегда fail-closed.
+Stale Pod не получает новые credentials и не переиспользуется для следующего
+turn. Retry создаёт новую attempt, RuntimeRevision, grant и Pod.
 
-## Что считается активностью
+## System assistant
 
-Срок PVC отсчитывается от наиболее позднего из событий:
+Warm Pod системного помощника является отдельным runtime class. Он сохраняется
+между idle periods, но не хранит secret values и не считается активным Turn.
+При revision change Pod заменяется контролируемо; после restart reconciler
+восстанавливает desired warm runtime до положительной assistant readiness.
 
-- принятый, запущенный или завершенный ход;
-- сообщение пользователя или долговечный обратный вызов;
-- постановка делегирования в очередь;
-- создание либо решение `ApprovalRequest`;
-- публикация или получение файла;
-- успешное сохранение новой версии архива сессии;
-- явное восстановление комнаты, обсуждения или сессии.
+## Durable state
 
-Сессии в состояниях `queued`, `running`, `retry_wait`, `waiting_approval` и `waiting_external`, а также с живой арендой среды выполнения не являются кандидатами на очистку.
+- RunEvent, audit, callback/gate receipts и published instruction/workflow
+  versions хранятся согласно organization policy и не удаляются с Pod;
+- artifact body удаляется только после retention expiry, отсутствия legal hold
+  и подтверждённого удаления всех bindings/download grants;
+- PVC удаляется только после archive/digest readback и отсутствия active,
+  queued, waiting или retryable attempts;
+- optional delivery attempts имеют собственный срок хранения и не удерживают
+  core Run/PVC после terminal state.
 
-## Удаление канала или обсуждения Mattermost
-
-1. Событие Mattermost либо периодическая сверка помечает `ConversationBinding` как `deletion_pending` и запрещает новые пользовательские ходы.
-2. Активный ход не обрывается автоматически. Менеджер или владелец может остановить его явно.
-3. Начинается отсрочка 7 суток. В этот период восстановление привязки отменяет очистку.
-4. Ожидающее согласование или внешний обратный вызов приостанавливает отсрочку до решения, отмены или истечения срока.
-5. После отсрочки и успешного архива удаляются pod, временные ресурсы и PVC.
-6. Метаданные, аудит и S3-архив сохраняются минимум 90 суток, после чего удаляются отдельной фазой согласно политике хранения и юридической блокировке удаления.
-
-Удаление команды Mattermost или рабочей области использует тот же процесс для всех дочерних комнат и диалогов, но требует отдельного подтверждения владельца в центре управления.
-
-## Условия удаления PVC
-
-PVC можно удалить, только если одновременно выполнены условия:
-
-- нет активного или поставленного в очередь хода;
-- нет незавершенного делегирования, обратного вызова, согласования или внешнего действия;
-- последняя версия архива загружена в S3 и проверена по контрольной сумме;
-- в PostgreSQL записана ссылка на этот архив;
-- срок отсрочки истек;
-- отсутствуют юридическая и ручная блокировки удаления;
-- обработчик очистки владеет актуальной арендой операции.
-
-Если S3 недоступен или проверка архива не прошла, PVC остается на месте, а система создает предупреждение. Нехватка диска не разрешает молча удалить непроверенное состояние.
-
-## Очиститель
-
-Очиститель работает идемпотентно по фазам `eligible -> archiving ->
-restore_proved -> cleanup_claimed -> kubernetes_cleanup -> consumed`. Записи
-выбираются под PostgreSQL session/full graph lock. Kubernetes `NotFound`
-считается допустимым повтором только при активной owner claim того же generation,
-заранее сохранённых PVC name/UID/resourceVersion, bounded expiry и durable
-deletion proof.
-
-Обязательные возможности:
-
-- предварительный просмотр без удаления;
-- ручная блокировка и разблокировка хранения;
-- повтор неуспешной фазы;
-- аудит инициатора, причины, версии политики и удаленных внешних идентификаторов;
-- метрики кандидатов, удалений, освобожденного объема и ошибок;
-- очистка по верхнему порогу использования диска только среди уже eligible PVC по LRU.
-
-При давлении на ресурсы сначала удаляются прогретые idle pod, затем уже eligible PVC. Минимальная отсрочка PVC не сокращается автоматически; аварийное принудительное удаление требует явного действия владельца и успешного архива.
-
-Ручная и юридическая блокировки являются owner state, а не payload flag:
-`HoldRuntimeRetention` server-side назначает `hold_id` exact Session scope и
-фиксирует `MANUAL|LEGAL`, version, actor, reason, idempotency receipt и audit;
-`ReleaseRuntimeRetention` требует exact hold/version и ту же owner boundary.
-Active hold проверяется под full Session graph lock при issue, consume,
-reissue и expiry cleanup authorization. Удаление строки или обход через
-process-local config запрещены.
-
-## Переход с текущей среды выполнения
-
-До появления S3-архива текущие PVC не удаляются новым автоматическим правилом. Сначала выполняются инвентаризация и архивирование унаследованных сессий, затем предварительный отчет без удаления, и только после ручной приемки владельцем включается автоматическая очистка.
-
-## Шлюз активации runtime-controller
-
-Issue #188 материализует доказуемый PostgreSQL/S3 предикат через
-специализированные archive, restore proof, cleanup authorization и consume
-команды. До слияния, отдельного владельческого шлюза и развёртывания этого
-unit прежний `runtime prune` остаётся строго `inventory-only`.
-
-После активации удаление session PVC выполняет только `runtime-controller`:
-
-- controller использует terminal journal и не выводит eligibility из
-  Kubernetes labels;
-- четырёхчасовой TTL относится только к Pod, а eligibility PVC выводится из
-  закреплённых owner-ом `ResourceRetentionPolicy` id/version и
-  `pvc_cleanup_eligible_at`; ни controller config, ни timestamp journal/Pod не
-  являются источником срока;
-- versioned archive, checksum readback и независимый restore proof должны
-  совпасть с authoritative execution;
-- отдельный authorizer повторно проверяет отсутствие queued/running work,
-  approval, callback и continuation, после чего выдаёт bounded authorization;
-- authorizer под session/full graph lock сначала создаёт bounded claim с exact
-  PVC name/UID/resourceVersion и запрещает новый work той же session;
-- только после claim delete использует exact `UID` и `resourceVersion`, а
-  `NotFound` принимается с observed timestamp и deletion proof;
-- controller потребляет ту же authorization до server-side expiry после
-  повторного owner graph lock;
-  ошибка, неизвестное состояние или pressure сохраняют PVC;
-- backfill автоматически продолжает archive/proof/authorization для каждого
-  controller-owned terminal journal; legacy PVC без server-owned
-  `RuntimeExecution` и journal остаётся `inventory-only` и не усыновляется по
-  Kubernetes labels.
-
-После `CONSUMED` cleanup следующий claim pin-ит последний authoritative S3
-version/checksum/provenance. Новый PVC сначала fail-closed восстанавливается и
-получает proof, связанный с его UID; role Pod до этого не запускается.
-
-Очистка несессионных Job и ConfigMap не даёт права удалить session PVC.
-Аварийного флага обхода proof, grace, owner graph или legal/manual hold нет.
+Очиститель использует bounded batch, owner-side claim/fence и аудит. Ручное
+массовое удаление SQL или Kubernetes resources не является штатной процедурой.

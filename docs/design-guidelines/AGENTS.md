@@ -27,4 +27,4 @@
 - интеграции с Kubernetes, Mattermost и GitHub/GitLab проектируются через SDK/интерфейсы/адаптеры, а не через бизнес-логику в shell;
 - shell допустим только как bootstrap/deploy wrapper на коротком MVP-срезе.
 
-Процесс разработки и ведения документации задается корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**`, `docs/decisions/**`, `docs/guides/**` и `docs/roadmap/**`.
+Процесс разработки и ведения документации задается корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**`, `docs/decisions/**` и `docs/guides/**`.

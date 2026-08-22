@@ -4,8 +4,8 @@ title: Адаптация технического профиля project-templa
 type: governance
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 2.0.0
+updated: 2026-08-23
 ---
 
 # Адаптация технического профиля project-template
@@ -41,11 +41,14 @@ updated: 2026-07-29
 - целевая PWA одна: `services/staff/control-center`;
 - одна активная программа разработки содержит не более двух unit одновременно;
 - верхнеуровневую координацию выполняет manager без обязательной роли director;
-- legacy `services/external/bot-service` и текущий
-  `services/jobs/agent-runner` заморожены до cutover и не являются эталонной
-  структурой новых unit;
-- переход выполняется без постоянного compatibility facade: необходимые данные
-  переносятся отдельной проверяемой миграцией.
+- `services/jobs/agent-runner` является защищённым runtime ABI, который
+  встраивается в каждый promoted role image; это активный target unit;
+- `role-image-builder` и image admission обеспечивают отдельное окружение и
+  набор инструментов для каждой роли;
+- Mattermost реализуется только optional interaction adapter-ом и не участвует
+  в core authority/readiness;
+- fresh install не содержит compatibility facade, legacy migration, dual-write
+  или cutover path; Git history служит архивом удалённого контура.
 
 ## Синхронизация
 

@@ -4,63 +4,50 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 0.4.0
-updated: 2026-08-10
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # Безопасность и секреты
 
-В `direct-production single-node prototype` до полного Vault lifecycle допустимы
-materialized Kubernetes Secrets. Их значения создаются криптографически
-безопасно owner-controlled code-first скриптом, записываются через файловый ввод
-и не попадают в аргументы, Git, логи или отчёты. Скрипт сохраняет существующий
-Secret и закрыто отклоняет неожиданный набор ключей. Долговечная ротация,
-восстановление и hardened supply chain вынесены в #256.
+## Authority
 
-Одноразовый owner-controlled bootstrap является единственным creator Secret и
-Certificate для нового namespace. После bootstrap только publisher может
-обновлять точные Secret закрытого delivery registry, а database credential
-reconciler — точный Secret monotonic lifecycle state; оба используют
-`resourceVersion` CAS и полный readback. Authority sidecar читает material только
-из exact read-only file mounts и не получает Kubernetes Secret API. Routine
-deploy ServiceAccount не имеет
-`get|list|watch|create|update|patch` для Secrets и не управляет cert-manager.
-Application material manifest принимается только файлом, проверяется по exact
-множеству Secret/CA ConfigMap имён, required keys и непустых data, применяется
-без вывода значений. Без полного
-readback bootstrap не создаёт безопасную readiness-отметку, поэтому deploy
-закрыто останавливается до первой мутации.
+- OIDC identity разрешается в Organization/Membership на сервере;
+- browser payload не является источником actor, owner, project или lineage;
+- mTLS подтверждает transport peer, но не заменяет application token, exact
+  operation, permission, fence и replay protection;
+- чужой или скрытый opaque ref отклоняется тем же owner eligibility rule;
+- RuntimeRevision pin-ит exact image, instructions, grants, artifacts, input
+  digest, attempt и generation.
 
-## Границы доверия
+## Секреты
 
-- пользователь и содержимое Mattermost считаются недоверенными;
-- команды и файлы, созданные агентом, считаются недоверенными;
-- ответы интеграций могут содержать инъекцию промпта;
-- сценарий установки роли и цепочка поставки зависимостей являются привилегированным риском;
-- прямые учетные данные среды выполнения позволяют обойти согласование MCP и выдаются осознанно.
+Secret value принимается только доверенным credential boundary, хранится в
+secret storage и возвращается как masked state. Значение запрещено в Git,
+ConfigMap, prompt, audit, log, trace, metric, event, frontend JSON, artifact и
+raw provider error.
 
-## Жизненный цикл секрета
+Role Pod не получает credentials управляемой интеграции. `integration-gateway`
+выполняет только зарегистрированную typed MCP capability после server-owned
+grant/approval. Прямой credential разрешается только явно выбранной role policy,
+если обход Human Gate допустим по модели риска.
 
-- Значение секрета принимается через защищенный интерфейс или API и сохраняется в хранилище секретов.
-- БД хранит стабильную ссылку на учетные данные, метаданные и ревизию.
-- После создания интерфейс показывает только маскированное обозначение и состояние.
-- Ротация увеличивает ревизию и применяется к следующему ходу.
-- Отзыв блокирует новые вызовы инструментов и сессии.
-- Секреты не попадают в Git, промпт, логи, метрики, трассировки, файлы и диагностические пакеты.
+## Role image и Kubernetes
 
-## Изоляция агента
+- `role-image-builder` не получает runtime secrets;
+- build, scan, sign, promotion и node pull имеют разные identities;
+- runtime запускает только promoted `repository@sha256` с совместимым ABI;
+- execution Pod получает минимальный ServiceAccount, read-only protected runtime
+  material и exact network egress;
+- Kubernetes ID, namespace, ServiceAccount или external connection locator не
+  является domain authority.
 
-- `ServiceAccount` и профиль доступа выбираются явно.
-- Pod сессии получает только права текущей `RuntimeRevision`.
-- Учетные данные опасных соединений остаются в шлюзе интеграций.
-- Пути файлов и авторизация хранилища изолированы.
-- Сборщик не получает секреты среды выполнения.
-- Промышленный профиль документирует сетевую политику и исходящий доступ; отключение контроля является явно принятым риском.
+## Key lifecycle
 
-## Согласование
+Key и CA rotation является forward-only протоколом с overlap и exact readback.
+Replay/rollback high watermark хранит verifier side, а не caller. Повреждение
+signature, конфликт revision, expiry или истечение grace немедленно закрывают
+доступ; только краткий сетевой отказ может использовать bounded LKG.
 
-Ручное согласование связывается с неизменяемым хешем вызова. Согласующий видит безопасное описание эффекта. Истекший или измененный запрос не выполняется.
-
-## Публичный выпуск
-
-До публикации обязательны проверка модели угроз, реестр зависимостей и лицензий, проверка истории на секреты, политика безопасности, канал сообщения об уязвимостях, перечень поддерживаемых версий и процесс раскрытия инцидентов.
+Материализация выполняется code-first после owner approval и никогда не печатает
+значения. PR содержит только имена expected keys и проверку формы.

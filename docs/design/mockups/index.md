@@ -4,8 +4,8 @@ title: Индекс макетов web-first MatterCodex
 type: product-design
 status: approved
 owner: product
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Индекс макетов web-first MatterCodex
@@ -13,6 +13,16 @@ updated: 2026-08-22
 Макеты к пакету промптов [UX-MC-002](../web-first-reset-prompt-pack.md).
 19 экранов в двух размерах: **desktop 1440×1024** и **mobile 390×844**.
 Один экран — один HTML-файл.
+
+Утверждённые исходные canvas-экспорты владельца хранятся в репозитории:
+
+- [полный набор экранов](../matter-codex-mockups.html);
+- [детальный Live Run Workspace](../matter-codex-live-run.html).
+
+Они являются binding UX source наравне с реестром ниже. Это HTML, а не PNG:
+экспорт содержит самостоятельный интерактивный canvas и вложенные artboards.
+Нормативные для реализации отдельные `*.dc.html` находятся в этом каталоге и
+могут открываться локально без доступа к внешнему сервису.
 
 Интерактивный холст со всеми макетами: <https://claude.ai/code/artifact/ab862d09-84c9-4501-be1e-dd936e9feda5>
 (страница «Макеты экранов» — ряд на экран, слева desktop, справа mobile;

@@ -4,69 +4,64 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 0.4.0
-updated: 2026-08-09
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # Профили развертывания
 
-## Direct-production single-node prototype
+## `web-only`
 
-Активный профиль прототипа имеет точное имя `direct-production single-node
-prototype`. Отдельного staging нет. Новый backend сначала разворачивается dark
-в `mattercodex-system` существующего production-кластера, без Ingress, cutover и
-переключения пользовательского трафика. Build CI изолирован в `mattercodex-ci`,
-а deploy CI и его namespaced Kubernetes identity — в `mattercodex-ci-deploy`.
-Оба scale set имеют отдельные ARC controller и non-default runner group,
-ограниченный точным workflow на owner-authorized full SHA. Запуск дополнительно
-требует совпадения immutable GitHub run actor/triggering actor с owner-controlled
-repository variable; Environment используется для main-only deployment history,
-но не выдаётся за недоступный тарифу manual approval.
+`deploy/k8s/profiles/web-only` — основной и самодостаточный профиль. Он включает:
 
-Legacy Mattermost, PostgreSQL и bot-service в `matter-kodex-prod` остаются
-авторитетным пользовательским путём и rollback path. Первый выпуск использует
-существующий private in-cluster registry и `localhost:5001` для node pull.
-Rootless BuildKit является единственным новым build path; legacy Kaniko не
-расширяется и пока не удаляется.
+- `staff-control-center` и `control-api-gateway`;
+- `control-plane` с единой fresh baseline PostgreSQL;
+- NATS JetStream и transactional outbox relay;
+- `runtime-controller`, `agent-runner` ABI и always-hot system assistant;
+- `role-image-builder` и image admission/supply chain;
+- `integration-gateway`, готовый при нуле connections и credentials;
+- `automation-scheduler`, OIDC, internal RPC authority и platform egress.
 
-Ограничения прототипа и точный порядок owner-gated bootstrap, release, dark
-deploy и rollback определяет `RUN-MC-015`. Cutover запрещён до #241, #237 и #194.
+Mattermost, Git providers и внешние business systems отсутствуют и не входят в
+startup/readiness. Kubernetes является средой выполнения самой платформы и
+role Pod, но Kubernetes connection как пользовательская интеграция не обязателен.
 
-## Начальный профиль
+## `web-with-mattermost`
 
-Назначение: личная эксплуатация, разработка, демонстрация и малый одноузловой контур.
+`deploy/k8s/profiles/web-with-mattermost` расширяет `web-only` отдельным
+`interaction-gateway`. Четыре capabilities включаются независимо:
 
-- один кластер или узел Kubernetes допустим;
-- встроенные PostgreSQL и Mattermost допустимы;
-- MinIO или локальное S3-совместимое хранилище допустимо;
-- сервисы без локального состояния могут иметь одну реплику;
-- резервная копия во внешнее хранилище обязательна;
-- отсутствие высокой доступности и NetworkPolicy явно отображается как риск;
-- обновление и восстановление должны быть воспроизводимы.
+- inbound messages;
+- notifications;
+- result mirror;
+- Human Gate decisions.
 
-Начальный профиль не считается высокодоступным только потому, что работает в Kubernetes.
+Профиль не содержит server URL, домен, Team/Channel ID или credentials в коде.
+Exact allowed hosts и credential references материализуются владельцем перед
+развертыванием. Недоступность Mattermost отражается как отдельный delivery
+incident и не меняет core Run outcome.
 
-## Промышленный профиль
+## Общие инварианты
 
-Назначение: коммерческая управляемая инсталляция.
+- все внутренние images закреплены по `repository@sha256` в release lock;
+- mutable tag, zero digest и template placeholder закрыто отклоняются;
+- public host, origin, OIDC endpoints, registry и Kubernetes API CIDR являются
+  параметрами render, а не hardcoded значениями;
+- прямые инфраструктурные зависимости Pod: PostgreSQL, NATS, локальный storage,
+  issuer/verifier sidecar и egress boundary;
+- соседний бизнес-сервис не входит в Kubernetes readiness;
+- `/healthz` означает жизнь процесса, `/readyz` читает локальный рассчитанный
+  snapshot без сетевого fan-out;
+- полный service graph проверяется после rollout отдельной диагностикой;
+- role image build и platform release build используют изолированные
+  identities и разные promotion credentials.
 
-- минимум две реплики сервисов платформы без локального состояния;
-- высокодоступный PostgreSQL под управлением оператора и PITR;
-- внешнее долговечное S3-совместимое хранилище;
-- внешний или высокодоступный OCI-реестр;
-- OIDC/RBAC;
-- выбор лидера или получение заданий через БД;
-- `PodDisruptionBudget` и политики топологии;
-- наблюдаемость и оповещения;
-- регулярные учения по резервному копированию и восстановлению;
-- подписанные неизменяемые образы;
-- документированная сетевая политика и исходящий доступ;
-- проверенные обновление и откат.
+## Render
 
-## Управляемый изолированный кластер
+Release lock создаёт `tools/release/build-release.sh`. Поддерживаемый manifest
+рендерит `tools/release/render-web-only.sh` с `--profile web-only` либо
+`--profile web-with-mattermost`. Несмотря на историческое имя скрипта, параметр
+профиля является авторитетным.
 
-Коммерческий вариант может предоставлять клиенту отдельный вложенный или изолированный кластер. Владение развертыванием платформы управления, цель резервного копирования, домен и TLS, реестр и наблюдаемость задаются параметрами профиля, а не кодом под одну установку.
-
-## Конфигурация
-
-Один Helm chart поддерживает профили через схемы и values. Нельзя поддерживать начальный и промышленный профили разными неэквивалентными наборами разрозненных манифестов.
+Render не применяет ресурсы в кластер. Применение, reset и deploy выполняет
+только владелец после отдельного решения.

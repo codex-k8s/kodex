@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 1.7.0
-updated: 2026-08-09
+version: 2.0.0
+updated: 2026-08-23
 ---
 
 # Кодификация документов и задач
@@ -103,14 +103,8 @@ updated: 2026-07-28
 | `ARCH-MC-011`      | `docs/architecture/web-first-platform-reset.md`             |
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
-| `ROAD-MC-001`      | `docs/roadmap/README.md`                                    |
-| `ROAD-MC-002`      | `docs/roadmap/epics-and-waves.md`                           |
-| `ROAD-MC-003`      | `docs/roadmap/result-human-gates.md`                        |
-| `ROAD-MC-004`      | `docs/roadmap/dogfooding-bootstrap.md`                      |
-| `ROAD-MC-005`      | `docs/roadmap/manager-kickoff-prompt.md`                    |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
-| `ADR-MC-015`       | `docs/decisions/0015-unit-rebuild-and-cutover.md`           |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |
 | `GUIDE-DOC-003`    | `docs/guides/distributed-security.md`                       |
 | `GUIDE-DOC-004`    | `docs/guides/delivery-waves.md`                             |
@@ -124,6 +118,7 @@ updated: 2026-07-28
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |
+| `SVC-MC-017`       | `services/jobs/agent-runner/README.md`                      |
 | `RUN-MC-008`       | `docs/runbooks/runtime-controller.md`                       |
 | `FE-DOC-001`       | `docs/guides/frontend-vue.md`                               |
 | `INFRA-DOC-001`    | `docs/guides/infrastructure.md`                             |
@@ -132,11 +127,11 @@ updated: 2026-07-28
 | `RUN-MC-006`       | `docs/runbooks/internal-rpc-authority.md`                   |
 | `SVC-MC-013`       | `services/external/control-api-gateway/README.md`           |
 | `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
-| `SVC-MC-014`       | `services/internal/control-plane/owner-configuration-contract.md` |
-| `SVC-MC-015`       | `services/internal/control-plane/legacy-data-materializer-contract.md` |
-| `SVC-MC-016`       | `services/jobs/legacy-data-migration/README.md`                    |
-| `RUN-MC-014`       | `docs/runbooks/legacy-data-migration.md`                           |
-| `RUN-MC-015`       | `docs/runbooks/direct-production-prototype.md`                     |
-| `RUN-MC-016`       | `docs/runbooks/direct-production-sso.md`                           |
+| `RUN-MC-001`       | `docs/runbooks/README.md`                                  |
+| `RUN-MC-002`       | `docs/runbooks/fresh-install.md`                            |
+| `RUN-MC-007`       | `docs/runbooks/control-plane.md`                            |
+| `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
+| `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
+| `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

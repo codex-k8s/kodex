@@ -16,4 +16,4 @@
 - Kubernetes, Mattermost и repository-провайдеры подключаются через SDK/интерфейсы/адаптеры;
 - модель данных и синхронизация multi-pod проектируются под PostgreSQL (`JSONB` + будущий `pgvector`);
 - env/secrets/CI variable names для платформы используют префикс `MATTERCODEX_`, кроме значений внешних runtime-контрактов;
-- проектное планирование и документационная каноника задаются корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**`, `docs/decisions/**` и `docs/roadmap/**`.
+- продуктовая и архитектурная каноника задаётся корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**` и `docs/decisions/**`.
