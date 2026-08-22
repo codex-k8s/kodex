@@ -28,6 +28,7 @@ chmod 0600 "$temporary_directory"/*
 common_arguments=(
   --context impossible-context
   --mode preflight
+  --registry-namespace fixture-registry
   --workflow-sha-file "$temporary_directory/workflow-sha"
   --build-owner-actor-id-file "$temporary_directory/build-owner"
   --deploy-owner-actor-id-file "$temporary_directory/deploy-owner"
@@ -52,6 +53,22 @@ if "$bootstrap" "${common_arguments[@]}" --github-pat-file "$temporary_directory
 fi
 grep -Fq 'Kubernetes context mismatch' "$temporary_directory/pat-only.err" || {
   printf 'PAT-only mode did not reach the Kubernetes context gate\n' >&2
+  exit 1
+}
+
+"$network_policy_renderer" 10.20.30.40/32 10.20.30.41/32 fixture-registry \
+  "$temporary_directory/network-policy.yaml"
+rg -q '__REGISTRY_|matter-kodex-prod' "$temporary_directory/network-policy.yaml" && {
+  printf 'ARC network policy retained an unresolved or legacy registry locator\n' >&2
+  exit 1
+}
+mkdir -p "$temporary_directory/helm-values"
+"$helm_values_renderer" 10.96.0.1 \
+  0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+  matter-codex-registry.fixture-registry.svc.cluster.local \
+  "$temporary_directory/helm-values" >/dev/null
+rg -q '__REGISTRY_HOST__|matter-kodex-prod' "$temporary_directory/helm-values" && {
+  printf 'ARC Helm values retained an unresolved or legacy registry locator\n' >&2
   exit 1
 }
 
@@ -182,11 +199,13 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
 }
 
 "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
-  "$temporary_directory/rendered-network-policy.yaml"
+  fixture-registry "$temporary_directory/rendered-network-policy.yaml"
 yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq -sc -e '
   map(select(.kind == "NetworkPolicy" and .metadata.namespace == "mattercodex-ci" and
     .metadata.name == "build-registry")) |
   length == 1 and
+  .[0].spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
+    "fixture-registry" and
   ([.[0].spec.egress[0].to[] | select(.ipBlock != null) | .ipBlock.cidr] | sort) ==
     ["10.43.198.224/32","192.0.2.10/32"] and
   ([.[0].spec.egress[0].ports[].port] | sort) == [5000,5001]
@@ -195,12 +214,12 @@ yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq
   exit 1
 }
 if "$network_policy_renderer" 0.0.0.0/0 192.0.2.10/32 \
-  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  fixture-registry "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted a non-/32 destination\n' >&2
   exit 1
 fi
 if "$network_policy_renderer" 999.0.0.1/32 192.0.2.10/32 \
-  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  fixture-registry "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted an invalid IPv4 destination\n' >&2
   exit 1
 fi
@@ -225,6 +244,7 @@ done
 mkdir -p -- "$temporary_directory/helm-values"
 fixture_proxy_sha=$(printf '%064d' 0)
 "$helm_values_renderer" 10.43.0.1 "$fixture_proxy_sha" \
+  matter-codex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null
 expected_kubernetes_no_proxy='10.43.0.1,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1'
 for controller_values in controller-values controller-deploy-values; do
@@ -246,6 +266,12 @@ NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
     .securityContext.capabilities.drop[0] == "ALL" and
     .securityContext.seccompProfile.type == "RuntimeDefault")] | length == 1)
 ' "$temporary_directory/helm-values/build-runner-values.yaml" >/dev/null
+REGISTRY_NO_PROXY='matter-codex-registry.fixture-registry.svc.cluster.local,localhost,127.0.0.1' \
+  yq -e '
+    ([.template.spec.containers[] | select(.name == "runner" or .name == "buildkitd") |
+      .env[] | select(.name == "NO_PROXY" and .value == strenv(REGISTRY_NO_PROXY))] |
+      length == 2)
+  ' "$temporary_directory/helm-values/build-runner-values.yaml" >/dev/null
 NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
   ([.listenerTemplate.spec.containers[].env[] |
     select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1) and
@@ -258,18 +284,20 @@ NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
   ([.template.spec.containers[] | select(.name == "runner") | .env[] |
     select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] | length == 1)
 ' "$temporary_directory/helm-values/deploy-runner-values.yaml" >/dev/null
-if rg -q '__KUBERNETES_API_SERVICE_IP__|__EGRESS_PROXY_CONFIG_SHA256__' \
+if rg -q '__KUBERNETES_API_SERVICE_IP__|__EGRESS_PROXY_CONFIG_SHA256__|__REGISTRY_HOST__' \
   "$temporary_directory/helm-values"; then
   printf 'Rendered ARC Helm values contain an unresolved placeholder\n' >&2
   exit 1
 fi
 if "$helm_values_renderer" 10.43.0.999 "$fixture_proxy_sha" \
+  matter-codex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" \
   >/dev/null 2>&1; then
   printf 'ARC Helm values renderer accepted an invalid Kubernetes API IP\n' >&2
   exit 1
 fi
 if "$helm_values_renderer" 10.43.0.1 invalid-sha \
+  matter-codex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null 2>&1; then
   printf 'ARC Helm values renderer accepted an invalid proxy config SHA-256\n' >&2
   exit 1
