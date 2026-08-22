@@ -150,9 +150,9 @@ type CompletedArtifact struct {
 	Content                     []byte
 }
 type DelegateInput struct {
-	LeaseRef, Fence, TargetAgentRef, Task string
-	Generation                            int64
-	Input                                 map[string]any
+	LeaseRef, Fence, TargetAgentRef, WorkflowStepKey, Task string
+	Generation                                             int64
+	Input                                                  map[string]any
 }
 type ProposeAssistantPlanInput struct {
 	LeaseRef, Fence, Summary string

@@ -27,6 +27,7 @@ const (
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
 var imageDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-core-v[1-9][0-9]*$`)
+var workflowStepKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$`)
 
 // RuntimeTLSBinding описывает точную mTLS-границу callback runtime-controller.
 type RuntimeTLSBinding struct {
@@ -44,10 +45,14 @@ type RunnerSessionMessage struct {
 
 // RunnerDelegationTarget — закрытый server-owned каталог доступных дочерних агентов.
 type RunnerDelegationTarget struct {
-	Ref             string `json:"ref"`
-	Name            string `json:"name"`
-	Purpose         string `json:"purpose"`
-	RoleDescription string `json:"role_description"`
+	Ref              string `json:"ref"`
+	Name             string `json:"name"`
+	Purpose          string `json:"purpose"`
+	RoleDescription  string `json:"role_description"`
+	WorkflowStepKey  string `json:"workflow_step_key,omitempty"`
+	WorkflowStepName string `json:"workflow_step_name,omitempty"`
+	Instructions     string `json:"instructions,omitempty"`
+	ExpectedResult   string `json:"expected_result,omitempty"`
 }
 
 // RunnerIntegrationGrant — безопасная проекция одной типизированной capability.
@@ -143,6 +148,14 @@ func (input RunnerInput) Validate() error {
 	} else if input.RunRef != "" || input.NodeRef != "" || input.TurnRef != "" || input.LeaseRef != "" ||
 		input.LeaseFence != "" || input.LeaseGeneration != 0 || input.Attempt != 0 || input.Task != "" || !input.SystemAssistant {
 		return errors.New("warm runner binding is invalid")
+	}
+	for _, target := range input.DelegationTargets {
+		if !opaqueReferencePattern.MatchString(target.Ref) || strings.TrimSpace(target.Name) == "" || len(target.Name) > 160 ||
+			len(target.Purpose) > 2000 || len(target.RoleDescription) > 2000 || len(target.WorkflowStepName) > 160 ||
+			len(target.Instructions) > 1000 || len(target.ExpectedResult) > 1000 ||
+			(target.WorkflowStepKey != "" && !workflowStepKeyPattern.MatchString(target.WorkflowStepKey)) {
+			return errors.New("runner delegation catalog is invalid")
+		}
 	}
 	return nil
 }

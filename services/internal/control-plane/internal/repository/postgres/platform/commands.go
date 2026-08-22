@@ -860,7 +860,11 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		var coordinatorEligible bool
-		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowValidateAgentCapabilities, scope.organizationID, projectID, draft.CoordinatorAgentRef, []string{}).Scan(&coordinatorEligible); err != nil {
+		coordinatorCapabilities := []string{}
+		if workflowRequiresDelegation(draft) {
+			coordinatorCapabilities = []string{"platform.run.delegate"}
+		}
+		if err := tx.QueryRow(ctx, queryCommandsChangeworkflowValidateAgentCapabilities, scope.organizationID, projectID, draft.CoordinatorAgentRef, coordinatorCapabilities).Scan(&coordinatorEligible); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !coordinatorEligible {
@@ -918,11 +922,16 @@ func validWorkflowVersion(version entity.WorkflowVersion) bool {
 		return false
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
+	knownAgents := make(map[string]struct{}, len(version.Steps))
+	totalInstructions := len(version.Instructions) + len(version.CompletionCriteria)
 	for index, step := range version.Steps {
 		if step.Key == "" || len(step.Key) > 96 || step.Position != int32(index+1) || strings.TrimSpace(step.Name) == "" || len(step.Name) > 160 || strings.TrimSpace(step.AgentRef) == "" || strings.TrimSpace(step.Instructions) == "" || len(step.Instructions) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 24*60*60 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || len(step.ExpectedResult) > 1000 || len(step.GateDecisions) > 4 || len(step.RequiredCapabilityKeys) > 50 {
 			return false
 		}
 		if _, duplicate := knownSteps[step.Key]; duplicate {
+			return false
+		}
+		if _, duplicate := knownAgents[step.AgentRef]; duplicate {
 			return false
 		}
 		for _, dependency := range step.DependsOn {
@@ -944,8 +953,19 @@ func validWorkflowVersion(version entity.WorkflowVersion) bool {
 			}
 		}
 		knownSteps[step.Key] = struct{}{}
+		knownAgents[step.AgentRef] = struct{}{}
+		totalInstructions += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 	}
-	return true
+	return totalInstructions <= 64<<10
+}
+
+func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
+	for _, step := range version.Steps {
+		if step.AgentRef != version.CoordinatorAgentRef {
+			return true
+		}
+	}
+	return false
 }
 
 func validCapabilityKey(value string) bool {
@@ -979,6 +999,9 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	}
 	var targetName string
 	var workflowSpec []byte
+	var workflowVersionID, workflowVersionRef, workflowVersionDigest string
+	var coordinatorRef, coordinatorName string
+	var workflowVersion entity.WorkflowVersion
 	runConcurrency := int32(defaultAgentRunConcurrency)
 	switch payload.Target.Type {
 	case "AGENT":
@@ -986,14 +1009,17 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 			return commandOutcome{}, errs.ErrConflict
 		}
 	case "WORKFLOW":
-		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName, &workflowSpec); err != nil {
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"workflow_ref":    payload.Target.Ref,
+		}).Scan(&targetName, &workflowVersionID, &workflowVersionRef, &workflowSpec, &workflowVersionDigest, &coordinatorRef, &coordinatorName); err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		var version entity.WorkflowVersion
-		if json.Unmarshal(workflowSpec, &version) != nil || !validWorkflowVersion(version) {
+		if json.Unmarshal(workflowSpec, &workflowVersion) != nil || !validWorkflowVersion(workflowVersion) || workflowVersion.CoordinatorAgentRef != coordinatorRef {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		runConcurrency = version.Concurrency
+		runConcurrency = workflowVersion.Concurrency
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -1022,15 +1048,34 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		artifactRefs = []string{}
 	}
 	var runID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Target.Type, payload.Target.Ref, source, title, payload.Task, rawInput, artifactRefs, scope.actorID, runConcurrency).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, pgx.StrictNamedArgs{
+		"run_ref":             runRef,
+		"organization_id":     scope.organizationID,
+		"project_id":          projectID,
+		"session_id":          sessionID,
+		"workflow_version_id": workflowVersionID,
+		"target_type":         payload.Target.Type,
+		"target_ref":          payload.Target.Ref,
+		"source":              source,
+		"title":               title,
+		"task":                payload.Task,
+		"input":               rawInput,
+		"input_artifact_refs": artifactRefs,
+		"initiated_by":        scope.actorID,
+		"concurrency_limit":   runConcurrency,
+	}).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert launched run: %w", mapWriteError(err))
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsRootRunId, runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("bind root run lineage: %w", errs.ErrUnavailable)
 	}
+	executionTask := payload.Task
+	if payload.Target.Type == "WORKFLOW" {
+		executionTask = workflowCoordinatorTask(payload.Task, workflowVersionRef, workflowVersionDigest, workflowVersion)
+	}
 	turnRef, _ := newRef("trn")
 	var turnID string
-	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, payload.Task, artifactRefs).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, runID, scope.actorRef, executionTask, artifactRefs).Scan(&turnID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert initial session turn: %w", errs.ErrUnavailable)
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
@@ -1046,39 +1091,13 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 			return commandOutcome{}, fmt.Errorf("insert direct agent execution node: %w", err)
 		}
 	} else {
-		var version entity.WorkflowVersion
-		if json.Unmarshal(workflowSpec, &version) != nil || !validWorkflowVersion(version) {
-			return commandOutcome{}, errs.ErrConflict
+		nodeID, _, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, coordinatorRef, coordinatorName, turnID, executionTask)
+		if err != nil {
+			return commandOutcome{}, fmt.Errorf("insert workflow coordinator execution node: %w", err)
 		}
-		nodeIDs := map[string]string{}
-		nodeRefs := map[string]string{}
-		for _, step := range version.Steps {
-			agentName := step.Name
-			if agentName == "" {
-				agentName = step.Key
-			}
-			nodeID, nodeRef, err := repository.insertAgentNode(ctx, tx, scope, runID, runID, rootNodeID, step.AgentRef, agentName, turnID, step.Instructions)
-			if err != nil {
-				return commandOutcome{}, err
-			}
-			nodeIDs[step.Key] = nodeID
-			nodeRefs[step.Key] = nodeRef
-			if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, step.Key, step.HumanGateAfter); err != nil {
-				return commandOutcome{}, errs.ErrUnavailable
-			}
-		}
-		for _, step := range version.Steps {
-			for _, dependency := range step.DependsOn {
-				sourceID, targetID := nodeIDs[dependency], nodeIDs[step.Key]
-				if sourceID == "" || targetID == "" {
-					return commandOutcome{}, errs.ErrInvalid
-				}
-				edgeRef, _ := newRef("edg")
-				if _, err := tx.Exec(ctx, queryCommandsLaunchrunInsertRunEdgesRefRootRunIdTargetNodeId, edgeRef, scope.organizationID, runID, sourceID, targetID); err != nil {
-					return commandOutcome{}, errs.ErrUnavailable
-				}
-				_ = nodeRefs
-			}
+		initialGate := !workflowRequiresDelegation(workflowVersion) && workflowHasHumanGate(workflowVersion)
+		if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunNodesWorkflowStepKeyHumanGateAfter, nodeID, "workflow.coordinator.initial", initialGate); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
 		}
 	}
 	if _, err := tx.Exec(ctx, queryCommandsLaunchrunUpdateRunsStateStartedAtVersion, runID); err != nil {
@@ -1092,6 +1111,53 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		return commandOutcome{}, fmt.Errorf("read launched run graph: %w", err)
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "RUN", resourceRef: runRef, summary: "i18n:RUN_CREATED"}, nil
+}
+
+func workflowCoordinatorTask(task, versionRef, versionDigest string, version entity.WorkflowVersion) string {
+	var builder strings.Builder
+	builder.WriteString(strings.TrimSpace(task))
+	builder.WriteString("\n\n# Workflow coordination contract\n")
+	builder.WriteString("Execute the immutable workflow version ")
+	builder.WriteString(versionRef)
+	builder.WriteString(" (sha256:")
+	builder.WriteString(versionDigest)
+	builder.WriteString("). Use delegate_agent exactly once for every step assigned to another agent. Execute coordinator-owned steps locally. End this turn after all required delegations are accepted; child results arrive in a later callback turn.\n")
+	if instructions := strings.TrimSpace(version.Instructions); instructions != "" {
+		builder.WriteString("\nWorkflow instructions: ")
+		builder.WriteString(instructions)
+		builder.WriteString("\n")
+	}
+	for _, step := range version.Steps {
+		builder.WriteString("\n- step ")
+		builder.WriteString(step.Key)
+		builder.WriteString("; agent ")
+		builder.WriteString(step.AgentRef)
+		if step.AgentRef == version.CoordinatorAgentRef {
+			builder.WriteString(" (execute locally)")
+		} else {
+			builder.WriteString(" (delegate)")
+		}
+		builder.WriteString("; task: ")
+		builder.WriteString(step.Instructions)
+		if expected := strings.TrimSpace(step.ExpectedResult); expected != "" {
+			builder.WriteString("; expected result: ")
+			builder.WriteString(expected)
+		}
+	}
+	if criteria := strings.TrimSpace(version.CompletionCriteria); criteria != "" {
+		builder.WriteString("\n\nCompletion criteria: ")
+		builder.WriteString(criteria)
+	}
+	return truncate(builder.String(), 96<<10)
+}
+
+func workflowHasHumanGate(version entity.WorkflowVersion) bool {
+	for _, step := range version.Steps {
+		if step.HumanGateAfter {
+			return true
+		}
+	}
+	return false
 }
 
 func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, scope scope, rootRunID, runID, parentNodeID, agentRef, displayName, turnID, summary string) (string, string, error) {

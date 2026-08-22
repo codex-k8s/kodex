@@ -194,6 +194,8 @@ CHILD_CALLBACK_REGISTERED:
   other: Child AI employee callback registered
 CHILD_AGENT_RESULT_DELIVERED:
   other: Child AI employee result delivered
+CALLBACK_CONTINUATION_QUEUED:
+  other: Coordinator will continue with the child AI employee results
 OWNER_DECISION_REQUIRED:
   other: Human decision required
 OWNER_GATE_CANCELLED:

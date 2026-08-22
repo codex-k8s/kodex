@@ -181,6 +181,13 @@ test.describe.serial("web-only fresh installation", () => {
     });
     await publishAndPrepareAgent(page);
 
+    await page.goto(`/projects/${projectRef}/agents/${coordinatorRef}`);
+    const delegationCapability = page.getByRole("checkbox", {
+      name: /Делегирование/,
+    });
+    await delegationCapability.check();
+    await expect(delegationCapability).toBeChecked();
+
     await page.goto(`/projects/${projectRef}/workflows`);
     await page.getByRole("button", { name: "Новый Процесс" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Новый Процесс" });
@@ -227,7 +234,7 @@ test.describe.serial("web-only fresh installation", () => {
     workflowRunRef = routeRef(page, "runs");
     await expectRunState(page, /В очереди|Выполняется/);
     await expectRunState(page, "Ждёт решения");
-    await expect(page.locator(".canvas-node")).toHaveCount(4, {
+    await expect(page.locator(".canvas-node")).toHaveCount(6, {
       timeout: 300_000,
     });
     await expect(
@@ -236,6 +243,15 @@ test.describe.serial("web-only fresh installation", () => {
     await expect(
       page.locator(".canvas-node").filter({ hasText: writerName }),
     ).toHaveCount(1);
+    await expect(page.locator('[data-edge-type="CALLBACK_TO"]')).toHaveCount(2);
+    await expect(page.locator('[data-edge-type="CONTINUES"]')).toHaveCount(1);
+    await expect(
+      page
+        .locator(".timeline")
+        .getByText("Результат дочернего ИИ-сотрудника доставлен", {
+          exact: true,
+        }),
+    ).toHaveCount(2);
 
     const contexts: BrowserContext[] = [];
     try {

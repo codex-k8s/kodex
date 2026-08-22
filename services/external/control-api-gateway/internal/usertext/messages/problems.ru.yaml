@@ -194,6 +194,8 @@ CHILD_CALLBACK_REGISTERED:
   other: Обратная связь дочернего ИИ-сотрудника зарегистрирована
 CHILD_AGENT_RESULT_DELIVERED:
   other: Результат дочернего ИИ-сотрудника доставлен
+CALLBACK_CONTINUATION_QUEUED:
+  other: Координатор продолжит работу с результатами дочерних ИИ-сотрудников
 OWNER_DECISION_REQUIRED:
   other: Требуется решение человека
 OWNER_GATE_CANCELLED:

@@ -77,6 +77,8 @@ var (
 	queryRuntimeDelegateexecutionSelectAgentsOrganizationIdProjectIdRef string
 	//go:embed sql/runtime_delegateexecution_select_runs_id.sql
 	queryRuntimeDelegateexecutionSelectRunsId string
+	//go:embed sql/runtime_delegateexecution_insert_child_session.sql
+	queryRuntimeDelegateexecutionInsertChildSession string
 	//go:embed sql/runtime_delegateexecution_insert_runs_ref_project_id_root_run_id.sql
 	queryRuntimeDelegateexecutionInsertRunsRefProjectIdRootRunId string
 	//go:embed sql/runtime_delegateexecution_select_sessions_id.sql
@@ -99,4 +101,18 @@ var (
 	queryRuntimeDelivercallbackInsertCallbackReceiptsChildRunId string
 	//go:embed sql/runtime_delivercallback_update_run_nodes_callback_summary_version.sql
 	queryRuntimeDelivercallbackUpdateRunNodesCallbackSummaryVersion string
+	//go:embed sql/runtime_callback_select_parent_session.sql
+	queryRuntimeCallbackSelectParentSession string
+	//go:embed sql/runtime_callback_insert_completed_turn.sql
+	queryRuntimeCallbackInsertCompletedTurn string
+	//go:embed sql/runtime_callback_update_session.sql
+	queryRuntimeCallbackUpdateSession string
+	//go:embed sql/runtime_callback_resolve_continuation.sql
+	queryRuntimeCallbackResolveContinuation string
+	//go:embed sql/runtime_callback_insert_continuation_turn.sql
+	queryRuntimeCallbackInsertContinuationTurn string
+	//go:embed sql/runtime_callback_insert_continuation_node.sql
+	queryRuntimeCallbackInsertContinuationNode string
+	//go:embed sql/runtime_callback_insert_continues_edge.sql
+	queryRuntimeCallbackInsertContinuesEdge string
 )

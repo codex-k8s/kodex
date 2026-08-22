@@ -364,23 +364,22 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if payload.Success {
-		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef string
-		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef)
+		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef, parentRunID string
+		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
 		if err == nil {
-			tag, insertErr := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, lease["runID"], callbackEdgeID)
-			if insertErr != nil {
-				return commandOutcome{}, errs.ErrUnavailable
-			}
-			if tag.RowsAffected() == 1 {
-				if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(payload.ResultSummary, 2000)); updateErr != nil {
-					return commandOutcome{}, errs.ErrUnavailable
-				}
-				if _, eventErr := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "runRef"), "CALLBACK_DELIVERED", parentNodeRef, callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); eventErr != nil {
-					return commandOutcome{}, eventErr
-				}
+			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
+				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
+				rootRunID: stringMap(lease, "rootRunID"), projectID: stringMap(lease, "projectID"),
+				parentRunID: parentRunID, resultSummary: payload.ResultSummary, callbackEdgeID: callbackEdgeID,
+				callbackEdgeRef: callbackEdgeRef, parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
+			}); callbackErr != nil {
+				return commandOutcome{}, callbackErr
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
+			return commandOutcome{}, continuationErr
 		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
@@ -492,15 +491,20 @@ func runtimeSafeErrorCode(code string) bool {
 
 func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.DelegateInput)
-	if !ok || payload.TargetAgentRef == "" || strings.TrimSpace(payload.Task) == "" {
+	if !ok || payload.TargetAgentRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 64<<10 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	var allowed bool
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunNodesId, lease["nodeID"]).Scan(&allowed); err != nil || !allowed {
+	var capabilityAllowed, relationshipAllowed bool
+	var workflowInstructions, workflowStepName string
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunNodesId, pgx.StrictNamedArgs{
+		"parent_node_id":    lease["nodeID"],
+		"target_agent_ref":  payload.TargetAgentRef,
+		"workflow_step_key": payload.WorkflowStepKey,
+	}).Scan(&capabilityAllowed, &relationshipAllowed, &workflowInstructions, &workflowStepName); err != nil || !capabilityAllowed || !relationshipAllowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	var agentID, agentName, role string
@@ -508,29 +512,77 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	childRef, _ := newRef("run")
-	var sessionID, initiatorID, parentRunID string
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &initiatorID, &parentRunID); err != nil {
+	var providerAccountID, initiatorID, parentRunID string
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, pgx.StrictNamedArgs{
+		"parent_run_id":   lease["runID"],
+		"organization_id": scope.organizationID,
+	}).Scan(&providerAccountID, &initiatorID, &parentRunID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	childSessionRef, _ := newRef("ses")
+	var childSessionID string
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertChildSession, pgx.StrictNamedArgs{
+		"session_ref":         childSessionRef,
+		"organization_id":     scope.organizationID,
+		"project_id":          lease["projectID"],
+		"target_agent_ref":    payload.TargetAgentRef,
+		"provider_account_id": providerAccountID,
+		"created_by":          initiatorID,
+	}).Scan(&childSessionID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	childTask := strings.TrimSpace(payload.Task)
+	if workflowInstructions != "" {
+		childTask = strings.TrimSpace(workflowInstructions) + "\n\nCoordinator assignment:\n" + childTask
+	}
+	childTask = truncate(childTask, 19_000)
 	var childID string
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunsRefProjectIdRootRunId, childRef, scope.organizationID, lease["projectID"], sessionID, lease["rootRunID"], parentRunID, payload.TargetAgentRef, agentName+": "+truncate(payload.Task, 100), payload.Task, asJSON(payload.Input), initiatorID).Scan(&childID); err != nil {
+	childTitle := agentName + ": " + truncate(payload.Task, 100)
+	if workflowStepName != "" {
+		childTitle = workflowStepName
+	}
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunsRefProjectIdRootRunId, pgx.StrictNamedArgs{
+		"run_ref":          childRef,
+		"organization_id":  scope.organizationID,
+		"project_id":       lease["projectID"],
+		"session_id":       childSessionID,
+		"root_run_id":      lease["rootRunID"],
+		"parent_run_id":    parentRunID,
+		"target_agent_ref": payload.TargetAgentRef,
+		"title":            childTitle,
+		"task":             childTask,
+		"input":            asJSON(payload.Input),
+		"initiated_by":     initiatorID,
+	}).Scan(&childID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	turnRef, _ := newRef("trn")
 	var turnID string
 	var turnNumber int64
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectSessionsId, sessionID).Scan(&turnNumber); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectSessionsId, childSessionID).Scan(&turnNumber); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, childID, turnNumber, stringMap(lease, "nodeRef"), payload.Task).Scan(&turnID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, childSessionID, childID, turnNumber, stringMap(lease, "nodeRef"), childTask).Scan(&turnID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeDelegateexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, childSessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	nodeRef, _ := newRef("nod")
 	var nodeID string
-	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId, nodeRef, scope.organizationID, lease["rootRunID"], childID, lease["nodeID"], agentName, role, agentID, turnID, truncate(payload.Task, 1000)).Scan(&nodeID); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionInsertRunNodesRefRootRunIdParentNodeId, pgx.StrictNamedArgs{
+		"node_ref":          nodeRef,
+		"organization_id":   scope.organizationID,
+		"root_run_id":       lease["rootRunID"],
+		"run_id":            childID,
+		"parent_node_id":    lease["nodeID"],
+		"display_name":      agentName,
+		"role":              role,
+		"agent_id":          agentID,
+		"turn_id":           turnID,
+		"workflow_step_key": payload.WorkflowStepKey,
+		"input_summary":     truncate(childTask, 1000),
+	}).Scan(&nodeID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	delegateEdgeRef, _ := newRef("edg")
@@ -568,18 +620,14 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 	if childState != "SUCCEEDED" {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	tag, err := tx.Exec(ctx, queryRuntimeDelivercallbackInsertCallbackReceiptsChildRunId, childID, edgeID)
+	duplicate, err := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
+		childRunID: childID, childRunRef: payload.ChildRunRef, rootRunID: rootRunID,
+		projectID: projectID, parentRunID: parentRunID, resultSummary: resultSummary,
+		callbackEdgeID: edgeID, callbackEdgeRef: payload.CallbackEdgeRef,
+		parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
+	})
 	if err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	duplicate := tag.RowsAffected() == 0
-	if !duplicate {
-		if _, err := tx.Exec(ctx, queryRuntimeDelivercallbackUpdateRunNodesCallbackSummaryVersion, parentNodeID, truncate(resultSummary, 2000)); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.ChildRunRef, "CALLBACK_DELIVERED", parentNodeRef, payload.CallbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); err != nil {
-			return commandOutcome{}, err
-		}
+		return commandOutcome{}, err
 	}
 	parentRef, err := mustRunRef(ctx, tx, parentRunID)
 	if err != nil {
@@ -590,4 +638,136 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Run: &parent, Graph: &graph, Duplicate: duplicate}, projectID: projectID, projectRef: projectRef, resourceKind: "CALLBACK", resourceRef: payload.CallbackEdgeRef, summary: "Child callback processed"}, nil
+}
+
+type callbackRecord struct {
+	childRunID, childRunRef, rootRunID, projectID, parentRunID string
+	resultSummary, callbackEdgeID, callbackEdgeRef             string
+	parentNodeID, parentNodeRef                                string
+}
+
+func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx, scope scope, record callbackRecord) (bool, error) {
+	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, record.childRunID, record.callbackEdgeID)
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if tag.RowsAffected() == 0 {
+		return true, nil
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, record.parentNodeID, truncate(record.resultSummary, 2000)); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	parentRunID := record.parentRunID
+	if parentRunID == "" {
+		return false, errs.ErrUnavailable
+	}
+	var sessionID string
+	var turnNumber int64
+	if err := tx.QueryRow(ctx, queryRuntimeCallbackSelectParentSession, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"parent_run_id":   parentRunID,
+	}).Scan(&sessionID, &turnNumber); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	turnRef, _ := newRef("trn")
+	var callbackTurnID string
+	if err := tx.QueryRow(ctx, queryRuntimeCallbackInsertCompletedTurn, pgx.StrictNamedArgs{
+		"turn_ref":        turnRef,
+		"organization_id": scope.organizationID,
+		"session_id":      sessionID,
+		"parent_run_id":   parentRunID,
+		"turn_number":     turnNumber,
+		"child_run_ref":   record.childRunRef,
+		"content":         truncate(record.resultSummary, 4000),
+	}).Scan(&callbackTurnID); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCallbackUpdateSession, pgx.StrictNamedArgs{"session_id": sessionID}); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if _, err := repository.emitRunEvent(ctx, tx, scope, record.projectID, record.rootRunID, record.childRunRef, "CALLBACK_DELIVERED", record.parentNodeRef, record.callbackEdgeRef, "", "", "i18n:CHILD_AGENT_RESULT_DELIVERED", "RUNNING", "RUNNING"); err != nil {
+		return false, err
+	}
+	if _, err := repository.scheduleCallbackContinuation(ctx, tx, scope, record.parentNodeID, record.projectID); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
+	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
+	var attempt int32
+	var humanGateAfter bool
+	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"parent_node_id":  parentNodeID,
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &humanGateAfter)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	var lockedSessionID string
+	var turnNumber int64
+	if err := tx.QueryRow(ctx, queryRuntimeCallbackSelectParentSession, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"parent_run_id":   parentRunID,
+	}).Scan(&lockedSessionID, &turnNumber); err != nil || lockedSessionID != sessionID {
+		return false, errs.ErrUnavailable
+	}
+	const continuationTask = "Continue the task using all completed child-agent results in the session context. Produce the final response and do not repeat completed delegations."
+	turnRef, _ := newRef("trn")
+	var turnID string
+	if err := tx.QueryRow(ctx, queryRuntimeCallbackInsertContinuationTurn, pgx.StrictNamedArgs{
+		"turn_ref":        turnRef,
+		"organization_id": scope.organizationID,
+		"session_id":      sessionID,
+		"parent_run_id":   parentRunID,
+		"turn_number":     turnNumber,
+		"agent_ref":       agentRef,
+		"content":         continuationTask,
+	}).Scan(&turnID); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCallbackUpdateSession, pgx.StrictNamedArgs{"session_id": sessionID}); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	nodeRef, _ := newRef("nod")
+	workflowStepKey := ""
+	if workflowVersionID != "" {
+		workflowStepKey = fmt.Sprintf("workflow.coordinator.continue.%d", attempt+1)
+	}
+	var nodeID string
+	if err := tx.QueryRow(ctx, queryRuntimeCallbackInsertContinuationNode, pgx.StrictNamedArgs{
+		"node_ref":          nodeRef,
+		"organization_id":   scope.organizationID,
+		"root_run_id":       rootRunID,
+		"parent_run_id":     parentRunID,
+		"parent_node_id":    parentNodeID,
+		"display_name":      displayName,
+		"role":              role,
+		"agent_id":          agentID,
+		"turn_id":           turnID,
+		"workflow_step_key": workflowStepKey,
+		"human_gate_after":  humanGateAfter,
+		"attempt":           attempt + 1,
+		"input_summary":     continuationTask,
+	}).Scan(&nodeID); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	edgeRef, _ := newRef("edg")
+	if _, err := tx.Exec(ctx, queryRuntimeCallbackInsertContinuesEdge, pgx.StrictNamedArgs{
+		"edge_ref":        edgeRef,
+		"organization_id": scope.organizationID,
+		"root_run_id":     rootRunID,
+		"source_node_id":  parentNodeID,
+		"target_node_id":  nodeID,
+	}); err != nil {
+		return false, errs.ErrUnavailable
+	}
+	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, nodeRef, "TURN_QUEUED", nodeRef, edgeRef, "", "", "i18n:CALLBACK_CONTINUATION_QUEUED", "RUNNING", "QUEUED"); err != nil {
+		return false, err
+	}
+	return true, nil
 }

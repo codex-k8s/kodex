@@ -14457,13 +14457,17 @@ func (x *ProviderCredentialBinding) GetContentSha256() string {
 }
 
 type DelegationTarget struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Ref             string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Purpose         string                 `protobuf:"bytes,3,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	RoleDescription string                 `protobuf:"bytes,4,opt,name=role_description,json=roleDescription,proto3" json:"role_description,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Ref              string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Name             string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Purpose          string                 `protobuf:"bytes,3,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	RoleDescription  string                 `protobuf:"bytes,4,opt,name=role_description,json=roleDescription,proto3" json:"role_description,omitempty"`
+	WorkflowStepKey  string                 `protobuf:"bytes,5,opt,name=workflow_step_key,json=workflowStepKey,proto3" json:"workflow_step_key,omitempty"`
+	WorkflowStepName string                 `protobuf:"bytes,6,opt,name=workflow_step_name,json=workflowStepName,proto3" json:"workflow_step_name,omitempty"`
+	Instructions     string                 `protobuf:"bytes,7,opt,name=instructions,proto3" json:"instructions,omitempty"`
+	ExpectedResult   string                 `protobuf:"bytes,8,opt,name=expected_result,json=expectedResult,proto3" json:"expected_result,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DelegationTarget) Reset() {
@@ -14520,6 +14524,34 @@ func (x *DelegationTarget) GetPurpose() string {
 func (x *DelegationTarget) GetRoleDescription() string {
 	if x != nil {
 		return x.RoleDescription
+	}
+	return ""
+}
+
+func (x *DelegationTarget) GetWorkflowStepKey() string {
+	if x != nil {
+		return x.WorkflowStepKey
+	}
+	return ""
+}
+
+func (x *DelegationTarget) GetWorkflowStepName() string {
+	if x != nil {
+		return x.WorkflowStepName
+	}
+	return ""
+}
+
+func (x *DelegationTarget) GetInstructions() string {
+	if x != nil {
+		return x.Instructions
+	}
+	return ""
+}
+
+func (x *DelegationTarget) GetExpectedResult() string {
+	if x != nil {
+		return x.ExpectedResult
 	}
 	return ""
 }
@@ -15277,16 +15309,17 @@ func (x *CompleteExecutionResponse) GetGraph() *RunGraph {
 }
 
 type DelegateExecutionRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Mutation       *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	LeaseRef       string                 `protobuf:"bytes,2,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
-	Fence          string                 `protobuf:"bytes,3,opt,name=fence,proto3" json:"fence,omitempty"`
-	Generation     int64                  `protobuf:"varint,4,opt,name=generation,proto3" json:"generation,omitempty"`
-	TargetAgentRef string                 `protobuf:"bytes,5,opt,name=target_agent_ref,json=targetAgentRef,proto3" json:"target_agent_ref,omitempty"`
-	Task           string                 `protobuf:"bytes,6,opt,name=task,proto3" json:"task,omitempty"`
-	Input          *structpb.Struct       `protobuf:"bytes,7,opt,name=input,proto3" json:"input,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Mutation        *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	LeaseRef        string                 `protobuf:"bytes,2,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence           string                 `protobuf:"bytes,3,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation      int64                  `protobuf:"varint,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	TargetAgentRef  string                 `protobuf:"bytes,5,opt,name=target_agent_ref,json=targetAgentRef,proto3" json:"target_agent_ref,omitempty"`
+	Task            string                 `protobuf:"bytes,6,opt,name=task,proto3" json:"task,omitempty"`
+	Input           *structpb.Struct       `protobuf:"bytes,7,opt,name=input,proto3" json:"input,omitempty"`
+	WorkflowStepKey string                 `protobuf:"bytes,8,opt,name=workflow_step_key,json=workflowStepKey,proto3" json:"workflow_step_key,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *DelegateExecutionRequest) Reset() {
@@ -15366,6 +15399,13 @@ func (x *DelegateExecutionRequest) GetInput() *structpb.Struct {
 		return x.Input
 	}
 	return nil
+}
+
+func (x *DelegateExecutionRequest) GetWorkflowStepKey() string {
+	if x != nil {
+		return x.WorkflowStepKey
+	}
+	return ""
 }
 
 type DelegateExecutionResponse struct {
@@ -18346,12 +18386,16 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"secret_uid\x18\x05 \x01(\tR\tsecretUid\x126\n" +
 	"\x17secret_resource_version\x18\x06 \x01(\tR\x15secretResourceVersion\x12%\n" +
-	"\x0econtent_sha256\x18\a \x01(\tR\rcontentSha256\"}\n" +
+	"\x0econtent_sha256\x18\a \x01(\tR\rcontentSha256\"\xa4\x02\n" +
 	"\x10DelegationTarget\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\apurpose\x18\x03 \x01(\tR\apurpose\x12)\n" +
-	"\x10role_description\x18\x04 \x01(\tR\x0froleDescription\"E\n" +
+	"\x10role_description\x18\x04 \x01(\tR\x0froleDescription\x12*\n" +
+	"\x11workflow_step_key\x18\x05 \x01(\tR\x0fworkflowStepKey\x12,\n" +
+	"\x12workflow_step_name\x18\x06 \x01(\tR\x10workflowStepName\x12\"\n" +
+	"\finstructions\x18\a \x01(\tR\finstructions\x12'\n" +
+	"\x0fexpected_result\x18\b \x01(\tR\x0eexpectedResult\"E\n" +
 	"\x15SessionContextMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\"\x8e\x01\n" +
@@ -18416,7 +18460,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tartifacts\x18\b \x03(\v2'.controlplane.v1.CompletedArtifactInputR\tartifacts\"t\n" +
 	"\x19CompleteExecutionResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
-	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\x98\x02\n" +
+	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xc4\x02\n" +
 	"\x18DelegateExecutionRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +
@@ -18426,7 +18470,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"generation\x12(\n" +
 	"\x10target_agent_ref\x18\x05 \x01(\tR\x0etargetAgentRef\x12\x12\n" +
 	"\x04task\x18\x06 \x01(\tR\x04task\x12-\n" +
-	"\x05input\x18\a \x01(\v2\x17.google.protobuf.StructR\x05input\"\xb4\x01\n" +
+	"\x05input\x18\a \x01(\v2\x17.google.protobuf.StructR\x05input\x12*\n" +
+	"\x11workflow_step_key\x18\b \x01(\tR\x0fworkflowStepKey\"\xb4\x01\n" +
 	"\x19DelegateExecutionResponse\x121\n" +
 	"\tchild_run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\bchildRun\x128\n" +
 	"\n" +

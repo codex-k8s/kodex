@@ -222,7 +222,7 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 		input.SessionContext = append(input.SessionContext, runtimecontract.RunnerSessionMessage{Role: message.GetRole(), Content: message.GetContent()})
 	}
 	for _, target := range revision.GetDelegationTargets() {
-		input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{Ref: target.GetRef(), Name: target.GetName(), Purpose: target.GetPurpose(), RoleDescription: target.GetRoleDescription()})
+		input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{Ref: target.GetRef(), Name: target.GetName(), Purpose: target.GetPurpose(), RoleDescription: target.GetRoleDescription(), WorkflowStepKey: target.GetWorkflowStepKey(), WorkflowStepName: target.GetWorkflowStepName(), Instructions: target.GetInstructions(), ExpectedResult: target.GetExpectedResult()})
 	}
 	for _, grant := range revision.GetIntegrationGrants() {
 		if !grant.GetEnabled() {

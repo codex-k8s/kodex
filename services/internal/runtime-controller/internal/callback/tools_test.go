@@ -30,3 +30,26 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 }
+
+func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {
+	t.Parallel()
+	targets := []runtimecontract.RunnerDelegationTarget{
+		{Ref: "agt_12345678", Name: "Researcher", WorkflowStepKey: "research"},
+		{Ref: "agt_87654321", Name: "Writer", WorkflowStepKey: "draft"},
+	}
+	tool := delegationTool(targets)
+	schema := tool["inputSchema"].(map[string]any)
+	if schema["additionalProperties"] != false {
+		t.Fatal("delegation tool schema must reject unknown fields")
+	}
+	required := schema["required"].([]string)
+	if len(required) != 3 || required[2] != "workflow_step_key" {
+		t.Fatalf("workflow step key is not mandatory: %#v", required)
+	}
+	properties := schema["properties"].(map[string]any)
+	targetEnum := properties["target_agent_ref"].(map[string]any)["enum"].([]string)
+	stepEnum := properties["workflow_step_key"].(map[string]any)["enum"].([]string)
+	if len(targetEnum) != 2 || targetEnum[0] != targets[0].Ref || len(stepEnum) != 2 || stepEnum[1] != targets[1].WorkflowStepKey {
+		t.Fatalf("delegation schema lost server-owned enum: targets=%#v steps=%#v", targetEnum, stepEnum)
+	}
+}

@@ -460,6 +460,7 @@ CREATE TABLE control_plane.runs (
     root_run_id uuid REFERENCES control_plane.runs(id),
     parent_run_id uuid REFERENCES control_plane.runs(id),
     retry_of_run_id uuid REFERENCES control_plane.runs(id),
+    workflow_version_id uuid REFERENCES control_plane.workflow_versions(id),
     target_type text NOT NULL CHECK (target_type IN ('AGENT', 'WORKFLOW', 'SYSTEM_ASSISTANT')),
     target_ref text NOT NULL,
     source text NOT NULL CHECK (source IN ('CONTROL_CENTER', 'SYSTEM_ASSISTANT', 'SCHEDULE', 'INTEGRATION', 'AGENT_DELEGATION', 'MATTERMOST')),
@@ -486,6 +487,8 @@ CREATE TABLE control_plane.runs (
 
 CREATE INDEX runs_project_recent ON control_plane.runs (project_id, created_at DESC);
 CREATE INDEX runs_root ON control_plane.runs (root_run_id, created_at);
+CREATE INDEX runs_workflow_version ON control_plane.runs (workflow_version_id)
+    WHERE workflow_version_id IS NOT NULL;
 
 CREATE TABLE control_plane.session_turns (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -535,6 +538,9 @@ CREATE TABLE control_plane.run_nodes (
 );
 
 CREATE INDEX run_nodes_graph ON control_plane.run_nodes (root_run_id, created_at);
+CREATE UNIQUE INDEX run_nodes_workflow_step_once
+    ON control_plane.run_nodes (root_run_id, workflow_step_key)
+    WHERE workflow_step_key <> '';
 
 CREATE TABLE control_plane.runtime_revisions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

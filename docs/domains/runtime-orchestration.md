@@ -4,8 +4,8 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Оркестрация среды выполнения
@@ -60,7 +60,10 @@ sequence и ordered deltas.
 - launch создаёт Session/Turn/Run/root node/RuntimeRevision/task/audit/outbox;
 - claim/start связывает exact workload, method, attempt, input digest и fence;
 - delegate наследует server-owned root actor/policy и создаёт child graph;
-- callback допускается один раз для terminal child и живого route;
+- каждый child получает отдельную Session, а callback допускается один раз для
+  terminal child и живого route;
+- последний ожидаемый callback создаёт свежий coordinator continuation Turn в
+  родительской Session;
 - cancel закрывает active claims, leases, grants, gates и nodes одной
   owner-транзакцией;
 - retry terminal attempt создаёт новый task/grant/revision и lineage edge;

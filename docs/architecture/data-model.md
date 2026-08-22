@@ -4,8 +4,8 @@ title: Логическая модель данных web-first платформ
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Логическая модель данных web-first платформы
@@ -47,9 +47,9 @@ purpose. RuntimeRevision ссылается только на admitted promoted 
 | --- | --- |
 | `workflows` | Project aggregate и current published version |
 | `workflow_versions` | immutable coordinator/agents/input/result/gate specification |
-| `sessions` | Agent-owned durable FIFO context |
+| `sessions` | Agent-owned durable FIFO context; каждый delegated child получает отдельную Session |
 | `session_turns` | ordered tasks with source, attempt и lifecycle |
-| `runs` | root/child execution, source, target, result, graph revision/sequence |
+| `runs` | root/child execution, pinned WorkflowVersion, source, target, result, graph revision/sequence |
 | `run_nodes` | root process, Agent, Human Gate или bounded external action |
 | `run_edges` | delegation, callback, retry, continuation и waiting semantics |
 | `run_events` | immutable ordered deltas в пределах root Run |
@@ -58,7 +58,9 @@ purpose. RuntimeRevision ссылается только на admitted promoted 
 | `callback_receipts` | exactly-once child-to-parent continuation effect |
 
 Root lineage, parent/child route и actor назначает control-plane. Payload и
-external locator не доказывают происхождение.
+external locator не доказывают происхождение. Exactly-once callback создаёт
+completed Turn в родительской Session, а после всех ожидаемых результатов —
+новый coordinator continuation Turn и `CONTINUES` edge.
 
 ## Gates, artifacts и schedules
 

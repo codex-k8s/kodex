@@ -321,12 +321,40 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 		result = append(result, assistantPlanTool())
 	}
 	if len(input.DelegationTargets) != 0 {
-		result = append(result, map[string]any{"name": "delegate_agent", "description": "Start an allowed child AI employee.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"target_agent_ref", "task"}, "properties": map[string]any{"target_agent_ref": map[string]string{"type": "string"}, "task": map[string]string{"type": "string"}, "input": map[string]string{"type": "object"}}}})
+		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, map[string]any{"name": "invoke_integration", "description": "Invoke an allowed typed integration capability.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"connection_ref", "capability_key", "input"}, "properties": map[string]any{"connection_ref": map[string]string{"type": "string"}, "capability_key": map[string]string{"type": "string"}, "input": map[string]string{"type": "object"}}}})
 	}
 	return result
+}
+
+func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
+	targetRefs := make([]string, 0, len(targets))
+	stepKeys := make([]string, 0, len(targets))
+	requiresStep := false
+	for _, target := range targets {
+		targetRefs = append(targetRefs, target.Ref)
+		if target.WorkflowStepKey != "" {
+			requiresStep = true
+			stepKeys = append(stepKeys, target.WorkflowStepKey)
+		}
+	}
+	required := []string{"target_agent_ref", "task"}
+	properties := map[string]any{
+		"target_agent_ref": map[string]any{"type": "string", "enum": targetRefs},
+		"task":             map[string]any{"type": "string", "minLength": 1, "maxLength": 65536},
+		"input":            map[string]any{"type": "object", "additionalProperties": true},
+	}
+	if requiresStep {
+		required = append(required, "workflow_step_key")
+		properties["workflow_step_key"] = map[string]any{"type": "string", "enum": stepKeys}
+	}
+	return map[string]any{
+		"name":        "delegate_agent",
+		"description": "Start one allowed child AI employee. For a workflow, use the exact server-owned step key and end the current turn after all delegations are accepted; results arrive in a callback turn.",
+		"inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties},
+	}
 }
 
 func (server *Server) callTool(writer http.ResponseWriter, request *http.Request, rpc mcpRequest, input runtimecontract.RunnerInput) {
@@ -416,11 +444,15 @@ func onlyKeys(values map[string]any, allowed ...string) bool {
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !onlyKeys(arguments, "target_agent_ref", "workflow_step_key", "task", "input") {
+		return nil, errors.New("delegation input is invalid")
+	}
 	target, _ := arguments["target_agent_ref"].(string)
+	stepKey, _ := arguments["workflow_step_key"].(string)
 	task, _ := arguments["task"].(string)
 	allowed := false
 	for _, item := range input.DelegationTargets {
-		if item.Ref == target {
+		if item.Ref == target && item.WorkflowStepKey == stepKey {
 			allowed = true
 			break
 		}
@@ -435,7 +467,7 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
-	response, err := server.control.Runtime.DelegateExecution(requestContext, &controlplanev1.DelegateExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, TargetAgentRef: target, Task: task, Input: structure})
+	response, err := server.control.Runtime.DelegateExecution(requestContext, &controlplanev1.DelegateExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, TargetAgentRef: target, WorkflowStepKey: stepKey, Task: task, Input: structure})
 	if err != nil {
 		return nil, err
 	}

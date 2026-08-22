@@ -4,8 +4,8 @@ title: Runtime, сессии и запуски
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Runtime, сессии и запуски
@@ -51,9 +51,14 @@ Mutation любой зависимости влияет только на сле
 
 Coordinator использует типизированный MCP tool с target ref из server catalog.
 Control-plane самостоятельно создаёт child Run/node/edge, наследует root actor и
-policy и выдаёт opaque delegation ref. Child terminal result создаёт один FIFO
-callback Turn родительской Session; explicit/fallback paths разделяют одну
-callback receipt.
+policy и выдаёт opaque delegation ref. Workflow Run закрепляет immutable
+WorkflowVersion; каталог координатора содержит только ещё не выполненные шаги
+этой версии. Каждый child Run получает отдельную server-created Session, поэтому
+его Turns не нарушают FIFO родительской Session и могут исполняться параллельно.
+Child terminal result создаёт один FIFO callback Turn родительской Session;
+explicit/fallback paths разделяют одну callback receipt. После последнего
+ожидаемого callback control-plane создаёт coordinator continuation с новой
+RuntimeRevision, а не просит frontend восстановить процесс.
 
 ## Human Gate
 

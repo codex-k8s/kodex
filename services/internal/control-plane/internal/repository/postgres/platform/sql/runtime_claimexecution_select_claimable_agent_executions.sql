@@ -69,20 +69,75 @@ SELECT n.id::text,
              AND connection.enabled
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
-       COALESCE((
-           SELECT jsonb_agg(jsonb_build_object(
-               'ref', candidate.ref,
-               'name', candidate.name,
-               'purpose', candidate.purpose,
-               'roleDescription', candidate.role_description
-           ) ORDER BY candidate.name)
-           FROM control_plane.agents candidate
-           WHERE candidate.organization_id = r.organization_id
-             AND candidate.project_id = r.project_id
-             AND candidate.id <> a.id
-             AND candidate.enabled
-             AND candidate.state = 'READY'
-       ), '[]'::jsonb),
+           CASE
+               WHEN 'platform.run.delegate' <> ALL(a.capabilities) THEN '[]'::jsonb
+               ELSE COALESCE((
+                   SELECT jsonb_agg(jsonb_build_object(
+                       'ref', target.ref,
+                       'name', target.name,
+                       'purpose', target.purpose,
+                       'roleDescription', target.role_description,
+                       'workflowStepKey', target.workflow_step_key,
+                       'workflowStepName', target.workflow_step_name,
+                       'instructions', target.instructions,
+                       'expectedResult', target.expected_result
+                   ) ORDER BY target.position, target.name)
+                   FROM (
+                       SELECT candidate.ref,
+                              candidate.name,
+                              candidate.purpose,
+                              candidate.role_description,
+                              ''::text AS workflow_step_key,
+                              ''::text AS workflow_step_name,
+                              ''::text AS instructions,
+                              ''::text AS expected_result,
+                              0::bigint AS position
+                       FROM control_plane.agents candidate
+                       WHERE root.workflow_version_id IS NULL
+                         AND NOT EXISTS (
+                             SELECT 1
+                             FROM control_plane.run_edges continuation
+                             WHERE continuation.root_run_id = root.id
+                               AND continuation.target_node_id = n.id
+                               AND continuation.type = 'CONTINUES'
+                         )
+                         AND candidate.organization_id = r.organization_id
+                         AND candidate.project_id = r.project_id
+                         AND candidate.id <> a.id
+                         AND candidate.enabled
+                         AND candidate.state = 'READY'
+
+                       UNION ALL
+
+                       SELECT candidate.ref,
+                              candidate.name,
+                              candidate.purpose,
+                              candidate.role_description,
+                              step.value ->> 'Key',
+                              step.value ->> 'Name',
+                              step.value ->> 'Instructions',
+                              COALESCE(step.value ->> 'ExpectedResult', ''),
+                              step.position
+                       FROM jsonb_array_elements(COALESCE(workflow_version.spec -> 'Steps', '[]'::jsonb))
+                            WITH ORDINALITY AS step(value, position)
+                       JOIN control_plane.agents candidate
+                         ON candidate.organization_id = r.organization_id
+                        AND candidate.project_id = r.project_id
+                        AND candidate.ref = step.value ->> 'AgentRef'
+                        AND candidate.id <> a.id
+                        AND candidate.enabled
+                        AND candidate.state = 'READY'
+                       WHERE root.workflow_version_id IS NOT NULL
+                         AND a.ref = workflow_version.spec ->> 'CoordinatorAgentRef'
+                         AND NOT EXISTS (
+                             SELECT 1
+                             FROM control_plane.run_nodes delegated
+                             WHERE delegated.root_run_id = root.id
+                               AND delegated.workflow_step_key = step.value ->> 'Key'
+                         )
+                   ) target
+               ), '[]'::jsonb)
+           END,
        COALESCE((
            SELECT edge.ref
            FROM control_plane.run_edges edge
@@ -134,6 +189,8 @@ JOIN control_plane.provider_credential_revisions pcr
 JOIN control_plane.agents a ON a.id = n.agent_id
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
 JOIN control_plane.runtime_profiles rp ON rp.stable_key = a.runtime_key
+LEFT JOIN control_plane.workflow_versions workflow_version
+  ON workflow_version.id = root.workflow_version_id
 JOIN LATERAL (
     SELECT instruction.ref, instruction.digest, instruction.content
     FROM control_plane.instruction_versions instruction

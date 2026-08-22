@@ -94,7 +94,7 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if targets, ok := values["delegationTargets"].([]map[string]string); ok {
 		for _, target := range targets {
-			result.DelegationTargets = append(result.DelegationTargets, &controlplanev1.DelegationTarget{Ref: target["ref"], Name: target["name"], Purpose: target["purpose"], RoleDescription: target["roleDescription"]})
+			result.DelegationTargets = append(result.DelegationTargets, &controlplanev1.DelegationTarget{Ref: target["ref"], Name: target["name"], Purpose: target["purpose"], RoleDescription: target["roleDescription"], WorkflowStepKey: target["workflowStepKey"], WorkflowStepName: target["workflowStepName"], Instructions: target["instructions"], ExpectedResult: target["expectedResult"]})
 		}
 	}
 	if messages, ok := values["sessionContext"].([]map[string]string); ok {
@@ -182,7 +182,7 @@ func (server *Server) CompleteExecution(ctx context.Context, request *controlpla
 }
 
 func (server *Server) DelegateExecution(ctx context.Context, request *controlplanev1.DelegateExecutionRequest) (*controlplanev1.DelegateExecutionResponse, error) {
-	payload := command.DelegateInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), TargetAgentRef: request.GetTargetAgentRef(), Task: request.GetTask(), Input: asMap(request.GetInput())}
+	payload := command.DelegateInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), TargetAgentRef: request.GetTargetAgentRef(), WorkflowStepKey: request.GetWorkflowStepKey(), Task: request.GetTask(), Input: asMap(request.GetInput())}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName, command.DelegateExecution, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

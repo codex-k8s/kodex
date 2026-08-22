@@ -1609,6 +1609,10 @@ message DelegationTarget {
   string name = 2;
   string purpose = 3;
   string role_description = 4;
+  string workflow_step_key = 5;
+  string workflow_step_name = 6;
+  string instructions = 7;
+  string expected_result = 8;
 }
 
 message SessionContextMessage {
@@ -1685,6 +1689,7 @@ message DelegateExecutionRequest {
   string target_agent_ref = 5;
   string task = 6;
   google.protobuf.Struct input = 7;
+  string workflow_step_key = 8;
 }
 message DelegateExecutionResponse {
   Run child_run = 1;

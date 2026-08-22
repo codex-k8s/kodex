@@ -82,7 +82,11 @@ export async function waitForTerminalSuccess(page: Page): Promise<void> {
 }
 
 export async function assertNoDuplicateGraphNodes(page: Page): Promise<void> {
-  const labels = await page.locator(".canvas-node").allTextContents();
-  const normalized = labels.map((value) => value.replace(/\s+/g, " ").trim());
-  expect(new Set(normalized).size).toBe(normalized.length);
+  const refs = await page
+    .locator(".canvas-node")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-node-ref") ?? ""),
+    );
+  expect(refs.every(Boolean)).toBe(true);
+  expect(new Set(refs).size).toBe(refs.length);
 }

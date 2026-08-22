@@ -4,8 +4,8 @@ title: Процессы и автоматизации
 type: domain
 status: approved
 owner: architect
-version: 2.0.0
-updated: 2026-08-22
+version: 2.1.0
+updated: 2026-08-23
 ---
 
 # Процессы и автоматизации
@@ -31,7 +31,10 @@ RuntimeRevision, task, audit и outbox event.
 Child terminal result создаёт один callback Turn исходной Session и
 `CALLBACK_TO` edge. Explicit и terminal fallback используют одну callback
 receipt. Agent-provided parent/root IDs и упоминание человека не являются
-authority.
+authority. Child Run исполняется в отдельной Session, а после всех ожидаемых
+callback control-plane создаёт новый coordinator Turn в исходной Session.
+WorkflowVersion и допустимые step key pin-ятся сервером при launch; повторное
+делегирование уже созданного шага отклоняется.
 
 ## Schedule
 

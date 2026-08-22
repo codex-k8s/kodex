@@ -125,7 +125,12 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
                 <path d="M 0 0 L 8 4 L 0 8 z" />
               </marker>
             </defs>
-            <g v-for="item in layout.edges" :key="item.edge.ref">
+            <g
+              v-for="item in layout.edges"
+              :key="item.edge.ref"
+              :data-edge-ref="item.edge.ref"
+              :data-edge-type="item.edge.type"
+            >
               <path
                 :d="item.path"
                 :class="
@@ -149,6 +154,8 @@ onBeforeUnmount(() => resizeObserver?.disconnect());
             :key="item.node.ref"
             type="button"
             class="canvas-node"
+            :data-node-ref="item.node.ref"
+            :data-node-type="item.node.type"
             :class="[
               'canvas-node--' + item.node.state.toLowerCase(),
               { 'canvas-node--selected': item.node.ref === selectedRef },

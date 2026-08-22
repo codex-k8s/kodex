@@ -679,10 +679,42 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || capability.Agent == nil || capability.Agent.Name == "" || !contains(capability.Agent.Capabilities, "platform.run.delegate") {
 		t.Fatalf("grant delegation capability: result=%#v err=%v", capability.Agent, err)
 	}
+	workflowDraft := entity.WorkflowVersion{Ref: "draft", Name: "Campaign preparation", Purpose: "Coordinate research and editing",
+		CoordinatorAgentRef: coordinator.Ref, VersionNumber: 1, Concurrency: 2, TimeoutSeconds: 3600,
+		Instructions: "Delegate both bounded steps and synthesize their callbacks.", CompletionCriteria: "Both child results are synthesized.", ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{
+			{Key: "research", Position: 1, Name: "Campaign research", AgentRef: firstChild.Ref, Instructions: "Research the bounded campaign context.", TimeoutSeconds: 900, ExpectedResult: "Research notes"},
+			{Key: "editing", Position: 2, Name: "Campaign editing", AgentRef: secondChild.Ref, Instructions: "Prepare the bounded campaign copy.", TimeoutSeconds: 900, ExpectedResult: "Edited copy"},
+		},
+	}
+	createdWorkflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-workflow-create"}, Payload: command.WorkflowInput{
+			ProjectRef: project.Project.Ref, Name: workflowDraft.Name, Purpose: workflowDraft.Purpose,
+			CoordinatorAgentRef: coordinator.Ref, Draft: &workflowDraft,
+		}})
+	if err != nil || createdWorkflow.Workflow == nil {
+		t.Fatalf("create delegation workflow: result=%#v err=%v", createdWorkflow.Workflow, err)
+	}
+	workflowVersion := createdWorkflow.Workflow.Version
+	validatedWorkflow, err := service.Execute(ctx, command.Command{Kind: command.ValidateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-workflow-validate", ExpectedVersion: &workflowVersion},
+		Payload:  command.WorkflowInput{Ref: createdWorkflow.Workflow.Ref},
+	})
+	if err != nil || validatedWorkflow.Workflow == nil || validatedWorkflow.Workflow.State != "VALID" {
+		t.Fatalf("validate delegation workflow: result=%#v err=%v", validatedWorkflow.Workflow, err)
+	}
+	workflowVersion = validatedWorkflow.Workflow.Version
+	publishedWorkflow, err := service.Execute(ctx, command.Command{Kind: command.PublishWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-workflow-publish", ExpectedVersion: &workflowVersion},
+		Payload:  command.WorkflowInput{Ref: createdWorkflow.Workflow.Ref},
+	})
+	if err != nil || publishedWorkflow.Workflow == nil || publishedWorkflow.Workflow.State != "PUBLISHED" {
+		t.Fatalf("publish delegation workflow: result=%#v err=%v", publishedWorkflow.Workflow, err)
+	}
 	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-launch-1"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Prepare campaign brief", Task: "Coordinate research and editing.",
-			Target: entity.RunTarget{Type: "AGENT", Ref: coordinator.Ref}, Input: map[string]any{"campaign": "Autumn"},
+			Target: entity.RunTarget{Type: "WORKFLOW", Ref: publishedWorkflow.Workflow.Ref}, Input: map[string]any{"campaign": "Autumn"},
 		}})
 	if err != nil || launched.Run == nil {
 		t.Fatalf("launch delegation coordinator: run=%#v err=%v", launched.Run, err)
@@ -693,6 +725,14 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("claim delegation coordinator: claims=%d err=%v", len(coordinatorClaim.RuntimeItems), err)
 	}
 	coordinatorLease := coordinatorClaim.RuntimeItems[0]
+	delegationCatalog, ok := coordinatorLease["delegationTargets"].([]map[string]string)
+	if !ok || len(delegationCatalog) != 2 {
+		t.Fatalf("workflow coordinator did not receive the pinned target catalog: %#v", coordinatorLease["delegationTargets"])
+	}
+	stepByAgent := map[string]string{}
+	for _, target := range delegationCatalog {
+		stepByAgent[target["ref"]] = target["workflowStepKey"]
+	}
 	delegations := []struct {
 		key   string
 		agent entity.Agent
@@ -705,7 +745,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
 			Mutation: value.Mutation{IdempotencyKey: item.key}, Payload: command.DelegateInput{
 				LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
-				Generation: coordinatorLease["generation"].(int64), TargetAgentRef: item.agent.Ref,
+				Generation: coordinatorLease["generation"].(int64), TargetAgentRef: item.agent.Ref, WorkflowStepKey: stepByAgent[item.agent.Ref],
 				Task: "Complete the assigned part of the campaign brief.", Input: map[string]any{"part": item.key},
 			}})
 		if err != nil || delegated.Run == nil || stringMap(delegated.Runtime, "callbackEdgeRef") == "" {
@@ -717,6 +757,17 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		Mutation: value.Mutation{IdempotencyKey: "delegation-children-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 2}})
 	if err != nil || len(claimedChildren.RuntimeItems) != 2 {
 		t.Fatalf("claim delegated children: claims=%d err=%v", len(claimedChildren.RuntimeItems), err)
+	}
+	childSessions := map[string]struct{}{}
+	for _, lease := range claimedChildren.RuntimeItems {
+		childSession := stringMap(lease, "sessionRef")
+		if childSession == "" || childSession == stringMap(coordinatorLease, "sessionRef") {
+			t.Fatalf("child execution reused the parent FIFO session: child=%q parent=%q", childSession, stringMap(coordinatorLease, "sessionRef"))
+		}
+		childSessions[childSession] = struct{}{}
+	}
+	if len(childSessions) != 2 {
+		t.Fatalf("parallel children did not receive distinct sessions: %#v", childSessions)
 	}
 	for index, lease := range claimedChildren.RuntimeItems {
 		completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
@@ -730,17 +781,50 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 			t.Fatalf("deduplicate child callback %d: duplicate=%v err=%v", index+1, callback.Duplicate, err)
 		}
 	}
-	completed := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
-	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 4 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
-		t.Fatalf("complete delegation root: run=%#v graph=%#v", completed.Run, completed.Graph)
+	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
+	if coordinatorCompleted.Run == nil || coordinatorCompleted.Run.State != "RUNNING" || coordinatorCompleted.Graph == nil {
+		t.Fatalf("coordinator completion did not queue callback continuation: run=%#v graph=%#v", coordinatorCompleted.Run, coordinatorCompleted.Graph)
+	}
+	continuationClaim, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-continuation-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(continuationClaim.RuntimeItems) != 1 {
+		t.Fatalf("claim coordinator continuation: claims=%#v err=%v", continuationClaim.RuntimeItems, err)
+	}
+	continuationLease := continuationClaim.RuntimeItems[0]
+	if stringMap(continuationLease, "sessionRef") != stringMap(coordinatorLease, "sessionRef") {
+		t.Fatalf("callback continuation left the parent session: continuation=%q parent=%q", stringMap(continuationLease, "sessionRef"), stringMap(coordinatorLease, "sessionRef"))
+	}
+	callbackContext, ok := continuationLease["sessionContext"].([]map[string]string)
+	if !ok {
+		t.Fatalf("continuation lost the authoritative session context: %#v", continuationLease["sessionContext"])
+	}
+	callbackTurns := 0
+	for _, message := range callbackContext {
+		if message["content"] == "Customer response prepared" {
+			callbackTurns++
+		}
+	}
+	if callbackTurns != 2 {
+		t.Fatalf("expected two exactly-once callback turns, got %d in %#v", callbackTurns, callbackContext)
+	}
+	if targets, _ := continuationLease["delegationTargets"].([]map[string]string); len(targets) != 0 {
+		t.Fatalf("completed workflow steps remained delegatable: %#v", targets)
+	}
+	completed := completeClaimedExecution(t, ctx, service, worker, continuationLease, "delegation-continuation", false)
+	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || completed.Graph == nil || len(completed.Graph.Nodes) < 5 || graphNodeState(completed.Graph.Nodes, "ROOT_PROCESS") != "SUCCEEDED" {
+		t.Fatalf("complete delegation root after callback continuation: run=%#v graph=%#v", completed.Run, completed.Graph)
 	}
 	callbackEdges := 0
+	continuationEdges := 0
 	for _, edge := range completed.Graph.Edges {
 		if edge.Type == "CALLBACK_TO" {
 			callbackEdges++
 		}
+		if edge.Type == "CONTINUES" {
+			continuationEdges++
+		}
 	}
-	if callbackEdges != 2 {
+	if callbackEdges != 2 || continuationEdges != 1 {
 		t.Fatalf("delegation graph lost callback edges: edges=%#v", completed.Graph.Edges)
 	}
 }
