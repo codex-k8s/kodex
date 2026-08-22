@@ -516,19 +516,12 @@ func newPublisherTechnicalServer(
 	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
 		_, _ = response.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
 		if ready, _ := readiness.Ready(); !ready {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
-		defer cancel()
-		if err := publisherApplication.Ready(ctx); err != nil {
-			metrics.SetReady(false)
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		metrics.SetReady(true)
 		_, _ = response.Write([]byte("ready\n"))
 	})
 	return &http.Server{

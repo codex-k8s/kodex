@@ -688,19 +688,12 @@ func newTechnicalServer(
 		response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = response.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
 		if ready, _ := readiness.Ready(); !ready {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-		ctx, cancel := context.WithTimeout(request.Context(), config.ReadinessTimeout)
-		defer cancel()
-		if err := authorityApplication.Ready(ctx); err != nil {
-			metrics.SetReady(false)
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		metrics.SetReady(true)
 		response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = response.Write([]byte("ready\n"))
 	})
