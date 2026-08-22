@@ -7,8 +7,8 @@ fail() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
-expected_version=1.26.5
-expected_builder='docker.io/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2'
+expected_version=1.26.6
+expected_builder='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83'
 
 [[ "$(env -u GOFLAGS GOENV=off GOWORK=off go env GOVERSION)" == "go$expected_version" ]] ||
   fail "go$expected_version is required"
@@ -34,7 +34,7 @@ while IFS= read -r dockerfile; do
   done
   [[ "$(rg -c '^ENV GOTOOLCHAIN=local$' "$dockerfile")" -ge "${#go_stages[@]}" ]] ||
     fail "GOTOOLCHAIN is not fixed in ${dockerfile#"$repository_root"/}"
-  [[ "$(rg -c -F 'RUN test "$(go env GOVERSION)" = "go1.26.5"' "$dockerfile")" == "${#go_stages[@]}" ]] ||
+  [[ "$(rg -c -F 'RUN test "$(go env GOVERSION)" = "go1.26.6"' "$dockerfile")" == "${#go_stages[@]}" ]] ||
     fail "builder does not verify its Go version in ${dockerfile#"$repository_root"/}"
 done < <(find "$repository_root/services" -name Dockerfile -type f -print | sort)
 

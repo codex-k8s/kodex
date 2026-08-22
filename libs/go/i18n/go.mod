@@ -1,6 +1,6 @@
 module github.com/codex-k8s/matter-codex/libs/go/i18n
 
-go 1.26.5
+go 1.26.6
 
 require github.com/nicksnyder/go-i18n/v2 v2.6.1
 

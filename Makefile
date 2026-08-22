@@ -1,6 +1,6 @@
 GOVULNCHECK_VERSION := v1.6.0
-GO_MIN_VERSION := 1.26.5
-GO_TOOLCHAIN := go1.26.5
+GO_MIN_VERSION := 1.26.6
+GO_TOOLCHAIN := go1.26.6
 BUF_VERSION := 1.71.0
 PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
 PROTOBUF_GO_PLUGIN_REVISION := 1
@@ -55,8 +55,7 @@ tidy-go: check-go-toolchain
 
 govulncheck: check-go-toolchain
 	$(if $(filter file,$(origin GOVULNCHECK_VERSION)),,$(error GOVULNCHECK_VERSION нельзя переопределять))
-	@printf 'Проверенный Go toolchain: %s\n' "$$(env -u GOFLAGS GOENV=off GOWORK=off go env GOVERSION)"
-	env -u GOFLAGS GOENV=off GOWORK=off go run 'golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)' -mode=source -scan=symbol -show=traces,version ./...
+	@GOVULNCHECK_VERSION='$(GOVULNCHECK_VERSION)' ./scripts/govulncheck-go-modules.sh
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 

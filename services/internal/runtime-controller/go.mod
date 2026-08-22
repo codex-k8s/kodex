@@ -1,6 +1,6 @@
 module github.com/codex-k8s/matter-codex/services/internal/runtime-controller
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1

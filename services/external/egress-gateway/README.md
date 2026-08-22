@@ -139,7 +139,7 @@ documentation или другому IANA special-purpose prefix, отверга�
 
 ## Проверенные внешние спецификации
 
-- [Go 1.26.5 `net`](https://pkg.go.dev/net),
+- [Go 1.26.6 `net`](https://pkg.go.dev/net),
   [`net/netip`](https://pkg.go.dev/net/netip) и
   [`crypto/tls`](https://pkg.go.dev/crypto/tls);
 - [miekg/dns v1.1.72](https://pkg.go.dev/github.com/miekg/dns);

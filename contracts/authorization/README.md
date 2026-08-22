@@ -1438,7 +1438,7 @@ JOSE audience/type separation.
 
 Проверены только официальные первичные источники:
 
-- gRPC-Go `v1.81.0`: `https://github.com/grpc/grpc-go/tree/v1.81.0` —
+- gRPC-Go `v1.82.1`: `https://github.com/grpc/grpc-go/tree/v1.82.1` —
   generated clients/servers, status/details, transport credentials и Unix
   target;
 - go-jose `v4.1.4`: `https://github.com/go-jose/go-jose/tree/v4.1.4` —

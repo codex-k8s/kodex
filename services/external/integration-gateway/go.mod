@@ -1,6 +1,6 @@
 module github.com/codex-k8s/matter-codex/services/external/integration-gateway
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1

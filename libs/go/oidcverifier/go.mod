@@ -1,6 +1,6 @@
 module github.com/codex-k8s/matter-codex/libs/go/oidcverifier
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/codex-k8s/matter-codex/libs/go/oidcidentity v0.0.0

@@ -65,7 +65,7 @@ lock-файлом; точный image — Dockerfile либо release lock.
 | `@openai/codex` | `0.144.1` | первый provider adapter через typed app-server contract |
 | `matter-codex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
 | Node.js | `24.x` | Codex/provider process и role tooling |
-| Go | `1.26.5` | runtime/toolchain для ролей, которым это разрешено recipe |
+| Go | `1.26.6` | runtime/toolchain для ролей, которым это разрешено recipe |
 | `git`, `gh`, browser, office/analysis CLI | только по role recipe | инструменты конкретной роли, не обязательный core набор |
 
 Обычный Agent запускается в exact promoted role image. Наличие GitHub,
@@ -95,7 +95,7 @@ direct-production prototype registry и hardcoded installation domain не вх�
 
 | Tool | Active version | Scope |
 |---|---:|---|
-| Go toolchain | `1.26.5` | format/build/test всех modules |
+| Go toolchain | `1.26.6` | format/build/test всех modules |
 | `buf` | `v1.71.0` | Proto lint/build/codegen |
 | `protoc-gen-go` | `v1.36.11` | Go Proto messages |
 | `protoc-gen-go-grpc` | `v1.6.2` | Go gRPC clients/servers |
