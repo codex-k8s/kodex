@@ -66,28 +66,113 @@ func run(ctx context.Context, args []string) error {
 }
 
 func bootstrapBroker(ctx context.Context) error {
+	config, timeout, err := loadBrokerBootstrapConfig()
+	if err != nil {
+		return err
+	}
+	return bootstrapBrokerWithRetry(ctx, config, timeout, brokerRetryPolicy{
+		initial: 250 * time.Millisecond,
+		maximum: 5 * time.Second,
+	}, func(config natsjetstream.Config) (brokerPublisher, error) {
+		return natsjetstream.New(config)
+	})
+}
+
+type brokerPublisher interface {
+	EnsureStream(context.Context) error
+	Close() error
+}
+
+type brokerPublisherFactory func(natsjetstream.Config) (brokerPublisher, error)
+
+type brokerRetryPolicy struct {
+	initial time.Duration
+	maximum time.Duration
+}
+
+const minimumBrokerConnectTimeout = 100 * time.Millisecond
+
+func loadBrokerBootstrapConfig() (natsjetstream.Config, time.Duration, error) {
 	replicas, err := strconv.Atoi(strings.TrimSpace(os.Getenv("CONTROL_PLANE_NATS_REPLICAS")))
 	if err != nil {
-		return errors.New("CONTROL_PLANE_NATS_REPLICAS is invalid")
+		return natsjetstream.Config{}, 0, errors.New("CONTROL_PLANE_NATS_REPLICAS is invalid")
 	}
 	maximumBytes, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("CONTROL_PLANE_NATS_MAX_BYTES")), 10, 64)
 	if err != nil {
-		return errors.New("CONTROL_PLANE_NATS_MAX_BYTES is invalid")
+		return natsjetstream.Config{}, 0, errors.New("CONTROL_PLANE_NATS_MAX_BYTES is invalid")
 	}
-	publisher, err := natsjetstream.New(natsjetstream.Config{
+	timeout, err := time.ParseDuration(strings.TrimSpace(os.Getenv("CONTROL_PLANE_BROKER_BOOTSTRAP_TIMEOUT")))
+	if err != nil || timeout < time.Second || timeout > 5*time.Minute {
+		return natsjetstream.Config{}, 0, errors.New("CONTROL_PLANE_BROKER_BOOTSTRAP_TIMEOUT is invalid")
+	}
+	return natsjetstream.Config{
 		URL: os.Getenv("CONTROL_PLANE_NATS_URL"), TLSServerName: os.Getenv("CONTROL_PLANE_NATS_TLS_SERVER_NAME"),
 		CAFile: os.Getenv("CONTROL_PLANE_NATS_CA_FILE"), CertificateFile: os.Getenv("CONTROL_PLANE_NATS_CERTIFICATE_FILE"),
 		PrivateKeyFile: os.Getenv("CONTROL_PLANE_NATS_PRIVATE_KEY_FILE"), CredentialsFile: os.Getenv("CONTROL_PLANE_NATS_CREDENTIALS_FILE"),
 		Stream: "CONTROL_PLANE", Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
 		Replicas: replicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000, MaxBytes: maximumBytes,
 		MaxPerSubject: 1_000_000, MaxAge: 30 * 24 * time.Hour, DuplicateWindow: 2 * time.Minute, ConnectTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		return fmt.Errorf("construct NATS publisher: %w", err)
+	}, timeout, nil
+}
+
+func bootstrapBrokerWithRetry(
+	ctx context.Context,
+	config natsjetstream.Config,
+	timeout time.Duration,
+	policy brokerRetryPolicy,
+	factory brokerPublisherFactory,
+) error {
+	if timeout <= 0 || policy.initial <= 0 || policy.maximum < policy.initial || factory == nil {
+		return errors.New("NATS bootstrap retry policy is invalid")
 	}
-	defer publisher.Close()
-	if err := publisher.EnsureStream(ctx); err != nil {
-		return fmt.Errorf("bootstrap NATS stream: %w", err)
+	bounded, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	deadline, _ := bounded.Deadline()
+
+	delay := policy.initial
+	var lastErr error
+	for {
+		if err := bounded.Err(); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("connect NATS within bootstrap timeout: %w", lastErr)
+			}
+			return fmt.Errorf("NATS bootstrap context ended: %w", err)
+		}
+		remaining := time.Until(deadline)
+		if remaining < minimumBrokerConnectTimeout {
+			if lastErr != nil {
+				return fmt.Errorf("connect NATS within bootstrap timeout: %w", lastErr)
+			}
+			return errors.New("NATS bootstrap timeout expired before connection attempt")
+		}
+		attempt := config
+		attempt.ConnectTimeout = min(config.ConnectTimeout, remaining)
+		publisher, err := factory(attempt)
+		if err == nil {
+			ensureErr := publisher.EnsureStream(bounded)
+			closeErr := publisher.Close()
+			if ensureErr != nil {
+				return fmt.Errorf("bootstrap NATS stream: %w", ensureErr)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("close NATS publisher after bootstrap: %w", closeErr)
+			}
+			return nil
+		}
+		if !errors.Is(err, natsjetstream.ErrConnect) {
+			return fmt.Errorf("construct NATS publisher: %w", err)
+		}
+		lastErr = err
+
+		timer := time.NewTimer(min(delay, time.Until(deadline)))
+		select {
+		case <-bounded.Done():
+			timer.Stop()
+			return fmt.Errorf("connect NATS within bootstrap timeout: %w", err)
+		case <-timer.C:
+		}
+		if delay < policy.maximum {
+			delay = min(delay*2, policy.maximum)
+		}
 	}
-	return nil
 }

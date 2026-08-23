@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -18,6 +19,9 @@ import (
 )
 
 const maximumRuntimeFileBytes = 1 << 20
+
+// ErrConnect классифицирует отказ initial connection, который допускает bounded retry вызывающей стороной.
+var ErrConnect = errors.New("connect NATS JetStream")
 
 // Config фиксирует точный поток окружения и идентичность TLS.
 type Config struct {
@@ -79,7 +83,7 @@ func New(config Config) (*Publisher, error) {
 		nats.ReconnectWait(250*time.Millisecond),
 	)
 	if err != nil {
-		return nil, errors.New("connect NATS JetStream")
+		return nil, fmt.Errorf("%w: %w", ErrConnect, err)
 	}
 	js, err := jetstream.New(connection)
 	if err != nil {
