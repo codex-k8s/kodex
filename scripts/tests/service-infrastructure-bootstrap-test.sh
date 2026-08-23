@@ -54,5 +54,14 @@ grep -Fq '0|2) printf "%s\n" "$status_json" ;;' "$vault_initializer" ||
   fail 'Vault bootstrap does not accept the documented sealed status code'
 grep -Fq '*) exit "$status_code" ;;' "$vault_initializer" ||
   fail 'Vault bootstrap does not fail closed for unexpected status errors'
+grep -Fq 'if ($value | type) == "boolean" then' "$vault_initializer" ||
+  fail 'Vault status booleans are not type checked'
+grep -Fq 'initialized=$(read_vault_boolean initialized <<<"$status")' "$vault_initializer" ||
+  fail 'Vault initialized=false can still be interpreted as a jq execution error'
+grep -Fq 'sealed=$(vault_status | read_vault_boolean sealed)' "$vault_initializer" ||
+  fail 'Vault sealed=false can still be interpreted as a jq execution error'
+if rg -q "jq -er '\.(initialized|sealed)'" "$vault_initializer"; then
+  fail 'Vault bootstrap still binds boolean values to jq truthiness exit codes'
+fi
 
 printf 'Service infrastructure bootstrap checks completed\n'

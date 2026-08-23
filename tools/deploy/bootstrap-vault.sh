@@ -58,6 +58,18 @@ vault_status() {
   '
 }
 
+read_vault_boolean() {
+  local field=$1
+  jq -r --arg field "$field" '
+    .[$field] as $value |
+    if ($value | type) == "boolean" then
+      $value | tostring
+    else
+      error("Vault status field is not boolean: " + $field)
+    end
+  '
+}
+
 require_root_material() {
   for file_path in "$root_token_file" "$unseal_key_file"; do
     [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault owner material is absent'
@@ -117,7 +129,7 @@ vault_kv_patch_file() {
 
 if [[ "$mode" == initialize ]]; then
   status=$(vault_status || true)
-  initialized=$(jq -er '.initialized' <<<"$status")
+  initialized=$(read_vault_boolean initialized <<<"$status")
   if [[ "$initialized" == false ]]; then
     umask 077
     init_file="$vault_directory/init.json"
@@ -131,7 +143,7 @@ if [[ "$mode" == initialize ]]; then
     chmod 0600 "$root_token_file" "$unseal_key_file" "$init_file"
   fi
   require_root_material
-  sealed=$(vault_status | jq -er '.sealed')
+  sealed=$(vault_status | read_vault_boolean sealed)
   if [[ "$sealed" == true ]]; then
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
