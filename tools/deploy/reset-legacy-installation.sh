@@ -122,8 +122,8 @@ fi
 if [[ "$mode" == apply ]]; then
   [[ "$confirmation" == DELETE-LEGACY-MATTERCODEX-AND-MYQRCONTACT ]] || fail 'destructive confirmation mismatch'
 
-  kubectl delete namespace "$legacy_namespace" "$myqr_namespace" --ignore-not-found --wait=true --timeout=20m
   delete_release_cluster_scope
+  kubectl delete namespace "$legacy_namespace" "$myqr_namespace" --ignore-not-found --wait=true --timeout=20m
 
   kubectl -n "$shared_namespace" delete deployment,service,ingress matter-codex-bot-service \
     --ignore-not-found --wait=true --timeout=5m
