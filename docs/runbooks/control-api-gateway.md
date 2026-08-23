@@ -4,7 +4,7 @@ title: Диагностика control-api-gateway
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
+version: 2.1.0
 updated: 2026-08-23
 ---
 
@@ -23,13 +23,16 @@ Public host, Origin и OIDC endpoints задаются deployment parameters. В
 ## Probes
 
 - `/healthz` — текущий HTTP process;
-- `/readyz` — локальный session/route/config snapshot и прямые sidecars;
+- `/readyz` — уже рассчитанный snapshot локального issuer sidecar и прямой
+  инфраструктуры NATS consumer;
 - control-plane, NATS producer, runtime и Mattermost не опрашиваются на каждую
   Kubernetes probe.
 
-Недоступный control-plane рабочий request нормализуется в `502/503/504` со
-stable error/message key. Пользовательский текст выбирает PWA из YAML i18n по
-locale; raw gRPC/provider diagnostics не возвращаются.
+Недоступный OIDC/JWKS либо control-plane рабочий request нормализуется в
+`502/503/504` со stable error/message key. Initial JWKS outage не блокирует
+startup: verifier закрыт до успешного refresh, а запрос получает локализованный
+`503`. Пользовательский текст выбирается из YAML i18n по locale; raw
+gRPC/provider diagnostics не возвращаются.
 
 ## Realtime Run
 
@@ -54,7 +57,7 @@ HTTP path после owner authorization.
 | `401` | OIDC issuer/audience/session expiry и bounded JWKS LKG |
 | `403` | exact Origin/CSRF и server-owned permission |
 | `409` | `If-Match`, idempotency intent либо stale Human Gate winner |
-| `503` | control-plane working path; это не причина делать gateway Pod unready |
+| `503` | JWKS/control-plane working path; это не причина делать gateway Pod unready |
 | WS reconnect loop | NATS client material, subject policy, sequence/catch-up |
 | старая локаль | trusted user locale и наличие key в RU/EN YAML |
 
