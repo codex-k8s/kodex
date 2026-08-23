@@ -48,6 +48,8 @@ var (
 	bootstrapComponentExpireScheduleClaimQuery string
 	//go:embed testdata/sql/bootstrap_component_schedule_target_state_readback.sql
 	bootstrapComponentScheduleTargetStateReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_core_prompt_upgrade_readback.sql
+	bootstrapComponentCorePromptUpgradeReadbackQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -130,6 +132,52 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
 		testOptionalInteractionIncident(t, ctx, repository, pool)
 	})
+	t.Run("system assistant core prompt upgrades forward only", func(t *testing.T) {
+		testSystemAssistantCorePromptUpgrade(t, ctx, repository, pool)
+	})
+}
+
+func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	t.Helper()
+	upgrade := func(revision, prompt string) error {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if err := repository.reconcileSystemAssistantCorePrompt(ctx, tx, revision, prompt); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	const upgradedRevision = "system-assistant-core-v2"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision two."
+	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
+		t.Fatalf("upgrade core prompt: %v", err)
+	}
+	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
+		t.Fatalf("repeat core prompt upgrade: %v", err)
+	}
+	var revision, state, desiredRevision, prompt string
+	var versionNumber, promptCount, auditCount int
+	if err := pool.QueryRow(ctx, bootstrapComponentCorePromptUpgradeReadbackQuery).Scan(
+		&revision,
+		&state,
+		&desiredRevision,
+		&prompt,
+		&versionNumber,
+		&promptCount,
+		&auditCount,
+	); err != nil {
+		t.Fatalf("read upgraded core prompt: %v", err)
+	}
+	if revision != upgradedRevision || state != "RECOVERING" || desiredRevision != upgradedRevision ||
+		prompt != upgradedPrompt || versionNumber != 2 || promptCount != 2 || auditCount != 1 {
+		t.Fatalf("unexpected upgraded core prompt: revision=%s state=%s desired=%s version=%d prompts=%d audits=%d", revision, state, desiredRevision, versionNumber, promptCount, auditCount)
+	}
+	if err := upgrade(systemassistant.CorePromptRevision, systemassistant.CorePrompt()); err == nil {
+		t.Fatal("core prompt rollback was accepted")
+	}
 }
 
 func testOptionalInteractionIncident(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

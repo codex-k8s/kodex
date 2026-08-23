@@ -206,6 +206,8 @@ ASSISTANT_READY:
   other: Ready for a command
 SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: System assistant runtime heartbeat recorded
+SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
+  other: System assistant core instructions upgraded
 SYSTEM_ASSISTANT_LABEL:
   other: System · non-removable
 ARTIFACT_AVAILABLE:

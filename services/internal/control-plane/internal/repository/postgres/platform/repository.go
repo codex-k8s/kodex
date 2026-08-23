@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -136,6 +137,14 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("lock installation bootstrap")
 	}
 	if bootstrappedAt != nil {
+		if err := repository.reconcileSystemAssistantCorePrompt(
+			ctx,
+			tx,
+			systemassistant.CorePromptRevision,
+			systemassistant.CorePrompt(),
+		); err != nil {
+			return err
+		}
 		return tx.Commit(ctx)
 	}
 	organizationRef, err := newRef("org")
@@ -294,6 +303,86 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("complete bootstrap")
 	}
 	return tx.Commit(ctx)
+}
+
+func (repository *Repository) reconcileSystemAssistantCorePrompt(
+	ctx context.Context,
+	tx pgx.Tx,
+	expectedRevision string,
+	expectedPrompt string,
+) error {
+	var organizationID, agentID, currentRevision, currentDigest, currentPrompt string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectAssistantCorePrompt).Scan(
+		&organizationID,
+		&agentID,
+		&currentRevision,
+		&currentDigest,
+		&currentPrompt,
+	); err != nil {
+		return errors.New("read system assistant core prompt")
+	}
+	expectedDigest := sha256.Sum256([]byte(expectedPrompt))
+	expectedDigestText := hex.EncodeToString(expectedDigest[:])
+	currentNumber, currentValid := systemAssistantCoreRevisionNumber(currentRevision)
+	expectedNumber, expectedValid := systemAssistantCoreRevisionNumber(expectedRevision)
+	if !currentValid || !expectedValid {
+		return errors.New("system assistant core prompt revision is invalid")
+	}
+	if currentNumber > expectedNumber {
+		return errors.New("system assistant core prompt rollback is forbidden")
+	}
+	if currentNumber == expectedNumber {
+		if currentRevision != expectedRevision || currentDigest != expectedDigestText || currentPrompt != expectedPrompt {
+			return errors.New("system assistant core prompt integrity mismatch")
+		}
+		return nil
+	}
+	promptRef, err := newRef("ins")
+	if err != nil {
+		return err
+	}
+	var insertedRef string
+	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertAssistantCorePromptVersion, pgx.StrictNamedArgs{
+		"prompt_ref":      promptRef,
+		"organization_id": organizationID,
+		"agent_id":        agentID,
+		"content":         expectedPrompt,
+		"digest":          expectedDigestText,
+	}).Scan(&insertedRef); err != nil || insertedRef != promptRef {
+		return errors.New("create system assistant core prompt revision")
+	}
+	tag, err := tx.Exec(ctx, queryRepositoryBootstrapUpdateAssistantCorePrompt, pgx.StrictNamedArgs{
+		"prompt_ref":       promptRef,
+		"next_revision":    expectedRevision,
+		"organization_id":  organizationID,
+		"agent_id":         agentID,
+		"current_revision": currentRevision,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("activate system assistant core prompt revision")
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		return err
+	}
+	tag, err = tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantCorePromptAudit, pgx.StrictNamedArgs{
+		"audit_ref":       auditRef,
+		"organization_id": organizationID,
+		"agent_id":        agentID,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("audit system assistant core prompt revision")
+	}
+	return nil
+}
+
+func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
+	const prefix = "system-assistant-core-v"
+	if !strings.HasPrefix(revision, prefix) {
+		return 0, false
+	}
+	number, err := strconv.ParseUint(strings.TrimPrefix(revision, prefix), 10, 32)
+	return number, err == nil && number > 0
 }
 
 func defaultProviderAccountID(ctx context.Context, tx pgx.Tx, organizationID string) (string, error) {

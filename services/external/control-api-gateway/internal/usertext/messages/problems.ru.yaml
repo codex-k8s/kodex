@@ -206,6 +206,8 @@ ASSISTANT_READY:
   other: Готов к команде
 SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
   other: Пульс среды выполнения системного помощника зафиксирован
+SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
+  other: Основные инструкции системного помощника обновлены
 SYSTEM_ASSISTANT_LABEL:
   other: Системный · неудаляемый
 ARTIFACT_AVAILABLE:

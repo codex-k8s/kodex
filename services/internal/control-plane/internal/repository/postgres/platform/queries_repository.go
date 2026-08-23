@@ -43,6 +43,14 @@ var (
 	queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision string
 	//go:embed sql/repository_bootstrap_update_installation_bootstrapped_at.sql
 	queryRepositoryBootstrapUpdateInstallationBootstrappedAt string
+	//go:embed sql/repository_bootstrap_select_assistant_core_prompt.sql
+	queryRepositoryBootstrapSelectAssistantCorePrompt string
+	//go:embed sql/repository_bootstrap_insert_assistant_core_prompt_version.sql
+	queryRepositoryBootstrapInsertAssistantCorePromptVersion string
+	//go:embed sql/repository_bootstrap_update_assistant_core_prompt.sql
+	queryRepositoryBootstrapUpdateAssistantCorePrompt string
+	//go:embed sql/repository_bootstrap_insert_assistant_core_prompt_audit.sql
+	queryRepositoryBootstrapInsertAssistantCorePromptAudit string
 	//go:embed sql/principal_resolve_verified_identity.sql
 	queryResolveVerifiedPrincipal string
 	//go:embed sql/proof_owner_lock_installation.sql
