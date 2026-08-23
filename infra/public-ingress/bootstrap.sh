@@ -49,6 +49,7 @@ crd_sha256=cd2a9f0ac0575dab99cc0f1743e5177684e001122e2e12fa4afd700102f99def
 if [[ "$mode" == apply ]]; then
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
+  restart_required=false
   curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
     "$crd_url" --output "$temporary_directory/traefik-crds.yaml"
   printf '%s  %s\n' "$crd_sha256" "$temporary_directory/traefik-crds.yaml" |
@@ -64,6 +65,20 @@ if [[ "$mode" == apply ]]; then
         "verbs":["get","list","watch"]
       }}
     ]' >/dev/null
+    restart_required=true
+  fi
+
+  if ! kubectl get clusterrole "$cluster_role" -o json |
+    jq -e 'any(.rules[]?; (.apiGroups | index("")) != null and (.resources | index("configmaps")) != null and
+      (["get","list","watch"] - .verbs | length == 0))' >/dev/null; then
+    kubectl patch clusterrole "$cluster_role" --type=json -p='[
+      {"op":"add","path":"/rules/-","value":{
+        "apiGroups":[""],
+        "resources":["configmaps"],
+        "verbs":["get","list","watch"]
+      }}
+    ]' >/dev/null
+    restart_required=true
   fi
 
   if ! kubectl -n "$namespace" get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[0].args}' |
@@ -73,6 +88,9 @@ if [[ "$mode" == apply ]]; then
       {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--providers.kubernetescrd.allowcrossnamespace=false"}
     ]' >/dev/null
   fi
+  if [[ "$restart_required" == true ]]; then
+    kubectl -n "$namespace" rollout restart deployment "$deployment" >/dev/null
+  fi
   kubectl -n "$namespace" rollout status deployment "$deployment" --timeout=300s >/dev/null
 fi
 
@@ -81,6 +99,9 @@ if [[ "$mode" == readback ]]; then
   kubectl auth can-i list serverstransports.traefik.io \
     --as="system:serviceaccount:$namespace:$deployment" --all-namespaces | grep -Fxq yes ||
     fail 'ingress controller cannot read ServersTransport resources'
+  kubectl auth can-i list configmaps \
+    --as="system:serviceaccount:$namespace:$deployment" --all-namespaces | grep -Fxq yes ||
+    fail 'ingress controller cannot read ConfigMap resources'
   kubectl -n "$namespace" get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[0].args}' |
     grep -Fq -- '--providers.kubernetescrd=true' || fail 'Kubernetes CRD provider is disabled'
 fi
