@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 bootstrap="$repository_root/infra/service-infrastructure/bootstrap.sh"
+vault_bootstrap="$repository_root/infra/service-infrastructure/vault-bootstrap.yaml"
 
 bash -n "$bootstrap"
 
@@ -32,5 +33,12 @@ done
 if grep -Fq 'mattercodex-vault-secrets-operator-vault-secrets-operator-controller-manager' "$bootstrap"; then
   fail 'readback still depends on the invalid duplicated release name'
 fi
+
+yq -e '
+  select(.kind == "Certificate" and .metadata.name == "mattercodex-control-api-bootstrap") |
+  .metadata.namespace == "mattercodex-system" and
+  .spec.secretName == "mattercodex-control-api-bootstrap-tls"
+' "$vault_bootstrap" >/dev/null ||
+  fail 'control API bootstrap certificate is outside the MatterCodex namespace'
 
 printf 'Service infrastructure bootstrap checks completed\n'
