@@ -307,7 +307,7 @@ build_owner_gate="$temporary_directory/build-owner-gate.yaml"
 deploy_owner_gate="$temporary_directory/deploy-owner-gate.yaml"
 render_owner_gate_config "$build_namespace" .github/workflows/build-release.yml build \
   "$build_owner_actor_file" "$build_owner_gate"
-render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production.yml deploy \
+render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production.yml render \
   "$deploy_owner_actor_file" "$deploy_owner_gate"
 
 controller_chart=$(pull_chart gha-runner-scale-set-controller)

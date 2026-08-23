@@ -154,6 +154,15 @@ if rg -U -q 'auth can-i[^\n]*(\n[^\n]*){0,2}\| grep -qx no' "$bootstrap"; then
 fi
 grep -Fq '(.spec.replicas // 0) == 0' "$bootstrap"
 grep -Fq '$items[0].spec.ephemeralRunnerSetName' "$bootstrap"
+grep -Fq 'render_owner_gate_config "$build_namespace" .github/workflows/build-release.yml build' \
+  "$bootstrap"
+grep -Fq 'render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production.yml render' \
+  "$bootstrap"
+if grep -Fq 'render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production.yml deploy' \
+  "$bootstrap"; then
+  printf 'Deploy runner owner gate still expects a non-existent deploy job\n' >&2
+  exit 1
+fi
 yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
   .data."envoy.yaml"' "$temporary_directory/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
