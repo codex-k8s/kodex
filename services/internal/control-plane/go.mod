@@ -19,6 +19,7 @@ require (
 
 require (
 	github.com/codex-k8s/matter-codex/libs/go/oidcidentity v0.0.0 // indirect
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
@@ -76,3 +77,5 @@ replace github.com/codex-k8s/matter-codex/libs/go/oidcidentity => ../../../libs/
 replace github.com/codex-k8s/matter-codex/libs/go/oidcverifier => ../../../libs/go/oidcverifier
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile

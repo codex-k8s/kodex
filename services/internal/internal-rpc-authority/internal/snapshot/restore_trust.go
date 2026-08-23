@@ -62,7 +62,6 @@ func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 	raw, err := readRegularFile(
 		options.RestoreRoleTrustJWSFile,
 		maxSnapshotBytes,
-		0o004,
 	)
 	if err != nil {
 		return nil, model.RestoreRoleTrustMetadata{}, fmt.Errorf(

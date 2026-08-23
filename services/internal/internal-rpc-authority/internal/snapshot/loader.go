@@ -7,12 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
@@ -227,7 +226,7 @@ func Load(options LoadOptions) (Loaded, error) {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	compactRaw, err := readRegularFile(options.SnapshotJWSFile, maxSnapshotBytes, 0o004)
+	compactRaw, err := readRegularFile(options.SnapshotJWSFile, maxSnapshotBytes)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("read signed authority snapshot: %w", err)
 	}
@@ -296,7 +295,7 @@ func Load(options LoadOptions) (Loaded, error) {
 	}
 	var signingKey internalrpcauth.ES256Key
 	if options.Role == RoleIssuer {
-		signingRaw, err := readRegularFile(options.ContextPrivateJWKFile, maxKeyFileBytes, 0o007)
+		signingRaw, err := readRegularFile(options.ContextPrivateJWKFile, maxKeyFileBytes)
 		if err != nil {
 			return Loaded{}, fmt.Errorf("read authorization signing key: %w", err)
 		}
@@ -415,7 +414,6 @@ func loadManifestVerificationKeyForType(
 	rootRaw, err := readRegularFile(
 		options.ManifestRootPublicJWKFile,
 		maxKeyFileBytes,
-		0o022,
 	)
 	if err != nil {
 		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read pinned manifest root key: %w", err)
@@ -427,7 +425,6 @@ func loadManifestVerificationKeyForType(
 	metadataRaw, err := readRegularFile(
 		options.ManifestRootMetadataFile,
 		maxKeyFileBytes,
-		0o022,
 	)
 	if err != nil {
 		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read pinned manifest root metadata: %w", err)
@@ -457,7 +454,6 @@ func loadManifestVerificationKeyForType(
 	bundleRaw, err := readRegularFile(
 		options.ManifestTrustBundleJWSFile,
 		maxSnapshotBytes,
-		0o004,
 	)
 	if err != nil {
 		return internalrpcauth.ES256Key{}, 0, fmt.Errorf("read manifest trust bundle: %w", err)
@@ -690,7 +686,7 @@ func loadProofTrust(
 	expectedSourceRevision uint64,
 	expectedSourceDigest string,
 ) (map[string]service.VerificationKeyRecord, error) {
-	raw, err := readRegularFile(path, maxKeyFileBytes, 0)
+	raw, err := readRegularFile(path, maxKeyFileBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -797,33 +793,15 @@ func samePublicKey(left, right internalrpcauth.ES256Key) bool {
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
 }
 
-func readRegularFile(path string, limit int64, forbiddenMode os.FileMode) ([]byte, error) {
+func readRegularFile(path string, limit int64) ([]byte, error) {
 	if path == "" {
 		return nil, errors.New("file path is empty")
 	}
-	resolved, err := filepath.EvalSymlinks(path)
+	value, err := securefile.Read(path, limit)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("file type, mode or size is invalid")
 	}
-	relative, err := filepath.Rel(filepath.Dir(path), resolved)
-	if err != nil || relative == ".." || filepath.IsAbs(relative) ||
-		len(relative) >= 3 && relative[:3] == "../" {
-		return nil, errors.New("file symlink escapes its mounted directory")
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("path is not a regular file")
-	}
-	if info.Size() <= 0 || info.Size() > limit {
-		return nil, errors.New("file size is outside the allowed boundary")
-	}
-	if forbiddenMode != 0 && info.Mode().Perm()&forbiddenMode != 0 {
-		return nil, errors.New("file permissions are too broad")
-	}
-	return os.ReadFile(resolved)
+	return value, nil
 }
 
 func trimSingleTrailingNewline(value []byte) []byte {

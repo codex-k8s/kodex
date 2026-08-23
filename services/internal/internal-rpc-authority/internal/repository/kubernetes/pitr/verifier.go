@@ -14,12 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
@@ -362,20 +362,9 @@ func verifyAnnotations(
 }
 
 func readToken(path string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	raw, err := securefile.Read(path, maxCredentialBytes)
 	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o007 != 0 ||
-		info.Size() <= 0 ||
-		info.Size() > maxCredentialBytes {
 		return "", errors.New("workload token file is unsafe")
-	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil {
-		return "", err
 	}
 	token := strings.TrimSpace(string(raw))
 	if token == "" || len(token) > maxCredentialBytes {

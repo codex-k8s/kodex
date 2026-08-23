@@ -190,7 +190,7 @@ func writeKeyset(t *testing.T, keyset PublicKeySet) string {
 func writeTestFile(t *testing.T, name string, raw []byte) string {
 	t.Helper()
 	file := filepath.Join(t.TempDir(), name)
-	if os.WriteFile(file, raw, 0o600) != nil {
+	if os.WriteFile(file, raw, 0o400) != nil {
 		t.Fatal("write test file")
 	}
 	return file

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -333,17 +334,9 @@ func validateRuntimeConfig(config RuntimeConfig) error {
 }
 
 func loadRuntimeCertificatePool(path string) (*x509.CertPool, error) {
-	info, err := os.Stat(path)
-	if err != nil ||
-		!info.Mode().IsRegular() ||
-		info.Size() <= 0 ||
-		info.Size() > maxCAFileBytes ||
-		info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("OTLP CA file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, maxCAFileBytes)
 	if err != nil {
-		return nil, errors.New("read OTLP CA file")
+		return nil, errors.New("OTLP CA file is unsafe")
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(raw) {
@@ -356,17 +349,9 @@ func readBoundedRuntimeFile(path string, maximum int64, label string) (string, e
 	if !filepath.IsAbs(path) {
 		return "", fmt.Errorf("%s path must be absolute", label)
 	}
-	info, err := os.Stat(path)
-	if err != nil ||
-		!info.Mode().IsRegular() ||
-		info.Size() <= 0 ||
-		info.Size() > maximum ||
-		info.Mode().Perm()&0o007 != 0 {
-		return "", fmt.Errorf("%s file is unsafe", label)
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, maximum)
 	if err != nil {
-		return "", fmt.Errorf("read %s file", label)
+		return "", fmt.Errorf("%s file is unsafe", label)
 	}
 	return string(raw), nil
 }

@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -52,10 +53,11 @@ func run(ctx context.Context, arguments []string) error {
 	if err := env.Parse(&environment); err != nil {
 		return errors.New("parse migration environment configuration")
 	}
-	raw, err := os.ReadFile(environment.DSNFile)
+	raw, err := securefile.Read(environment.DSNFile, 16<<10)
 	if err != nil {
-		return errors.New("read PostgreSQL DSN file")
+		return fmt.Errorf("read PostgreSQL DSN file: %w", err)
 	}
+	defer clear(raw)
 	config, err := pgx.ParseConfig(strings.TrimSpace(string(raw)))
 	if err != nil {
 		return errors.New("parse PostgreSQL DSN")

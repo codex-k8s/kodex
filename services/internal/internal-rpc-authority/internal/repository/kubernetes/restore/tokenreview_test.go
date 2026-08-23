@@ -44,7 +44,7 @@ func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount
 	))
 	defer server.Close()
 	tokenFile := filepath.Join(t.TempDir(), "token")
-	if err := os.WriteFile(tokenFile, []byte(serverToken), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(serverToken), 0o400); err != nil {
 		t.Fatal(err)
 	}
 	store := &Store{

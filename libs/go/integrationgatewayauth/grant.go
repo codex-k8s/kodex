@@ -8,13 +8,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 )
 
 const (
@@ -316,9 +316,9 @@ func read(path string) ([]byte, error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("JWK path is not absolute")
 	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maximumFileBytes || info.Mode().Perm()&0o007 != 0 {
+	raw, err := securefile.Read(path, maximumFileBytes)
+	if err != nil {
 		return nil, errors.New("JWK file is unsafe")
 	}
-	return os.ReadFile(path)
+	return raw, nil
 }

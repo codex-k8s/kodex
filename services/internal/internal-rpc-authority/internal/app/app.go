@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +15,7 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/udscred"
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	readbackclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/readback"
@@ -808,26 +807,11 @@ func stopGRPC(ctx context.Context, server *grpc.Server) error {
 }
 
 func readPrivateFile(path string, limit int64) ([]byte, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	value, err := securefile.Read(path, limit)
 	if err != nil {
-		return nil, err
-	}
-	relative, err := filepath.Rel(filepath.Dir(path), resolved)
-	if err != nil || relative == ".." || filepath.IsAbs(relative) ||
-		len(relative) >= 3 && relative[:3] == "../" {
-		return nil, errors.New("secret file symlink escapes its mounted directory")
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o007 != 0 ||
-		info.Size() <= 0 ||
-		info.Size() > limit {
 		return nil, errors.New("secret file type, mode or size is invalid")
 	}
-	return os.ReadFile(resolved)
+	return value, nil
 }
 
 func allowedMethods(mode Mode) map[string]string {

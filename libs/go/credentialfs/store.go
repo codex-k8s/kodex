@@ -4,10 +4,11 @@ package credentialfs
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 )
 
 const maximumCredentialBytes = 1 << 20
@@ -39,12 +40,8 @@ func (store *Store) Read(reference, name string) ([]byte, error) {
 	if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
 		return nil, errors.New("credential file escapes root")
 	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximumCredentialBytes || info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("credential file is unsafe")
-	}
-	value, err := os.ReadFile(resolved)
-	if err != nil || len(value) < 1 || len(value) > maximumCredentialBytes {
+	value, err := securefile.ReadWithin(root, resolved, maximumCredentialBytes)
+	if err != nil {
 		return nil, errors.New("credential file is unavailable")
 	}
 	return value, nil

@@ -104,18 +104,6 @@ require_ready_deployment_by_selector() {
   ' >/dev/null || fail "$description deployment is not fully ready"
 }
 
-require_secrets_store_csi_fsgroup_policy() {
-  [[ $(kubectl get csidriver secrets-store.csi.k8s.io -o jsonpath='{.spec.fsGroupPolicy}') == File ]] ||
-    fail 'Secrets Store CSI Driver fsGroup policy is not File'
-}
-
-reconcile_secrets_store_csi_fsgroup_policy() {
-  kubectl patch csidriver secrets-store.csi.k8s.io --type=merge \
-    --patch '{"spec":{"fsGroupPolicy":"File"}}' >/dev/null ||
-    fail 'Secrets Store CSI Driver fsGroup policy reconciliation failed'
-  require_secrets_store_csi_fsgroup_policy
-}
-
 require_vault_csi_provider() {
   local daemonset_json
 
@@ -152,7 +140,6 @@ if [[ "$mode" == apply-controllers ]]; then
   helm upgrade --install mattercodex-secrets-store-csi "$csi_chart" \
     --namespace kube-system --values "$script_directory/secrets-store-csi-values.yaml" \
     --atomic --wait --timeout 10m
-  reconcile_secrets_store_csi_fsgroup_policy
 
   trust_chart=$(download_chart trust-manager)
   helm upgrade --install mattercodex-trust-manager "$trust_chart" \
@@ -190,7 +177,6 @@ if [[ "$mode" == readback ]]; then
   kubectl -n kube-system rollout status \
     daemonset/mattercodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s >/dev/null ||
     fail 'Secrets Store CSI Driver rollout is incomplete'
-  require_secrets_store_csi_fsgroup_policy
   require_ready_deployment_by_selector cert-manager \
     'app.kubernetes.io/instance=mattercodex-trust-manager,app.kubernetes.io/name=trust-manager' \
     'trust-manager'

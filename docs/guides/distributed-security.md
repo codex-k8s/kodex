@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.2
+version: 1.4.3
 updated: 2026-08-23
 ---
 
@@ -408,6 +408,24 @@ provider identity только к Vault TCP/8200; workload authority по-пре
 задают переданный projected token, Vault Kubernetes auth role и policy.
 Отсутствие provider ingress нельзя исправлять CIDR, wildcard namespace или
 выдачей provider дополнительных Kubernetes полномочий.
+
+Projected secret file считается допустимым только при полном совпадении
+следующего контракта:
+
+- volume и container mount имеют `readOnly: true`;
+- mount подключён только к тому контейнеру, которому принадлежит credential;
+- provider создаёт regular file с точным режимом `0444`, когда драйвер не умеет
+  назначить UID/GID non-root workload;
+- приложение принимает только exact `0400`, `0440` или `0444`, ограничивает
+  размер, не разрешает symlink выйти из mount boundary и отклоняет любые права
+  записи/исполнения;
+- путь, metadata и содержимое credential не попадают в логи и внешние ошибки.
+
+`0444` означает доступность всем процессам только внутри mount namespace
+целевого контейнера, а не другим Pod или workload. Добавлять root init
+container, копировать secret в writable `emptyDir`, включать group `0` либо
+полагаться на неподтверждённое изменение ownership через `fsGroupPolicy`
+запрещено. Итоговый render проверяет mode и обе read-only границы.
 
 Переход с незашифрованного транспорта на TLS выполняется системно: сначала
 инвентаризируются все

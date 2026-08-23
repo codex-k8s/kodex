@@ -11,4 +11,4 @@ spec:
       - objectName: "interaction-gateway.platform-worker.public.jwk"
         secretPath: "kv/data/mattercodex/platform-worker-grants/interaction-gateway"
         secretKey: "public-jwk"
-        filePermission: 288
+        filePermission: 292

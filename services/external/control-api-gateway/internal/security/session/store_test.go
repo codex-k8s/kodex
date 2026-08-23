@@ -73,7 +73,7 @@ func TestSessionExpiryIsClosed(t *testing.T) {
 
 func writeKey(t *testing.T, path, value string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(value+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(value+"\n"), 0o400); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
 }

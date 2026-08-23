@@ -7,6 +7,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
 	github.com/exaring/otelpgx v0.11.1
 	github.com/google/uuid v1.6.0
@@ -71,3 +72,5 @@ replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../li
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile

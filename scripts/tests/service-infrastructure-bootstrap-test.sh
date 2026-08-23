@@ -37,12 +37,6 @@ grep -Fq 'app.kubernetes.io/component=controller-manager' "$bootstrap" ||
   fail 'Vault Secrets Operator selector does not identify the controller manager'
 grep -Fq 'daemonset/mattercodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s' "$bootstrap" ||
   fail 'Secrets Store CSI Driver rollout readback is absent'
-grep -Fq 'reconcile_secrets_store_csi_fsgroup_policy' "$bootstrap" ||
-  fail 'Secrets Store CSI Driver fsGroup policy reconciliation is absent'
-grep -Fq -- '--patch '\''{"spec":{"fsGroupPolicy":"File"}}'\''' "$bootstrap" ||
-  fail 'Secrets Store CSI Driver fsGroup policy patch is not exact'
-[[ $(grep -Fc 'require_secrets_store_csi_fsgroup_policy' "$bootstrap") -eq 3 ]] ||
-  fail 'Secrets Store CSI Driver fsGroup policy is not checked after apply and during readback'
 grep -Fq 'require_vault_csi_provider' "$bootstrap" ||
   fail 'Vault CSI provider strict readback is absent'
 [[ $(grep -Fc 'require_vault_csi_provider' "$bootstrap") -eq 3 ]] ||

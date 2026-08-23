@@ -4,7 +4,7 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.2.1
+version: 1.2.2
 updated: 2026-08-07
 ---
 
@@ -225,11 +225,16 @@ role и объекты Vault и не вправе переопределять a
 Неиспользуемый Vault Agent cache sidecar в этом профиле отключён, чтобы не было
 двух альтернативных путей доверия к Vault.
 
-Secrets Store CSI Driver обслуживает inline ephemeral volumes с
-`CSIDriver.fsGroupPolicy=File`. Kubelet применяет Pod `fsGroup` к secret files с
-mode `0440`; приложение остаётся non-root, а group/world root и world-readable
-secret modes не требуются. Bootstrap после Helm install и отдельный readback
-проверяют это фактически обслуживаемое cluster-scoped поле.
+Secrets Store CSI Provider создаёт credential files с exact mode `0444`, потому
+что текущий driver/provider не назначает UID/GID non-root workload, а изменение
+`CSIDriver.fsGroupPolicy` не является доказательством фактического ownership.
+CSI volume и соответствующий container mount всегда `readOnly: true` и
+подключаются только к целевому контейнеру. Приложения читают такие файлы через
+`libs/go/securefile`, принимают только `0400`, `0440` или `0444` и закрыто
+отклоняют write/execute permissions и выход symlink за mount boundary.
+
+Root init container, копия credential в writable volume, supplemental group `0`
+и ручной `chown` не являются поддерживаемым путём доставки secret.
 
 ## PostgreSQL в Kubernetes и за его пределами
 

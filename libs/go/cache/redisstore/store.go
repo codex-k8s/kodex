@@ -6,11 +6,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/cache"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -132,14 +132,9 @@ func (store *Store) PoolStats() PoolStats {
 }
 
 func loadCertificatePool(path string) (*x509.CertPool, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 ||
-		info.Size() > maximumCABytes || info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("Redis CA file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, maximumCABytes)
 	if err != nil {
-		return nil, errors.New("read Redis CA file")
+		return nil, errors.New("Redis CA file is unsafe")
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(raw) {

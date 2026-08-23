@@ -2,7 +2,10 @@ module github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth
 
 go 1.26.6
 
-require github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
+require (
+	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
+)
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
@@ -21,3 +24,5 @@ require (
 )
 
 replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../internalrpcauth
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../securefile

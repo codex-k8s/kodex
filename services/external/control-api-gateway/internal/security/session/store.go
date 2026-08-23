@@ -12,11 +12,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/google/uuid"
 )
 
@@ -175,13 +175,9 @@ func open(aead cipher.AEAD, raw []byte) ([]byte, error) {
 }
 
 func loadAEAD(path string) (cipher.AEAD, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maximumFile || info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("session key file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, maximumFile)
 	if err != nil {
-		return nil, errors.New("read session key")
+		return nil, errors.New("session key file is unsafe")
 	}
 	trimmed := strings.TrimSpace(string(raw))
 	key, err := hex.DecodeString(trimmed)

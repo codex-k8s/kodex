@@ -13,6 +13,7 @@ COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
+COPY libs/go/securefile/ libs/go/securefile/
 COPY services/internal/runtime-controller/ services/internal/runtime-controller/
 WORKDIR /workspace/services/internal/runtime-controller
 RUN test "$(go env GOVERSION)" = "go1.26.6"

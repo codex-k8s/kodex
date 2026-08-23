@@ -14,6 +14,7 @@ COPY libs/go/httpserver/go.mod libs/go/httpserver/go.mod
 COPY libs/go/internalrpcauth/go.mod libs/go/internalrpcauth/go.mod
 COPY libs/go/observability/go.mod libs/go/observability/go.mod
 COPY libs/go/serviceruntime/go.mod libs/go/serviceruntime/go.mod
+COPY libs/go/securefile/go.mod libs/go/securefile/go.mod
 COPY services/jobs/role-image-builder/go.mod services/jobs/role-image-builder/go.sum services/jobs/role-image-builder/
 WORKDIR /workspace/services/jobs/role-image-builder
 RUN go mod download
@@ -26,6 +27,7 @@ COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
+COPY libs/go/securefile/ libs/go/securefile/
 COPY services/jobs/role-image-builder/ services/jobs/role-image-builder/
 WORKDIR /workspace/services/jobs/role-image-builder
 RUN test "$(go env GOVERSION)" = "go1.26.6"

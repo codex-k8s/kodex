@@ -8,13 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc"
@@ -239,28 +238,9 @@ func (attestor *FileAttestor) Attest(
 }
 
 func readMountedValue(path string, maximum int) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	raw, err := securefile.Read(path, int64(maximum))
 	if err != nil {
-		return "", err
-	}
-	relative, err := filepath.Rel(filepath.Dir(path), resolved)
-	if err != nil ||
-		relative == ".." ||
-		filepath.IsAbs(relative) ||
-		strings.HasPrefix(relative, "../") {
-		return "", errors.New("mounted readback file escapes its directory")
-	}
-	info, err := os.Stat(resolved)
-	if err != nil ||
-		!info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o007 != 0 ||
-		info.Size() <= 0 ||
-		info.Size() > int64(maximum) {
 		return "", errors.New("mounted readback file is unsafe")
-	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil {
-		return "", err
 	}
 	value := strings.TrimSpace(string(raw))
 	if value == "" {

@@ -1,6 +1,7 @@
 package publisher
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -18,7 +19,15 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		"deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
 		"deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
 	} {
-		registry, err := LoadRegistry(filepath.Join(repositoryRoot, relative))
+		source, err := os.ReadFile(filepath.Join(repositoryRoot, relative))
+		if err != nil {
+			t.Fatalf("прочитать реестр %s: %v", relative, err)
+		}
+		projected := filepath.Join(t.TempDir(), filepath.Base(relative))
+		if err := os.WriteFile(projected, source, 0o444); err != nil {
+			t.Fatalf("материализовать projected реестр %s: %v", relative, err)
+		}
+		registry, err := LoadRegistry(projected)
 		if err != nil {
 			t.Fatalf("реестр %s не прошёл runtime-валидацию: %v", relative, err)
 		}

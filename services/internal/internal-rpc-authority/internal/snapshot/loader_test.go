@@ -29,18 +29,28 @@ func TestReadRegularFileAcceptsExactGroupReadableSecret(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o440); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	if _, err := readRegularFile(path, 1024, 0o007); err != nil {
+	if _, err := readRegularFile(path, 1024); err != nil {
 		t.Fatalf("group-readable projected secret rejected: %v", err)
 	}
 }
 
-func TestReadRegularFileRejectsWorldReadablePrivateMaterial(t *testing.T) {
+func TestReadRegularFileAcceptsReadOnlyContainerScopedMaterial(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "private.jwk")
 	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o444); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	if _, err := readRegularFile(path, 1024, 0o007); err == nil {
-		t.Fatal("world-readable private material accepted")
+	if _, err := readRegularFile(path, 1024); err != nil {
+		t.Fatalf("read-only projected material rejected: %v", err)
+	}
+}
+
+func TestReadRegularFileRejectsWritableMaterial(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "private.jwk")
+	if err := os.WriteFile(path, []byte(`{"kty":"EC"}`), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	if _, err := readRegularFile(path, 1024); err == nil {
+		t.Fatal("writable private material accepted")
 	}
 }
 
@@ -54,7 +64,7 @@ func TestReadRegularFileRejectsEscapingSymlink(t *testing.T) {
 	if err := os.Symlink(target, path); err != nil {
 		t.Fatalf("create symlink: %v", err)
 	}
-	if _, err := readRegularFile(path, 1024, 0o004); err == nil {
+	if _, err := readRegularFile(path, 1024); err == nil {
 		t.Fatal("escaping projected-file symlink accepted")
 	}
 }

@@ -276,9 +276,18 @@ func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]a
 	if err != nil {
 		return false, err
 	}
-	params, err := runtime.DefaultUnstructuredConverter.ToUnstructured(ownerPolicy)
-	if err != nil {
-		return false, err
+	parameterSpec := make(map[string]any, len(ownerPolicy.Data))
+	for name, value := range ownerPolicy.Data {
+		parameterSpec[name] = value
+	}
+	params := map[string]any{
+		"apiVersion": "supplychain.mattercodex.dev/v1alpha1",
+		"kind":       "ImageAdmissionPolicyParameters",
+		"metadata": map[string]any{
+			"name":      ownerPolicy.Name,
+			"namespace": ownerPolicy.Namespace,
+		},
+		"spec": parameterSpec,
 	}
 	variableValues := map[string]any{}
 	activation := map[string]any{

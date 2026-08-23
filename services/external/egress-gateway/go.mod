@@ -20,11 +20,14 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 )
 
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

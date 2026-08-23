@@ -23,6 +23,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0 // indirect
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dyatlov/go-opengraph/opengraph v0.0.0-20220524092352-606d7b1e5f8a // indirect
 	github.com/fatih/color v1.19.0 // indirect
@@ -103,3 +104,5 @@ replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../li
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile

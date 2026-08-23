@@ -11,12 +11,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
@@ -349,11 +348,7 @@ func verifyStaticRoleResponse(
 }
 
 func loadCertificatePool(path string) (*x509.CertPool, error) {
-	resolved, err := resolveMountedFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("resolve Vault CA bundle: %w", err)
-	}
-	raw, err := os.ReadFile(resolved)
+	raw, err := securefile.Read(path, maxVaultResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read Vault CA bundle: %w", err)
 	}
@@ -365,36 +360,9 @@ func loadCertificatePool(path string) (*x509.CertPool, error) {
 }
 
 func readTokenFile(path string) ([]byte, error) {
-	resolved, err := resolveMountedFile(path)
+	raw, err := securefile.Read(path, 16<<10)
 	if err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o007 != 0 ||
-		info.Size() <= 0 ||
-		info.Size() > 16<<10 {
 		return nil, errors.New("vault Kubernetes auth token file is unsafe")
 	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil {
-		return nil, err
-	}
 	return []byte(strings.TrimSpace(string(raw))), nil
-}
-
-func resolveMountedFile(path string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", err
-	}
-	relative, err := filepath.Rel(filepath.Dir(path), resolved)
-	if err != nil || relative == ".." || filepath.IsAbs(relative) ||
-		len(relative) >= 3 && relative[:3] == "../" {
-		return "", errors.New("mounted file symlink escapes its directory")
-	}
-	return resolved, nil
 }
