@@ -39,10 +39,22 @@ myqr_namespace=myqrcontact
 shared_namespace=matter-kodex-prod
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 
+detect_mattermost_workload() {
+  local deployment_exists=false statefulset_exists=false
+  kubectl -n "$shared_namespace" get deployment mattermost >/dev/null 2>&1 && deployment_exists=true
+  kubectl -n "$shared_namespace" get statefulset mattermost >/dev/null 2>&1 && statefulset_exists=true
+  case "$deployment_exists:$statefulset_exists" in
+    true:false) printf 'deployment\n' ;;
+    false:true) printf 'statefulset\n' ;;
+    false:false) fail 'retained Mattermost workload is absent' ;;
+    true:true) fail 'retained Mattermost workload is ambiguous' ;;
+  esac
+}
+
 for retained_namespace in "$shared_namespace" mattercodex-ci mattercodex-ci-deploy identity cert-manager; do
   kubectl get namespace "$retained_namespace" >/dev/null 2>&1 || fail "retained namespace is absent: $retained_namespace"
 done
-kubectl -n "$shared_namespace" get statefulset mattermost >/dev/null 2>&1 || fail 'retained Mattermost is absent'
+mattermost_workload_kind=$(detect_mattermost_workload)
 kubectl -n "$shared_namespace" get deployment matter-codex-registry >/dev/null 2>&1 || fail 'retained registry is absent'
 
 if [[ "$mode" == preflight ]]; then
@@ -55,7 +67,8 @@ if [[ "$mode" == preflight ]]; then
       (.metadata.name | startswith("mc-var-")) or
       .metadata.name == "legacy-data-migration-source-postgresql-g1"
     )] | length')
-  printf 'Legacy reset preflight completed: shared PVC=%s shared secrets=%s\n' "$legacy_pvcs" "$legacy_secrets"
+  printf 'Legacy reset preflight completed: mattermost=%s shared PVC=%s shared secrets=%s\n' \
+    "$mattermost_workload_kind" "$legacy_pvcs" "$legacy_secrets"
   exit 0
 fi
 
@@ -120,7 +133,8 @@ if [[ "$mode" == readback ]]; then
       fail "removed namespace still exists: $removed_namespace"
     fi
   done
-  kubectl -n "$shared_namespace" get statefulset mattermost >/dev/null
+  [[ $(detect_mattermost_workload) == "$mattermost_workload_kind" ]] ||
+    fail 'retained Mattermost workload kind changed during reset'
   kubectl -n "$shared_namespace" get deployment matter-codex-registry >/dev/null
   kubectl -n mattercodex-ci get deployment mattercodex-arc-build-gha-rs-controller >/dev/null
   kubectl -n mattercodex-ci-deploy get deployment mattercodex-arc-deploy-gha-rs-controller >/dev/null
