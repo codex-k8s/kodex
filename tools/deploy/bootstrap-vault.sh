@@ -328,6 +328,31 @@ if [[ "$mode" == configure-database ]]; then
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   database_password=$(read_single_line_secret "$database_password_file" 'PostgreSQL bootstrap password')
+
+  database_password_policy=mattercodex-database
+  cat >"$temporary_directory/database-password-policy.hcl" <<'HCL'
+length = 48
+
+rule "charset" {
+  charset = "abcdefghijklmnopqrstuvwxyz"
+  min-chars = 1
+}
+rule "charset" {
+  charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  min-chars = 1
+}
+rule "charset" {
+  charset = "0123456789"
+  min-chars = 1
+}
+rule "charset" {
+  charset = "-_"
+  min-chars = 1
+}
+HCL
+  vault_input "$temporary_directory/database-password-policy.hcl" \
+    write "sys/policies/password/$database_password_policy" policy=- >/dev/null
+
   for role in control_plane_migrator control_plane_runtime_g1 internal_rpc_authority_migrator; do
     openssl rand -base64 48 >"$temporary_directory/$role"
     role_password=$(read_single_line_secret "$temporary_directory/$role" 'generated PostgreSQL role password')
@@ -342,10 +367,11 @@ if [[ "$mode" == configure-database ]]; then
   done
 
   database_connection="postgresql://postgres:$(jq -rn --arg value "$database_password" '$value|@uri')@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
-  jq -cn --arg connection "$database_connection" '{
+  jq -cn --arg connection "$database_connection" --arg password_policy "$database_password_policy" '{
     plugin_name:"postgresql-database-plugin",
     allowed_roles:"control-plane-migrator,control-plane-runtime-g1,internal-rpc-authority-migrator,internal-rpc-authority-publisher-g3,internal-rpc-authority-publisher-g4,internal-rpc-authority-publisher-g5,internal-rpc-authority-readback-attestor-g3,internal-rpc-authority-readback-attestor-g4,internal-rpc-authority-readback-attestor-g5",
-    connection_url:$connection
+    connection_url:$connection,
+    password_policy:$password_policy
   }' >"$temporary_directory/database-config.json"
 
   configure_verified_database() {
@@ -440,8 +466,9 @@ if [[ "$mode" == configure-database-runtime ]]; then
     principal=${mapping#*:}
     vault_cli write "database/static-roles/$role_name" \
       db_name=mattercodex-postgresql username="$principal" rotation_period=1h >/dev/null
+    vault_cli write -f "database/rotate-role/$role_name" >/dev/null
     vault_cli read -format=json "database/static-creds/$role_name" |
-      jq -e --arg username "$principal" '.data.username == $username and (.data.password | length) >= 32' \
+      jq -e --arg username "$principal" '.data.username == $username and (.data.password | length) >= 48' \
       >/dev/null || fail "database static credential readback failed: $role_name"
   done
 fi
@@ -590,6 +617,12 @@ if [[ "$mode" == readback ]]; then
   vault_cli secrets list -format=json | jq -e 'has("kv/") and has("secret/") and has("database/") and has("pki/")' >/dev/null ||
     fail 'Vault engines readback failed'
   vault_cli auth list -format=json | jq -e 'has("kubernetes/")' >/dev/null || fail 'Vault auth readback failed'
+  vault_cli read -format=json sys/policies/password/mattercodex-database |
+    jq -e '.data.policy | contains("length = 48")' >/dev/null ||
+    fail 'Vault database password policy readback failed'
+  vault_cli read -format=json database/config/mattercodex-postgresql |
+    jq -e '.data.password_policy == "mattercodex-database"' >/dev/null ||
+    fail 'Vault database password policy binding readback failed'
 fi
 
 printf 'Vault bootstrap completed: %s\n' "$mode"

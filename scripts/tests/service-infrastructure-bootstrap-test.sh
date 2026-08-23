@@ -145,6 +145,18 @@ grep -Fq 'Vault PostgreSQL connection did not become ready within the bounded re
 if grep -Fq 'verify_connection=false' "$vault_initializer"; then
   fail 'Vault PostgreSQL connection verification is disabled'
 fi
+grep -Fq 'database_password_policy=mattercodex-database' "$vault_initializer" ||
+  fail 'Vault PostgreSQL connection has no project-owned password policy'
+grep -Fq 'length = 48' "$vault_initializer" ||
+  fail 'Vault PostgreSQL password policy is shorter than the approved contract'
+grep -Fq 'write "sys/policies/password/$database_password_policy" policy=-' "$vault_initializer" ||
+  fail 'Vault PostgreSQL password policy is not materialized through stdin'
+grep -Fq 'password_policy:$password_policy' "$vault_initializer" ||
+  fail 'Vault PostgreSQL connection does not bind the project-owned password policy'
+grep -Fq 'vault_cli write -f "database/rotate-role/$role_name"' "$vault_initializer" ||
+  fail 'existing Vault static credentials are not rotated after policy reconciliation'
+grep -Fq '(.data.password | length) >= 48' "$vault_initializer" ||
+  fail 'Vault static credential readback does not enforce the policy length'
 
 grep -Fq 'local vault_path=$1 username=$2 password_file=$3 database=$4 postgresql_host=$5 ca_file=$6' \
   "$vault_initializer" || fail 'workload DSN helper does not require an exact PostgreSQL authority'
