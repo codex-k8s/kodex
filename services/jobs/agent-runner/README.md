@@ -50,10 +50,16 @@ MCP остаётся runtime-протоколом. Каждый server/tool им
 типизированную schema, timeout, required flag и allowlist. Config генерируется
 из server-owned RuntimeRevision; secret values в TOML не записываются.
 
-- platform MCP: delegation, callback, session continuation, Human Gate,
-  owner attention, active work/sync и artifact publication;
+- platform MCP: `delegate_agent`, `invoke_integration` по exact grants и
+  `propose_configuration_plan` только для системного помощника;
 - integration MCP: специализированные adapters `integration-gateway`;
 - generic external API proxy и произвольная command authority запрещены.
+
+Terminal completion, child callback и публикация bounded artifacts идут через
+защищённый runner callback contract. Продолжение Session создаёт владелец
+состояния через специализированный owner API, а Human Gate материализуется из
+опубликованной WorkflowVersion; эти действия не объявляются отдельными MCP
+tools.
 
 Долговечное ожидание Human Gate не удерживает Pod. Control-plane фиксирует
 `WAITING_HUMAN`, закрывает текущую attempt и после решения создаёт новую

@@ -13,7 +13,6 @@ updated: 2026-08-23
 | ADR | Решение | Статус |
 | --- | --- | --- |
 | `ADR-MC-002` | Универсальная web-first модель `Organization`, `Project` и `Agent` | approved |
-| `ADR-MC-003` | Совместное управление через UI и GitOps | approved |
 | `ADR-MC-004` | `RuntimeRevision` и неизменяемая привязка учетной записи поставщика | approved |
 | `ADR-MC-005` | Два режима интеграций и обязательные согласования | approved |
 | `ADR-MC-006` | Bounded artifact storage boundary без обязательного S3 | approved |
@@ -22,8 +21,6 @@ updated: 2026-08-23
 | `ADR-MC-009` | Публичная редакция AGPL и коммерческая лицензия | approved/legal-review-required |
 | `ADR-MC-010` | Терминальная обработка блокировок политики поставщика | approved |
 | `ADR-MC-011` | Настраиваемые политики координации и внимания инициатора | approved |
-| `ADR-MC-012` | Локальная память проекта и ролей | approved |
-| `ADR-MC-013` | Реестр активной работы и управляемая синхронизация | approved |
 | `ADR-DOC-004` | Transactional outbox, broker-neutral relay, NATS и durable inbox | approved |
 | `ARCH-MC-011` | Owner-approved web-first reset и fresh baseline | approved |
 

@@ -24,15 +24,13 @@ IntegrationGrant и bounded launch input.
 
 ## Делегирование
 
-Coordinator runtime получает platform MCP server с typed tools:
-
-- `delegate_agent`;
-- `continue_session`;
-- `return_to_coordinator`;
-- `request_human_gate`;
-- `request_owner_attention`;
-- `list_active_work` и `request_sync`;
-- `publish_artifact`.
+Coordinator runtime получает platform MCP server с typed tool
+`delegate_agent`. При наличии выданных integration grants тот же server
+добавляет `invoke_integration`; системному помощнику вместо них доступен
+`propose_configuration_plan`. Completion, callback и публикация bounded
+artifacts выполняются через защищённый runner callback contract, а Human Gate
+открывается owner-транзакцией по опубликованной WorkflowVersion. Они не
+маскируются несуществующими MCP tools.
 
 MCP — протокол runtime-вызова. Каждый tool maps в специализированную
 control-plane command и имеет закрытую input/output schema. Generic CRUD или
