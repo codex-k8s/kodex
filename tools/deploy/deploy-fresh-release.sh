@@ -171,6 +171,31 @@ wait_statefulset() {
     fail "StatefulSet rollout failed: $name"
 }
 
+wait_trust_material() {
+  local resource_name
+
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
+    kubectl -n "$namespace" wait --for=condition=Ready \
+      "certificates.cert-manager.io/$resource_name" --timeout=5m >/dev/null ||
+      fail "Certificate is not ready: $resource_name"
+  done < <(yq -N -r 'select(.kind == "Certificate") | .metadata.name' "$render_file" | sort -u)
+
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
+    kubectl wait --for=condition=Synced \
+      "bundles.trust.cert-manager.io/$resource_name" --timeout=5m >/dev/null ||
+      fail "CA Bundle is not synced: $resource_name"
+  done < <(yq -N -r 'select(.kind == "Bundle") | .metadata.name' "$render_file" | sort -u)
+
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
+    kubectl -n "$namespace" wait --for=condition=Ready \
+      "vaultstaticsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
+      fail "VaultStaticSecret is not ready: $resource_name"
+  done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
+}
+
 apply_job() {
   local name=$1
   local output_file="$temporary_directory/job-$name.yaml"
@@ -219,6 +244,7 @@ if [[ "$mode" == apply-state ]]; then
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
         .metadata.name == "internal-rpc-authority-restore-evidence") | not))
   '
+  wait_trust_material
   apply_filter stateful '
     select(.kind == "StatefulSet" and
       (.metadata.name == "mattercodex-postgresql" or .metadata.name == "mattercodex-nats"))
@@ -251,6 +277,7 @@ if [[ "$mode" == apply-workloads ]]; then
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
         .metadata.name == "internal-rpc-authority-restore-evidence") | not))
   '
+  wait_trust_material
   for registry_deployment in \
     mattercodex-image-registry-push mattercodex-image-registry-staging-read \
     mattercodex-image-registry-evidence mattercodex-image-registry-admin \
@@ -276,6 +303,7 @@ if [[ "$mode" == readback ]]; then
   "$vault_bootstrap" --context "$expected_context" --mode readback \
     --material-directory "$material_directory"
   ensure_restore_evidence_anchor
+  wait_trust_material
   while IFS=$'\t' read -r kind name; do
     [[ -n "$kind" && -n "$name" ]] || continue
     case "$kind" in

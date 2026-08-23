@@ -34,11 +34,10 @@ spec:
             - {name: REGISTRY_HTTP_TLS_CERTIFICATE, value: /identity/tls.crt}
             - {name: REGISTRY_HTTP_TLS_KEY, value: /identity/tls.key}
             - {name: REGISTRY_HTTP_TLS_CLIENTCAS_0, value: /identity/client-ca.pem}
-            - {name: REGISTRY_HTTP_TLS_CLIENTAUTH, value: require-and-verify-client-cert}
             - {name: REGISTRY_AUTH, value: htpasswd}
             - {name: REGISTRY_AUTH_HTPASSWD_REALM, value: mattercodex-staging-read}
             - {name: REGISTRY_AUTH_HTPASSWD_PATH, value: /identity/auth.htpasswd}
-            - {name: REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED, value: "true"}
+            - {name: REGISTRY_STORAGE_MAINTENANCE, value: '{"readonly":{"enabled":true}}'}
             - {name: REGISTRY_STORAGE_DELETE_ENABLED, value: "false"}
           ports: [{name: read, containerPort: 5004}]
           readinessProbe: {tcpSocket: {port: read}, periodSeconds: 5, timeoutSeconds: 2}

@@ -1,0 +1,98 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-database-credential-reconciler-client-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: client-ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-publisher-client-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: client-ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-readback-attestor-client-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: client-ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-restore-controller-client-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: client-ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-publisher-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-readback-attestor-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-restore-controller-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: internal-rpc-authority-vault-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: ca.pem}
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: mattercodex-vault-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources: [{secret: {name: mattercodex-installation-ca, key: tls.crt}}]
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    configMap: {key: ca.pem}

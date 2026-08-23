@@ -1,15 +1,3 @@
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
-  name: control-api-gateway-vault-ca
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  sources:
-    - secret: {name: mattercodex-vault-ca-source, key: ca.crt}
-  target:
-    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
-    secret: {key: ca.crt}
----
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:

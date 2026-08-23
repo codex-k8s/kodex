@@ -98,6 +98,8 @@ create_secret mattercodex-trust mattercodex-installation-ca \
   --from-file=tls.crt="$ca_certificate_file"
 create_secret mattercodex-trust mattercodex-vault-ca-source \
   --from-file=ca.crt="$ca_certificate_file"
+create_secret mattercodex-system control-api-gateway-vault-ca \
+  --from-file=ca.crt="$ca_certificate_file"
 create_secret mattercodex-system mattercodex-postgresql-bootstrap \
   --from-file=password="$postgresql_password_file"
 create_secret mattercodex-system mattercodex-nats-credentials \
@@ -137,7 +139,8 @@ kubectl -n mattercodex-system wait --for=condition=Ready certificate/mattercodex
 kubectl -n mattercodex-system wait --for=condition=Ready certificate/mattercodex-control-api-bootstrap --timeout=180s >/dev/null
 
 for secret_name in mattercodex-installation-ca mattercodex-postgresql-bootstrap mattercodex-nats-credentials \
-  mattercodex-vault-server-tls runtime-provider-openai-default-r1 mattercodex-sentry; do
+  mattercodex-vault-server-tls control-api-gateway-vault-ca runtime-provider-openai-default-r1 \
+  mattercodex-sentry; do
   kubectl -n mattercodex-system get secret "$secret_name" >/dev/null || fail "secret readback failed: $secret_name"
 done
 printf 'Fresh install secret materialization completed\n'

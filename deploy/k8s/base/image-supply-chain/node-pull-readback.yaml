@@ -59,7 +59,7 @@ spec:
         - name: containerd-config
           hostPath: {path: /etc/containerd/certs.d, type: DirectoryOrCreate}
         - name: containerd-socket
-          hostPath: {path: /run/containerd/containerd.sock, type: Socket}
+          hostPath: {path: /run/k3s/containerd/containerd.sock, type: Socket}
         - name: vault-ca
           configMap: {name: mattercodex-vault-ca, defaultMode: 0440}
         - name: vault-token
