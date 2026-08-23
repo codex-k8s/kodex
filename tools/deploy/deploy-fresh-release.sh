@@ -191,8 +191,9 @@ if [[ "$mode" == apply-workloads ]]; then
   done
   ensure_restore_evidence_anchor
   apply_filter workloads '
-    select((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
-      .metadata.name == "internal-rpc-authority-restore-evidence") | not)
+    select(.kind != "Job" and
+      ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+        .metadata.name == "internal-rpc-authority-restore-evidence") | not))
   '
   for registry_deployment in \
     mattercodex-image-registry-push mattercodex-image-registry-staging-read \

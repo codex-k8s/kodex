@@ -153,9 +153,12 @@ hosts передаются параметрами deployment environment. Реп
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 10. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
-   применяет полный render за исключением этого create-once ресурса, дожидается
-   image supply chain, выполняет `release-artifact-materializer`, затем ждёт
-   rollout каждого Deployment и DaemonSet.
+   применяет workload-ресурсы за исключением этого create-once ресурса и всех
+   `Job`, дожидается image supply chain, отдельно выполняет
+   `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
+   DaemonSet. Migration/bootstrap Job принадлежат только фазе
+   `apply-migrations`: generic apply не обновляет их immutable template при
+   переходе на новый release digest.
 11. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
     Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
     anchor и отсутствие terminal container waiting states.
