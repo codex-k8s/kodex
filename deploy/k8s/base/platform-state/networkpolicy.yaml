@@ -16,6 +16,7 @@ spec:
                 values:
                   - control-plane
                   - internal-rpc-authority
+                  - vault
       ports:
         - protocol: TCP
           port: 5432
