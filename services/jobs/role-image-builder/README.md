@@ -1,3 +1,13 @@
+---
+id: JOB-MC-002
+title: Сборка окружений ролей
+type: service
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # role-image-builder
 
 `role-image-builder` — единственный исполнитель одной fenced attempt сборки
@@ -93,15 +103,15 @@ Probe не выполняет сетевых вызовов сам.
 |---|---|
 | create recipe | `control-plane`; server-owned owner/generation/policy, новая queued build или exact reuse |
 | update recipe | `control-plane`; version CAS, generation++, новый canonical hash и build/reuse; прежние build/admission/promotion claims отзываются одной owner-транзакцией |
-| archive/restore/delete recipe | `control-plane`; специализированная команда; незавершённые build и artifact закрываются, их lease/claims отзываются |
+| archive/restore recipe | `control-plane`; специализированная команда; незавершённые build закрываются, их lease/claims отзываются; delete отсутствует |
 | resolve/reuse | `control-plane`; только exact `ACTIVE`, admitted, signed, promoted artifact с current policy/readback |
 | claim build | `role-image-builder`; одна leased attempt, fence/generation/JTI и immutable input snapshot |
 | renew/progress | `role-image-builder`; только current token/attempt/fence, закрытые stage и percent |
 | complete/fail | `role-image-builder`; terminal owner transaction отзывает lease; complete создаёт immutable artifact |
-| cancel | owner-команда `ManageImageBuild`; закрывает claim/lease, старый worker отвергается |
-| retry | owner-команда; новая attempt/fence/generation и свежий grant, build evidence очищается |
-| expiry | owner-команда после lease deadline; старый grant закрыт |
-| dead letter | owner-команда после исчерпания maximum attempts; новых claims нет |
+| cancel | update/archive recipe атомарно закрывает её открытые build; отдельного универсального build command нет |
+| retry | следующий server-side claim после failed attempt повышает attempt/fence и выдаёт свежий lease token в пределах maximum attempts |
+| expiry | следующий server-side claim после lease deadline повышает attempt/fence; прежний token закрыто отклоняется |
+| attempts exhausted | build больше не попадает в claim selector; новый build создаётся только `REQUEST_BUILD` для актуальной recipe version |
 | claim admission | `image-admission`; одна lease/fence на exact artifact и current policy |
 | admission accepted | durable OCI evidence bundle проходит exact readback; owner transaction фиксирует receipt content и реальный OCI manifest digest, promotion identity ещё не выдана |
 | admission rejected | тот же durable evidence bundle фиксируется owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
@@ -162,5 +172,6 @@ smoke и browser E2E запускаются только в disposable уста�
 
 Остановить новые owner-команды и вернуть Deployment на предыдущий exact image
 digest. Уже promoted digest не удалять и policy revision не откатывать.
-Queued/claimed attempts закрыть только специализированными owner-командами;
-ручное изменение PostgreSQL, claims, leases или registry tags запрещено.
+Queued/claimed attempts закрыть только update/archive recipe либо штатным
+worker terminal path; ручное изменение PostgreSQL, claims, leases или registry
+tags запрещено.
