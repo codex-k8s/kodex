@@ -40,8 +40,9 @@ spec:
               kubernetes.io/metadata.name: mattercodex-system
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: runtime-controller
-              app.kubernetes.io/component: hot-runtime
+              app.kubernetes.io/name: agent-runner
+              app.kubernetes.io/component: role-runtime
+              runtime.mattercodex.dev/managed: "true"
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: mattercodex-system

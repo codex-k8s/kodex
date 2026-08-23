@@ -121,6 +121,17 @@ yq -o=json '
     any(.ports[]?; .protocol == "TCP" and .port == 4222))
 ' >/dev/null || fail 'control API realtime NATS egress is absent'
 
+yq -o=json 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths")' "$render_file" |
+  jq -e '
+    any(.spec.ingress[].from[]?;
+      .podSelector.matchLabels."app.kubernetes.io/name" == "agent-runner" and
+      .podSelector.matchLabels."app.kubernetes.io/component" == "role-runtime" and
+      .podSelector.matchLabels."runtime.mattercodex.dev/managed" == "true") and
+    (any(.spec.ingress[].from[]?;
+      .podSelector.matchLabels."app.kubernetes.io/name" == "runtime-controller" and
+      .podSelector.matchLabels."app.kubernetes.io/component" == "hot-runtime") | not)
+  ' >/dev/null || fail 'managed role runtime provider path is absent from egress gateway ingress'
+
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$render_file" |
   jq -e '
     (.spec.template.spec.containers[] | select(.name == "control-plane") | .env) as $env |
