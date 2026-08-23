@@ -226,9 +226,11 @@ Fresh install использует одну baseline migration `control_plane_ba
 Legacy aliases, backfill, cutover, dual read/write и migration jobs отсутствуют.
 Bootstrap идемпотентно создаёт organization, initial owner membership contract,
 system assistant, core prompt, platform capabilities, built-in integration
-definitions, default runtime policy и system policies. Повтор с теми же stable
-keys сверяет immutable content; расхождение требует controlled revision, а не
-перезапись.
+definitions, default runtime policy и system policies. Повтор после завершённого
+bootstrap сверяет защищённые revision, digest и content core prompt: новая
+поставляемая revision применяется forward-only, а rollback либо конфликт одной
+revision закрывают startup. Остальные baseline-записи принадлежат installation
+schema/release и повторно не создаются и не перезаписываются.
 
 ## Профили готовности
 
