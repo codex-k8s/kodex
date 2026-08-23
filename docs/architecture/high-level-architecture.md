@@ -4,7 +4,7 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.4
+version: 1.1.5
 updated: 2026-08-23
 ---
 
@@ -28,9 +28,10 @@ flowchart LR
     RC[Runtime Controller] -- generated protected gRPC --> CP
     RC --> K8S[Kubernetes API]
     K8S --> AR[Role image Pod + agent-runner]
-    AR --> AI[Поставщик среды выполнения ИИ]
+    AR --> EG[Platform Egress Gateway]
+    EG --> AI[Поставщик среды выполнения ИИ]
     AR --> MG[Шлюз интеграций MCP]
-    MG --> EG[Platform Egress Gateway]
+    MG --> EG
     EG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
     AR --> CP
@@ -121,11 +122,12 @@ Integration metadata, grants, approval policy и долговечные Human Ga
 ## Platform Egress Gateway
 
 Предоставляет namespace-local HTTP CONNECT Service для разрешённого
-исходящего HTTPS-трафика `integration-gateway`. Он сопоставляет exact CONNECT
-authority, фактический TLS ClientHello SNI и immutable policy, самостоятельно
-получает bounded A/AAAA snapshot и выполняет dial только к повторно
-проверенному literal IP. Gateway не завершает TLS: CA/hostname verification и
-application credentials остаются end-to-end у consumer.
+исходящего HTTPS-трафика role Pod, `integration-gateway`, optional
+`interaction-gateway` и доверенного release materializer. Он сопоставляет
+exact CONNECT authority, фактический TLS ClientHello SNI и immutable policy,
+самостоятельно получает bounded A/AAAA snapshot и выполняет dial только к
+повторно проверенному literal IP. Gateway не завершает TLS: CA/hostname
+verification и application credentials остаются end-to-end у consumer.
 Один consumer proxy URL на `8080` дополнительно принимает только bodyless
 `GET /readyz` без query и возвращает `204` по тому же ACTIVE/READY state;
 technical `/livez`, `/readyz`, `/metrics`, `/policy` на `9090` остаются
