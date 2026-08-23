@@ -96,6 +96,10 @@ OWNER_GATE_NODE_ROLE:
   other: Result review
 ARTIFACT_UPLOADED:
   other: File uploaded
+ARTIFACT_DOWNLOADED:
+  other: File downloaded
+ARTIFACT_PREVIEWED:
+  other: File preview opened
 RUN_TURN_STARTED:
   other: The AI employee started working
 ROLE_IMAGE_RECIPE_CHANGED:
@@ -188,6 +192,8 @@ ASSISTANT_TURN_ACCEPTED:
   other: Assistant command accepted
 ASSISTANT_PLAN_APPLIED:
   other: Assistant plan applied
+ASSISTANT_PLAN_PROPOSED:
+  other: Assistant change plan proposed
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Assistant instruction supplement updated
 ASSISTANT_RECOVERY_REQUESTED:
@@ -244,6 +250,22 @@ ROOT_PROCESS_COMPLETED:
   other: Root process completed
 OWNER_CHANGES_QUEUED:
   other: Requested changes queued for the AI employee
+PLATFORM_ACCESS_UPDATED:
+  other: Platform access updated
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: Mattermost message already processed
+MATTERMOST_GATE_COMMAND_HELP:
+  other: Mattermost decision command was not recognized
+MATTERMOST_GATE_RESOLVED:
+  other: Mattermost decision accepted
+MATTERMOST_GATE_STALE:
+  other: The decision was already made elsewhere
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: The Mattermost message has no single configured recipient
+MATTERMOST_INBOUND_RUN:
+  other: Mattermost task
+MATTERMOST_RUN_ACCEPTED:
+  other: Mattermost task accepted
 WEB_ONLY_CORE_SUMMARY:
   other: Core features work independently of external integrations
 CAPABILITY_PROJECT_MANAGE_NAME:

@@ -96,6 +96,10 @@ OWNER_GATE_NODE_ROLE:
   other: Проверка результата
 ARTIFACT_UPLOADED:
   other: Файл загружен
+ARTIFACT_DOWNLOADED:
+  other: Файл скачан
+ARTIFACT_PREVIEWED:
+  other: Предпросмотр файла открыт
 RUN_TURN_STARTED:
   other: ИИ-сотрудник начал работу
 ROLE_IMAGE_RECIPE_CHANGED:
@@ -188,6 +192,8 @@ ASSISTANT_TURN_ACCEPTED:
   other: Команда помощнику принята
 ASSISTANT_PLAN_APPLIED:
   other: План помощника применён
+ASSISTANT_PLAN_PROPOSED:
+  other: Помощник подготовил план изменений
 ASSISTANT_INSTRUCTIONS_UPDATED:
   other: Дополнение к инструкциям помощника обновлено
 ASSISTANT_RECOVERY_REQUESTED:
@@ -244,6 +250,22 @@ ROOT_PROCESS_COMPLETED:
   other: Корневой процесс завершён
 OWNER_CHANGES_QUEUED:
   other: Запрошенные изменения поставлены ИИ-сотруднику в очередь
+PLATFORM_ACCESS_UPDATED:
+  other: Доступ к платформе обновлён
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: Сообщение Mattermost уже обработано
+MATTERMOST_GATE_COMMAND_HELP:
+  other: Команда решения Mattermost не распознана
+MATTERMOST_GATE_RESOLVED:
+  other: Решение из Mattermost принято
+MATTERMOST_GATE_STALE:
+  other: Решение уже принято в другой поверхности
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: Для входящего сообщения Mattermost не настроен единственный получатель
+MATTERMOST_INBOUND_RUN:
+  other: Задание из Mattermost
+MATTERMOST_RUN_ACCEPTED:
+  other: Задание из Mattermost принято
 WEB_ONLY_CORE_SUMMARY:
   other: Основные функции работают независимо от внешних интеграций
 CAPABILITY_PROJECT_MANAGE_NAME:

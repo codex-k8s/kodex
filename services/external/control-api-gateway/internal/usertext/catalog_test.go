@@ -2,11 +2,17 @@ package usertext
 
 import (
 	"bufio"
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
 )
+
+var controlPlaneMessagePattern = regexp.MustCompile(`i18n:([A-Z][A-Z0-9_]*)`)
 
 func TestCatalogContainsTheSameResolvedMessagesForEveryLocale(t *testing.T) {
 	t.Parallel()
@@ -27,6 +33,48 @@ func TestCatalogContainsTheSameResolvedMessagesForEveryLocale(t *testing.T) {
 				t.Errorf("message %s is unresolved for locale %s", messageID, locale)
 			}
 		}
+	}
+}
+
+func TestCatalogContainsEveryStaticControlPlaneMessage(t *testing.T) {
+	t.Parallel()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve user text test path")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../../../"))
+	controlPlaneRoot := filepath.Join(root, "services/internal/control-plane")
+	available := stringSet(catalogKeys(t, "messages/problems.en.yaml"))
+	used := map[string]struct{}{}
+	err := filepath.WalkDir(controlPlaneRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".go" && filepath.Ext(path) != ".sql" {
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, match := range controlPlaneMessagePattern.FindAllSubmatch(raw, -1) {
+			used[string(match[1])] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan control-plane user text identifiers: %v", err)
+	}
+	missing := make([]string, 0)
+	for messageID := range used {
+		if _, ok := available[messageID]; !ok {
+			missing = append(missing, messageID)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Fatalf("control-plane messages are absent from the owner locale catalog: %v", missing)
 	}
 }
 
@@ -54,4 +102,12 @@ func catalogKeys(t *testing.T, path string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func stringSet(values []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		result[value] = struct{}{}
+	}
+	return result
 }
