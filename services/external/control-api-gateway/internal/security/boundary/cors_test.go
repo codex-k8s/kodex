@@ -2,12 +2,26 @@ package boundary
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+
+	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 )
+
+func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
+	statusCode, code, retryable := authenticationProblem(oidcauth.ErrSigningKeysUnavailable)
+	if statusCode != http.StatusServiceUnavailable || code != "UNAVAILABLE" || !retryable {
+		t.Fatalf("JWKS outage mapping = %d/%s/%t", statusCode, code, retryable)
+	}
+	statusCode, code, retryable = authenticationProblem(errors.New("invalid bearer"))
+	if statusCode != http.StatusUnauthorized || code != "UNAUTHENTICATED" || retryable {
+		t.Fatalf("invalid bearer mapping = %d/%s/%t", statusCode, code, retryable)
+	}
+}
 
 func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "https://control-api.mattercodex.local/api/v1/session", nil)

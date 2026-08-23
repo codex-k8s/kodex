@@ -125,7 +125,8 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return boundary.verifier.VerifyAuthorization(deadline, request.Header.Get("Authorization"))
 			}()
 			if err != nil {
-				writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+				statusCode, code, retryable := authenticationProblem(err)
+				writeProblem(writer, statusCode, code, retryable)
 				return
 			}
 			subjectKey := principal.OrganizationID + ":" + principal.Subject
@@ -153,7 +154,8 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			return boundary.authenticate(request)
 		}()
 		if err != nil {
-			writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+			statusCode, code, retryable := authenticationProblem(err)
+			writeProblem(writer, statusCode, code, retryable)
 			return
 		}
 		subjectKey := identity.OrganizationID + ":" + identity.Subject
@@ -346,6 +348,9 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		return Identity{}, session.Claims{}, err
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+		return Identity{}, session.Claims{}, err
+	}
 	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
 		principal.SessionRevision != claims.SessionRevision {
 		return Identity{}, session.Claims{}, errors.New("owner session binding is invalid")
@@ -355,6 +360,13 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
 		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
 	}, claims, nil
+}
+
+func authenticationProblem(err error) (int, string, bool) {
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+		return http.StatusServiceUnavailable, "UNAVAILABLE", true
+	}
+	return http.StatusUnauthorized, "UNAUTHENTICATED", false
 }
 
 func (boundary *Boundary) verifyCSRF(request *http.Request, claims session.Claims) bool {

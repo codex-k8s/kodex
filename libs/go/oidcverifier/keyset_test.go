@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,6 +13,18 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 )
+
+func TestBoundedKeySetRejectsVerificationBeforeFirstSnapshot(t *testing.T) {
+	t.Parallel()
+
+	set := newBoundedKeySet(&http.Client{Timeout: time.Millisecond}, "http://127.0.0.1:1/jwks")
+	if err := set.Refresh(t.Context()); err == nil {
+		t.Fatal("недоступный начальный JWKS был принят")
+	}
+	if err := set.verificationError(); !errors.Is(err, ErrSigningKeysUnavailable) {
+		t.Fatalf("начальное отсутствие JWKS = %v, ожидается typed unavailable", err)
+	}
+}
 
 func TestBoundedKeySetStopsAfterLastKnownGoodWindow(t *testing.T) {
 	t.Parallel()
@@ -40,8 +53,8 @@ func TestBoundedKeySetStopsAfterLastKnownGoodWindow(t *testing.T) {
 		t.Fatalf("degraded deadline = %v %t", deadline, degraded)
 	}
 	now = now.Add(lastKnownGoodWindow + time.Second)
-	if _, err := set.VerifySignature(t.Context(), "not-a-token"); err == nil {
-		t.Fatal("expired last-known-good keys were accepted")
+	if _, err := set.VerifySignature(t.Context(), "not-a-token"); !errors.Is(err, ErrSigningKeysUnavailable) {
+		t.Fatalf("истёкшие last-known-good ключи вернули %v, ожидается typed unavailable", err)
 	}
 }
 

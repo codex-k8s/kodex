@@ -16,6 +16,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
+	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/google/uuid"
 )
@@ -311,8 +312,11 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	credentialDigest := sha256.Sum256([]byte(credential))
 	if producer.CallerWorkloadID == "control-api-gateway" {
 		verified, err := service.oidc.VerifyToken(ctx, credential)
+		if errors.Is(err, oidcverifier.ErrSigningKeysUnavailable) {
+			return ResolveResult{}, domainerrs.ErrUnavailable
+		}
 		if err != nil {
-			return ResolveResult{}, errors.New("OIDC application credential is rejected")
+			return ResolveResult{}, domainerrs.ErrUnauthorized
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = verified.Subject, verified.OrganizationID
 		principal.ExternalDisplayName, principal.ExternalEmailHint = verified.DisplayName, verified.EmailHint

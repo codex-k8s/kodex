@@ -29,6 +29,11 @@ const (
 	unknownUserName     = "i18n:OIDC_USER_NAME"
 )
 
+// ErrSigningKeysUnavailable отделяет недоступность авторитетного набора ключей
+// от некорректного bearer. Transport boundary возвращает для неё typed
+// Unavailable, не маскируя отказ соседней системы как ошибку пользователя.
+var ErrSigningKeysUnavailable = errors.New("OIDC signing keys are unavailable")
+
 type Config struct {
 	Issuer         string
 	Audience       string
@@ -134,9 +139,12 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 		},
 	}
 	keys := newBoundedKeySet(client, config.JWKSURL)
-	if err := keys.Refresh(ctx); err != nil {
+	// JWKS является соседней identity dependency, а не startup/readiness
+	// authority текущего процесса. До первого успешного refresh verifier
+	// остаётся fail-closed и рабочий запрос получает typed Unavailable.
+	if refreshErr := keys.Refresh(ctx); refreshErr != nil && ctx.Err() != nil {
 		base.CloseIdleConnections()
-		return nil, errors.New("initialize OIDC signing keys")
+		return nil, ctx.Err()
 	}
 	return &Verifier{
 		verifier:  coreoidc.NewVerifier(config.Issuer, keys, &coreoidc.Config{ClientID: config.Audience, SupportedSigningAlgs: []string{"RS256"}}),
@@ -158,11 +166,20 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	if verifier == nil || raw == "" || len(raw) > maximumBearerBytes || strings.TrimSpace(raw) != raw {
 		return Principal{}, errors.New("OIDC bearer is invalid")
 	}
+	if err := verifier.keys.verificationError(); err != nil {
+		return Principal{}, err
+	}
 	token, err := verifier.verifier.Verify(ctx, raw)
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return Principal{}, err
 	}
-	if err != nil || token.Expiry.IsZero() {
+	if err != nil {
+		if availabilityErr := verifier.keys.verificationError(); availabilityErr != nil {
+			return Principal{}, availabilityErr
+		}
+		return Principal{}, errors.New("OIDC bearer is invalid")
+	}
+	if token.Expiry.IsZero() {
 		return Principal{}, errors.New("OIDC bearer is invalid")
 	}
 	if deadline, degraded := verifier.keys.DegradedDeadline(); degraded && token.Expiry.After(deadline) {

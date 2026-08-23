@@ -151,7 +151,7 @@ func (set *boundedKeySet) VerifySignature(_ context.Context, raw string) ([]byte
 	now := set.now().UTC()
 	set.mutex.RUnlock()
 	if blocked || len(keys.Keys) == 0 || degraded && !now.Before(deadline) {
-		return nil, errors.New("OIDC signing keys are unavailable")
+		return nil, ErrSigningKeysUnavailable
 	}
 	signed, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil || len(signed.Signatures) != 1 {
@@ -170,6 +170,15 @@ func (set *boundedKeySet) VerifySignature(_ context.Context, raw string) ([]byte
 		return nil, errors.New("OIDC signature is invalid")
 	}
 	return payload, nil
+}
+
+func (set *boundedKeySet) verificationError() error {
+	set.mutex.RLock()
+	defer set.mutex.RUnlock()
+	if set.blocked || len(set.keys.Keys) == 0 || set.degraded && !set.now().UTC().Before(set.lastSuccess.Add(lastKnownGoodWindow)) {
+		return ErrSigningKeysUnavailable
+	}
+	return nil
 }
 
 func validKeyTime(key jose.JSONWebKey, now time.Time) bool {
