@@ -46,6 +46,8 @@ var (
 	bootstrapComponentChangeScheduleAfterClaimQuery string
 	//go:embed testdata/sql/bootstrap_component_expire_schedule_claim.sql
 	bootstrapComponentExpireScheduleClaimQuery string
+	//go:embed testdata/sql/bootstrap_component_schedule_target_state_readback.sql
+	bootstrapComponentScheduleTargetStateReadbackQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -697,6 +699,50 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 	}
 	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleOccurrenceReadbackQuery, stringMap(claims[0], "occurrenceRef")).Scan(&occurrenceState, &leaseCleared, &runSource); err != nil || occurrenceState != "CANCELLED" || !leaseCleared {
 		t.Fatalf("cancel schedule occurrence with run: state=%q lease_cleared=%t err=%v", occurrenceState, leaseCleared, err)
+	}
+
+	targetSchedule, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateSchedule, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "schedule-create-target-disable"},
+		Payload: command.ScheduleInput{ProjectRef: project.Project.Ref, Name: "Target lifecycle accounting summary", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "DAILY", TimeOfDay: "10:00", Timezone: "Europe/Saratov", Input: map[string]any{"task": "Prepare a bounded lifecycle summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+	})
+	if err != nil || targetSchedule.Schedule == nil {
+		t.Fatalf("create target lifecycle schedule: schedule=%#v err=%v", targetSchedule.Schedule, err)
+	}
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentMakeScheduleDueQuery, targetSchedule.Schedule.Ref); err != nil {
+		t.Fatalf("make target lifecycle schedule due: %v", err)
+	}
+	targetClaims, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-target-lifecycle-component", 1)
+	if err != nil || len(targetClaims) != 1 {
+		t.Fatalf("claim target lifecycle schedule: claims=%#v err=%v", targetClaims, err)
+	}
+	agentVersion := agent.Version
+	disabledAgent, err := service.Execute(ctx, command.Command{
+		Kind: command.SetAgentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-disable-target-agent", ExpectedVersion: &agentVersion},
+		Payload:  command.AgentInput{Ref: agent.Ref, Enabled: false},
+	})
+	if err != nil || disabledAgent.Agent == nil || disabledAgent.Agent.Enabled {
+		t.Fatalf("disable scheduled target agent: agent=%#v err=%v", disabledAgent.Agent, err)
+	}
+	var scheduleEnabled bool
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleTargetStateReadbackQuery, targetSchedule.Schedule.Ref, stringMap(targetClaims[0], "occurrenceRef")).Scan(&scheduleEnabled, &occurrenceState, &leaseCleared); err != nil || scheduleEnabled || occurrenceState != "CANCELLED" || !leaseCleared {
+		t.Fatalf("suspend schedule with disabled target: enabled=%t state=%q lease_cleared=%t err=%v", scheduleEnabled, occurrenceState, leaseCleared, err)
+	}
+	claimsAfterDisable, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-target-lifecycle-component", 1)
+	if err != nil || len(claimsAfterDisable) != 0 {
+		t.Fatalf("disabled target schedule was reclaimed: claims=%#v err=%v", claimsAfterDisable, err)
+	}
+	disabledAgentVersion := disabledAgent.Agent.Version
+	reenabledAgent, err := service.Execute(ctx, command.Command{
+		Kind: command.SetAgentEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-reenable-target-agent", ExpectedVersion: &disabledAgentVersion},
+		Payload:  command.AgentInput{Ref: agent.Ref, Enabled: true},
+	})
+	if err != nil || reenabledAgent.Agent == nil || !reenabledAgent.Agent.Enabled {
+		t.Fatalf("reenable scheduled target agent: agent=%#v err=%v", reenabledAgent.Agent, err)
+	}
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleTargetStateReadbackQuery, targetSchedule.Schedule.Ref, stringMap(targetClaims[0], "occurrenceRef")).Scan(&scheduleEnabled, &occurrenceState, &leaseCleared); err != nil || scheduleEnabled {
+		t.Fatalf("target reenable implicitly enabled schedule: enabled=%t err=%v", scheduleEnabled, err)
 	}
 }
 

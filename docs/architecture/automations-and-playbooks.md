@@ -80,8 +80,12 @@ Automation-scheduler не вычисляет cron lifecycle и не создаё
 3. просит control-plane materialize-ить Run source `SCHEDULE`;
 4. фиксирует typed result либо отдаёт lease на bounded retry.
 
-Несколько replicas безопасны за счёт owner-side lock/claim. Cancel, disable,
-target archive и terminal occurrence закрывают leases/grants одной транзакцией.
+Несколько replicas безопасны за счёт owner-side lock/claim. Отключение или
+архивирование target атомарно приостанавливает связанные Schedule и закрывает
+ещё не материализованные claims. Обратное включение target не запускает
+Schedule скрыто: владелец включает каждое расписание явно. Уже
+материализованный Run продолжает работать по immutable snapshot, а его cancel
+и terminal occurrence закрывают leases/grants одной owner-транзакцией.
 Claim атомарно сохраняет immutable snapshot имени, target, schedule version и
 bounded input вместе с digest и заранее двигает `next_run_at`. Materialization
 использует только этот snapshot, поэтому параллельное изменение Schedule не

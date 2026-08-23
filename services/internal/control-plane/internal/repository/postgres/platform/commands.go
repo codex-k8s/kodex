@@ -672,8 +672,25 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	if err := tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if input.Kind == command.ArchiveAgent || input.Kind == command.SetAgentEnabled && !payload.Enabled {
+		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, item.ProjectRef, "AGENT", item.Ref); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	item.NextActions = agentActions(item, true, true)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "i18n:AGENT_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
+}
+
+func (repository *Repository) suspendTargetSchedules(ctx context.Context, tx pgx.Tx, scope scope, projectID, projectRef, targetType, targetRef string) error {
+	var suspended int64
+	var scheduleRef string
+	if err := tx.QueryRow(ctx, queryCommandsSuspendTargetSchedules, scope.organizationID, projectID, targetType, targetRef).Scan(&suspended, &scheduleRef); err != nil {
+		return errs.ErrUnavailable
+	}
+	if suspended == 0 {
+		return nil
+	}
+	return repository.emitPlatformEvent(ctx, tx, scope, "SCHEDULE_CHANGED", projectRef, scheduleRef, "i18n:SCHEDULE_UPDATED")
 }
 
 func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -927,6 +944,9 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 		tag, err := tx.Exec(ctx, queryCommandsChangeworkflowArchiveWorkflow, workflowID)
 		if err != nil || tag.RowsAffected() != 1 {
 			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, projectRef, "WORKFLOW", payload.Ref); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	workflow, readErr := scanWorkflow(tx.QueryRow(ctx, queryCommandsChangeworkflowSelectAuthoritativeReadback, scope.organizationID, payload.Ref), false)

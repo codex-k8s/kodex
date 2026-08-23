@@ -63,6 +63,8 @@ var (
 	queryCommandsChangeagentArchiveAgent string
 	//go:embed sql/commands_changeagent_select_agents_ref.sql
 	queryCommandsChangeagentSelectAgentsRef string
+	//go:embed sql/commands_suspend_target_schedules.sql
+	queryCommandsSuspendTargetSchedules string
 	//go:embed sql/commands_changeinstructions_select_agents_organization_id_ref.sql
 	queryCommandsChangeinstructionsSelectAgentsOrganizationIdRef string
 	//go:embed sql/commands_changeinstructions_select_next_draft_version.sql
