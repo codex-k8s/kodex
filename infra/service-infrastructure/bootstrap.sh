@@ -77,6 +77,33 @@ download_chart() {
   printf '%s\n' "$archive"
 }
 
+require_ready_deployment_by_selector() {
+  local namespace=$1
+  local selector=$2
+  local description=$3
+  local deployment_list deployment_name
+
+  deployment_list=$(kubectl -n "$namespace" get deployment -l "$selector" -o json) ||
+    fail "$description deployment query failed"
+  deployment_name=$(jq -er '
+    if (.items | length) == 1 then
+      .items[0].metadata.name
+    else
+      error("expected exactly one deployment")
+    end
+  ' <<<"$deployment_list") || fail "$description deployment is not unique"
+
+  kubectl -n "$namespace" rollout status "deployment/$deployment_name" --timeout=180s >/dev/null ||
+    fail "$description deployment rollout is incomplete"
+  kubectl -n "$namespace" get deployment "$deployment_name" -o json | jq -e '
+    (.spec.replicas // 0) > 0 and
+    .status.observedGeneration == .metadata.generation and
+    (.status.updatedReplicas // 0) == .spec.replicas and
+    (.status.readyReplicas // 0) == .spec.replicas and
+    (.status.availableReplicas // 0) == .spec.replicas
+  ' >/dev/null || fail "$description deployment is not fully ready"
+}
+
 if [[ "$mode" == apply-controllers ]]; then
   kubectl create namespace mattercodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
@@ -117,10 +144,15 @@ if [[ "$mode" == readback ]]; then
     kubectl get customresourcedefinition "$resource" >/dev/null 2>&1 ||
       fail "required CRD is absent: $resource"
   done
-  kubectl -n kube-system get daemonset mattercodex-secrets-store-csi-secrets-store-csi-driver >/dev/null
-  kubectl -n cert-manager get deployment trust-manager >/dev/null
-  kubectl -n vault-secrets-operator-system get deployment \
-    mattercodex-vault-secrets-operator-vault-secrets-operator-controller-manager >/dev/null
+  kubectl -n kube-system rollout status \
+    daemonset/mattercodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s >/dev/null ||
+    fail 'Secrets Store CSI Driver rollout is incomplete'
+  require_ready_deployment_by_selector cert-manager \
+    'app.kubernetes.io/instance=mattercodex-trust-manager,app.kubernetes.io/name=trust-manager' \
+    'trust-manager'
+  require_ready_deployment_by_selector vault-secrets-operator-system \
+    'app.kubernetes.io/instance=mattercodex-vault-secrets-operator,app.kubernetes.io/name=vault-secrets-operator,app.kubernetes.io/component=controller-manager' \
+    'Vault Secrets Operator'
   if kubectl get namespace mattercodex-system >/dev/null 2>&1; then
     kubectl -n mattercodex-system get statefulset vault >/dev/null
     kubectl -n mattercodex-system get service vault >/dev/null
