@@ -61,7 +61,6 @@ jobs:
           REGISTRY_PUSH: ${{ vars.MATTERCODEX_REGISTRY_PUSH }}
           NODE_PULL: ${{ vars.MATTERCODEX_NODE_PULL }}
           REPOSITORY_PREFIX: ${{ vars.MATTERCODEX_REPOSITORY_PREFIX }}
-          ADMISSION_TOOLS_IMAGE: ${{ vars.MATTERCODEX_ADMISSION_TOOLS_IMAGE }}
           DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
           REGISTRY_DOCKER_CONFIG_JSON: ${{ secrets.MATTERCODEX_RELEASE_REGISTRY_DOCKER_CONFIG_JSON }}
           HTTPS_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
@@ -81,7 +80,6 @@ jobs:
             --registry-push "$REGISTRY_PUSH"
             --node-pull "$NODE_PULL"
             --repository-prefix "${REPOSITORY_PREFIX:-mattercodex}"
-            --admission-tools-image "$ADMISSION_TOOLS_IMAGE"
             --profile "$DEPLOYMENT_PROFILE"
           )
           if [[ -n "${HTTPS_PROXY:-}" ]]; then

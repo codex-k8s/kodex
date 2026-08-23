@@ -10,7 +10,6 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --source-sha <40-hex> --output <release-lock.json>" \
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
-    '  --admission-tools-image <repository@sha256:digest>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
     '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' >&2
 }
@@ -20,7 +19,6 @@ output=""
 registry_push=""
 node_pull=""
 repository_prefix="mattercodex"
-admission_tools_image=""
 build_proxy=""
 build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
@@ -33,7 +31,6 @@ while (($# > 0)); do
     --registry-push) registry_push="${2:-}"; shift 2 ;;
     --node-pull) node_pull="${2:-}"; shift 2 ;;
     --repository-prefix) repository_prefix="${2:-}"; shift 2 ;;
-    --admission-tools-image) admission_tools_image="${2:-}"; shift 2 ;;
     --build-proxy) build_proxy="${2:-}"; shift 2 ;;
     --build-no-proxy) build_no_proxy="${2:-}"; shift 2 ;;
     --build-run-id) build_run_id="${2:-}"; shift 2 ;;
@@ -58,10 +55,6 @@ registry_push_host=${registry_push%%/*}
   fail 'registry push endpoint must use external HTTPS port 443'
 [[ "$repository_prefix" =~ ^[a-z0-9][a-z0-9._/-]*$ && "$repository_prefix" != */ && "$repository_prefix" != *//* ]] ||
   fail 'repository prefix is invalid'
-[[ "$admission_tools_image" =~ ^[a-z0-9][a-z0-9._:/-]*@sha256:[a-f0-9]{64}$ ]] ||
-  fail 'admission tools image must be an immutable pull reference'
-[[ "$admission_tools_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
-  fail 'admission tools image has a zero digest'
 [[ "$build_run_id" == local || "$build_run_id" =~ ^[0-9]+$ ]] || fail 'build run ID is invalid'
 if [[ -n "$build_proxy" || -n "$build_no_proxy" ]]; then
   [[ "$build_proxy" =~ ^https?://[^[:space:]]+$ && -n "$build_no_proxy" ]] ||
@@ -106,6 +99,28 @@ source_context="$temporary_directory/source"
 mkdir -p "$metadata_directory" "$source_context"
 git -C "$repository_root" archive "$source_sha" | tar -x -C "$source_context"
 
+admission_tools_component=image-admission-tools
+admission_tools_destination="$registry_push/$repository_prefix/$admission_tools_component:$source_sha"
+admission_tools_dockerfile=infra/admission-tools/Dockerfile
+[[ -f "$source_context/$admission_tools_dockerfile" ]] || fail 'admission tools Dockerfile is missing'
+"$buildctl_path" --addr "$buildkit_host" build \
+  --frontend dockerfile.v0 \
+  --local context="$source_context" \
+  --local dockerfile="$source_context/$(dirname -- "$admission_tools_dockerfile")" \
+  --opt filename="$(basename -- "$admission_tools_dockerfile")" \
+  --opt platform=linux/amd64 \
+  --opt "build-arg:SOURCE_SHA=$source_sha" \
+  "${proxy_frontend_options[@]}" \
+  --output "type=image,name=$admission_tools_destination,push=true" \
+  --metadata-file "$metadata_directory/$admission_tools_component.json"
+admission_tools_digest=$(jq -r '."containerimage.digest" // empty' \
+  "$metadata_directory/$admission_tools_component.json")
+[[ "$admission_tools_digest" =~ ^sha256:[a-f0-9]{64}$ && \
+  "$admission_tools_digest" != sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'BuildKit returned an invalid admission tools digest'
+admission_tools_build_ref="$registry_push/$repository_prefix/$admission_tools_component@$admission_tools_digest"
+admission_tools_pull_ref="$node_pull/$repository_prefix/$admission_tools_component@$admission_tools_digest"
+
 while IFS=$'\t' read -r component dockerfile target; do
   [[ "$component" =~ ^[a-z0-9-]+$ ]] || fail 'invalid component name'
   [[ "$dockerfile" == services/*/Dockerfile || "$dockerfile" == services/*/*/Dockerfile ]] ||
@@ -135,7 +150,7 @@ while IFS=$'\t' read -r component dockerfile target; do
   [[ -z "$target" ]] || target_options=(--opt "target=$target")
   component_options=()
   if [[ "$component" == image-admission ]]; then
-    component_options=(--opt "build-arg:ADMISSION_TOOLS_IMAGE=$admission_tools_image")
+    component_options=(--opt "build-arg:ADMISSION_TOOLS_IMAGE=$admission_tools_build_ref")
   elif [[ "$component" == role-base-documents ]]; then
     agent_runner_digest=$(jq -r '."containerimage.digest" // empty' "$metadata_directory/agent-runner.json")
     [[ "$agent_runner_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'agent-runner digest is unavailable for role base'
@@ -184,7 +199,6 @@ while IFS= read -r component; do
   mv "$images_json.next" "$images_json"
 done < <(jq -r '.images[].component' "$manifest")
 
-admission_tools_digest=${admission_tools_image##*@}
 jq -n \
   --arg profile "$profile" \
   --arg source_sha "$source_sha" \
@@ -192,7 +206,7 @@ jq -n \
   --arg registry_push "$registry_push" \
   --arg node_pull "$node_pull" \
   --arg repository_prefix "$repository_prefix" \
-  --arg admission_tools_ref "$admission_tools_image" \
+  --arg admission_tools_ref "$admission_tools_pull_ref" \
   --arg admission_tools_digest "$admission_tools_digest" \
   --arg role_input_repository "$repository_prefix/role-image-inputs" \
   --arg role_input_manifest_digest "$role_image_input_manifest_digest" \

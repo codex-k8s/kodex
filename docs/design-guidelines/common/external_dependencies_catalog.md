@@ -84,6 +84,9 @@ promoted system role image и always-hot runtime contract.
 | NATS JetStream | environment contract | durable domain-event transport |
 | `nsc` | `v2.15.0` | owner-side generation of fresh NATS operator, account and bounded user material |
 | `cosign` | `v3.1.3` | owner-side generation of image-signing material and runtime OCI verification |
+| `syft` | `v1.51.0` | формирование SBOM при admission role image |
+| `grype` | `v0.117.0` | проверка уязвимостей SBOM при admission role image |
+| `regctl` | `v0.11.5` | OCI readback, evidence artifacts и promotion role image |
 | Vault + Secrets Store CSI | pinned manifests/charts | workload-bound secret delivery без значений в manifests |
 | Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |
 | OpenTelemetry/Prometheus/Grafana | pinned manifests/release lock | telemetry и diagnostics |

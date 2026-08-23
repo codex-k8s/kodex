@@ -78,6 +78,12 @@ Release lock создаёт `tools/release/build-release.sh`. Поддержив
 `--profile web-with-mattermost`. Несмотря на историческое имя скрипта, параметр
 профиля является авторитетным.
 
+`build-release.sh` первым собирает закреплённый в репозитории
+`infra/admission-tools/Dockerfile`, получает digest из BuildKit metadata и
+только затем собирает остальные образы. Внешняя переменная с произвольным
+tools image не используется: build dependency и runtime pull reference
+материализуются из одного digest в том же release lock.
+
 Для `web-with-mattermost` render дополнительно требует
 `--mattermost-host <exact-dns>`. Он одновременно материализует installation-level
 allowlist interaction adapter и тот же exact destination в egress policy. В
