@@ -14,6 +14,9 @@ vi.mock("@/shared/config/runtime", () => ({
 vi.mock("@/shared/api/mutation", () => ({
   csrfToken: () => "csrf-test-value-with-sufficient-length-000000000000",
 }));
+vi.mock("@/shared/locale", () => ({
+  currentLocale: () => "ru",
+}));
 
 import { useRealtimeStore } from "@/features/realtime/store";
 
@@ -137,6 +140,7 @@ describe("realtime store", () => {
     store.openRun("run_realtime01");
     const socket = FakeWebSocket.instances[0];
     expect(socket).toBeDefined();
+    expect(socket?.url).toContain("locale=ru");
 
     socket?.open();
     expect(JSON.parse(socket?.sent[0] ?? "{}")).toMatchObject({
@@ -191,6 +195,32 @@ describe("realtime store", () => {
     expect(store.state.run_realtime01).toMatchObject({
       state: "connecting",
       attempt: 1,
+    });
+    store.closeAll();
+  });
+
+  it("сохраняет локализованную ошибку platform stream при reconnect", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    const socket = FakeWebSocket.instances[0];
+    expect(socket?.url).toContain("locale=ru");
+    socket?.open();
+    socket?.message({
+      type: "PROBLEM",
+      status: 503,
+      code: "PLATFORM_UNAVAILABLE",
+      title: "Обновления платформы временно недоступны",
+      retryable: true,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    socket?.close(1013, "PLATFORM_UNAVAILABLE");
+
+    expect(store.platformState).toMatchObject({
+      state: "offline",
+      attempt: 1,
+      problemCode: "PLATFORM_UNAVAILABLE",
+      problemTitle: "Обновления платформы временно недоступны",
     });
     store.closeAll();
   });

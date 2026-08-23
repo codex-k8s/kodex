@@ -4,8 +4,8 @@ title: ИИ-сотрудники и инструкции
 type: domain
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.0.1
+updated: 2026-08-23
 ---
 
 # ИИ-сотрудники и инструкции
@@ -46,7 +46,7 @@ parent, child, recipient policy и route.
 
 ## System Assistant
 
-Помощник MatterCodex — системный Agent со stable key `system.assistant`.
+Помощник MatterCodex — системный Agent со stable key `system-assistant`.
 Bootstrap создаёт один экземпляр, protected versioned core prompt и owner
 supplement. Domain constraints и команды запрещают delete, archive, disable,
 смену purpose и замену core prompt.

@@ -4,8 +4,8 @@ title: Межсервисная коммуникация и доменные с�
 type: guide
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-07-31
+version: 1.2.1
+updated: 2026-08-23
 ---
 
 # Межсервисная коммуникация и доменные события
@@ -259,7 +259,8 @@ NATS account/cluster либо утвержденным инфраструкту�
 
 ### Consumer
 
-Consumer использует durable pull consumer и explicit acknowledgement:
+Consumer с локальным долговечным эффектом использует durable pull consumer и
+explicit acknowledgement:
 
 ```text
 JetStream message
@@ -292,11 +293,23 @@ Consumer config задает:
 обязана сохранить сообщение или ссылку на него для расследования и повторного
 запуска. Broker redelivery не заменяет durable inbox.
 
+Единственное исключение для stateless owner-facing WebSocket fan-out допустимо,
+когда NATS-сообщение служит только bounded wake-сигналом и не создаёт локального
+бизнес-эффекта. Такой gateway не объявляет durable inbox или projection. Он
+после owner authorization читает события по sequence из авторитетного event
+store, периодически сверяет server-owned cursor, автоматически выполняет
+catch-up/resync после пропущенного сигнала и отдаёт browser только безопасные
+данные. AsyncAPI явно фиксирует `inbox: NONE_NO_LOCAL_DURABLE_EFFECT`, точный
+read path и механизм восстановления. Эта граница не разрешает volatile
+обработку события, создающего локальное состояние или внешний эффект.
+
 Машинный реестр перечисляет только фактически материализованные consumer
 событий. gRPC caller/producer profile не делает workload потребителем события.
 Для
-каждого consumer совпадают AsyncAPI operation/subject, deploy owner, effect,
-durable inbox/cursor, authority/read path и readiness; лишняя запись registry
+каждого effectful consumer совпадают AsyncAPI operation/subject, deploy owner,
+effect, durable inbox/cursor, authority/read path и readiness. Для stateless
+fan-out совпадают явно отсутствующий local effect/inbox, авторитетный read path
+и восстановление пропусков; лишняя запись registry
 считается ложной topology и закрыто отклоняется проверкой.
 
 ## Гарантии доставки

@@ -4,7 +4,7 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.3
+version: 1.1.4
 updated: 2026-08-23
 ---
 
@@ -24,7 +24,8 @@ flowchart LR
     CP --> OB[(Transactional Outbox)]
     OB --> NATS[NATS JetStream]
     AS[Планировщик автоматизаций] -- generated protected gRPC --> CP
-    NATS --> RC[Runtime Controller]
+    NATS -. wake-сигнал realtime .-> CAG
+    RC[Runtime Controller] -- generated protected gRPC --> CP
     RC --> K8S[Kubernetes API]
     K8S --> AR[Role image Pod + agent-runner]
     AR --> AI[Поставщик среды выполнения ИИ]
@@ -109,7 +110,11 @@ promoted OCI image окружения роли через rootless BuildKit. С�
 
 ## Шлюз интеграций
 
-Предоставляет MCP endpoint в области одной сессии. Он аутентифицирует сессию агента, вычисляет права, маскирует данные, создает запросы согласования и выполняет внешние действия от имени `IntegrationConnection`.
+Предоставляет MCP endpoint в области одной сессии. Он аутентифицирует сессию
+агента, проверяет выданный control-plane exact grant, маскирует данные и
+выполняет типизированные внешние действия от имени `IntegrationConnection`.
+Integration metadata, grants, approval policy и долговечные Human Gates
+остаются авторитетным состоянием control-plane.
 
 Опасные учетные данные остаются в шлюзе или хранилище секретов и не передаются в pod агента.
 
@@ -142,8 +147,11 @@ Pod напрямую и не использует Kubernetes CronJob как би
 ## Модель согласованности
 
 - Внутри доменного контекста используется транзакция PostgreSQL.
-- Между контекстами используются transactional outbox, broker-neutral relay,
-  NATS JetStream, durable PostgreSQL inbox/cursor и идемпотентные consumers.
+- Между контекстами с локальным долговечным эффектом используются
+  transactional outbox, broker-neutral relay, NATS JetStream, durable
+  PostgreSQL inbox/cursor и идемпотентные consumers. Stateless realtime
+  gateway использует NATS только как bounded wake-сигнал, а пропуски
+  восстанавливает через авторитетные event store/cursor control-plane.
 - Синхронный путь использует Proto/gRPC с deadline, mTLS/SPIFFE и подписанным
   authorization context.
 - Kubernetes, Mattermost и внешние API согласуются асинхронно с явным состоянием и повторами.

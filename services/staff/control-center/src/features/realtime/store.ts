@@ -8,6 +8,7 @@ import type {
 import { csrfToken } from "@/shared/api/mutation";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { usePlatformStore } from "@/features/platform/store";
+import { currentLocale } from "@/shared/locale";
 
 export type StreamState = "connecting" | "live" | "offline" | "recovering";
 
@@ -16,6 +17,7 @@ interface ConnectionState {
   attempt: number;
   lastHeartbeat?: string;
   problemCode?: string;
+  problemTitle?: string;
 }
 
 interface ActiveStream {
@@ -53,6 +55,7 @@ interface ReadyWire {
 interface ProblemWire {
   type: "PROBLEM";
   code: string;
+  title: string;
   retryable: boolean;
 }
 
@@ -161,6 +164,7 @@ function streamURL(runRef: string): string {
   const url = new URL(runtimeConfig().realtimeUrl);
   url.pathname = `${url.pathname.replace(/\/$/, "")}/runs/${encodeURIComponent(runRef)}/stream`;
   url.protocol = "wss:";
+  url.searchParams.set("locale", currentLocale());
   return url.toString();
 }
 
@@ -168,6 +172,7 @@ function platformStreamURL(): string {
   const url = new URL(runtimeConfig().realtimeUrl);
   url.pathname = `${url.pathname.replace(/\/$/, "")}/platform/stream`;
   url.protocol = "wss:";
+  url.searchParams.set("locale", currentLocale());
   return url.toString();
 }
 
@@ -185,8 +190,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
   function scheduleReconnect(runRef: string, stream: ActiveStream): void {
     if (stream.stopped) return;
     if (stream.timer !== undefined) window.clearTimeout(stream.timer);
-    const attempt = (state[runRef]?.attempt ?? 0) + 1;
-    state[runRef] = { state: "offline", attempt };
+    const previous = state[runRef];
+    const attempt = (previous?.attempt ?? 0) + 1;
+    state[runRef] = {
+      state: "offline",
+      attempt,
+      problemCode: previous?.problemCode,
+      problemTitle: previous?.problemTitle,
+    };
     const delay = Math.min(10_000, 500 * 2 ** Math.min(attempt, 5));
     stream.timer = window.setTimeout(() => connect(runRef, stream), delay);
   }
@@ -285,6 +296,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       } else if (
         type === "PROBLEM" &&
         typeof envelope.code === "string" &&
+        typeof envelope.title === "string" &&
         typeof envelope.retryable === "boolean"
       ) {
         const problem = envelope as unknown as ProblemWire;
@@ -292,6 +304,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
           state: problem.retryable ? "recovering" : "offline",
           attempt: previousAttempt,
           problemCode: problem.code,
+          problemTitle: problem.title,
         };
       }
     });
@@ -348,6 +361,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       state: "connecting",
       attempt: previousAttempt,
       problemCode: undefined,
+      problemTitle: undefined,
     });
     let socket: WebSocket;
     try {
@@ -451,6 +465,22 @@ export const useRealtimeStore = defineStore("realtime", () => {
               state: "live",
               attempt: 0,
               problemCode: undefined,
+              problemTitle: undefined,
+            });
+            return;
+          }
+          if (
+            envelope.type === "PROBLEM" &&
+            typeof envelope.code === "string" &&
+            typeof envelope.title === "string" &&
+            typeof envelope.retryable === "boolean"
+          ) {
+            const problem = envelope as unknown as ProblemWire;
+            Object.assign(platformState, {
+              state: problem.retryable ? "recovering" : "offline",
+              attempt: previousAttempt,
+              problemCode: problem.code,
+              problemTitle: problem.title,
             });
             return;
           }
@@ -468,6 +498,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
               attempt: 0,
               lastHeartbeat: envelope.serverTime,
               problemCode: undefined,
+              problemTitle: undefined,
             });
           }
         })
@@ -511,6 +542,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       attempt: 0,
       lastHeartbeat: undefined,
       problemCode: undefined,
+      problemTitle: undefined,
     });
   }
 

@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.0.1
 updated: 2026-08-23
 ---
 
@@ -69,7 +69,7 @@ hosts передаются параметрами deployment environment. Реп
 
 - повторный bootstrap не создаёт вторую Organization или системного помощника;
 - initial owner membership разрешается из проверенного OIDC subject;
-- stable key системного помощника — `system.assistant`;
+- stable key системного помощника — `system-assistant`;
 - core prompt version, built-in platform capabilities, integration definitions,
   runtime defaults и policies совпадают с shipped revision;
 - попытка delete/disable/archive помощника закрыто отклоняется;

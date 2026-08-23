@@ -2,12 +2,35 @@ package websockettransport
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/grpc"
 )
+
+type streamLocalizingRecorder struct{ *httptest.ResponseRecorder }
+
+func (recorder *streamLocalizingRecorder) Localize(messageID string) string {
+	return "accept-language:" + messageID
+}
+
+func (recorder *streamLocalizingRecorder) LocalizeFor(locale, messageID string) string {
+	return locale + ":" + messageID
+}
+
+func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
+	writer := &streamLocalizingRecorder{ResponseRecorder: httptest.NewRecorder()}
+	request := httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/platform/stream?locale=ru", nil)
+	if title := streamLocalizer(writer, request)("STREAM_UNAVAILABLE"); title != "ru:STREAM_UNAVAILABLE" {
+		t.Fatalf("selected locale was ignored: %q", title)
+	}
+	request = httptest.NewRequest(http.MethodGet, "https://owner.example.test/api/v1/platform/stream?locale=unexpected", nil)
+	if title := streamLocalizer(writer, request)("STREAM_UNAVAILABLE"); title != "accept-language:STREAM_UNAVAILABLE" {
+		t.Fatalf("unsupported locale did not use safe fallback: %q", title)
+	}
+}
 
 func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/platform/stream", nil)

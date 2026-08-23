@@ -1,14 +1,17 @@
 asyncapi: 3.0.0
 info:
   title: MatterCodex resumable owner streams
-  version: 2.1.0
+  version: 2.2.0
   description: |
     Защищённые owner-scoped WebSocket потоки запуска и общей конфигурации.
     Run stream восстанавливает упорядоченные deltas через авторитетный
     control-plane event store. Platform stream передаёт только безопасные
     invalidation-сигналы без project/aggregate refs; после разрыва клиент
     перечитывает доступные ему bounded read models через owner HTTP API.
-    Gateway получает live-сигналы из NATS и не становится владельцем состояния.
+    Gateway получает bounded wake-сигналы из NATS и не становится владельцем
+    состояния. Периодическая сверка с авторитетным cursor/event store
+    восстанавливает пропуск после reconnect NATS, даже если browser WebSocket
+    не разрывался.
 defaultContentType: application/json
 servers:
   owner:
@@ -20,6 +23,11 @@ servers:
     x-channel-subprotocols:
       runStream: [mattercodex.run.v1, csrf.<csrf-token>]
       platformStream: [mattercodex.platform.v1, csrf.<csrf-token>]
+    x-locale-query:
+      name: locale
+      values: [ru, en]
+      fallback: VERIFIED_ACCEPT_LANGUAGE
+      purpose: Локализация безопасного Problem.title в выбранной пользователем локали.
 channels:
   runStream:
     address: /runs/{runRef}/stream
@@ -65,16 +73,19 @@ operations:
     x-source:
       initialSnapshot: controlplane.v1.PlatformQueryService.GetRunGraph
       catchUp: controlplane.v1.PlatformQueryService.ListRunEvents
-      live: NATS_JETSTREAM_CONTROL_PLANE_RUN_EVENTS
+      liveWakeSignal: CORE_NATS_CONTROL_PLANE_RUN_EVENTS
+      durableSource: CONTROL_PLANE_RUN_EVENT_STORE
     x-delivery:
       mode: AT_LEAST_ONCE
       orderingKey: rootRunRef
       sequenceField: sequence
       duplicate: CLIENT_IGNORES_SEQUENCE_NOT_GREATER_THAN_APPLIED
       gap: CLIENT_SENDS_RESUME
-      unavailableCatchUp: SERVER_SENDS_RESYNC_THEN_AUTHORITATIVE_SNAPSHOT
+      unavailableCatchUp: SERVER_SENDS_LOCALIZED_PROBLEM_AND_CLOSES_1013
       reconnect: CLIENT_SENDS_LAST_APPLIED_SEQUENCE
-      overflow: PROBLEM_AND_CLOSE_1013
+      missedWakeSignal: HEARTBEAT_CATCH_UP_FROM_CONTROL_PLANE
+      unavailableRange: SERVER_SENDS_RESYNC_THEN_FRESH_AUTHORITATIVE_SNAPSHOT
+      overflow: COALESCED_WAKE_SIGNAL_THEN_AUTHORITATIVE_CATCH_UP
       progress: COALESCED_AND_BOUNDED
       maximumFrameBytes: 65536
     x-redaction:
@@ -103,16 +114,17 @@ operations:
     summary: Передать ordered invalidation без раскрытия чужих project metadata.
     x-source:
       cursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
-      live: NATS_JETSTREAM_CONTROL_PLANE_PLATFORM_EVENTS
+      liveWakeSignal: CORE_NATS_CONTROL_PLANE_PLATFORM_EVENTS
       state: OWNER_HTTP_API_AUTHORITATIVE_READS
     x-delivery:
       mode: AT_LEAST_ONCE
       orderingKey: organizationRef
       sequenceField: sequence
       duplicate: CLIENT_IGNORES_SEQUENCE_NOT_GREATER_THAN_APPLIED
-      gap: SERVER_CLOSES_AND_CLIENT_RELOADS_AUTHORIZED_BOUNDED_READ_MODELS
+      gap: SERVER_READS_AUTHORITATIVE_CURSOR_AND_CLIENT_RELOADS_AUTHORIZED_BOUNDED_READ_MODELS
       reconnect: CLIENT_SENDS_LAST_APPLIED_SEQUENCE
-      overflow: CLOSE_1013_BACKPRESSURE
+      missedWakeSignal: HEARTBEAT_CURSOR_CHECK_THEN_AUTHORITATIVE_RESYNC
+      overflow: AUTHORITATIVE_CURSOR_RESYNC
       maximumFrameBytes: 65536
     x-redaction:
       forwarded: [eventName, kind, sequence]
@@ -288,7 +300,7 @@ components:
       enum: [RETENTION_EXPIRED, GAP_DETECTED, PROJECTION_RECOVERED]
     ProblemCode:
       type: string
-      enum: [UNAUTHORIZED, FORBIDDEN, RUN_NOT_FOUND, RATE_LIMITED, GAP_UNRECOVERABLE, BACKPRESSURE, INTERNAL]
+      enum: [INTERNAL, INVALID_RESUME, PLATFORM_UNAVAILABLE, RUN_UNAVAILABLE, STREAM_UNAVAILABLE]
     RunGraph:
       type: object
       additionalProperties: false

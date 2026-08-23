@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: Доменные события web-first control-plane
-  version: 2.0.0
+  version: 2.1.0
   description: |
     Авторитетные безопасные факты универсального control-plane. События
     фиксируются с бизнес-состоянием в одной PostgreSQL-транзакции, публикуются
@@ -49,18 +49,15 @@ operations:
       deduplicationKey: eventId
       maximumPayloadBytes: 65536
     x-consumers:
-      - service: runtime-controller
-        effect: MATERIALIZE_OR_CANCEL_EXACT_RUNTIME_WORK
-        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
-        gap: DO_NOT_ACK_AND_READ_AUTHORITATIVE_EVENTS
       - service: control-api-gateway
-        effect: FORWARD_TO_AUTHORIZED_RUN_STREAMS
-        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+        effect: WAKE_AUTHORIZED_RUN_STREAM_CATCH_UP
+        subscription: EPHEMERAL_BOUNDED_CORE_NATS_SIGNAL
+        inbox: NONE_NO_LOCAL_DURABLE_EFFECT
+        durableSource: CONTROL_PLANE_RUN_EVENT_STORE
         gap: READ_CONTROL_PLANE_EVENTS_THEN_RESUME
+        missedSignal: PERIODIC_AUTHORITATIVE_CATCH_UP
+        readPath: controlplane.v1.PlatformQueryService.ListRunEvents
         ownership: CONTROL_PLANE_REMAINS_EVENT_STORE_OWNER
-      - service: automation-scheduler
-        effect: UPDATE_TARGET_TERMINAL_OBSERVATION
-        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
   publishPlatformEvent:
     action: send
     channel: { $ref: '#/channels/platformEvents' }
@@ -76,11 +73,13 @@ operations:
       maximumPayloadBytes: 65536
     x-consumers:
       - service: control-api-gateway
-        effect: INVALIDATE_OWNER_SCOPED_READ_MODEL_AND_PUSH_BOUNDED_DELTA
-        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
-      - service: runtime-controller
-        effect: REFRESH_PINNED_RUNTIME_CONFIGURATION_WHEN_APPLICABLE
-        inbox: DURABLE_POSTGRESQL_INBOX_AND_CURSOR
+        effect: WAKE_OWNER_SCOPED_AUTHORITATIVE_READ
+        subscription: EPHEMERAL_BOUNDED_CORE_NATS_SIGNAL
+        inbox: NONE_NO_LOCAL_DURABLE_EFFECT
+        durableSource: CONTROL_PLANE_PLATFORM_EVENT_CURSOR
+        gap: AUTHORITATIVE_CURSOR_RESYNC
+        missedSignal: PERIODIC_AUTHORITATIVE_CURSOR_CHECK
+        readPath: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
 components:
   messages:
     RunEvent:

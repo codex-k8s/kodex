@@ -25,6 +25,9 @@ const graph = computed(
     platform.graphs[run.value?.rootRunRef ?? runRef.value] ??
     platform.graphs[runRef.value],
 );
+const streamState = computed(
+  () => realtime.state[graph.value?.runRef ?? runRef.value],
+);
 const eventList = computed(() =>
   Object.values(
     platform.events[graph.value?.runRef ?? runRef.value] ?? {},
@@ -213,6 +216,13 @@ onBeforeUnmount(() => {
           :class="`live-indicator--${realtime.state[graph?.runRef ?? runRef]?.state ?? 'connecting'}`"
           >● {{ $t("runs.live") }}</span
         >
+      </div>
+      <div
+        v-if="streamState?.problemTitle"
+        class="offline-banner"
+        role="status"
+      >
+        {{ streamState.problemTitle }}
       </div>
       <ProblemNotice v-if="problem" :problem="problem" compact />
       <section

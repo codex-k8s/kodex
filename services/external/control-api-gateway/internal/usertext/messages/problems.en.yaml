@@ -38,6 +38,8 @@ INVALID_RESUME:
   other: The saved stream position is invalid
 STREAM_UNAVAILABLE:
   other: Live updates are temporarily unavailable
+PLATFORM_UNAVAILABLE:
+  other: Platform updates are temporarily unavailable
 GAP_UNRECOVERABLE:
   other: Some live updates are no longer available; the current state will be loaded again
 INTERACTION_DELIVERY_FAILED:

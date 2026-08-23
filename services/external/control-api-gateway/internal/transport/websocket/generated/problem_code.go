@@ -5,11 +5,9 @@ package generated
 type ProblemCode string
 
 const (
-	ProblemCodeUnauthorized     ProblemCode = "UNAUTHORIZED"
-	ProblemCodeForbidden        ProblemCode = "FORBIDDEN"
-	ProblemCodeRunNotFound      ProblemCode = "RUN_NOT_FOUND"
-	ProblemCodeRateLimited      ProblemCode = "RATE_LIMITED"
-	ProblemCodeGapUnrecoverable ProblemCode = "GAP_UNRECOVERABLE"
-	ProblemCodeBackpressure     ProblemCode = "BACKPRESSURE"
-	ProblemCodeInternal         ProblemCode = "INTERNAL"
+	ProblemCodeInternal            ProblemCode = "INTERNAL"
+	ProblemCodeInvalidResume       ProblemCode = "INVALID_RESUME"
+	ProblemCodePlatformUnavailable ProblemCode = "PLATFORM_UNAVAILABLE"
+	ProblemCodeRunUnavailable      ProblemCode = "RUN_UNAVAILABLE"
+	ProblemCodeStreamUnavailable   ProblemCode = "STREAM_UNAVAILABLE"
 )

@@ -4,8 +4,8 @@ title: Качество API и событийных контрактов
 type: guide
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-31
+version: 0.2.1
+updated: 2026-08-23
 ---
 
 # Качество API и событийных контрактов
@@ -37,9 +37,12 @@ updated: 2026-07-31
 Обработчик обязан выдерживать повторную доставку и неизвестные необязательные поля.
 
 Каждый `server`, `channel`, `operation`, `message`, `schema` и `enum` имеет
-полезное русское описание. Для каждой операции consumer явно указаны
+полезное русское описание. Для каждой операции effectful consumer явно указаны
 workload/owner, subject/stream, durable inbox/cursor, эффект, семантика
-duplicate/stale/gap, чтение/повторное присоединение и readiness. Реестр
+duplicate/stale/gap, чтение/повторное присоединение и readiness. Stateless
+WebSocket fan-out без локального эффекта явно указывает отсутствие inbox,
+авторитетный event store/cursor, периодическую сверку и автоматический
+catch-up/resync. Реестр
 перечисляет consumer только при наличии всех этих частей; профиль gRPC
 producer не подменяет операцию AsyncAPI.
 

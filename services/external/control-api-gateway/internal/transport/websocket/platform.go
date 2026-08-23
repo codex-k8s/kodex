@@ -61,6 +61,7 @@ type platformSignal struct {
 }
 
 func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *http.Request) {
+	localize := streamLocalizer(writer, request)
 	identity, ok := boundary.IdentityFromContext(request.Context())
 	if !ok {
 		httptransport.WriteLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
@@ -91,12 +92,12 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 	err = wsjson.Read(readContext, connection, &resume)
 	cancelRead()
 	if err != nil || resume.Type != "RESUME" || !safeRef.MatchString(resume.RequestRef) || resume.AfterSequence < 0 {
-		closeProblem(connection, "INVALID_RESUME")
+		server.closeProblem(streamContext, connection, "INVALID_RESUME", localize)
 		return
 	}
 	cursor, err := server.control.Query.GetPlatformEventCursor(streamContext, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || !safeRef.MatchString(cursor.GetOrganizationRef()) || cursor.GetCurrentSequence() < 0 {
-		closeProblem(connection, "PLATFORM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "PLATFORM_UNAVAILABLE", localize)
 		return
 	}
 	organizationRef := cursor.GetOrganizationRef()
@@ -117,12 +118,12 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 		}
 	})
 	if err != nil {
-		closeProblem(connection, "STREAM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "STREAM_UNAVAILABLE", localize)
 		return
 	}
 	defer subscription.Unsubscribe()
 	if err = server.nats.FlushTimeout(2 * time.Second); err != nil {
-		closeProblem(connection, "STREAM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "STREAM_UNAVAILABLE", localize)
 		return
 	}
 	// Повторный owner-scoped cursor read закрывает окно между eligibility read
@@ -130,7 +131,7 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 	// browser никогда не получает project/aggregate refs из org-wide subject.
 	cursor, err = server.control.Query.GetPlatformEventCursor(streamContext, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || cursor.GetOrganizationRef() != organizationRef || cursor.GetCurrentSequence() < 0 {
-		closeProblem(connection, "PLATFORM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "PLATFORM_UNAVAILABLE", localize)
 		return
 	}
 	latest := cursor.GetCurrentSequence()
@@ -158,15 +159,22 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 		case <-streamContext.Done():
 			return
 		case <-overflow:
-			closeProblem(connection, "BACKPRESSURE")
-			return
+			var synchronized bool
+			latest, synchronized = server.synchronizePlatformCursor(streamContext, connection, resume.RequestRef, organizationRef, latest, localize)
+			if !synchronized {
+				return
+			}
 		case signal := <-signals:
 			if signal.Sequence <= latest {
 				continue
 			}
 			if signal.Sequence != latest+1 {
-				closeProblem(connection, "GAP_UNRECOVERABLE")
-				return
+				var synchronized bool
+				latest, synchronized = server.synchronizePlatformCursor(streamContext, connection, resume.RequestRef, organizationRef, latest, localize)
+				if !synchronized {
+					return
+				}
+				continue
 			}
 			if !server.write(streamContext, connection, map[string]any{
 				"type":       "PLATFORM_INVALIDATED",
@@ -179,6 +187,13 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 			}
 			latest = signal.Sequence
 		case now := <-ticker.C:
+			// Сверка с server-owned cursor закрывает тихое окно потери Core NATS
+			// сигналов при broker reconnect без разрыва browser WebSocket.
+			var synchronized bool
+			latest, synchronized = server.synchronizePlatformCursor(streamContext, connection, resume.RequestRef, organizationRef, latest, localize)
+			if !synchronized {
+				return
+			}
 			if !server.write(streamContext, connection, map[string]any{
 				"type":           "PLATFORM_HEARTBEAT",
 				"serverTime":     now.UTC().Format(time.RFC3339Nano),
@@ -188,6 +203,27 @@ func (server *Server) ServePlatformHTTP(writer http.ResponseWriter, request *htt
 			}
 		}
 	}
+}
+
+func (server *Server) synchronizePlatformCursor(ctx context.Context, connection *websocket.Conn, requestRef, organizationRef string, latest int64, localize func(string) string) (int64, bool) {
+	cursor, err := server.control.Query.GetPlatformEventCursor(ctx, &controlplanev1.GetPlatformEventCursorRequest{})
+	if err != nil || cursor.GetOrganizationRef() != organizationRef || cursor.GetCurrentSequence() < latest {
+		server.closeProblem(ctx, connection, "PLATFORM_UNAVAILABLE", localize)
+		return latest, false
+	}
+	current := cursor.GetCurrentSequence()
+	if current == latest {
+		return latest, true
+	}
+	if !server.write(ctx, connection, map[string]any{
+		"type":            "PLATFORM_RESYNC_REQUIRED",
+		"requestRef":      requestRef,
+		"currentSequence": current,
+		"reason":          "AUTHORITATIVE_READ_REQUIRED",
+	}) {
+		return latest, false
+	}
+	return current, true
 }
 
 func decodePlatformSignal(payload []byte, organizationRef string) (platformSignal, bool) {

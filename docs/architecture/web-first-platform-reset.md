@@ -4,8 +4,8 @@ title: Целевая архитектура web-first платформы
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.0.1
+updated: 2026-08-23
 ---
 
 # Целевая архитектура web-first платформы
@@ -166,7 +166,7 @@ Mattermost adapter конкурируют за одну строку; `SELECT FO
 
 ## Системный помощник
 
-Bootstrap с stable key `system.assistant` создаёт ровно одного системного
+Bootstrap с stable key `system-assistant` создаёт ровно одного системного
 Agent, protected core prompt version, owner supplement, durable system Session
 и WarmRuntimeDesiredState. Database constraints и domain methods запрещают
 delete, archive, disable и смену system purpose.
@@ -196,8 +196,10 @@ Mattermost definition имеет независимые capabilities `INBOUND_ME
 ## Realtime
 
 Control-plane transaction сохраняет `RunEvent` и outbox envelope. Relay
-публикует события в NATS JetStream at least once. Gateway durable consumer
-фиксирует inbox/cursor до fan-out. Для browser stream:
+публикует события в NATS JetStream at least once. Stateless gateway использует
+событие как bounded wake-сигнал и не фиксирует локальный бизнес-эффект:
+авторитетными источниками восстановления остаются `RunEvent` store и platform
+cursor control-plane. Для browser stream:
 
 1. gateway авторизует Run через control-plane;
 2. получает snapshot и sequence;
@@ -205,6 +207,8 @@ Control-plane transaction сохраняет `RunEvent` и outbox envelope. Rela
 4. отправляет deltas строго по sequence;
 5. при gap запрашивает catch-up;
 6. при недоступном диапазоне заменяет state новым snapshot.
+7. на heartbeat сверяет авторитетный sequence/cursor и автоматически
+   восстанавливает сигнал, потерянный при reconnect NATS без разрыва WebSocket.
 
 Frontend reducer нормализует nodes/edges/events/gates/artifacts, игнорирует
 duplicate, обнаруживает gap и никогда не выводит terminal/nextActions локально.

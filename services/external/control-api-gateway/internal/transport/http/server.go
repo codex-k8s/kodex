@@ -68,6 +68,10 @@ func (writer *localizedResponseWriter) Localize(messageID string) string {
 	return writer.texts.Localize(writer.locale, messageID, nil)
 }
 
+func (writer *localizedResponseWriter) LocalizeFor(locale, messageID string) string {
+	return writer.texts.Localize(locale, messageID, nil)
+}
+
 func (writer *localizedResponseWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
 
 func (server *Server) localizationMiddleware(next http.Handler) http.Handler {

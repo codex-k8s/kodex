@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http"
+	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"github.com/nats-io/nats.go"
 )
 
@@ -51,15 +52,25 @@ type busEnvelope struct {
 	Sequence   int64  `json:"sequence"`
 }
 
+type streamProblemSpec struct {
+	status    int
+	retryable bool
+}
+
+var streamProblemSpecs = map[string]streamProblemSpec{
+	"INTERNAL":             {status: http.StatusInternalServerError},
+	"INVALID_RESUME":       {status: http.StatusBadRequest},
+	"PLATFORM_UNAVAILABLE": {status: http.StatusServiceUnavailable, retryable: true},
+	"RUN_UNAVAILABLE":      {status: http.StatusServiceUnavailable, retryable: true},
+	"STREAM_UNAVAILABLE":   {status: http.StatusServiceUnavailable, retryable: true},
+}
+
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	server.ServeRunHTTP(writer, request)
 }
 
 func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Request) {
-	localize := func(messageID string) string { return messageID }
-	if localized, ok := writer.(interface{ Localize(string) string }); ok {
-		localize = localized.Localize
-	}
+	localize := streamLocalizer(writer, request)
 	runRef := request.PathValue("runRef")
 	if !safeRef.MatchString(runRef) {
 		httptransport.WriteLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -92,17 +103,17 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 	err = wsjson.Read(readContext, connection, &resume)
 	cancelRead()
 	if err != nil || resume.Type != "RESUME" || !safeRef.MatchString(resume.RequestRef) || resume.AfterSequence < 0 {
-		closeProblem(connection, "INVALID_RESUME")
+		server.closeProblem(streamContext, connection, "INVALID_RESUME", localize)
 		return
 	}
 	snapshot, err := server.control.Query.GetRunGraph(streamContext, &controlplanev1.GetRunGraphRequest{RunRef: runRef})
 	if err != nil {
-		closeProblem(connection, "RUN_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "RUN_UNAVAILABLE", localize)
 		return
 	}
 	rootRef := snapshot.GetRun().GetRootRunRef()
 	if !safeRef.MatchString(rootRef) {
-		closeProblem(connection, "INTERNAL")
+		server.closeProblem(streamContext, connection, "INTERNAL", localize)
 		return
 	}
 	signals := make(chan int64, 1)
@@ -120,12 +131,12 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 		}
 	})
 	if err != nil {
-		closeProblem(connection, "STREAM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "STREAM_UNAVAILABLE", localize)
 		return
 	}
 	defer subscription.Unsubscribe()
 	if err = server.nats.FlushTimeout(2 * time.Second); err != nil {
-		closeProblem(connection, "STREAM_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "STREAM_UNAVAILABLE", localize)
 		return
 	}
 	// Повторное чтение после регистрации subscription закрывает окно между
@@ -133,7 +144,7 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 	// авторитетный control-plane; NATS только будит bounded catch-up.
 	snapshot, err = server.control.Query.GetRunGraph(streamContext, &controlplanev1.GetRunGraphRequest{RunRef: rootRef})
 	if err != nil {
-		closeProblem(connection, "RUN_UNAVAILABLE")
+		server.closeProblem(streamContext, connection, "RUN_UNAVAILABLE", localize)
 		return
 	}
 	currentSequence := snapshot.GetGraph().GetSequence()
@@ -151,10 +162,11 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 	} else {
 		latest, err = server.catchUp(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
 		if err != nil {
-			if !server.writeResync(streamContext, connection, resume.RequestRef, rootRef, resume.AfterSequence, "GAP_DETECTED") || !server.writeSnapshot(streamContext, connection, resume.RequestRef, rootRef, snapshot, localize) {
+			var recovered bool
+			latest, recovered = server.recoverRunGraph(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
+			if !recovered {
 				return
 			}
-			latest = currentSequence
 		}
 	}
 	if !server.write(streamContext, connection, map[string]any{"type": "STREAM_READY", "requestRef": resume.RequestRef, "runRef": rootRef, "latestSequence": latest}) {
@@ -169,11 +181,26 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 		case <-signals:
 			next, catchErr := server.catchUp(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
 			if catchErr != nil {
-				closeProblem(connection, "GAP_UNRECOVERABLE")
-				return
+				var recovered bool
+				next, recovered = server.recoverRunGraph(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
+				if !recovered {
+					return
+				}
 			}
 			latest = next
 		case now := <-ticker.C:
+			// Core NATS служит bounded live-сигналом. Авторитетный catch-up на
+			// heartbeat восстанавливает события, пропущенные при reconnect NATS,
+			// даже если browser WebSocket всё это время оставался открытым.
+			next, catchErr := server.catchUp(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
+			if catchErr != nil {
+				var recovered bool
+				next, recovered = server.recoverRunGraph(streamContext, connection, resume.RequestRef, rootRef, latest, localize)
+				if !recovered {
+					return
+				}
+			}
+			latest = next
 			if !server.write(streamContext, connection, map[string]any{"type": "HEARTBEAT", "serverTime": now.UTC().Format(time.RFC3339Nano), "latestSequence": latest}) {
 				return
 			}
@@ -195,6 +222,23 @@ func (server *Server) writeResync(ctx context.Context, connection *websocket.Con
 }
 
 type protocolSelection struct{ csrf string }
+
+func streamLocalizer(writer http.ResponseWriter, request *http.Request) func(string) string {
+	localize := func(messageID string) string { return messageID }
+	if localized, ok := writer.(interface{ Localize(string) string }); ok {
+		localize = localized.Localize
+	}
+	locale := request.URL.Query().Get("locale")
+	if locale != "ru" && locale != "en" {
+		return localize
+	}
+	if localized, ok := writer.(interface {
+		LocalizeFor(string, string) string
+	}); ok {
+		return func(messageID string) string { return localized.LocalizeFor(locale, messageID) }
+	}
+	return localize
+}
 
 func requestedProtocols(request *http.Request, baseProtocol string) (protocolSelection, bool) {
 	var result protocolSelection
@@ -228,6 +272,19 @@ func (server *Server) catchUp(ctx context.Context, connection *websocket.Conn, r
 		}
 		return nil
 	})
+}
+
+func (server *Server) recoverRunGraph(ctx context.Context, connection *websocket.Conn, requestRef, rootRef string, after int64, localize func(string) string) (int64, bool) {
+	snapshot, err := server.control.Query.GetRunGraph(ctx, &controlplanev1.GetRunGraphRequest{RunRef: rootRef})
+	if err != nil {
+		server.closeProblem(ctx, connection, "RUN_UNAVAILABLE", localize)
+		return after, false
+	}
+	if !server.writeResync(ctx, connection, requestRef, rootRef, after, "GAP_DETECTED") ||
+		!server.writeSnapshot(ctx, connection, requestRef, rootRef, snapshot, localize) {
+		return after, false
+	}
+	return snapshot.GetGraph().GetSequence(), true
 }
 
 func readCatchUp(ctx context.Context, client controlplanev1.PlatformQueryServiceClient, rootRef string, after int64, consume func(*controlplanev1.RunEvent) error) (int64, error) {
@@ -269,7 +326,20 @@ func (server *Server) write(ctx context.Context, connection *websocket.Conn, val
 	defer cancel()
 	return wsjson.Write(bounded, connection, value) == nil
 }
-func closeProblem(connection *websocket.Conn, code string) {
+
+func (server *Server) closeProblem(ctx context.Context, connection *websocket.Conn, code string, localize func(string) string) {
+	spec, known := streamProblemSpecs[code]
+	if !known {
+		code = "INTERNAL"
+		spec = streamProblemSpecs[code]
+	}
+	_ = server.write(ctx, connection, generated.ProblemEnvelope{
+		Type:      "PROBLEM",
+		Status:    spec.status,
+		Code:      generated.ProblemCode(code),
+		Title:     localize(code),
+		Retryable: spec.retryable,
+	})
 	_ = connection.Close(websocket.StatusTryAgainLater, code)
 }
 

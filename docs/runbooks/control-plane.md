@@ -4,7 +4,7 @@ title: Диагностика control-plane
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
+version: 2.0.1
 updated: 2026-08-23
 ---
 
@@ -34,7 +34,7 @@ down не используются.
 Проверить через owner API/audit, не прямым изменением SQL:
 
 - одну Organization и initial owner claim contract;
-- один Agent со stable key `system.assistant`;
+- один Agent со stable key `system-assistant`;
 - protected core prompt и owner supplement;
 - built-in capabilities, integration definitions и runtime defaults;
 - desired/observed warm assistant revision;

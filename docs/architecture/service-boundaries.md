@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.7
+version: 1.2.8
 updated: 2026-08-23
 ---
 
@@ -57,7 +57,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
 | `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
 | `interaction-gateway`    | optional external adapter       | independent inbound/notification/result-mirror/gate-decision deliveries                                                                     | core readiness, sessions, gates, artifacts и terminal Run state          |
-| `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
+| `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, credential isolation и provider effect receipts                                                          | integration metadata/grants, Human Gates, чужое domain state и agent orchestration |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
 | `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
 | `role-image-builder`     | job                             | trusted materialization, BuildKit execution, provenance и staging registry artifact                                                        | canonical build specification hash, SBOM/vulnerability/signature admission, promotion и role business state |

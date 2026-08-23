@@ -38,6 +38,8 @@ INVALID_RESUME:
   other: Сохранённая позиция потока некорректна
 STREAM_UNAVAILABLE:
   other: Динамические обновления временно недоступны
+PLATFORM_UNAVAILABLE:
+  other: Обновления платформы временно недоступны
 GAP_UNRECOVERABLE:
   other: Часть обновлений больше недоступна; актуальное состояние будет загружено заново
 INTERACTION_DELIVERY_FAILED:

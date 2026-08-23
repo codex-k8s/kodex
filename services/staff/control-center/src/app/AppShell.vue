@@ -300,6 +300,13 @@ onBeforeUnmount(() => {
     <div v-if="!online" class="offline-banner" role="status">
       {{ $t("app.offline") }}
     </div>
+    <div
+      v-else-if="realtime.platformState.problemTitle"
+      class="offline-banner"
+      role="status"
+    >
+      {{ realtime.platformState.problemTitle }}
+    </div>
 
     <aside class="sidebar" :class="{ 'sidebar--open': mobileOpen }">
       <RouterLink
