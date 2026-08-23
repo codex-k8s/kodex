@@ -11,10 +11,12 @@
 
 ## Целевой reset
 
-Зоны `services/external/**`, `services/internal/**`, `services/jobs/**` и
-`services/dev/**` остаются целевой структурой deployables. Legacy bot-service,
-compatibility facade, dual-write и cutover path в fresh-install профиле
-отсутствуют. Mattermost реализуется отдельным необязательным adapter unit.
+Зоны `services/external/**`, `services/internal/**`, `services/jobs/**`,
+`services/staff/**` и `services/dev/**` остаются целевой структурой deployables.
+Production Control Center размещается только в `services/staff/control-center`.
+Legacy bot-service, compatibility facade, dual-write и cutover path в
+fresh-install профиле отсутствуют. Mattermost реализуется отдельным
+необязательным adapter unit.
 
 ## Неизменные правила
 
