@@ -225,6 +225,12 @@ role и объекты Vault и не вправе переопределять a
 Неиспользуемый Vault Agent cache sidecar в этом профиле отключён, чтобы не было
 двух альтернативных путей доверия к Vault.
 
+Secrets Store CSI Driver обслуживает inline ephemeral volumes с
+`CSIDriver.fsGroupPolicy=File`. Kubelet применяет Pod `fsGroup` к secret files с
+mode `0440`; приложение остаётся non-root, а group/world root и world-readable
+secret modes не требуются. Bootstrap после Helm install и отдельный readback
+проверяют это фактически обслуживаемое cluster-scoped поле.
+
 ## PostgreSQL в Kubernetes и за его пределами
 
 Environment выбирает один явный data path:
