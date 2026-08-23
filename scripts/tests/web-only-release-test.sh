@@ -62,6 +62,12 @@ if yq -e '
 ' "$render_file" >/dev/null 2>&1; then
   fail 'web-only render materializes the optional interaction adapter'
 fi
+if yq -e '
+  select(.kind == "NetworkPolicy") |
+  select((.spec | tostring) | test("interaction-gateway|[Mm]attermost"))
+' "$render_file" >/dev/null 2>&1; then
+  fail 'web-only NetworkPolicy grants the optional interaction adapter'
+fi
 
 for stateful_set in mattercodex-postgresql mattercodex-nats; do
   STATEFUL_SET="$stateful_set" yq -e '

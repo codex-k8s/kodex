@@ -47,9 +47,6 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: interaction-gateway
       ports:
         - protocol: TCP
           port: 8443
