@@ -34,7 +34,7 @@ func newKubernetesReadinessObserver() *kubernetesReadinessObserver {
 	return &kubernetesReadinessObserver{now: time.Now}
 }
 
-func (observer *kubernetesReadinessObserver) Observe(err error) (available, changed, degraded bool) {
+func (observer *kubernetesReadinessObserver) Observe(err error, allowLastKnownGood bool) (available, changed, degraded bool) {
 	now := observer.now().UTC()
 	if err == nil {
 		changed = observer.degraded
@@ -44,6 +44,9 @@ func (observer *kubernetesReadinessObserver) Observe(err error) (available, chan
 	}
 	changed = !observer.degraded
 	observer.degraded = true
+	if !allowLastKnownGood {
+		return false, changed, true
+	}
 	available = !observer.lastSuccess.IsZero() && now.Before(observer.lastSuccess.Add(kubernetesLastKnownGoodWindow))
 	return available, changed, true
 }
@@ -157,7 +160,7 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 			kubernetesCheck, cancelKubernetes := context.WithTimeout(ctx, config.RequestTimeout)
 			kubernetesErr := manager.Check(kubernetesCheck)
 			cancelKubernetes()
-			kubernetesAvailable, kubernetesChanged, kubernetesDegraded := kubernetes.Observe(kubernetesErr)
+			kubernetesAvailable, kubernetesChanged, kubernetesDegraded := kubernetes.Observe(kubernetesErr, workload.AllowsLastKnownGoodObservation(kubernetesErr))
 			if kubernetesChanged {
 				if kubernetesDegraded {
 					logger.WarnContext(ctx, "Kubernetes runtime observation degraded", "error_class", "kubernetes")

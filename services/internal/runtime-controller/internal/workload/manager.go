@@ -89,9 +89,25 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 
 func (manager *Manager) Check(ctx context.Context) error {
 	if _, err := manager.client.CoreV1().Pods(manager.config.Namespace).List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
-		return errors.New("Kubernetes runtime namespace is unavailable")
+		return fmt.Errorf("Kubernetes runtime namespace observation failed: %w", err)
 	}
 	return nil
+}
+
+// AllowsLastKnownGoodObservation допускает короткое LKG-окно только для
+// временной недоступности transport/API server. Ошибка авторизации, целостности
+// TLS, неизвестная классификация и повреждённый ответ закрывают readiness сразу.
+func AllowsLastKnownGoodObservation(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || apierrors.IsTimeout(err) ||
+		apierrors.IsServerTimeout(err) || apierrors.IsServiceUnavailable(err) ||
+		apierrors.IsTooManyRequests(err) || apierrors.IsInternalError(err) {
+		return true
+	}
+	var networkError net.Error
+	return errors.As(err, &networkError) && (networkError.Timeout() || networkError.Temporary())
 }
 
 func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Context) error) error {
