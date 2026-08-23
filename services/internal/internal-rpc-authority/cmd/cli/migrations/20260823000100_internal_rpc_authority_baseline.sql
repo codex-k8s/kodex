@@ -158,6 +158,7 @@ SET row_security = off;
 -- Name: activate_readback_trust("text", "text", bigint, "text", bigint, "text", bigint, bigint, "text", "text", timestamp with time zone); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."activate_readback_trust"("p_root_id" "text", "p_root_fingerprint_sha256" "text", "p_manifest_bundle_revision" bigint, "p_manifest_bundle_digest_sha256" "text", "p_trust_source_revision" bigint, "p_trust_set_digest_sha256" "text", "p_trust_key_set_revision" bigint, "p_signer_generation" bigint, "p_predecessor_state_digest_sha256" "text", "p_served_state_digest_sha256" "text", "p_served_at" timestamp with time zone) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -260,6 +261,7 @@ BEGIN
     RETURN true;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -267,6 +269,7 @@ $_$;
 -- Name: apply_restore_fence("text", bigint, "text", "text", timestamp with time zone); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."apply_restore_fence"("p_database_cluster_id" "text", "p_restore_epoch" bigint, "p_phase" "text", "p_evidence_digest_sha256" "text", "p_safe_window_not_before" timestamp with time zone) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -329,6 +332,7 @@ BEGIN
     RETURN coalesce(applied, false);
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -336,6 +340,7 @@ $_$;
 -- Name: consume_authority_readback_attestation_challenge("uuid", "uuid", "uuid", "text", bigint, "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."consume_authority_readback_attestation_challenge"("p_challenge_id" "uuid", "p_receipt_id" "uuid", "p_evidence_jti" "uuid", "p_evidence_digest_sha256" "text", "p_verifier_generation" bigint, "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -479,6 +484,7 @@ BEGIN
     RETURN p_receipt_id;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -486,6 +492,7 @@ $_$;
 -- Name: issue_authority_readback_attestation_challenge("uuid", "uuid", "uuid", "text", "text", "uuid", "text", "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."issue_authority_readback_attestation_challenge"("p_intent_id" "uuid", "p_challenge_id" "uuid", "p_challenge_jti" "uuid", "p_challenge_nonce" "text", "p_challenge_digest_sha256" "text", "p_readback_credential_jti" "uuid", "p_readback_credential_digest_sha256" "text", "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -559,10 +566,12 @@ BEGIN
     RETURN accepted_id;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"("p_source_revision" bigint, "p_source_digest_sha256" "text", "p_key_set_revision" bigint, "p_policy_revision" bigint, "p_signer_generation" bigint, "p_predecessor_revision" bigint, "p_predecessor_digest_sha256" "text", "p_snapshot_compact_jws" "text", "p_publication_intent_id" "uuid", "p_publication_input_digest_sha256" "text", "p_expected_readback_count" integer, "p_published_at" timestamp with time zone) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -696,6 +705,7 @@ BEGIN
     RETURN true;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -703,6 +713,7 @@ $_$;
 -- Name: publisher_promote_snapshot("uuid", bigint, "text", integer); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -751,6 +762,7 @@ BEGIN
     RETURN FOUND;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -758,6 +770,7 @@ $_$;
 -- Name: reconcile_runtime_database_identity("text", "text", bigint, "text", "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -851,6 +864,7 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -858,6 +872,7 @@ $_$;
 -- Name: record_database_credential_session_readback("text", "uuid"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") RETURNS "text"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -921,6 +936,7 @@ BEGIN
     RETURN identity.lifecycle_status;
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -928,6 +944,7 @@ $_$;
 -- Name: retire_runtime_database_identity("text", "text", bigint, "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -1008,6 +1025,7 @@ BEGIN
     RETURN coalesce(accepted, false);
 END
 $_$;
+-- +goose StatementEnd
 
 
 
@@ -1015,6 +1033,7 @@ $_$;
 -- Name: runtime_restore_fence_allows_work(); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."runtime_restore_fence_allows_work"() RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -1030,6 +1049,7 @@ CREATE FUNCTION "internal_rpc_authority"."runtime_restore_fence_allows_work"() R
        )
     FROM internal_rpc_authority.authority_restore_fences AS fence;
 $$;
+-- +goose StatementEnd
 
 
 
@@ -1037,6 +1057,7 @@ $$;
 -- Name: validate_snapshot_attestation_receipt("uuid", "text", bigint, "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
+-- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."validate_snapshot_attestation_receipt"("p_receipt_id" "uuid", "p_workload_id" "text", "p_source_revision" bigint, "p_source_digest_sha256" "text") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
@@ -1072,6 +1093,7 @@ CREATE FUNCTION "internal_rpc_authority"."validate_snapshot_attestation_receipt"
           AND intent.served_state_digest_sha256 = p_source_digest_sha256
     );
 $$;
+-- +goose StatementEnd
 
 
 

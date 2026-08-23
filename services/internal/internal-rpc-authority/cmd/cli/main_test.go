@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -82,6 +83,31 @@ func TestFreshInstallContainsOneAuthorityBaseline(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0] != baselineMigration {
 		t.Fatalf("unexpected fresh migration set: %v", entries)
+	}
+}
+
+func TestBaselineWrapsEveryFunctionForGoose(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(baselineMigration)
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	text := string(content)
+	createFunctionPrefix := "CREATE " + "FUNCTION "
+	functionCount := strings.Count(text, createFunctionPrefix)
+	wrappedFunctionPattern := regexp.MustCompile(
+		`(?s)-- \+goose StatementBegin\s+` +
+			regexp.QuoteMeta(createFunctionPrefix) +
+			`.*?(?:\$_\$|\$\$);\s+-- \+goose StatementEnd`,
+	)
+	wrappedFunctionCount := len(wrappedFunctionPattern.FindAllString(text, -1))
+	if functionCount == 0 || wrappedFunctionCount != functionCount {
+		t.Fatalf(
+			"Goose function boundaries = %d, want %d",
+			wrappedFunctionCount,
+			functionCount,
+		)
 	}
 }
 
