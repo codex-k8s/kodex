@@ -4,7 +4,8 @@ set -euo pipefail
 registry_service_cidr=${1:-}
 registry_endpoint_cidr=${2:-}
 registry_namespace=${3:-}
-output=${4:-}
+release_registry_host=${4:-}
+output=${5:-}
 valid_ipv4_cidr() {
   local cidr=$1 address first second third fourth
   [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]] || return 1
@@ -12,11 +13,26 @@ valid_ipv4_cidr() {
   IFS=. read -r first second third fourth <<<"$address"
   ((first <= 255 && second <= 255 && third <= 255 && fourth <= 255))
 }
+valid_dns_host() {
+  local host=$1 label
+  local -a labels=()
+
+  [[ ${#host} -le 253 && "$host" == *.* ]] || return 1
+  [[ "$host" != .* && "$host" != *. && "$host" != *..* ]] || return 1
+  [[ "$host" != *.svc && "$host" != *.svc.cluster.local ]] || return 1
+  IFS='.' read -r -a labels <<<"$host"
+  ((${#labels[@]} >= 2)) || return 1
+  for label in "${labels[@]}"; do
+    [[ ${#label} -le 63 ]] || return 1
+    [[ "$label" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || return 1
+  done
+}
 if ! valid_ipv4_cidr "$registry_service_cidr" ||
    ! valid_ipv4_cidr "$registry_endpoint_cidr" ||
    [[ ! "$registry_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+   ! valid_dns_host "$release_registry_host" ||
    [[ -z "$output" ]]; then
-  printf 'Usage: %s <registry-service-ipv4/32> <registry-endpoint-ipv4/32> <registry-namespace> <output>\n' "$0" >&2
+  printf 'Usage: %s <registry-service-ipv4/32> <registry-endpoint-ipv4/32> <registry-namespace> <release-registry-host> <output>\n' "$0" >&2
   exit 2
 fi
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -24,17 +40,19 @@ source_file="$script_directory/network-policy.yaml"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 REGISTRY_SERVICE_CIDR=$registry_service_cidr REGISTRY_ENDPOINT_CIDR=$registry_endpoint_cidr \
-REGISTRY_NAMESPACE=$registry_namespace \
+REGISTRY_NAMESPACE=$registry_namespace RELEASE_REGISTRY_HOST=$release_registry_host \
   yq eval-all '
     (.. | select(tag == "!!str")) |=
       sub("__REGISTRY_SERVICE_CIDR__"; strenv(REGISTRY_SERVICE_CIDR)) |
     (.. | select(tag == "!!str")) |=
       sub("__REGISTRY_ENDPOINT_CIDR__"; strenv(REGISTRY_ENDPOINT_CIDR)) |
     (.. | select(tag == "!!str")) |=
-      sub("__REGISTRY_NAMESPACE__"; strenv(REGISTRY_NAMESPACE))
+      sub("__REGISTRY_NAMESPACE__"; strenv(REGISTRY_NAMESPACE)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__RELEASE_REGISTRY_HOST__"; strenv(RELEASE_REGISTRY_HOST))
   ' "$source_file" >"$temporary_directory/resolved-source.yaml"
-if rg -q '__REGISTRY_(SERVICE|ENDPOINT)_CIDR__|__REGISTRY_NAMESPACE__' "$temporary_directory/resolved-source.yaml"; then
-  printf 'Registry CIDR placeholder remained after render\n' >&2
+if rg -q '__REGISTRY_(SERVICE|ENDPOINT)_CIDR__|__REGISTRY_NAMESPACE__|__RELEASE_REGISTRY_HOST__' "$temporary_directory/resolved-source.yaml"; then
+  printf 'Registry network policy placeholder remained after render\n' >&2
   exit 1
 fi
 yq eval-all '.' "$temporary_directory/resolved-source.yaml" >"$temporary_directory/build-unannotated.yaml"

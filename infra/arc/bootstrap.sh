@@ -13,7 +13,7 @@ require_denied() {
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --registry-namespace <namespace> --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --registry-namespace <namespace> --release-registry-host <exact-dns-name> --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -23,6 +23,7 @@ github_app_installation_id_file=""
 github_app_private_key_file=""
 github_pat_file=""
 registry_namespace=""
+release_registry_host=""
 workflow_sha_file=""
 build_owner_actor_file=""
 deploy_owner_actor_file=""
@@ -35,6 +36,7 @@ while (($# > 0)); do
     --github-app-private-key-file) github_app_private_key_file="${2:-}"; shift 2 ;;
     --github-pat-file) github_pat_file="${2:-}"; shift 2 ;;
     --registry-namespace) registry_namespace="${2:-}"; shift 2 ;;
+    --release-registry-host) release_registry_host="${2:-}"; shift 2 ;;
     --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
     --build-owner-actor-id-file) build_owner_actor_file="${2:-}"; shift 2 ;;
     --deploy-owner-actor-id-file) deploy_owner_actor_file="${2:-}"; shift 2 ;;
@@ -63,6 +65,21 @@ fi
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
 [[ "$registry_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
   fail "exact registry namespace is required"
+valid_dns_host() {
+  local host=$1 label
+  local -a labels=()
+
+  [[ ${#host} -le 253 && "$host" == *.* ]] || return 1
+  [[ "$host" != .* && "$host" != *. && "$host" != *..* ]] || return 1
+  [[ "$host" != *.svc && "$host" != *.svc.cluster.local ]] || return 1
+  IFS='.' read -r -a labels <<<"$host"
+  ((${#labels[@]} >= 2)) || return 1
+  for label in "${labels[@]}"; do
+    [[ ${#label} -le 63 ]] || return 1
+    [[ "$label" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || return 1
+  done
+}
+valid_dns_host "$release_registry_host" || fail "exact release registry DNS host is required"
 registry_host="matter-codex-registry.${registry_namespace}.svc.cluster.local"
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
@@ -135,7 +152,8 @@ kubectl --context "$expected_context" -n "$registry_namespace" get pod "$registr
   ' >/dev/null || fail "registry hostNetwork Pod binding is invalid"
 rendered_network_policy="$temporary_directory/network-policy.yaml"
 "$script_directory/render-network-policy.sh" "$registry_service_ip/32" \
-  "$registry_endpoint_ip/32" "$registry_namespace" "$rendered_network_policy"
+  "$registry_endpoint_ip/32" "$registry_namespace" "$release_registry_host" \
+  "$rendered_network_policy"
 egress_proxy_config_sha256=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-ci" and
     .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
