@@ -61,6 +61,18 @@ remove_legacy_session_token_finalizer() {
   fi
 }
 
+delete_stray_default_registry_resource() {
+  local resource_kind=$1 resource_name=matter-codex-registry actual_owner
+  if ! kubectl -n default get "$resource_kind" "$resource_name" >/dev/null 2>&1; then
+    return
+  fi
+  actual_owner=$(kubectl -n default get "$resource_kind" "$resource_name" \
+    -o jsonpath='{.metadata.labels.app\.kubernetes\.io/part-of}')
+  [[ "$actual_owner" == mattercodex-release-bootstrap ]] ||
+    fail "refusing to delete non-MatterCodex default resource: $resource_kind/$resource_name"
+  kubectl -n default delete "$resource_kind" "$resource_name" --wait=true --timeout=5m
+}
+
 for retained_namespace in "$shared_namespace" mattercodex-ci mattercodex-ci-deploy identity cert-manager; do
   kubectl get namespace "$retained_namespace" >/dev/null 2>&1 || fail "retained namespace is absent: $retained_namespace"
 done
@@ -131,10 +143,13 @@ if [[ "$mode" == apply ]]; then
   done
 
   if [[ "$wipe_registry" == true ]]; then
+    for resource_kind in deployment service persistentvolumeclaim; do
+      delete_stray_default_registry_resource "$resource_kind"
+    done
     kubectl -n "$shared_namespace" scale deployment/matter-codex-registry --replicas=0 >/dev/null
     kubectl -n "$shared_namespace" rollout status deployment/matter-codex-registry --timeout=180s >/dev/null
     kubectl -n "$shared_namespace" delete persistentvolumeclaim matter-codex-registry --wait=true --timeout=5m
-    kubectl apply -f "$repository_root/infra/bootstrap-registry/registry.yaml" >/dev/null
+    kubectl -n "$shared_namespace" apply -f "$repository_root/infra/bootstrap-registry/registry.yaml" >/dev/null
     kubectl -n "$shared_namespace" rollout status deployment/matter-codex-registry --timeout=300s >/dev/null
   fi
 fi
