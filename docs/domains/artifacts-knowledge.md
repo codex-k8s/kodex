@@ -4,8 +4,8 @@ title: Файлы, результаты и знания
 type: domain
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Файлы, результаты и знания
@@ -23,10 +23,14 @@ Mattermost post/thread.
 
 ## Жизненный цикл
 
-`UPLOADING -> SCANNING -> AVAILABLE | QUARANTINED`; delete/retention/legal hold
-являются отдельными guarded transitions. Runtime получает только `AVAILABLE`
-version через bounded immutable materialization. Upload completion повторно
-сверяет declared size/digest с сохранённым content.
+Fresh baseline выполняет bounded inspection синхронно до фиксации upload и
+сохраняет один из итоговых scan states: `CLEAN`, `QUARANTINED`, `FAILED`.
+Transport-состояние ongoing upload отображает клиент, но оно не является
+долговечным доменным переходом. Поля `PENDING` и `SCANNING` зарезервированы в
+схеме для будущего отдельного scanner adapter и не выдаются как успешная
+готовность без фактического consumer. Runtime получает только `CLEAN` version
+через bounded immutable materialization. Upload повторно сверяет declared
+size/digest с фактически прочитанным content.
 
 Download использует короткоживущий one-time grant, связанный с User,
 organization, Project, artifact version и purpose. Browser не получает storage
@@ -52,5 +56,5 @@ DeliveryAttempt. Его outage не меняет Artifact availability и core R
 - пользователь загружает input и скачивает generated result в web-only режиме;
 - Unicode/повторяющиеся имена не перезаписывают content;
 - foreign Project и expired/replayed grant закрыто отклоняются;
-- quarantined artifact не materialize-ится в role Pod;
+- artifact со state, отличным от `CLEAN`, не materialize-ится в role Pod;
 - raw file bytes, provider payload и secret не попадают в events, logs или audit.

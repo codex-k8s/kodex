@@ -4,8 +4,8 @@ title: Вложения и artifacts
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-23
 ---
 
 # Вложения и artifacts
@@ -25,11 +25,13 @@ object storage меняет repository adapter, но не owner API и domain mo
 1. Browser отправляет metadata и bounded stream через owner endpoint.
 2. Gateway проверяет session/Origin/CSRF/rate/body limits и использует generated
    streaming gRPC client.
-3. Control-plane разрешает User и Project, проверяет media/size, вычисляет digest
-   и одной транзакцией сохраняет metadata, content, audit, idempotency receipt и
-   `artifact.uploaded` event.
-4. Artifact имеет `SCANNING` либо `AVAILABLE` согласно обязательной policy;
-   quarantined version не может стать input.
+3. Control-plane разрешает User и Project, ограниченно читает stream, вычисляет
+   digest и выполняет встроенную проверку содержимого до открытия транзакции.
+4. Fresh baseline атомарно сохраняет metadata, content, audit, idempotency
+   receipt и `artifact.available`/platform invalidation с итоговым persisted
+   scan state `CLEAN`, `QUARANTINED` либо `FAILED`. Это синхронный bounded
+   inspection, а не фиктивный background scanner; только `CLEAN` version может
+   стать input, knowledge binding, preview или download.
 5. Control Center получает safe metadata event и читает body только отдельным
    download/preview request.
 
