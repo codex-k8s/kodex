@@ -9,8 +9,9 @@ fail() {
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 bootstrap="$repository_root/infra/service-infrastructure/bootstrap.sh"
 vault_bootstrap="$repository_root/infra/service-infrastructure/vault-bootstrap.yaml"
+vault_initializer="$repository_root/tools/deploy/bootstrap-vault.sh"
 
-bash -n "$bootstrap"
+bash -n "$bootstrap" "$vault_initializer"
 
 grep -Fq 'require_ready_deployment_by_selector cert-manager' "$bootstrap" ||
   fail 'trust-manager does not use the strict deployment readback'
@@ -40,5 +41,12 @@ yq -e '
   .spec.secretName == "mattercodex-control-api-bootstrap-tls"
 ' "$vault_bootstrap" >/dev/null ||
   fail 'control API bootstrap certificate is outside the MatterCodex namespace'
+
+vault_endpoint='VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200'
+[[ $(grep -Fc "$vault_endpoint" "$vault_initializer") -eq 7 ]] ||
+  fail 'Vault bootstrap does not consistently use the certificate-bound service DNS'
+if rg -q 'VAULT_ADDR=https://(127\.0\.0\.1|localhost)' "$vault_initializer"; then
+  fail 'Vault bootstrap uses a loopback hostname outside the certificate SAN contract'
+fi
 
 printf 'Service infrastructure bootstrap checks completed\n'
