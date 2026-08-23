@@ -51,6 +51,16 @@ detect_mattermost_workload() {
   esac
 }
 
+remove_legacy_session_token_finalizer() {
+  local secret_name=$1 patch
+  if patch=$(kubectl -n "$shared_namespace" get secret "$secret_name" -o json | jq -ce '
+    select((.metadata.finalizers // []) | index("matter-codex.dev/session-token-protection")) |
+    {metadata:{finalizers:[.metadata.finalizers[] | select(. != "matter-codex.dev/session-token-protection")]}}
+  '); then
+    kubectl -n "$shared_namespace" patch secret "$secret_name" --type=merge -p "$patch" >/dev/null
+  fi
+}
+
 for retained_namespace in "$shared_namespace" mattercodex-ci mattercodex-ci-deploy identity cert-manager; do
   kubectl get namespace "$retained_namespace" >/dev/null 2>&1 || fail "retained namespace is absent: $retained_namespace"
 done
@@ -98,7 +108,9 @@ if [[ "$mode" == apply ]]; then
 
   while IFS= read -r resource_name; do
     [[ -n "$resource_name" ]] || continue
-    kubectl -n "$shared_namespace" delete secret "$resource_name" --wait=true --timeout=2m
+    remove_legacy_session_token_finalizer "$resource_name"
+    kubectl -n "$shared_namespace" delete secret "$resource_name" \
+      --ignore-not-found --wait=true --timeout=2m
   done < <(kubectl -n "$shared_namespace" get secrets -o json |
     jq -r '.items[] | select(
       (.metadata.name | startswith("matter-codex-")) or
