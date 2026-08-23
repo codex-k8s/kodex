@@ -63,10 +63,10 @@ grep -Fq 'sealed=$(vault_status | read_vault_boolean sealed)' "$vault_initialize
 if rg -q "jq -er '\.(initialized|sealed)'" "$vault_initializer"; then
   fail 'Vault bootstrap still binds boolean values to jq truthiness exit codes'
 fi
-grep -Fq 'vault operator unseal -format=json' "$vault_initializer" ||
-  fail 'Vault unseal command is absent'
-if grep -Fq 'vault operator unseal -format=json -' "$vault_initializer"; then
-  fail 'Vault unseal still passes a literal dash as the positional key'
+grep -Fq 'vault write -format=json sys/unseal key=-' "$vault_initializer" ||
+  fail 'Vault unseal does not use the stdin-backed API write'
+if grep -Fq 'vault operator unseal' "$vault_initializer"; then
+  fail 'Vault unseal still depends on an interactive operator command'
 fi
 
 printf 'Service infrastructure bootstrap checks completed\n'

@@ -148,7 +148,7 @@ if [[ "$mode" == initialize ]]; then
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-      vault operator unseal -format=json
+      vault write -format=json sys/unseal key=-
     ' <"$unseal_key_file" >/dev/null
   fi
   [[ $(vault_status | jq -er '.initialized and (.sealed | not)') == true ]] || fail 'Vault initialize readback failed'
