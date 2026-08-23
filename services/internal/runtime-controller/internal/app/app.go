@@ -98,6 +98,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	if err := errors.Join(
+		control.CheckLocalAuthority(startup),
+		manager.Check(startup),
+	); err != nil {
+		return errors.Join(errors.New("runtime controller startup barrier failed"), err)
+	}
 	coordinator := callback.NewCoordinator()
 	callbackServer, err := callback.New(callback.Config{Listen: config.CallbackListen,
 		CertificateFile: config.CallbackServerCertificateFile, PrivateKeyFile: config.CallbackServerPrivateKeyFile,

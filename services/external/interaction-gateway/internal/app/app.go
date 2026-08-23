@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -49,6 +50,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	})
 	if err != nil {
 		return err
+	}
+	if err := control.CheckLocalAuthority(startup); err != nil {
+		return errors.Join(
+			fmt.Errorf("interaction gateway startup barrier failed: %w", err),
+			control.Close(),
+		)
 	}
 	text, err := usertext.New()
 	if err != nil {

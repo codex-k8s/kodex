@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -48,6 +49,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	})
 	if err != nil {
 		return err
+	}
+	if err := control.CheckLocalAuthority(startup); err != nil {
+		return errors.Join(
+			fmt.Errorf("integration gateway startup barrier failed: %w", err),
+			control.Close(),
+		)
 	}
 	adapter, err := integration.New(integration.Config{CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL, AllowedHosts: config.AllowedIntegrationHosts, Timeout: config.OperationTimeout})
 	if err != nil {

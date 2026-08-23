@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -48,6 +49,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	})
 	if err != nil {
 		return err
+	}
+	if err := control.CheckLocalAuthority(startup); err != nil {
+		return errors.Join(
+			fmt.Errorf("automation scheduler startup barrier failed: %w", err),
+			control.Close(),
+		)
 	}
 	technical, err := httpserver.New(httpserver.Config{
 		Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,

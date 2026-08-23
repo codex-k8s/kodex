@@ -76,6 +76,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	if err := errors.Join(
+		control.CheckLocalAuthority(startup),
+		realtime.Check(startup),
+	); err != nil {
+		return errors.Join(errors.New("control API startup barrier failed"), err)
+	}
 	texts, err := usertext.New()
 	if err != nil {
 		return err
