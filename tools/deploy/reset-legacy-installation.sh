@@ -38,6 +38,31 @@ legacy_namespace=mattercodex-system
 myqr_namespace=myqrcontact
 shared_namespace=matter-kodex-prod
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+release_profile_selector='mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)'
+release_cluster_resource_kinds=(
+  validatingadmissionpolicies.admissionregistration.k8s.io
+  validatingadmissionpolicybindings.admissionregistration.k8s.io
+  clusterroles.rbac.authorization.k8s.io
+  clusterrolebindings.rbac.authorization.k8s.io
+  bundles.trust.cert-manager.io
+)
+
+delete_release_cluster_scope() {
+  local resource_kind
+  for resource_kind in "${release_cluster_resource_kinds[@]}"; do
+    kubectl delete "$resource_kind" -l "$release_profile_selector" \
+      --ignore-not-found --wait=true --timeout=5m >/dev/null
+  done
+}
+
+verify_release_cluster_scope_absent() {
+  local resource_kind remaining
+  for resource_kind in "${release_cluster_resource_kinds[@]}"; do
+    remaining=$(kubectl get "$resource_kind" -l "$release_profile_selector" -o json |
+      jq '.items | length')
+    [[ "$remaining" == 0 ]] || fail "release-owned cluster scope remains: $resource_kind"
+  done
+}
 
 detect_mattermost_workload() {
   local deployment_exists=false statefulset_exists=false
@@ -98,6 +123,7 @@ if [[ "$mode" == apply ]]; then
   [[ "$confirmation" == DELETE-LEGACY-MATTERCODEX-AND-MYQRCONTACT ]] || fail 'destructive confirmation mismatch'
 
   kubectl delete namespace "$legacy_namespace" "$myqr_namespace" --ignore-not-found --wait=true --timeout=20m
+  delete_release_cluster_scope
 
   kubectl -n "$shared_namespace" delete deployment,service,ingress matter-codex-bot-service \
     --ignore-not-found --wait=true --timeout=5m
@@ -160,6 +186,7 @@ if [[ "$mode" == readback ]]; then
       fail "removed namespace still exists: $removed_namespace"
     fi
   done
+  verify_release_cluster_scope_absent
   [[ $(detect_mattermost_workload) == "$mattermost_workload_kind" ]] ||
     fail 'retained Mattermost workload kind changed during reset'
   kubectl -n "$shared_namespace" get deployment matter-codex-registry >/dev/null
