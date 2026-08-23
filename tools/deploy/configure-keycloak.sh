@@ -63,6 +63,15 @@ read_secret_key() {
   chmod 0600 "$output_file"
 }
 
+read_single_line_secret() {
+  local file_path=$1 label=$2 value
+  [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail "$label is absent"
+  value=$(<"$file_path")
+  [[ -n "$value" && "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
+    fail "$label must be a non-empty single line"
+  printf '%s' "$value"
+}
+
 read_secret_key "$admin_secret" client-id "$temporary_directory/admin-client-id"
 read_secret_key "$admin_secret" client-secret "$temporary_directory/admin-client-secret"
 read_secret_key "$bootstrap_secret" organization-id "$temporary_directory/organization-id"
@@ -70,17 +79,20 @@ read_secret_key "$bootstrap_secret" owner-username "$temporary_directory/owner-u
 read_secret_key "$bootstrap_secret" owner-email "$temporary_directory/owner-email"
 read_secret_key "$bootstrap_secret" owner-initial-password "$temporary_directory/owner-password"
 
-organization_id=$(tr -d '\r\n' <"$temporary_directory/organization-id")
-owner_username=$(tr -d '\r\n' <"$temporary_directory/owner-username")
-owner_email=$(tr -d '\r\n' <"$temporary_directory/owner-email")
+admin_client_id=$(read_single_line_secret "$temporary_directory/admin-client-id" 'Keycloak admin client ID')
+admin_client_secret=$(read_single_line_secret "$temporary_directory/admin-client-secret" 'Keycloak admin client secret')
+organization_id=$(read_single_line_secret "$temporary_directory/organization-id" 'bootstrap organization ID')
+owner_username=$(read_single_line_secret "$temporary_directory/owner-username" 'bootstrap owner username')
+owner_email=$(read_single_line_secret "$temporary_directory/owner-email" 'bootstrap owner email')
+owner_password=$(read_single_line_secret "$temporary_directory/owner-password" 'bootstrap owner password')
 [[ "$organization_id" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$ ]] ||
   fail 'organization ID is invalid'
 [[ "$owner_username" =~ ^[a-zA-Z0-9._@-]{3,128}$ ]] || fail 'owner username is invalid'
 [[ "$owner_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail 'owner email is invalid'
-[[ $(wc -c <"$temporary_directory/owner-password") -ge 16 ]] || fail 'owner password is too short'
+[[ ${#owner_password} -ge 16 ]] || fail 'owner password is too short'
 
 keycloak_request() {
-  { cat "$temporary_directory/admin-client-id"; printf '\n'; cat "$temporary_directory/admin-client-secret"; printf '\n'; } |
+  printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret" |
     kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
       IFS= read -r client_id
       IFS= read -r client_secret
@@ -198,7 +210,7 @@ if [[ "$mode" == apply ]]; then
   if [[ "$owner_count" == 0 ]]; then
     keycloak_request create users -r "$realm" -s "username=$owner_username" -s enabled=true \
       -s "email=$owner_email" -s emailVerified=true >/dev/null
-    { cat "$temporary_directory/admin-client-id"; printf '\n'; cat "$temporary_directory/admin-client-secret"; printf '\n'; cat "$temporary_directory/owner-password"; printf '\n'; } |
+    printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$owner_password" |
       kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
         IFS= read -r client_id
         IFS= read -r client_secret
