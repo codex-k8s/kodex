@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.2.2
+version: 1.2.3
 updated: 2026-08-23
 ---
 
@@ -114,7 +114,10 @@ hosts передаются параметрами deployment environment. Реп
    runtime-компоненты читают точную immutable `ConfigMap`-проекцию тех же
    значений. Отсутствие CR, drift двух проекций или попытка заменить
    `parameterNotFoundAction: Deny` является ошибкой release, а не основанием
-   перезапускать API server. Существующий anchor только
+   перезапускать API server. Общий Vault ingress разрешает только
+   `vault-csi-provider` в том же namespace и TCP/8200: именно provider создаёт
+   сетевое соединение для CSI mount, а Vault auth role ограничивает authority
+   исходного workload. Существующий anchor только
    проверяется по обязательной форме и не переписывается render-ом: продвинуть
    его вправе исключительно PITR executor через forward-only policy. Первый
    verified Vault database connect может попасть в короткий restart PostgreSQL

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.1
+version: 1.4.2
 updated: 2026-08-23
 ---
 
@@ -401,6 +401,13 @@ policy, ServiceAccount и `SecretProviderClass`; CA читается отдел�
 Render, startup и readback закрыто проверяют метод, разрешённые имена, EKU,
 TTL, SNI и фактически обслуживаемый путь mTLS. Синтаксически корректный GET к
 PKI issue path не считается доставкой сертификата.
+
+При node-published CSI mount сетевое соединение с Vault устанавливает Pod
+provider, а не workload-потребитель. Итоговая `NetworkPolicy` разрешает exact
+provider identity только к Vault TCP/8200; workload authority по-прежнему
+задают переданный projected token, Vault Kubernetes auth role и policy.
+Отсутствие provider ingress нельзя исправлять CIDR, wildcard namespace или
+выдачей provider дополнительных Kubernetes полномочий.
 
 Переход с незашифрованного транспорта на TLS выполняется системно: сначала
 инвентаризируются все
