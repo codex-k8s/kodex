@@ -74,5 +74,16 @@ grep -Fq 'exec vault kv patch -mount=kv "$1" "$2"=-' "$vault_initializer" ||
   fail 'Vault KV patch does not name the canonical mount'
 [[ $(grep -Fc 'Vault KV seed path must be relative to the canonical mount' "$vault_initializer") -eq 2 ]] ||
   fail 'Vault KV seed helpers do not reject absolute or duplicated mount paths'
+grep -Fq 'for delay in 1 2 3 5 8 13; do' "$vault_initializer" ||
+  fail 'Vault PostgreSQL startup retry has no bounded backoff contract'
+grep -Fq "rg -q 'error verifying connection:.*connection refused'" "$vault_initializer" ||
+  fail 'Vault PostgreSQL startup retry is not limited to the proven transient error'
+grep -Fq 'Vault database configuration failed with a non-transient error' "$vault_initializer" ||
+  fail 'Vault PostgreSQL configuration does not fail closed for semantic errors'
+grep -Fq 'Vault PostgreSQL connection did not become ready within the bounded retry budget' \
+  "$vault_initializer" || fail 'Vault PostgreSQL configuration has no terminal retry error'
+if grep -Fq 'verify_connection=false' "$vault_initializer"; then
+  fail 'Vault PostgreSQL connection verification is disabled'
+fi
 
 printf 'Service infrastructure bootstrap checks completed\n'
