@@ -266,7 +266,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if resourceRef == "" {
 		resourceRef = payload.WorkloadInstance
 	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: resourceRef, summary: "Work claims materialized"}, nil
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: resourceRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
@@ -303,7 +303,7 @@ func (repository *Repository) renewExecution(ctx context.Context, tx pgx.Tx, sco
 	if _, err := tx.Exec(ctx, queryRuntimeRenewexecutionUpdateRuntimeLeasesExpiresAtUpdatedAt, lease["leaseID"], expires); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	return commandOutcome{result: command.Result{Runtime: map[string]any{"leaseRef": payload.LeaseRef, "fence": payload.Fence, "generation": payload.Generation, "expiresAt": expires}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUNTIME_LEASE", resourceRef: payload.LeaseRef, summary: "Runtime lease renewed"}, nil
+	return commandOutcome{result: command.Result{Runtime: map[string]any{"leaseRef": payload.LeaseRef, "fence": payload.Fence, "generation": payload.Generation, "expiresAt": expires}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUNTIME_LEASE", resourceRef: payload.LeaseRef, summary: "i18n:RUNTIME_LEASE_RENEWED"}, nil
 }
 
 func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -327,7 +327,7 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "Runtime progress recorded"}, nil
+	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_PROGRESS_RECORDED"}, nil
 }
 
 func stringMap(values map[string]any, key string) string {
@@ -522,7 +522,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "Runtime execution completed"}, nil
+	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event, CreatedRefs: artifactRefs}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_NODE", resourceRef: stringMap(lease, "nodeRef"), summary: "i18n:RUNTIME_EXECUTION_COMPLETED"}, nil
 }
 
 func nonEmptyResult(payload command.CompleteExecutionInput) string {
@@ -530,9 +530,9 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 		return truncate(text, 2000)
 	}
 	if payload.Success {
-		return "RUN_COMPLETED"
+		return "i18n:RUN_COMPLETED"
 	}
-	return payload.SafeErrorCode
+	return "i18n:" + payload.SafeErrorCode
 }
 
 func runtimeSafeErrorCode(code string) bool {
@@ -659,7 +659,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &child, Graph: &graph, Event: &event, Runtime: map[string]any{"callbackEdgeRef": callbackEdgeRef}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: childRef, summary: "Child run delegated"}, nil
+	return commandOutcome{result: command.Result{Run: &child, Graph: &graph, Event: &event, Runtime: map[string]any{"callbackEdgeRef": callbackEdgeRef}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: childRef, summary: "i18n:CHILD_RUN_DELEGATED"}, nil
 }
 
 func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -692,7 +692,7 @@ func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, sc
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &parent, Graph: &graph, Duplicate: duplicate}, projectID: projectID, projectRef: projectRef, resourceKind: "CALLBACK", resourceRef: payload.CallbackEdgeRef, summary: "Child callback processed"}, nil
+	return commandOutcome{result: command.Result{Run: &parent, Graph: &graph, Duplicate: duplicate}, projectID: projectID, projectRef: projectRef, resourceKind: "CALLBACK", resourceRef: payload.CallbackEdgeRef, summary: "i18n:CHILD_CALLBACK_PROCESSED"}, nil
 }
 
 type callbackRecord struct {

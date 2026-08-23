@@ -198,6 +198,8 @@ ASSISTANT_EXECUTING:
   other: Выполняет команду
 ASSISTANT_READY:
   other: Готов к команде
+SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
+  other: Пульс среды выполнения системного помощника зафиксирован
 SYSTEM_ASSISTANT_LABEL:
   other: Системный · неудаляемый
 ARTIFACT_AVAILABLE:
@@ -212,8 +214,26 @@ CHILD_CALLBACK_REGISTERED:
   other: Обратная связь дочернего ИИ-сотрудника зарегистрирована
 CHILD_AGENT_RESULT_DELIVERED:
   other: Результат дочернего ИИ-сотрудника доставлен
+CHILD_RUN_DELEGATED:
+  other: Работа передана дочернему ИИ-сотруднику
+CHILD_CALLBACK_PROCESSED:
+  other: Результат дочернего ИИ-сотрудника обработан
 CALLBACK_CONTINUATION_QUEUED:
   other: Координатор продолжит работу с результатами дочерних ИИ-сотрудников
+RUN_COMPLETED:
+  other: Запуск завершён
+RUNTIME_WORK_CLAIMS_MATERIALIZED:
+  other: Доступная работа назначена среде выполнения
+RUNTIME_LEASE_RENEWED:
+  other: Аренда среды выполнения продлена
+RUNTIME_PROGRESS_RECORDED:
+  other: Ход выполнения зафиксирован
+RUNTIME_EXECUTION_COMPLETED:
+  other: Выполнение в среде завершено
+INTEGRATION_ACTION_COMPLETED:
+  other: Действие интеграции завершено
+INTEGRATION_INVOCATION_COMPLETED:
+  other: Вызов интеграции завершён
 OWNER_DECISION_REQUIRED:
   other: Требуется решение человека
 OWNER_GATE_CANCELLED:

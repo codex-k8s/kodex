@@ -198,6 +198,8 @@ ASSISTANT_EXECUTING:
   other: Executing the command
 ASSISTANT_READY:
   other: Ready for a command
+SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
+  other: System assistant runtime heartbeat recorded
 SYSTEM_ASSISTANT_LABEL:
   other: System · non-removable
 ARTIFACT_AVAILABLE:
@@ -212,8 +214,26 @@ CHILD_CALLBACK_REGISTERED:
   other: Child AI employee callback registered
 CHILD_AGENT_RESULT_DELIVERED:
   other: Child AI employee result delivered
+CHILD_RUN_DELEGATED:
+  other: Work delegated to a child AI employee
+CHILD_CALLBACK_PROCESSED:
+  other: Child AI employee result processed
 CALLBACK_CONTINUATION_QUEUED:
   other: Coordinator will continue with the child AI employee results
+RUN_COMPLETED:
+  other: Run completed
+RUNTIME_WORK_CLAIMS_MATERIALIZED:
+  other: Available work assigned to runtime
+RUNTIME_LEASE_RENEWED:
+  other: Runtime lease renewed
+RUNTIME_PROGRESS_RECORDED:
+  other: Runtime progress recorded
+RUNTIME_EXECUTION_COMPLETED:
+  other: Runtime execution completed
+INTEGRATION_ACTION_COMPLETED:
+  other: Integration action completed
+INTEGRATION_INVOCATION_COMPLETED:
+  other: Integration invocation completed
 OWNER_DECISION_REQUIRED:
   other: Human decision required
 OWNER_GATE_CANCELLED:

@@ -110,7 +110,7 @@ func (repository *Repository) reportWarmRuntime(ctx context.Context, tx pgx.Tx, 
 	_ = json.Unmarshal(limits, &assistant.ResourceLimits)
 	assistant.System = true
 	assistant.Ready = contains([]string{"READY", "BUSY"}, payload.State)
-	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "Warm runtime heartbeat recorded", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:SYSTEM_ASSISTANT_HEARTBEAT_RECORDED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
 func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
@@ -518,7 +518,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocationUpdateIntegrationInvocationsStateResultSummarySafeErrorCode, invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100)); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")
+	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "i18n:INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -530,7 +530,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_INVOCATION", resourceRef: payload.InvocationRef, summary: "Integration invocation completed"}, nil
+	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_INVOCATION", resourceRef: payload.InvocationRef, summary: "i18n:INTEGRATION_INVOCATION_COMPLETED"}, nil
 }
 
 func safeIntegrationErrorCode(code string) bool {
