@@ -371,23 +371,28 @@ if [[ "$mode" == configure-database ]]; then
 
   configure_verified_database
 
+  control_plane_postgresql_host=control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
+  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+
   write_dsn() {
-    local vault_path=$1 username=$2 password_file=$3 database=$4 ca_file=$5
+    local vault_path=$1 username=$2 password_file=$3 database=$4 postgresql_host=$5 ca_file=$6
     local encoded_password password
     password=$(read_single_line_secret "$password_file" 'generated PostgreSQL role password')
     encoded_password=$(jq -rn --arg value "$password" '$value|@uri')
-    printf 'postgresql://%s:%s@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/%s?sslmode=verify-full&sslrootcert=%s\n' \
-      "$username" "$encoded_password" "$database" "$ca_file" >"$temporary_directory/dsn"
+    printf 'postgresql://%s:%s@%s:5432/%s?sslmode=verify-full&sslrootcert=%s\n' \
+      "$username" "$encoded_password" "$postgresql_host" "$database" "$ca_file" \
+      >"$temporary_directory/dsn"
     vault_kv_put_file "$vault_path" dsn "$temporary_directory/dsn"
   }
   write_dsn mattercodex/control-plane/postgres-migration control_plane_migrator \
-    "$temporary_directory/control_plane_migrator" control_plane \
+    "$temporary_directory/control_plane_migrator" control_plane "$control_plane_postgresql_host" \
     /var/run/config/mattercodex/control-plane/postgres/ca.pem
   write_dsn mattercodex/control-plane/postgres-runtime control_plane_runtime_g1 \
-    "$temporary_directory/control_plane_runtime_g1" control_plane \
+    "$temporary_directory/control_plane_runtime_g1" control_plane "$control_plane_postgresql_host" \
     /var/run/config/mattercodex/control-plane/postgres/ca.pem
   write_dsn internal-rpc-authority/postgres-migration internal_rpc_authority_migrator \
     "$temporary_directory/internal_rpc_authority_migrator" internal_rpc_authority \
+    "$internal_rpc_authority_postgresql_host" \
     /var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
 fi
 
@@ -413,8 +418,10 @@ if [[ "$mode" == configure-database-runtime ]]; then
         psql --host=127.0.0.1 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1
     ' >/dev/null
   encoded_password=$(jq -rn --arg value "$reconciler_password" '$value|@uri')
-  printf 'postgresql://ira_database_credential_reconciler:%s@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
-    "$encoded_password" >"$temporary_directory/reconciler-dsn"
+  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+  printf 'postgresql://ira_database_credential_reconciler:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
+    "$encoded_password" "$internal_rpc_authority_postgresql_host" \
+    >"$temporary_directory/reconciler-dsn"
   vault_kv_put_file internal-rpc-authority/database-credential-reconciler dsn \
     "$temporary_directory/reconciler-dsn"
 

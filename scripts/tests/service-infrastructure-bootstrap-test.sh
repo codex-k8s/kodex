@@ -137,4 +137,19 @@ if grep -Fq 'verify_connection=false' "$vault_initializer"; then
   fail 'Vault PostgreSQL connection verification is disabled'
 fi
 
+grep -Fq 'local vault_path=$1 username=$2 password_file=$3 database=$4 postgresql_host=$5 ca_file=$6' \
+  "$vault_initializer" || fail 'workload DSN helper does not require an exact PostgreSQL authority'
+grep -Fq 'postgresql://%s:%s@%s:5432/%s?sslmode=verify-full&sslrootcert=%s' \
+  "$vault_initializer" || fail 'workload DSN does not preserve verify-full with an exact authority'
+control_plane_postgresql_host=control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
+internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+grep -Fq "control_plane_postgresql_host=$control_plane_postgresql_host" "$vault_initializer" ||
+  fail 'control-plane PostgreSQL authority is not canonical'
+grep -Fq "internal_rpc_authority_postgresql_host=$internal_rpc_authority_postgresql_host" \
+  "$vault_initializer" || fail 'internal-rpc-authority PostgreSQL authority is not canonical'
+[[ $(grep -Fc '"$control_plane_postgresql_host"' "$vault_initializer") -eq 2 ]] ||
+  fail 'control-plane migration and runtime DSN do not share the exact authority'
+[[ $(grep -Fc '"$internal_rpc_authority_postgresql_host"' "$vault_initializer") -eq 2 ]] ||
+  fail 'internal-rpc-authority migration and reconciler DSN do not share the exact authority'
+
 printf 'Service infrastructure bootstrap checks completed\n'
