@@ -1,4 +1,6 @@
 -- +goose Up
+SET ROLE control_plane_owner;
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS control_plane;
@@ -1122,5 +1124,9 @@ INSERT INTO control_plane.installation (singleton, schema_version)
 VALUES (true, 1)
 ON CONFLICT (singleton) DO NOTHING;
 
+RESET ROLE;
+
 -- +goose Down
+SET ROLE control_plane_owner;
 DROP SCHEMA IF EXISTS control_plane CASCADE;
+RESET ROLE;

@@ -156,6 +156,15 @@ yq -o=json 'select(.kind == "Job" and .metadata.name == "control-plane-migrate")
       .value == "/var/run/secrets/mattercodex/control-plane/postgres-migration/dsn")
   ' >/dev/null || fail 'fresh control-plane migration command is inconsistent with the CLI contract'
 
+yq -o=json 'select(.kind == "Job" and .metadata.name == "internal-rpc-authority-migrate")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "migrate") |
+    .command == ["/usr/local/bin/internal-rpc-authority-cli"] and
+    .args == ["up"] and
+    any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE" and
+      .value == "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn")
+  ' >/dev/null || fail 'fresh internal RPC authority migration command is inconsistent with the CLI contract'
+
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-api-gateway")' "$render_file" |
   jq -e '
     .spec.template.spec.containers[] | select(.name == "control-api-gateway") |

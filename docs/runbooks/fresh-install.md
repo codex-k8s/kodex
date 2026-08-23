@@ -76,7 +76,8 @@ hosts передаются параметрами deployment environment. Реп
    `platform-state`; дождаться готовности обоих StatefulSet и exact Service.
 3. Материализовать database roles/Vault static credentials, NATS user
    credentials и authority keys; дождаться readback authority.
-4. Запустить `control-plane-cli up` с
+4. Запустить `internal-rpc-authority-cli up` с exact TLS DSN, затем
+   `control-plane-cli up` с
    `CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE` через migration Job.
 5. Запустить `control-plane-cli broker bootstrap` с exact NATS material.
 6. Развернуть `control-plane`, затем runtime/scheduler/integration workers,
