@@ -1,11 +1,44 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 
-defineProps<{ title: string; busy?: boolean }>();
+import {
+  focusableElements,
+  trappedFocusTarget,
+} from "@/shared/ui/dialog-focus";
+
+const props = defineProps<{ title: string; busy?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 const panel = ref<HTMLElement>();
+let returnFocusTo: HTMLElement | null = null;
 
-onMounted(() => panel.value?.focus());
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    if (!props.busy) emit("close");
+    return;
+  }
+  if (event.key !== "Tab" || !panel.value) return;
+  const target = trappedFocusTarget(
+    focusableElements(panel.value),
+    document.activeElement,
+    event.shiftKey,
+  );
+  if (!target) return;
+  event.preventDefault();
+  target.focus();
+}
+
+onMounted(() => {
+  returnFocusTo =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  void nextTick(() => {
+    if (!panel.value?.contains(document.activeElement)) panel.value?.focus();
+  });
+});
+onBeforeUnmount(() => {
+  if (returnFocusTo?.isConnected) returnFocusTo.focus();
+});
 </script>
 
 <template>
@@ -21,7 +54,7 @@ onMounted(() => panel.value?.focus());
       aria-modal="true"
       :aria-label="title"
       tabindex="-1"
-      @keydown.esc="!busy && emit('close')"
+      @keydown="handleKeydown"
     >
       <header class="modal__header">
         <h2>{{ title }}</h2>
