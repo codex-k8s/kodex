@@ -113,7 +113,7 @@ Gateway использует NATS только как сигнал достав�
 
 ## Health и readiness
 
-- `/healthz` и `/livez` проверяют только жизнь процесса;
+- `/healthz` проверяет только жизнь процесса;
 - `/readyz` возвращает уже рассчитанный локальный snapshot и не делает
   сетевых вызовов на probe;
 - background readiness проверяет только PostgreSQL, outbox, NATS и local

@@ -193,7 +193,7 @@ EOF
             - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
           startupProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 5, timeoutSeconds: 3}
-          livenessProbe: {httpGet: {path: /livez, port: 9091}, periodSeconds: 10, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: 9091}, periodSeconds: 10, timeoutSeconds: 2}
           resources: {requests: {cpu: 25m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
           securityContext: {runAsNonRoot: true, runAsUser: 29001, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:

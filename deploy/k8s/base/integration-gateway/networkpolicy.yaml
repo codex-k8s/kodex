@@ -56,6 +56,7 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
       ports:
         - {protocol: TCP, port: 8080}
     - to:

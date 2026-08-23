@@ -18,7 +18,7 @@
 | Technical Service | `egress-gateway-technical.mattercodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
-| Liveness | `GET /livez` на technical port |
+| Liveness | `GET /healthz` на technical port; проверяет только жизнь процесса |
 | Compatibility readiness | bodyless `GET /readyz` без query на `8080`: `204` только при effective `ACTIVE/READY`, иначе `503`; другие non-CONNECT routes закрыты |
 | Technical readiness | `GET /readyz` на technical port |
 | Policy readback | `GET /policy` на technical port; только process/policy/resolver state, revision и SHA-256 digest |

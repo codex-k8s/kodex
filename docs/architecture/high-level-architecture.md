@@ -130,7 +130,7 @@ exact CONNECT authority, фактический TLS ClientHello SNI и immutable
 verification и application credentials остаются end-to-end у consumer.
 Один consumer proxy URL на `8080` дополнительно принимает только bodyless
 `GET /readyz` без query и возвращает `204` по тому же ACTIVE/READY state;
-technical `/livez`, `/readyz`, `/metrics`, `/policy` на `9090` остаются
+technical `/healthz`, `/readyz`, `/metrics`, `/policy` на `9090` остаются
 monitoring-only.
 
 ## Internal RPC Authority

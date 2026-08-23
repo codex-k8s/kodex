@@ -24,7 +24,7 @@ Technical Service
 `egress-gateway-technical.mattercodex-system.svc.cluster.local:9090` с
 `publishNotReadyAddresses=true` публикует:
 
-- `/livez` — жив ли процесс;
+- `/healthz` — жив ли собственный процесс, без сетевых вызовов;
 - `/readyz` — одновременно ли process `READY`, policy `ACTIVE` и resolver
   `VALIDATED`;
 - `/policy` — только `processState`, `policyState`, `revision`, canonical

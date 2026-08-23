@@ -1,6 +1,6 @@
 # `httpserver`
 
-Общий технический HTTP server для `/livez`, `/readyz` и `/metrics`.
+Общий технический HTTP server для `/healthz`, `/readyz` и `/metrics`.
 Библиотека также принимает ограниченный набор service-owned `ExactGETRoute`
 для безопасного readback: только точный `GET` без query/body и с общими
 защитными заголовками. Библиотека не регистрирует изменяющие состояние или
