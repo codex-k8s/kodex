@@ -212,6 +212,21 @@ for stateful_set in mattercodex-postgresql mattercodex-nats; do
     fail "fresh stateful dependency is absent or binds an installation-specific storage class: $stateful_set"
 done
 
+yq -o=json 'select(.kind == "NetworkPolicy" and
+  .metadata.name == "platform-postgresql-exact-clients")' "$render_file" |
+  jq -e '
+    .spec.policyTypes == ["Ingress", "Egress"] and
+    .spec.egress == [] and
+    (.spec.ingress | length) == 1 and
+    (.spec.ingress[0].ports == [{"protocol":"TCP","port":5432}]) and
+    (.spec.ingress[0].from | length) == 1 and
+    (.spec.ingress[0].from[0].podSelector.matchExpressions | length) == 1 and
+    (.spec.ingress[0].from[0].podSelector.matchExpressions[0] as $selector |
+      $selector.key == "app.kubernetes.io/name" and
+      $selector.operator == "In" and
+      ($selector.values | sort) == ["control-plane", "internal-rpc-authority", "vault"])
+  ' >/dev/null || fail 'PostgreSQL ingress does not expose the exact Vault database engine path'
+
 for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw nats; do
   SERVICE="$service" yq -e '
     select(.kind == "Service" and .metadata.name == strenv(SERVICE))

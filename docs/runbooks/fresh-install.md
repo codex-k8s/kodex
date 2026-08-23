@@ -114,7 +114,10 @@ hosts передаются параметрами deployment environment. Реп
    verified Vault database connect может попасть в короткий restart PostgreSQL
    после init scripts: только `connection refused` повторяется с ограниченным
    backoff; semantic/configuration ошибки завершают фазу немедленно, а
-   `verify_connection` не отключается.
+   `verify_connection` не отключается. PostgreSQL ingress разрешает TCP/5432
+   только точным внутренним workload и Vault database engine в этом же
+   namespace; отсутствие пути от `app.kubernetes.io/name=vault` является
+   ошибкой render, а не основанием расширять CIDR или отключать policy/TLS.
 9. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
