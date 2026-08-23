@@ -103,6 +103,8 @@ vault_input() {
 
 vault_kv_put_file() {
   local path=$1 key=$2 file_path=$3
+  [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
+    fail 'Vault KV seed path must be relative to the canonical mount'
   [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
   require_root_material
   { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
@@ -110,12 +112,14 @@ vault_kv_put_file() {
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-      exec vault kv put "$1" "$2"=-
+      exec vault kv put -mount=kv "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
 }
 
 vault_kv_patch_file() {
   local path=$1 key=$2 file_path=$3
+  [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
+    fail 'Vault KV seed path must be relative to the canonical mount'
   [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
   require_root_material
   { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
@@ -123,7 +127,7 @@ vault_kv_patch_file() {
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-      exec vault kv patch "$1" "$2"=-
+      exec vault kv patch -mount=kv "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
 }
 

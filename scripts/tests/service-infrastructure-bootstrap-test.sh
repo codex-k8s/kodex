@@ -68,5 +68,11 @@ grep -Fq 'vault write -format=json sys/unseal key=-' "$vault_initializer" ||
 if grep -Fq 'vault operator unseal' "$vault_initializer"; then
   fail 'Vault unseal still depends on an interactive operator command'
 fi
+grep -Fq 'exec vault kv put -mount=kv "$1" "$2"=-' "$vault_initializer" ||
+  fail 'Vault KV put does not name the canonical mount'
+grep -Fq 'exec vault kv patch -mount=kv "$1" "$2"=-' "$vault_initializer" ||
+  fail 'Vault KV patch does not name the canonical mount'
+[[ $(grep -Fc 'Vault KV seed path must be relative to the canonical mount' "$vault_initializer") -eq 2 ]] ||
+  fail 'Vault KV seed helpers do not reject absolute or duplicated mount paths'
 
 printf 'Service infrastructure bootstrap checks completed\n'
