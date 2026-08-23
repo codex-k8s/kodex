@@ -1,11 +1,15 @@
 package main
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+//go:embed testdata/publisher_append_snapshot_history.sql
+var publicationFunctionDeclaration string
 
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
 
@@ -105,8 +109,7 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 			t.Fatalf("baseline is missing current workload principal %q", required)
 		}
 	}
-	const publicationFunction = `CREATE FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"`
-	if strings.Count(text, publicationFunction) != 1 ||
+	if strings.Count(text, strings.TrimSpace(publicationFunctionDeclaration)) != 1 ||
 		!strings.Contains(text, `"p_published_at" timestamp with time zone) RETURNS boolean`) {
 		t.Fatal("baseline does not contain exactly one current snapshot publication function")
 	}

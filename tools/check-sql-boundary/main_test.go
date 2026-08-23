@@ -1,10 +1,22 @@
 package main
 
 import (
-	"os"
+	_ "embed"
 	"path/filepath"
 	"testing"
 )
+
+//go:embed testdata/select.sql
+var selectQueryFixture string
+
+//go:embed testdata/common_table_expression.sql
+var commonTableExpressionFixture string
+
+//go:embed testdata/update.sql
+var updateQueryFixture string
+
+//go:embed testdata/grant.sql
+var grantQueryFixture string
 
 func TestSQLLiteralBoundary(t *testing.T) {
 	t.Parallel()
@@ -14,10 +26,10 @@ func TestSQLLiteralBoundary(t *testing.T) {
 		value   string
 		matches bool
 	}{
-		{name: "select query", value: "SELECT id FROM projects WHERE ref = $1", matches: true},
-		{name: "common table expression", value: "WITH candidate AS (SELECT id FROM runs) SELECT id FROM candidate", matches: true},
-		{name: "update query", value: "UPDATE runs SET state = 'FAILED' WHERE id = $1", matches: true},
-		{name: "grant query", value: "GRANT SELECT ON TABLE runs TO runtime", matches: true},
+		{name: "select query", value: selectQueryFixture, matches: true},
+		{name: "common table expression", value: commonTableExpressionFixture, matches: true},
+		{name: "update query", value: updateQueryFixture, matches: true},
+		{name: "grant query", value: grantQueryFixture, matches: true},
 		{name: "action identifier", value: "REVOKE", matches: false},
 		{name: "vault route", value: "/v1/database/static-roles/", matches: false},
 		{name: "runtime diagnostic", value: "select claimable executions", matches: false},
@@ -35,19 +47,12 @@ func TestSQLLiteralBoundary(t *testing.T) {
 func TestValidateQueryHeader(t *testing.T) {
 	t.Parallel()
 
-	directory := t.TempDir()
-	valid := filepath.Join(directory, "membership__list.sql")
-	if err := os.WriteFile(valid, []byte("-- name: membership__list :many\nSELECT id FROM memberships;\n"), 0o600); err != nil {
-		t.Fatalf("write valid query: %v", err)
-	}
+	valid := filepath.Join("testdata", "valid", "membership__list.sql")
 	if err := validateQueryHeader(valid); err != nil {
 		t.Fatalf("validateQueryHeader(valid) error = %v", err)
 	}
 
-	invalid := filepath.Join(directory, "membership__get.sql")
-	if err := os.WriteFile(invalid, []byte("-- name: membership__list :one\nSELECT id FROM memberships;\n"), 0o600); err != nil {
-		t.Fatalf("write invalid query: %v", err)
-	}
+	invalid := filepath.Join("testdata", "invalid", "membership__get.sql")
 	if err := validateQueryHeader(invalid); err == nil {
 		t.Fatal("validateQueryHeader(invalid) accepted a mismatched name")
 	}

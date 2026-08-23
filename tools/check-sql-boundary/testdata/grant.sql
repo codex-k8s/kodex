@@ -1,0 +1,1 @@
+GRANT SELECT ON TABLE runs TO runtime;
