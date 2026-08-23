@@ -140,6 +140,10 @@ SCHEDULE_UPDATED:
   other: Schedule updated
 SCHEDULED_RUN_TASK:
   other: Scheduled run
+SCHEDULE_OCCURRENCE_MATERIALIZED:
+  other: Scheduled run created
+SCHEDULE_OCCURRENCE_COMPLETED:
+  other: Scheduled run completed
 INTEGRATION_CONNECTION_CREATED:
   other: Integration connection created
 INTEGRATION_CONNECTION_UPDATED:

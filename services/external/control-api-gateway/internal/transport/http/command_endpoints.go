@@ -463,7 +463,7 @@ func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, pro
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	target, input := scheduleInput(body)
-	response, err := server.control.Command.CreateSchedule(r.Context(), &controlplanev1.CreateScheduleRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Target: target, Preset: body.Preset, CronExpression: stringValue(body.CronExpression), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
+	response, err := server.control.Command.CreateSchedule(r.Context(), &controlplanev1.CreateScheduleRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Target: target, Preset: string(body.Preset), TimeOfDay: body.TimeOfDay, DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -480,7 +480,7 @@ func (server *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, ref
 		return
 	}
 	target, input := scheduleInput(body)
-	response, err := server.control.Command.UpdateSchedule(r.Context(), &controlplanev1.UpdateScheduleRequest{Mutation: m, ScheduleRef: ref, Name: body.Name, Target: target, Preset: body.Preset, CronExpression: stringValue(body.CronExpression), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
+	response, err := server.control.Command.UpdateSchedule(r.Context(), &controlplanev1.UpdateScheduleRequest{Mutation: m, ScheduleRef: ref, Name: body.Name, Target: target, Preset: string(body.Preset), TimeOfDay: body.TimeOfDay, DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

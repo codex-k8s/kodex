@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import type { ScheduleInput } from "@/shared/api/generated/openapi/types.gen";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -41,7 +42,9 @@ const form = reactive({
   name: "",
   targetType: "AGENT" as "AGENT" | "WORKFLOW",
   targetRef: "",
-  preset: "DAILY",
+  preset: "DAILY" as ScheduleInput["preset"],
+  timeOfDay: "09:00",
+  dayOfWeek: "MONDAY" as NonNullable<ScheduleInput["dayOfWeek"]>,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   task: "",
   sessionPolicy: "NEW_EACH_RUN" as "NEW_EACH_RUN" | "CONTINUE_ONE",
@@ -49,6 +52,21 @@ const form = reactive({
     | "CONTROL_CENTER_ONLY"
     | "CONTROL_CENTER_AND_OPTIONAL_CHANNELS",
 });
+const timezoneOptions = Array.from(
+  new Set([
+    form.timezone,
+    "UTC",
+    "Europe/Saratov",
+    "Europe/Moscow",
+    "Europe/Berlin",
+    "Asia/Dubai",
+    "Asia/Almaty",
+    "Asia/Tokyo",
+    "America/New_York",
+    "America/Chicago",
+    "America/Los_Angeles",
+  ]),
+);
 const targets = computed(() =>
   form.targetType === "AGENT" ? agents.value : workflows.value,
 );
@@ -63,6 +81,8 @@ async function submit(): Promise<void> {
       targetType: form.targetType,
       targetRef: form.targetRef,
       preset: form.preset,
+      timeOfDay: form.preset === "HOURLY" ? "00:00" : form.timeOfDay,
+      ...(form.preset === "WEEKLY" ? { dayOfWeek: form.dayOfWeek } : {}),
       timezone: form.timezone,
       input: { task: form.task },
       sessionPolicy: form.sessionPolicy,
@@ -143,8 +163,18 @@ onMounted(
           <div>
             <h3>{{ schedule.name }}</h3>
             <p>
-              {{ schedule.target.displayName }} · {{ schedule.preset }} ·
-              {{ schedule.timezone }}
+              {{ schedule.target.displayName }} ·
+              {{ $t(`automations.presetValue.${schedule.preset}`)
+              }}<template v-if="schedule.timeOfDay">
+                · {{ schedule.timeOfDay }}</template
+              ><template v-if="schedule.dayOfWeek">
+                · {{ $t(`automations.day.${schedule.dayOfWeek}`) }}</template
+              >
+              · {{ schedule.timezone }}
+            </p>
+            <p v-if="schedule.nextRunAt" class="secondary">
+              {{ $t("automations.nextRun") }}:
+              {{ new Date(schedule.nextRunAt).toLocaleString() }}
             </p>
           </div>
           <StatusBadge :state="schedule.state" />
@@ -211,10 +241,43 @@ onMounted(
             <option value="WEEKLY">{{ $t("automations.weekly") }}</option>
           </select></label
         >
+        <label v-if="form.preset !== 'HOURLY'" class="field"
+          ><span>{{ $t("automations.timeOfDay") }}</span
+          ><input v-model="form.timeOfDay" type="time" required
+        /></label>
+        <label v-if="form.preset === 'WEEKLY'" class="field"
+          ><span>{{ $t("automations.dayOfWeek") }}</span
+          ><select v-model="form.dayOfWeek">
+            <option value="MONDAY">{{ $t("automations.day.MONDAY") }}</option>
+            <option value="TUESDAY">
+              {{ $t("automations.day.TUESDAY") }}
+            </option>
+            <option value="WEDNESDAY">
+              {{ $t("automations.day.WEDNESDAY") }}
+            </option>
+            <option value="THURSDAY">
+              {{ $t("automations.day.THURSDAY") }}
+            </option>
+            <option value="FRIDAY">{{ $t("automations.day.FRIDAY") }}</option>
+            <option value="SATURDAY">
+              {{ $t("automations.day.SATURDAY") }}
+            </option>
+            <option value="SUNDAY">{{ $t("automations.day.SUNDAY") }}</option>
+          </select></label
+        >
         <label class="field"
           ><span>{{ $t("automations.timezone") }}</span
-          ><input v-model.trim="form.timezone" required maxlength="64"
-        /></label>
+          ><input
+            v-model.trim="form.timezone"
+            list="schedule-timezones"
+            required
+            maxlength="80"
+          /><datalist id="schedule-timezones">
+            <option v-for="timezone in timezoneOptions" :key="timezone">
+              {{ timezone }}
+            </option>
+          </datalist></label
+        >
         <label class="field field--wide"
           ><span>{{ $t("runs.task") }}</span
           ><textarea v-model.trim="form.task" required maxlength="8000" />

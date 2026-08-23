@@ -70,8 +70,8 @@ completed Turn в родительской Session, а после всех ож�
 | `artifacts` | organization/project/run metadata, version/digest/scan/result state |
 | `artifact_bindings` | exact input/result/session/run/node relation |
 | `artifact_content` | bounded MVP content под той же PostgreSQL tenant boundary |
-| `schedules` | Agent/Workflow target, timezone, input/session/notification policy |
-| `schedule_occurrences` | immutable due time, attempt/fence и materialized Run |
+| `schedules` | Agent/Workflow target, server-normalized preset, timezone, next due, input/session/notification policy |
+| `schedule_occurrences` | immutable due time, schedule version, target/input snapshot и digest, attempt/fence и materialized Run |
 
 ## Integrations
 

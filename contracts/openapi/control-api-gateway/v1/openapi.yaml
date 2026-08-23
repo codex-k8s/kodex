@@ -2130,6 +2130,8 @@ components:
         state: { type: string, enum: [ACTIVE, PAUSED, NEEDS_ATTENTION, ARCHIVED] }
         preset: { type: string, maxLength: 120 }
         cronExpression: { type: string, maxLength: 160 }
+        timeOfDay: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        dayOfWeek: { type: string, enum: ['', MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY] }
         timezone: { type: string, maxLength: 80 }
         input: { type: object, maxProperties: 100, additionalProperties: true }
         sessionPolicy: { type: string, enum: [NEW_EACH_RUN, CONTINUE_ONE] }
@@ -2140,13 +2142,14 @@ components:
     ScheduleInput:
       type: object
       additionalProperties: false
-      required: [name, targetRef, targetType, preset, timezone, input, sessionPolicy, notificationPolicy]
+      required: [name, targetRef, targetType, preset, timeOfDay, timezone, input, sessionPolicy, notificationPolicy]
       properties:
         name: { type: string, minLength: 1, maxLength: 160 }
         targetRef: { $ref: '#/components/schemas/OpaqueRef' }
         targetType: { type: string, enum: [AGENT, WORKFLOW] }
-        preset: { type: string, maxLength: 120 }
-        cronExpression: { type: string, maxLength: 160 }
+        preset: { type: string, enum: [HOURLY, DAILY, WEEKDAYS, WEEKLY] }
+        timeOfDay: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        dayOfWeek: { type: string, enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY] }
         timezone: { type: string, minLength: 1, maxLength: 80 }
         input: { type: object, maxProperties: 100, additionalProperties: true }
         sessionPolicy: { type: string, enum: [NEW_EACH_RUN, CONTINUE_ONE] }

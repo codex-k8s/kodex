@@ -4385,6 +4385,8 @@ type Schedule struct {
 	NextRunAt          *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=next_run_at,json=nextRunAt,proto3" json:"next_run_at,omitempty"`
 	LastOutcome        string                 `protobuf:"bytes,14,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"`
 	NextActions        []NextAction           `protobuf:"varint,15,rep,packed,name=next_actions,json=nextActions,proto3,enum=controlplane.v1.NextAction" json:"next_actions,omitempty"`
+	TimeOfDay          string                 `protobuf:"bytes,16,opt,name=time_of_day,json=timeOfDay,proto3" json:"time_of_day,omitempty"`
+	DayOfWeek          string                 `protobuf:"bytes,17,opt,name=day_of_week,json=dayOfWeek,proto3" json:"day_of_week,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -4522,6 +4524,20 @@ func (x *Schedule) GetNextActions() []NextAction {
 		return x.NextActions
 	}
 	return nil
+}
+
+func (x *Schedule) GetTimeOfDay() string {
+	if x != nil {
+		return x.TimeOfDay
+	}
+	return ""
+}
+
+func (x *Schedule) GetDayOfWeek() string {
+	if x != nil {
+		return x.DayOfWeek
+	}
+	return ""
 }
 
 type IntegrationCapability struct {
@@ -12344,6 +12360,8 @@ type CreateScheduleRequest struct {
 	Input              *structpb.Struct       `protobuf:"bytes,8,opt,name=input,proto3" json:"input,omitempty"`
 	SessionPolicy      string                 `protobuf:"bytes,9,opt,name=session_policy,json=sessionPolicy,proto3" json:"session_policy,omitempty"`
 	NotificationPolicy string                 `protobuf:"bytes,10,opt,name=notification_policy,json=notificationPolicy,proto3" json:"notification_policy,omitempty"`
+	TimeOfDay          string                 `protobuf:"bytes,11,opt,name=time_of_day,json=timeOfDay,proto3" json:"time_of_day,omitempty"`
+	DayOfWeek          string                 `protobuf:"bytes,12,opt,name=day_of_week,json=dayOfWeek,proto3" json:"day_of_week,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -12448,6 +12466,20 @@ func (x *CreateScheduleRequest) GetNotificationPolicy() string {
 	return ""
 }
 
+func (x *CreateScheduleRequest) GetTimeOfDay() string {
+	if x != nil {
+		return x.TimeOfDay
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetDayOfWeek() string {
+	if x != nil {
+		return x.DayOfWeek
+	}
+	return ""
+}
+
 type CreateScheduleResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Schedule      *Schedule              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
@@ -12504,6 +12536,8 @@ type UpdateScheduleRequest struct {
 	Input              *structpb.Struct       `protobuf:"bytes,8,opt,name=input,proto3" json:"input,omitempty"`
 	SessionPolicy      string                 `protobuf:"bytes,9,opt,name=session_policy,json=sessionPolicy,proto3" json:"session_policy,omitempty"`
 	NotificationPolicy string                 `protobuf:"bytes,10,opt,name=notification_policy,json=notificationPolicy,proto3" json:"notification_policy,omitempty"`
+	TimeOfDay          string                 `protobuf:"bytes,11,opt,name=time_of_day,json=timeOfDay,proto3" json:"time_of_day,omitempty"`
+	DayOfWeek          string                 `protobuf:"bytes,12,opt,name=day_of_week,json=dayOfWeek,proto3" json:"day_of_week,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -12604,6 +12638,20 @@ func (x *UpdateScheduleRequest) GetSessionPolicy() string {
 func (x *UpdateScheduleRequest) GetNotificationPolicy() string {
 	if x != nil {
 		return x.NotificationPolicy
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetTimeOfDay() string {
+	if x != nil {
+		return x.TimeOfDay
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetDayOfWeek() string {
+	if x != nil {
+		return x.DayOfWeek
 	}
 	return ""
 }
@@ -16464,6 +16512,7 @@ type ScheduleClaim struct {
 	OccurrenceRef string                 `protobuf:"bytes,2,opt,name=occurrence_ref,json=occurrenceRef,proto3" json:"occurrence_ref,omitempty"`
 	Lease         *WorkLease             `protobuf:"bytes,3,opt,name=lease,proto3" json:"lease,omitempty"`
 	ScheduledFor  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
+	InputDigest   string                 `protobuf:"bytes,5,opt,name=input_digest,json=inputDigest,proto3" json:"input_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -16524,6 +16573,13 @@ func (x *ScheduleClaim) GetScheduledFor() *timestamppb.Timestamp {
 		return x.ScheduledFor
 	}
 	return nil
+}
+
+func (x *ScheduleClaim) GetInputDigest() string {
+	if x != nil {
+		return x.InputDigest
+	}
+	return ""
 }
 
 type ClaimDueSchedulesRequest struct {
@@ -18849,7 +18905,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12>\n" +
 	"\fnext_actions\x18\x0f \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x12\x16\n" +
-	"\x06digest\x18\x10 \x01(\tR\x06digest\"\xd8\x04\n" +
+	"\x06digest\x18\x10 \x01(\tR\x06digest\"\x98\x05\n" +
 	"\bSchedule\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
@@ -18867,7 +18923,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x13notification_policy\x18\f \x01(\tR\x12notificationPolicy\x12:\n" +
 	"\vnext_run_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tnextRunAt\x12!\n" +
 	"\flast_outcome\x18\x0e \x01(\tR\vlastOutcome\x12>\n" +
-	"\fnext_actions\x18\x0f \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\"\xa0\x01\n" +
+	"\fnext_actions\x18\x0f \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\x12\x1e\n" +
+	"\vtime_of_day\x18\x10 \x01(\tR\ttimeOfDay\x12\x1e\n" +
+	"\vday_of_week\x18\x11 \x01(\tR\tdayOfWeek\"\xa0\x01\n" +
 	"\x15IntegrationCapability\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -19459,7 +19517,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\x7f\n" +
 	"\x15ListSchedulesResponse\x127\n" +
 	"\tschedules\x18\x01 \x03(\v2\x19.controlplane.v1.ScheduleR\tschedules\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xa2\x03\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xe2\x03\n" +
 	"\x15CreateScheduleRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
 	"\vproject_ref\x18\x02 \x01(\tR\n" +
@@ -19472,9 +19530,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05input\x18\b \x01(\v2\x17.google.protobuf.StructR\x05input\x12%\n" +
 	"\x0esession_policy\x18\t \x01(\tR\rsessionPolicy\x12/\n" +
 	"\x13notification_policy\x18\n" +
-	" \x01(\tR\x12notificationPolicy\"O\n" +
+	" \x01(\tR\x12notificationPolicy\x12\x1e\n" +
+	"\vtime_of_day\x18\v \x01(\tR\ttimeOfDay\x12\x1e\n" +
+	"\vday_of_week\x18\f \x01(\tR\tdayOfWeek\"O\n" +
 	"\x16CreateScheduleResponse\x125\n" +
-	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ScheduleR\bschedule\"\xa4\x03\n" +
+	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ScheduleR\bschedule\"\xe4\x03\n" +
 	"\x15UpdateScheduleRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12!\n" +
 	"\fschedule_ref\x18\x02 \x01(\tR\vscheduleRef\x12\x12\n" +
@@ -19486,7 +19546,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05input\x18\b \x01(\v2\x17.google.protobuf.StructR\x05input\x12%\n" +
 	"\x0esession_policy\x18\t \x01(\tR\rsessionPolicy\x12/\n" +
 	"\x13notification_policy\x18\n" +
-	" \x01(\tR\x12notificationPolicy\"O\n" +
+	" \x01(\tR\x12notificationPolicy\x12\x1e\n" +
+	"\vtime_of_day\x18\v \x01(\tR\ttimeOfDay\x12\x1e\n" +
+	"\vday_of_week\x18\f \x01(\tR\tdayOfWeek\"O\n" +
 	"\x16UpdateScheduleResponse\x125\n" +
 	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ScheduleR\bschedule\"\x96\x01\n" +
 	"\x19SetScheduleEnabledRequest\x12<\n" +
@@ -19787,12 +19849,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\x0e2&.controlplane.v1.AssistantRuntimeStateR\x05state\x12&\n" +
 	"\x0fsafe_error_code\x18\x05 \x01(\tR\rsafeErrorCode\"[\n" +
 	"\x19ReportWarmRuntimeResponse\x12>\n" +
-	"\tassistant\x18\x01 \x01(\v2 .controlplane.v1.SystemAssistantR\tassistant\"\xe0\x01\n" +
+	"\tassistant\x18\x01 \x01(\v2 .controlplane.v1.SystemAssistantR\tassistant\"\x83\x02\n" +
 	"\rScheduleClaim\x125\n" +
 	"\bschedule\x18\x01 \x01(\v2\x19.controlplane.v1.ScheduleR\bschedule\x12%\n" +
 	"\x0eoccurrence_ref\x18\x02 \x01(\tR\roccurrenceRef\x120\n" +
 	"\x05lease\x18\x03 \x01(\v2\x1a.controlplane.v1.WorkLeaseR\x05lease\x12?\n" +
-	"\rscheduled_for\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\"]\n" +
+	"\rscheduled_for\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x12!\n" +
+	"\finput_digest\x18\x05 \x01(\tR\vinputDigest\"]\n" +
 	"\x18ClaimDueSchedulesRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"S\n" +

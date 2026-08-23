@@ -65,6 +65,14 @@ Schedule хранит target kind/ref, version policy, timezone, preset/cron, bo
 input, session policy, concurrency/misfire, retry и notification policy.
 Mattermost destination не обязателен.
 
+Owner API принимает закрытые presets `HOURLY`, `DAILY`, `WEEKDAYS`, `WEEKLY`,
+локальное время, день недели для weekly и IANA timezone. Control-plane
+валидирует timezone и сам материализует внутреннее cron-представление; frontend
+не вычисляет следующий запуск. При несуществующем локальном времени во время
+DST-перехода occurrence переносится на первую существующую минуту после
+разрыва. Для пропущенного времени создаётся не более одного bounded occurrence,
+после чего `next_run_at` сразу переводится в будущее.
+
 Automation-scheduler не вычисляет cron lifecycle и не создаёт Run локально. Он:
 
 1. claim-ит due occurrences специализированным RPC;
@@ -74,6 +82,13 @@ Automation-scheduler не вычисляет cron lifecycle и не создаё
 
 Несколько replicas безопасны за счёт owner-side lock/claim. Cancel, disable,
 target archive и terminal occurrence закрывают leases/grants одной транзакцией.
+Claim атомарно сохраняет immutable snapshot имени, target, schedule version и
+bounded input вместе с digest и заранее двигает `next_run_at`. Materialization
+использует только этот snapshot, поэтому параллельное изменение Schedule не
+меняет уже принятую occurrence. Пока occurrence `CLAIMED` или `MATERIALIZED`,
+тот же Schedule повторно не claim-ится. Истёкший `CLAIMED` occurrence не
+теряется: control-plane выдаёт для той же immutable occurrence новый lease и
+монотонное поколение, после чего прежние lease/fence закрыто отклоняются.
 
 ## Результат и уведомления
 

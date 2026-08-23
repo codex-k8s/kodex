@@ -1416,6 +1416,42 @@ func (e RunTargetType) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleDayOfWeek.
+const (
+	ScheduleDayOfWeekEmpty     ScheduleDayOfWeek = ""
+	ScheduleDayOfWeekFRIDAY    ScheduleDayOfWeek = "FRIDAY"
+	ScheduleDayOfWeekMONDAY    ScheduleDayOfWeek = "MONDAY"
+	ScheduleDayOfWeekSATURDAY  ScheduleDayOfWeek = "SATURDAY"
+	ScheduleDayOfWeekSUNDAY    ScheduleDayOfWeek = "SUNDAY"
+	ScheduleDayOfWeekTHURSDAY  ScheduleDayOfWeek = "THURSDAY"
+	ScheduleDayOfWeekTUESDAY   ScheduleDayOfWeek = "TUESDAY"
+	ScheduleDayOfWeekWEDNESDAY ScheduleDayOfWeek = "WEDNESDAY"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleDayOfWeek enum.
+func (e ScheduleDayOfWeek) Valid() bool {
+	switch e {
+	case ScheduleDayOfWeekEmpty:
+		return true
+	case ScheduleDayOfWeekFRIDAY:
+		return true
+	case ScheduleDayOfWeekMONDAY:
+		return true
+	case ScheduleDayOfWeekSATURDAY:
+		return true
+	case ScheduleDayOfWeekSUNDAY:
+		return true
+	case ScheduleDayOfWeekTHURSDAY:
+		return true
+	case ScheduleDayOfWeekTUESDAY:
+		return true
+	case ScheduleDayOfWeekWEDNESDAY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleNotificationPolicy.
 const (
 	ScheduleNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
@@ -1494,6 +1530,39 @@ func (e ScheduleCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleInputDayOfWeek.
+const (
+	ScheduleInputDayOfWeekFRIDAY    ScheduleInputDayOfWeek = "FRIDAY"
+	ScheduleInputDayOfWeekMONDAY    ScheduleInputDayOfWeek = "MONDAY"
+	ScheduleInputDayOfWeekSATURDAY  ScheduleInputDayOfWeek = "SATURDAY"
+	ScheduleInputDayOfWeekSUNDAY    ScheduleInputDayOfWeek = "SUNDAY"
+	ScheduleInputDayOfWeekTHURSDAY  ScheduleInputDayOfWeek = "THURSDAY"
+	ScheduleInputDayOfWeekTUESDAY   ScheduleInputDayOfWeek = "TUESDAY"
+	ScheduleInputDayOfWeekWEDNESDAY ScheduleInputDayOfWeek = "WEDNESDAY"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputDayOfWeek enum.
+func (e ScheduleInputDayOfWeek) Valid() bool {
+	switch e {
+	case ScheduleInputDayOfWeekFRIDAY:
+		return true
+	case ScheduleInputDayOfWeekMONDAY:
+		return true
+	case ScheduleInputDayOfWeekSATURDAY:
+		return true
+	case ScheduleInputDayOfWeekSUNDAY:
+		return true
+	case ScheduleInputDayOfWeekTHURSDAY:
+		return true
+	case ScheduleInputDayOfWeekTUESDAY:
+		return true
+	case ScheduleInputDayOfWeekWEDNESDAY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleInputNotificationPolicy.
 const (
 	ScheduleInputNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleInputNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
@@ -1506,6 +1575,30 @@ func (e ScheduleInputNotificationPolicy) Valid() bool {
 	case ScheduleInputNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS:
 		return true
 	case ScheduleInputNotificationPolicyCONTROLCENTERONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleInputPreset.
+const (
+	DAILY    ScheduleInputPreset = "DAILY"
+	HOURLY   ScheduleInputPreset = "HOURLY"
+	WEEKDAYS ScheduleInputPreset = "WEEKDAYS"
+	WEEKLY   ScheduleInputPreset = "WEEKLY"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputPreset enum.
+func (e ScheduleInputPreset) Valid() bool {
+	switch e {
+	case DAILY:
+		return true
+	case HOURLY:
+		return true
+	case WEEKDAYS:
+		return true
+	case WEEKLY:
 		return true
 	default:
 		return false
@@ -2661,6 +2754,7 @@ type RuntimeSelection struct {
 // Schedule defines model for Schedule.
 type Schedule struct {
 	CronExpression     *string                    `json:"cronExpression,omitempty"`
+	DayOfWeek          *ScheduleDayOfWeek         `json:"dayOfWeek,omitempty"`
 	Input              *map[string]interface{}    `json:"input,omitempty"`
 	LastOutcome        *string                    `json:"lastOutcome,omitempty"`
 	Name               string                     `json:"name"`
@@ -2673,9 +2767,13 @@ type Schedule struct {
 	SessionPolicy      ScheduleSessionPolicy      `json:"sessionPolicy"`
 	State              ScheduleState              `json:"state"`
 	Target             RunTarget                  `json:"target"`
+	TimeOfDay          *string                    `json:"timeOfDay,omitempty"`
 	Timezone           string                     `json:"timezone"`
 	Version            int64                      `json:"version"`
 }
+
+// ScheduleDayOfWeek defines model for Schedule.DayOfWeek.
+type ScheduleDayOfWeek string
 
 // ScheduleNotificationPolicy defines model for Schedule.NotificationPolicy.
 type ScheduleNotificationPolicy string
@@ -2696,19 +2794,26 @@ type ScheduleCommandAction string
 
 // ScheduleInput defines model for ScheduleInput.
 type ScheduleInput struct {
-	CronExpression     *string                         `json:"cronExpression,omitempty"`
+	DayOfWeek          *ScheduleInputDayOfWeek         `json:"dayOfWeek,omitempty"`
 	Input              map[string]interface{}          `json:"input"`
 	Name               string                          `json:"name"`
 	NotificationPolicy ScheduleInputNotificationPolicy `json:"notificationPolicy"`
-	Preset             string                          `json:"preset"`
+	Preset             ScheduleInputPreset             `json:"preset"`
 	SessionPolicy      ScheduleInputSessionPolicy      `json:"sessionPolicy"`
 	TargetRef          OpaqueRef                       `json:"targetRef"`
 	TargetType         ScheduleInputTargetType         `json:"targetType"`
+	TimeOfDay          string                          `json:"timeOfDay"`
 	Timezone           string                          `json:"timezone"`
 }
 
+// ScheduleInputDayOfWeek defines model for ScheduleInput.DayOfWeek.
+type ScheduleInputDayOfWeek string
+
 // ScheduleInputNotificationPolicy defines model for ScheduleInput.NotificationPolicy.
 type ScheduleInputNotificationPolicy string
+
+// ScheduleInputPreset defines model for ScheduleInput.Preset.
+type ScheduleInputPreset string
 
 // ScheduleInputSessionPolicy defines model for ScheduleInput.SessionPolicy.
 type ScheduleInputSessionPolicy string

@@ -107,7 +107,7 @@ func (server *Server) ChangeArtifactBinding(ctx context.Context, request *contro
 }
 
 func (server *Server) CreateSchedule(ctx context.Context, request *controlplanev1.CreateScheduleRequest) (*controlplanev1.CreateScheduleResponse, error) {
-	payload := command.ScheduleInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy(), Enabled: true}
+	payload := command.ScheduleInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(), DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy(), Enabled: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateSchedule_FullMethodName, command.CreateSchedule, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (server *Server) CreateSchedule(ctx context.Context, request *controlplanev
 }
 
 func (server *Server) UpdateSchedule(ctx context.Context, request *controlplanev1.UpdateScheduleRequest) (*controlplanev1.UpdateScheduleResponse, error) {
-	payload := command.ScheduleInput{Ref: request.GetScheduleRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy()}
+	payload := command.ScheduleInput{Ref: request.GetScheduleRef(), Name: request.GetName(), Target: runTarget(request.GetTarget()), Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(), DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), Input: asMap(request.GetInput()), SessionPolicy: request.GetSessionPolicy(), NotificationPolicy: request.GetNotificationPolicy()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_UpdateSchedule_FullMethodName, command.UpdateSchedule, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

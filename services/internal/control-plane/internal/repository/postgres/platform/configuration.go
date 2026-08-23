@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	scheduleservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -20,24 +21,34 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	payload.Name = strings.TrimSpace(payload.Name)
 	if input.Kind == command.CreateSchedule {
+		normalized, err := normalizeScheduleInput(payload, time.Now().UTC())
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		payload.CronExpression = normalized.CronExpression
+		payload.TimeOfDay = normalized.TimeOfDay
+		payload.DayOfWeek = normalized.DayOfWeek
 		projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
 		if projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
 		}
-		if !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) {
-			return commandOutcome{}, errs.ErrInvalid
+		if err := repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); err != nil {
+			return commandOutcome{}, err
 		}
 		ref, _ := newRef("sch")
 		var item entity.Schedule
 		var next *time.Time
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 		item.ProjectRef = payload.ProjectRef
 		item.Target = payload.Target
 		item.Input = payload.Input
+		item.TimeOfDay = payload.TimeOfDay
+		item.DayOfWeek = payload.DayOfWeek
 		item.NextRunAt = next
 		item.NextActions = scheduleActions(item, true)
 		return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "SCHEDULE", resourceRef: ref, summary: "i18n:SCHEDULE_CREATED", platformEvent: "SCHEDULE_CHANGED"}, nil
@@ -45,10 +56,29 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	var projectID, projectRef string
+	var scheduleID, projectID, projectRef, storedPreset, storedCron, storedTimezone string
+	var storedVersion int64
+	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, scope.organizationID, payload.Ref).Scan(&scheduleID, &projectID, &projectRef, &storedPreset, &storedCron, &storedTimezone, &storedVersion); errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrNotFound
+	} else if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if storedVersion != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
+	}
 	var item entity.Schedule
 	if input.Kind == command.UpdateSchedule {
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		normalized, normalizeErr := normalizeScheduleInput(payload, time.Now().UTC())
+		if normalizeErr != nil {
+			return commandOutcome{}, normalizeErr
+		}
+		if targetErr := repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); targetErr != nil {
+			return commandOutcome{}, targetErr
+		}
+		payload.CronExpression = normalized.CronExpression
+		payload.TimeOfDay = normalized.TimeOfDay
+		payload.DayOfWeek = normalized.DayOfWeek
+		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -57,18 +87,70 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		}
 		item.Target = payload.Target
 		item.Input = payload.Input
+		item.TimeOfDay = payload.TimeOfDay
+		item.DayOfWeek = payload.DayOfWeek
 	} else {
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesEnabledVersionUpdatedAt, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		next, nextErr := scheduleservice.Next(storedPreset, storedCron, storedTimezone, time.Now().UTC())
+		if nextErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesEnabledVersionUpdatedAt, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Enabled, next).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if !payload.Enabled {
+			if _, cancelErr := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences, scheduleID); cancelErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+		}
 	}
 	item.ProjectRef = projectRef
+	if displayErr := attachScheduleDisplay(&item); displayErr != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
 	item.NextActions = scheduleActions(item, true)
 	return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE", resourceRef: item.Ref, summary: "i18n:SCHEDULE_UPDATED", platformEvent: "SCHEDULE_CHANGED"}, nil
+}
+
+func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (scheduleservice.Normalized, error) {
+	payload.Name = strings.TrimSpace(payload.Name)
+	if payload.Name == "" || len(payload.Name) > 160 || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || !contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) {
+		return scheduleservice.Normalized{}, errs.ErrInvalid
+	}
+	normalized, err := scheduleservice.Normalize(scheduleservice.Spec{Preset: payload.Preset, TimeOfDay: payload.TimeOfDay, DayOfWeek: payload.DayOfWeek, Timezone: payload.Timezone}, after)
+	if err != nil {
+		return scheduleservice.Normalized{}, errs.ErrInvalid
+	}
+	return normalized, nil
+}
+
+func (repository *Repository) validateScheduleTarget(ctx context.Context, tx pgx.Tx, organizationID, projectID string, target entity.RunTarget) error {
+	query := queryConfigurationChangescheduleSelectAgentTarget
+	if target.Type == "WORKFLOW" {
+		query = queryConfigurationChangescheduleSelectWorkflowTarget
+	} else if target.Type != "AGENT" {
+		return errs.ErrInvalid
+	}
+	var id string
+	if err := tx.QueryRow(ctx, query, organizationID, projectID, target.Ref).Scan(&id); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrNotFound
+	} else if err != nil {
+		return errs.ErrUnavailable
+	}
+	return nil
+}
+
+func attachScheduleDisplay(item *entity.Schedule) error {
+	timeOfDay, dayOfWeek, err := scheduleservice.Display(item.Preset, item.CronExpression)
+	if err != nil {
+		return err
+	}
+	item.TimeOfDay = timeOfDay
+	item.DayOfWeek = dayOfWeek
+	return nil
 }
 
 func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

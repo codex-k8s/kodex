@@ -168,15 +168,15 @@ type Artifact struct {
 }
 
 type Schedule struct {
-	Ref, ProjectRef, Name, Preset, CronExpression, Timezone string
-	SessionPolicy, NotificationPolicy                       string
-	Target                                                  RunTarget
-	Input                                                   map[string]any
-	Enabled                                                 bool
-	Version                                                 int64
-	NextRunAt, LastRunAt                                    *time.Time
-	CreatedAt, UpdatedAt                                    time.Time
-	NextActions                                             []string
+	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone string
+	SessionPolicy, NotificationPolicy                                             string
+	Target                                                                        RunTarget
+	Input                                                                         map[string]any
+	Enabled                                                                       bool
+	Version                                                                       int64
+	NextRunAt, LastRunAt                                                          *time.Time
+	CreatedAt, UpdatedAt                                                          time.Time
+	NextActions                                                                   []string
 }
 
 type IntegrationCapability struct{ Key, Name, Description, Risk string }

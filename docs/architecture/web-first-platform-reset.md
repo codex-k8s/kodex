@@ -100,7 +100,7 @@ Project membership отдельно задаёт typed permissions. Полном
 | `POST /api/v1/owner-gates/{gateRef}/resolution` | `ResolveOwnerGate` | Gate service | recipient permission, OCC/idempotency | one winner + graph continuation + `owner_gate.resolved` | runtime-controller, WS, optional adapter |
 | artifact upload/download endpoints | reserve/complete/grant RPC | Artifact service | project/run lineage, one-time grant | metadata/scan/result + `artifact.available` | object boundary, PWA |
 | assistant conversation endpoints | enqueue system turn/apply typed plan | Assistant + same domain services | user authority preserved per tool | Session/Turn, typed receipts, double attribution | warm assistant runtime, PWA |
-| schedule endpoints | typed schedule commands | Schedule service | target/grants resolved server-side | Schedule/Occurrence + `run.created` | scheduler/runtime-controller |
+| schedule endpoints | typed preset/time/timezone commands | Schedule service | target resolved server-side, OCC/idempotency; claim pin-ит schedule version + immutable input digest | Schedule/Occurrence + `run.created` | scheduler/runtime-controller |
 | integration endpoints | metadata RPC + typed gateway client | Integration service | grants and secret boundary separated | connection metadata/audit; credential receipt only | integration-gateway, PWA |
 | `GET /api/v1/audit-events` | `ListAuditEvents` с bounded поиском | Audit query service | OIDC actor; platform Auditor/Administrator/Owner либо project `VIEW_AUDIT` | read-only события с двойной attribution и server-resolved resource name; без event | экран аудита |
 

@@ -283,7 +283,7 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 	}
 	response := &controlplanev1.ClaimDueSchedulesResponse{}
 	for _, item := range items {
-		response.Claims = append(response.Claims, &controlplanev1.ScheduleClaim{Schedule: &controlplanev1.Schedule{Ref: mapString(item, "scheduleRef"), Version: mapInt64(item, "scheduleVersion")}, OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor")})
+		response.Claims = append(response.Claims, &controlplanev1.ScheduleClaim{Schedule: &controlplanev1.Schedule{Ref: mapString(item, "scheduleRef"), Version: mapInt64(item, "scheduleVersion")}, OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor"), InputDigest: mapString(item, "inputDigest")})
 	}
 	return response, nil
 }

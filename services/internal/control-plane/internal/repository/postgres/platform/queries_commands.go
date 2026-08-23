@@ -199,6 +199,8 @@ var (
 	queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt string
 	//go:embed sql/commands_changerun_update_runtime_leases_state_updated_at.sql
 	queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt string
+	//go:embed sql/commands_changerun_update_schedule_occurrences_state_cancelled.sql
+	queryCommandsChangerunUpdateScheduleOccurrencesStateCancelled string
 	//go:embed sql/commands_changerun_update_session_turns_state_completed_at.sql
 	queryCommandsChangerunUpdateSessionTurnsStateCompletedAt string
 	//go:embed sql/commands_changerun_update_owner_gates_state_decision_decision_comment.sql

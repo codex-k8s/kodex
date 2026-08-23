@@ -1662,6 +1662,9 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateScheduleOccurrencesStateCancelled, rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateSessionTurnsStateCompletedAt, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}

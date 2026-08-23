@@ -250,17 +250,17 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 }
 
 func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "cronExpression", "timezone", "input", "sessionPolicy", "notificationPolicy") ||
-		!hasAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "timezone", "input", "sessionPolicy", "notificationPolicy") {
+	if !onlyAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "dayOfWeek", "timezone", "input", "sessionPolicy", "notificationPolicy") ||
+		!hasAssistantFields(input, "projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy") {
 		return command.ScheduleInput{}, errs.ErrInvalid
 	}
 	boundedInput, boundedInputOK := assistantObjectValue(input, "input")
 	payload := command.ScheduleInput{ProjectRef: assistantString(input, "projectRef"), Name: assistantString(input, "name"),
-		Preset: assistantString(input, "preset"), CronExpression: assistantString(input, "cronExpression"), Timezone: assistantString(input, "timezone"),
+		Preset: assistantString(input, "preset"), TimeOfDay: assistantString(input, "timeOfDay"), DayOfWeek: assistantString(input, "dayOfWeek"), Timezone: assistantString(input, "timezone"),
 		SessionPolicy: assistantString(input, "sessionPolicy"), NotificationPolicy: assistantString(input, "notificationPolicy"),
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}, Input: boundedInput}
 	if !boundedInputOK || payload.ProjectRef == "" || payload.Name == "" || len(payload.Name) > 160 || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" ||
-		payload.Preset == "" || len(payload.Preset) > 120 || len(payload.CronExpression) > 160 || payload.Timezone == "" || len(payload.Timezone) > 80 ||
+		payload.Preset == "" || len(payload.Preset) > 120 || len(payload.TimeOfDay) > 5 || len(payload.DayOfWeek) > 9 || payload.Timezone == "" || len(payload.Timezone) > 80 ||
 		!contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) || !validBoundedRunInput(payload.Input) {
 		return command.ScheduleInput{}, errs.ErrInvalid
 	}

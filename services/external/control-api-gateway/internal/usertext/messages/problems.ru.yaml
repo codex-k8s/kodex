@@ -140,6 +140,10 @@ SCHEDULE_UPDATED:
   other: Расписание обновлено
 SCHEDULED_RUN_TASK:
   other: Запуск по расписанию
+SCHEDULE_OCCURRENCE_MATERIALIZED:
+  other: Запуск по расписанию создан
+SCHEDULE_OCCURRENCE_COMPLETED:
+  other: Запуск по расписанию завершён
 INTEGRATION_CONNECTION_CREATED:
   other: Подключение интеграции создано
 INTEGRATION_CONNECTION_UPDATED:

@@ -1109,6 +1109,9 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &canManage); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
+		if err := attachScheduleDisplay(&item); err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
 		_ = json.Unmarshal(input, &item.Input)
 		item.NextActions = scheduleActions(item, canManage)
 		result = append(result, item)

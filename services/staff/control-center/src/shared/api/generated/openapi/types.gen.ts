@@ -621,6 +621,8 @@ export type Schedule = {
     state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED';
     preset: string;
     cronExpression?: string;
+    timeOfDay?: string;
+    dayOfWeek?: '' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
     timezone: string;
     input?: {
         [key: string]: unknown;
@@ -636,8 +638,9 @@ export type ScheduleInput = {
     name: string;
     targetRef: OpaqueRef;
     targetType: 'AGENT' | 'WORKFLOW';
-    preset: string;
-    cronExpression?: string;
+    preset: 'HOURLY' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY';
+    timeOfDay: string;
+    dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
     timezone: string;
     input: {
         [key: string]: unknown;

@@ -113,10 +113,10 @@ type ArtifactBindingInput struct {
 	Enabled               bool
 }
 type ScheduleInput struct {
-	Ref, ProjectRef, Name, Preset, CronExpression, Timezone, SessionPolicy, NotificationPolicy string
-	Target                                                                                     entity.RunTarget
-	Input                                                                                      map[string]any
-	Enabled                                                                                    bool
+	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone, SessionPolicy, NotificationPolicy string
+	Target                                                                                                           entity.RunTarget
+	Input                                                                                                            map[string]any
+	Enabled                                                                                                          bool
 }
 type ConnectionInput struct {
 	Ref, DefinitionKey, Name string

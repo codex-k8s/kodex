@@ -22,6 +22,14 @@ fenced claim наступившего occurrence и просит владель�
 запусков и параллельности, attempts и история occurrences принадлежат
 MatterCodex. Реализация внутренней очереди не изменяет этот контракт.
 
+При claim control-plane одной транзакцией фиксирует immutable input/target
+snapshot и digest occurrence, выдаёт fenced lease и вычисляет следующий due
+time. Worker не интерпретирует cron и не пересчитывает timezone. Изменение
+Schedule после claim влияет только на будущие occurrences.
+Истечение claim не отменяет уже наступивший occurrence: owner повторно выдаёт
+его с новым lease/fence и монотонным поколением, а старое поколение теряет
+полномочия.
+
 ## Последствия
 
 - Несколько реплик работают без повторных экземпляров расписания.

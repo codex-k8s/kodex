@@ -716,6 +716,8 @@ message Schedule {
   google.protobuf.Timestamp next_run_at = 13;
   string last_outcome = 14;
   repeated NextAction next_actions = 15;
+  string time_of_day = 16;
+  string day_of_week = 17;
 }
 
 message IntegrationCapability {
@@ -1455,6 +1457,8 @@ message CreateScheduleRequest {
   google.protobuf.Struct input = 8;
   string session_policy = 9;
   string notification_policy = 10;
+  string time_of_day = 11;
+  string day_of_week = 12;
 }
 message CreateScheduleResponse {
   Schedule schedule = 1;
@@ -1470,6 +1474,8 @@ message UpdateScheduleRequest {
   google.protobuf.Struct input = 8;
   string session_policy = 9;
   string notification_policy = 10;
+  string time_of_day = 11;
+  string day_of_week = 12;
 }
 message UpdateScheduleResponse {
   Schedule schedule = 1;
@@ -1809,6 +1815,7 @@ message ScheduleClaim {
   string occurrence_ref = 2;
   WorkLease lease = 3;
   google.protobuf.Timestamp scheduled_for = 4;
+  string input_digest = 5;
 }
 message ClaimDueSchedulesRequest {
   string workload_instance = 1;

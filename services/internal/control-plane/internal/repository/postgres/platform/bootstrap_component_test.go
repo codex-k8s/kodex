@@ -38,6 +38,14 @@ var (
 	bootstrapComponentConnectIntegrationQuery string
 	//go:embed testdata/sql/bootstrap_component_make_interaction_delivery_due.sql
 	bootstrapComponentMakeInteractionDeliveryDueQuery string
+	//go:embed testdata/sql/bootstrap_component_make_schedule_due.sql
+	bootstrapComponentMakeScheduleDueQuery string
+	//go:embed testdata/sql/bootstrap_component_schedule_occurrence_readback.sql
+	bootstrapComponentScheduleOccurrenceReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_change_schedule_after_claim.sql
+	bootstrapComponentChangeScheduleAfterClaimQuery string
+	//go:embed testdata/sql/bootstrap_component_expire_schedule_claim.sql
+	bootstrapComponentExpireScheduleClaimQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -110,6 +118,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
 		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
+	})
+	t.Run("durable schedule materializes immutable occurrence", func(t *testing.T) {
+		testScheduleLifecycle(t, ctx, repository)
 	})
 	t.Run("integration configuration and grants", func(t *testing.T) {
 		testIntegrationConfigurationAndGrants(t, ctx, repository, pool)
@@ -417,7 +428,7 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	}
 	scheduleResult, err := service.Execute(ctx, command.Command{
 		Kind: command.CreateSchedule, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-schedule"},
-		Payload: command.ScheduleInput{ProjectRef: projectRef, Name: "Daily readback", Target: entity.RunTarget{Type: "AGENT", Ref: actionAgent.Ref}, Preset: "DAILY", CronExpression: "0 9 * * *", Timezone: "UTC", Input: map[string]any{"task": "Prepare a bounded daily summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+		Payload: command.ScheduleInput{ProjectRef: projectRef, Name: "Daily readback", Target: entity.RunTarget{Type: "AGENT", Ref: actionAgent.Ref}, Preset: "DAILY", TimeOfDay: "09:00", Timezone: "UTC", Input: map[string]any{"task": "Prepare a bounded daily summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
 	})
 	if err != nil || scheduleResult.Schedule == nil {
 		t.Fatalf("create action readback schedule: schedule=%#v err=%v", scheduleResult.Schedule, err)
@@ -425,6 +436,9 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	schedules, _, err := service.ListSchedules(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
 	if err != nil || len(schedules) != 1 || len(schedules[0].NextActions) != 1 || schedules[0].NextActions[0] != "OPEN" {
 		t.Fatalf("read-only schedule actions are not authoritative: schedules=%#v err=%v", schedules, err)
+	}
+	if schedules[0].TimeOfDay != "09:00" || schedules[0].CronExpression != "0 9 * * *" || schedules[0].NextRunAt == nil {
+		t.Fatalf("owner-friendly schedule was not normalized: %#v", schedules[0])
 	}
 	runResult, err := service.Execute(ctx, command.Command{
 		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-run"},
@@ -593,6 +607,96 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 		if membership.Ref == added.Membership.Ref && membership.Active {
 			t.Fatal("project membership remained active after organization suspension")
 		}
+	}
+}
+
+func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.schedules.create",
+	}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatalf("construct schedule service: %v", err)
+	}
+	project, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "schedule-project-create"},
+		Payload: command.ProjectInput{Name: "Accounting automation", Purpose: "Prepare recurring accounting summaries", Language: "en"},
+	})
+	if err != nil || project.Project == nil {
+		t.Fatalf("create schedule project: project=%#v err=%v", project.Project, err)
+	}
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "schedule-accountant", "Accounting assistant")
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateSchedule, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "schedule-create"},
+		Payload: command.ScheduleInput{ProjectRef: project.Project.Ref, Name: "Daily accounting summary", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Preset: "WEEKDAYS", TimeOfDay: "09:30", Timezone: "Europe/Saratov", Input: map[string]any{"task": "Prepare a bounded accounting summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+	})
+	if err != nil || created.Schedule == nil || created.Schedule.CronExpression != "30 9 * * 1-5" || created.Schedule.TimeOfDay != "09:30" || created.Schedule.NextRunAt == nil {
+		t.Fatalf("create normalized schedule: schedule=%#v err=%v", created.Schedule, err)
+	}
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentMakeScheduleDueQuery, created.Schedule.Ref); err != nil {
+		t.Fatalf("make schedule due: %v", err)
+	}
+	schedulerClaim := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "automation-scheduler", Operation: "platform.runtime.schedules.claim",
+	}, "automation-scheduler")
+	claims, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-component", 1)
+	if err != nil || len(claims) != 1 || stringMap(claims[0], "inputDigest") == "" {
+		t.Fatalf("claim due schedule: claims=%#v err=%v", claims, err)
+	}
+	staleClaim := claims[0]
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentExpireScheduleClaimQuery, stringMap(staleClaim, "occurrenceRef")); err != nil {
+		t.Fatalf("expire schedule claim: %v", err)
+	}
+	claims, err = service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-recovery-component", 1)
+	if err != nil || len(claims) != 1 || stringMap(claims[0], "occurrenceRef") != stringMap(staleClaim, "occurrenceRef") || claims[0]["generation"].(int64) != staleClaim["generation"].(int64)+1 || stringMap(claims[0], "leaseRef") == stringMap(staleClaim, "leaseRef") {
+		t.Fatalf("recover expired schedule claim: stale=%#v recovered=%#v err=%v", staleClaim, claims, err)
+	}
+	if _, err := repository.pool.Exec(ctx, bootstrapComponentChangeScheduleAfterClaimQuery, created.Schedule.Ref); err != nil {
+		t.Fatalf("change schedule after claim: %v", err)
+	}
+	schedulerMaterialize := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "automation-scheduler", Operation: "platform.runtime.schedules.materialize",
+	}, "automation-scheduler")
+	_, err = service.Execute(ctx, command.Command{
+		Kind: command.MaterializeOccurrence, Principal: schedulerMaterialize,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-occurrence-stale-materialize"},
+		Payload:  command.OccurrenceInput{OccurrenceRef: stringMap(staleClaim, "occurrenceRef"), LeaseRef: stringMap(staleClaim, "leaseRef"), Fence: stringMap(staleClaim, "fence"), Generation: staleClaim["generation"].(int64)},
+	})
+	if !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("stale schedule claim retained authority: %v", err)
+	}
+	materialized, err := service.Execute(ctx, command.Command{
+		Kind: command.MaterializeOccurrence, Principal: schedulerMaterialize,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-occurrence-materialize"},
+		Payload:  command.OccurrenceInput{OccurrenceRef: stringMap(claims[0], "occurrenceRef"), LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: claims[0]["generation"].(int64)},
+	})
+	if err != nil || materialized.Run == nil || materialized.Schedule == nil || materialized.Run.Source != "SCHEDULE" || materialized.Schedule.Ref != created.Schedule.Ref || materialized.Run.Input["task"] != "Prepare a bounded accounting summary." {
+		t.Fatalf("materialize schedule occurrence: result=%#v err=%v", materialized, err)
+	}
+	var occurrenceState, runSource string
+	var leaseCleared bool
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleOccurrenceReadbackQuery, stringMap(claims[0], "occurrenceRef")).Scan(&occurrenceState, &leaseCleared, &runSource); err != nil || occurrenceState != "MATERIALIZED" || !leaseCleared || runSource != "SCHEDULE" {
+		t.Fatalf("schedule occurrence readback: state=%q lease_cleared=%t source=%q err=%v", occurrenceState, leaseCleared, runSource, err)
+	}
+	duplicateClaims, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-component", 1)
+	if err != nil || len(duplicateClaims) != 0 {
+		t.Fatalf("active schedule occurrence was claimed twice: claims=%#v err=%v", duplicateClaims, err)
+	}
+	runVersion := materialized.Run.Version
+	cancelled, err := service.Execute(ctx, command.Command{
+		Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "schedule-run-cancel", ExpectedVersion: &runVersion},
+		Payload:  command.RunCommandInput{RunRef: materialized.Run.Ref, Reason: "Close schedule component fixture"},
+	})
+	if err != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("cancel scheduled run: run=%#v err=%v", cancelled.Run, err)
+	}
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentScheduleOccurrenceReadbackQuery, stringMap(claims[0], "occurrenceRef")).Scan(&occurrenceState, &leaseCleared, &runSource); err != nil || occurrenceState != "CANCELLED" || !leaseCleared {
+		t.Fatalf("cancel schedule occurrence with run: state=%q lease_cleared=%t err=%v", occurrenceState, leaseCleared, err)
 	}
 }
 

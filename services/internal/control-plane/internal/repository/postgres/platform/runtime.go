@@ -499,7 +499,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		var scheduleID string
 		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateScheduleOccurrencesStateLeaseRefFenceDigest, lease["rootRunID"], map[bool]string{true: "COMPLETED", false: "FAILED"}[runState == "SUCCEEDED"]).Scan(&scheduleID)
 		if err == nil {
-			if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSchedulesLastRunAtVersionUpdatedAt, scheduleID); updateErr != nil {
+			if _, updateErr := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSchedulesLastRunAtUpdatedAt, scheduleID); updateErr != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
