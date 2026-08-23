@@ -16,13 +16,22 @@ keycloak_bootstrap="$repository_root/tools/deploy/configure-keycloak.sh"
 bash -n "$bootstrap" "$vault_initializer" "$keycloak_bootstrap"
 
 for secret_bootstrap in "$vault_initializer" "$keycloak_bootstrap"; do
-  grep -Fq 'read_single_line_secret()' "$secret_bootstrap" ||
+grep -Fq 'read_single_line_secret()' "$secret_bootstrap" ||
     fail "single-line secret validator is absent: ${secret_bootstrap#"$repository_root"/}"
   if rg -q '\{ cat "\$[^;]+"; printf '\''\\n'\''' "$secret_bootstrap"; then
     fail "secret bootstrap can insert an empty framing record: ${secret_bootstrap#"$repository_root"/}"
   fi
 done
-grep -Fq '{ printf '\''%s\n'\'' "$root_token"; cat "$file_path"; }' "$vault_initializer" ||
+grep -Fq 'local material_file_path' "$vault_initializer" ||
+  fail 'Vault owner material validation can mutate caller locals through Bash dynamic scope'
+grep -Fq 'for material_file_path in "$root_token_file" "$unseal_key_file"; do' "$vault_initializer" ||
+  fail 'Vault owner material validation does not use its private loop variable'
+if grep -Fq 'for file_path in "$root_token_file" "$unseal_key_file"; do' "$vault_initializer"; then
+  fail 'Vault owner material validation reuses the caller-owned seed file variable'
+fi
+[[ $(grep -Fc 'local path=$1 key=$2 seed_file_path=$3 root_token' "$vault_initializer") -eq 2 ]] ||
+  fail 'Vault KV helpers do not own an isolated seed file variable'
+grep -Fq '{ printf '\''%s\n'\'' "$root_token"; cat "$seed_file_path"; }' "$vault_initializer" ||
   fail 'Vault KV payload is not preserved byte-for-byte after token framing'
 grep -Fq 'printf '\''%s\n%s\n'\'' "$database_password" "$role_password"' "$vault_initializer" ||
   fail 'PostgreSQL role password framing is not canonical'
