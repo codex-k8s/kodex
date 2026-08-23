@@ -291,45 +291,28 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	schedule.NextActions = scheduleActions(schedule, true)
-	if input.Kind == command.MaterializeOccurrence {
-		if state != "CLAIMED" {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		var immutableInput map[string]any
-		if json.Unmarshal(occurrenceInput, &immutableInput) != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		nested := input
-		nested.Kind = command.LaunchRun
-		nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: "i18n:SCHEDULED_RUN_TASK", Source: "SCHEDULE", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: immutableInput}
-		outcome, err := repository.launchRun(ctx, tx, scope, nested)
-		if err != nil {
-			return commandOutcome{}, err
-		}
-		var runID string
-		_ = tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectRunsRef, outcome.result.Run.Ref).Scan(&runID)
-		_, _ = tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion, occurrenceID, runID)
-		outcome.resourceKind = "SCHEDULE_OCCURRENCE"
-		outcome.resourceRef = payload.OccurrenceRef
-		outcome.summary = "i18n:SCHEDULE_OCCURRENCE_MATERIALIZED"
-		outcome.result.Schedule = &schedule
-		return outcome, nil
-	}
-	if !contains([]string{"MATERIALIZED", "CLAIMED"}, state) {
+	if state != "CLAIMED" {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	outcomeState := "COMPLETED"
-	if strings.ToUpper(payload.Outcome) != "SUCCEEDED" {
-		outcomeState = "FAILED"
-	}
-	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateVersionUpdatedAt, occurrenceID, outcomeState); err != nil {
+	var immutableInput map[string]any
+	if json.Unmarshal(occurrenceInput, &immutableInput) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateSchedulesLastRunAtUpdatedAt, scheduleID); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	nested := input
+	nested.Kind = command.LaunchRun
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: "i18n:SCHEDULED_RUN_TASK", Source: "SCHEDULE", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: immutableInput}
+	outcome, err := repository.launchRun(ctx, tx, scope, nested)
+	if err != nil {
+		return commandOutcome{}, err
 	}
-	schedule.LastRunAt = timePointer(time.Now().UTC())
-	return commandOutcome{result: command.Result{Schedule: &schedule}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE_OCCURRENCE", resourceRef: payload.OccurrenceRef, summary: "i18n:SCHEDULE_OCCURRENCE_COMPLETED", platformEvent: "SCHEDULE_CHANGED"}, nil
+	var runID string
+	_ = tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectRunsRef, outcome.result.Run.Ref).Scan(&runID)
+	_, _ = tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion, occurrenceID, runID)
+	outcome.resourceKind = "SCHEDULE_OCCURRENCE"
+	outcome.resourceRef = payload.OccurrenceRef
+	outcome.summary = "i18n:SCHEDULE_OCCURRENCE_MATERIALIZED"
+	outcome.result.Schedule = &schedule
+	return outcome, nil
 }
 
 func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {

@@ -243,14 +243,6 @@ func (server *Server) ProposeAssistantPlan(ctx context.Context, request *control
 	return &controlplanev1.ProposeAssistantPlanResponse{Plan: castPlan(result.Plan), Conversation: castConversation(*result.Conversation)}, nil
 }
 
-func (server *Server) DeliverCallback(ctx context.Context, request *controlplanev1.DeliverCallbackRequest) (*controlplanev1.DeliverCallbackResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_DeliverCallback_FullMethodName, command.DeliverCallback, request.GetMutation(), command.CallbackInput{ChildRunRef: request.GetChildRunRef(), CallbackEdgeRef: request.GetCallbackEdgeRef()})
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.DeliverCallbackResponse{ParentRun: castRun(*result.Run), RootGraph: castGraph(*result.Graph), Duplicate: result.Duplicate}, nil
-}
-
 func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *controlplanev1.ReconcileWarmRuntimeRequest) (*controlplanev1.ReconcileWarmRuntimeResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReconcileWarmRuntime_FullMethodName)
 	if err != nil {
@@ -299,15 +291,6 @@ func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request
 		return nil, err
 	}
 	return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}, nil
-}
-
-func (server *Server) CompleteScheduleOccurrence(ctx context.Context, request *controlplanev1.CompleteScheduleOccurrenceRequest) (*controlplanev1.CompleteScheduleOccurrenceResponse, error) {
-	payload := command.OccurrenceInput{OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Outcome: request.GetOutcome()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName, command.CompleteOccurrence, request.GetMutation(), payload)
-	if err != nil {
-		return nil, err
-	}
-	return &controlplanev1.CompleteScheduleOccurrenceResponse{Schedule: castSchedule(*result.Schedule)}, nil
 }
 
 func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {

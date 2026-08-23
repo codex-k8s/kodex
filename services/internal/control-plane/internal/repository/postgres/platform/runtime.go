@@ -66,8 +66,6 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.delegateExecution(ctx, tx, scope, input)
 	case command.ProposeAssistantPlan:
 		return repository.proposeAssistantPlan(ctx, tx, scope, input)
-	case command.DeliverCallback:
-		return repository.deliverCallback(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -660,39 +658,6 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Run: &child, Graph: &graph, Event: &event, Runtime: map[string]any{"callbackEdgeRef": callbackEdgeRef}}, projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: childRef, summary: "i18n:CHILD_RUN_DELEGATED"}, nil
-}
-
-func (repository *Repository) deliverCallback(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
-	payload, ok := input.Payload.(command.CallbackInput)
-	if !ok || payload.ChildRunRef == "" || payload.CallbackEdgeRef == "" {
-		return commandOutcome{}, errs.ErrInvalid
-	}
-	var childID, rootRunID, projectID, projectRef, parentRunID, resultSummary, edgeID, parentNodeID, parentNodeRef string
-	var childState string
-	if err := tx.QueryRow(ctx, queryRuntimeDelivercallbackSelectRunsOrganizationIdRef, scope.organizationID, payload.ChildRunRef, payload.CallbackEdgeRef).Scan(&childID, &rootRunID, &projectID, &projectRef, &parentRunID, &resultSummary, &childState, &edgeID, &parentNodeID, &parentNodeRef); err != nil {
-		return commandOutcome{}, errs.ErrNotFound
-	}
-	if childState != "SUCCEEDED" {
-		return commandOutcome{}, errs.ErrConflict
-	}
-	duplicate, err := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
-		childRunID: childID, childRunRef: payload.ChildRunRef, rootRunID: rootRunID,
-		projectID: projectID, parentRunID: parentRunID, resultSummary: resultSummary,
-		callbackEdgeID: edgeID, callbackEdgeRef: payload.CallbackEdgeRef,
-		parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
-	})
-	if err != nil {
-		return commandOutcome{}, err
-	}
-	parentRef, err := mustRunRef(ctx, tx, parentRunID)
-	if err != nil {
-		return commandOutcome{}, err
-	}
-	parent, graph, err := repository.readRunGraphTx(ctx, tx, scope, parentRef)
-	if err != nil {
-		return commandOutcome{}, err
-	}
-	return commandOutcome{result: command.Result{Run: &parent, Graph: &graph, Duplicate: duplicate}, projectID: projectID, projectRef: projectRef, resourceKind: "CALLBACK", resourceRef: payload.CallbackEdgeRef, summary: "i18n:CHILD_CALLBACK_PROCESSED"}, nil
 }
 
 type callbackRecord struct {

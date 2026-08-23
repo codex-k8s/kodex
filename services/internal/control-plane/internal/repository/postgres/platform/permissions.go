@@ -19,8 +19,8 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, s
 		command.CreateConnection, command.TestConnection, command.SetConnectionEnabled, command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return errs.ErrForbidden
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback, command.MaterializeOccurrence,
-		command.CompleteOccurrence, command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.MaterializeOccurrence,
+		command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
 		command.CompleteInteractionDelivery, command.AcceptInteractionMessage:
 		return nil
 	}

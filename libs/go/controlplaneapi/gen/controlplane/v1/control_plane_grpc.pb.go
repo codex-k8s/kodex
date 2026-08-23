@@ -3115,12 +3115,10 @@ const (
 	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
-	RuntimeWorkService_DeliverCallback_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/DeliverCallback"
 	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
 	RuntimeWorkService_ReportWarmRuntime_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
 	RuntimeWorkService_ClaimDueSchedules_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
 	RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName     = "/controlplane.v1.RuntimeWorkService/MaterializeScheduleOccurrence"
-	RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName        = "/controlplane.v1.RuntimeWorkService/CompleteScheduleOccurrence"
 	RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName   = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationConnectionTests"
 	RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest"
 	RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName      = "/controlplane.v1.RuntimeWorkService/ResolveIntegrationInvocation"
@@ -3140,12 +3138,10 @@ type RuntimeWorkServiceClient interface {
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
-	DeliverCallback(ctx context.Context, in *DeliverCallbackRequest, opts ...grpc.CallOption) (*DeliverCallbackResponse, error)
 	ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
 	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
-	CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(ctx context.Context, in *ClaimIntegrationConnectionTestsRequest, opts ...grpc.CallOption) (*ClaimIntegrationConnectionTestsResponse, error)
 	CompleteIntegrationConnectionTest(ctx context.Context, in *CompleteIntegrationConnectionTestRequest, opts ...grpc.CallOption) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(ctx context.Context, in *ResolveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ResolveIntegrationInvocationResponse, error)
@@ -3232,16 +3228,6 @@ func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in 
 	return out, nil
 }
 
-func (c *runtimeWorkServiceClient) DeliverCallback(ctx context.Context, in *DeliverCallbackRequest, opts ...grpc.CallOption) (*DeliverCallbackResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeliverCallbackResponse)
-	err := c.cc.Invoke(ctx, RuntimeWorkService_DeliverCallback_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *runtimeWorkServiceClient) ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReconcileWarmRuntimeResponse)
@@ -3276,16 +3262,6 @@ func (c *runtimeWorkServiceClient) MaterializeScheduleOccurrence(ctx context.Con
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MaterializeScheduleOccurrenceResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *runtimeWorkServiceClient) CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CompleteScheduleOccurrenceResponse)
-	err := c.cc.Invoke(ctx, RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3363,12 +3339,10 @@ type RuntimeWorkServiceServer interface {
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
-	DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error)
 	ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
 	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
-	CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error)
 	CompleteIntegrationConnectionTest(context.Context, *CompleteIntegrationConnectionTestRequest) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(context.Context, *ResolveIntegrationInvocationRequest) (*ResolveIntegrationInvocationResponse, error)
@@ -3406,9 +3380,6 @@ func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, 
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
 }
-func (UnimplementedRuntimeWorkServiceServer) DeliverCallback(context.Context, *DeliverCallbackRequest) (*DeliverCallbackResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeliverCallback not implemented")
-}
 func (UnimplementedRuntimeWorkServiceServer) ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcileWarmRuntime not implemented")
 }
@@ -3420,9 +3391,6 @@ func (UnimplementedRuntimeWorkServiceServer) ClaimDueSchedules(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeScheduleOccurrence not implemented")
-}
-func (UnimplementedRuntimeWorkServiceServer) CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteScheduleOccurrence not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimIntegrationConnectionTests not implemented")
@@ -3589,24 +3557,6 @@ func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RuntimeWorkService_DeliverCallback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeliverCallbackRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RuntimeWorkServiceServer).DeliverCallback(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RuntimeWorkService_DeliverCallback_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RuntimeWorkServiceServer).DeliverCallback(ctx, req.(*DeliverCallbackRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _RuntimeWorkService_ReconcileWarmRuntime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReconcileWarmRuntimeRequest)
 	if err := dec(in); err != nil {
@@ -3675,24 +3625,6 @@ func _RuntimeWorkService_MaterializeScheduleOccurrence_Handler(srv interface{}, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).MaterializeScheduleOccurrence(ctx, req.(*MaterializeScheduleOccurrenceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _RuntimeWorkService_CompleteScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteScheduleOccurrenceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RuntimeWorkServiceServer).CompleteScheduleOccurrence(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: RuntimeWorkService_CompleteScheduleOccurrence_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RuntimeWorkServiceServer).CompleteScheduleOccurrence(ctx, req.(*CompleteScheduleOccurrenceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3841,10 +3773,6 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RuntimeWorkService_ProposeAssistantPlan_Handler,
 		},
 		{
-			MethodName: "DeliverCallback",
-			Handler:    _RuntimeWorkService_DeliverCallback_Handler,
-		},
-		{
 			MethodName: "ReconcileWarmRuntime",
 			Handler:    _RuntimeWorkService_ReconcileWarmRuntime_Handler,
 		},
@@ -3859,10 +3787,6 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeScheduleOccurrence",
 			Handler:    _RuntimeWorkService_MaterializeScheduleOccurrence_Handler,
-		},
-		{
-			MethodName: "CompleteScheduleOccurrence",
-			Handler:    _RuntimeWorkService_CompleteScheduleOccurrence_Handler,
 		},
 		{
 			MethodName: "ClaimIntegrationConnectionTests",

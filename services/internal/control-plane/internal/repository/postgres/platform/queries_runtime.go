@@ -97,12 +97,6 @@ var (
 	queryRuntimeDelegateexecutionInsertCallbackEdge string
 	//go:embed sql/runtime_proposeassistantplan_select_context.sql
 	queryRuntimeProposeassistantplanSelectContext string
-	//go:embed sql/runtime_delivercallback_select_runs_organization_id_ref.sql
-	queryRuntimeDelivercallbackSelectRunsOrganizationIdRef string
-	//go:embed sql/runtime_delivercallback_insert_callback_receipts_child_run_id.sql
-	queryRuntimeDelivercallbackInsertCallbackReceiptsChildRunId string
-	//go:embed sql/runtime_delivercallback_update_run_nodes_callback_summary_version.sql
-	queryRuntimeDelivercallbackUpdateRunNodesCallbackSummaryVersion string
 	//go:embed sql/runtime_callback_select_parent_session.sql
 	queryRuntimeCallbackSelectParentSession string
 	//go:embed sql/runtime_callback_insert_completed_turn.sql

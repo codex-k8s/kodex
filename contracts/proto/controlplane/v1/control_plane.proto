@@ -109,12 +109,10 @@ service RuntimeWorkService {
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
-  rpc DeliverCallback(DeliverCallbackRequest) returns (DeliverCallbackResponse);
   rpc ReconcileWarmRuntime(ReconcileWarmRuntimeRequest) returns (ReconcileWarmRuntimeResponse);
   rpc ReportWarmRuntime(ReportWarmRuntimeRequest) returns (ReportWarmRuntimeResponse);
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
   rpc MaterializeScheduleOccurrence(MaterializeScheduleOccurrenceRequest) returns (MaterializeScheduleOccurrenceResponse);
-  rpc CompleteScheduleOccurrence(CompleteScheduleOccurrenceRequest) returns (CompleteScheduleOccurrenceResponse);
   rpc ClaimIntegrationConnectionTests(ClaimIntegrationConnectionTestsRequest) returns (ClaimIntegrationConnectionTestsResponse);
   rpc CompleteIntegrationConnectionTest(CompleteIntegrationConnectionTestRequest) returns (CompleteIntegrationConnectionTestResponse);
   rpc ResolveIntegrationInvocation(ResolveIntegrationInvocationRequest) returns (ResolveIntegrationInvocationResponse);
@@ -1792,17 +1790,6 @@ message ProposeAssistantPlanResponse {
   AssistantPlan plan = 1;
   AssistantConversation conversation = 2;
 }
-message DeliverCallbackRequest {
-  MutationContext mutation = 1;
-  string child_run_ref = 2;
-  string callback_edge_ref = 3;
-}
-message DeliverCallbackResponse {
-  Run parent_run = 1;
-  RunGraph root_graph = 2;
-  bool duplicate = 3;
-}
-
 message ReconcileWarmRuntimeRequest {
   string workload_instance = 1;
 }
@@ -1847,18 +1834,6 @@ message MaterializeScheduleOccurrenceResponse {
   Run run = 1;
   Schedule schedule = 2;
 }
-message CompleteScheduleOccurrenceRequest {
-  MutationContext mutation = 1;
-  string occurrence_ref = 2;
-  string lease_ref = 3;
-  string fence = 4;
-  int64 generation = 5;
-  string outcome = 6;
-}
-message CompleteScheduleOccurrenceResponse {
-  Schedule schedule = 1;
-}
-
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
   string connection_ref = 2;

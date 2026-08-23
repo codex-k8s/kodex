@@ -1159,7 +1159,6 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		{key: "delegation-first", agent: firstChild},
 		{key: "delegation-second", agent: secondChild},
 	}
-	children := make([]command.Result, 0, len(delegations))
 	for _, item := range delegations {
 		delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
 			Mutation: value.Mutation{IdempotencyKey: item.key}, Payload: command.DelegateInput{
@@ -1170,7 +1169,6 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		if err != nil || delegated.Run == nil || stringMap(delegated.Runtime, "callbackEdgeRef") == "" {
 			t.Fatalf("delegate %s child: run=%#v runtime=%v err=%v", item.key, delegated.Run, delegated.Runtime, err)
 		}
-		children = append(children, delegated)
 	}
 	claimedChildren, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-children-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 2}})
@@ -1191,13 +1189,10 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	for index, lease := range claimedChildren.RuntimeItems {
 		completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
 	}
-	for index, child := range children {
-		callback, err := service.Execute(ctx, command.Command{Kind: command.DeliverCallback, Principal: worker,
-			Mutation: value.Mutation{IdempotencyKey: "delegation-callback-replay-" + leftPad(index+1, 2)},
-			Payload:  command.CallbackInput{ChildRunRef: child.Run.Ref, CallbackEdgeRef: stringMap(child.Runtime, "callbackEdgeRef")},
-		})
-		if err != nil || !callback.Duplicate {
-			t.Fatalf("deduplicate child callback %d: duplicate=%v err=%v", index+1, callback.Duplicate, err)
+	for index, lease := range claimedChildren.RuntimeItems {
+		replayed := completeClaimedExecution(t, ctx, service, worker, lease, "delegation-child-"+leftPad(index+1, 2), false)
+		if replayed.Run == nil || replayed.Graph == nil {
+			t.Fatalf("replay child completion %d lost authoritative result: %#v", index+1, replayed)
 		}
 	}
 	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)

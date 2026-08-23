@@ -57,9 +57,7 @@ const (
 	CompleteExecution             Kind = "COMPLETE_EXECUTION"
 	DelegateExecution             Kind = "DELEGATE_EXECUTION"
 	ProposeAssistantPlan          Kind = "PROPOSE_ASSISTANT_PLAN"
-	DeliverCallback               Kind = "DELIVER_CALLBACK"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
-	CompleteOccurrence            Kind = "COMPLETE_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
 	CompleteInteractionDelivery   Kind = "COMPLETE_INTERACTION_DELIVERY"
@@ -160,11 +158,10 @@ type ProposeAssistantPlanInput struct {
 	Generation               int64
 	Operations               []entity.AssistantPlanOperation
 }
-type CallbackInput struct{ ChildRunRef, CallbackEdgeRef string }
 type WarmRuntimeInput struct{ WorkloadInstance, RuntimeRevision, State, SafeErrorCode string }
 type OccurrenceInput struct {
-	OccurrenceRef, LeaseRef, Fence, Outcome string
-	Generation                              int64
+	OccurrenceRef, LeaseRef, Fence string
+	Generation                     int64
 }
 type IntegrationInvocationInput struct {
 	InvocationRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string

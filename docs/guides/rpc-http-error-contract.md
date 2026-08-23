@@ -34,15 +34,11 @@ updated: 2026-07-28
 | UNAVAILABLE             | Unavailable        | 503         | UNAVAILABLE             | true      |
 | INTERNAL                | Internal           | 500         | INTERNAL                | false     |
 
-Набор domain-specific problem codes задается закрытой машинной policy.
-Неизвестный код не является допустимой доменной ошибкой.
-
-Gateway обязан проверять, что detail принадлежит известному типу и содержит
-`code` и `correlation_id`. Закрытая матрица
-`contracts/errors/v1/rpc-http-mapping.yaml` определяет допустимые коды для
-каждой группы RPC и является источником истины для gateway. Конфликт
-оптимистичной версии передается как
-`VERSION_MISMATCH/VERSION_MISMATCH`.
+Набор внешних problem codes закрыт схемой `Problem` в owner OpenAPI и единым
+mapper `control-api-gateway`. Gateway не передаёт пользователю свободный gRPC
+текст: он преобразует только известный canonical gRPC code, а frontend
+локализует стабильный `Problem.code` по текущей локали. Конфликт оптимистичной
+версии передается как `VERSION_MISMATCH`.
 
 Неизвестный gRPC code, отсутствующий detail, неизвестный `code` или
 несогласованная пара `reason/code/retryable` преобразуется в `500 INTERNAL` и
