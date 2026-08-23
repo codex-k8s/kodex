@@ -74,6 +74,18 @@ grep -Fq 'select(.kind != "Job" and' "$fresh_deployer" ||
   fail 'fresh workload deploy can mutate immutable completed Jobs through generic apply'
 [[ $(grep -c '^[[:space:]]*apply_job ' "$fresh_deployer") -eq 4 ]] ||
   fail 'fresh deploy does not retain explicit lifecycle for all four release Jobs'
+grep -Fq 'replace_immutable_resource_on_drift()' "$fresh_deployer" ||
+  fail 'fresh deploy does not implement bounded immutable resource replacement'
+[[ $(grep -c '^[[:space:]]*rotate_release_immutable_resources$' "$fresh_deployer") -eq 2 ]] ||
+  fail 'fresh deploy does not reconcile immutable resources in state and workload phases'
+for immutable_name in mattercodex-role-environments mattercodex-image-admission-policy; do
+  grep -Fq "replace_immutable_resource_on_drift configmap ConfigMap $immutable_name" "$fresh_deployer" ||
+    fail "fresh deploy omits immutable ConfigMap lifecycle: $immutable_name"
+done
+grep -Fq 'imageadmissionpolicyparameters.supplychain.mattercodex.dev' "$fresh_deployer" ||
+  fail 'fresh deploy omits immutable image admission parameters lifecycle'
+grep -Fq 'cmp -s "$desired_payload" "$live_payload"' "$fresh_deployer" ||
+  fail 'fresh deploy replaces immutable resources without semantic drift comparison'
 yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
   .metadata.name == "internal-rpc-authority-restore-anchor-forward-only")' \
   "$repository_root/deploy/k8s/base/internal-rpc-authority-restore/evidence-admission.yaml" |

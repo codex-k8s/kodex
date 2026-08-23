@@ -158,7 +158,12 @@ hosts передаются параметрами deployment environment. Реп
    `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
    DaemonSet. Migration/bootstrap Job принадлежат только фазе
    `apply-migrations`: generic apply не обновляет их immutable template при
-   переходе на новый release digest.
+   переходе на новый release digest. Перед generic apply state/workload-фаза
+   сравнивает semantic payload закрытого списка release-owned immutable
+   ресурсов (`mattercodex-role-environments`, image admission ConfigMap и
+   `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
+   устраняется bounded delete/create с немедленным exact readback. Добавлять в
+   этот список неизвестный ресурс без отдельного lifecycle запрещено.
 11. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
     Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
     anchor и отсутствие terminal container waiting states.
