@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 materializer="$repository_root/tools/deploy/materialize-nats-operator-files.sh"
+account_configurer="$repository_root/tools/deploy/configure-nats-application-account.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 mkdir -p "$temporary_directory/bin" "$temporary_directory/nsc" "$temporary_directory/output"
@@ -15,17 +16,22 @@ mkdir -p "$temporary_directory/bin" "$temporary_directory/nsc" "$temporary_direc
 cat >"$temporary_directory/bin/nsc" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ " $* " == *' edit account '* ]]; then
+  printf '%s\n' "$*" >"${FAKE_NSC_CALL_LOG:?}"
+  exit 0
+fi
 output_file=""
 kind=""
 name=""
 mode=""
+field=""
 while (($# > 0)); do
   case "$1" in
     describe) kind=${2:-}; shift 2 ;;
     --name) name=${2:-}; shift 2 ;;
     --raw) mode=raw; shift ;;
     --json) mode=json; shift ;;
-    --field) shift 2 ;;
+    --field) field=${2:-}; shift 2 ;;
     --output-file) output_file=${2:-}; shift 2 ;;
     -H) shift 2 ;;
     *) shift ;;
@@ -48,12 +54,53 @@ if [[ "$mode" == json && "$name" == SYS ]]; then
   exit 0
 fi
 if [[ "$mode" == json && "$name" == APPLICATION ]]; then
+  if [[ -z "$field" ]]; then
+    disk_storage=34359738368
+    [[ "${FAKE_NSC_BAD_LIMITS:-false}" != true ]] || disk_storage=1
+    jq -n --argjson disk_storage "$disk_storage" '{
+      name: "APPLICATION",
+      nats: {
+        type: "account",
+        limits: {
+          mem_storage: 268435456,
+          disk_storage: $disk_storage,
+          streams: 8,
+          consumer: 64,
+          max_ack_pending: 100000,
+          mem_max_stream_bytes: 268435456,
+          disk_max_stream_bytes: 34359738368,
+          max_bytes_required: true
+        }
+      }
+    }' >"$output_file"
+    exit 0
+  fi
   printf '"A%s"\n' "$(printf 'P%.0s' {1..55})" >"$output_file"
   exit 0
 fi
 exit 1
 EOF
 chmod 0700 "$temporary_directory/bin/nsc"
+
+FAKE_NSC_CALL_LOG="$temporary_directory/nsc-edit.log" PATH="$temporary_directory/bin:$PATH" \
+  "$account_configurer" --nsc-home "$temporary_directory/nsc" >/dev/null
+for expected_flag in \
+  '--js-mem-storage 268435456' \
+  '--js-disk-storage 34359738368' \
+  '--js-streams 8' \
+  '--js-consumer 64' \
+  '--js-max-ack-pending 100000' \
+  '--js-max-mem-stream 268435456' \
+  '--js-max-disk-stream 34359738368' \
+  '--js-max-bytes-required'; do
+  grep -Fq -- "$expected_flag" "$temporary_directory/nsc-edit.log" ||
+    fail "JetStream account edit omits $expected_flag"
+done
+if FAKE_NSC_BAD_LIMITS=true FAKE_NSC_CALL_LOG="$temporary_directory/nsc-edit-bad.log" \
+  PATH="$temporary_directory/bin:$PATH" \
+  "$account_configurer" --nsc-home "$temporary_directory/nsc" >/dev/null 2>&1; then
+  fail 'JetStream account limit drift was accepted'
+fi
 
 PATH="$temporary_directory/bin:$PATH" "$materializer" \
   --nsc-home "$temporary_directory/nsc" --output-directory "$temporary_directory/output" >/dev/null
@@ -77,6 +124,6 @@ fi
 after_sha=$(sha256sum "$temporary_directory/output/operator.jwt" | awk '{print $1}')
 [[ "$before_sha" == "$after_sha" ]] || fail 'failed materialization changed existing canonical output'
 
-bash -n "$materializer" "$repository_root/tools/deploy/generate-fresh-install-material.sh" \
+bash -n "$account_configurer" "$materializer" "$repository_root/tools/deploy/generate-fresh-install-material.sh" \
   "$repository_root/tools/deploy/materialize-fresh-install-secrets.sh"
 printf 'NATS operator material tests passed\n'

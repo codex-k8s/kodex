@@ -106,6 +106,8 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 nsc_home="$output_directory/nats/nsc"
 nsc -H "$nsc_home" add operator --name MATTERCODEX --sys >/dev/null 2>&1
 nsc -H "$nsc_home" add account --name APPLICATION >/dev/null 2>&1
+"$repository_root/tools/deploy/configure-nats-application-account.sh" \
+  --nsc-home "$nsc_home" >/dev/null
 
 add_application_user() {
   local user_name=$1
