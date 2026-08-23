@@ -207,6 +207,14 @@ yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")'
     source("CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256") == "runtime-provider-openai-default-metadata"
   ' >/dev/null || fail 'control-plane provider credential metadata binding is incomplete'
 
+yq -o=json 'select(.kind == "Deployment" and .metadata.name == "runtime-controller")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "runtime-controller") |
+    any(.env[]; .name == "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE" and
+      .valueFrom.configMapKeyRef.name == "mattercodex-image-admission-policy" and
+      .valueFrom.configMapKeyRef.key == "nodeReadbackImage")
+  ' >/dev/null || fail 'runtime-controller does not accept the exact release default role image'
+
 test -f "$repository_root/contracts/runtime-controller/v4/agent-runner-input.schema.json" ||
   fail 'runtime input v4 schema is absent'
 test ! -e "$repository_root/contracts/runtime-controller/v3" ||

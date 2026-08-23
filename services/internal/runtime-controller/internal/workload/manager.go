@@ -42,7 +42,8 @@ type Config struct {
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret string
 	StorageClass, SessionPVCSize, RunnerServiceAccount                     string
 	ProviderHTTPSProxy                                                     string
-	PromotedRoleImageRepository, RoleRuntimeContractSHA256                 string
+	PromotedRoleImageRepository, DefaultRoleImageReference                 string
+	RoleRuntimeContractSHA256                                              string
 	RoleRuntimeContractRevision                                            uint64
 	TurnCPUMilli, TurnMemoryBytes                                          int64
 }
@@ -81,6 +82,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		config.ProviderHTTPSProxy == "" ||
 		config.StorageClass == "" || config.RunnerServiceAccount == "" ||
 		config.PromotedRoleImageRepository == "" || config.RoleRuntimeContractRevision == 0 ||
+		!validPinnedImageReference(config.DefaultRoleImageReference) ||
 		len(config.RoleRuntimeContractSHA256) != sha256.Size*2 || config.TurnCPUMilli < 100 || config.TurnMemoryBytes < 128<<20 {
 		return nil, errors.New("Kubernetes runtime manager configuration is invalid")
 	}
@@ -528,12 +530,29 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 }
 
 func (manager *Manager) validateImage(input runtimecontract.RunnerInput) error {
-	if input.ImageReference != manager.config.PromotedRoleImageRepository+"@"+input.ImageManifestDigest ||
+	promoted := input.ImageReference == manager.config.PromotedRoleImageRepository+"@"+input.ImageManifestDigest
+	defaultPinned := input.ImageReference == manager.config.DefaultRoleImageReference &&
+		strings.HasSuffix(manager.config.DefaultRoleImageReference, "@"+input.ImageManifestDigest)
+	if (!promoted && !defaultPinned) ||
 		input.RoleRuntimeContractRevision != manager.config.RoleRuntimeContractRevision ||
 		input.RoleRuntimeContractSHA256 != manager.config.RoleRuntimeContractSHA256 {
 		return errors.New("runtime role image is outside promoted policy")
 	}
 	return nil
+}
+
+func validPinnedImageReference(reference string) bool {
+	separator := strings.LastIndex(reference, "@sha256:")
+	if separator <= 0 || separator+len("@sha256:")+64 != len(reference) {
+		return false
+	}
+	for _, character := range reference[separator+len("@sha256:"):] {
+		if (character < 'a' || character > 'f') &&
+			(character < '0' || character > '9') {
+			return false
+		}
+	}
+	return !strings.ContainsAny(reference[:separator], "@${}")
 }
 
 func (manager *Manager) validateProviderSecret(ctx context.Context, input runtimecontract.RunnerInput, binding ProviderSecretBinding) error {

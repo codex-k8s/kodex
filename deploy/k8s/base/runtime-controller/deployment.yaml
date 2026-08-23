@@ -48,6 +48,8 @@ spec:
               valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
             - name: RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: promotedPullRepository}}
+            - name: RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
             - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256

@@ -41,6 +41,7 @@ type Config struct {
 	ControlPlanePrivateKeyFile     string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile           string        `env:"RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE"`
 	PromotedRoleImageRepository    string        `env:"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY"`
+	DefaultRoleImageReference      string        `env:"RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"`
 	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
 	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
@@ -73,6 +74,7 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
+		DefaultRoleImageReference:   "registry-pull.invalid/mattercodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.mattercodex-system.svc:8080",
 		StorageClass:                "runtime-session", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
@@ -113,6 +115,7 @@ func (config Config) validate() error {
 		!validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
 		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
 		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
+		!validPinnedImageReference(config.DefaultRoleImageReference) ||
 		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {
 		return errors.New("runtime role image policy is invalid")
 	}
@@ -128,6 +131,13 @@ func (config Config) validate() error {
 		return errors.New("runtime controller bounded configuration is invalid")
 	}
 	return nil
+}
+
+func validPinnedImageReference(reference string) bool {
+	separator := strings.LastIndex(reference, "@sha256:")
+	return separator > 0 && separator+len("@sha256:")+64 == len(reference) &&
+		sha256TextPattern.MatchString(reference[separator+len("@sha256:"):]) &&
+		!strings.ContainsAny(reference[:separator], "${}")
 }
 
 func validDNSLabel(value string) bool {

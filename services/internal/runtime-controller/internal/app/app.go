@@ -93,6 +93,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		CallbackClientTLSSecret: config.CallbackClientTLSSecret, ProviderHTTPSProxy: config.ProviderHTTPSProxy,
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize, RunnerServiceAccount: config.RunnerServiceAccount,
 		PromotedRoleImageRepository: config.PromotedRoleImageRepository, RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
+		DefaultRoleImageReference: config.DefaultRoleImageReference,
 		RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256, TurnCPUMilli: config.TurnCPUMilli, TurnMemoryBytes: config.TurnMemoryBytes,
 	})
 	if err != nil {

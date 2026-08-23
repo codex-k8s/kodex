@@ -18,6 +18,7 @@ import (
 )
 
 const testDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const testDefaultDigest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
 const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
@@ -105,6 +106,27 @@ func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T)
 	binding.ResourceVersion = "2"
 	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
 		t.Fatal("EnsureTurn() accepted a provider Secret outside the immutable credential revision")
+	}
+}
+
+func TestValidateImageAcceptsOnlyPromotedOrExactReleaseDefault(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.validateImage(input); err != nil {
+		t.Fatalf("promoted role image was rejected: %v", err)
+	}
+	input.ImageReference = manager.config.DefaultRoleImageReference
+	input.ImageManifestDigest = testDefaultDigest
+	if err := manager.validateImage(input); err != nil {
+		t.Fatalf("exact release default image was rejected: %v", err)
+	}
+	input.ImageReference = "registry.example/mattercodex/other@" + testDefaultDigest
+	if err := manager.validateImage(input); err == nil {
+		t.Fatal("arbitrary pinned image was accepted")
 	}
 }
 
@@ -214,8 +236,10 @@ func newTestManager(t *testing.T, client *fake.Clientset) *Manager {
 		CallbackClientCASecret: "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ProviderHTTPSProxy: "http://egress-gateway.mattercodex-system.svc:8080",
 		StorageClass:       "runtime-session", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
-		PromotedRoleImageRepository: "registry.example/mattercodex/roles", RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256: testContractDigest, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+		PromotedRoleImageRepository: "registry.example/mattercodex/roles",
+		DefaultRoleImageReference:   "registry.example/mattercodex/agent-runner@" + testDefaultDigest,
+		RoleRuntimeContractRevision: 1,
+		RoleRuntimeContractSHA256:   testContractDigest, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
