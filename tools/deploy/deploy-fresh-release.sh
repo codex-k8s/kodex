@@ -42,6 +42,7 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 vault_bootstrap="$repository_root/tools/deploy/bootstrap-vault.sh"
 namespace=mattercodex-system
+restore_evidence_name=internal-rpc-authority-restore-evidence
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
@@ -69,6 +70,45 @@ apply_filter() {
   yq "$expression" "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail "release phase is empty: $name"
   kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$output_file" >/dev/null
+}
+
+validate_restore_evidence_anchor() {
+  local input_file=$1
+  jq -e --arg namespace "$namespace" --arg name "$restore_evidence_name" '
+    .apiVersion == "v1" and
+    .kind == "Secret" and
+    .metadata.namespace == $namespace and
+    .metadata.name == $name and
+    .type == "Opaque" and
+    (.metadata.annotations as $annotations |
+      ($annotations["mattercodex.dev/restore-anchor-revision"] | type == "string" and test("^[1-9][0-9]*$")) and
+      ($annotations["mattercodex.dev/restore-epoch"] | type == "string" and test("^[1-9][0-9]*$")) and
+      ($annotations["mattercodex.dev/restore-evidence-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+      ($annotations["mattercodex.dev/restore-predecessor-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      ($annotations["mattercodex.dev/restore-predecessor-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+      ($annotations["mattercodex.dev/restored-cluster-uid"] | type == "string" and length > 0) and
+      ($annotations["mattercodex.dev/restored-timeline-id"] | type == "string" and length > 0) and
+      (($annotations["mattercodex.dev/restore-anchor-revision"] | tonumber) >
+        ($annotations["mattercodex.dev/restore-predecessor-revision"] | tonumber))) and
+    (.data["evidence.jws"] | type == "string")
+  ' "$input_file" >/dev/null || fail 'restore evidence anchor is absent or malformed'
+}
+
+ensure_restore_evidence_anchor() {
+  local anchor_manifest="$temporary_directory/restore-evidence-anchor.yaml"
+  local anchor_json="$temporary_directory/restore-evidence-anchor.json"
+  RESTORE_EVIDENCE_NAME="$restore_evidence_name" yq '
+    select(.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+      .metadata.name == strenv(RESTORE_EVIDENCE_NAME))
+  ' "$render_file" >"$anchor_manifest"
+  [[ -s "$anchor_manifest" ]] || fail 'restore evidence anchor is absent from release render'
+
+  if ! kubectl -n "$namespace" get secret "$restore_evidence_name" >/dev/null 2>&1; then
+    kubectl create -f "$anchor_manifest" >/dev/null
+  fi
+  kubectl -n "$namespace" get secret "$restore_evidence_name" -o json >"$anchor_json" ||
+    fail 'restore evidence anchor readback failed'
+  validate_restore_evidence_anchor "$anchor_json"
 }
 
 wait_statefulset() {
@@ -105,9 +145,12 @@ if [[ "$mode" == apply-state ]]; then
   "$vault_bootstrap" --context "$expected_context" --mode configure-image-pki \
     --material-directory "$material_directory" --render "$render_file"
 
+  ensure_restore_evidence_anchor
   apply_filter foundation '
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "DaemonSet" and
-      .kind != "Job" and .kind != "CronJob")
+      .kind != "Job" and .kind != "CronJob" and
+      ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+        .metadata.name == "internal-rpc-authority-restore-evidence") | not))
   '
   apply_filter stateful '
     select(.kind == "StatefulSet" and
@@ -134,7 +177,11 @@ if [[ "$mode" == apply-workloads ]]; then
     [[ $(kubectl -n "$namespace" get job "$migration_job" -o jsonpath='{.status.succeeded}') == 1 ]] ||
       fail "completed prerequisite Job is absent: $migration_job"
   done
-  kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$render_file" >/dev/null
+  ensure_restore_evidence_anchor
+  apply_filter workloads '
+    select((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+      .metadata.name == "internal-rpc-authority-restore-evidence") | not)
+  '
   for registry_deployment in \
     mattercodex-image-registry-push mattercodex-image-registry-staging-read \
     mattercodex-image-registry-evidence mattercodex-image-registry-admin \
@@ -159,6 +206,7 @@ fi
 if [[ "$mode" == readback ]]; then
   "$vault_bootstrap" --context "$expected_context" --mode readback \
     --material-directory "$material_directory"
+  ensure_restore_evidence_anchor
   while IFS=$'\t' read -r kind name; do
     [[ -n "$kind" && -n "$name" ]] || continue
     case "$kind" in

@@ -17,6 +17,27 @@ bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter"
 if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
   fail 'fresh deploy expands a local variable in the declaration that assigns it'
 fi
+grep -Fq 'ensure_restore_evidence_anchor()' "$fresh_deployer" ||
+  fail 'fresh deploy does not implement create-once restore evidence materialization'
+[[ $(grep -c '^[[:space:]]*ensure_restore_evidence_anchor$' "$fresh_deployer") -eq 3 ]] ||
+  fail 'fresh deploy does not validate restore evidence in state, workloads and readback phases'
+[[ $(grep -c 'metadata.name == "internal-rpc-authority-restore-evidence"' "$fresh_deployer") -eq 2 ]] ||
+  fail 'fresh deploy does not exclude restore evidence from both generic apply phases'
+if grep -Fq 'kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$render_file"' \
+  "$fresh_deployer"; then
+  fail 'fresh workload deploy can overwrite the forward-only restore evidence anchor'
+fi
+yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
+  .metadata.name == "internal-rpc-authority-restore-anchor-forward-only")' \
+  "$repository_root/deploy/k8s/base/internal-rpc-authority-restore/evidence-admission.yaml" |
+  jq -e '
+    .spec.failurePolicy == "Fail" and
+    .spec.matchConstraints.resourceRules[0].operations == ["UPDATE", "DELETE"] and
+    any(.spec.validations[];
+      .message == "only the independent PITR executor may update restore evidence" and
+      (.expression | contains("system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-pitr")))
+  ' >/dev/null ||
+  fail 'restore evidence forward-only admission boundary was weakened'
 grep -Fq 'mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)' \
   "$legacy_resetter" || fail 'incompatible reset does not use the closed release profile selector'
 for cluster_kind in \
