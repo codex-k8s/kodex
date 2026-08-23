@@ -107,7 +107,11 @@ hosts передаются параметрами deployment environment. Реп
    и повторяющиеся resource identities.
 8. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
    image PKI и static material, затем применяет non-workload resources,
-   PostgreSQL и NATS и материализует database credentials.
+   PostgreSQL и NATS и материализует database credentials. Первый verified
+   Vault database connect может попасть в короткий restart PostgreSQL после
+   init scripts: только `connection refused` повторяется с ограниченным
+   backoff; semantic/configuration ошибки завершают фазу немедленно, а
+   `verify_connection` не отключается.
 9. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не

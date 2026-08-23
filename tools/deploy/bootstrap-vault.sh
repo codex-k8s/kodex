@@ -33,7 +33,7 @@ case "$mode" in
   initialize|configure-core|configure-policies|configure-database|configure-database-runtime|configure-image-pki|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
-for command_name in awk base64 jq kubectl openssl sha256sum sort stat yq; do
+for command_name in awk base64 jq kubectl openssl rg sha256sum sleep sort stat yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
@@ -327,7 +327,33 @@ if [[ "$mode" == configure-database ]]; then
     allowed_roles:"control-plane-migrator,control-plane-runtime-g1,internal-rpc-authority-migrator,internal-rpc-authority-publisher-g3,internal-rpc-authority-publisher-g4,internal-rpc-authority-publisher-g5,internal-rpc-authority-readback-attestor-g3,internal-rpc-authority-readback-attestor-g4,internal-rpc-authority-readback-attestor-g5",
     connection_url:$connection
   }' >"$temporary_directory/database-config.json"
-  vault_input "$temporary_directory/database-config.json" write database/config/mattercodex-postgresql - >/dev/null
+
+  configure_verified_database() {
+    local error_file="$temporary_directory/database-config.error"
+    local attempt=1 delay
+    for delay in 1 2 3 5 8 13; do
+      if vault_input "$temporary_directory/database-config.json" \
+        write database/config/mattercodex-postgresql - >/dev/null 2>"$error_file"; then
+        return
+      fi
+      rg -q 'error verifying connection:.*connection refused' "$error_file" ||
+        fail 'Vault database configuration failed with a non-transient error'
+      printf 'Vault PostgreSQL connection is not ready; retrying: next_attempt=%d delay=%ss\n' \
+        "$((attempt + 1))" "$delay"
+      sleep "$delay"
+      attempt=$((attempt + 1))
+    done
+    if vault_input "$temporary_directory/database-config.json" \
+      write database/config/mattercodex-postgresql - >/dev/null 2>"$error_file"; then
+      return
+    fi
+    if rg -q 'error verifying connection:.*connection refused' "$error_file"; then
+      fail 'Vault PostgreSQL connection did not become ready within the bounded retry budget'
+    fi
+    fail 'Vault database configuration failed with a non-transient error'
+  }
+
+  configure_verified_database
 
   write_dsn() {
     local vault_path=$1 username=$2 password_file=$3 database=$4 ca_file=$5
