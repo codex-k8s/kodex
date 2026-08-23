@@ -34,7 +34,7 @@ case "$mode" in
 esac
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] || fail 'release render is invalid'
 [[ -d "$material_directory" && ! -L "$material_directory" ]] || fail 'material directory is invalid'
-for command_name in awk jq kubectl rg sha256sum sort yq; do
+for command_name in awk cmp jq kubectl rg sha256sum sort yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
@@ -70,6 +70,60 @@ apply_filter() {
   yq "$expression" "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail "release phase is empty: $name"
   kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$output_file" >/dev/null
+}
+
+immutable_resource_payload() {
+  local kind=$1 input_file=$2 output_file=$3
+  case "$kind" in
+    ConfigMap)
+      jq -S '{immutable:(.immutable // false),data:(.data // {}),binaryData:(.binaryData // {})}' \
+        "$input_file" >"$output_file"
+      ;;
+    ImageAdmissionPolicyParameters)
+      jq -S '.spec' "$input_file" >"$output_file"
+      ;;
+    *) fail "unsupported immutable release resource kind: $kind" ;;
+  esac
+}
+
+replace_immutable_resource_on_drift() {
+  local resource=$1 kind=$2 name=$3
+  local desired_yaml="$temporary_directory/immutable-$name.yaml"
+  local desired_json="$temporary_directory/immutable-$name-desired.json"
+  local desired_payload="$temporary_directory/immutable-$name-desired-payload.json"
+  local live_json="$temporary_directory/immutable-$name-live.json"
+  local live_payload="$temporary_directory/immutable-$name-live-payload.json"
+
+  RESOURCE_KIND="$kind" RESOURCE_NAME="$name" yq '
+    select(.kind == strenv(RESOURCE_KIND) and .metadata.namespace == "mattercodex-system" and
+      .metadata.name == strenv(RESOURCE_NAME))
+  ' "$render_file" >"$desired_yaml"
+  [[ -s "$desired_yaml" ]] || fail "immutable release resource is absent: $kind/$name"
+  yq -o=json -I=0 '.' "$desired_yaml" >"$desired_json"
+  immutable_resource_payload "$kind" "$desired_json" "$desired_payload"
+
+  if kubectl -n "$namespace" get "$resource/$name" -o json >"$live_json" 2>/dev/null; then
+    immutable_resource_payload "$kind" "$live_json" "$live_payload"
+    if cmp -s "$desired_payload" "$live_payload"; then
+      return
+    fi
+    kubectl -n "$namespace" delete "$resource/$name" --wait=true --timeout=2m >/dev/null
+  fi
+
+  kubectl create --field-manager=mattercodex-fresh-install -f "$desired_yaml" >/dev/null
+  kubectl -n "$namespace" get "$resource/$name" -o json >"$live_json" ||
+    fail "immutable release resource readback failed: $kind/$name"
+  immutable_resource_payload "$kind" "$live_json" "$live_payload"
+  cmp -s "$desired_payload" "$live_payload" ||
+    fail "immutable release resource payload mismatch: $kind/$name"
+}
+
+rotate_release_immutable_resources() {
+  replace_immutable_resource_on_drift configmap ConfigMap mattercodex-role-environments
+  replace_immutable_resource_on_drift configmap ConfigMap mattercodex-image-admission-policy
+  replace_immutable_resource_on_drift \
+    imageadmissionpolicyparameters.supplychain.mattercodex.dev \
+    ImageAdmissionPolicyParameters mattercodex-image-admission-policy
 }
 
 validate_restore_evidence_anchor() {
@@ -157,6 +211,7 @@ if [[ "$mode" == apply-state ]]; then
   done < <(yq -N -r '
     select(.kind == "CustomResourceDefinition") | .metadata.name
   ' "$render_file" | sort -u)
+  rotate_release_immutable_resources
   apply_filter foundation '
     select(.kind != "CustomResourceDefinition" and
       .kind != "Deployment" and .kind != "StatefulSet" and .kind != "DaemonSet" and
@@ -190,6 +245,7 @@ if [[ "$mode" == apply-workloads ]]; then
       fail "completed prerequisite Job is absent: $migration_job"
   done
   ensure_restore_evidence_anchor
+  rotate_release_immutable_resources
   apply_filter workloads '
     select(.kind != "Job" and
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
