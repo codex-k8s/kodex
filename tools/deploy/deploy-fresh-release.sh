@@ -64,7 +64,8 @@ if [[ "$mode" == preflight ]]; then
 fi
 
 apply_filter() {
-  local name=$1 expression=$2 output_file="$temporary_directory/$name.yaml"
+  local name=$1 expression=$2
+  local output_file="$temporary_directory/$name.yaml"
   yq "$expression" "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail "release phase is empty: $name"
   kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$output_file" >/dev/null
@@ -77,7 +78,8 @@ wait_statefulset() {
 }
 
 apply_job() {
-  local name=$1 output_file="$temporary_directory/job-$name.yaml"
+  local name=$1
+  local output_file="$temporary_directory/job-$name.yaml"
   if kubectl -n "$namespace" get job "$name" >/dev/null 2>&1; then
     if [[ $(kubectl -n "$namespace" get job "$name" -o jsonpath='{.status.succeeded}') == 1 ]]; then
       return
