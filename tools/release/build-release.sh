@@ -123,7 +123,7 @@ admission_tools_pull_ref="$node_pull/$repository_prefix/$admission_tools_compone
 
 while IFS=$'\t' read -r component dockerfile target; do
   [[ "$component" =~ ^[a-z0-9-]+$ ]] || fail 'invalid component name'
-  [[ "$dockerfile" == services/*/Dockerfile || "$dockerfile" == services/*/*/Dockerfile ]] ||
+  "$repository_root/tools/release/validate-image-dockerfile-path.sh" "$dockerfile" ||
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in

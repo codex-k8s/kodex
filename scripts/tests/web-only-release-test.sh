@@ -7,8 +7,30 @@ fail() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
+
+bash -n "$dockerfile_path_validator"
+while IFS= read -r dockerfile; do
+  "$dockerfile_path_validator" "$dockerfile"
+  [[ -f "$repository_root/$dockerfile" ]] || {
+    printf 'Release image Dockerfile is absent: %s\n' "$dockerfile" >&2
+    exit 1
+  }
+done < <(jq -r '.images[].dockerfile' "$repository_root/tools/release/images.json")
+for invalid_dockerfile in \
+  services/jobs/agent-runner/../Dockerfile \
+  services/jobs/agent-runner/dockerfile \
+  services/jobs/agent-runner/.Dockerfile \
+  infra/admission-tools/Dockerfile \
+  services/unknown/example/Dockerfile; do
+  if "$dockerfile_path_validator" "$invalid_dockerfile" >/dev/null 2>&1; then
+    printf 'Release image Dockerfile validator accepted an unsafe path: %s\n' \
+      "$invalid_dockerfile" >&2
+    exit 1
+  fi
+done
 lock_file="$temporary_directory/release-lock.json"
 render_file="$temporary_directory/web-only.yaml"
 source_sha=$(git -C "$repository_root" rev-parse HEAD)
