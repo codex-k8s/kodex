@@ -13,6 +13,8 @@ var (
 	queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance string
 	//go:embed sql/runtime_claimexecution_update_run_nodes_state_started_at_version.sql
 	queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion string
+	//go:embed sql/runtime_readexecutionartifact_select_artifact_content.sql
+	queryRuntimeReadexecutionartifactSelectArtifactContent string
 	//go:embed sql/runtime_lease_select_runtime_leases_organization_id_ref.sql
 	queryRuntimeLeaseSelectRuntimeLeasesOrganizationIdRef string
 	//go:embed sql/runtime_lease_for_update_select_runtime_leases_organization_id_ref.sql

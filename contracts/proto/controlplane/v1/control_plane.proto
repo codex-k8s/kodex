@@ -102,6 +102,7 @@ service SystemAssistantService {
 
 service RuntimeWorkService {
   rpc ClaimExecution(ClaimExecutionRequest) returns (ClaimExecutionResponse);
+  rpc ReadExecutionArtifact(ReadExecutionArtifactRequest) returns (ReadExecutionArtifactResponse);
   rpc RenewExecution(RenewExecutionRequest) returns (RenewExecutionResponse);
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
@@ -695,6 +696,7 @@ message Artifact {
   bool preview_available = 13;
   google.protobuf.Timestamp created_at = 14;
   repeated NextAction next_actions = 15;
+  string digest = 16;
 }
 
 message Schedule {
@@ -1208,6 +1210,7 @@ message CreateWorkflowRequest {
   string name = 3;
   string purpose = 4;
   string coordinator_agent_ref = 5;
+  WorkflowVersion draft = 6;
 }
 message CreateWorkflowResponse {
   Workflow workflow = 1;
@@ -1665,6 +1668,16 @@ message ClaimedExecution {
 }
 message ClaimExecutionResponse {
   repeated ClaimedExecution executions = 1;
+}
+message ReadExecutionArtifactRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string artifact_ref = 4;
+}
+message ReadExecutionArtifactResponse {
+  Artifact artifact = 1;
+  bytes content = 2;
 }
 message RenewExecutionRequest {
   string lease_ref = 1;

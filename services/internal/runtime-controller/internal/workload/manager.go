@@ -230,6 +230,13 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 		}
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(), ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(), CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(), Risk: grant.GetRisk()})
 	}
+	for _, artifact := range revision.GetArtifacts() {
+		input.InputArtifacts = append(input.InputArtifacts, runtimecontract.RunnerInputArtifact{
+			Ref: artifact.GetRef(), FileName: artifact.GetFileName(), MediaType: artifact.GetMediaType(),
+			Digest: artifact.GetDigest(), SizeBytes: artifact.GetSizeBytes(), Revision: int64(artifact.GetRevision()),
+			Version: artifact.GetVersion(),
+		})
+	}
 }
 
 func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding) error {

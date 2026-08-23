@@ -1,20 +1,56 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
+
+func (repository *Repository) ReadExecutionArtifact(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, artifactRef string) (platformrepo.ArtifactDownload, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, err
+	}
+	fenceDigest := sha256.Sum256([]byte(fence))
+	item := entity.Artifact{}
+	var body []byte
+	err = repository.pool.QueryRow(ctx, queryRuntimeReadexecutionartifactSelectArtifactContent, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"lease_ref":       leaseRef,
+		"fence_digest":    hex.EncodeToString(fenceDigest[:]),
+		"generation":      generation,
+		"artifact_ref":    artifactRef,
+	}).Scan(
+		&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.FileName,
+		&item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source,
+		&item.SizeBytes, &item.Revision, &item.Version, &item.CreatedAt, &body,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+	}
+	if int64(len(body)) != item.SizeBytes || item.SizeBytes < 0 || item.SizeBytes > platformrepo.MaximumArtifactBytes {
+		return platformrepo.ArtifactDownload{}, errs.ErrConflict
+	}
+	return platformrepo.ArtifactDownload{Artifact: item, Reader: io.NopCloser(bytes.NewReader(body))}, nil
+}
 
 func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
@@ -51,7 +87,8 @@ type claimableExecution struct {
 	providerCredentialRevisionNumber, generation, roleRuntimeContractRevision      int64
 	attempt                                                                        int32
 	capabilities, knowledge                                                        []string
-	rawInput, rawIntegrationGrants, rawDelegationTargets, rawSessionContext        []byte
+	rawInput, rawArtifacts, rawIntegrationGrants, rawDelegationTargets             []byte
+	rawSessionContext                                                              []byte
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -82,6 +119,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
 			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
+			&candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
 			&candidate.rawIntegrationGrants, &candidate.rawDelegationTargets, &candidate.callbackEdgeRef,
 			&candidate.rawSessionContext, &candidate.turnID, &candidate.agentID,
@@ -113,6 +151,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		providerCredentialSHA256 := candidate.providerCredentialSHA256
 		instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
 		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
+		rawArtifacts := candidate.rawArtifacts
 		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
 		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
 		callbackEdgeRef, rawSessionContext := candidate.callbackEdgeRef, candidate.rawSessionContext
@@ -136,6 +175,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
 		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
+		var artifacts []map[string]any
+		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var sessionContext []map[string]string
 		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
@@ -147,7 +188,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerAccountRef, providerCredentialRef, providerSecretName,
 			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
 			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
-			integrationGrantsDigestHex, string(rawDelegationTargets), string(rawSessionContext),
+			integrationGrantsDigestHex, string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext),
 			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
 			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
 		}, "\x00")))
@@ -171,7 +212,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"providerCredentialSHA256":         providerCredentialSHA256,
 			"instructionDigest":                instructionDigest, "instructions": instructions,
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
-			"knowledgeArtifactRefs": knowledge, "delegationTargets": delegationTargets,
+			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts, "delegationTargets": delegationTargets,
 			"callbackEdgeRef": callbackEdgeRef, "sessionContext": sessionContext,
 			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
 			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,

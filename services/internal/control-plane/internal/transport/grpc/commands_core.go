@@ -177,7 +177,7 @@ func (server *Server) ChangeAgentIntegrationGrant(ctx context.Context, request *
 }
 
 func (server *Server) CreateWorkflow(ctx context.Context, request *controlplanev1.CreateWorkflowRequest) (*controlplanev1.CreateWorkflowResponse, error) {
-	payload := command.WorkflowInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Purpose: request.GetPurpose(), CoordinatorAgentRef: request.GetCoordinatorAgentRef()}
+	payload := command.WorkflowInput{ProjectRef: request.GetProjectRef(), Name: request.GetName(), Purpose: request.GetPurpose(), CoordinatorAgentRef: request.GetCoordinatorAgentRef(), Draft: domainWorkflowVersion(request.GetDraft())}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateWorkflow_FullMethodName, command.CreateWorkflow, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

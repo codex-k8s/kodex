@@ -3071,6 +3071,7 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	RuntimeWorkService_ClaimExecution_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
+	RuntimeWorkService_ReadExecutionArtifact_FullMethodName             = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
 	RuntimeWorkService_RenewExecution_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/RenewExecution"
 	RuntimeWorkService_ReportExecutionProgress_FullMethodName           = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
 	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
@@ -3095,6 +3096,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RuntimeWorkServiceClient interface {
 	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
+	ReadExecutionArtifact(ctx context.Context, in *ReadExecutionArtifactRequest, opts ...grpc.CallOption) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(ctx context.Context, in *RenewExecutionRequest, opts ...grpc.CallOption) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
@@ -3126,6 +3128,16 @@ func (c *runtimeWorkServiceClient) ClaimExecution(ctx context.Context, in *Claim
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimExecutionResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_ClaimExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReadExecutionArtifact(ctx context.Context, in *ReadExecutionArtifactRequest, opts ...grpc.CallOption) (*ReadExecutionArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadExecutionArtifactResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReadExecutionArtifact_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3307,6 +3319,7 @@ func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Con
 // for forward compatibility.
 type RuntimeWorkServiceServer interface {
 	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
+	ReadExecutionArtifact(context.Context, *ReadExecutionArtifactRequest) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
@@ -3336,6 +3349,9 @@ type UnimplementedRuntimeWorkServiceServer struct{}
 
 func (UnimplementedRuntimeWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReadExecutionArtifact(context.Context, *ReadExecutionArtifactRequest) (*ReadExecutionArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadExecutionArtifact not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenewExecution not implemented")
@@ -3423,6 +3439,24 @@ func _RuntimeWorkService_ClaimExecution_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).ClaimExecution(ctx, req.(*ClaimExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReadExecutionArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadExecutionArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReadExecutionArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReadExecutionArtifact(ctx, req.(*ReadExecutionArtifactRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3743,6 +3777,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimExecution",
 			Handler:    _RuntimeWorkService_ClaimExecution_Handler,
+		},
+		{
+			MethodName: "ReadExecutionArtifact",
+			Handler:    _RuntimeWorkService_ReadExecutionArtifact_Handler,
 		},
 		{
 			MethodName: "RenewExecution",

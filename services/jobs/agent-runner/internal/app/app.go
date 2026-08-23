@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net"
@@ -125,6 +126,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err := materializeWorkspace(input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
+	if err := materializeInputArtifacts(ctx, input, client); err != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
+	}
 	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token())
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_MCP_UNAVAILABLE")
@@ -193,7 +197,7 @@ func safeFailureCode(code string) string {
 }
 
 func materializeWorkspace(input model.Input) error {
-	for _, relative := range []string{".matter-codex", ".matter-codex/inbox", ".matter-codex/outbox", ".matter-codex/state"} {
+	for _, relative := range []string{".matter-codex", ".matter-codex/inbox", ".matter-codex/outbox", ".matter-codex/state", "input"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
@@ -239,11 +243,71 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		builder.Write(raw)
 		builder.WriteString("\n```\n")
 	}
+	if len(input.InputArtifacts) != 0 {
+		builder.WriteString("\n# Input files\n")
+		for index, artifact := range input.InputArtifacts {
+			builder.WriteString("\n- `")
+			builder.WriteString(artifactWorkspacePath(index, artifact))
+			builder.WriteString("` — ")
+			builder.WriteString(fmt.Sprintf("%q", artifact.FileName))
+			builder.WriteString(" (")
+			builder.WriteString(artifact.MediaType)
+			builder.WriteString(")")
+		}
+		builder.WriteString("\n")
+	}
 	result := []byte(builder.String())
 	if len(result) == 0 || len(result) > 1<<20 || !utf8.Valid(result) {
 		return nil, errors.New("turn prompt is invalid")
 	}
 	return result, nil
+}
+
+func materializeInputArtifacts(ctx context.Context, input model.Input, client *callback.Client) error {
+	directory := filepath.Join(input.WorkspaceRoot, "input")
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return errors.New("read runtime input directory")
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || (entry.Type()&os.ModeType != 0 && entry.Type()&os.ModeSymlink == 0) {
+			return errors.New("runtime input directory contains an unsupported entry")
+		}
+		if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil {
+			return errors.New("clear runtime input directory")
+		}
+	}
+	for index, artifact := range input.InputArtifacts {
+		raw, err := client.ReadArtifact(ctx, input, artifact)
+		if err != nil {
+			return err
+		}
+		if err := writeWorkspaceFile(input.WorkspaceRoot, artifactWorkspacePath(index, artifact), raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func artifactWorkspacePath(index int, artifact runtimecontract.RunnerInputArtifact) string {
+	extension := strings.ToLower(filepath.Ext(artifact.FileName))
+	if len(extension) > 16 || !safeArtifactExtension(extension) {
+		extension = ".bin"
+	}
+	return filepath.Join("input", fmt.Sprintf("%03d%s", index+1, extension))
+}
+
+func safeArtifactExtension(extension string) bool {
+	if len(extension) < 2 || extension[0] != '.' {
+		return false
+	}
+	for _, character := range extension[1:] {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func writeWorkspaceFile(root, relative string, payload []byte) error {

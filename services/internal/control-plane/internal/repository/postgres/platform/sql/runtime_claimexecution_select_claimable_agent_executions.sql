@@ -38,6 +38,34 @@ SELECT n.id::text,
                    AND knowledge_binding.target_ref=a.ref
                    AND knowledge_artifact.scan_state='CLEAN'),'{}'),
        r.input,
+       COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+               'ref', runtime_artifact.ref,
+               'fileName', runtime_artifact.file_name,
+               'mediaType', runtime_artifact.media_type,
+               'sizeBytes', runtime_artifact.size_bytes,
+               'digest', runtime_artifact.digest,
+               'revision', runtime_artifact.revision,
+               'version', runtime_artifact.version,
+               'source', runtime_artifact.source
+           ) ORDER BY array_position(root.input_artifact_refs, runtime_artifact.ref) NULLS LAST,
+                      runtime_artifact.file_name,
+                      runtime_artifact.ref)
+           FROM control_plane.artifacts AS runtime_artifact
+           WHERE runtime_artifact.organization_id = r.organization_id
+             AND runtime_artifact.project_id = r.project_id
+             AND runtime_artifact.scan_state = 'CLEAN'
+             AND (
+               runtime_artifact.ref = ANY(root.input_artifact_refs)
+               OR EXISTS (
+                 SELECT 1
+                 FROM control_plane.artifact_bindings AS runtime_binding
+                 WHERE runtime_binding.artifact_id = runtime_artifact.id
+                   AND runtime_binding.target_kind = 'KNOWLEDGE'
+                   AND runtime_binding.target_ref = a.ref
+               )
+             )
+       ), '[]'::jsonb),
        n.attempt,
        COALESCE((
            SELECT max(lease.generation)
@@ -231,6 +259,14 @@ WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
+  AND cardinality(root.input_artifact_refs) = (
+      SELECT count(DISTINCT input_artifact.ref)
+      FROM control_plane.artifacts AS input_artifact
+      WHERE input_artifact.organization_id = r.organization_id
+        AND input_artifact.project_id = r.project_id
+        AND input_artifact.ref = ANY(root.input_artifact_refs)
+        AND input_artifact.scan_state = 'CLEAN'
+  )
   AND NOT EXISTS (
       SELECT 1
       FROM control_plane.run_edges edge

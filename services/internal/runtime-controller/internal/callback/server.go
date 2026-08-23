@@ -4,6 +4,7 @@ package callback
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -179,6 +181,14 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if len(parts) == 5 && parts[0] == "v1" && parts[1] == "executions" && parts[2] != "" && parts[3] == "artifacts" && parts[4] != "" {
+		if request.Method != http.MethodGet {
+			http.NotFound(writer, request)
+			return
+		}
+		server.artifact(writer, request, parts[2], parts[4])
+		return
+	}
 	if len(parts) != 4 || parts[0] != "v1" || parts[1] != "executions" || parts[2] == "" {
 		http.NotFound(writer, request)
 		return
@@ -205,6 +215,51 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 	default:
 		http.NotFound(writer, request)
 	}
+}
+
+func (server *Server) artifact(writer http.ResponseWriter, request *http.Request, leaseRef, artifactRef string) {
+	input, ok := server.authorize(request, leaseRef)
+	if !ok {
+		http.NotFound(writer, request)
+		return
+	}
+	var expected *runtimecontract.RunnerInputArtifact
+	for index := range input.InputArtifacts {
+		if input.InputArtifacts[index].Ref == artifactRef {
+			expected = &input.InputArtifacts[index]
+			break
+		}
+	}
+	if expected == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
+	defer cancel()
+	response, err := server.control.Runtime.ReadExecutionArtifact(ctx, &controlplanev1.ReadExecutionArtifactRequest{
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, ArtifactRef: expected.Ref,
+	})
+	if err != nil {
+		writeControlError(writer, err)
+		return
+	}
+	artifact := response.GetArtifact()
+	content := response.GetContent()
+	digest := sha256.Sum256(content)
+	actualDigest := "sha256:" + hex.EncodeToString(digest[:])
+	if artifact.GetRef() != expected.Ref || artifact.GetFileName() != expected.FileName ||
+		artifact.GetMediaType() != expected.MediaType || artifact.GetSizeBytes() != expected.SizeBytes ||
+		int64(len(content)) != expected.SizeBytes || artifact.GetRevision() != int32(expected.Revision) ||
+		artifact.GetVersion() != expected.Version || subtle.ConstantTimeCompare([]byte(artifact.GetDigest()), []byte(expected.Digest)) != 1 ||
+		subtle.ConstantTimeCompare([]byte(actualDigest), []byte(expected.Digest)) != 1 {
+		http.Error(writer, "runtime artifact binding is invalid", http.StatusConflict)
+		return
+	}
+	writer.Header().Set("Content-Type", expected.MediaType)
+	writer.Header().Set("Content-Length", strconv.FormatInt(expected.SizeBytes, 10))
+	writer.Header().Set("X-MatterCodex-Artifact-Digest", expected.Digest)
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(content)
 }
 
 func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request) {

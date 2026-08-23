@@ -43,6 +43,12 @@ func assistantOperationSchema(kind string, input map[string]any) map[string]any 
 }
 
 func workflowInputSchema() map[string]any {
+	inputField := objectSchema([]string{"label", "valueType", "required", "options"}, map[string]any{
+		"label": stringSchema(1, 160), "description": stringSchema(0, 500),
+		"valueType": enumSchema("TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"),
+		"required":  map[string]any{"type": "boolean"},
+		"options":   map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": stringSchema(1, 160)},
+	})
 	step := objectSchema([]string{"name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys"}, map[string]any{
 		"name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "agentRef": opaqueRefSchema(),
 		"parallel": map[string]any{"type": "boolean"}, "parallelGroup": map[string]any{"type": "integer", "minimum": 0, "maximum": 50},
@@ -52,6 +58,7 @@ func workflowInputSchema() map[string]any {
 	})
 	return objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
 		"projectRef": opaqueRefSchema(), "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": opaqueRefSchema(),
+		"inputFields":    map[string]any{"type": "array", "maxItems": 100, "items": inputField},
 		"steps":          map[string]any{"type": "array", "minItems": 1, "maxItems": 200, "items": step},
 		"maxConcurrency": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 604800}, "completionCriteria": stringSchema(0, 2000),

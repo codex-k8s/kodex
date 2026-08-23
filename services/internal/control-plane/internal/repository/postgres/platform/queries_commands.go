@@ -129,6 +129,8 @@ var (
 	queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef string
 	//go:embed sql/commands_launchrun_select_sessions_organization_id_project_id_ref.sql
 	queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef string
+	//go:embed sql/commands_launchrun_validate_input_artifacts.sql
+	queryCommandsLaunchrunValidateInputArtifacts string
 	//go:embed sql/commands_launchrun_insert_runs_ref_project_id_target_type.sql
 	queryCommandsLaunchrunInsertRunsRefProjectIdTargetType string
 	//go:embed sql/commands_launchrun_update_runs_root_run_id.sql
@@ -197,6 +199,8 @@ var (
 	queryCommandsChangerunUpdateRunNodesStateNextActionsFinishedAt string
 	//go:embed sql/commands_changerun_update_runtime_leases_state_updated_at.sql
 	queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt string
+	//go:embed sql/commands_changerun_update_session_turns_state_completed_at.sql
+	queryCommandsChangerunUpdateSessionTurnsStateCompletedAt string
 	//go:embed sql/commands_changerun_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment string
 	//go:embed sql/commands_changerun_select_runs_id.sql

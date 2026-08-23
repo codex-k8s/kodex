@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
 type localizingRecorder struct{ *httptest.ResponseRecorder }
@@ -43,6 +44,37 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 		if items, ok := step[key].([]any); !ok || len(items) != 0 {
 			t.Fatalf("обязательная коллекция %s отсутствует: %#v", key, step[key])
 		}
+	}
+}
+
+func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
+	t.Parallel()
+
+	key := "priority"
+	fields := []generated.WorkflowInputFieldInput{{
+		Key: &key, Label: "Приоритет", Description: "Выберите срочность",
+		ValueType: generated.SELECT, Required: true, Options: []string{"Обычный", "Высокий"},
+	}}
+	draft := workflowDraft(generated.WorkflowInput{
+		Name: "Обработка обращения", Purpose: "Подготовить ответ", CoordinatorAgentRef: "agt-coordinator",
+		InputFields: &fields,
+	})
+	if len(draft.GetInputFields()) != 1 {
+		t.Fatalf("поля входа потеряны: %#v", draft)
+	}
+	field := draft.GetInputFields()[0]
+	if field.GetKey() != key || field.GetValueType() != "SELECT" || !field.GetRequired() || !reflect.DeepEqual(field.GetOptions(), []string{"Обычный", "Высокий"}) {
+		t.Fatalf("поле входа искажено: %#v", field)
+	}
+}
+
+func TestNormalizeWorkflowInputFieldAddsEmptyOptions(t *testing.T) {
+	t.Parallel()
+
+	value := map[string]any{"key": "company", "label": "Компания", "valueType": "TEXT"}
+	normalize(value)
+	if options, ok := value["options"].([]any); !ok || len(options) != 0 {
+		t.Fatalf("обязательная коллекция options отсутствует: %#v", value)
 	}
 }
 

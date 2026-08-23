@@ -392,19 +392,19 @@ func (e IntegrationCapabilityRisk) Valid() bool {
 
 // Defines values for IntegrationConfigurationFieldValueType.
 const (
-	STRINGLIST IntegrationConfigurationFieldValueType = "STRING_LIST"
-	TEXT       IntegrationConfigurationFieldValueType = "TEXT"
-	URL        IntegrationConfigurationFieldValueType = "URL"
+	IntegrationConfigurationFieldValueTypeSTRINGLIST IntegrationConfigurationFieldValueType = "STRING_LIST"
+	IntegrationConfigurationFieldValueTypeTEXT       IntegrationConfigurationFieldValueType = "TEXT"
+	IntegrationConfigurationFieldValueTypeURL        IntegrationConfigurationFieldValueType = "URL"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationConfigurationFieldValueType enum.
 func (e IntegrationConfigurationFieldValueType) Valid() bool {
 	switch e {
-	case STRINGLIST:
+	case IntegrationConfigurationFieldValueTypeSTRINGLIST:
 		return true
-	case TEXT:
+	case IntegrationConfigurationFieldValueTypeTEXT:
 		return true
-	case URL:
+	case IntegrationConfigurationFieldValueTypeURL:
 		return true
 	default:
 		return false
@@ -1650,6 +1650,66 @@ func (e WorkflowCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for WorkflowInputFieldValueType.
+const (
+	WorkflowInputFieldValueTypeBOOLEAN  WorkflowInputFieldValueType = "BOOLEAN"
+	WorkflowInputFieldValueTypeDATE     WorkflowInputFieldValueType = "DATE"
+	WorkflowInputFieldValueTypeLONGTEXT WorkflowInputFieldValueType = "LONG_TEXT"
+	WorkflowInputFieldValueTypeNUMBER   WorkflowInputFieldValueType = "NUMBER"
+	WorkflowInputFieldValueTypeSELECT   WorkflowInputFieldValueType = "SELECT"
+	WorkflowInputFieldValueTypeTEXT     WorkflowInputFieldValueType = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputFieldValueType enum.
+func (e WorkflowInputFieldValueType) Valid() bool {
+	switch e {
+	case WorkflowInputFieldValueTypeBOOLEAN:
+		return true
+	case WorkflowInputFieldValueTypeDATE:
+		return true
+	case WorkflowInputFieldValueTypeLONGTEXT:
+		return true
+	case WorkflowInputFieldValueTypeNUMBER:
+		return true
+	case WorkflowInputFieldValueTypeSELECT:
+		return true
+	case WorkflowInputFieldValueTypeTEXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkflowInputFieldInputValueType.
+const (
+	BOOLEAN  WorkflowInputFieldInputValueType = "BOOLEAN"
+	DATE     WorkflowInputFieldInputValueType = "DATE"
+	LONGTEXT WorkflowInputFieldInputValueType = "LONG_TEXT"
+	NUMBER   WorkflowInputFieldInputValueType = "NUMBER"
+	SELECT   WorkflowInputFieldInputValueType = "SELECT"
+	TEXT     WorkflowInputFieldInputValueType = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputFieldInputValueType enum.
+func (e WorkflowInputFieldInputValueType) Valid() bool {
+	switch e {
+	case BOOLEAN:
+		return true
+	case DATE:
+		return true
+	case LONGTEXT:
+		return true
+	case NUMBER:
+		return true
+	case SELECT:
+		return true
+	case TEXT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowStepGateDecisions.
 const (
 	WorkflowStepGateDecisionsAPPROVE        WorkflowStepGateDecisions = "APPROVE"
@@ -1813,6 +1873,7 @@ type AgentPage struct {
 type Artifact struct {
 	AgentBindings    []OpaqueRef       `json:"agentBindings"`
 	CreatedAt        Timestamp         `json:"createdAt"`
+	Digest           string            `json:"digest"`
 	FileName         string            `json:"fileName"`
 	MediaType        string            `json:"mediaType"`
 	NextActions      []NextAction      `json:"nextActions"`
@@ -2678,21 +2739,22 @@ type UserSummary struct {
 
 // Workflow defines model for Workflow.
 type Workflow struct {
-	CompletionCriteria  *string        `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef *OpaqueRef     `json:"coordinatorAgentRef,omitempty"`
-	MaxConcurrency      *int           `json:"maxConcurrency,omitempty"`
-	Name                string         `json:"name"`
-	NextActions         []NextAction   `json:"nextActions"`
-	ProjectRef          OpaqueRef      `json:"projectRef"`
-	Purpose             string         `json:"purpose"`
-	Ref                 OpaqueRef      `json:"ref"`
-	Revision            *int           `json:"revision,omitempty"`
-	State               WorkflowState  `json:"state"`
-	Steps               []WorkflowStep `json:"steps"`
-	TimeoutSeconds      *int           `json:"timeoutSeconds,omitempty"`
-	UpdatedAt           Timestamp      `json:"updatedAt"`
-	ValidationMessages  []string       `json:"validationMessages"`
-	Version             int64          `json:"version"`
+	CompletionCriteria  *string              `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef *OpaqueRef           `json:"coordinatorAgentRef,omitempty"`
+	InputFields         []WorkflowInputField `json:"inputFields"`
+	MaxConcurrency      *int                 `json:"maxConcurrency,omitempty"`
+	Name                string               `json:"name"`
+	NextActions         []NextAction         `json:"nextActions"`
+	ProjectRef          OpaqueRef            `json:"projectRef"`
+	Purpose             string               `json:"purpose"`
+	Ref                 OpaqueRef            `json:"ref"`
+	Revision            *int                 `json:"revision,omitempty"`
+	State               WorkflowState        `json:"state"`
+	Steps               []WorkflowStep       `json:"steps"`
+	TimeoutSeconds      *int                 `json:"timeoutSeconds,omitempty"`
+	UpdatedAt           Timestamp            `json:"updatedAt"`
+	ValidationMessages  []string             `json:"validationMessages"`
+	Version             int64                `json:"version"`
 }
 
 // WorkflowState defines model for Workflow.State.
@@ -2708,14 +2770,41 @@ type WorkflowCommandAction string
 
 // WorkflowInput defines model for WorkflowInput.
 type WorkflowInput struct {
-	CompletionCriteria  *string              `json:"completionCriteria,omitempty"`
-	CoordinatorAgentRef OpaqueRef            `json:"coordinatorAgentRef"`
-	MaxConcurrency      *int                 `json:"maxConcurrency,omitempty"`
-	Name                string               `json:"name"`
-	Purpose             string               `json:"purpose"`
-	Steps               *[]WorkflowStepInput `json:"steps,omitempty"`
-	TimeoutSeconds      *int                 `json:"timeoutSeconds,omitempty"`
+	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef OpaqueRef                  `json:"coordinatorAgentRef"`
+	InputFields         *[]WorkflowInputFieldInput `json:"inputFields,omitempty"`
+	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
+	Name                string                     `json:"name"`
+	Purpose             string                     `json:"purpose"`
+	Steps               *[]WorkflowStepInput       `json:"steps,omitempty"`
+	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
 }
+
+// WorkflowInputField defines model for WorkflowInputField.
+type WorkflowInputField struct {
+	Description string                      `json:"description"`
+	Key         string                      `json:"key"`
+	Label       string                      `json:"label"`
+	Options     []string                    `json:"options"`
+	Required    bool                        `json:"required"`
+	ValueType   WorkflowInputFieldValueType `json:"valueType"`
+}
+
+// WorkflowInputFieldValueType defines model for WorkflowInputField.ValueType.
+type WorkflowInputFieldValueType string
+
+// WorkflowInputFieldInput defines model for WorkflowInputFieldInput.
+type WorkflowInputFieldInput struct {
+	Description string                           `json:"description"`
+	Key         *string                          `json:"key,omitempty"`
+	Label       string                           `json:"label"`
+	Options     []string                         `json:"options"`
+	Required    bool                             `json:"required"`
+	ValueType   WorkflowInputFieldInputValueType `json:"valueType"`
+}
+
+// WorkflowInputFieldInputValueType defines model for WorkflowInputFieldInput.ValueType.
+type WorkflowInputFieldInputValueType string
 
 // WorkflowPage defines model for WorkflowPage.
 type WorkflowPage struct {

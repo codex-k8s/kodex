@@ -170,7 +170,7 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 	}
 	inputs := make([]*controlplanev1.WorkflowInputField, 0, len(value.Inputs))
 	for _, input := range value.Inputs {
-		inputs = append(inputs, &controlplanev1.WorkflowInputField{Key: input.Key, Label: input.Label, Description: input.Help, ValueType: input.Type, Required: input.Required})
+		inputs = append(inputs, &controlplanev1.WorkflowInputField{Key: input.Key, Label: input.Label, Description: input.Help, ValueType: input.Type, Required: input.Required, Options: append([]string(nil), input.Options...)})
 	}
 	steps := make([]*controlplanev1.WorkflowStep, 0, len(value.Steps))
 	for index, step := range value.Steps {
@@ -259,7 +259,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
-	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest}
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 	state := "DISABLED"

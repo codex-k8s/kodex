@@ -258,6 +258,17 @@ func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal,
 	}
 	return service.repository.DownloadArtifact(ctx, p, ref, purpose)
 }
+func (service *Service) ReadExecutionArtifact(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.ArtifactDownload{}, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.execution.artifact.read" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 || strings.TrimSpace(artifactRef) == "" {
+		return repository.ArtifactDownload{}, errs.ErrForbidden
+	}
+	return service.repository.ReadExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef)
+}
 func (service *Service) ListSchedules(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Schedule, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

@@ -55,6 +55,7 @@ type Agent struct {
 type WorkflowInputField struct {
 	Key, Label, Type, Help, DefaultValue string
 	Required                             bool
+	Options                              []string
 }
 
 type WorkflowStep struct {

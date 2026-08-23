@@ -1719,6 +1719,28 @@ components:
         recipe: { $ref: '#/components/schemas/RoleImageRecipe' }
         imageBuild: { $ref: '#/components/schemas/RoleImageBuild' }
         reused: { type: boolean }
+    WorkflowInputField:
+      type: object
+      additionalProperties: false
+      required: [key, label, description, valueType, required, options]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z][a-z0-9_-]*$' }
+        label: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 500 }
+        valueType: { type: string, enum: [TEXT, LONG_TEXT, NUMBER, BOOLEAN, DATE, SELECT] }
+        required: { type: boolean }
+        options: { type: array, uniqueItems: true, maxItems: 50, items: { type: string, minLength: 1, maxLength: 160 } }
+    WorkflowInputFieldInput:
+      type: object
+      additionalProperties: false
+      required: [label, description, valueType, required, options]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z][a-z0-9_-]*$' }
+        label: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 500 }
+        valueType: { type: string, enum: [TEXT, LONG_TEXT, NUMBER, BOOLEAN, DATE, SELECT] }
+        required: { type: boolean }
+        options: { type: array, uniqueItems: true, maxItems: 50, items: { type: string, minLength: 1, maxLength: 160 } }
     WorkflowStep:
       type: object
       additionalProperties: false
@@ -1755,7 +1777,7 @@ components:
     Workflow:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, name, purpose, state, steps, validationMessages, updatedAt, nextActions]
+      required: [ref, version, projectRef, name, purpose, state, inputFields, steps, validationMessages, updatedAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -1765,6 +1787,7 @@ components:
         state: { type: string, enum: [DRAFT, VALID, PUBLISHED, ARCHIVED] }
         revision: { type: integer, minimum: 1 }
         coordinatorAgentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        inputFields: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/WorkflowInputField' } }
         steps: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/WorkflowStep' } }
         maxConcurrency: { type: integer, minimum: 1, maximum: 100 }
         timeoutSeconds: { type: integer, minimum: 1, maximum: 604800 }
@@ -1780,6 +1803,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         purpose: { type: string, minLength: 1, maxLength: 1000 }
         coordinatorAgentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        inputFields: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/WorkflowInputFieldInput' } }
         steps: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/WorkflowStepInput' } }
         maxConcurrency: { type: integer, minimum: 1, maximum: 100, default: 1 }
         timeoutSeconds: { type: integer, minimum: 1, maximum: 604800, default: 7200 }
@@ -2019,7 +2043,7 @@ components:
     Artifact:
       type: object
       additionalProperties: false
-      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, scanState, source, revision, agentBindings, previewAvailable, createdAt, nextActions]
+      required: [ref, version, projectRef, fileName, mediaType, sizeBytes, digest, scanState, source, revision, agentBindings, previewAvailable, createdAt, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -2029,6 +2053,7 @@ components:
         fileName: { type: string, maxLength: 255 }
         mediaType: { type: string, maxLength: 160 }
         sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 104857600 }
+        digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
         scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
         source: { type: string, enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT] }
         revision: { type: integer, minimum: 1 }

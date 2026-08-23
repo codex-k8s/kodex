@@ -162,7 +162,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 }
 
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
-	if !onlyAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
+	if !onlyAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria") ||
 		!hasAssistantFields(input, "projectRef", "name", "purpose", "coordinatorAgentRef", "steps") {
 		return command.WorkflowInput{}, errs.ErrInvalid
 	}
@@ -182,6 +182,29 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 	}
 	draft := entity.WorkflowVersion{Ref: "draft", Name: name, Purpose: assistantString(input, "purpose"), CoordinatorAgentRef: coordinator,
 		VersionNumber: 1, Concurrency: int32(concurrency), TimeoutSeconds: timeout, CompletionCriteria: assistantString(input, "completionCriteria"), ResultSchema: map[string]any{}}
+	if rawFields, exists := input["inputFields"]; exists {
+		fields, ok := rawFields.([]any)
+		if !ok || len(fields) > 100 {
+			return command.WorkflowInput{}, errs.ErrInvalid
+		}
+		for index, raw := range fields {
+			field, ok := raw.(map[string]any)
+			if !ok || !onlyAssistantFields(field, "label", "description", "valueType", "required", "options") ||
+				!hasAssistantFields(field, "label", "valueType", "required", "options") {
+				return command.WorkflowInput{}, errs.ErrInvalid
+			}
+			required, requiredOK := assistantBoolValue(field, "required")
+			options, optionsOK := assistantStringsValue(field, "options")
+			if !requiredOK || !optionsOK {
+				return command.WorkflowInput{}, errs.ErrInvalid
+			}
+			draft.Inputs = append(draft.Inputs, entity.WorkflowInputField{
+				Key: "field-" + leftPad(index+1, 3), Label: assistantString(field, "label"),
+				Help: assistantString(field, "description"), Type: assistantString(field, "valueType"),
+				Required: required, Options: options,
+			})
+		}
+	}
 	frontier := []string{}
 	parallelGroups := map[int32][]string{}
 	for index, raw := range rawSteps {
@@ -238,7 +261,7 @@ func assistantSchedule(input map[string]any) (command.ScheduleInput, error) {
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}, Input: boundedInput}
 	if !boundedInputOK || payload.ProjectRef == "" || payload.Name == "" || len(payload.Name) > 160 || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" ||
 		payload.Preset == "" || len(payload.Preset) > 120 || len(payload.CronExpression) > 160 || payload.Timezone == "" || len(payload.Timezone) > 80 ||
-		!contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) || len(payload.Input) > 100 {
+		!contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) || !validBoundedRunInput(payload.Input) {
 		return command.ScheduleInput{}, errs.ErrInvalid
 	}
 	return payload, nil
@@ -254,7 +277,7 @@ func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 		SessionRef: assistantString(input, "sessionRef"), Source: "SYSTEM_ASSISTANT", Input: boundedInput, ArtifactRefs: assistantStrings(input, "artifactRefs"),
 		Target: entity.RunTarget{Type: assistantString(input, "targetType"), Ref: assistantString(input, "targetRef")}}
 	if !boundedInputOK || payload.ProjectRef == "" || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || payload.Title == "" || len(payload.Title) > 240 ||
-		payload.Task == "" || len(payload.Task) > 32768 || len(payload.Input) > 100 || len(payload.ArtifactRefs) > 50 {
+		payload.Task == "" || len(payload.Task) > 32768 || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	return payload, nil

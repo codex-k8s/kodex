@@ -720,6 +720,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	draft := entity.WorkflowVersion{Ref: "draft", Name: "Contract review", Purpose: "Prepare a contract recommendation",
 		CoordinatorAgentRef: reviewer.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600,
 		CompletionCriteria: "A recommendation is approved by the owner", ResultSchema: map[string]any{},
+		Inputs: []entity.WorkflowInputField{{Key: "contract", Label: "Contract", Type: "TEXT", Required: true}},
 		Steps: []entity.WorkflowStep{{Key: "review", Position: 1, Name: "Review contract", AgentRef: reviewer.Ref,
 			Instructions: "Review the contract and prepare a recommendation.", TimeoutSeconds: 900,
 			ExpectedResult: "A bounded recommendation", HumanGateAfter: true, GateDecisions: []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}}},
@@ -869,6 +870,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	workflowDraft := entity.WorkflowVersion{Ref: "draft", Name: "Campaign preparation", Purpose: "Coordinate research and editing",
 		CoordinatorAgentRef: coordinator.Ref, VersionNumber: 1, Concurrency: 2, TimeoutSeconds: 3600,
 		Instructions: "Delegate both bounded steps and synthesize their callbacks.", CompletionCriteria: "Both child results are synthesized.", ResultSchema: map[string]any{},
+		Inputs: []entity.WorkflowInputField{{Key: "campaign", Label: "Campaign", Type: "TEXT", Required: true}},
 		Steps: []entity.WorkflowStep{
 			{Key: "research", Position: 1, Name: "Campaign research", AgentRef: firstChild.Ref, Instructions: "Research the bounded campaign context.", TimeoutSeconds: 900, ExpectedResult: "Research notes"},
 			{Key: "editing", Position: 2, Name: "Campaign editing", AgentRef: secondChild.Ref, Instructions: "Prepare the bounded campaign copy.", TimeoutSeconds: 900, ExpectedResult: "Edited copy"},
@@ -1048,6 +1050,10 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
+	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
+	}, "runtime-controller")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct lifecycle service: %v", err)
@@ -1126,11 +1132,41 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-launch-1"}, Payload: command.LaunchRunInput{
 			ProjectRef: project.Project.Ref, Title: "Answer customer", Task: "Prepare an answer about delivery status.",
 			Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref}, Input: map[string]any{"ticket": "SUP-42"},
+			ArtifactRefs: []string{secondRevision.Ref},
 		}})
 	if err != nil || launch.Run == nil || launch.Graph == nil || launch.Run.State != "RUNNING" || len(launch.Graph.Nodes) != 2 {
 		t.Fatalf("launch direct run: run=%#v graph=%#v err=%v", launch.Run, launch.Graph, err)
 	}
-	completed := claimAndCompleteRun(t, ctx, service, worker, "lifecycle-first", true)
+	if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-concurrent-session"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, SessionRef: launch.Run.SessionRef, Title: "Concurrent answer",
+			Task: "This turn must wait for the current one.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Agent.Ref},
+		}}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("active Session accepted a concurrent turn: %v", err)
+	}
+	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-first-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(claimed.RuntimeItems) != 1 {
+		t.Fatalf("claim lifecycle execution: claims=%d err=%v", len(claimed.RuntimeItems), err)
+	}
+	lease := claimed.RuntimeItems[0]
+	catalog, ok := lease["artifacts"].([]map[string]any)
+	if !ok || len(catalog) != 2 {
+		t.Fatalf("runtime artifact catalog = %#v, want input and knowledge artifacts", lease["artifacts"])
+	}
+	runtimeDownload, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), secondRevision.Ref)
+	if err != nil {
+		t.Fatalf("read lease-bound runtime artifact: %v", err)
+	}
+	runtimeBody, runtimeReadErr := io.ReadAll(runtimeDownload.Reader)
+	runtimeCloseErr := runtimeDownload.Reader.Close()
+	if runtimeReadErr != nil || runtimeCloseErr != nil || string(runtimeBody) != "# Updated policy\n" || runtimeDownload.Artifact.Digest != secondRevision.Digest {
+		t.Fatalf("runtime artifact body=%q artifact=%#v read_err=%v close_err=%v", string(runtimeBody), runtimeDownload.Artifact, runtimeReadErr, runtimeCloseErr)
+	}
+	if _, err := service.ReadExecutionArtifact(ctx, runtimeReader, stringMap(lease, "leaseRef"), "wrong-fence", lease["generation"].(int64), secondRevision.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("runtime artifact accepted a stale fence: %v", err)
+	}
+	completed := completeClaimedExecution(t, ctx, service, worker, lease, "lifecycle-first", true)
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct run: run=%#v artifacts=%v", completed.Run, completed.CreatedRefs)
 	}

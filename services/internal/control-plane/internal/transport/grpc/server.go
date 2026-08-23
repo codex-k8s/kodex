@@ -112,8 +112,26 @@ func domainWorkflowVersion(input *controlplanev1.WorkflowVersion) *entity.Workfl
 		TimeoutSeconds:      int64(input.GetTimeoutSeconds()),
 		CompletionCriteria:  input.GetCompletionCriteria(),
 	}
+	knownInputKeys := make(map[string]struct{}, len(input.GetInputFields()))
 	for _, item := range input.GetInputFields() {
-		result.Inputs = append(result.Inputs, entity.WorkflowInputField{Key: item.GetKey(), Label: item.GetLabel(), Type: item.GetValueType(), Help: item.GetDescription(), Required: item.GetRequired()})
+		if item.GetKey() != "" {
+			knownInputKeys[item.GetKey()] = struct{}{}
+		}
+	}
+	nextInputKey := 1
+	for _, item := range input.GetInputFields() {
+		key := item.GetKey()
+		if key == "" {
+			for {
+				key = fmt.Sprintf("field-%03d", nextInputKey)
+				nextInputKey++
+				if _, exists := knownInputKeys[key]; !exists {
+					break
+				}
+			}
+			knownInputKeys[key] = struct{}{}
+		}
+		result.Inputs = append(result.Inputs, entity.WorkflowInputField{Key: key, Label: item.GetLabel(), Type: item.GetValueType(), Help: item.GetDescription(), Required: item.GetRequired(), Options: append([]string(nil), item.GetOptions()...)})
 	}
 	parallelGroupDependencies := map[int32][]string{}
 	frontier := []string{}

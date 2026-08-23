@@ -39,3 +39,21 @@ func TestDomainWorkflowVersionBuildsAuthoritativeDependencies(t *testing.T) {
 		t.Fatalf("Human Gate шага потерян: %#v", got.Steps[3])
 	}
 }
+
+func TestDomainWorkflowVersionAssignsStableAvailableInputKeys(t *testing.T) {
+	t.Parallel()
+
+	got := domainWorkflowVersion(&controlplanev1.WorkflowVersion{InputFields: []*controlplanev1.WorkflowInputField{
+		{Key: "field-002", Label: "Существующее", ValueType: "TEXT"},
+		{Label: "Новое", ValueType: "SELECT", Required: true, Options: []string{"Да", "Нет"}},
+	}})
+	if got == nil || len(got.Inputs) != 2 {
+		t.Fatalf("поля входа потеряны: %#v", got)
+	}
+	if got.Inputs[0].Key != "field-002" || got.Inputs[1].Key != "field-001" {
+		t.Fatalf("server-owned keys назначены неверно: %#v", got.Inputs)
+	}
+	if !reflect.DeepEqual(got.Inputs[1].Options, []string{"Да", "Нет"}) {
+		t.Fatalf("варианты выбора потеряны: %#v", got.Inputs[1])
+	}
+}

@@ -15,6 +15,7 @@ import (
 const testDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
+const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 
 func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *testing.T) {
 	client := fake.NewSimpleClientset()
@@ -47,6 +48,9 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	}
 	if input.CodexHome != "/tmp/codex-home" {
 		t.Fatalf("provider state path = %q; secret-bearing state must not use the session volume", input.CodexHome)
+	}
+	if len(input.InputArtifacts) != 1 || input.InputArtifacts[0].Ref != "artifact_abcdefgh" || input.InputArtifacts[0].Digest != testArtifactDigest {
+		t.Fatalf("runtime artifact catalog = %#v", input.InputArtifacts)
 	}
 	if !hasEnv(pod.Spec.Containers[1], "HTTPS_PROXY", "http://egress-gateway.mattercodex-system.svc:8080") {
 		t.Fatal("provider runtime is not fenced through the egress gateway")
@@ -146,6 +150,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
 			ImageReference: "registry.example/mattercodex/roles@" + testDigest, ImageManifestDigest: testDigest,
 			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
+			Artifacts: []*controlplanev1.Artifact{{Ref: "artifact_abcdefgh", FileName: "brief.txt", MediaType: "text/plain", SizeBytes: 12, Digest: testArtifactDigest, Revision: 1, Version: 1}},
 			ProviderCredential: &controlplanev1.ProviderCredentialBinding{
 				AccountRef: "pacc_abcdefgh", CredentialRevisionRef: "pcr_abcdefgh", CredentialRevision: 1,
 				SecretName: "runtime-provider-openai-default-r1", SecretUid: "10000000-0000-4000-8000-000000000001",

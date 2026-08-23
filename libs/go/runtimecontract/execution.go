@@ -15,13 +15,16 @@ import (
 )
 
 const (
-	RunnerInputSchemaV4      = "mattercodex.agent-runner-input.v4"
-	RunnerModeTurn           = "TURN"
-	RunnerModeWarm           = "WARM"
-	MaximumRunnerInputBytes  = 2 << 20
-	MaximumCompletionBytes   = 16 << 20
-	MaximumCompletionFiles   = 32
-	MaximumProgressTextBytes = 2 << 10
+	RunnerInputSchemaV4       = "mattercodex.agent-runner-input.v4"
+	RunnerModeTurn            = "TURN"
+	RunnerModeWarm            = "WARM"
+	MaximumRunnerInputBytes   = 2 << 20
+	MaximumInputArtifactBytes = 16 << 20
+	MaximumInputArtifacts     = 128
+	MaximumInputArtifactTotal = 256 << 20
+	MaximumCompletionBytes    = 16 << 20
+	MaximumCompletionFiles    = 32
+	MaximumProgressTextBytes  = 2 << 10
 )
 
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
@@ -67,6 +70,18 @@ type RunnerIntegrationGrant struct {
 	Risk                  string `json:"risk"`
 }
 
+// RunnerInputArtifact описывает exact версию входного либо knowledge artifact.
+// Байты передаются отдельно через execution-scoped callback и сверяются runner.
+type RunnerInputArtifact struct {
+	Ref       string `json:"ref"`
+	FileName  string `json:"file_name"`
+	MediaType string `json:"media_type"`
+	Digest    string `json:"digest"`
+	SizeBytes int64  `json:"size_bytes"`
+	Revision  int64  `json:"revision"`
+	Version   int64  `json:"version"`
+}
+
 // RunnerInput — immutable contract одного turn либо always-hot system runtime.
 // В нём нет actor/organization authority и secret values.
 type RunnerInput struct {
@@ -96,6 +111,7 @@ type RunnerInput struct {
 	SessionContext              []RunnerSessionMessage   `json:"session_context,omitempty"`
 	DelegationTargets           []RunnerDelegationTarget `json:"delegation_targets,omitempty"`
 	IntegrationGrants           []RunnerIntegrationGrant `json:"integration_grants,omitempty"`
+	InputArtifacts              []RunnerInputArtifact    `json:"input_artifacts,omitempty"`
 	Capabilities                []string                 `json:"capabilities,omitempty"`
 	Provider                    string                   `json:"provider"`
 	Model                       string                   `json:"model"`
@@ -135,6 +151,7 @@ func (input RunnerInput) Validate() error {
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
 		input.OutboxRoot != "/workspace/.matter-codex/outbox" || input.CodexHome != "/tmp/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
+		len(input.InputArtifacts) > MaximumInputArtifacts ||
 		len(input.Capabilities) > 256 {
 		return errors.New("runner input is invalid")
 	}
@@ -157,7 +174,29 @@ func (input RunnerInput) Validate() error {
 			return errors.New("runner delegation catalog is invalid")
 		}
 	}
+	artifactRefs := make(map[string]struct{}, len(input.InputArtifacts))
+	var artifactBytes int64
+	for _, artifact := range input.InputArtifacts {
+		if !opaqueReferencePattern.MatchString(artifact.Ref) || !validArtifactFileName(artifact.FileName) ||
+			strings.TrimSpace(artifact.MediaType) == "" || len(artifact.MediaType) > 255 ||
+			!imageDigestPattern.MatchString(artifact.Digest) || artifact.SizeBytes < 0 ||
+			artifact.SizeBytes > MaximumInputArtifactBytes || artifact.Revision < 1 || artifact.Version < 1 {
+			return errors.New("runner artifact catalog is invalid")
+		}
+		if _, exists := artifactRefs[artifact.Ref]; exists {
+			return errors.New("runner artifact catalog is invalid")
+		}
+		artifactRefs[artifact.Ref] = struct{}{}
+		artifactBytes += artifact.SizeBytes
+		if artifactBytes > MaximumInputArtifactTotal {
+			return errors.New("runner artifact catalog is invalid")
+		}
+	}
 	return nil
+}
+
+func validArtifactFileName(value string) bool {
+	return value != "" && len(value) <= 255 && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00\r\n")
 }
 
 func EncodeRunnerInput(input RunnerInput) ([]byte, error) {

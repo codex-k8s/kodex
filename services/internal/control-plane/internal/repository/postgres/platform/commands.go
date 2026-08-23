@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -936,20 +937,16 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 }
 
 func validWorkflowVersion(version entity.WorkflowVersion) bool {
-	if strings.TrimSpace(version.Name) == "" || len(version.Name) > 160 || len(version.Purpose) > 2000 || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Steps) < 1 || len(version.Steps) > 200 {
+	if strings.TrimSpace(version.Name) == "" || len(version.Name) > 160 || len(version.Purpose) > 2000 || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
 		return false
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
-	knownAgents := make(map[string]struct{}, len(version.Steps))
 	totalInstructions := len(version.Instructions) + len(version.CompletionCriteria)
 	for index, step := range version.Steps {
 		if step.Key == "" || len(step.Key) > 96 || step.Position != int32(index+1) || strings.TrimSpace(step.Name) == "" || len(step.Name) > 160 || strings.TrimSpace(step.AgentRef) == "" || strings.TrimSpace(step.Instructions) == "" || len(step.Instructions) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 24*60*60 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || len(step.ExpectedResult) > 1000 || len(step.GateDecisions) > 4 || len(step.RequiredCapabilityKeys) > 50 {
 			return false
 		}
 		if _, duplicate := knownSteps[step.Key]; duplicate {
-			return false
-		}
-		if _, duplicate := knownAgents[step.AgentRef]; duplicate {
 			return false
 		}
 		for _, dependency := range step.DependsOn {
@@ -971,10 +968,112 @@ func validWorkflowVersion(version entity.WorkflowVersion) bool {
 			}
 		}
 		knownSteps[step.Key] = struct{}{}
-		knownAgents[step.AgentRef] = struct{}{}
 		totalInstructions += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 	}
 	return totalInstructions <= 64<<10
+}
+
+func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {
+	known := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if !validWorkflowInputKey(field.Key) || strings.TrimSpace(field.Label) == "" || len(field.Label) > 160 || len(field.Help) > 500 || !contains([]string{"TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"}, field.Type) || len(field.Options) > 50 {
+			return false
+		}
+		if _, duplicate := known[field.Key]; duplicate {
+			return false
+		}
+		known[field.Key] = struct{}{}
+		options := make(map[string]struct{}, len(field.Options))
+		for _, option := range field.Options {
+			if strings.TrimSpace(option) == "" || len(option) > 160 {
+				return false
+			}
+			if _, duplicate := options[option]; duplicate {
+				return false
+			}
+			options[option] = struct{}{}
+		}
+		if field.Type == "SELECT" && len(field.Options) == 0 || field.Type != "SELECT" && len(field.Options) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func validWorkflowInputKey(key string) bool {
+	if len(key) < 1 || len(key) > 80 || key[0] < 'a' || key[0] > 'z' {
+		return false
+	}
+	for _, character := range key {
+		if character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validWorkflowRunInput(fields []entity.WorkflowInputField, input map[string]any) bool {
+	if len(input) > len(fields) {
+		return false
+	}
+	known := make(map[string]entity.WorkflowInputField, len(fields))
+	for _, field := range fields {
+		known[field.Key] = field
+		value, exists := input[field.Key]
+		if field.Required && (!exists || emptyWorkflowInputValue(value)) {
+			return false
+		}
+	}
+	for key, value := range input {
+		field, exists := known[key]
+		if !exists || !validWorkflowRunInputValue(field, value) {
+			return false
+		}
+	}
+	return true
+}
+
+func emptyWorkflowInputValue(value any) bool {
+	text, isText := value.(string)
+	return value == nil || isText && strings.TrimSpace(text) == ""
+}
+
+func validWorkflowRunInputValue(field entity.WorkflowInputField, value any) bool {
+	switch field.Type {
+	case "TEXT":
+		text, ok := value.(string)
+		return ok && len(text) <= 4000
+	case "LONG_TEXT":
+		text, ok := value.(string)
+		return ok && len(text) <= 32768
+	case "NUMBER":
+		number, ok := value.(float64)
+		return ok && !math.IsNaN(number) && !math.IsInf(number, 0)
+	case "BOOLEAN":
+		_, ok := value.(bool)
+		return ok
+	case "DATE":
+		date, ok := value.(string)
+		if !ok || len(date) != len("2006-01-02") {
+			return false
+		}
+		_, err := time.Parse("2006-01-02", date)
+		return err == nil
+	case "SELECT":
+		selected, ok := value.(string)
+		return ok && contains(field.Options, selected)
+	default:
+		return false
+	}
+}
+
+func validBoundedRunInput(input map[string]any) bool {
+	if len(input) > 100 {
+		return false
+	}
+	raw, err := json.Marshal(input)
+	return err == nil && len(raw) <= 64<<10
 }
 
 func workflowRequiresDelegation(version entity.WorkflowVersion) bool {
@@ -1001,7 +1100,7 @@ func validCapabilityKey(value string) bool {
 
 func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
-	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || payload.Target.Ref == "" {
+	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) || len(payload.ArtifactRefs) > 50 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
@@ -1037,6 +1136,9 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 		if json.Unmarshal(workflowSpec, &workflowVersion) != nil || !validWorkflowVersion(workflowVersion) || workflowVersion.CoordinatorAgentRef != coordinatorRef {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		if !validWorkflowRunInput(workflowVersion.Inputs, payload.Input) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		runConcurrency = workflowVersion.Concurrency
 	default:
 		return commandOutcome{}, errs.ErrInvalid
@@ -1064,6 +1166,17 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 	artifactRefs := append([]string(nil), payload.ArtifactRefs...)
 	if artifactRefs == nil {
 		artifactRefs = []string{}
+	}
+	var artifactsValid bool
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateInputArtifacts, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID,
+		"project_id":      projectID,
+		"artifact_refs":   artifactRefs,
+	}).Scan(&artifactsValid); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if !artifactsValid {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	var runID string
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertRunsRefProjectIdTargetType, pgx.StrictNamedArgs{
@@ -1547,6 +1660,9 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 		nodeRows.Close()
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateRuntimeLeasesStateUpdatedAt, rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateSessionTurnsStateCompletedAt, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		gateRows, err := tx.Query(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)

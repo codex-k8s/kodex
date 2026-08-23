@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import type { WorkflowStepInput } from "@/shared/api/generated/openapi/types.gen";
+import { useRoute } from "vue-router";
+import type {
+  WorkflowInputFieldInput,
+  WorkflowStepInput,
+} from "@/shared/api/generated/openapi/types.gen";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -10,7 +13,6 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const route = useRoute();
-const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
 const workflowRef = computed(() => String(route.params.workflowRef));
 const workflow = computed(() => platform.workflows[workflowRef.value]);
@@ -25,7 +27,12 @@ const agentList = computed(() =>
 );
 const busy = ref(false);
 const problem = ref<AppProblem>();
-const task = ref("");
+const gateDecisionOptions = [
+  "APPROVE",
+  "REJECT",
+  "REQUEST_CHANGES",
+  "CANCEL",
+] as const;
 const form = reactive({
   name: "",
   purpose: "",
@@ -33,8 +40,42 @@ const form = reactive({
   maxConcurrency: 2,
   timeoutSeconds: 7200,
   completionCriteria: "",
+  inputFields: [] as WorkflowInputFieldInput[],
   steps: [] as WorkflowStepInput[],
 });
+function addInputField() {
+  if (!canEdit.value) return;
+  form.inputFields.push({
+    label: "",
+    description: "",
+    valueType: "TEXT",
+    required: false,
+    options: [],
+  });
+}
+function removeInputField(index: number) {
+  if (!canEdit.value) return;
+  form.inputFields.splice(index, 1);
+}
+function updateFieldOptions(field: WorkflowInputFieldInput, event: Event) {
+  field.options = (event.target as HTMLInputElement).value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+function toggleCapability(step: WorkflowStepInput, key: string) {
+  const index = step.requiredCapabilityKeys.indexOf(key);
+  if (index >= 0) step.requiredCapabilityKeys.splice(index, 1);
+  else step.requiredCapabilityKeys.push(key);
+}
+function toggleDecision(
+  step: WorkflowStepInput,
+  decision: WorkflowStepInput["gateDecisions"][number],
+) {
+  const index = step.gateDecisions.indexOf(decision);
+  if (index >= 0) step.gateDecisions.splice(index, 1);
+  else step.gateDecisions.push(decision);
+}
 function addStep() {
   if (!canEdit.value) return;
   form.steps.push({
@@ -62,6 +103,7 @@ async function load() {
   await Promise.all([
     platform.loadWorkflow(workflowRef.value),
     platform.loadAgents(projectRef.value),
+    platform.loadCapabilities(),
   ]);
   if (workflow.value) {
     Object.assign(form, {
@@ -71,6 +113,14 @@ async function load() {
       maxConcurrency: workflow.value.maxConcurrency ?? 1,
       timeoutSeconds: workflow.value.timeoutSeconds ?? 7200,
       completionCriteria: workflow.value.completionCriteria ?? "",
+      inputFields: workflow.value.inputFields.map((field) => ({
+        key: field.key,
+        label: field.label,
+        description: field.description,
+        valueType: field.valueType,
+        required: field.required,
+        options: [...field.options],
+      })),
       steps: workflow.value.steps.map((step) => ({
         position: step.position,
         name: step.name,
@@ -111,23 +161,12 @@ async function command(action: "VALIDATE" | "PUBLISH" | "ARCHIVE") {
     busy.value = false;
   }
 }
-async function launch() {
-  if (!workflow.value || !canLaunch.value || !task.value.trim()) return;
-  busy.value = true;
-  try {
-    const run = await platform.launch({
-      projectRef: projectRef.value,
-      targetRef: workflow.value.ref,
-      targetType: "WORKFLOW",
-      title: task.value.trim().slice(0, 160),
-      task: task.value.trim(),
-    });
-    await router.push(`/runs/${run.ref}`);
-  } catch (error) {
-    problem.value = asProblem(error);
-  } finally {
-    busy.value = false;
-  }
+function launchRoute(): string {
+  const query = new URLSearchParams({
+    targetType: "WORKFLOW",
+    targetRef: workflow.value?.ref ?? "",
+  });
+  return `/projects/${projectRef.value}/runs/new?${query.toString()}`;
 }
 onMounted(() => void load());
 </script>
@@ -187,9 +226,98 @@ onMounted(() => void load());
                 max="604800" /></label
             ><label class="field"
               ><span>{{ $t("workflows.completion") }}</span
-              ><input v-model.trim="form.completionCriteria"
+              ><input v-model.trim="form.completionCriteria" /></label
+            ><label class="field"
+              ><span>{{ $t("workflows.concurrency") }}</span
+              ><input
+                v-model.number="form.maxConcurrency"
+                type="number"
+                min="1"
+                max="100"
+                required
             /></label>
           </div>
+          <section class="editor-section">
+            <div class="section-header">
+              <div>
+                <h2>{{ $t("workflows.inputFields") }}</h2>
+                <p>{{ $t("workflows.inputFieldsHint") }}</p>
+              </div>
+              <button
+                v-if="canEdit"
+                class="button"
+                type="button"
+                @click="addInputField"
+              >
+                {{ $t("workflows.addInputField") }}
+              </button>
+            </div>
+            <div v-if="form.inputFields.length" class="input-field-list">
+              <article
+                v-for="(field, index) in form.inputFields"
+                :key="field.key ?? index"
+                class="input-field-card panel form-grid"
+              >
+                <label class="field"
+                  ><span>{{ $t("workflows.inputLabel") }}</span
+                  ><input
+                    v-model.trim="field.label"
+                    required
+                    maxlength="160" /></label
+                ><label class="field"
+                  ><span>{{ $t("workflows.inputType") }}</span
+                  ><select v-model="field.valueType">
+                    <option value="TEXT">
+                      {{ $t("workflows.inputTypes.TEXT") }}
+                    </option>
+                    <option value="LONG_TEXT">
+                      {{ $t("workflows.inputTypes.LONG_TEXT") }}
+                    </option>
+                    <option value="NUMBER">
+                      {{ $t("workflows.inputTypes.NUMBER") }}
+                    </option>
+                    <option value="BOOLEAN">
+                      {{ $t("workflows.inputTypes.BOOLEAN") }}
+                    </option>
+                    <option value="DATE">
+                      {{ $t("workflows.inputTypes.DATE") }}
+                    </option>
+                    <option value="SELECT">
+                      {{ $t("workflows.inputTypes.SELECT") }}
+                    </option>
+                  </select></label
+                ><label class="field field--wide"
+                  ><span>{{ $t("workflows.inputDescription") }}</span
+                  ><input
+                    v-model.trim="field.description"
+                    maxlength="500" /></label
+                ><label
+                  v-if="field.valueType === 'SELECT'"
+                  class="field field--wide"
+                  ><span>{{ $t("workflows.inputOptions") }}</span
+                  ><textarea
+                    :value="field.options.join('\n')"
+                    required
+                    @input="updateFieldOptions(field, $event)"
+                  /></label
+                ><label class="check-field"
+                  ><input v-model="field.required" type="checkbox" />{{
+                    $t("workflows.inputRequired")
+                  }}</label
+                ><button
+                  v-if="canEdit"
+                  class="button button--danger input-field-remove"
+                  type="button"
+                  @click="removeInputField(index)"
+                >
+                  {{ $t("common.delete") }}
+                </button>
+              </article>
+            </div>
+            <p v-else class="empty-inline">
+              {{ $t("workflows.noInputFields") }}
+            </p>
+          </section>
           <div class="section-header">
             <h2>{{ $t("workflows.steps") }}</h2>
             <button
@@ -234,6 +362,73 @@ onMounted(() => void load());
                   $t("workflows.humanGate")
                 }}</label
               >
+              <details class="field--wide step-advanced">
+                <summary>{{ $t("common.advanced") }}</summary>
+                <div class="form-grid advanced-grid">
+                  <label v-if="step.parallel" class="field"
+                    ><span>{{ $t("workflows.parallelGroup") }}</span
+                    ><input
+                      v-model.number="step.parallelGroup"
+                      type="number"
+                      min="0"
+                      max="50"
+                  /></label>
+                  <label class="field"
+                    ><span>{{ $t("workflows.stepTimeout") }}</span
+                    ><input
+                      v-model.number="step.timeoutSeconds"
+                      type="number"
+                      min="1"
+                      max="86400"
+                      required
+                  /></label>
+                  <label class="field field--wide"
+                    ><span>{{ $t("workflows.expectedResult") }}</span
+                    ><textarea
+                      v-model.trim="step.expectedResult"
+                      maxlength="1000"
+                    />
+                  </label>
+                  <fieldset
+                    v-if="step.humanGate"
+                    class="choice-field field--wide"
+                  >
+                    <legend>{{ $t("workflows.gateDecisions") }}</legend>
+                    <label
+                      v-for="decision in gateDecisionOptions"
+                      :key="decision"
+                      class="check-field"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="step.gateDecisions.includes(decision)"
+                        @change="toggleDecision(step, decision)"
+                      />{{ $t(`workflows.gateDecision.${decision}`) }}
+                    </label>
+                  </fieldset>
+                  <fieldset class="choice-field field--wide">
+                    <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
+                    <label
+                      v-for="capability in platform.capabilities"
+                      :key="capability.key"
+                      class="check-field"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="
+                          step.requiredCapabilityKeys.includes(capability.key)
+                        "
+                        @change="toggleCapability(step, capability.key)"
+                      />{{ capability.name }}
+                    </label>
+                    <span
+                      v-if="!platform.capabilities.length"
+                      class="secondary-copy"
+                      >{{ $t("common.noData") }}</span
+                    >
+                  </fieldset>
+                </div>
+              </details>
             </div>
             <button
               v-if="canEdit"
@@ -257,17 +452,10 @@ onMounted(() => void load());
         </fieldset>
         <aside v-if="canLaunch" class="panel launch-panel">
           <h2>{{ $t("runs.new") }}</h2>
-          <label class="field"
-            ><span>{{ $t("runs.task") }}</span
-            ><textarea v-model="task" maxlength="8000" /></label
-          ><button
-            class="button button--primary"
-            type="button"
-            :disabled="busy || !task.trim()"
-            @click="launch"
-          >
+          <p>{{ $t("workflows.launchHint") }}</p>
+          <RouterLink class="button button--primary" :to="launchRoute()">
             {{ $t("common.launch") }}
-          </button>
+          </RouterLink>
         </aside>
       </div></AsyncState
     ></PageFrame
@@ -286,6 +474,27 @@ onMounted(() => void load());
   margin: 0;
   padding: 0;
   border: 0;
+}
+.editor-section {
+  display: grid;
+  gap: 12px;
+}
+.section-header p,
+.launch-panel p,
+.empty-inline,
+.secondary-copy {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.input-field-list {
+  display: grid;
+  gap: 10px;
+}
+.input-field-card {
+  position: relative;
+}
+.input-field-remove {
+  justify-self: end;
 }
 .workflow-step {
   position: relative;
@@ -310,6 +519,30 @@ onMounted(() => void load());
 .check-field input {
   width: 20px;
   min-height: 20px;
+}
+.step-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.step-advanced summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.advanced-grid {
+  margin-top: 12px;
+}
+.choice-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.choice-field legend {
+  padding: 0 6px;
+  color: var(--text-secondary);
 }
 .launch-panel {
   display: grid;

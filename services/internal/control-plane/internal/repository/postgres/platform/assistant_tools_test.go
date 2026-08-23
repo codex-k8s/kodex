@@ -31,6 +31,7 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
 		"projectRef": "prj_12345678", "name": "Lead qualification", "purpose": "Qualify inbound leads", "coordinatorAgentRef": "agt_12345678",
 		"maxConcurrency": float64(2), "timeoutSeconds": float64(7200), "completionCriteria": "Every lead has a decision",
+		"inputFields": []any{map[string]any{"label": "Company", "description": "Lead company name", "valueType": "TEXT", "required": true, "options": []any{}}},
 		"steps": []any{map[string]any{"name": "Research", "purpose": "Research the lead", "agentRef": "agt_12345678", "parallel": false,
 			"parallelGroup": float64(0), "timeoutSeconds": float64(3600), "expectedResult": "Lead profile", "humanGate": false,
 			"gateDecisions": []any{}, "requiredCapabilityKeys": []any{}}},
@@ -40,7 +41,8 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 		t.Fatalf("map workflow operation: kind=%q err=%v", mapped.Kind, err)
 	}
 	payload := mapped.Payload.(command.WorkflowInput)
-	if payload.Draft == nil || len(payload.Draft.Steps) != 1 || payload.Draft.Steps[0].Key != "step-001" {
+	if payload.Draft == nil || len(payload.Draft.Steps) != 1 || payload.Draft.Steps[0].Key != "step-001" ||
+		len(payload.Draft.Inputs) != 1 || payload.Draft.Inputs[0].Key != "field-001" {
 		t.Fatalf("unexpected workflow draft: %#v", payload.Draft)
 	}
 	run := entity.AssistantPlanOperation{Type: "LAUNCH_RUN", Summary: "Launch", Input: map[string]any{

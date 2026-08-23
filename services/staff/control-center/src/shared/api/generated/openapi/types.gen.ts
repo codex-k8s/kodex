@@ -293,6 +293,24 @@ export type RoleImageRecipeCommandReceipt = {
     reused: boolean;
 };
 
+export type WorkflowInputField = {
+    key: string;
+    label: string;
+    description: string;
+    valueType: 'TEXT' | 'LONG_TEXT' | 'NUMBER' | 'BOOLEAN' | 'DATE' | 'SELECT';
+    required: boolean;
+    options: Array<string>;
+};
+
+export type WorkflowInputFieldInput = {
+    key?: string;
+    label: string;
+    description: string;
+    valueType: 'TEXT' | 'LONG_TEXT' | 'NUMBER' | 'BOOLEAN' | 'DATE' | 'SELECT';
+    required: boolean;
+    options: Array<string>;
+};
+
 export type WorkflowStep = {
     ref: OpaqueRef;
     position: number;
@@ -331,6 +349,7 @@ export type Workflow = {
     state: 'DRAFT' | 'VALID' | 'PUBLISHED' | 'ARCHIVED';
     revision?: number;
     coordinatorAgentRef?: OpaqueRef;
+    inputFields: Array<WorkflowInputField>;
     steps: Array<WorkflowStep>;
     maxConcurrency?: number;
     timeoutSeconds?: number;
@@ -344,6 +363,7 @@ export type WorkflowInput = {
     name: string;
     purpose: string;
     coordinatorAgentRef: OpaqueRef;
+    inputFields?: Array<WorkflowInputFieldInput>;
     steps?: Array<WorkflowStepInput>;
     maxConcurrency?: number;
     timeoutSeconds?: number;
@@ -558,6 +578,7 @@ export type Artifact = {
     fileName: string;
     mediaType: string;
     sizeBytes: number;
+    digest: string;
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;

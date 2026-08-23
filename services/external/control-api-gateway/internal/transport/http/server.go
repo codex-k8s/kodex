@@ -364,6 +364,9 @@ func requiredCollectionKeys(value map[string]any) []string {
 	if _, isStep := value["position"]; isStep {
 		keys = append(keys, "gateDecisions", "requiredCapabilityKeys")
 	}
+	if _, isWorkflowInput := value["valueType"]; isWorkflowInput {
+		keys = append(keys, "options")
+	}
 	if _, isAgent := value["roleDescription"]; isAgent {
 		keys = append(keys, "capabilities", "integrations", "knowledgeArtifactRefs", "nextActions")
 	}
@@ -393,12 +396,12 @@ func flattenWorkflow(value map[string]any) {
 	if version == nil {
 		version, _ = value["draftVersion"].(map[string]any)
 	}
-	for _, key := range []string{"revision", "coordinatorAgentRef", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
 		if item, exists := version[key]; exists {
 			value[key] = item
 		}
 	}
-	for _, key := range []string{"steps", "validationMessages", "nextActions"} {
+	for _, key := range []string{"inputFields", "steps", "validationMessages", "nextActions"} {
 		if _, exists := value[key]; !exists {
 			value[key] = []any{}
 		}

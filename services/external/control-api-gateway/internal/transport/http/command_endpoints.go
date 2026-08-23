@@ -276,6 +276,11 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 
 func workflowDraft(body generated.WorkflowInput) *controlplanev1.WorkflowVersion {
 	draft := &controlplanev1.WorkflowVersion{Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
+	if body.InputFields != nil {
+		for _, field := range *body.InputFields {
+			draft.InputFields = append(draft.InputFields, &controlplanev1.WorkflowInputField{Key: stringValue(field.Key), Label: field.Label, Description: field.Description, ValueType: string(field.ValueType), Required: field.Required, Options: append([]string(nil), field.Options...)})
+		}
+	}
 	if body.MaxConcurrency != nil {
 		draft.MaxConcurrency = int32(*body.MaxConcurrency)
 	}
@@ -306,16 +311,11 @@ func (server *Server) CreateWorkflow(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Command.CreateWorkflow(r.Context(), &controlplanev1.CreateWorkflowRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef})
-	if err == nil && body.Steps != nil {
-		version := response.GetWorkflow().GetVersion()
-		updateMutation := &controlplanev1.MutationContext{IdempotencyKey: p.IdempotencyKey + "-draft", ExpectedVersion: &version}
-		updated, updateErr := server.control.Command.UpdateWorkflowDraft(r.Context(), &controlplanev1.UpdateWorkflowDraftRequest{Mutation: updateMutation, WorkflowRef: response.GetWorkflow().GetRef(), Draft: workflowDraft(body)})
-		if updateErr == nil {
-			response = &controlplanev1.CreateWorkflowResponse{Workflow: updated.GetWorkflow()}
-		}
-		err = updateErr
+	request := &controlplanev1.CreateWorkflowRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Purpose: body.Purpose, CoordinatorAgentRef: body.CoordinatorAgentRef}
+	if body.Steps != nil && len(*body.Steps) > 0 {
+		request.Draft = workflowDraft(body)
 	}
+	response, err := server.control.Command.CreateWorkflow(r.Context(), request)
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

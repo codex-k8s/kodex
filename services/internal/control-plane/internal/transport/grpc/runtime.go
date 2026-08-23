@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"io"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -10,6 +11,8 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+const maximumExecutionArtifactBytes = 16 << 20
 
 func mapString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
@@ -92,6 +95,21 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"], ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"], CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"], Risk: grant["risk"], Enabled: true})
 		}
 	}
+	if artifacts, ok := values["artifacts"].([]map[string]any); ok {
+		for _, artifact := range artifacts {
+			result.Artifacts = append(result.Artifacts, &controlplanev1.Artifact{
+				Ref:       mapString(artifact, "ref"),
+				FileName:  mapString(artifact, "fileName"),
+				MediaType: mapString(artifact, "mediaType"),
+				SizeBytes: mapInt64(artifact, "sizeBytes"),
+				Digest:    mapString(artifact, "digest"),
+				Revision:  int32(mapInt64(artifact, "revision")),
+				Version:   mapInt64(artifact, "version"),
+				ScanState: controlplanev1.ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN,
+				Source:    artifactSource(mapString(artifact, "source")),
+			})
+		}
+	}
 	if targets, ok := values["delegationTargets"].([]map[string]string); ok {
 		for _, target := range targets {
 			result.DelegationTargets = append(result.DelegationTargets, &controlplanev1.DelegationTarget{Ref: target["ref"], Name: target["name"], Purpose: target["purpose"], RoleDescription: target["roleDescription"], WorkflowStepKey: target["workflowStepKey"], WorkflowStepName: target["workflowStepName"], Instructions: target["instructions"], ExpectedResult: target["expectedResult"]})
@@ -142,6 +160,23 @@ func (server *Server) ClaimExecution(ctx context.Context, request *controlplanev
 		response.Executions = append(response.Executions, castClaim(item))
 	}
 	return response, nil
+}
+
+func (server *Server) ReadExecutionArtifact(ctx context.Context, request *controlplanev1.ReadExecutionArtifactRequest) (*controlplanev1.ReadExecutionArtifactResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	download, err := server.service.ReadExecutionArtifact(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetArtifactRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	defer download.Reader.Close()
+	content, err := io.ReadAll(io.LimitReader(download.Reader, maximumExecutionArtifactBytes+1))
+	if err != nil || len(content) > maximumExecutionArtifactBytes || int64(len(content)) != download.Artifact.SizeBytes {
+		return nil, transportError(errs.ErrUnavailable)
+	}
+	return &controlplanev1.ReadExecutionArtifactResponse{Artifact: castArtifact(download.Artifact), Content: content}, nil
 }
 
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {

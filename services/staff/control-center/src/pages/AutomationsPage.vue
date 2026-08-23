@@ -76,10 +76,7 @@ async function submit(): Promise<void> {
   }
 }
 
-async function command(
-  ref: string,
-  action: "ENABLE" | "PAUSE",
-): Promise<void> {
+async function command(ref: string, action: "ENABLE" | "PAUSE"): Promise<void> {
   const schedule = platform.schedules[ref];
   const requiredAction = action === "PAUSE" ? "DISABLE" : action;
   if (!schedule?.nextActions.includes(requiredAction)) return;
