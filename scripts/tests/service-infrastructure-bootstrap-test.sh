@@ -10,6 +10,7 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 bootstrap="$repository_root/infra/service-infrastructure/bootstrap.sh"
 vault_bootstrap="$repository_root/infra/service-infrastructure/vault-bootstrap.yaml"
 vault_values="$repository_root/infra/service-infrastructure/vault-values.yaml"
+csi_values="$repository_root/infra/service-infrastructure/secrets-store-csi-values.yaml"
 vault_initializer="$repository_root/tools/deploy/bootstrap-vault.sh"
 keycloak_bootstrap="$repository_root/tools/deploy/configure-keycloak.sh"
 
@@ -50,6 +51,9 @@ grep -Fq 'require_vault_csi_provider' "$bootstrap" ||
   fail 'Vault CSI provider strict readback is absent'
 [[ $(grep -Fc 'require_vault_csi_provider' "$bootstrap") -eq 3 ]] ||
   fail 'Vault CSI provider is not checked by apply and readback modes'
+
+yq -e '.syncSecret.enabled == true and .enableSecretRotation == true' "$csi_values" >/dev/null ||
+  fail 'Secrets Store CSI secret synchronization or rotation is disabled'
 
 yq -e '.csi.enabled == true and .csi.agent.enabled == false' "$vault_values" >/dev/null ||
   fail 'Vault CSI provider or direct mode is disabled'

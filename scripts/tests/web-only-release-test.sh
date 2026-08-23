@@ -19,6 +19,9 @@ verify_csi_secret_mounts() {
     printf '%s' "$encoded_objects" | base64 -d | yq -o=json '.' |
       jq -e '(length > 0) and all(.[]; .filePermission == 292)' >/dev/null ||
       fail "SecretProviderClass does not use exact read-only mode 0444: $provider_class"
+    printf '%s' "$encoded_objects" | base64 -d | yq -o=json '.' |
+      jq -e 'all(.[]; (.secretPath | startswith("secret/data/") | not))' >/dev/null ||
+      fail "SecretProviderClass uses a non-canonical Vault KV mount: $provider_class"
     ((secret_provider_class_count += 1))
   done < <(yq -N -r '
     select(.kind == "SecretProviderClass") |
@@ -53,10 +56,11 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
 legacy_resetter="$repository_root/tools/deploy/reset-legacy-installation.sh"
+fresh_materializer="$repository_root/tools/deploy/materialize-fresh-install-secrets.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
-bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter"
+bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter" "$fresh_materializer"
 if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
   fail 'fresh deploy expands a local variable in the declaration that assigns it'
 fi
@@ -86,6 +90,23 @@ grep -Fq 'imageadmissionpolicyparameters.supplychain.mattercodex.dev' "$fresh_de
   fail 'fresh deploy omits immutable image admission parameters lifecycle'
 grep -Fq 'cmp -s "$desired_payload" "$live_payload"' "$fresh_deployer" ||
   fail 'fresh deploy replaces immutable resources without semantic drift comparison'
+grep -Fq 'wait_trust_material()' "$fresh_deployer" ||
+  fail 'fresh deploy does not implement bounded trust material readiness'
+[[ $(grep -c '^[[:space:]]*wait_trust_material$' "$fresh_deployer") -eq 3 ]] ||
+  fail 'fresh deploy does not verify trust material in state, workloads and readback phases'
+for readiness_condition in \
+  'certificates.cert-manager.io/$resource_name' \
+  'bundles.trust.cert-manager.io/$resource_name' \
+  'vaultstaticsecrets.secrets.hashicorp.com/$resource_name'; do
+  grep -Fq "$readiness_condition" "$fresh_deployer" ||
+    fail "fresh deploy omits trust resource readiness: $readiness_condition"
+done
+grep -Fq 'create_secret mattercodex-system control-api-gateway-vault-ca' "$fresh_materializer" ||
+  fail 'fresh secret materialization omits the exact Vault CA Secret for VSO'
+if yq -e 'select(.kind == "Bundle" and .metadata.name == "control-api-gateway-vault-ca")' \
+  "$repository_root/deploy/k8s/base/control-api-gateway/vault-resources.yaml" >/dev/null 2>&1; then
+  fail 'control API Vault CA still depends on disabled trust-manager Secret targets'
+fi
 yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
   .metadata.name == "internal-rpc-authority-restore-anchor-forward-only")' \
   "$repository_root/deploy/k8s/base/internal-rpc-authority-restore/evidence-admission.yaml" |
@@ -214,6 +235,29 @@ if rg -ni 'bot-service|legacy-data-migration|mattermostMode' "$render_file" >/de
 fi
 
 verify_csi_secret_mounts "$render_file"
+
+if rg -q 'REGISTRY_HTTP_TLS_CLIENTAUTH|REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED|secret/data/' \
+  "$render_file"; then
+  fail 'render contains unsupported registry configuration or a non-canonical Vault path'
+fi
+for registry_deployment in mattercodex-image-registry-pull mattercodex-image-registry-staging-read; do
+  REGISTRY_DEPLOYMENT="$registry_deployment" yq -o=json '
+    select(.kind == "Deployment" and .metadata.name == strenv(REGISTRY_DEPLOYMENT)) |
+    .spec.template.spec.containers[] | select(.name == "registry") |
+    .env[] | select(.name == "REGISTRY_STORAGE_MAINTENANCE") | .value
+  ' "$render_file" | jq -er 'fromjson | .readonly.enabled == true' >/dev/null ||
+    fail "registry readonly configuration is not a structured parent value: $registry_deployment"
+done
+yq -o=json 'select(.kind == "DaemonSet" and
+  .metadata.name == "mattercodex-registry-node-pull-readback")' "$render_file" |
+  jq -e '
+    any(.spec.template.spec.volumes[];
+      .name == "containerd-socket" and
+      .hostPath.path == "/run/k3s/containerd/containerd.sock" and
+      .hostPath.type == "Socket") and
+    any(.spec.template.spec.containers[] | .volumeMounts[]?;
+      .name == "containerd-socket" and .mountPath == "/run/containerd/containerd.sock")
+  ' >/dev/null || fail 'node pull readback does not bridge the K3s containerd socket'
 
 if yq -e '
   select(
@@ -382,20 +426,72 @@ for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw 
   ' "$render_file" >/dev/null || fail "fresh stateful service is absent: $service"
 done
 
-for certificate in mattercodex-postgresql mattercodex-nats control-plane-nats-client control-plane-nats-bootstrap-client control-api-gateway-nats-client; do
+for certificate in \
+  mattercodex-postgresql mattercodex-nats control-plane-nats-client \
+  control-plane-nats-bootstrap-client control-api-gateway-nats-client \
+  internal-rpc-authority-database-credential-reconciler internal-rpc-authority-publisher \
+  internal-rpc-authority-readback-attestor internal-rpc-authority-restore-controller \
+  internal-rpc-authority-restore-operator internal-rpc-authority-role-image-builder-workload \
+  internal-rpc-authority-image-admission-workload internal-rpc-authority-image-promotion-workload \
+  internal-rpc-authority-automation-scheduler-workload \
+  internal-rpc-authority-control-api-gateway-workload internal-rpc-authority-control-plane-workload \
+  internal-rpc-authority-integration-gateway-workload \
+  internal-rpc-authority-interaction-gateway-workload \
+  internal-rpc-authority-runtime-controller-workload runtime-controller-callback-server \
+  runtime-execution-client; do
   CERTIFICATE="$certificate" yq -e '
     select(.kind == "Certificate" and .metadata.name == strenv(CERTIFICATE)) |
     .spec.issuerRef.name == "mattercodex-installation-ca"
   ' "$render_file" >/dev/null || fail "fresh TLS certificate contract is absent: $certificate"
 done
 
-for bundle in control-plane-postgresql-ca internal-rpc-authority-postgresql-ca mattercodex-nats-ca; do
+while IFS=$'\t' read -r certificate service_account; do
+  CERTIFICATE="$certificate" SERVICE_ACCOUNT="$service_account" yq -e '
+    select(.kind == "Certificate" and .metadata.name == strenv(CERTIFICATE)) |
+    ((.spec.uris | contains(["spiffe://mattercodex.local/ns/mattercodex-system/sa/" + strenv(SERVICE_ACCOUNT)])) and
+      (.spec.usages | contains(["client auth"])))
+  ' "$render_file" >/dev/null || fail "fresh workload identity is incomplete: $certificate"
+done <<'EOF'
+internal-rpc-authority-database-credential-reconciler	internal-rpc-authority-database-credential-reconciler
+internal-rpc-authority-publisher	internal-rpc-authority-publisher
+internal-rpc-authority-readback-attestor	internal-rpc-authority-readback-attestor
+internal-rpc-authority-restore-controller	internal-rpc-authority-restore-controller
+internal-rpc-authority-restore-operator	internal-rpc-authority-restore-operator
+internal-rpc-authority-role-image-builder-workload	role-image-builder
+internal-rpc-authority-image-admission-workload	image-admission
+internal-rpc-authority-image-promotion-workload	image-promotion
+internal-rpc-authority-automation-scheduler-workload	automation-scheduler
+internal-rpc-authority-control-api-gateway-workload	control-api-gateway
+internal-rpc-authority-control-plane-workload	control-plane
+internal-rpc-authority-integration-gateway-workload	integration-gateway
+internal-rpc-authority-interaction-gateway-workload	interaction-gateway
+internal-rpc-authority-runtime-controller-workload	runtime-controller
+runtime-execution-client	agent-runner
+EOF
+
+for bundle in \
+  control-plane-postgresql-ca internal-rpc-authority-postgresql-ca mattercodex-nats-ca \
+  internal-rpc-authority-publisher-ca internal-rpc-authority-readback-attestor-ca \
+  internal-rpc-authority-restore-controller-ca internal-rpc-authority-vault-ca \
+  mattercodex-vault-ca; do
   BUNDLE="$bundle" yq -e '
     select(.kind == "Bundle" and .metadata.name == strenv(BUNDLE)) |
     .metadata.namespace == null and
     .spec.sources[0].secret.name == "mattercodex-installation-ca" and
     .spec.target.configMap.key == "ca.pem"
   ' "$render_file" >/dev/null || fail "fresh CA bundle contract is absent or incorrectly namespaced: $bundle"
+done
+for bundle in \
+  internal-rpc-authority-database-credential-reconciler-client-ca \
+  internal-rpc-authority-publisher-client-ca \
+  internal-rpc-authority-readback-attestor-client-ca \
+  internal-rpc-authority-restore-controller-client-ca; do
+  BUNDLE="$bundle" yq -e '
+    select(.kind == "Bundle" and .metadata.name == strenv(BUNDLE)) |
+    .metadata.namespace == null and
+    .spec.sources[0].secret.name == "mattercodex-installation-ca" and
+    .spec.target.configMap.key == "client-ca.pem"
+  ' "$render_file" >/dev/null || fail "fresh client CA bundle contract is absent: $bundle"
 done
 
 yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql")' "$render_file" |

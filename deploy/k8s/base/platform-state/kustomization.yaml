@@ -3,7 +3,9 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - certificates.yaml
+  - authority-certificates.yaml
   - ca-bundles.yaml
+  - authority-ca-bundles.yaml
   - postgresql.yaml
   - nats.yaml
   - networkpolicy.yaml

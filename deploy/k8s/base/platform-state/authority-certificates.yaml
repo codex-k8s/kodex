@@ -1,0 +1,254 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-database-credential-reconciler
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-database-credential-reconciler-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - internal-rpc-authority-database-credential-reconciler
+    - internal-rpc-authority-database-credential-reconciler.mattercodex-system.svc
+    - internal-rpc-authority-database-credential-reconciler.mattercodex-system.svc.cluster.local
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-database-credential-reconciler
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-publisher
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-publisher-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - internal-rpc-authority-publisher
+    - internal-rpc-authority-publisher.mattercodex-system.svc
+    - internal-rpc-authority-publisher.mattercodex-system.svc.cluster.local
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-readback-attestor
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-readback-attestor-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - internal-rpc-authority-readback-attestor
+    - internal-rpc-authority-readback-attestor.mattercodex-system.svc
+    - internal-rpc-authority-readback-attestor.mattercodex-system.svc.cluster.local
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-readback-attestor
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-restore-controller
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-restore-controller-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - internal-rpc-authority-restore-controller
+    - internal-rpc-authority-restore-controller.mattercodex-system.svc
+    - internal-rpc-authority-restore-controller.mattercodex-system.svc.cluster.local
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-restore-operator
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-restore-operator-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  uris:
+    - spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator
+  usages: [client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-role-image-builder-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-role-image-builder-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [role-image-builder, role-image-builder.mattercodex-system.svc, role-image-builder.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-image-admission-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-image-admission-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [image-admission, image-admission.mattercodex-system.svc, image-admission.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-image-promotion-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-image-promotion-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [image-promotion, image-promotion.mattercodex-system.svc, image-promotion.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-automation-scheduler-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-automation-scheduler-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [automation-scheduler, automation-scheduler.mattercodex-system.svc, automation-scheduler.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-control-api-gateway-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-control-api-gateway-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [control-api-gateway, control-api-gateway.mattercodex-system.svc, control-api-gateway.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-control-plane-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-control-plane-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [control-plane, control-plane.mattercodex-system.svc, control-plane.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-integration-gateway-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-integration-gateway-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [integration-gateway, integration-gateway.mattercodex-system.svc, integration-gateway.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-interaction-gateway-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-interaction-gateway-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [interaction-gateway, interaction-gateway.mattercodex-system.svc, interaction-gateway.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-runtime-controller-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-runtime-controller-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [runtime-controller, runtime-controller.mattercodex-system.svc, runtime-controller.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller]
+  usages: [server auth, client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: runtime-controller-callback-server
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: runtime-controller-callback-server-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames: [runtime-controller-callback, runtime-controller-callback.mattercodex-system.svc, runtime-controller-callback.mattercodex-system.svc.cluster.local]
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller]
+  usages: [server auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: runtime-execution-client
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: runtime-execution-client-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  uris: [spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner]
+  usages: [client auth]
+  issuerRef: {name: mattercodex-installation-ca, kind: Issuer}

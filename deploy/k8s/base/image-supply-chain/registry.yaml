@@ -68,8 +68,8 @@ spec:
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 127.0.0.1:5006
-            - name: REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED
-              value: "true"
+            - name: REGISTRY_STORAGE_MAINTENANCE
+              value: '{"readonly":{"enabled":true}}'
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
@@ -356,8 +356,6 @@ spec:
               value: /var/run/secrets/mattercodex/registry/tls.key
             - name: REGISTRY_HTTP_TLS_CLIENTCAS_0
               value: /var/run/secrets/mattercodex/registry/client-ca.pem
-            - name: REGISTRY_HTTP_TLS_CLIENTAUTH
-              value: require-and-verify-client-cert
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
@@ -500,8 +498,6 @@ spec:
               value: /var/run/secrets/mattercodex/registry/tls.key
             - name: REGISTRY_HTTP_TLS_CLIENTCAS_0
               value: /var/run/secrets/mattercodex/registry/client-ca.pem
-            - name: REGISTRY_HTTP_TLS_CLIENTAUTH
-              value: require-and-verify-client-cert
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
