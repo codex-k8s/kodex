@@ -144,10 +144,10 @@ packages:
     consumers:
       - internal-rpc-authority-publisher
       - internal-rpc-authority-restore-controller
-  - id: internal-rpc-authority-readback-postgresql-v1
+  - id: internal-rpc-authority-postgresql-baseline-v1
     format: sql
     owner: internal-rpc-authority
-    source: contracts/authorization/v1/postgresql-readback-boundary.sql
+    source: services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql
     consumers:
       - internal-rpc-authority-publisher
       - internal-rpc-authority-issuer

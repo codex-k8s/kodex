@@ -92,8 +92,6 @@ type registryTarget struct {
 		PossessionKeyVaultPath  string `yaml:"possession_key_vault_path"`
 		PossessionKeyMountPath  string `yaml:"possession_key_mount_path"`
 		PossessionJWKSource     string `yaml:"possession_public_jwk_source"`
-		DatabaseFunction        string `yaml:"database_function"`
-		SnapshotDatabaseFunc    string `yaml:"snapshot_database_function"`
 		AttestorAddress         string `yaml:"attestor_address"`
 		AttestorTLSServerName   string `yaml:"attestor_tls_server_name"`
 		AttestorTrustBundleID   string `yaml:"attestor_trust_bundle_id"`
@@ -204,10 +202,6 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 				"contracts/authorization/v1/readback-credential.schema.json" ||
 			entry.Readback.PossessionJWKSource !=
 				"SIGNED_NORMAL_READBACK_CREDENTIAL" ||
-			entry.Readback.DatabaseFunction !=
-				"internal_rpc_authority.record_authority_key_delivery_readback(uuid)" ||
-			entry.Readback.SnapshotDatabaseFunc !=
-				"internal_rpc_authority.record_authority_snapshot_readback(uuid)" ||
 			entry.Readback.AttestorAddress !=
 				"internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443" ||
 			entry.Readback.AttestorTLSServerName !=

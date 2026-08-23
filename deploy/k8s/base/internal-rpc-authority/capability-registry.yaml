@@ -520,7 +520,7 @@ spec:
           - workload-role-independent-attestation-readbacks
           - promote-after-exact-full-role-readback-set
         prepareTransaction:
-          function: internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
+          function: internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer,timestamptz)
           isolation: ADVISORY_XACT_LOCK_AND_ROW_CAS
           effects:
             - append-immutable-authority-snapshot-history
@@ -1008,7 +1008,6 @@ spec:
         - authority_readback_intents
         - authority_readback_attestation_challenges
         - authority_readback_attestation_receipts
-        - authority_workload_database_identities
         - authority_runtime_database_identities
         - authority_rotation_intents
         - authority_restore_fences
@@ -1022,9 +1021,7 @@ spec:
             - authority_snapshot_watermarks
             - authority_proof_watermarks
             - authority_proof_reservations
-          execute:
-            - internal_rpc_authority.record_authority_key_delivery_readback(uuid)
-            - internal_rpc_authority.record_authority_snapshot_readback(uuid)
+          execute: []
           delete: []
         internal_rpc_authority_verifier:
           select:
@@ -1033,9 +1030,7 @@ spec:
           insertUpdate:
             - authority_snapshot_watermarks
             - authority_replay_reservations
-          execute:
-            - internal_rpc_authority.record_authority_key_delivery_readback(uuid)
-            - internal_rpc_authority.record_authority_snapshot_readback(uuid)
+          execute: []
           delete: []
         internal_rpc_authority_proof_resolver:
           select:
@@ -1043,9 +1038,7 @@ spec:
             - authority_restore_fences
             - authority_rotation_intents
           insertUpdate: []
-          execute:
-            - internal_rpc_authority.record_authority_key_delivery_readback(uuid)
-            - internal_rpc_authority.record_authority_snapshot_readback(uuid)
+          execute: []
           delete: []
         internal_rpc_authority_publisher:
           select:
@@ -1054,12 +1047,9 @@ spec:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
           execute:
-            - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
+            - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer,timestamptz)
             - internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)
-            - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
-            - internal_rpc_authority.publisher_read_restore_fence()
-            - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
-            - internal_rpc_authority.is_active_runtime_database_session(text)
+            - internal_rpc_authority.runtime_restore_fence_allows_work()
           forbidden:
             - DIRECT_AUTHORITY_SNAPSHOT_HISTORY_INSERT_UPDATE_DELETE
             - DIRECT_AUTHORITY_ROTATION_INTENTS_INSERT_UPDATE_DELETE
@@ -1074,11 +1064,10 @@ spec:
           execute:
             - internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)
             - internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)
-            - internal_rpc_authority.is_active_runtime_database_session(text)
+            - internal_rpc_authority.runtime_restore_fence_allows_work()
           forbidden:
             - authority_key_delivery_readbacks
             - authority_snapshot_readbacks
-            - authority_workload_database_identities
             - authority_runtime_database_identities
           delete: []
         internal_rpc_authority_recovery:
@@ -1103,172 +1092,28 @@ spec:
         - RESET_READBACK_CHALLENGE
         - LOGIN_AS_SHARED_GROUP_ROLE
       workloadRoleDatabaseIdentity:
-        executableContract: contracts/authorization/v1/postgresql-readback-boundary.sql
-        schema: internal_rpc_authority
-        schemaOwner: internal_rpc_authority_readback_owner
-        tableOwner: internal_rpc_authority_readback_owner
-        functionOwner: internal_rpc_authority_readback_owner
-        ownerAttributes:
-          login: false
-          superuser: false
-          bypassRls: false
-          createDb: false
-          createRole: false
-          inherit: false
-        ownerRuntimeMembershipAllowed: false
-        schemaCreatePolicy: OWNER_ONLY
-        registry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
-        cardinality: BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_WORKLOAD_ROLE_GENERATION
-        mappingTable: authority_workload_database_identities
-        mappingKey:
-          - session_user
-        mappedFields:
-          - workload_id
-          - role
-          - workload_generation
-          - credential_generation
-        constraints:
-          sessionUserUnique: true
-          currentWorkloadRoleGenerationUnique: true
-          nextWorkloadRoleGenerationUnique: true
-          previousWorkloadRoleGenerationUnique: true
-          readbackForeignKeyToIdentity: true
-          readbackUniqueTuple:
-            - workload_id
-            - role
-            - workload_generation
-            - source_revision
-            - digest_sha256
+        executableContract: services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql
+        registry: deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml
+        loginPrincipalSource: exact-target-registry
+        expectedSessionUserSource: mounted-vault-database-credential
         sharedCapabilityRoles: NOLOGIN
-        publisherRuntimeIdentity:
-          loginPrincipals:
-            CURRENT: ira_publisher_g4
-            NEXT: ira_publisher_g5
-          capabilityRole: internal_rpc_authority_publisher
-          membershipOnly: true
-          activation: SET_ROLE
-          directPrivilegeGrants: FORBIDDEN
-          ownerOrAttestorMembership: FORBIDDEN
-          effectiveAllowedPrivileges:
-            select:
-              - authority_snapshot_history
-              - authority_rotation_intents
-              - authority_key_delivery_readbacks
-              - authority_snapshot_readbacks
-            execute:
-              - internal_rpc_authority.publisher_append_snapshot_history(bigint,text,bigint,bigint,bigint,bigint,text,text,uuid,text,integer)
-              - internal_rpc_authority.publisher_promote_snapshot(uuid,bigint,text,integer)
-              - internal_rpc_authority.publisher_record_rotation_intent(uuid,bigint,text,bigint,uuid)
-              - internal_rpc_authority.publisher_read_restore_fence()
-              - internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
-          directSnapshotHistoryOrRotationIntentDmlAndRestoreFenceRead: FORBIDDEN
-          consumerEvidenceInsertUpdateOrFunctionExecute: FORBIDDEN
-        rowLevelSecurity:
-          enabled: true
-          forcedForTableOwner: true
-          principalSource: session_user
-          defaultPolicy: DENY
+        activation: SET_ROLE
+        directPrivilegeGrants: FORBIDDEN
+        ownerOrAttestorMembership: FORBIDDEN
+        servedStateReadback:
+          transport: MTLS_GRPC
+          challengeMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+          attestationMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+          workloadDirectPostgresqlMutation: FORBIDDEN
+          attestorServerOwnedReceiptWrite: REQUIRED
+          oneWinner: true
+          replayPolicy: FAIL_CLOSED
         protectedReadbackTables:
           - authority_readback_intents
           - authority_readback_attestation_challenges
           - authority_readback_attestation_receipts
           - authority_key_delivery_readbacks
           - authority_snapshot_readbacks
-        readbackFunctions:
-          challengeIssue:
-            name: internal_rpc_authority.issue_authority_readback_attestation_challenge
-            exactSignature: internal_rpc_authority.issue_authority_readback_attestation_challenge(uuid,uuid,uuid,text,text,uuid,text,uuid,text)
-            returns: uuid
-            targetTable: authority_readback_attestation_challenges
-            security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
-            publicExecuteRevoked: true
-            unsafeOverloadAllowed: false
-            executeGrant: internal_rpc_authority_readback_attestor
-            directChallengeInsertGrantAllowed: false
-            sameIdempotencyKeyAndCanonicalRequestDigest: RETURN_PERSISTED_CHALLENGE
-            sameKeyDifferentDigest: IDEMPOTENCY_CONFLICT
-            serverGeneratedChallengeFieldsOnly: true
-            multiReplicaCas: UNIQUE_IDEMPOTENCY_AND_CHALLENGE_JTI_ONE_WINNER
-          challengeConsume:
-            name: internal_rpc_authority.consume_authority_readback_attestation_challenge
-            exactSignature: internal_rpc_authority.consume_authority_readback_attestation_challenge(uuid,uuid,uuid,text,bigint,uuid,text)
-            returns: uuid
-            targetTable: authority_readback_attestation_receipts
-            security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
-            publicExecuteRevoked: true
-            unsafeOverloadAllowed: false
-            executeGrant: internal_rpc_authority_readback_attestor
-            directReceiptInsertGrantAllowed: false
-            sameIdempotencyKeyAndEvidenceDigest: RETURN_PERSISTED_RECEIPT
-            sameKeyOrChallengeDifferentDigest: READBACK_CHALLENGE_REPLAY_DETECTED
-            atomicChallengeConsumeAndReceiptInsert: true
-          keyDelivery:
-            name: internal_rpc_authority.record_authority_key_delivery_readback
-            identityArguments: uuid
-            exactSignature: internal_rpc_authority.record_authority_key_delivery_readback(uuid)
-            returns: bigint
-            targetTable: authority_key_delivery_readbacks
-            security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
-            publicExecuteRevoked: true
-            unsafeOverloadAllowed: false
-            executeGrantsFromExactTargetRegistry: true
-            publisherExecuteAllowed: false
-            callerProvidedWorkloadOrRoleAllowed: false
-            callerProvidedRevisionDigestGenerationAllowed: false
-            onlyArgument: controller_verified_immutable_attestation_receipt_id
-            locksRegisteredTarget: true
-            atomicChecks:
-              - allowed-current-next-or-bounded-previous-session-user-mapping
-              - exact-workload-role-generation
-              - pinned-key-delivery-intent
-              - controller-verified-role-specific-possession-and-served-state
-              - single-use-unexpired-attestation-receipt
-          snapshot:
-            name: internal_rpc_authority.record_authority_snapshot_readback
-            identityArguments: uuid
-            exactSignature: internal_rpc_authority.record_authority_snapshot_readback(uuid)
-            returns: bigint
-            targetTable: authority_snapshot_readbacks
-            security: SECURITY_DEFINER
-            fixedSearchPath: pg_catalog,internal_rpc_authority,pg_temp
-            publicExecuteRevoked: true
-            unsafeOverloadAllowed: false
-            executeGrantsFromExactTargetRegistry: true
-            publisherExecuteAllowed: false
-            callerProvidedWorkloadOrRoleAllowed: false
-            callerProvidedRevisionDigestGenerationAllowed: false
-            onlyArgument: controller_verified_immutable_attestation_receipt_id
-            locksRegisteredTarget: true
-            atomicChecks:
-              - allowed-current-next-or-bounded-previous-session-user-mapping
-              - exact-workload-role-generation
-              - pinned-snapshot-intent
-              - controller-verified-role-specific-possession-and-served-state
-              - single-use-unexpired-attestation-receipt
-        credentialLifecycle:
-          owner: internal-rpc-authority-publisher
-          delivery: vault-database-secret
-          statuses:
-            CURRENT: exactly-one
-            NEXT: at-most-one
-            PREVIOUS: at-most-one-bounded-by-overlap-not-after
-            RETIRED: append-only-history
-          overlap: current-and-next-login-principals-simultaneously-usable
-          nextReadbackBeforePromotionRequired: true
-          promotionFunction: internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)
-          promotionIsolation: SERIALIZABLE
-          promotionAtomicEffects:
-            - verify-next-key-delivery-and-snapshot-attestation-receipts
-            - current-to-bounded-previous
-            - next-to-current
-            - pinned-intents-to-promoted
-          retirePreviousAfterPromotionAndCurrentReadback: true
-          revokeRetiredLoginAfterStateCommit: true
-          staleOrRetiredFunctionCallPolicy: FAIL_CLOSED
-          readinessRequiresSessionUserReadback: true
       runtimeCapabilityDatabaseIdentity:
         mappingTable: authority_runtime_database_identities
         owner: internal_rpc_authority_readback_owner
@@ -1277,7 +1122,7 @@ spec:
           - PUBLISHER
           - READBACK_ATTESTOR
         cardinality: BOUNDED_ONE_CURRENT_ONE_NEXT_ONE_PREVIOUS_PER_CAPABILITY
-        checkedByFunction: internal_rpc_authority.is_active_runtime_database_session(text)
+        checkedByRepository: authority_runtime_database_identities_session_user_rls
         guardRowLock: FOR_SHARE_UNTIL_TRANSACTION_END
         runtimeMutationAllowed: false
         retirementFenceAppliesToAlreadyOpenSession: true

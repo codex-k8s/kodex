@@ -68,11 +68,8 @@ workload/SPIFFE вызывающей стороны, операцией, цел�
 | `contracts/authorization/v1/readback-credential.schema.json` | отдельный normal-readback credential с точным purpose/audience и possession JWK |
 | `contracts/authorization/v1/readback-credential-trust.schema.json` | attestor-owned CURRENT/NEXT/PREVIOUS trust signer normal-readback credential |
 | `contracts/authorization/v1/readback-manifest-trust-root.schema.json` | независимо управляемый offline-root bundle signer normal-readback credential trust |
-| `contracts/authorization/v1/readback-attestation.schema.json` | role-bound served-state evidence для server-owned durable challenge |
 | `contracts/authorization/v1/readback-attestation.schema.json` | role-bound challenge evidence фактически обслуживаемого pinned state |
-| `contracts/authorization/v1/postgresql-readback-boundary.sql` | исполняемый точный PostgreSQL privilege/RLS/function contract |
-| `contracts/authorization/v1/postgresql-readback-behavior.sql` | исполняемый CURRENT+NEXT/readback/promotion/retired contour |
-| `contracts/authorization/v1/postgresql-publisher-live-session-retirement.sql` | отказ promotion/evidence read для уже открытой retired publisher session после commit fence, `NOLOGIN` и отзыва membership |
+| `services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql` | единственная fresh PostgreSQL schema и точный privilege/RLS/function contract |
 | `contracts/authorization/v1/postgresql-attestor-live-session-retirement.sql` | отказ challenge/read для уже открытой retired attestor session после commit fence, `NOLOGIN` и отзыва membership |
 | `contracts/authorization/v1/key-delivery-targets.schema.json` | точный `(workload,role)` key/trust/database-identity fan-out |
 | `contracts/authorization/v1/authorization-error-matrix.json` | полная reason/code/stage/retryable/message matrix |
@@ -830,219 +827,68 @@ reservation/watermark.
 
 ### Workload/role-bound readback
 
-Shared capability roles `internal_rpc_authority_issuer`,
-`internal_rpc_authority_verifier` и
-`internal_rpc_authority_proof_resolver` имеют `NOLOGIN` и не могут
-использоваться как session identity. Publisher для каждой активной
-`(workload_id,role,workload_generation,credential_generation)` создаёт
-отдельный PostgreSQL login principal из точного delivery registry. Vault
-database secret доставляет его только соответствующему sidecar/resolver;
-current и next principals кратко перекрываются, а previous отзывается лишь
-после promotion и readback.
+Каждый issuer, verifier и proof resolver использует отдельный PostgreSQL
+`LOGIN` principal из точного delivery registry и после проверки
+`session_user` явно выполняет `SET ROLE` в соответствующую
+`NOLOGIN` capability role. Runtime principal не является владельцем schema,
+не состоит в owner/attestor roles и не получает прямой DML на readback tables.
 
-Таблица `authority_workload_database_identities` имеет unique
-`session_user` и unique tuple с `credential_generation`. Три partial unique
-indexes разрешают одновременно не более одного `CURRENT`, одного `NEXT` и
-одного ограниченный `PREVIOUS` для
-`(workload_id,role,workload_generation)`. `RETIRED` остаётся в append-only
-истории, но его login отзывается после state commit. `CURRENT` и `NEXT`
-одновременно вызывают readback до promotion; `PREVIOUS` допускается только до
-`overlap_not_after`; stale/expired/retired закрыто отклоняются.
+Проверка фактически обслуживаемого состояния выполняется только через mTLS gRPC
+контур `AuthorityReadbackAttestorService`:
 
-Клиент не получает `INSERT/UPDATE` таблиц
-`authority_readback_intents`,
-`authority_readback_attestation_challenges`,
-`authority_readback_attestation_receipts`,
-`authority_key_delivery_readbacks` и `authority_snapshot_readbacks`. Он
-вызывает только одну из двух точный `SECURITY DEFINER` functions:
+1. workload вызывает `IssueAttestationChallenge` с pinned intent,
+   normal-readback credential и idempotency key;
+2. attestor выводит workload/role/generations из проверенного mTLS peer,
+   credential и server-owned intent, затем сохраняет bounded challenge;
+3. workload подписывает challenge отдельным possession key и вызывает
+   `AttestServedState`;
+4. attestor одной PostgreSQL transaction потребляет challenge, создаёт
+   immutable receipt и записывает итоговый key-delivery либо snapshot readback;
+5. issuer/verifier активирует snapshot только с receipt, который авторитетная
+   функция `validate_snapshot_attestation_receipt` связывает с workload,
+   source revision и digest.
 
-- `internal_rpc_authority.record_authority_key_delivery_readback(uuid) RETURNS bigint`;
-- `internal_rpc_authority.record_authority_snapshot_readback(uuid) RETURNS bigint`.
+Workload не вызывает PostgreSQL readback functions и не передаёт в SQL
+workload, role, generation, revision или digest. Consumer-side readback
+functions не входят в fresh baseline. Единственные изменяющие entrypoints
+readback-attestor — точные
+`issue_authority_readback_attestation_challenge` и
+`consume_authority_readback_attestation_challenge`; `EXECUTE` для
+`PUBLIC` отозван.
 
-Единственный аргумент — opaque UUID immutable одноразового receipt,
-созданного `internal-rpc-authority-readback-attestor`, а не publisher или
-consumer. Обычный readback не использует restore role credential или restore
-ACK key. Publisher из immutable normal rotation intent выпускает отдельный
-`mattercodex-internal-rpc-readback-credential+jws` с единственным audience
+Normal-readback credential имеет audience
 `urn:mattercodex:internal-rpc-authority-readback-attestor`, точный purpose,
-workload SPIFFE/role/generations/material generation и distinct possession
-JWK/kid/generation/thumbprint. Credential и possession private key
-доставляются по точному normal-readback Vault paths из target registry; эти
-paths, key IDs и material не совпадают с restore-only credential/ACK.
+workload SPIFFE, role, поколения и отдельный possession JWK. Credential и
+private key доставляются по разным Vault paths из target registry и не
+совпадают с restore credential/ACK. Attestor проверяет independently rooted
+manifest bundle, forward-only credential trust и persistent high-watermark.
+Повреждение, rollback, gap, conflict, истечение material или неподтверждённый
+served state немедленно закрывают авторизацию.
 
-Signer normal-readback credential имеет отдельный однонаправленный trust snapshot
-`mattercodex-internal-rpc-readback-credential-trust+jws` с
-`CURRENT/NEXT/PREVIOUS`, source/key-set revisions, predecessor/history и
-manifest signer generation. До проверки этого snapshot attestor обязан
-проверить отдельный
-`mattercodex-internal-rpc-readback-manifest-root+jws`: его offline root,
-идентификатор, точный public JWK, `kid` и RFC 7638 SHA-256 fingerprint
-закреплены owner ceremony в immutable image config. Fingerprint не заменяет
-public verification key, а JWK из изменяемого Vault bundle не принимается.
-Схема `readback-root-verification-material.schema.json` фиксирует точный
-material и validity. Forward-only root transition использует
-`readback-root-rotation.schema.json`: старый root подписывает новый точный JWK,
-новый root встречной подписью доказывает possession, обе подписи связывают
-purpose/audience/revision/predecessor и overlap. Rollback, gap, missing
-cross-signature либо same-channel substitution закрыто отклоняются. Signed
-bundle signer keys доставляется attestor через
-отдельные Secret/CSI/Vault role, mount и `NetworkPolicy`, недоступные
-publisher. Bundle содержит ровно один `CURRENT`, один `NEXT` и не более одного
-ограниченный `PREVIOUS`, revision/digest/predecessor/history и validity. Root
-rotation сначала cross-signs old/new roots, закрепляет новый fingerprint и
-держит overlap до cryptographic served readback каждой attestor replica.
-Attestor, а не publisher, хранит persistent high-watermark обоих уровней и
-cryptographic readback фактически обслуживаемых bundle и credential-trust
-snapshot. Co-delivered signer, restore trust, без увеличения ревизии mutation,
-rollback/history gap, expired root/signer и готовность по не обслуживаемому
-bundle закрыто отклоняются.
-Restore-controller typ/audience, multi-audience token и permissive fallback
-закрыто отклоняются; normal-readback credential симметрично не принимается
-restore controller.
+Challenge и attestation используют server-owned UUID/JTI/nonce, 30-секундный
+TTL, canonical request digest и one-winner idempotency. Точный повтор после
+потерянного ответа возвращает сохранённый challenge/receipt; тот же key с
+другим intent/evidence даёт conflict, а повторно потреблённый или истёкший
+challenge закрыто отклоняется.
 
-До подписи evidence workload вызывает
-`IssueAttestationChallenge(pinned_intent_id,
-readback_credential_compact_jws,idempotency_key,correlation_id)`. Request не
-содержит workload, role, generations, purpose, audience, nonce или TTL.
-Attestor связывает actual mTLS SPIFFE с credential, на стороне сервера разрешает
-pinned intent и в `SERIALIZABLE` transaction сохраняет challenge ID/JTI,
-непредсказуемый nonce, canonical digest, точный credential/pinned tuple,
-idempotency key, request digest, `issued_at` и `expires_at=issued_at+30s`.
-Уникальные idempotency key/challenge JTI дают multi-replica CAS. Exact retry
-после потерянного ответа возвращает ту же сохранённую challenge response;
-тот же key с другим digest даёт `IDEMPOTENCY_CONFLICT`.
+Fresh schema и все grants/RLS/functions заданы единственной baseline migration
+`services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql`.
+Disposable PostgreSQL contour повторно проверяет fresh install, capability
+roles, точные функции, отсутствие устаревших overload и runtime права.
 
-`semantic_request_digest_sha256` challenge равен lowercase SHA-256 RFC 8785
-object с точным полями `v=1`, полный метод, pinned intent ID, SHA-256 compact
-readback credential и actual mTLS SPIFFE. `challenge_digest_sha256` равен
-lowercase SHA-256 RFC 8785 object с challenge ID/JTI/nonce, точный audience,
-intent ID/revision/digest, credential JTI/digest, workload/role/workload
-generation/credential generation/material generation и possession
-kid/generation/thumbprint, `issued_at`/`expires_at`. Idempotency key и
-correlation ID в semantic digest не входят.
+Publisher и readback-attestor имеют отдельный
+`CURRENT/NEXT/PREVIOUS/RETIRED` lifecycle в
+`authority_runtime_database_identities`. Reconciler сначала фиксирует
+server-owned retirement fence, затем выполняет `NOLOGIN`, отзыв membership,
+rotation credential и bounded drain. Уже открытая retired session теряет право
+на следующий statement, потому что рабочие functions и RLS повторно проверяют
+неизменяемый `session_user`.
 
-`AttestServedState` принимает только pinned lookup, тот же normal-readback
-credential, signed evidence, idempotency key, correlation и challenge ID.
-Evidence связывает challenge ID/JTI/nonce/digest, credential JTI/digest,
-possession key, actual workload/role/generations, purpose, intent и served
-digest. Одна transaction блокирует challenge `FOR UPDATE`, проверяет
-`ISSUED`/TTL/signature/точный tuple, атомарно помечает challenge `CONSUMED` и
-создаёт immutable receipt. Crash до commit сохраняет `ISSUED`; crash после
-commit до ответа и точная повторная попытка того же semantic digest возвращают сохранённый
-receipt. Повтор challenge/JTI с другим digest, concurrent opposite evidence,
-expired/missing challenge и cross-audience replay закрыто отклоняются.
-Semantic digest attest request равен lowercase SHA-256 RFC 8785 object из
-полный метод, challenge digest, readback credential digest и evidence compact
-JWS digest; точная повторная попытка сравнивает именно этот digest и evidence JTI/digest.
-
-Функции не принимают revision, digest, generation, proof hash, workload или
-role. Обе имеют fixed
-`search_path=pg_catalog,internal_rpc_authority,pg_temp`, `EXECUTE` для `PUBLIC`
-отозван, на стороне сервера разрешают `session_user`, блокируют точный registry row,
-проверяют допустимый lifecycle, блокируют receipt и pinned intent, требуют
-unconsumed/unexpired receipt и точный tuple, копируют только server-owned
-значения и в той же transaction помечают receipt consumed. Arbitrary 64-hex,
-stale tuple, opposite role/material, missing served state, receipt reuse,
-pinned-intent mutation и concurrent promotion закрыто отклоняются.
-
-Schema, пять protected таблиц, owner trigger атомарного challenge consume и
-обе readback functions принадлежат отдельному
-`internal_rpc_authority_readback_owner` с
-`NOLOGIN/NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOINHERIT`; runtime
-principals не имеют membership этой роли. Protected таблицы используют `ENABLE` и
-`FORCE ROW LEVEL SECURITY`; `CREATE` в schema доступен только owner.
-`REVOKE/GRANT EXECUTE` всегда указывают schema и полный список типов, unsafe
-overload запрещён. Publisher имеет только `SELECT` обеих итоговых readback
-tables и точный functions для append snapshot history, создания rotation
-intent, чтения restore fence и promotion. Прямые `SELECT/INSERT/UPDATE` на
-`authority_snapshot_history`, `authority_rotation_intents` и
-`authority_restore_fences` отсутствуют: каждая function сначала проверяет
-immutable `session_user` lifecycle fence. Publisher не создаёт challenge/receipt, не пишет
-protected tables и не исполняет consumer readback functions. Attestor может
-создать только verified pinned projection, challenge и receipt; owner trigger
-выводит session/workload/role/generations из persistent intent/identity и не
-позволяет обойти одноразовый consume. Attestor не пишет итоговые readback rows.
-
-Сам publisher подключается не shared `NOLOGIN` role, а точный
-`ira_publisher_g1` (`CURRENT`) либо `ira_publisher_g2` (`NEXT`) с
-`LOGIN/NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/NOINHERIT`. Оба имеют
-только membership `internal_rpc_authority_publisher`, после TLS login явно
-выполняют `SET ROLE internal_rpc_authority_publisher` и не имеют прямых grants
-или membership owner/attestor. Vault database static roles вращают пароли
-точный principals с current/next overlap; publisher ServiceAccount получает
-файловые username/password только через Vault Kubernetes auth. Token renewal,
-credential refresh, rotation и перевод retired principal в `NOLOGIN`
-обязательны. PostgreSQL использует `sslmode=verify-full`, точный SNI
-`internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local` и
-отдельную CA; Vault — точный SNI
-`vault.mattercodex-system.svc.cluster.local`. NetworkPolicy разрешает только
-точный Vault:8200 и PostgreSQL:5432 destinations: source egress policies
-`internal-rpc-authority-publisher-to-vault` и
-`internal-rpc-authority-publisher-to-postgresql` обязательны вместе с
-destination ingress; итоговый render фиксирует Service ClusterIP и не допускает
-wildcard destination. Readiness реальным
-non-superuser session проверяет точный `session_user`, `SET ROLE`, только
-promotion/SELECT и отказ direct consumer evidence writes.
-
-Readback attestor использует симметричную runtime boundary: shared
-`internal_rpc_authority_readback_attestor` остаётся `NOLOGIN`, а
-`ira_readback_attestor_g1` (`CURRENT`) и `ira_readback_attestor_g2` (`NEXT`)
-имеют только минимальные login attributes и membership capability role.
-Реальный deployable
-`internal-rpc-authority-database-credential-reconciler` владеет четырьмя точный
-Vault PostgreSQL static roles publisher/attestor. Он имеет отдельный binary,
-ServiceAccount, versioned
-`internalrpcauthority.v1.DatabaseCredentialLifecycleService`, fenced
-PostgreSQL leader lease, точный Vault/PostgreSQL network и только закрытые
-reconcile/retire functions. Desired principals и generations выводятся из
-versioned capability registry, а caller может передать только idempotency key.
-Reconciler сохраняет canonical registered-set digest, восстанавливается после
-crash на каждой границе Vault rotation/DB fence/revoke/drain и подтверждает
-CURRENT+NEXT/readback до готовность. ServiceAccount attestor
-ServiceAccount `internal-rpc-authority-readback-attestor` аутентифицируется
-через Vault Kubernetes auth, получает username/password только в файлах и
-подключается с точным PostgreSQL SNI/CA. Для Vault:8200 и PostgreSQL:5432
-обязательны отдельные source egress и destination ingress policies без
-wildcard destination. Readiness подтверждает свежий CURRENT credential,
-`session_user`, явный `SET ROLE`, issue/consume/RLS read и отказ прямых
-challenge/receipt writes; replica после пропущенной rotation перечитывает
-на стороне сервера lifecycle и Vault credential до возврата в ready.
-
-Таблица `authority_runtime_database_identities`, принадлежащая отдельному
-owner, хранит ограниченный `CURRENT/NEXT/PREVIOUS/RETIRED` lifecycle publisher и
-attestor login principals. Runtime roles не читают и не меняют её напрямую.
-Каждый challenge issue/consume, publisher promotion и защищённый RLS read
-повторно проверяет неизменяемый `session_user` через точный `SECURITY DEFINER`
-boundary. Retirement сначала commit-ит серверный `RETIRED` fence, затем
-выполняет `ALTER ROLE ... NOLOGIN`, отзыв capability membership, Vault password
-rotation и ограниченный drain/termination старых backends. Проверка удерживает
-строку runtime identity через `FOR SHARE` до конца statement/transaction:
-action, первым получивший lock, может commit до retirement; после commit
-retirement любая новая попытка и retry закрыто отклоняются. Crash action
-освобождает lock, после чего retirement завершается. Поэтому как новое
-соединение, так и уже открытая retired session закрыто теряют
-promotion/challenge/read capability, а минимальный `NEXT` principal продолжает
-обслуживать overlap; `NOLOGIN` и готовность сами по себе authority fence не
-считаются.
-
-Promotion выполняет точный function
-`internal_rpc_authority.promote_authority_workload_database_identity(text,text,bigint,bigint,uuid,uuid)`
-в одной `SERIALIZABLE` transaction. Она блокирует `CURRENT`, `NEXT`, оба
-pinned intents и обе readback rows точный `NEXT`; затем атомарно переводит
-старый current в ограниченный `PREVIOUS`, next в `CURRENT` и intents в
-`PROMOTED`. Неполный set откатывает transaction. Предыдущий principal
-retire/revoke допускается только после overlap и полного current readback;
-crash до commit сохраняет прежний current, crash после commit восстанавливает
-однозначный lifecycle. Исполняемые catalog/RLS/privilege и behavior contracts
-зафиксированы в `postgresql-readback-boundary.sql`,
-`postgresql-readback-assertions.sql` и
-`postgresql-readback-behavior.sql`. Behavior contract подключается отдельными
-role-specific DSN и не использует superuser `SET SESSION AUTHORIZATION`.
-
-Principal одного target не пишет за другой target или opposite role; retired
-generation и shared group principal закрыто отклоняются. Эти identity и
-readbacks входят в тот же rotation intent, поэтому promotion невозможна при
-missing, ambiguous либо cross-role row.
+Readiness workload проверяет локально обслуживаемый snapshot, persistent
+watermark/replay store, точный `session_user`, capability role и тот же
+attestor protocol, который используется перед рабочим RPC. Технический
+`/readyz` читает только рассчитанный snapshot; внешние вызовы выполняет
+отдельный bounded observer.
 
 ### PITR fence
 
