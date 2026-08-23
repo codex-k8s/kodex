@@ -74,7 +74,12 @@ hosts передаются параметрами deployment environment. Реп
 1. Создать новый owner-controlled каталог material командой
    `tools/deploy/generate-fresh-install-material.sh`. Команда требует exact
    `--release-registry-host`, отказывается писать в существующий каталог и
-   создаёт файлы с режимом `0600`.
+   создаёт файлы с режимом `0600`. NATS operator/account JWT сохраняются как
+   compact JWT без armoured envelope, а account nkeys - как значения без JSON-
+   кавычек. Повторная материализация этих пяти файлов из сохранённого `nsc`
+   store выполняется только через
+   `tools/deploy/materialize-nats-operator-files.sh`; значения команда не
+   выводит.
 2. Применить bootstrap registry через `infra/bootstrap-registry/bootstrap.sh`.
    Public host, IngressClass и ClusterIssuer передаются параметрами; их нельзя
    брать из константы репозитория. Выполнить `preflight`, `apply`, затем
@@ -95,6 +100,8 @@ hosts передаются параметрами deployment environment. Реп
 6. Создать namespace, installation CA source и bootstrap secrets командой
    `tools/deploy/materialize-fresh-install-secrets.sh`, затем установить Vault
    через `infra/service-infrastructure/bootstrap.sh --mode apply-vault`.
+   Materializer проверяет canonical shape NATS JWT/nkeys до создания namespace
+   и Secret и закрыто отклоняет envelope, JSON-строку или неоднозначный вывод.
 7. Выполнить `tools/deploy/deploy-fresh-release.sh --mode preflight` для exact
    immutable render. Скрипт отклоняет placeholder, zero digest, другой context
    и повторяющиеся resource identities.
