@@ -8,10 +8,14 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
+fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
-bash -n "$dockerfile_path_validator"
+bash -n "$dockerfile_path_validator" "$fresh_deployer"
+if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
+  fail 'fresh deploy expands a local variable in the declaration that assigns it'
+fi
 while IFS= read -r dockerfile; do
   "$dockerfile_path_validator" "$dockerfile"
   [[ -f "$repository_root/$dockerfile" ]] || {
