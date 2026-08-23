@@ -141,15 +141,22 @@ BuildKit output и credential values отбрасываются.
 ## Локальная проверка
 
 ```bash
-go test ./...
-go build ./cmd/role-image-builder ./cmd/image-admission-controller ./cmd/image-admission-bridge
+cd services/jobs/role-image-builder
+GOWORK=off go test ./...
+GOWORK=off go build ./cmd/role-image-builder ./cmd/image-admission-controller ./cmd/image-admission-bridge
+cd ../../..
+./tools/verify-image-supply-chain-fixtures.sh
+make test-web-only-release
 docker build --target runtime -f services/jobs/role-image-builder/Dockerfile .
 docker build --target admission-runtime \
   --build-arg ADMISSION_TOOLS_IMAGE="$ADMISSION_TOOLS_IMAGE" \
   -f services/jobs/role-image-builder/Dockerfile .
 ```
 
-Полные integration/E2E/deploy/lifecycle проверки отложены в Issue #216.
+Fixture и release-проверки используют синтетические digests и локальный render,
+не обращаются к production registry или Kubernetes. Реальный registry/BuildKit
+smoke и browser E2E запускаются только в disposable установке; если такая среда
+не предоставлена, они честно фиксируются как `NOT RUN`.
 
 ## Rollback
 
