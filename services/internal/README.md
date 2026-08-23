@@ -1,3 +1,13 @@
+---
+id: REPO-MC-002
+title: Внутренние сервисы
+type: repository-readme
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # Внутренние сервисы
 
 Сервис владеет доменными инвариантами и своим единым источником истины в
