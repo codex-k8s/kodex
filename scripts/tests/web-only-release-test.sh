@@ -9,13 +9,27 @@ fail() {
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
+legacy_resetter="$repository_root/tools/deploy/reset-legacy-installation.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
-bash -n "$dockerfile_path_validator" "$fresh_deployer"
+bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter"
 if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
   fail 'fresh deploy expands a local variable in the declaration that assigns it'
 fi
+grep -Fq 'mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)' \
+  "$legacy_resetter" || fail 'incompatible reset does not use the closed release profile selector'
+for cluster_kind in \
+  validatingadmissionpolicies.admissionregistration.k8s.io \
+  validatingadmissionpolicybindings.admissionregistration.k8s.io \
+  clusterroles.rbac.authorization.k8s.io \
+  clusterrolebindings.rbac.authorization.k8s.io \
+  bundles.trust.cert-manager.io; do
+  grep -Fq "$cluster_kind" "$legacy_resetter" ||
+    fail "incompatible reset omits a release-owned cluster kind: $cluster_kind"
+done
+grep -Fq 'verify_release_cluster_scope_absent' "$legacy_resetter" ||
+  fail 'incompatible reset does not read back cluster-scope cleanup'
 while IFS= read -r dockerfile; do
   "$dockerfile_path_validator" "$dockerfile"
   [[ -f "$repository_root/$dockerfile" ]] || {
