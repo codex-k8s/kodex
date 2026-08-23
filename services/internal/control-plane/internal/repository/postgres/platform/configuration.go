@@ -39,7 +39,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		item.Target = payload.Target
 		item.Input = payload.Input
 		item.NextRunAt = next
-		item.NextActions = []string{"OPEN", "EDIT", "DISABLE"}
+		item.NextActions = scheduleActions(item, true)
 		return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: payload.ProjectRef, resourceKind: "SCHEDULE", resourceRef: ref, summary: "i18n:SCHEDULE_CREATED", platformEvent: "SCHEDULE_CHANGED"}, nil
 	}
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
@@ -67,12 +67,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		}
 	}
 	item.ProjectRef = projectRef
-	item.NextActions = []string{"OPEN", "EDIT"}
-	if item.Enabled {
-		item.NextActions = append(item.NextActions, "DISABLE")
-	} else {
-		item.NextActions = append(item.NextActions, "ENABLE")
-	}
+	item.NextActions = scheduleActions(item, true)
 	return commandOutcome{result: command.Result{Schedule: &item}, projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE", resourceRef: item.Ref, summary: "i18n:SCHEDULE_UPDATED", platformEvent: "SCHEDULE_CHANGED"}, nil
 }
 

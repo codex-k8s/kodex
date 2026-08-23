@@ -71,6 +71,11 @@ async function send(): Promise<void> {
 }
 
 async function apply(planRef: string, version: number): Promise<void> {
+  const plan = conversationList.value
+    .flatMap((item) => item.turns)
+    .map((turn) => turn.plan)
+    .find((item) => item?.ref === planRef && item.version === version);
+  if (!plan?.nextActions.includes("APPLY_PLAN")) return;
   busy.value = true;
   problem.value = undefined;
   try {

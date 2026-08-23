@@ -55,18 +55,20 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 	var internalID string
 	var recipe entity.RoleImageRecipe
 	var specification []byte
+	var canManage bool
 	err := row.Scan(&internalID, &recipe.Ref, &recipe.ProjectRef, &recipe.RoleDefinitionRef,
 		&recipe.Name, &recipe.State, &specification, &recipe.Generation, &recipe.SpecSHA256,
 		&recipe.PolicyRevision, &recipe.PolicySHA256, &recipe.RoleRuntimeContractRevision,
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
-		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt)
+		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt,
+		&canManage)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.RoleImageRecipe{}, nil, nil, errs.ErrNotFound
 	}
 	if err != nil || decodeJSON(specification, &recipe.Input) != nil {
 		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable
 	}
-	recipe.NextActions = roleImageActions(recipe)
+	recipe.NextActions = roleImageActions(recipe, canManage)
 	rows, err := querier.Query(ctx, queryRoleImagesListBuilds, current.organizationID, internalID)
 	if err != nil {
 		return entity.RoleImageRecipe{}, nil, nil, errs.ErrUnavailable

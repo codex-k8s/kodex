@@ -54,6 +54,7 @@ const targets = computed(() =>
 );
 
 async function submit(): Promise<void> {
+  if (!canCreate.value) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -77,10 +78,11 @@ async function submit(): Promise<void> {
 
 async function command(
   ref: string,
-  action: "ENABLE" | "PAUSE" | "ARCHIVE",
+  action: "ENABLE" | "PAUSE",
 ): Promise<void> {
   const schedule = platform.schedules[ref];
-  if (!schedule) return;
+  const requiredAction = action === "PAUSE" ? "DISABLE" : action;
+  if (!schedule?.nextActions.includes(requiredAction)) return;
   try {
     await platform.changeSchedule(schedule, action);
   } catch (error) {
@@ -165,14 +167,6 @@ onMounted(
               @click="command(schedule.ref, 'PAUSE')"
             >
               {{ $t("automations.pause") }}
-            </button>
-            <button
-              v-if="schedule.nextActions.includes('ARCHIVE')"
-              class="button button--danger"
-              type="button"
-              @click="command(schedule.ref, 'ARCHIVE')"
-            >
-              {{ $t("common.archive") }}
             </button>
           </div>
         </article>

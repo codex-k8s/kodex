@@ -82,7 +82,7 @@ function configurationValue(field: IntegrationConfigurationField): unknown {
 
 async function submit(): Promise<void> {
   const definition = selectedDefinition.value;
-  if (!definition) return;
+  if (!canCreateConnection.value || !definition?.available) return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -113,6 +113,7 @@ async function command(
   connection: IntegrationConnection,
   action: "TEST" | "ENABLE" | "DISABLE",
 ): Promise<void> {
+  if (!connection.nextActions.includes(action)) return;
   commandRef.value = connection.ref;
   problem.value = undefined;
   try {
@@ -151,7 +152,12 @@ async function loadGrantTargets(): Promise<void> {
 
 async function saveGrant(): Promise<void> {
   const connection = grantConnection.value;
-  if (!connection || !grant.targetRef || !grant.capabilityKey) return;
+  if (
+    !connection?.nextActions.includes("MANAGE_GRANTS") ||
+    !grant.targetRef ||
+    !grant.capabilityKey
+  )
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -176,6 +182,7 @@ async function revokeGrant(
   agentRef?: string,
   workflowRef?: string,
 ): Promise<void> {
+  if (!connection.nextActions.includes("MANAGE_GRANTS")) return;
   busy.value = true;
   problem.value = undefined;
   try {

@@ -1040,19 +1040,19 @@ func (e RoleImageRecipeState) Valid() bool {
 
 // Defines values for RoleImageRecipeCommandAction.
 const (
-	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
-	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
-	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
+	ARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	REQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageRecipeCommandAction enum.
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
-	case RoleImageRecipeCommandActionARCHIVE:
+	case ARCHIVE:
 		return true
-	case RoleImageRecipeCommandActionREQUESTBUILD:
+	case REQUESTBUILD:
 		return true
-	case RoleImageRecipeCommandActionRESTORE:
+	case RESTORE:
 		return true
 	default:
 		return false
@@ -1478,19 +1478,16 @@ func (e ScheduleState) Valid() bool {
 
 // Defines values for ScheduleCommandAction.
 const (
-	ScheduleCommandActionARCHIVE ScheduleCommandAction = "ARCHIVE"
-	ScheduleCommandActionENABLE  ScheduleCommandAction = "ENABLE"
-	ScheduleCommandActionPAUSE   ScheduleCommandAction = "PAUSE"
+	ENABLE ScheduleCommandAction = "ENABLE"
+	PAUSE  ScheduleCommandAction = "PAUSE"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleCommandAction enum.
 func (e ScheduleCommandAction) Valid() bool {
 	switch e {
-	case ScheduleCommandActionARCHIVE:
+	case ENABLE:
 		return true
-	case ScheduleCommandActionENABLE:
-		return true
-	case ScheduleCommandActionPAUSE:
+	case PAUSE:
 		return true
 	default:
 		return false

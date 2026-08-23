@@ -30,6 +30,7 @@ const filtered = computed(() => {
 });
 
 async function submit(): Promise<void> {
+  if (!canCreate.value) return;
   busy.value = true;
   problem.value = undefined;
   try {

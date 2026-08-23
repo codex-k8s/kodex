@@ -31,6 +31,7 @@ const busy = ref(false);
 const problem = ref<AppProblem>();
 const form = reactive({ name: "", purpose: "", coordinatorAgentRef: "" });
 async function submit() {
+  if (!canCreate.value) return;
   busy.value = true;
   problem.value = undefined;
   try {

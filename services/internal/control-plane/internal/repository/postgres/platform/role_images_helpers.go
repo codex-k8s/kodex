@@ -47,18 +47,20 @@ type lockedBuild struct {
 func scanRecipe(row roleImageRowScanner) (entity.RoleImageRecipe, error) {
 	var recipe entity.RoleImageRecipe
 	var specification []byte
+	var canManage bool
 	err := row.Scan(&recipe.Ref, &recipe.ProjectRef, &recipe.RoleDefinitionRef, &recipe.Name,
 		&recipe.State, &specification, &recipe.Generation, &recipe.SpecSHA256,
 		&recipe.PolicyRevision, &recipe.PolicySHA256, &recipe.RoleRuntimeContractRevision,
 		&recipe.RoleRuntimeContractSHA256, &recipe.ActiveImageArtifactRef,
-		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt)
+		&recipe.PromotedImageReference, &recipe.Version, &recipe.CreatedAt, &recipe.UpdatedAt,
+		&canManage)
 	if err != nil {
 		return entity.RoleImageRecipe{}, err
 	}
 	if err := json.Unmarshal(specification, &recipe.Input); err != nil {
 		return entity.RoleImageRecipe{}, errors.New("decode role image recipe specification")
 	}
-	recipe.NextActions = roleImageActions(recipe)
+	recipe.NextActions = roleImageActions(recipe, canManage)
 	return recipe, nil
 }
 
@@ -78,7 +80,7 @@ func scanLockedRecipe(row roleImageRowScanner) (lockedRecipe, error) {
 	if err := json.Unmarshal(specification, &result.Recipe.Input); err != nil {
 		return lockedRecipe{}, errors.New("decode locked role image recipe specification")
 	}
-	result.Recipe.NextActions = roleImageActions(result.Recipe)
+	result.Recipe.NextActions = roleImageActions(result.Recipe, true)
 	return result, nil
 }
 
@@ -185,8 +187,11 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	return result, nil
 }
 
-func roleImageActions(recipe entity.RoleImageRecipe) []string {
+func roleImageActions(recipe entity.RoleImageRecipe, canManage bool) []string {
 	actions := []string{"OPEN"}
+	if !canManage {
+		return actions
+	}
 	if recipe.State == "ACTIVE" {
 		actions = append(actions, "UPDATE", "REQUEST_BUILD", "ARCHIVE")
 	} else {

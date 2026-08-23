@@ -2088,7 +2088,7 @@ components:
       type: object
       additionalProperties: false
       required: [action]
-      properties: { action: { type: string, enum: [ENABLE, PAUSE, ARCHIVE] } }
+      properties: { action: { type: string, enum: [ENABLE, PAUSE] } }
     IntegrationCapability:
       type: object
       additionalProperties: false

@@ -83,6 +83,7 @@ const permissions: ProjectPermission[] = [
 ];
 
 function edit(membership: Membership): void {
+  if (!membership.nextActions.includes("EDIT")) return;
   selected.value = membership;
   Object.assign(form, {
     userRef: membership.user.ref,
@@ -95,6 +96,7 @@ function edit(membership: Membership): void {
 }
 
 function add(): void {
+  if (!canAdd.value) return;
   selected.value = undefined;
   Object.assign(form, {
     userRef: "",
@@ -132,7 +134,14 @@ async function load(): Promise<void> {
 }
 
 async function submit(): Promise<void> {
-  if (!form.userRef || (!organizationScope.value && !projectRef.value)) return;
+  if (
+    !form.userRef ||
+    (!organizationScope.value && !projectRef.value) ||
+    (selected.value
+      ? !selected.value.nextActions.includes("EDIT")
+      : !canAdd.value)
+  )
+    return;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -166,6 +175,7 @@ async function submit(): Promise<void> {
 }
 
 async function revoke(membership: Membership): Promise<void> {
+  if (!membership.nextActions.includes("REVOKE")) return;
   busy.value = true;
   problem.value = undefined;
   try {

@@ -40,11 +40,13 @@ const form = reactive({
 const formReady = computed(() => isAgentDraftComplete(form));
 
 function openDialog(): void {
+  if (!canCreate.value) return;
   form.runtimeRef ||= runtimes.value[0]?.ref ?? "";
   dialog.value = true;
 }
 
 async function submit(): Promise<void> {
+  if (!canCreate.value) return;
   busy.value = true;
   problem.value = undefined;
   try {

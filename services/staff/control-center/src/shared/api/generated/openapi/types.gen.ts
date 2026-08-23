@@ -612,7 +612,7 @@ export type ScheduleInput = {
 };
 
 export type ScheduleCommand = {
-    action: 'ENABLE' | 'PAUSE' | 'ARCHIVE';
+    action: 'ENABLE' | 'PAUSE';
 };
 
 export type IntegrationCapability = {

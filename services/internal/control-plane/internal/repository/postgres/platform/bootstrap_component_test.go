@@ -390,6 +390,60 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || len(memberships) != 2 {
 		t.Fatalf("member cannot use granted project permission: memberships=%d err=%v", len(memberships), err)
 	}
+	actionAgent := createLifecycleAgent(t, ctx, service, owner, projectRef, "membership-action-agent", "Readback analyst")
+	agents, _, err := service.ListAgents(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || len(agents) != 1 || agents[0].Ref != actionAgent.Ref || len(agents[0].NextActions) != 1 || agents[0].NextActions[0] != "OPEN" {
+		t.Fatalf("read-only agent actions are not authoritative: agents=%#v err=%v", agents, err)
+	}
+	agentReadback, err := service.GetAgent(ctx, candidate, actionAgent.Ref)
+	if err != nil || len(agentReadback.NextActions) != 1 || agentReadback.NextActions[0] != "OPEN" {
+		t.Fatalf("read-only agent detail exposed mutations: agent=%#v err=%v", agentReadback, err)
+	}
+	workflowDraft := entity.WorkflowVersion{
+		Name: "Readback process", Purpose: "Validate actor-scoped actions", CoordinatorAgentRef: actionAgent.Ref,
+		VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "A bounded result is produced", ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "analyze", Position: 1, Name: "Analyze", AgentRef: actionAgent.Ref, Instructions: "Analyze the bounded input.", TimeoutSeconds: 900, ExpectedResult: "A bounded result"}},
+	}
+	workflowResult, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-workflow"},
+		Payload: command.WorkflowInput{ProjectRef: projectRef, Name: workflowDraft.Name, Purpose: workflowDraft.Purpose, CoordinatorAgentRef: actionAgent.Ref, Draft: &workflowDraft},
+	})
+	if err != nil || workflowResult.Workflow == nil {
+		t.Fatalf("create action readback workflow: workflow=%#v err=%v", workflowResult.Workflow, err)
+	}
+	workflows, _, err := service.ListWorkflows(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || len(workflows) != 1 || len(workflows[0].NextActions) != 1 || workflows[0].NextActions[0] != "OPEN" {
+		t.Fatalf("read-only workflow actions are not authoritative: workflows=%#v err=%v", workflows, err)
+	}
+	scheduleResult, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateSchedule, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-schedule"},
+		Payload: command.ScheduleInput{ProjectRef: projectRef, Name: "Daily readback", Target: entity.RunTarget{Type: "AGENT", Ref: actionAgent.Ref}, Preset: "DAILY", CronExpression: "0 9 * * *", Timezone: "UTC", Input: map[string]any{"task": "Prepare a bounded daily summary."}, SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY"},
+	})
+	if err != nil || scheduleResult.Schedule == nil {
+		t.Fatalf("create action readback schedule: schedule=%#v err=%v", scheduleResult.Schedule, err)
+	}
+	schedules, _, err := service.ListSchedules(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || len(schedules) != 1 || len(schedules[0].NextActions) != 1 || schedules[0].NextActions[0] != "OPEN" {
+		t.Fatalf("read-only schedule actions are not authoritative: schedules=%#v err=%v", schedules, err)
+	}
+	runResult, err := service.Execute(ctx, command.Command{
+		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-run"},
+		Payload: command.LaunchRunInput{ProjectRef: projectRef, Title: "Readback run", Task: "Produce a bounded readback result.", Target: entity.RunTarget{Type: "AGENT", Ref: actionAgent.Ref}},
+	})
+	if err != nil || runResult.Run == nil {
+		t.Fatalf("create action readback run: run=%#v err=%v", runResult.Run, err)
+	}
+	runs, _, err := service.ListRuns(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || len(runs) != 1 || len(runs[0].NextActions) != 1 || runs[0].NextActions[0] != "OPEN" {
+		t.Fatalf("read-only run actions are not authoritative: runs=%#v err=%v", runs, err)
+	}
+	runVersion := runResult.Run.Version
+	if cancelled, cancelErr := service.Execute(ctx, command.Command{
+		Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "membership-action-run-cancel", ExpectedVersion: &runVersion},
+		Payload: command.RunCommandInput{RunRef: runResult.Run.Ref, Reason: "Finish action readback fixture"},
+	}); cancelErr != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
+		t.Fatalf("close action readback run: run=%#v err=%v", cancelled.Run, cancelErr)
+	}
 	remaining, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("assigned member remained a candidate: candidates=%#v err=%v", remaining, err)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
@@ -368,10 +369,11 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	var result []entity.Agent
 	for rows.Next() {
 		var item entity.Agent
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var canManage, canLaunch bool
+		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
-		item.NextActions = agentActions(item)
+		item.NextActions = agentActions(item, canManage, canLaunch)
 		result = append(result, item)
 	}
 	for index := range result {
@@ -387,8 +389,9 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 		return entity.Agent{}, err
 	}
 	var item entity.Agent
+	var canManage, canLaunch bool
 	err = repository.pool.QueryRow(ctx, queryQueriesGetagentSelectAgentsOrganizationIdRefSystemKey, scope.organizationID, ref, scope.role, scope.actorID).Scan(
-		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt)
+		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Agent{}, errs.ErrNotFound
 	}
@@ -396,28 +399,39 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 		return entity.Agent{}, errs.ErrUnavailable
 	}
 	item.System = item.SystemKey != ""
-	item.NextActions = agentActions(item)
+	item.NextActions = agentActions(item, canManage, canLaunch)
 	_ = repository.attachInstructions(ctx, scope, &item)
 	_ = repository.attachAgentGrants(ctx, scope, &item)
 	return item, nil
 }
 
-func agentActions(agent entity.Agent) []string {
+func agentActions(agent entity.Agent, canManage, canLaunch bool) []string {
 	if agent.System {
-		return []string{"OPEN", "RECOVER"}
+		actions := []string{"OPEN"}
+		if canManage {
+			actions = append(actions, "RECOVER")
+		}
+		return actions
 	}
 	actions := []string{"OPEN"}
 	if agent.State == "ARCHIVED" {
 		return actions
 	}
-	actions = append(actions, "EDIT", "MANAGE_CAPABILITIES")
-	if agent.Enabled && agent.State == "READY" {
-		actions = append(actions, "LAUNCH", "DISABLE")
+	if canManage {
+		actions = append(actions, "EDIT", "MANAGE_CAPABILITIES")
 	}
-	if !agent.Enabled {
+	if canLaunch && agent.Enabled && agent.State == "READY" {
+		actions = append(actions, "LAUNCH")
+	}
+	if canManage && agent.Enabled && agent.State == "READY" {
+		actions = append(actions, "DISABLE")
+	}
+	if canManage && !agent.Enabled {
 		actions = append(actions, "ENABLE")
 	}
-	actions = append(actions, "ARCHIVE")
+	if canManage {
+		actions = append(actions, "ARCHIVE")
+	}
 	return actions
 }
 
@@ -473,7 +487,7 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 	defer rows.Close()
 	var result []entity.Workflow
 	for rows.Next() {
-		item, scanErr := scanWorkflow(rows)
+		item, scanErr := scanWorkflow(rows, true)
 		if scanErr != nil {
 			return nil, "", scanErr
 		}
@@ -489,11 +503,18 @@ type queryRunner interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-func scanWorkflow(row rowScanner) (entity.Workflow, error) {
+func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	var item entity.Workflow
 	var draft, published []byte
 	var publishedVersion int32
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Purpose, &item.CoordinatorAgentRef, &item.State, &item.Version, &draft, &published, &publishedVersion, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	var canManage, canLaunch bool
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.Name, &item.Purpose, &item.CoordinatorAgentRef, &item.State, &item.Version, &draft, &published, &publishedVersion, &item.CreatedAt, &item.UpdatedAt}
+	if actorScoped {
+		destinations = append(destinations, &canManage, &canLaunch)
+	} else {
+		canManage, canLaunch = true, true
+	}
+	if err := row.Scan(destinations...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Workflow{}, errs.ErrNotFound
 		}
@@ -510,11 +531,19 @@ func scanWorkflow(row rowScanner) (entity.Workflow, error) {
 		}
 		item.Published.VersionNumber = publishedVersion
 	}
-	item.NextActions = []string{"OPEN", "EDIT"}
-	if item.State == "PUBLISHED" {
-		item.NextActions = append(item.NextActions, "LAUNCH")
-	}
+	item.NextActions = workflowActions(item, canManage, canLaunch)
 	return item, nil
+}
+
+func workflowActions(item entity.Workflow, canManage, canLaunch bool) []string {
+	actions := []string{"OPEN"}
+	if canManage && item.State != "ARCHIVED" {
+		actions = append(actions, "EDIT")
+	}
+	if canLaunch && item.State == "PUBLISHED" {
+		actions = append(actions, "LAUNCH")
+	}
+	return actions
 }
 
 func (repository *Repository) GetWorkflow(ctx context.Context, principal value.Principal, ref string) (entity.Workflow, error) {
@@ -523,7 +552,7 @@ func (repository *Repository) GetWorkflow(ctx context.Context, principal value.P
 		return entity.Workflow{}, err
 	}
 	row := repository.pool.QueryRow(ctx, queryQueriesGetworkflowSelectWorkflowsOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID)
-	return scanWorkflow(row)
+	return scanWorkflow(row, true)
 }
 
 func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, string, error) {
@@ -538,7 +567,7 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	defer rows.Close()
 	var result []entity.Run
 	for rows.Next() {
-		item, scanErr := scanRun(rows)
+		item, scanErr := scanRun(rows, true)
 		if scanErr != nil {
 			return nil, "", scanErr
 		}
@@ -549,30 +578,42 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	return result, "", rows.Err()
 }
 
-func scanRun(row rowScanner) (entity.Run, error) {
+func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
 	var item entity.Run
 	var input []byte
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &item.CreatedAt, &item.StartedAt, &item.FinishedAt); err != nil {
+	var canCancel, canLaunch bool
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.SessionRef, &item.RootRunRef, &item.ParentRunRef, &item.RetryOfRunRef, &item.Title, &item.Task, &item.State, &item.Source, &item.ResultSummary, &item.SafeErrorCode, &item.SafeErrorMessage, &item.InitiatorName, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Attempt, &item.GraphRevision, &item.EventSequence, &item.Version, &input, &item.InputArtifactRefs, &item.ArtifactRefs, &item.GateRefs, &item.CreatedAt, &item.StartedAt, &item.FinishedAt}
+	if actorScoped {
+		destinations = append(destinations, &canCancel, &canLaunch)
+	} else {
+		canCancel, canLaunch = true, true
+	}
+	if err := row.Scan(destinations...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Run{}, errs.ErrNotFound
 		}
 		return entity.Run{}, errs.ErrUnavailable
 	}
 	_ = json.Unmarshal(input, &item.Input)
-	item.NextActions = runActions(item.State)
+	item.NextActions = runActions(item.State, canCancel, canLaunch)
 	return item, nil
 }
-func runActions(state string) []string {
+func runActions(state string, canCancel, canLaunch bool) []string {
 	switch state {
 	case "QUEUED", "RUNNING", "WAITING_HUMAN":
-		return []string{"OPEN", "CANCEL"}
+		if canCancel {
+			return []string{"OPEN", "CANCEL"}
+		}
 	case "FAILED", "CANCELLED":
-		return []string{"OPEN", "RETRY"}
+		if canCancel {
+			return []string{"OPEN", "RETRY"}
+		}
 	case "SUCCEEDED":
-		return []string{"OPEN", "ADD_TURN"}
-	default:
-		return []string{"OPEN"}
+		if canLaunch {
+			return []string{"OPEN", "ADD_TURN"}
+		}
 	}
+	return []string{"OPEN"}
 }
 func contains(values []string, want string) bool {
 	for _, value := range values {
@@ -581,6 +622,159 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+type actorActionPermissions struct {
+	canManageAgents    bool
+	canManageWorkflows bool
+	canCancelRuns      bool
+	canLaunchRuns      bool
+	canResolveGates    bool
+	canManageArtifacts bool
+	canManageSchedules bool
+}
+
+func (repository *Repository) projectActionPermissions(
+	ctx context.Context,
+	runner queryRunner,
+	scope scope,
+	projectRef string,
+) (actorActionPermissions, error) {
+	if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
+		return actorActionPermissions{
+			canManageAgents:    true,
+			canManageWorkflows: true,
+			canCancelRuns:      true,
+			canLaunchRuns:      true,
+			canResolveGates:    true,
+			canManageArtifacts: true,
+			canManageSchedules: true,
+		}, nil
+	}
+	if projectRef == "" {
+		return actorActionPermissions{}, nil
+	}
+	var permissions []string
+	if err := runner.QueryRow(
+		ctx,
+		queryQueriesProjectActionPermissionsSelectMembershipsOrganizationIdRef,
+		scope.organizationID,
+		projectRef,
+		scope.actorID,
+	).Scan(&permissions); errors.Is(err, pgx.ErrNoRows) {
+		return actorActionPermissions{}, errs.ErrNotFound
+	} else if err != nil {
+		return actorActionPermissions{}, errs.ErrUnavailable
+	}
+	return actorActionPermissions{
+		canManageAgents:    contains(permissions, "MANAGE_AGENTS"),
+		canManageWorkflows: contains(permissions, "MANAGE_WORKFLOWS"),
+		canCancelRuns:      contains(permissions, "CANCEL_RUNS"),
+		canLaunchRuns:      contains(permissions, "LAUNCH_RUNS"),
+		canResolveGates:    contains(permissions, "RESOLVE_GATES"),
+		canManageArtifacts: contains(permissions, "MANAGE_ARTIFACTS"),
+		canManageSchedules: contains(permissions, "MANAGE_SCHEDULES"),
+	}, nil
+}
+
+func (repository *Repository) applyResultActionPermissions(
+	ctx context.Context,
+	runner queryRunner,
+	scope scope,
+	result *command.Result,
+	projectRef string,
+) error {
+	if result == nil {
+		return nil
+	}
+	if projectRef == "" {
+		switch {
+		case result.Agent != nil:
+			projectRef = result.Agent.ProjectRef
+		case result.Workflow != nil:
+			projectRef = result.Workflow.ProjectRef
+		case result.Run != nil:
+			projectRef = result.Run.ProjectRef
+		case result.Gate != nil:
+			projectRef = result.Gate.ProjectRef
+		case result.Artifact != nil:
+			projectRef = result.Artifact.ProjectRef
+		case result.Schedule != nil:
+			projectRef = result.Schedule.ProjectRef
+		}
+	}
+	if projectRef == "" {
+		return nil
+	}
+	permissions, err := repository.projectActionPermissions(ctx, runner, scope, projectRef)
+	if err != nil {
+		return err
+	}
+	if result.Agent != nil {
+		result.Agent.NextActions = agentActions(*result.Agent, permissions.canManageAgents, permissions.canLaunchRuns)
+	}
+	if result.Workflow != nil {
+		result.Workflow.NextActions = workflowActions(*result.Workflow, permissions.canManageWorkflows, permissions.canLaunchRuns)
+	}
+	if result.Run != nil {
+		result.Run.NextActions = runActions(result.Run.State, permissions.canCancelRuns, permissions.canLaunchRuns)
+	}
+	if result.Graph != nil {
+		for index := range result.Graph.Nodes {
+			result.Graph.Nodes[index].NextActions = filterNodeActions(result.Graph.Nodes[index].NextActions, permissions)
+		}
+	}
+	if result.Gate != nil {
+		result.Gate.NextActions = gateActions(result.Gate.State, permissions.canResolveGates)
+	}
+	if result.Artifact != nil {
+		result.Artifact.NextActions = artifactActions(result.Artifact.ScanState, permissions.canManageArtifacts)
+	}
+	if result.Schedule != nil {
+		result.Schedule.NextActions = scheduleActions(*result.Schedule, permissions.canManageSchedules)
+	}
+	if result.Event != nil {
+		applyEventActionPermissions(result.Event, permissions)
+	}
+	return nil
+}
+
+func filterNodeActions(actions []string, permissions actorActionPermissions) []string {
+	result := make([]string, 0, len(actions))
+	for _, action := range actions {
+		switch action {
+		case "OPEN":
+			result = append(result, action)
+		case "CANCEL", "RETRY":
+			if permissions.canCancelRuns {
+				result = append(result, action)
+			}
+		case "RESOLVE_GATE":
+			if permissions.canResolveGates {
+				result = append(result, action)
+			}
+		}
+	}
+	return result
+}
+
+func applyEventActionPermissions(event *entity.RunEvent, permissions actorActionPermissions) {
+	if event.Delta.Run != nil {
+		event.Delta.Run.NextActions = runActions(
+			event.Delta.Run.State,
+			permissions.canCancelRuns,
+			permissions.canLaunchRuns,
+		)
+	}
+	if event.Delta.Node != nil {
+		event.Delta.Node.NextActions = filterNodeActions(event.Delta.Node.NextActions, permissions)
+	}
+	if event.Delta.Gate != nil {
+		event.Delta.Gate.NextActions = gateActions(event.Delta.Gate.State, permissions.canResolveGates)
+	}
+	if event.Delta.Artifact != nil {
+		event.Delta.Artifact.NextActions = artifactActions(event.Delta.Artifact.ScanState, permissions.canManageArtifacts)
+	}
 }
 
 func (repository *Repository) GetRun(ctx context.Context, principal value.Principal, ref string) (entity.Run, error) {
@@ -604,7 +798,7 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 }
 
 func (repository *Repository) readRunWithIncidents(ctx context.Context, runner queryRunner, scope scope, ref string) (entity.Run, error) {
-	item, err := scanRun(runner.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID))
+	item, err := scanRun(runner.QueryRow(ctx, queryQueriesGetrunSelectRunsOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 	if err != nil {
 		return entity.Run{}, err
 	}
@@ -648,6 +842,10 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	permissions, err := repository.projectActionPermissions(ctx, tx, scope, run.ProjectRef)
+	if err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
 	rows, err := tx.Query(ctx, queryQueriesGetrungraphSelectArtifactsNodeIdRef, scope.organizationID, run.RootRunRef)
 	if err != nil {
@@ -659,6 +857,7 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 			rows.Close()
 			return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 		}
+		n.NextActions = filterNodeActions(n.NextActions, permissions)
 		graph.Nodes = append(graph.Nodes, n)
 	}
 	if err := rows.Err(); err != nil {
@@ -714,6 +913,10 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	if err != nil {
 		return nil, 0, false, err
 	}
+	permissions, err := repository.projectActionPermissions(ctx, tx, scope, run.ProjectRef)
+	if err != nil {
+		return nil, 0, false, err
+	}
 	limit := filter.Limit
 	if limit < 1 {
 		limit = 200
@@ -739,6 +942,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		if e.Delta.Incident != nil {
 			e.IncidentRef = e.Delta.Incident.Ref
 		}
+		applyEventActionPermissions(&e, permissions)
 		e.GraphRevision = e.Delta.Run.GraphRevision
 		result = append(result, e)
 	}
@@ -765,7 +969,7 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 	defer rows.Close()
 	var result []entity.OwnerGate
 	for rows.Next() {
-		item, scanErr := scanGate(rows)
+		item, scanErr := scanGate(rows, true)
 		if scanErr != nil {
 			return nil, "", scanErr
 		}
@@ -774,25 +978,36 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 	return result, "", rows.Err()
 }
 
-func scanGate(row rowScanner) (entity.OwnerGate, error) {
+func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ArtifactRefs); err != nil {
+	canResolve := true
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ArtifactRefs}
+	if actorScoped {
+		canResolve = false
+		destinations = append(destinations, &canResolve)
+	}
+	if err := row.Scan(destinations...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.OwnerGate{}, errs.ErrNotFound
 		}
 		return entity.OwnerGate{}, errs.ErrUnavailable
 	}
-	if item.State == "OPEN" {
-		item.NextActions = []string{"RESOLVE_GATE"}
-	}
+	item.NextActions = gateActions(item.State, canResolve)
 	return item, nil
+}
+
+func gateActions(state string, canResolve bool) []string {
+	if state == "OPEN" && canResolve {
+		return []string{"RESOLVE_GATE"}
+	}
+	return []string{}
 }
 func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.Principal, ref string) (entity.OwnerGate, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.OwnerGate{}, err
 	}
-	return scanGate(repository.pool.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID))
+	return scanGate(repository.pool.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 }
 
 func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, string, error) {
@@ -825,13 +1040,19 @@ func scanArtifact(row rowScanner) (entity.Artifact, error) {
 		}
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
-	if item.ScanState == "CLEAN" {
-		item.NextActions = []string{"DOWNLOAD"}
-		if canManage {
-			item.NextActions = append(item.NextActions, "BIND")
-		}
-	}
+	item.NextActions = artifactActions(item.ScanState, canManage)
 	return item, nil
+}
+
+func artifactActions(scanState string, canManage bool) []string {
+	if scanState != "CLEAN" {
+		return []string{}
+	}
+	actions := []string{"DOWNLOAD"}
+	if canManage {
+		actions = append(actions, "BIND")
+	}
+	return actions
 }
 func (repository *Repository) GetArtifact(ctx context.Context, principal value.Principal, ref string) (entity.Artifact, error) {
 	scope, err := repository.resolveScope(ctx, principal)
@@ -855,19 +1076,27 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	for rows.Next() {
 		var item entity.Schedule
 		var input []byte
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var canManage bool
+		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.Name, &item.Target.Type, &item.Target.Ref, &item.Target.Name, &item.Preset, &item.CronExpression, &item.Timezone, &input, &item.SessionPolicy, &item.NotificationPolicy, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &canManage); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		_ = json.Unmarshal(input, &item.Input)
-		item.NextActions = []string{"OPEN", "EDIT"}
-		if item.Enabled {
-			item.NextActions = append(item.NextActions, "DISABLE")
-		} else {
-			item.NextActions = append(item.NextActions, "ENABLE")
-		}
+		item.NextActions = scheduleActions(item, canManage)
 		result = append(result, item)
 	}
 	return result, "", rows.Err()
+}
+
+func scheduleActions(item entity.Schedule, canManage bool) []string {
+	actions := []string{"OPEN"}
+	if !canManage {
+		return actions
+	}
+	actions = append(actions, "EDIT")
+	if item.Enabled {
+		return append(actions, "DISABLE")
+	}
+	return append(actions, "ENABLE")
 }
 
 func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, principal value.Principal, category string) ([]entity.IntegrationDefinition, []string, error) {

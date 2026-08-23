@@ -1,5 +1,9 @@
 -- name: queries_listownergates_select_owner_gates_organization_id_ref_state :many
-SELECT g.ref,p.ref,root.ref,n.ref,g.title,g.prompt,g.context_summary,COALESCE(requester_agent.ref,initiator.ref),COALESCE(requester_agent.name,initiator.display_name),g.allowed_decisions,g.state,COALESCE(g.decision,''),g.decision_comment,COALESCE(s.display_name,''),g.version,g.created_at,g.resolved_at,'{}'::text[]
+SELECT g.ref,p.ref,root.ref,n.ref,g.title,g.prompt,g.context_summary,COALESCE(requester_agent.ref,initiator.ref),COALESCE(requester_agent.name,initiator.display_name),g.allowed_decisions,g.state,COALESCE(g.decision,''),g.decision_comment,COALESCE(s.display_name,''),g.version,g.created_at,g.resolved_at,'{}'::text[],
+       ($4 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
+         SELECT 1 FROM control_plane.memberships resolve_membership
+         WHERE resolve_membership.project_id=g.project_id AND resolve_membership.subject_id=$5::uuid AND resolve_membership.active AND 'RESOLVE_GATES'=ANY(resolve_membership.permissions)
+       ))
 FROM control_plane.owner_gates g
 JOIN control_plane.projects p ON p.id=g.project_id
 JOIN control_plane.runs root ON root.id=g.root_run_id

@@ -53,6 +53,11 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if json.Unmarshal(storedPayload, &result) != nil {
 			return command.Result{}, errs.ErrConflict
 		}
+		if exposesActorActions(input.Principal.CallerWorkload) {
+			if err := repository.applyResultActionPermissions(ctx, tx, scope, &result, ""); err != nil {
+				return command.Result{}, err
+			}
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, errs.ErrConflict
 		}
@@ -67,6 +72,11 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	}
 	if outcome.resourceRef == "" {
 		return command.Result{}, errs.ErrConflict
+	}
+	if exposesActorActions(input.Principal.CallerWorkload) {
+		if err := repository.applyResultActionPermissions(ctx, tx, scope, &outcome.result, outcome.projectRef); err != nil {
+			return command.Result{}, err
+		}
 	}
 	auditRef, err := newRef("aud")
 	if err != nil {
@@ -97,6 +107,10 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
 	return outcome.result, nil
+}
+
+func exposesActorActions(workload string) bool {
+	return workload == "control-api-gateway"
 }
 
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -574,7 +588,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	item.Model = runtime.Model
 	item.RuntimeRevision = runtime.RuntimeRevision
 	item.PublishedInstructions = &entity.InstructionVersion{Ref: instructionRef, VersionNumber: 1, State: "PUBLISHED", Content: input.Instructions, Digest: hex.EncodeToString(digest[:]), CreatedAt: publishedAt, PublishedAt: &publishedAt}
-	item.NextActions = agentActions(item)
+	item.NextActions = agentActions(item, true, true)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "i18n:AGENT_CREATED_READY", platformEvent: "AGENT_CHANGED"}, nil
 }
 
@@ -657,7 +671,7 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 	if err := tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	item.NextActions = agentActions(item)
+	item.NextActions = agentActions(item, true, true)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: item.ProjectRef, resourceKind: "AGENT", resourceRef: item.Ref, summary: "i18n:AGENT_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
@@ -797,7 +811,7 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	agent.NextActions = agentActions(agent)
+	agent.NextActions = agentActions(agent, true, true)
 	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "i18n:AGENT_PERMISSIONS_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }
 
@@ -914,7 +928,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrConflict
 		}
 	}
-	workflow, readErr := scanWorkflow(tx.QueryRow(ctx, queryCommandsChangeworkflowSelectAuthoritativeReadback, scope.organizationID, payload.Ref))
+	workflow, readErr := scanWorkflow(tx.QueryRow(ctx, queryCommandsChangeworkflowSelectAuthoritativeReadback, scope.organizationID, payload.Ref), false)
 	if readErr != nil {
 		return commandOutcome{}, readErr
 	}
@@ -1277,7 +1291,7 @@ func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, 
 	run.SafeErrorMessage = truncate(run.SafeErrorMessage, 500)
 	run.ArtifactRefs = boundedStrings(run.ArtifactRefs, 200)
 	run.GateRefs = boundedStrings(run.GateRefs, 200)
-	run.NextActions = runActions(run.State)
+	run.NextActions = runActions(run.State, true, true)
 	delta := entity.RunEventDelta{Run: &run}
 	if nodeRef != "" {
 		node, err := scanRunNode(tx.QueryRow(ctx, queryCommandsEmitruneventSelectNodeDelta, organizationID, nodeRef))
@@ -1304,7 +1318,7 @@ func (repository *Repository) readRunEventDelta(ctx context.Context, tx pgx.Tx, 
 		delta.Edge = &edge
 	}
 	if gateRef != "" {
-		gate, err := scanGate(tx.QueryRow(ctx, queryCommandsEmitruneventSelectGateDelta, organizationID, gateRef))
+		gate, err := scanGate(tx.QueryRow(ctx, queryCommandsEmitruneventSelectGateDelta, organizationID, gateRef), false)
 		if err != nil {
 			return entity.RunEventDelta{}, fmt.Errorf("read owner gate event delta: %w", err)
 		}
@@ -1402,7 +1416,7 @@ func eventKind(eventType string) string {
 }
 
 func (repository *Repository) readRunGraphTx(ctx context.Context, tx pgx.Tx, scope scope, runRef string) (entity.Run, entity.RunGraph, error) {
-	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraphSelectRunsOrganizationIdRef, scope.organizationID, runRef))
+	run, err := scanRun(tx.QueryRow(ctx, queryCommandsGetrunforgraphSelectRunsOrganizationIdRef, scope.organizationID, runRef), false)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, fmt.Errorf("read run snapshot: %w", err)
 	}
@@ -1742,7 +1756,7 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	gate, err := scanGate(tx.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId,
-		scope.organizationID, payload.GateRef, scope.role, scope.actorID))
+		scope.organizationID, payload.GateRef, scope.role, scope.actorID), true)
 	if err != nil {
 		return commandOutcome{}, err
 	}

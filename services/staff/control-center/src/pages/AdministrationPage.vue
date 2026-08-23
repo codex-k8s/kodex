@@ -28,6 +28,7 @@ async function load(): Promise<void> {
 }
 
 async function save(): Promise<void> {
+  if (!state.value?.assistant.nextActions.includes("EDIT")) return;
   busy.value = true;
   problem.value = undefined;
   try {

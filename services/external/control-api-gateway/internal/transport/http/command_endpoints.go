@@ -13,6 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const (
+	scheduleActionEnable = "ENABLE"
+	scheduleActionPause  = "PAUSE"
+)
+
 func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request, p generated.CompleteOnboardingParams) {
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
 	if m == nil {
@@ -491,8 +496,8 @@ func (server *Server) CommandSchedule(w http.ResponseWriter, r *http.Request, re
 	if !ok {
 		return
 	}
-	enabled := body.Action == generated.ScheduleCommandActionENABLE
-	if body.Action != generated.ScheduleCommandActionENABLE && body.Action != generated.ScheduleCommandActionPAUSE && body.Action != generated.ScheduleCommandActionARCHIVE {
+	enabled := string(body.Action) == scheduleActionEnable
+	if string(body.Action) != scheduleActionEnable && string(body.Action) != scheduleActionPause {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
