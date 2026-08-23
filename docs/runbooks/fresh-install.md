@@ -91,7 +91,11 @@ hosts передаются параметрами deployment environment. Реп
    `readback`.
 4. Установить pinned service controllers командами
    `infra/service-infrastructure/bootstrap.sh --mode apply-controllers` и
-   `--mode readback`. Изменение публичного Traefik выполняется только
+   `--mode readback`. Bootstrap закрепляет для Secrets Store CSI Driver
+   `fsGroupPolicy: File`: только так inline CSI secret с mode `0440` получает
+   Pod `fsGroup` и остаётся читаемым non-root workload без world permissions.
+   API default `ReadWriteOnceWithFSType` для volume без fstype запрещён как
+   недостижимый runtime path. Изменение публичного Traefik выполняется только
    `infra/public-ingress/bootstrap.sh`, после чего также обязателен `readback`.
 5. Настроить SSO через `tools/deploy/configure-keycloak.sh --mode apply` и
    повторить `--mode readback`. Скрипт создаёт или приводит к exact состоянию
