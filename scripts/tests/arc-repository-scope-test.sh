@@ -29,6 +29,7 @@ common_arguments=(
   --context impossible-context
   --mode preflight
   --registry-namespace fixture-registry
+  --release-registry-host registry.example.test
   --workflow-sha-file "$temporary_directory/workflow-sha"
   --build-owner-actor-id-file "$temporary_directory/build-owner"
   --deploy-owner-actor-id-file "$temporary_directory/deploy-owner"
@@ -55,8 +56,15 @@ grep -Fq 'Kubernetes context mismatch' "$temporary_directory/pat-only.err" || {
   printf 'PAT-only mode did not reach the Kubernetes context gate\n' >&2
   exit 1
 }
+if "$bootstrap" "${common_arguments[@]}" \
+  --release-registry-host https://registry.example.test \
+  --github-pat-file "$temporary_directory/pat" >/dev/null 2>&1; then
+  printf 'ARC bootstrap accepted a registry URL instead of an exact DNS host\n' >&2
+  exit 1
+fi
 
 "$network_policy_renderer" 10.20.30.40/32 10.20.30.41/32 fixture-registry \
+  registry.example.test \
   "$temporary_directory/network-policy.yaml"
 rg -q '__REGISTRY_|matter-kodex-prod' "$temporary_directory/network-policy.yaml" && {
   printf 'ARC network policy retained an unresolved or legacy registry locator\n' >&2
@@ -147,7 +155,7 @@ fi
 grep -Fq '(.spec.replicas // 0) == 0' "$bootstrap"
 grep -Fq '$items[0].spec.ephemeralRunnerSetName' "$bootstrap"
 yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
-  .data."envoy.yaml"' "$repository_root/infra/arc/network-policy.yaml" \
+  .data."envoy.yaml"' "$temporary_directory/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
 yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   def authority_allowed($routes; $authority):
@@ -162,7 +170,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   $virtual_host.routes as $routes |
   $hcm.upgrade_configs[0] as $hcm_upgrade |
   ($virtual_host.domains == ["*"]) and
-  ($routes | length == 23) and
+  ($routes | length == 24) and
   (all($routes[];
     .match.connect_matcher == {} and
     (.match.headers | length == 1) and .match.headers[0].name == ":authority" and
@@ -173,7 +181,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
     .route.upgrade_configs[0].connect_config == {})) and
   (all("github.com:443", "broker.actions.githubusercontent.com:443",
     "raw.githubusercontent.com:443", "avatars.githubassets.com:443",
-    "ghcr.io:443", "gcr.io:443", "registry-1.docker.io:443",
+    "ghcr.io:443", "registry.example.test:443", "gcr.io:443", "registry-1.docker.io:443",
     "production.cloudfront.docker.com:443",
     "proxy.golang.org:443", "sum.golang.org:443", "storage.googleapis.com:443",
     "registry.npmjs.org:443", "dl-cdn.alpinelinux.org:443",
@@ -199,7 +207,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
 }
 
 "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
-  fixture-registry "$temporary_directory/rendered-network-policy.yaml"
+  fixture-registry registry.example.test "$temporary_directory/rendered-network-policy.yaml"
 yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq -sc -e '
   map(select(.kind == "NetworkPolicy" and .metadata.namespace == "mattercodex-ci" and
     .metadata.name == "build-registry")) |
@@ -214,13 +222,27 @@ yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq
   exit 1
 }
 if "$network_policy_renderer" 0.0.0.0/0 192.0.2.10/32 \
-  fixture-registry "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  fixture-registry registry.example.test \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted a non-/32 destination\n' >&2
   exit 1
 fi
 if "$network_policy_renderer" 999.0.0.1/32 192.0.2.10/32 \
-  fixture-registry "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  fixture-registry registry.example.test \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted an invalid IPv4 destination\n' >&2
+  exit 1
+fi
+if "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
+  fixture-registry https://registry.example.test \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  printf 'Registry network policy renderer accepted a registry URL instead of an exact DNS host\n' >&2
+  exit 1
+fi
+if "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
+  fixture-registry registry.example.test:443 \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  printf 'Registry network policy renderer accepted a registry host with a port\n' >&2
   exit 1
 fi
 for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
