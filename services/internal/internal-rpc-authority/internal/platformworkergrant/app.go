@@ -29,7 +29,10 @@ const (
 
 var supportedWorkloads = map[string]struct{}{
 	"automation-scheduler": {},
+	"image-admission":      {},
+	"image-promotion":      {},
 	"integration-gateway":  {},
+	"role-image-builder":   {},
 	"runtime-controller":   {},
 }
 

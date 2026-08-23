@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - serviceaccount.yaml
+  - vault-secret-provider-class.yaml
   - migration-job.yaml
   - networkpolicy.yaml

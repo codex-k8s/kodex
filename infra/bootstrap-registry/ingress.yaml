@@ -1,0 +1,32 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: mattercodex-release-registry-auth
+spec:
+  basicAuth:
+    secret: mattercodex-release-registry-auth
+    removeHeader: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mattercodex-release-registry
+  annotations:
+    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: matter-kodex-prod-mattercodex-release-registry-auth@kubernetescrd
+spec:
+  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  tls:
+    - hosts: [__MATTERCODEX_REGISTRY_HOST__]
+      secretName: mattercodex-release-registry-tls
+  rules:
+    - host: __MATTERCODEX_REGISTRY_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: matter-codex-registry
+                port: {name: registry}

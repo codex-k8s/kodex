@@ -4,6 +4,7 @@ namespace: mattercodex-system
 resources:
   - deployment.yaml
   - ingress.yaml
+  - servers-transport.yaml
   - networkpolicy.yaml
   - poddisruptionbudget.yaml
   - service.yaml

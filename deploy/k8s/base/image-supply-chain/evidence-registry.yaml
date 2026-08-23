@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: mattercodex-image-registry
     mattercodex.dev/registry-storage: evidence
 spec:
-  accessModes: [ReadWriteMany]
+  accessModes: [ReadWriteOnce]
   resources:
     requests: {storage: 20Gi}
 ---

@@ -39,6 +39,51 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: staff-control-center-backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: staff-control-center-backend-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - staff-control-center
+    - staff-control-center.mattercodex-system.svc
+    - staff-control-center.mattercodex-system.svc.cluster.local
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-ingress-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: staff-control-center-ingress-client-tls
+  duration: 720h
+  renewBefore: 120h
+  commonName: mattercodex-public-ingress
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: mattercodex-nats
   annotations:
     argocd.argoproj.io/sync-wave: "-9"

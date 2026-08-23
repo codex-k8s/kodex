@@ -82,6 +82,8 @@ promoted system role image и always-hot runtime contract.
 | Kubernetes | environment contract | платформа и execution-scoped role Pods |
 | PostgreSQL | environment contract | fresh control-plane baseline и authority state |
 | NATS JetStream | environment contract | durable domain-event transport |
+| `nsc` | `v2.15.0` | owner-side generation of fresh NATS operator, account and bounded user material |
+| `cosign` | `v3.1.3` | owner-side generation of image-signing material and runtime OCI verification |
 | Vault + Secrets Store CSI | pinned manifests/charts | workload-bound secret delivery без значений в manifests |
 | Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |
 | OpenTelemetry/Prometheus/Grafana | pinned manifests/release lock | telemetry и diagnostics |

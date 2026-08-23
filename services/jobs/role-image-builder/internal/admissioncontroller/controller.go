@@ -339,7 +339,7 @@ func validManagedWorkspace(workspace *corev1.PersistentVolumeClaim, namespace st
 	if workspace == nil || workspace.Namespace != namespace || workspace.Labels[orchestratedLabel] != "true" ||
 		!idPattern.MatchString(workspace.Labels[idLabel]) || workspace.Name != "mc-admit-"+workspace.Labels[idLabel] ||
 		workspace.Spec.Resources.Requests.Storage().String() != "2Gi" || len(workspace.Spec.AccessModes) != 1 ||
-		workspace.Spec.AccessModes[0] != corev1.ReadWriteMany {
+		workspace.Spec.AccessModes[0] != corev1.ReadWriteOnce {
 		return false
 	}
 	return true

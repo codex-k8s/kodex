@@ -44,7 +44,12 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
   --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
   --oidc-connect-address identity.example.test:443 \
   --oidc-tls-server-name identity.example.test \
-  --kubernetes-api-service-cidr 10.96.0.1/32 >/dev/null
+  --promoted-pull-host roles.example.test \
+  --kubernetes-api-service-cidr 10.96.0.1/32 \
+  --ingress-class public --cluster-issuer public-production \
+  --ingress-namespace ingress-system --ingress-pod-name public-ingress \
+  --oidc-namespace identity --oidc-pod-name sso \
+  --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
 
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
@@ -247,7 +252,7 @@ yq -e '
   (.data.policySHA256 | test("^[a-f0-9]{64}$")) and
   (.data.trustedRoleBaseDigest | test("^sha256:[a-f0-9]{64}$")) and
   (.data.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
-  .data.pullRegistryHost == "registry.example.test:5001"
+  .data.pullRegistryHost == "roles.example.test"
 ' "$render_file" >/dev/null || fail 'role image release policy was not materialized'
 
 role_environment_catalog=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments") | .data."catalog.json"' "$render_file")
@@ -299,7 +304,12 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
   --oidc-connect-address identity.example.test:443 \
   --oidc-tls-server-name identity.example.test \
-  --kubernetes-api-service-cidr 10.96.0.1/32 >/dev/null
+  --promoted-pull-host roles.example.test \
+  --kubernetes-api-service-cidr 10.96.0.1/32 \
+  --ingress-class public --cluster-issuer public-production \
+  --ingress-namespace ingress-system --ingress-pod-name public-ingress \
+  --oidc-namespace identity --oidc-pod-name sso \
+  --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gateway")' "$mattermost_render" |
   jq -e '

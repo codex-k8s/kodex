@@ -65,10 +65,12 @@ spec:
     - Egress
   ingress:
     - from:
-        - ipBlock:
-            cidr: 192.0.2.0/32
-        - ipBlock:
-            cidr: 2001:db8::/128
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit

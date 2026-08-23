@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-23
 ---
 
@@ -71,21 +71,49 @@ hosts передаются параметрами deployment environment. Реп
 
 ## 4. Порядок новой установки
 
-1. Создать namespace, installation CA source и перечисленные bootstrap secrets.
-2. Применить `Issuer`, `Certificate`, CA `Bundle`, PostgreSQL и NATS из
-   `platform-state`; дождаться готовности обоих StatefulSet и exact Service.
-3. Материализовать database roles/Vault static credentials, NATS user
-   credentials и authority keys; дождаться readback authority.
-4. Запустить `internal-rpc-authority-cli up` с exact TLS DSN, затем
-   `control-plane-cli up` с
-   `CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE` через migration Job.
-5. Запустить `control-plane-cli broker bootstrap` с exact NATS material.
-6. Развернуть `control-plane`, затем runtime/scheduler/integration workers,
-   gateway и Control Center.
-7. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
+1. Создать новый owner-controlled каталог material командой
+   `tools/deploy/generate-fresh-install-material.sh`. Команда требует exact
+   `--release-registry-host`, отказывается писать в существующий каталог и
+   создаёт файлы с режимом `0600`.
+2. Применить bootstrap registry через `infra/bootstrap-registry/bootstrap.sh`.
+   Public host, IngressClass и ClusterIssuer передаются параметрами; их нельзя
+   брать из константы репозитория. Выполнить `preflight`, `apply`, затем
+   `readback`.
+3. Установить pinned service controllers командами
+   `infra/service-infrastructure/bootstrap.sh --mode apply-controllers` и
+   `--mode readback`. Изменение публичного Traefik выполняется только
+   `infra/public-ingress/bootstrap.sh`, после чего также обязателен `readback`.
+4. Настроить SSO через `tools/deploy/configure-keycloak.sh --mode apply` и
+   повторить `--mode readback`. Скрипт создаёт или приводит к exact состоянию
+   realm, public SPA client с Authorization Code + PKCE S256, audience и
+   обязательные owner claims; пароль существующего owner не меняется.
+5. Создать namespace, installation CA source и bootstrap secrets командой
+   `tools/deploy/materialize-fresh-install-secrets.sh`, затем установить Vault
+   через `infra/service-infrastructure/bootstrap.sh --mode apply-vault`.
+6. Выполнить `tools/deploy/deploy-fresh-release.sh --mode preflight` для exact
+   immutable render. Скрипт отклоняет placeholder, zero digest, другой context
+   и повторяющиеся resource identities.
+7. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
+   image PKI и static material, затем применяет non-workload resources,
+   PostgreSQL и NATS и материализует database credentials.
+8. Выполнить фазу `apply-migrations`. Она последовательно запускает
+   `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
+   `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
+   перезапускается; неуспешный удаляется и создаётся заново из того же render.
+9. Выполнить фазу `apply-workloads`. Она применяет полный render, дожидается
+   image supply chain, выполняет `release-artifact-materializer`, затем ждёт
+   rollout каждого Deployment и DaemonSet.
+10. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
+    Deployment, DaemonSet, Job и отсутствие terminal container waiting states.
+11. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
    через `--mattermost-host`; web-only запрещает этот параметр и не содержит
    interaction deployment, trust material или external credential mounts.
-8. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
+12. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
+
+Каждый из перечисленных скриптов требует exact `--context`. После ошибки нельзя
+повторять reset или предыдущие разрушительные шаги: устраняется причина и
+повторяется только текущая идемпотентная фаза. Release render и material catalog
+не меняются между фазами.
 
 ## 5. Проверка bootstrap
 

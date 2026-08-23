@@ -1,0 +1,57 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mattercodex-installation-ca
+  namespace: mattercodex-system
+spec:
+  ca:
+    secretName: mattercodex-installation-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-vault-server
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-vault-server-tls
+  duration: 2160h
+  renewBefore: 360h
+  commonName: vault.mattercodex-system.svc.cluster.local
+  dnsNames:
+    - vault
+    - vault.mattercodex-system
+    - vault.mattercodex-system.svc
+    - vault.mattercodex-system.svc.cluster.local
+    - vault-active
+    - vault-active.mattercodex-system
+    - vault-active.mattercodex-system.svc
+    - vault-active.mattercodex-system.svc.cluster.local
+  privateKey:
+    algorithm: RSA
+    size: 3072
+    rotationPolicy: Always
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-control-api-bootstrap
+spec:
+  secretName: mattercodex-control-api-bootstrap-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - control-api.mattercodex.local
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer

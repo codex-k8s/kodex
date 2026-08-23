@@ -5,7 +5,6 @@ resources:
   - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
   - poddisruptionbudget.yaml
   - networkpolicy.yaml
   - vault-resources.yaml

@@ -91,7 +91,17 @@ jobs:
           OIDC_JWKS_URL: ${{ vars.MATTERCODEX_OIDC_JWKS_URL }}
           OIDC_CONNECT_ADDRESS: ${{ vars.MATTERCODEX_OIDC_CONNECT_ADDRESS }}
           OIDC_TLS_SERVER_NAME: ${{ vars.MATTERCODEX_OIDC_TLS_SERVER_NAME }}
+          PROMOTED_PULL_HOST: ${{ vars.MATTERCODEX_PROMOTED_PULL_HOST }}
           KUBERNETES_API_SERVICE_CIDR: ${{ vars.MATTERCODEX_KUBERNETES_API_SERVICE_CIDR }}
+          INGRESS_CLASS: ${{ vars.MATTERCODEX_INGRESS_CLASS }}
+          CLUSTER_ISSUER: ${{ vars.MATTERCODEX_CLUSTER_ISSUER }}
+          INGRESS_NAMESPACE: ${{ vars.MATTERCODEX_INGRESS_NAMESPACE }}
+          INGRESS_POD_NAME: ${{ vars.MATTERCODEX_INGRESS_POD_NAME }}
+          OIDC_NAMESPACE: ${{ vars.MATTERCODEX_OIDC_NAMESPACE }}
+          OIDC_POD_NAME: ${{ vars.MATTERCODEX_OIDC_POD_NAME }}
+          OIDC_POD_COMPONENT: ${{ vars.MATTERCODEX_OIDC_POD_COMPONENT }}
+          OIDC_TARGET_PORT: ${{ vars.MATTERCODEX_OIDC_TARGET_PORT }}
+          DISABLE_OBSERVABILITY: ${{ vars.MATTERCODEX_DISABLE_OBSERVABILITY }}
           MATTERMOST_HOST: ${{ vars.MATTERCODEX_MATTERMOST_HOST }}
           DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
         run: |
@@ -106,11 +116,19 @@ jobs:
             --oidc-issuer "$OIDC_ISSUER" --oidc-jwks-url "$OIDC_JWKS_URL" \
             --oidc-connect-address "$OIDC_CONNECT_ADDRESS" \
             --oidc-tls-server-name "$OIDC_TLS_SERVER_NAME" \
-            --kubernetes-api-service-cidr "$KUBERNETES_API_SERVICE_CIDR"
+            --promoted-pull-host "$PROMOTED_PULL_HOST" \
+            --kubernetes-api-service-cidr "$KUBERNETES_API_SERVICE_CIDR" \
+            --ingress-class "$INGRESS_CLASS" --cluster-issuer "$CLUSTER_ISSUER" \
+            --ingress-namespace "$INGRESS_NAMESPACE" --ingress-pod-name "$INGRESS_POD_NAME" \
+            --oidc-namespace "$OIDC_NAMESPACE" --oidc-pod-name "$OIDC_POD_NAME" \
+            --oidc-pod-component "$OIDC_POD_COMPONENT" --oidc-target-port "$OIDC_TARGET_PORT"
           )
           if [[ "$DEPLOYMENT_PROFILE" == "web-with-mattermost" ]]; then
             test -n "$MATTERMOST_HOST"
             render_arguments+=(--mattermost-host "$MATTERMOST_HOST")
+          fi
+          if [[ "$DISABLE_OBSERVABILITY" == "true" ]]; then
+            render_arguments+=(--disable-observability)
           fi
           tools/release/render-web-only.sh "${render_arguments[@]}"
           sha256sum release.yaml | awk '{print $1}' > release.sha256

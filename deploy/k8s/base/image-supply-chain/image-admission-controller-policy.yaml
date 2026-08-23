@@ -60,11 +60,17 @@ spec:
     - name: issuerEnvironmentNames
       expression: >-
         variables.protected ? variables.issuer.env.map(item, item.name).join(',') : ''
+    - name: grantAgent
+      expression: >-
+        variables.protected ? variables.pod.initContainers[2] : variables.main
+    - name: grantEnvironmentNames
+      expression: >-
+        variables.protected ? variables.grantAgent.env.map(item, item.name).join(',') : ''
     - name: csiVolumes
       expression: >-
         variables.pod.volumes.filter(volume,
           volume.name in ['identity', 'authority-manifest-trust',
-            'authority-proof-trust', 'authority-issuer-key', 'application-grant'])
+            'authority-proof-trust', 'authority-issuer-key', 'platform-worker-grant-signer'])
   validations:
     - expression: >-
         object.metadata.namespace == 'mattercodex-system' &&
@@ -181,9 +187,10 @@ spec:
     - expression: >-
         variables.initNames ==
           (variables.protected ?
-            'internal-rpc-authority-socket-init,internal-rpc-authority-issuer' : '') &&
+            'internal-rpc-authority-socket-init,internal-rpc-authority-issuer,' +
+            'platform-worker-grant-agent' : '') &&
         (!variables.protected ||
-          (variables.pod.initContainers.size() == 2 &&
+          (variables.pod.initContainers.size() == 3 &&
            variables.pod.initContainers[0].image == params.data.authorityImage &&
            variables.pod.initContainers[0].command ==
              ['/usr/local/bin/internal-rpc-authority-socket-init'] &&
@@ -193,6 +200,11 @@ spec:
              ['/usr/local/bin/internal-rpc-authority-issuer'] &&
            variables.pod.initContainers[1].name == 'internal-rpc-authority-issuer' &&
            variables.pod.initContainers[1].restartPolicy == 'Always' &&
+           variables.pod.initContainers[2].image == params.data.authorityImage &&
+           variables.pod.initContainers[2].command ==
+             ['/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent'] &&
+           variables.pod.initContainers[2].name == 'platform-worker-grant-agent' &&
+           variables.pod.initContainers[2].restartPolicy == 'Always' &&
            variables.pod.initContainers.all(container,
              container.securityContext.runAsNonRoot == true &&
              container.securityContext.allowPrivilegeEscalation == false &&
@@ -261,11 +273,25 @@ spec:
               false)))
       message: Image admission authority sidecar configuration differs from the exact contract.
     - expression: >-
+        !variables.protected ||
+        (variables.grantEnvironmentNames ==
+          'PLATFORM_WORKER_GRANT_WORKLOAD_ID,PLATFORM_WORKER_GRANT_OUTPUT_FILE' &&
+         variables.grantAgent.env.all(item,
+           !has(item.valueFrom) && has(item.value) &&
+           (item.name == 'PLATFORM_WORKER_GRANT_WORKLOAD_ID' ?
+              item.value == variables.workload :
+            item.name == 'PLATFORM_WORKER_GRANT_OUTPUT_FILE' ?
+              item.value == '/application-grant/application-grant.jws' : false)) &&
+         variables.grantAgent.volumeMounts.map(mount, mount.name).join(',') ==
+           'application-grant,platform-worker-grant-signer')
+      message: Image admission grant sidecar configuration differs from the exact contract.
+    - expression: >-
         variables.volumeNames ==
           (variables.protected ?
             'work,tmp,script,identity,authority-sockets,authority-snapshot,' +
             'authority-manifest-trust,authority-proof-trust,authority-issuer-key,' +
             'authority-workload-tls,control-plane-ca,application-grant,' +
+            'platform-worker-grant-signer,' +
             'authority-readback-ca,authority-vault-ca,authority-vault-token,' +
             'authority-restore-ca,authority-restore-certificate,' +
             'authority-restore-role-trust,authority-postgresql,' +
@@ -328,10 +354,12 @@ spec:
             variables.protected && has(volume.configMap) &&
             volume.configMap.name == 'mattercodex-internal-ca' :
           volume.name == 'application-grant' ?
+            variables.protected && has(volume.emptyDir) &&
+            string(volume.emptyDir.sizeLimit) == '1Mi' :
+          volume.name == 'platform-worker-grant-signer' ?
             variables.protected && has(volume.csi) &&
             volume.csi.volumeAttributes['secretProviderClass'] ==
-              (variables.phase == 'promote' ? 'image-promotion-application-grant' :
-               'image-admission-application-grant') :
+              variables.workload + '-platform-worker-grant-signer' :
           volume.name == 'authority-readback-ca' ?
             variables.protected && has(volume.configMap) &&
             volume.configMap.name == 'internal-rpc-authority-readback-attestor-ca' :
@@ -421,7 +449,7 @@ spec:
           '^[a-f0-9]{64}$')
       message: Image admission workspace identity is outside the owner contract.
     - expression: >-
-        object.spec.accessModes == ['ReadWriteMany'] &&
+        object.spec.accessModes == ['ReadWriteOnce'] &&
         string(object.spec.resources.requests['storage']) == '2Gi' &&
         !has(object.spec.volumeName) &&
         !has(object.spec.selector) &&

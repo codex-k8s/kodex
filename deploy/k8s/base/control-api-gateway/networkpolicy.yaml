@@ -16,10 +16,6 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
-      ports: [{protocol: TCP, port: 8443}]
-    - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: staff-control-center
@@ -43,6 +39,13 @@ spec:
     - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
       ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __MATTERCODEX_OIDC_NAMESPACE__}}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: __MATTERCODEX_OIDC_POD_NAME__
+              app.kubernetes.io/component: __MATTERCODEX_OIDC_POD_COMPONENT__
+      ports: [{protocol: TCP, port: __MATTERCODEX_OIDC_TARGET_PORT__}]
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
           podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}

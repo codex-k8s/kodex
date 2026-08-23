@@ -12,7 +12,13 @@ usage() {
     '  --public-host <dns> --public-origin <https://dns>' \
     '  --oidc-issuer <https-url> --oidc-jwks-url <https-url>' \
     '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
+    '  --promoted-pull-host <dns>' \
     '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' \
+    '  --ingress-class <name> --cluster-issuer <name>' \
+    '  --ingress-namespace <name> --ingress-pod-name <label-value>' \
+    '  --oidc-namespace <name> --oidc-pod-name <label-value>' \
+    '  --oidc-pod-component <label-value> --oidc-target-port <port>' \
+    '  [--disable-observability]' \
     '  [--profile <web-only|web-with-mattermost>]' \
     '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
@@ -26,7 +32,17 @@ oidc_issuer=""
 oidc_jwks_url=""
 oidc_connect_address=""
 oidc_tls_server_name=""
+promoted_pull_host=""
 kubernetes_api_service_cidr=""
+ingress_class=""
+cluster_issuer=""
+ingress_namespace=""
+ingress_pod_name=""
+oidc_namespace=""
+oidc_pod_name=""
+oidc_pod_component=""
+oidc_target_port=""
+disable_observability=false
 mattermost_host=""
 profile="web-only"
 
@@ -41,7 +57,17 @@ while (($# > 0)); do
     --oidc-jwks-url) oidc_jwks_url="${2:-}"; shift 2 ;;
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-tls-server-name) oidc_tls_server_name="${2:-}"; shift 2 ;;
+    --promoted-pull-host) promoted_pull_host="${2:-}"; shift 2 ;;
     --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
+    --ingress-class) ingress_class="${2:-}"; shift 2 ;;
+    --cluster-issuer) cluster_issuer="${2:-}"; shift 2 ;;
+    --ingress-namespace) ingress_namespace="${2:-}"; shift 2 ;;
+    --ingress-pod-name) ingress_pod_name="${2:-}"; shift 2 ;;
+    --oidc-namespace) oidc_namespace="${2:-}"; shift 2 ;;
+    --oidc-pod-name) oidc_pod_name="${2:-}"; shift 2 ;;
+    --oidc-pod-component) oidc_pod_component="${2:-}"; shift 2 ;;
+    --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
+    --disable-observability) disable_observability=true; shift ;;
     --mattermost-host) mattermost_host="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -61,6 +87,14 @@ done
 [[ "$oidc_connect_address" =~ ^[a-zA-Z0-9._-]+:[1-9][0-9]{0,4}$ ]] || fail 'OIDC connect address is invalid'
 [[ "$oidc_tls_server_name" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] ||
   fail 'OIDC TLS server name is invalid'
+[[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$promoted_pull_host" == *.* ]] ||
+  fail 'promoted pull host is invalid'
+for dns_label in "$ingress_class" "$cluster_issuer" "$ingress_namespace" "$ingress_pod_name" \
+  "$oidc_namespace" "$oidc_pod_name" "$oidc_pod_component"; do
+  [[ "$dns_label" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'deployment selector is invalid'
+done
+[[ "$oidc_target_port" =~ ^[1-9][0-9]{0,4}$ && "$oidc_target_port" -le 65535 ]] ||
+  fail 'OIDC target port is invalid'
 if [[ "$profile" == "web-with-mattermost" ]]; then
   [[ "$mattermost_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$mattermost_host" == *.* ]] ||
     fail 'Mattermost host is required and must be an exact lowercase DNS name'
@@ -99,7 +133,6 @@ node_pull=$(jq -er '.registry.node_pull' "$lock_file")
 repository_prefix=$(jq -er '.registry.repository_prefix' "$lock_file")
 release_source_registry=${registry_push%%/*}
 release_source_hostname=${release_source_registry%:443}
-pull_registry_host=${node_pull%%/*}
 agent_runner_ref=$(jq -er '.images[] | select(.component == "agent-runner") | .pull_ref' "$lock_file")
 agent_runner_digest=$(jq -er '.images[] | select(.component == "agent-runner") | .digest' "$lock_file")
 role_base_documents_digest=$(jq -er '.images[] | select(.component == "role-base-documents") | .digest' "$lock_file")
@@ -120,7 +153,7 @@ OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_CONNECT_ADDRESS="$oidc_connect_address" \
 OIDC_TLS_SERVER_NAME="$oidc_tls_server_name" \
 OIDC_ORIGIN="$oidc_origin" \
-PULL_REGISTRY_HOST="$pull_registry_host" \
+PULL_REGISTRY_HOST="$promoted_pull_host" \
 KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__MATTERCODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
@@ -132,6 +165,52 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
     sub("__MATTERCODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
     sub("__MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR)) |
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
+  )
+' "$rendered"
+
+if [[ "$disable_observability" == true ]]; then
+  yq -i '
+    with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Job");
+      .spec.template.spec.containers[] |= (
+        .env = ((.env // []) | map(select(.name != "OTEL_SDK_DISABLED")) +
+          [{"name":"OTEL_SDK_DISABLED","value":"true"}])
+      )
+    ) |
+    with(select(.kind == "CronJob");
+      .spec.jobTemplate.spec.template.spec.containers[] |= (
+        .env = ((.env // []) | map(select(.name != "OTEL_SDK_DISABLED")) +
+          [{"name":"OTEL_SDK_DISABLED","value":"true"}])
+      )
+    )
+  ' "$rendered"
+  yq -i 'select(.kind != "PodMonitor" and .kind != "ServiceMonitor" and .kind != "PrometheusRule")' \
+    "$rendered"
+fi
+
+INGRESS_CLASS="$ingress_class" \
+CLUSTER_ISSUER="$cluster_issuer" \
+INGRESS_NAMESPACE="$ingress_namespace" \
+INGRESS_POD_NAME="$ingress_pod_name" \
+OIDC_NAMESPACE="$oidc_namespace" \
+OIDC_POD_NAME="$oidc_pod_name" \
+OIDC_POD_COMPONENT="$oidc_pod_component" \
+OIDC_TARGET_PORT="$oidc_target_port" yq -i '
+  (.. | select(tag == "!!str")) |= (
+    sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__MATTERCODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
+    sub("__MATTERCODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
+    sub("__MATTERCODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME)) |
+    sub("__MATTERCODEX_OIDC_NAMESPACE__"; strenv(OIDC_NAMESPACE)) |
+    sub("__MATTERCODEX_OIDC_POD_NAME__"; strenv(OIDC_POD_NAME)) |
+    sub("__MATTERCODEX_OIDC_POD_COMPONENT__"; strenv(OIDC_POD_COMPONENT))
+  ) |
+  with(select(.kind == "NetworkPolicy" and (
+      .metadata.name == "control-api-gateway-exact-runtime-paths" or
+      .metadata.name == "control-plane-exact-runtime-paths"
+    ));
+    (.spec.egress[] |
+      select(.to[]?.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == strenv(OIDC_NAMESPACE)) |
+      .ports[0].port) = (strenv(OIDC_TARGET_PORT) | tonumber)
   )
 ' "$rendered"
 
@@ -147,7 +226,7 @@ LOCK_DIGEST="$lock_sha256" \
 REGISTRY_PUSH="$registry_push" \
 NODE_PULL="$node_pull" \
 REPOSITORY_PREFIX="$repository_prefix" \
-PULL_REGISTRY_HOST="$pull_registry_host" \
+PULL_REGISTRY_HOST="$promoted_pull_host" \
 AGENT_RUNNER_REF="$agent_runner_ref" \
 AGENT_RUNNER_DIGEST="$agent_runner_digest" \
 AUTHORITY_REF="$authority_ref" \
@@ -169,7 +248,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.promotedPullRepository = (strenv(NODE_PULL) + "/" + strenv(REPOSITORY_PREFIX) + "/roles") |
     .data.pullRegistryHost = strenv(PULL_REGISTRY_HOST) |
     .data.pullCredentialGeneration = "1" |
-    .data.nodeReadbackImage = strenv(AGENT_RUNNER_REF) |
+    .data.nodeReadbackImage = (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) + "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST)) |
     .data.roleImageInputRepository = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs" |
     .data.policyRevision = "1" |
     .data.policySHA256 = strenv(LOCK_DIGEST) |
@@ -289,7 +368,7 @@ yq -o=json '.' "$rendered" | jq -sc '
 if rg -n 'sha256:0{64}' "$output" >/dev/null; then
   fail 'render contains a zero image digest'
 fi
-if rg -n '__MATTERCODEX_[A-Z0-9_]+__|admission-tools\.invalid|registry-pull\.invalid|https://control\.invalid' "$output" >/dev/null; then
+if rg -n '__MATTERCODEX_[A-Z0-9_]+__|admission-tools\.invalid|registry-pull\.invalid|https://control\.invalid|control-api\.mattercodex\.local.*Ingress' "$output" >/dev/null; then
   fail 'render contains an unresolved deployment placeholder'
 fi
 if rg -n '\$\{[A-Z][A-Z0-9_]*IMAGE[A-Z0-9_]*\}' "$output" >/dev/null; then

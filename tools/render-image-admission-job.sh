@@ -96,7 +96,7 @@ metadata:
   annotations:
     mattercodex.dev/admission-run-sha256: ${run_sha256}
 spec:
-  accessModes: [ReadWriteMany]
+  accessModes: [ReadWriteOnce]
   resources:
     requests: {storage: 2Gi}
 EOF
@@ -104,13 +104,13 @@ EOF
 
 emit_job() {
   local phase=$1 service_account=$2 identity_spc=$3 protected=${4:-false}
-  local workload="" grant_spc=""
+  local workload="" grant_signer_spc=""
   if [[ $phase == claim || $phase == admit ]]; then
     workload=image-admission
-    grant_spc=image-admission-application-grant
+    grant_signer_spc=image-admission-platform-worker-grant-signer
   elif [[ $phase == promote ]]; then
     workload=image-promotion
-    grant_spc=image-promotion-application-grant
+    grant_signer_spc=image-promotion-platform-worker-grant-signer
   fi
   cat <<EOF
 ---
@@ -213,6 +213,21 @@ EOF
             - {name: authority-postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
             - {name: authority-observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
             - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+        - name: platform-worker-grant-agent
+          restartPolicy: Always
+          image: ${authority_image}
+          command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
+          env:
+            - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: "${workload}"}
+            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /application-grant/application-grant.jws}
+          startupProbe: {httpGet: {path: /readyz, port: 9093}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: 9093}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: 9093}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3}
+          resources: {requests: {cpu: 5m, memory: 16Mi}, limits: {cpu: 100m, memory: 48Mi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 29004, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: application-grant, mountPath: /application-grant}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
 EOF
   fi
   cat <<EOF
@@ -301,7 +316,8 @@ EOF
         - {name: authority-issuer-key, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-issuer-key}}}
         - {name: authority-workload-tls, secret: {secretName: internal-rpc-authority-${workload}-workload-tls, defaultMode: 0440}}
         - {name: control-plane-ca, configMap: {name: mattercodex-internal-ca, defaultMode: 0440}}
-        - {name: application-grant, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_spc}}}}
+        - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
+        - {name: platform-worker-grant-signer, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_signer_spc}}}}
         - {name: authority-readback-ca, configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}}
         - {name: authority-vault-ca, configMap: {name: internal-rpc-authority-vault-ca, defaultMode: 0440}}
         - name: authority-vault-token

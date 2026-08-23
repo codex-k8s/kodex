@@ -8,6 +8,7 @@ resources:
   - role-environments.yaml
   - serviceaccount.yaml
   - registry.yaml
+  - registry-ingress-route.yaml
   - staging-read-registry.yaml
   - evidence-registry.yaml
   - registry-tls-secret-provider-class.yaml

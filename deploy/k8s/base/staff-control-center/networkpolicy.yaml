@@ -16,8 +16,8 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__}}
       ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1

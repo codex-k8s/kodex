@@ -113,8 +113,10 @@ render_tools_image=admission-tools.invalid/mattercodex/image-admission-tools@sha
 render_admission_image=mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
 [[ $(grep -F -c "common_name: $render_pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
-[[ $(grep -F -c '192.0.2.0/32' "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c '2001:db8::/128' "$temporary_directory/supply.yaml") -eq 2 ]]
+grep -Fq 'kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__' \
+  "$temporary_directory/supply.yaml"
+grep -Fq 'app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__' \
+  "$temporary_directory/supply.yaml"
 [[ $(grep -F -c "$render_tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
 for binary in registry-pull-authorizer registry-write-authorizer node-pull-bootstrap; do
   binary_images=$(MC195_BINARY="/usr/local/bin/$binary" yq eval-all '

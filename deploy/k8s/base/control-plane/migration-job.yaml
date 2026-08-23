@@ -67,6 +67,9 @@ spec:
             - name: postgres-migration
               mountPath: /var/run/secrets/mattercodex/control-plane/postgres-migration
               readOnly: true
+            - name: postgres-ca
+              mountPath: /var/run/config/mattercodex/control-plane/postgres
+              readOnly: true
       volumes:
         - name: postgres-migration
           csi:
@@ -74,3 +77,10 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-postgres-migration
+        - name: postgres-ca
+          configMap:
+            name: control-plane-postgresql-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem

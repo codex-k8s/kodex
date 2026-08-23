@@ -90,6 +90,17 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
+              kubernetes.io/metadata.name: __MATTERCODEX_OIDC_NAMESPACE__
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: __MATTERCODEX_OIDC_POD_NAME__
+              app.kubernetes.io/component: __MATTERCODEX_OIDC_POD_COMPONENT__
+      ports:
+        - protocol: TCP
+          port: __MATTERCODEX_OIDC_TARGET_PORT__
+    - to:
+        - namespaceSelector:
+            matchLabels:
               kubernetes.io/metadata.name: observability
           podSelector:
             matchLabels:
