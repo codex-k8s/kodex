@@ -48,5 +48,11 @@ vault_endpoint='VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:82
 if rg -q 'VAULT_ADDR=https://(127\.0\.0\.1|localhost)' "$vault_initializer"; then
   fail 'Vault bootstrap uses a loopback hostname outside the certificate SAN contract'
 fi
+grep -Fq 'status_json=$(vault status -format=json) || status_code=$?' "$vault_initializer" ||
+  fail 'Vault status exit code is not captured explicitly'
+grep -Fq '0|2) printf "%s\n" "$status_json" ;;' "$vault_initializer" ||
+  fail 'Vault bootstrap does not accept the documented sealed status code'
+grep -Fq '*) exit "$status_code" ;;' "$vault_initializer" ||
+  fail 'Vault bootstrap does not fail closed for unexpected status errors'
 
 printf 'Service infrastructure bootstrap checks completed\n'
