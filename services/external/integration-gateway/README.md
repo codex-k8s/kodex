@@ -1,3 +1,13 @@
+---
+id: EXT-MC-003
+title: Integration gateway
+type: service
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # integration-gateway
 
 `integration-gateway` — stateless worker типизированных внешних capabilities.

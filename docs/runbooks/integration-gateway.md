@@ -26,7 +26,7 @@ Runtime вызывает только зарегистрированный typed
 - IntegrationDefinition/capability schema revision;
 - active Connection metadata и credential revision;
 - server-owned Agent/Workflow grant;
-- risk/approval policy;
+- risk и наличие явного grant;
 - application grant, mTLS peer, method, fence и replay watermark.
 
 Gateway не предоставляет universal HTTP/API proxy. Provider credentials
@@ -35,17 +35,20 @@ session-scoped MCP binding. Raw provider response не выходит в audit/e
 
 ## Probes
 
-`/healthz` проверяет процесс, `/readyz` — локальный config/credential boundary,
-authority sidecar и egress policy snapshot. Control-plane и external providers
-не вызываются на Kubernetes probe. Connection test является отдельной
-пользовательской операцией и возвращает typed result.
+`/healthz` проверяет процесс, `/readyz` читает локальный снимок issuer sidecar.
+Control-plane, credential конкретного Connection, egress gateway и external
+providers не вызываются на Kubernetes probe. Их фактическая доступность
+проверяется рабочим invocation либо отдельной пользовательской операцией test.
 
-## Effect и approval
+## Effect и grant
 
-Один provider effect связывается с exact invocation/attempt/fence. Retry с тем
-же intent не выполняет внешний эффект повторно после durable receipt. Опасная
-операция открывает server-owned Human Gate; решение в web продолжает effect один
-раз. Expired/stale grant или изменённый input закрыто отклоняется.
+Один provider effect связывается с exact invocation/attempt/fence. После
+durable completion receipt тот же invocation не исполняется повторно.
+Поставляемые definitions содержат только типизированные read capabilities;
+write/destructive adapters в текущий каталог не входят. Любой новый такой
+adapter обязан сначала определить отдельную approval policy и Human Gate
+lifecycle, а не наследовать разрешение read-adapter. Expired/stale grant или
+изменённый input закрыто отклоняется.
 
 ## Диагностика
 
@@ -54,7 +57,6 @@ authority sidecar и egress policy snapshot. Control-plane и external providers
 | definition unavailable | проверить catalog revision и enabled state |
 | connection unavailable | проверить metadata/credential masked state и отдельный test |
 | grant required | выдать exact capability Agent/Workflow через Control Center |
-| approval required | разрешить Human Gate в web |
 | provider unavailable | проверить exact egress host/SNI/CA и provider status |
 | replay or fence conflict | не повторять вручную; сверить authoritative receipt |
 
