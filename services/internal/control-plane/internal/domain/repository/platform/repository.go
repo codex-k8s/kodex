@@ -123,6 +123,7 @@ type Repository interface {
 	ListAuditEvents(context.Context, value.Principal, query.Filter) ([]entity.AuditEvent, string, error)
 	Execute(context.Context, command.Command) (command.Result, error)
 	ReconcileWarmRuntime(context.Context, value.Principal, string) (entity.SystemAssistant, map[string]any, bool, error)
+	ReportWarmRuntime(context.Context, value.Principal, command.WarmRuntimeInput) (entity.SystemAssistant, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ClaimIntegrationConnectionTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)

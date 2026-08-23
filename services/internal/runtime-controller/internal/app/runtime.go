@@ -110,7 +110,7 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 func (runtime *runtime) reportWarm(ctx context.Context, revision string, state controlplanev1.AssistantRuntimeState, code string) error {
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
-	_, err := runtime.control.Runtime.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(revision, state.String())}, WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
+	_, err := runtime.control.Runtime.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
 	return err
 }
 

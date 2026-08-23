@@ -4,7 +4,7 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.0.2
+version: 1.0.3
 updated: 2026-08-23
 ---
 
@@ -77,6 +77,19 @@ assistant readiness означает, что exact desired prompt/runtime revisi
 secret-store authority; typed MCP operation повторно проверяет текущего User.
 `Failed`/`Succeeded` warm Pod и immutable ticket другого controller instance или
 revision являются stale materialization и заменяются reconciler-ом.
+
+Повторный bootstrap сверяет digest текущего immutable core prompt. Более новая
+поставляемая revision создаёт следующую published instruction version,
+forward-only меняет desired runtime revision, переводит assistant в
+`RECOVERING` и фиксирует системный audit. Rollback revision и совпавшая revision
+с другим digest закрывают startup.
+
+Warm report связан с exact desired revision и controller instance. Повторный
+report того же state обновляет только `last_heartbeat_at`, не создаёт новые
+idempotency receipts, audit и outbox events и не увеличивает aggregate version.
+Смена state/revision/instance атомарно увеличивает version и публикует одно
+событие. Поэтому heartbeat действительно поддерживает readiness и не создаёт
+периодический поток ложных configuration changes.
 
 ## Health/readiness
 

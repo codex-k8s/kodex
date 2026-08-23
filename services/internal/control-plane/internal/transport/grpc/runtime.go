@@ -264,12 +264,16 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 }
 
 func (server *Server) ReportWarmRuntime(ctx context.Context, request *controlplanev1.ReportWarmRuntimeRequest) (*controlplanev1.ReportWarmRuntimeResponse, error) {
-	payload := command.WarmRuntimeInput{WorkloadInstance: request.GetWorkloadInstance(), RuntimeRevision: request.GetRuntimeRevision(), State: assistantRuntimeState(request.GetState()), SafeErrorCode: request.GetSafeErrorCode()}
-	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName, command.ReportWarmRuntime, request.GetMutation(), payload)
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_ReportWarmRuntime_FullMethodName)
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.ReportWarmRuntimeResponse{Assistant: castAssistant(*result.Assistant)}, nil
+	payload := command.WarmRuntimeInput{WorkloadInstance: request.GetWorkloadInstance(), RuntimeRevision: request.GetRuntimeRevision(), State: assistantRuntimeState(request.GetState()), SafeErrorCode: request.GetSafeErrorCode()}
+	assistant, err := server.service.ReportWarmRuntime(ctx, p, payload)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.ReportWarmRuntimeResponse{Assistant: castAssistant(assistant)}, nil
 }
 
 func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlplanev1.ClaimDueSchedulesRequest) (*controlplanev1.ClaimDueSchedulesResponse, error) {

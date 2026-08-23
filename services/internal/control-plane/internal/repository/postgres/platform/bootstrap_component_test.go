@@ -50,6 +50,8 @@ var (
 	bootstrapComponentScheduleTargetStateReadbackQuery string
 	//go:embed testdata/sql/bootstrap_component_core_prompt_upgrade_readback.sql
 	bootstrapComponentCorePromptUpgradeReadbackQuery string
+	//go:embed testdata/sql/bootstrap_component_warm_heartbeat_counts.sql
+	bootstrapComponentWarmHeartbeatCountsQuery string
 )
 
 func TestBootstrapComponent(t *testing.T) {
@@ -1503,15 +1505,44 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.plan.propose",
 	}, "runtime-controller")
+	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct platform service: %v", err)
 	}
-	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportWarmRuntime, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-ready-1"}, Payload: command.WarmRuntimeInput{
-			WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
-		}}); err != nil {
+	firstHeartbeat, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
+	})
+	if err != nil {
 		t.Fatalf("report assistant readiness: %v", err)
+	}
+	var firstAuditCount, firstOutboxCount int
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentWarmHeartbeatCountsQuery).Scan(&firstAuditCount, &firstOutboxCount); err != nil {
+		t.Fatalf("read first warm heartbeat effects: %v", err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	secondHeartbeat, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
+	})
+	if err != nil {
+		t.Fatalf("repeat assistant heartbeat: %v", err)
+	}
+	var secondAuditCount, secondOutboxCount int
+	if err := repository.pool.QueryRow(ctx, bootstrapComponentWarmHeartbeatCountsQuery).Scan(&secondAuditCount, &secondOutboxCount); err != nil {
+		t.Fatalf("read repeated warm heartbeat effects: %v", err)
+	}
+	if firstHeartbeat.LastHeartbeatAt == nil || secondHeartbeat.LastHeartbeatAt == nil ||
+		!secondHeartbeat.LastHeartbeatAt.After(*firstHeartbeat.LastHeartbeatAt) ||
+		secondHeartbeat.Version != firstHeartbeat.Version || firstAuditCount != secondAuditCount || firstOutboxCount != secondOutboxCount {
+		t.Fatalf("repeated warm heartbeat was not effect-free: first=%#v second=%#v audit=%d/%d outbox=%d/%d", firstHeartbeat, secondHeartbeat, firstAuditCount, secondAuditCount, firstOutboxCount, secondOutboxCount)
+	}
+	if _, err := service.ReportWarmRuntime(ctx, worker, command.WarmRuntimeInput{
+		WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("non-heartbeat operation reported warm runtime: %v", err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-conversation-1"}, Payload: command.AssistantConversationInput{Title: "Configure sales team"}})

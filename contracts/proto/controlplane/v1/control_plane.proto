@@ -1812,7 +1812,7 @@ message ReconcileWarmRuntimeResponse {
   bool materialization_required = 3;
 }
 message ReportWarmRuntimeRequest {
-  MutationContext mutation = 1;
+  reserved 1;
   string workload_instance = 2;
   string runtime_revision = 3;
   AssistantRuntimeState state = 4;

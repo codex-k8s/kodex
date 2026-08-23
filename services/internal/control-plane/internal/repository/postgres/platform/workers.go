@@ -93,24 +93,65 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	return assistant, snapshot, required, nil
 }
 
-func (repository *Repository) reportWarmRuntime(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
-	payload, ok := input.Payload.(command.WarmRuntimeInput)
-	if !ok || payload.WorkloadInstance == "" || payload.RuntimeRevision == "" || !contains([]string{"STARTING", "READY", "BUSY", "RECOVERING", "UNAVAILABLE"}, payload.State) {
-		return commandOutcome{}, errs.ErrInvalid
+func (repository *Repository) ReportWarmRuntime(ctx context.Context, principal value.Principal, payload command.WarmRuntimeInput) (entity.SystemAssistant, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return entity.SystemAssistant{}, err
 	}
+	if principal.CallerWorkload != "runtime-controller" || principal.Permission != "platform.runtime.warm.report" ||
+		payload.WorkloadInstance == "" || payload.RuntimeRevision == "" ||
+		!contains([]string{"STARTING", "READY", "BUSY", "RECOVERING", "UNAVAILABLE"}, payload.State) {
+		return entity.SystemAssistant{}, errs.ErrForbidden
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return entity.SystemAssistant{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	var assistant entity.SystemAssistant
 	var limits []byte
-	err := tx.QueryRow(ctx, queryWorkersReportwarmruntimeUpdateAssistantRuntimeRuntimeStateRuntimeRevisionWarmInstanceRef, scope.organizationID, payload.WorkloadInstance, payload.RuntimeRevision, payload.State).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt)
+	var changed bool
+	err = tx.QueryRow(ctx, queryWorkersReportwarmruntimeUpdateAssistantRuntimeRuntimeStateRuntimeRevisionWarmInstanceRef, pgx.StrictNamedArgs{
+		"organization_id":   scope.organizationID,
+		"workload_instance": payload.WorkloadInstance,
+		"runtime_revision":  payload.RuntimeRevision,
+		"runtime_state":     payload.State,
+	}).Scan(&assistant.StableKey, &assistant.CorePromptRevision, &assistant.OwnerInstructions, &assistant.RuntimeState, &assistant.RuntimeRevision, &assistant.DesiredRuntimeRevision, &assistant.WarmSessionRef, &limits, &assistant.LastHeartbeatAt, &assistant.Version, &assistant.UpdatedAt, &changed)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return commandOutcome{}, errs.ErrConflict
+		return entity.SystemAssistant{}, errs.ErrConflict
 	}
 	if err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+		return entity.SystemAssistant{}, errs.ErrUnavailable
 	}
 	_ = json.Unmarshal(limits, &assistant.ResourceLimits)
 	assistant.System = true
 	assistant.Ready = contains([]string{"READY", "BUSY"}, payload.State)
-	return commandOutcome{result: command.Result{Assistant: &assistant}, resourceKind: "SYSTEM_ASSISTANT", resourceRef: assistant.StableKey, summary: "i18n:SYSTEM_ASSISTANT_HEARTBEAT_RECORDED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+	if changed {
+		auditRef, refErr := newRef("aud")
+		if refErr != nil {
+			return entity.SystemAssistant{}, refErr
+		}
+		if _, err := tx.Exec(ctx, queryCommandsExecuteInsertAuditEventsRefProjectIdAction,
+			auditRef,
+			scope.organizationID,
+			nil,
+			scope.actorID,
+			"controlplane.report_warm_runtime",
+			"SYSTEM_ASSISTANT",
+			assistant.StableKey,
+			"i18n:SYSTEM_ASSISTANT_HEARTBEAT_RECORDED",
+			principal.CorrelationRef,
+		); err != nil {
+			return entity.SystemAssistant{}, errs.ErrUnavailable
+		}
+		if err := repository.emitPlatformEvent(ctx, tx, scope, "SYSTEM_ASSISTANT_CHANGED", "", assistant.StableKey, "i18n:SYSTEM_ASSISTANT_HEARTBEAT_RECORDED"); err != nil {
+			return entity.SystemAssistant{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.SystemAssistant{}, errs.ErrConflict
+	}
+	return assistant, nil
 }
 
 func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {

@@ -379,6 +379,16 @@ func (service *Service) ReconcileWarmRuntime(ctx context.Context, p value.Princi
 	}
 	return service.repository.ReconcileWarmRuntime(ctx, p, instance)
 }
+func (service *Service) ReportWarmRuntime(ctx context.Context, p value.Principal, input command.WarmRuntimeInput) (entity.SystemAssistant, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.SystemAssistant{}, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.warm.report" {
+		return entity.SystemAssistant{}, errs.ErrForbidden
+	}
+	return service.repository.ReportWarmRuntime(ctx, p, input)
+}
 func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -466,7 +476,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAssistantConversation, command.AddAssistantTurn, command.ApplyAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback, command.ReportWarmRuntime,
+		command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback,
 		command.MaterializeOccurrence, command.CompleteOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
 		command.AcceptInteractionMessage:

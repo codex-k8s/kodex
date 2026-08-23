@@ -58,7 +58,6 @@ const (
 	DelegateExecution             Kind = "DELEGATE_EXECUTION"
 	ProposeAssistantPlan          Kind = "PROPOSE_ASSISTANT_PLAN"
 	DeliverCallback               Kind = "DELIVER_CALLBACK"
-	ReportWarmRuntime             Kind = "REPORT_WARM_RUNTIME"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
 	CompleteOccurrence            Kind = "COMPLETE_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"

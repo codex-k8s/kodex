@@ -154,8 +154,6 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAssistant(ctx, tx, scope, input)
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CompleteExecution, command.DelegateExecution, command.ProposeAssistantPlan, command.DeliverCallback:
 		return repository.changeExecution(ctx, tx, scope, input)
-	case command.ReportWarmRuntime:
-		return repository.reportWarmRuntime(ctx, tx, scope, input)
 	case command.MaterializeOccurrence, command.CompleteOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:
