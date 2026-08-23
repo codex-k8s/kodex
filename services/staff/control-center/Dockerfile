@@ -7,7 +7,8 @@ WORKDIR /workspace/services/staff/control-center
 COPY services/staff/control-center/package.json services/staff/control-center/package-lock.json ./
 RUN npm ci --ignore-scripts
 
-COPY services/staff/control-center/index.html services/staff/control-center/openapi-ts.config.mjs services/staff/control-center/tsconfig.app.json services/staff/control-center/tsconfig.json services/staff/control-center/tsconfig.node.json services/staff/control-center/vite.config.ts ./
+COPY services/staff/control-center/index.html services/staff/control-center/eslint.config.js services/staff/control-center/openapi-ts.config.mjs services/staff/control-center/playwright.config.ts services/staff/control-center/playwright.auth.config.ts services/staff/control-center/tsconfig.app.json services/staff/control-center/tsconfig.e2e.json services/staff/control-center/tsconfig.json services/staff/control-center/tsconfig.node.json services/staff/control-center/vite.config.ts ./
+COPY services/staff/control-center/e2e/ e2e/
 COPY services/staff/control-center/public/ public/
 COPY services/staff/control-center/src/ src/
 
