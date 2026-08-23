@@ -34,9 +34,10 @@ stderr, Codex JSONL, provider payload, secret и file body запрещены.
 
 ## Локализация ошибок
 
-Backend возвращает stable code/message key и безопасные parameters. PWA выбирает
-текст из RU/EN YAML по доверенной locale пользователя. Gateway не возвращает
-raw downstream message или stack trace.
+Backend возвращает stable code/message key и безопасные parameters. Go gateway
+выбирает текст из embedded RU/EN YAML по доверенной locale пользователя, а PWA
+локализует собственный UI из согласованного RU/EN-каталога. Gateway не
+возвращает raw downstream message или stack trace.
 
 ## Health/readiness
 

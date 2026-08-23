@@ -1,3 +1,13 @@
+---
+id: SVC-MC-001
+title: Control-plane
+type: service
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # Control-plane
 
 `control-plane` — единственный авторитетный владелец универсальной web-first
@@ -84,10 +94,12 @@ bootstrap transaction. Она создаёт:
 - immutable published core prompt;
 - долговечную system Session и warm runtime desired state.
 
-Повторный bootstrap возвращает уже зафиксированное состояние. Database trigger
-и domain commands запрещают удалить, отключить, архивировать или превратить
-системного помощника в обычного Agent; core prompt нельзя изменить либо
-удалить.
+Повторный bootstrap сверяет текущие revision/digest/content core prompt. Новая
+поставляемая revision создаёт следующую immutable published Instruction и
+переводит warm runtime в `RECOVERING`; rollback либо конфликт содержимого одной
+revision закрывают startup. Database trigger и domain commands запрещают
+удалить, отключить, архивировать или превратить системного помощника в обычного
+Agent; опубликованную версию core prompt нельзя изменить либо удалить.
 
 ## Выполнение и события
 

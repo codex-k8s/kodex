@@ -1,3 +1,13 @@
+---
+id: REPO-MC-001
+title: MatterCodex
+type: repository-readme
+status: approved
+owner: manager
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # MatterCodex
 
 MatterCodex — web-first платформа управления ИИ-сотрудниками и выполняемыми ими

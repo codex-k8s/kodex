@@ -1,3 +1,13 @@
+---
+id: REPO-MC-003
+title: Jobs и workers
+type: repository-readme
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # Jobs и workers
 
 Worker исполняет attempt, но не становится владельцем aggregate. Task,
