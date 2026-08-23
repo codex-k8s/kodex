@@ -1,1 +1,0 @@
-SELECT served_generation FROM interaction_gateway_runtime_credential_fence WHERE singleton;

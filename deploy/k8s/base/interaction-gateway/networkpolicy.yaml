@@ -1,9 +1,11 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: interaction-gateway-deny-all
+  name: interaction-gateway-default-deny
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: interaction-gateway
   policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
@@ -11,89 +13,67 @@ kind: NetworkPolicy
 metadata:
   name: interaction-gateway-exact-runtime-paths
 spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway, app.kubernetes.io/component: external-gateway}}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: interaction-gateway
+      app.kubernetes.io/component: interaction-adapter
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: role-runtime, runtime.mattercodex.dev/managed: "true"}}
-      ports: [{protocol: TCP, port: 8443}]
-    - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattermost}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: mattermost}}
-      ports: [{protocol: TCP, port: 8443}]
-    - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
-      ports: [{protocol: TCP, port: 8443}]
-    - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: control-api-gateway, app.kubernetes.io/component: external-gateway}}
-      ports: [{protocol: TCP, port: 9443}]
-    - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
-      ports: [{protocol: TCP, port: 8443}]
-    - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
-      ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}, {protocol: TCP, port: 9092}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - {protocol: TCP, port: 9090}
+        - {protocol: TCP, port: 9091}
   egress:
     - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-          podSelector: {matchLabels: {k8s-app: kube-dns}}
-      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
     - to:
-        - podSelector: {matchLabels: {cnpg.io/cluster: interaction-gateway-postgresql}}
-      ports: [{protocol: TCP, port: 5432}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+      ports:
+        - {protocol: TCP, port: 8443}
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
-      ports: [{protocol: TCP, port: 8443}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports:
+        - {protocol: TCP, port: 8080}
     - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: matter-codex-bot-service}}
-      ports: [{protocol: TCP, port: 8443}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+      ports:
+        - {protocol: TCP, port: 4317}
     - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattermost}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: mattermost}}
-      ports: [{protocol: TCP, port: 443}]
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: storage}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: object-store}}
-      ports: [{protocol: TCP, port: 443}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
-      ports: [{protocol: TCP, port: 8200}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}}
-      ports: [{protocol: TCP, port: 5432}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}}
-      ports: [{protocol: TCP, port: 8443}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}}
-      ports: [{protocol: TCP, port: 8443}]
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}
-      ports: [{protocol: TCP, port: 4317}]
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
-      ports: [{protocol: TCP, port: 8443}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: interaction-gateway-migration-exact-paths
-spec:
-  podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway, app.kubernetes.io/component: migration}}
-  policyTypes: [Ingress, Egress]
-  ingress: []
-  egress:
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-          podSelector: {matchLabels: {k8s-app: kube-dns}}
-      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
-    - to:
-        - podSelector: {matchLabels: {cnpg.io/cluster: interaction-gateway-postgresql}}
-      ports: [{protocol: TCP, port: 5432}]
-    - to:
-        - podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
-      ports: [{protocol: TCP, port: 8200}]
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentry-relay
+      ports:
+        - {protocol: TCP, port: 8443}

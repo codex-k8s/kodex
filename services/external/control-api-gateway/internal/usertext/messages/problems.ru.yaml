@@ -1,0 +1,376 @@
+INTERNAL:
+  other: Внутренняя ошибка
+INVALID_REQUEST:
+  other: Проверьте данные запроса
+UNAUTHENTICATED:
+  other: Войдите, чтобы продолжить
+PERMISSION_DENIED:
+  other: У вас нет прав на это действие
+NOT_FOUND:
+  other: Запрошенный объект не найден
+IDEMPOTENCY_CONFLICT:
+  other: Этот ключ запроса уже использован для другой операции
+VERSION_OR_STATE_CONFLICT:
+  other: Объект изменился; проверьте актуальную версию и повторите действие
+STATE_CONFLICT:
+  other: Действие недоступно в текущем состоянии
+RATE_LIMITED:
+  other: Слишком много запросов; повторите попытку немного позже
+UNAVAILABLE:
+  other: Сервис временно недоступен
+DEADLINE_EXCEEDED:
+  other: Операция выполнялась слишком долго; повторите попытку
+CSRF_REJECTED:
+  other: Не удалось проверить сессию; перезагрузите страницу и повторите действие
+ORIGIN_REJECTED:
+  other: Этому сайту запрещён доступ к MatterCodex
+STOPPING:
+  other: Сервис перезапускается; подключитесь снова через несколько секунд
+PAYLOAD_TOO_LARGE:
+  other: Загружаемые данные слишком велики
+UPSTREAM_PAYLOAD_TOO_LARGE:
+  other: Созданный файл слишком велик для загрузки
+RUN_NOT_FOUND:
+  other: Запуск не найден или недоступен вам
+RUN_UNAVAILABLE:
+  other: Поток запуска временно недоступен
+INVALID_RESUME:
+  other: Сохранённая позиция потока некорректна
+STREAM_UNAVAILABLE:
+  other: Динамические обновления временно недоступны
+PLATFORM_UNAVAILABLE:
+  other: Обновления платформы временно недоступны
+GAP_UNRECOVERABLE:
+  other: Часть обновлений больше недоступна; актуальное состояние будет загружено заново
+INTERACTION_DELIVERY_FAILED:
+  other: Не удалось доставить сообщение в необязательный внешний канал
+INTERACTION_DELIVERY_RETRYING:
+  other: Доставка будет автоматически повторена; основной запуск не затронут
+INTERACTION_DELIVERY_RETRY_EXHAUSTED:
+  other: Автоматические попытки исчерпаны; проверьте подключение в разделе интеграций
+INTERACTION_DELIVERY_RECOVERED:
+  other: Доставка во внешний канал восстановлена
+INTERACTION_DELIVERY_RECOVERY_COMPLETE:
+  other: Дополнительных действий не требуется; основной запуск оставался доступен
+INTERACTION_DELIVERY_SUCCEEDED:
+  other: Сообщение доставлено во внешний канал
+CANCELLED_BY_OWNER:
+  other: Запуск отменён пользователем
+PROVIDER_AUTH_UNAVAILABLE:
+  other: Доступ к модели не настроен или временно недоступен
+PROVIDER_UNAVAILABLE:
+  other: Провайдер модели временно недоступен
+PROVIDER_RESPONSE_INVALID:
+  other: Провайдер модели вернул некорректный ответ
+RUNTIME_UNAVAILABLE:
+  other: Среда выполнения агента временно недоступна
+RUNTIME_LIMIT_EXCEEDED:
+  other: Агент превысил ограничение выполнения
+SYSTEM_ASSISTANT_NAME:
+  other: Системный помощник
+SYSTEM_ASSISTANT_PURPOSE:
+  other: Настраивает платформу и объясняет её текущее состояние
+SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
+  other: Встроенный неудаляемый помощник с типизированными MCP-инструментами
+DEFAULT_RUNTIME_NAME:
+  other: Базовая среда
+DEFAULT_PROVIDER_ACCOUNT_NAME:
+  other: Основная учётная запись модели
+INSTALLATION_OWNER_NAME:
+  other: Владелец установки
+OIDC_USER_NAME:
+  other: Пользователь
+SYSTEM_ASSISTANT_COMMAND:
+  other: Команда системному помощнику
+RUN_COORDINATION_ROLE:
+  other: Координация
+RUN_CANCELLED_BY_OWNER:
+  other: Запуск отменён владельцем
+OWNER_GATE_REVIEW_TITLE:
+  other: Проверить результат
+OWNER_GATE_REVIEW_PROMPT:
+  other: Подтвердите продолжение процесса
+OWNER_GATE_NODE_NAME:
+  other: Требуется решение
+OWNER_GATE_NODE_ROLE:
+  other: Проверка результата
+ARTIFACT_UPLOADED:
+  other: Файл загружен
+ARTIFACT_DOWNLOADED:
+  other: Файл скачан
+ARTIFACT_PREVIEWED:
+  other: Предпросмотр файла открыт
+RUN_TURN_STARTED:
+  other: ИИ-сотрудник начал работу
+ROLE_IMAGE_RECIPE_CHANGED:
+  other: Конфигурация среды роли обновлена
+ROLE_IMAGE_BUILD_COMPLETED:
+  other: Образ среды роли собран
+ONBOARDING_COMPLETED:
+  other: Первичная настройка завершена
+PROJECT_CREATED:
+  other: Проект создан
+PROJECT_UPDATED:
+  other: Проект обновлён
+PROJECT_ACCESS_UPDATED:
+  other: Доступ к проекту обновлён
+AGENT_CREATED_READY:
+  other: ИИ-сотрудник создан и готов к запуску
+AGENT_UPDATED:
+  other: ИИ-сотрудник обновлён
+AGENT_INSTRUCTIONS_UPDATED:
+  other: Инструкции ИИ-сотрудника обновлены
+AGENT_PERMISSIONS_UPDATED:
+  other: Разрешения ИИ-сотрудника обновлены
+INSTRUCTIONS_TOO_SHORT:
+  other: Инструкции должны содержать не менее 20 символов
+WORKFLOW_CREATED:
+  other: Workflow создан
+WORKFLOW_UPDATED:
+  other: Workflow обновлён
+RUN_CREATED:
+  other: Запуск создан
+RUN_CANCELLED:
+  other: Запуск отменён
+RUN_RETRY_CREATED:
+  other: Создана новая попытка
+SESSION_CONTINUATION:
+  other: Продолжение сессии
+SESSION_CONTINUED:
+  other: Сессия продолжена
+OWNER_GATE_RESOLVED:
+  other: Решение принято
+SCHEDULE_CREATED:
+  other: Расписание создано
+SCHEDULE_UPDATED:
+  other: Расписание обновлено
+SCHEDULED_RUN_TASK:
+  other: Запуск по расписанию
+SCHEDULE_OCCURRENCE_MATERIALIZED:
+  other: Запуск по расписанию создан
+SCHEDULE_OCCURRENCE_COMPLETED:
+  other: Запуск по расписанию завершён
+INTEGRATION_CONNECTION_CREATED:
+  other: Подключение интеграции создано
+INTEGRATION_CONNECTION_UPDATED:
+  other: Подключение интеграции обновлено
+INTEGRATION_GRANT_UPDATED:
+  other: Разрешение интеграции обновлено
+INTEGRATION_CONNECTION_TEST_COMPLETED:
+  other: Проверка подключения завершена
+INTEGRATION_TEST_SUCCEEDED:
+  other: Подключение работает
+INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
+  other: Учётные данные ещё не настроены
+INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Учётные данные настроены и скрыты
+INTEGRATION_CREDENTIAL_INVALID:
+  other: Учётные данные недоступны или отклонены
+INTEGRATION_UNAVAILABLE:
+  other: Внешняя система временно недоступна
+INTEGRATION_AUTH_REJECTED:
+  other: Внешняя система отклонила учётные данные
+INTEGRATION_CREDENTIAL_UNAVAILABLE:
+  other: Защищённые учётные данные не материализованы
+INTEGRATION_CONFIGURATION_INVALID:
+  other: Настройки подключения не прошли безопасную проверку
+INTEGRATION_REQUEST_REJECTED:
+  other: Внешняя система отклонила запрос
+INTEGRATION_CAPABILITY_UNSUPPORTED:
+  other: Возможность не поддерживается этим адаптером
+INTEGRATION_RESPONSE_INVALID:
+  other: Внешняя система вернула неподдерживаемый ответ
+INTEGRATION_RATE_LIMITED:
+  other: Внешняя система временно ограничила частоту запросов
+NEW_ASSISTANT_CONVERSATION:
+  other: Новый разговор
+ASSISTANT_CONVERSATION_CREATED:
+  other: Разговор с помощником создан
+ASSISTANT_TURN_QUEUED:
+  other: Команда помощнику поставлена в очередь
+ASSISTANT_TURN_ACCEPTED:
+  other: Команда помощнику принята
+ASSISTANT_PLAN_APPLIED:
+  other: План помощника применён
+ASSISTANT_PLAN_PROPOSED:
+  other: Помощник подготовил план изменений
+ASSISTANT_INSTRUCTIONS_UPDATED:
+  other: Дополнение к инструкциям помощника обновлено
+ASSISTANT_RECOVERY_REQUESTED:
+  other: Восстановление помощника запрошено
+ASSISTANT_RECOVERING:
+  other: Помощник восстанавливается
+ASSISTANT_EXECUTING:
+  other: Выполняет команду
+ASSISTANT_READY:
+  other: Готов к команде
+SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
+  other: Пульс среды выполнения системного помощника зафиксирован
+SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
+  other: Основные инструкции системного помощника обновлены
+SYSTEM_ASSISTANT_LABEL:
+  other: Системный · неудаляемый
+ARTIFACT_AVAILABLE:
+  other: Файл доступен
+RESULT_ARTIFACT_AVAILABLE:
+  other: Файл результата доступен
+ARTIFACT_BINDING_UPDATED:
+  other: Привязка файла обновлена
+CHILD_AGENT_STARTED:
+  other: Дочерний ИИ-сотрудник запущен
+CHILD_CALLBACK_REGISTERED:
+  other: Обратная связь дочернего ИИ-сотрудника зарегистрирована
+CHILD_AGENT_RESULT_DELIVERED:
+  other: Результат дочернего ИИ-сотрудника доставлен
+CHILD_RUN_DELEGATED:
+  other: Работа передана дочернему ИИ-сотруднику
+CHILD_CALLBACK_PROCESSED:
+  other: Результат дочернего ИИ-сотрудника обработан
+CALLBACK_CONTINUATION_QUEUED:
+  other: Координатор продолжит работу с результатами дочерних ИИ-сотрудников
+RUN_COMPLETED:
+  other: Запуск завершён
+RUNTIME_WORK_CLAIMS_MATERIALIZED:
+  other: Доступная работа назначена среде выполнения
+RUNTIME_LEASE_RENEWED:
+  other: Аренда среды выполнения продлена
+RUNTIME_PROGRESS_RECORDED:
+  other: Ход выполнения зафиксирован
+RUNTIME_EXECUTION_COMPLETED:
+  other: Выполнение в среде завершено
+INTEGRATION_ACTION_COMPLETED:
+  other: Действие интеграции завершено
+INTEGRATION_INVOCATION_COMPLETED:
+  other: Вызов интеграции завершён
+OWNER_DECISION_REQUIRED:
+  other: Требуется решение человека
+OWNER_GATE_CANCELLED:
+  other: Решение человека отменено вместе с запуском
+RUN_NODE_CANCELLED:
+  other: Шаг выполнения отменён
+ROOT_PROCESS_COMPLETED:
+  other: Корневой процесс завершён
+OWNER_CHANGES_QUEUED:
+  other: Запрошенные изменения поставлены ИИ-сотруднику в очередь
+PLATFORM_ACCESS_UPDATED:
+  other: Доступ к платформе обновлён
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: Сообщение Mattermost уже обработано
+MATTERMOST_GATE_COMMAND_HELP:
+  other: Команда решения Mattermost не распознана
+MATTERMOST_GATE_RESOLVED:
+  other: Решение из Mattermost принято
+MATTERMOST_GATE_STALE:
+  other: Решение уже принято в другой поверхности
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: Для входящего сообщения Mattermost не настроен единственный получатель
+MATTERMOST_INBOUND_RUN:
+  other: Задание из Mattermost
+MATTERMOST_RUN_ACCEPTED:
+  other: Задание из Mattermost принято
+WEB_ONLY_CORE_SUMMARY:
+  other: Основные функции работают независимо от внешних интеграций
+CAPABILITY_PROJECT_MANAGE_NAME:
+  other: Управление проектами
+CAPABILITY_PROJECT_MANAGE_DESCRIPTION:
+  other: Создание и настройка проектов
+CAPABILITY_AGENT_MANAGE_NAME:
+  other: Управление ИИ-сотрудниками
+CAPABILITY_AGENT_MANAGE_DESCRIPTION:
+  other: Настройка ИИ-сотрудников и инструкций
+CAPABILITY_RUN_LAUNCH_NAME:
+  other: Запуск работы
+CAPABILITY_RUN_LAUNCH_DESCRIPTION:
+  other: Запуск ИИ-сотрудников и workflows
+CAPABILITY_RUN_DELEGATE_NAME:
+  other: Делегирование
+CAPABILITY_RUN_DELEGATE_DESCRIPTION:
+  other: Запуск дочерних ИИ-сотрудников в графе выполнения
+CAPABILITY_GATE_RESOLVE_NAME:
+  other: Решения человека
+CAPABILITY_GATE_RESOLVE_DESCRIPTION:
+  other: Принятие решений по Human Gate
+CAPABILITY_ARTIFACT_MANAGE_NAME:
+  other: Файлы
+CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Чтение и создание файлов результата
+CAPABILITY_SCHEDULE_MANAGE_NAME:
+  other: Автоматизации
+CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Управление расписаниями
+CAPABILITY_INTEGRATION_GRANT_NAME:
+  other: Интеграции
+CAPABILITY_INTEGRATION_GRANT_DESCRIPTION:
+  other: Выдача типизированных разрешений интеграций
+INTEGRATION_CATEGORY_DEVELOPMENT:
+  other: Разработка
+INTEGRATION_CATEGORY_INFRASTRUCTURE:
+  other: Инфраструктура
+INTEGRATION_CATEGORY_COMMUNICATIONS:
+  other: Коммуникации
+INTEGRATION_GITHUB_DESCRIPTION:
+  other: Типизированное чтение разрешённых репозиториев
+INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
+  other: Чтение репозитория
+INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
+  other: Читать разрешённый репозиторий
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
+  other: Изменение pull request
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
+  other: Создавать и изменять pull requests
+INTEGRATION_KUBERNETES_DESCRIPTION:
+  other: Типизированное наблюдение за разрешёнными workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
+  other: Наблюдение за workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
+  other: Читать разрешённые workloads
+INTEGRATION_MATTERMOST_DESCRIPTION:
+  other: Необязательные входящие сообщения, уведомления, зеркало результатов и решения
+INTEGRATION_MATTERMOST_INBOUND_NAME:
+  other: Входящие сообщения
+INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION:
+  other: Создавать задания из Mattermost
+INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME:
+  other: Уведомления
+INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION:
+  other: Отправлять уведомления
+INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME:
+  other: Зеркало результатов
+INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION:
+  other: Публиковать безопасные итоги
+INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
+  other: Решения Human Gate
+INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
+  other: Принимать первое действительное решение
+INTEGRATION_FIELD_GITHUB_OWNER_LABEL:
+  other: Владелец репозитория
+INTEGRATION_FIELD_GITHUB_OWNER_HELP:
+  other: Организация или пользователь GitHub без URL
+INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER:
+  other: example-org
+INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL:
+  other: Репозиторий
+INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP:
+  other: Название разрешённого репозитория без владельца
+INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER:
+  other: customer-knowledge
+INTEGRATION_FIELD_SERVER_URL_LABEL:
+  other: Адрес Kubernetes API
+INTEGRATION_FIELD_SERVER_URL_HELP:
+  other: Точный HTTPS-адрес разрешённого API server
+INTEGRATION_FIELD_NAMESPACES_LABEL:
+  other: Разрешённые namespaces
+INTEGRATION_FIELD_NAMESPACES_HELP:
+  other: Перечислите namespaces через запятую; другие будут отклонены
+INTEGRATION_FIELD_BASE_URL_LABEL:
+  other: Адрес Mattermost
+INTEGRATION_FIELD_BASE_URL_HELP:
+  other: Точный HTTPS-адрес сервера Mattermost
+INTEGRATION_FIELD_TEAM_LABEL:
+  other: Team
+INTEGRATION_FIELD_TEAM_HELP:
+  other: Системное имя Team для уведомлений и зеркала результатов
+INTEGRATION_FIELD_CHANNEL_LABEL:
+  other: Канал
+INTEGRATION_FIELD_CHANNEL_HELP:
+  other: Системное имя канала без внутреннего ID

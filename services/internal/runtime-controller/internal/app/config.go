@@ -4,257 +4,142 @@ import (
 	"errors"
 	"net"
 	"net/url"
-	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/value"
 )
 
-const serviceName = "runtime-controller"
+const (
+	controlPlaneTarget        = "dns:///control-plane.mattercodex-system.svc:8443"
+	controlPlaneTLSServerName = "control-plane.mattercodex-system.svc.cluster.local"
+	callbackTLSServerName     = "runtime-controller-callback.mattercodex-system.svc.cluster.local"
+)
+
+var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Config struct {
-	Environment                      string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	TechnicalListen                  string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
-	Namespace                        string        `env:"POD_NAMESPACE"`
-	PodUID                           string        `env:"POD_UID"`
-	ControlPlaneTarget               string        `env:"RUNTIME_CONTROL_PLANE_TARGET"`
-	ControlPlaneTLSServerName        string        `env:"RUNTIME_CONTROL_PLANE_TLS_SERVER_NAME"`
-	ControlPlaneCAFile               string        `env:"RUNTIME_CONTROL_PLANE_CA_FILE"`
-	ControlPlaneCertificateFile      string        `env:"RUNTIME_CONTROL_PLANE_CERTIFICATE_FILE"`
-	ControlPlanePrivateKeyFile       string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
-	ApplicationGrantFile             string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
-	RunnerControlPlaneTarget         string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TARGET"`
-	RunnerControlPlaneTLSServerName  string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME"`
-	InteractionGatewayURL            string        `env:"RUNTIME_INTERACTION_GATEWAY_URL"`
-	SessionMCPURL                    string        `env:"RUNTIME_SESSION_MCP_URL"`
-	ControllerImage                  string        `env:"RUNTIME_CONTROLLER_IMAGE"`
-	AuthorityImage                   string        `env:"RUNTIME_AUTHORITY_IMAGE"`
-	PromotedRoleImageRepository      string        `env:"RUNTIME_PROMOTED_ROLE_IMAGE_REPOSITORY"`
-	RoleRuntimeContractRevision      uint64        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_REVISION"`
-	RoleRuntimeContractSHA256        string        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_SHA256"`
-	StorageClass                     string        `env:"RUNTIME_STORAGE_CLASS"`
-	PVCSize                          string        `env:"RUNTIME_PVC_SIZE"`
-	ReadClusterRole                  string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
-	AdminClusterRole                 string        `env:"RUNTIME_ADMIN_CLUSTER_ROLE"`
-	ExecutionCapability              string        `env:"RUNTIME_EXECUTION_CAPABILITY"`
-	ArchiveRestoreCapability         string        `env:"RUNTIME_ARCHIVE_RESTORE_CAPABILITY"`
-	ArchiveServiceAccount            string        `env:"RUNTIME_ARCHIVE_SERVICE_ACCOUNT"`
-	RestoreServiceAccount            string        `env:"RUNTIME_RESTORE_SERVICE_ACCOUNT"`
-	CleanupServiceAccount            string        `env:"RUNTIME_CLEANUP_SERVICE_ACCOUNT"`
-	CredentialBrokerServiceAccount   string        `env:"RUNTIME_CREDENTIAL_BROKER_SERVICE_ACCOUNT"`
-	ProjectReadBrokerServiceAccount  string        `env:"RUNTIME_PROJECT_READ_BROKER_SERVICE_ACCOUNT"`
-	ClusterAdminBrokerServiceAccount string        `env:"RUNTIME_CLUSTER_ADMIN_BROKER_SERVICE_ACCOUNT"`
-	S3ArchiveBrokerServiceAccount    string        `env:"RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT"`
-	S3RestoreBrokerServiceAccount    string        `env:"RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT"`
-	MaximumPods                      int           `env:"RUNTIME_MAXIMUM_PODS"`
-	MaximumOrganizationExecutions    int           `env:"RUNTIME_MAXIMUM_ORGANIZATION_EXECUTIONS"`
-	MaximumCPUMilli                  int64         `env:"RUNTIME_MAXIMUM_CPU_MILLI"`
-	MaximumMemoryBytes               int64         `env:"RUNTIME_MAXIMUM_MEMORY_BYTES"`
-	S3Endpoint                       string        `env:"RUNTIME_S3_ENDPOINT"`
-	S3TLSServerName                  string        `env:"RUNTIME_S3_TLS_SERVER_NAME"`
-	S3Bucket                         string        `env:"RUNTIME_S3_BUCKET"`
-	S3Region                         string        `env:"RUNTIME_S3_REGION"`
-	NATSURL                          string        `env:"RUNTIME_NATS_URL"`
-	NATSTLSServerName                string        `env:"RUNTIME_NATS_TLS_SERVER_NAME"`
-	NATSCAFile                       string        `env:"RUNTIME_NATS_CA_FILE"`
-	NATSCertificateFile              string        `env:"RUNTIME_NATS_CERTIFICATE_FILE"`
-	NATSPrivateKeyFile               string        `env:"RUNTIME_NATS_PRIVATE_KEY_FILE"`
-	NATSCredentialsFile              string        `env:"RUNTIME_NATS_CREDENTIALS_FILE"`
-	NATSStream                       string        `env:"RUNTIME_NATS_STREAM"`
-	NATSDurable                      string        `env:"RUNTIME_NATS_DURABLE"`
-	NATSReplicas                     int           `env:"RUNTIME_NATS_REPLICAS"`
-	NATSMaxBytes                     int64         `env:"RUNTIME_NATS_MAX_BYTES"`
-	PostgresDSNFile                  string        `env:"RUNTIME_POSTGRES_DSN_FILE"`
-	PostgresTLSServerName            string        `env:"RUNTIME_POSTGRES_TLS_SERVER_NAME"`
-	PostgresCAFile                   string        `env:"RUNTIME_POSTGRES_CA_FILE"`
-	PostgresPrincipal                string        `env:"RUNTIME_POSTGRES_PRINCIPAL"`
-	StartupTimeout                   time.Duration `env:"RUNTIME_STARTUP_TIMEOUT"`
-	ShutdownTimeout                  time.Duration `env:"RUNTIME_SHUTDOWN_TIMEOUT"`
-	ReconcileInterval                time.Duration `env:"RUNTIME_RECONCILE_INTERVAL"`
-	ClaimInterval                    time.Duration `env:"RUNTIME_CLAIM_INTERVAL"`
-	ExpiryInterval                   time.Duration `env:"RUNTIME_EXPIRY_INTERVAL"`
-	ReadinessInterval                time.Duration `env:"RUNTIME_READINESS_INTERVAL"`
-	Watchdog                         time.Duration `env:"RUNTIME_WATCHDOG"`
-	WarmTTL                          time.Duration `env:"RUNTIME_WARM_TTL"`
-	JobTTL                           time.Duration `env:"RUNTIME_JOB_TTL"`
+	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	Namespace                      string        `env:"POD_NAMESPACE"`
+	PodUID                         string        `env:"POD_UID"`
+	PodIP                          string        `env:"POD_IP"`
+	TechnicalListen                string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
+	CallbackListen                 string        `env:"RUNTIME_CONTROLLER_CALLBACK_LISTEN"`
+	CallbackTLSServerName          string        `env:"RUNTIME_CONTROLLER_CALLBACK_TLS_SERVER_NAME"`
+	CallbackServerCertificateFile  string        `env:"RUNTIME_CONTROLLER_CALLBACK_SERVER_CERTIFICATE_FILE"`
+	CallbackServerPrivateKeyFile   string        `env:"RUNTIME_CONTROLLER_CALLBACK_SERVER_PRIVATE_KEY_FILE"`
+	CallbackClientCAFile           string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_FILE"`
+	CallbackExpectedClientSPIFFEID string        `env:"RUNTIME_CONTROLLER_CALLBACK_EXPECTED_CLIENT_SPIFFE_ID"`
+	CallbackClientCASecret         string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_CA_SECRET"`
+	CallbackClientTLSSecret        string        `env:"RUNTIME_CONTROLLER_CALLBACK_CLIENT_TLS_SECRET"`
+	ControlPlaneTarget             string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName      string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile             string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile    string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile     string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile           string        `env:"RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE"`
+	PromotedRoleImageRepository    string        `env:"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY"`
+	DefaultRoleImageReference      string        `env:"RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"`
+	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
+	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
+	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
+	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
+	RunnerServiceAccount           string        `env:"RUNTIME_CONTROLLER_RUNNER_SERVICE_ACCOUNT"`
+	MaximumConcurrentTurns         int           `env:"RUNTIME_CONTROLLER_MAXIMUM_CONCURRENT_TURNS"`
+	TurnCPUMilli                   int64         `env:"RUNTIME_CONTROLLER_TURN_CPU_MILLI"`
+	TurnMemoryBytes                int64         `env:"RUNTIME_CONTROLLER_TURN_MEMORY_BYTES"`
+	PollInterval                   time.Duration `env:"RUNTIME_CONTROLLER_POLL_INTERVAL"`
+	InfrastructureCheckInterval    time.Duration `env:"RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL"`
+	LeaseRenewInterval             time.Duration `env:"RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL"`
+	RequestTimeout                 time.Duration `env:"RUNTIME_CONTROLLER_REQUEST_TIMEOUT"`
+	ExecutionTimeout               time.Duration `env:"RUNTIME_CONTROLLER_EXECUTION_TIMEOUT"`
+	ShutdownTimeout                time.Duration `env:"RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT"`
+	WarmLongPoll                   time.Duration `env:"RUNTIME_CONTROLLER_WARM_LONG_POLL"`
 }
 
 func loadConfig() (Config, error) {
 	config := Config{
-		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.mattercodex-system.svc:8443",
-		ControlPlaneTLSServerName:       "control-plane.mattercodex-system.svc.cluster.local",
-		ControlPlaneCAFile:              "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
-		ControlPlaneCertificateFile:     "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
-		ControlPlanePrivateKeyFile:      "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
-		ApplicationGrantFile:            "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		RunnerControlPlaneTarget:        "control-plane.mattercodex-system.svc:8443",
-		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
-		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
-		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
-		StorageClass:                    "runtime-session", PVCSize: "20Gi",
-		ReadClusterRole:  "runtime-role-project-read",
-		AdminClusterRole: "cluster-admin", ExecutionCapability: "enabled",
-		ArchiveRestoreCapability: "enabled", ArchiveServiceAccount: "runtime-archive",
-		RestoreServiceAccount: "runtime-restore-verifier", CleanupServiceAccount: "runtime-cleanup-authorizer",
-		CredentialBrokerServiceAccount:   "runtime-credential-broker",
-		ProjectReadBrokerServiceAccount:  "runtime-project-read-broker",
-		ClusterAdminBrokerServiceAccount: "runtime-cluster-admin-broker",
-		S3ArchiveBrokerServiceAccount:    "runtime-s3-archive-broker",
-		S3RestoreBrokerServiceAccount:    "runtime-s3-restore-broker",
-		MaximumPods:                      100, MaximumOrganizationExecutions: 16,
-		MaximumCPUMilli: 100_000, MaximumMemoryBytes: 400 << 30,
-		S3Endpoint:      "https://runtime-archive-s3.mattercodex-system.svc:9000",
-		S3TLSServerName: "runtime-archive-s3.mattercodex-system.svc.cluster.local",
-		S3Bucket:        "mattercodex-runtime", S3Region: "mattercodex-1",
-		NATSURL:             "tls://nats.mattercodex-system.svc:4222",
-		NATSTLSServerName:   "nats.mattercodex-system.svc.cluster.local",
-		NATSCAFile:          "/var/run/config/mattercodex/runtime-controller/nats/ca.pem",
-		NATSCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/nats-tls/tls.crt",
-		NATSPrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/nats-tls/tls.key",
-		NATSCredentialsFile: "/var/run/secrets/mattercodex/runtime-controller/nats/user.creds",
-		NATSStream:          "CONTROL_PLANE", NATSDurable: "RUNTIME_CONTROLLER_V1", NATSReplicas: 3,
-		NATSMaxBytes:          32 << 30,
-		PostgresDSNFile:       "/var/run/secrets/mattercodex/runtime-controller/postgres/dsn",
-		PostgresTLSServerName: "runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local",
-		PostgresCAFile:        "/var/run/config/mattercodex/runtime-controller/postgres/ca.pem",
-		PostgresPrincipal:     "runtime_controller_runtime_g1",
-		StartupTimeout:        30 * time.Second, ShutdownTimeout: 20 * time.Second,
-		ReconcileInterval: 5 * time.Second, ClaimInterval: time.Second, ExpiryInterval: 15 * time.Second,
-		ReadinessInterval: 10 * time.Second, Watchdog: 2 * time.Minute,
-		WarmTTL: 4 * time.Hour, JobTTL: time.Hour,
+		Environment: "development", Namespace: "mattercodex-system",
+		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
+		CallbackServerCertificateFile:  "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.crt",
+		CallbackServerPrivateKeyFile:   "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.key",
+		CallbackClientCAFile:           "/var/run/config/mattercodex/runtime-controller/callback-client/ca.crt",
+		CallbackExpectedClientSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		CallbackClientCASecret:         "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
+		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName,
+		ControlPlaneCAFile:          "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
+		DefaultRoleImageReference:   "registry-pull.invalid/mattercodex/agent-runner@sha256:" + strings.Repeat("0", 64),
+		ProviderHTTPSProxy:          "http://egress-gateway.mattercodex-system.svc:8080",
+		StorageClass:                "runtime-session", SessionPVCSize: "20Gi",
+		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
+		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
+		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
+		ExecutionTimeout: 60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
 	}
-	if config.ArchiveRestoreCapability == "disabled" {
-		for _, name := range []string{
-			"RUNTIME_ARCHIVE_SERVICE_ACCOUNT", "RUNTIME_RESTORE_SERVICE_ACCOUNT",
-			"RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT", "RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT",
-			"RUNTIME_S3_ENDPOINT", "RUNTIME_S3_TLS_SERVER_NAME", "RUNTIME_S3_BUCKET", "RUNTIME_S3_REGION",
-		} {
-			if _, exists := os.LookupEnv(name); exists {
-				return Config{}, errors.New("disabled runtime archive/restore environment is configured")
-			}
-		}
-		config.ArchiveServiceAccount = ""
-		config.RestoreServiceAccount = ""
-		config.S3ArchiveBrokerServiceAccount = ""
-		config.S3RestoreBrokerServiceAccount = ""
-		config.S3Endpoint = ""
-		config.S3TLSServerName = ""
-		config.S3Bucket = ""
-		config.S3Region = ""
-	}
-	if err := config.validate(); err != nil {
-		return Config{}, err
-	}
-	return config, nil
+	return config, config.validate()
 }
 
 func (config Config) validate() error {
-	for _, endpoint := range []string{config.TechnicalListen, config.ControlPlaneTarget} {
-		if _, _, err := net.SplitHostPort(endpoint); err != nil {
-			return errors.New("runtime-controller endpoint is invalid")
+	if config.PodUID == "" || len(config.PodUID) > 128 || net.ParseIP(config.PodIP) == nil ||
+		config.Namespace == "" || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
+		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName {
+		return errors.New("runtime controller identity is invalid")
+	}
+	for _, address := range []string{config.TechnicalListen, config.CallbackListen} {
+		if _, _, err := net.SplitHostPort(address); err != nil {
+			return errors.New("runtime controller listen address is invalid")
 		}
 	}
-	if config.ControlPlaneTLSServerName == "" || net.ParseIP(config.ControlPlaneTLSServerName) != nil {
-		return errors.New("runtime-controller TLS endpoint is invalid")
-	}
-	if config.ExecutionCapability != "enabled" && config.ExecutionCapability != "disabled" {
-		return errors.New("runtime execution capability is invalid")
-	}
-	archiveRestoreEnabled := config.ArchiveRestoreCapability == "enabled"
-	archiveRestoreDisabled := config.ArchiveRestoreCapability == "disabled"
-	if !archiveRestoreEnabled && !archiveRestoreDisabled {
-		return errors.New("runtime archive/restore capability is invalid")
-	}
-	archiveRestoreValues := []string{
-		config.ArchiveServiceAccount, config.RestoreServiceAccount,
-		config.S3ArchiveBrokerServiceAccount, config.S3RestoreBrokerServiceAccount,
-		config.S3Endpoint, config.S3TLSServerName, config.S3Bucket, config.S3Region,
-	}
-	if archiveRestoreEnabled {
-		s3Endpoint, err := url.Parse(config.S3Endpoint)
-		if err != nil || s3Endpoint.Scheme != "https" || s3Endpoint.Host == "" || s3Endpoint.Path != "" ||
-			config.S3TLSServerName == "" || net.ParseIP(config.S3TLSServerName) != nil {
-			return errors.New("runtime archive/restore TLS endpoint is invalid")
-		}
-		for _, value := range archiveRestoreValues {
-			if value == "" {
-				return errors.New("runtime archive/restore configuration is incomplete")
-			}
-		}
-	} else {
-		for _, value := range archiveRestoreValues {
-			if value != "" {
-				return errors.New("disabled runtime archive/restore configuration is not empty")
-			}
+	for _, fileName := range []string{config.CallbackServerCertificateFile, config.CallbackServerPrivateKeyFile,
+		config.CallbackClientCAFile, config.ControlPlaneCAFile, config.ControlPlaneCertificateFile,
+		config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile} {
+		if !filepath.IsAbs(fileName) {
+			return errors.New("runtime controller file path is invalid")
 		}
 	}
-	if _, _, err := net.SplitHostPort(config.RunnerControlPlaneTarget); err != nil ||
-		config.RunnerControlPlaneTLSServerName == "" || net.ParseIP(config.RunnerControlPlaneTLSServerName) != nil {
-		return errors.New("runtime runner control-plane endpoint is invalid")
+	spiffe, err := url.Parse(config.CallbackExpectedClientSPIFFEID)
+	if err != nil || spiffe.Scheme != "spiffe" || spiffe.Host == "" || spiffe.Path == "" || spiffe.RawQuery != "" || spiffe.Fragment != "" {
+		return errors.New("runtime callback client identity is invalid")
 	}
-	for _, raw := range []string{config.InteractionGatewayURL, config.SessionMCPURL} {
-		endpoint, parseErr := url.Parse(raw)
-		if parseErr != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.Path != "" ||
-			endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.User != nil ||
-			!strings.HasSuffix(endpoint.Hostname(), ".svc.cluster.local") {
-			return errors.New("runtime agent gateway endpoint is invalid")
-		}
+	proxy, proxyErr := url.Parse(config.ProviderHTTPSProxy)
+	if !validDNSLabel(config.CallbackClientCASecret) || !validDNSLabel(config.CallbackClientTLSSecret) ||
+		!validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
+		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
+		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
+		!validPinnedImageReference(config.DefaultRoleImageReference) ||
+		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {
+		return errors.New("runtime role image policy is invalid")
 	}
-	if !strings.HasPrefix(config.NATSURL, "tls://") || config.NATSTLSServerName == "" ||
-		net.ParseIP(config.NATSTLSServerName) != nil || config.PostgresTLSServerName == "" ||
-		net.ParseIP(config.PostgresTLSServerName) != nil {
-		return errors.New("runtime-controller dependency TLS endpoint is invalid")
-	}
-	for _, path := range []string{config.ControlPlaneCAFile, config.ControlPlaneCertificateFile,
-		config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile, config.NATSCAFile,
-		config.NATSCertificateFile, config.NATSPrivateKeyFile, config.NATSCredentialsFile,
-		config.PostgresDSNFile, config.PostgresCAFile} {
-		if !filepath.IsAbs(path) {
-			return errors.New("runtime-controller path must be absolute")
-		}
-	}
-	if (config.Environment != "staging" && config.Environment != "production") ||
-		config.Namespace == "" || config.PodUID == "" || config.StorageClass == "" || config.PVCSize == "" ||
-		config.MaximumPods < 1 || config.MaximumPods > 10_000 ||
-		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
-		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
-		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<10 ||
-		config.PostgresPrincipal == "" ||
-		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
-		!value.ValidImageRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
-		!validSHA256(config.RoleRuntimeContractSHA256) ||
-		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) {
-		return errors.New("runtime-controller bounded configuration is invalid")
-	}
-	if config.WarmTTL != 4*time.Hour ||
-		config.StartupTimeout < 5*time.Second || config.StartupTimeout > time.Minute ||
+	if config.MaximumConcurrentTurns < 1 || config.MaximumConcurrentTurns > 128 || config.TurnCPUMilli < 100 ||
+		config.TurnCPUMilli > 16000 || config.TurnMemoryBytes < 128<<20 || config.TurnMemoryBytes > 64<<30 ||
+		config.PollInterval < 100*time.Millisecond || config.PollInterval > 10*time.Second ||
+		config.InfrastructureCheckInterval < 5*time.Second || config.InfrastructureCheckInterval > time.Minute ||
+		config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval > 20*time.Second ||
+		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
+		config.ExecutionTimeout < time.Minute || config.ExecutionTimeout > 4*time.Hour ||
 		config.ShutdownTimeout < 5*time.Second || config.ShutdownTimeout > time.Minute ||
-		config.ReconcileInterval < time.Second || config.ReconcileInterval > time.Minute ||
-		config.ClaimInterval < 250*time.Millisecond || config.ClaimInterval > time.Minute ||
-		config.ExpiryInterval < 5*time.Second || config.ExpiryInterval > time.Minute ||
-		config.ReadinessInterval < 5*time.Second || config.ReadinessInterval > time.Minute ||
-		config.Watchdog < 30*time.Second || config.Watchdog > 10*time.Minute ||
-		config.JobTTL < time.Minute || config.JobTTL > 24*time.Hour {
-		return errors.New("runtime-controller duration is invalid")
+		config.WarmLongPoll < time.Second || config.WarmLongPoll > 30*time.Second {
+		return errors.New("runtime controller bounded configuration is invalid")
 	}
 	return nil
 }
 
-func validSHA256(value string) bool {
-	return len(value) == 64 && strings.Trim(value, "0123456789abcdef") == "" &&
-		value != strings.Repeat("0", 64)
+func validPinnedImageReference(reference string) bool {
+	separator := strings.LastIndex(reference, "@sha256:")
+	return separator > 0 && separator+len("@sha256:")+64 == len(reference) &&
+		sha256TextPattern.MatchString(reference[separator+len("@sha256:"):]) &&
+		!strings.ContainsAny(reference[:separator], "${}")
 }
 
-func validPinnedImage(value string) bool {
-	parts := strings.Split(value, "@sha256:")
-	if len(parts) != 2 || parts[0] == "" || len(parts[1]) != 64 || strings.Trim(parts[1], "0123456789abcdef") != "" {
-		return false
-	}
-	return parts[1] != strings.Repeat("0", 64)
+func validDNSLabel(value string) bool {
+	return regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`).MatchString(value)
 }

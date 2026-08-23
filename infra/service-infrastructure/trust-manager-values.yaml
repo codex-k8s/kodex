@@ -1,0 +1,8 @@
+replicaCount: 1
+app:
+  trust:
+    namespace: mattercodex-trust
+  webhook:
+    tls:
+      approverPolicy:
+        enabled: false

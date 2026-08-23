@@ -89,8 +89,8 @@ func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 
 func TestSchemaMarkerIsInstalledAfterCompleteContract(t *testing.T) {
 	t.Parallel()
-	marker := strings.LastIndex(testSchemaContract, "INSERT INTO runtime_event_schema_versions")
-	lastIndex := strings.LastIndex(testSchemaContract, "CREATE INDEX runtime_inbox_repairs_event_idx")
+	marker := strings.LastIndex(testSchemaContract, "runtime_event_schema_versions")
+	lastIndex := strings.LastIndex(testSchemaContract, "runtime_inbox_repairs_event_idx")
 	if marker < 0 || lastIndex < 0 || marker < lastIndex {
 		t.Fatal("schema marker is not installed after required objects")
 	}
@@ -108,7 +108,7 @@ func TestReadinessManifestCoversNamedConstraintsAndIndexes(t *testing.T) {
 			t.Fatalf("constraint %s is absent from readiness manifest", match[1])
 		}
 	}
-	indexPattern := regexp.MustCompile(`CREATE INDEX\s+([a-z0-9_]+)`)
+	indexPattern := regexp.MustCompile(`(?m)^CREATE[[:space:]]+INDEX[[:space:]]+([a-z0-9_]+)`)
 	for _, match := range indexPattern.FindAllStringSubmatch(testSchemaContract, -1) {
 		if _, ok := required["index/"+match[1]]; !ok {
 			t.Fatalf("index %s is absent from readiness manifest", match[1])

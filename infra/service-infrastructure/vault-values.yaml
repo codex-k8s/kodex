@@ -1,0 +1,77 @@
+global:
+  enabled: true
+  tlsDisable: false
+fullnameOverride: vault
+injector:
+  enabled: false
+server:
+  enabled: true
+  image:
+    repository: hashicorp/vault
+    tag: 2.0.4
+    pullPolicy: IfNotPresent
+  logFormat: json
+  logLevel: info
+  updateStrategyType: OnDelete
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 2Gi}
+  authDelegator:
+    enabled: true
+  dataStorage:
+    enabled: true
+    size: 16Gi
+    storageClass: null
+    accessMode: ReadWriteOnce
+  auditStorage:
+    enabled: true
+    size: 8Gi
+    storageClass: null
+    accessMode: ReadWriteOnce
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumes:
+    - name: vault-server-tls
+      secret:
+        secretName: mattercodex-vault-server-tls
+  volumeMounts:
+    - name: vault-server-tls
+      mountPath: /vault/userconfig/vault-server-tls
+      readOnly: true
+  standalone:
+    enabled: true
+    config: |-
+      ui = false
+      disable_mlock = true
+      api_addr = "https://vault.mattercodex-system.svc:8200"
+      listener "tcp" {
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+        tls_disable = 0
+        tls_cert_file = "/vault/userconfig/vault-server-tls/tls.crt"
+        tls_key_file = "/vault/userconfig/vault-server-tls/tls.key"
+        tls_client_ca_file = "/vault/userconfig/vault-server-tls/ca.crt"
+        telemetry {
+          unauthenticated_metrics_access = "false"
+        }
+      }
+      storage "file" {
+        path = "/vault/data"
+      }
+  ha:
+    enabled: false
+csi:
+  enabled: true
+  image:
+    repository: hashicorp/vault-csi-provider
+    tag: 1.7.4
+    pullPolicy: IfNotPresent
+  daemonSet:
+    kubeletRootDir: /var/lib/kubelet
+  agent:
+    enabled: true
+    image:
+      repository: hashicorp/vault
+      tag: 2.0.4
+      pullPolicy: IfNotPresent

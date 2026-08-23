@@ -1,0 +1,470 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-image-admission-controller-jobs
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [jobs]
+        scope: Namespaced
+  matchConditions:
+    - name: exact-controller
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:mattercodex-system:image-admission-controller'
+  variables:
+    - name: phase
+      expression: object.metadata.labels['mattercodex.dev/image-admission-phase']
+    - name: admissionId
+      expression: object.metadata.labels['mattercodex.dev/image-admission-id']
+    - name: protected
+      expression: variables.phase in ['claim', 'admit', 'promote']
+    - name: workload
+      expression: >-
+        variables.phase == 'promote' ? 'image-promotion' : 'image-admission'
+    - name: expectedServiceAccount
+      expression: >-
+        variables.phase == 'scan' ? 'mattercodex-image-scanner' :
+        variables.phase == 'sign' ? 'mattercodex-image-signer' :
+        variables.workload
+    - name: expectedIdentity
+      expression: >-
+        variables.phase == 'scan' ? 'mattercodex-image-scanner' :
+        variables.phase == 'sign' ? 'mattercodex-image-signer' :
+        variables.phase == 'promote' ? 'mattercodex-image-promotion-writer' :
+        'mattercodex-image-admission-owner'
+    - name: pod
+      expression: object.spec.template.spec
+    - name: main
+      expression: variables.pod.containers[0]
+    - name: volumeNames
+      expression: variables.pod.volumes.map(volume, volume.name).join(',')
+    - name: mainEnvironmentNames
+      expression: variables.main.env.map(item, item.name).join(',')
+    - name: mainMountNames
+      expression: variables.main.volumeMounts.map(mount, mount.name).join(',')
+    - name: initNames
+      expression: >-
+        has(variables.pod.initContainers) ?
+        variables.pod.initContainers.map(container, container.name).join(',') : ''
+    - name: issuer
+      expression: >-
+        variables.protected ? variables.pod.initContainers[1] : variables.main
+    - name: issuerEnvironmentNames
+      expression: >-
+        variables.protected ? variables.issuer.env.map(item, item.name).join(',') : ''
+    - name: grantAgent
+      expression: >-
+        variables.protected ? variables.pod.initContainers[2] : variables.main
+    - name: grantEnvironmentNames
+      expression: >-
+        variables.protected ? variables.grantAgent.env.map(item, item.name).join(',') : ''
+    - name: csiVolumes
+      expression: >-
+        variables.pod.volumes.filter(volume,
+          volume.name in ['identity', 'authority-manifest-trust',
+            'authority-proof-trust', 'authority-issuer-key', 'platform-worker-grant-signer'])
+  validations:
+    - expression: >-
+        object.metadata.namespace == 'mattercodex-system' &&
+        has(object.metadata.labels) &&
+        variables.phase in ['claim', 'scan', 'sign', 'admit', 'promote'] &&
+        variables.admissionId.matches('^[a-f0-9]{32}$') &&
+        object.metadata.name ==
+          'mc-admit-' + variables.admissionId + '-' + variables.phase &&
+        object.metadata.labels['mattercodex.dev/image-admission-orchestrated'] == 'true' &&
+        has(object.metadata.annotations) &&
+        object.metadata.annotations['mattercodex.dev/admission-run-id'].matches(
+          '^v[0-9]{14}-[a-f0-9]{40}$') &&
+        object.metadata.annotations['mattercodex.dev/admission-run-id'].endsWith(
+          '-' + params.data.orchestrationRevision) &&
+        object.metadata.annotations['mattercodex.dev/admission-run-sha256'].matches(
+          '^[a-f0-9]{64}$') &&
+        object.metadata.annotations['mattercodex.dev/admission-policy-revision'] ==
+          params.data.policyRevision
+      message: Image admission Job identity is outside the owner contract.
+    - expression: >-
+        object.spec.backoffLimit == 1 &&
+        object.spec.activeDeadlineSeconds == 720 &&
+        object.spec.ttlSecondsAfterFinished == 3600 &&
+        (!has(object.spec.parallelism) || object.spec.parallelism == 1) &&
+        (!has(object.spec.completions) || object.spec.completions == 1) &&
+        (!has(object.spec.manualSelector) || object.spec.manualSelector == false) &&
+        (!has(object.spec.suspend) || object.spec.suspend == false) &&
+        !has(object.spec.podFailurePolicy)
+      message: Image admission Job lifecycle differs from the bounded contract.
+    - expression: >-
+        variables.pod.serviceAccountName == variables.expectedServiceAccount &&
+        has(variables.pod.automountServiceAccountToken) &&
+        variables.pod.automountServiceAccountToken == false &&
+        has(variables.pod.enableServiceLinks) &&
+        variables.pod.enableServiceLinks == false &&
+        variables.pod.restartPolicy == 'Never' &&
+        variables.pod.terminationGracePeriodSeconds == 30 &&
+        (!has(variables.pod.hostNetwork) || variables.pod.hostNetwork == false) &&
+        (!has(variables.pod.hostPID) || variables.pod.hostPID == false) &&
+        (!has(variables.pod.hostIPC) || variables.pod.hostIPC == false) &&
+        !has(variables.pod.nodeName) &&
+        !has(variables.pod.hostname) &&
+        !has(variables.pod.subdomain) &&
+        !has(variables.pod.runtimeClassName) &&
+        !has(variables.pod.priorityClassName) &&
+        (!has(variables.pod.imagePullSecrets) || variables.pod.imagePullSecrets.size() == 0) &&
+        (!has(variables.pod.hostAliases) || variables.pod.hostAliases.size() == 0)
+      message: Image admission Pod identity or host boundary differs from the owner contract.
+    - expression: >-
+        variables.pod.containers.size() == 1 &&
+        variables.main.name == variables.phase &&
+        variables.main.image == params.data.admissionImage &&
+        variables.main.imagePullPolicy == 'IfNotPresent' &&
+        variables.main.command ==
+          ['/bin/sh', '/opt/mattercodex/image-admission.sh', variables.phase] &&
+        (!has(variables.main.args) || variables.main.args.size() == 0) &&
+        !has(variables.main.lifecycle) &&
+        !has(variables.main.livenessProbe) &&
+        !has(variables.main.readinessProbe) &&
+        !has(variables.main.startupProbe) &&
+        (!has(variables.main.ports) || variables.main.ports.size() == 0) &&
+        variables.main.securityContext.runAsNonRoot == true &&
+        variables.main.securityContext.runAsUser == 10001 &&
+        variables.main.securityContext.runAsGroup == 10001 &&
+        variables.main.securityContext.allowPrivilegeEscalation == false &&
+        variables.main.securityContext.readOnlyRootFilesystem == true &&
+        variables.main.securityContext.capabilities.drop == ['ALL'] &&
+        !has(variables.main.securityContext.privileged)
+      message: Image admission executable or container privileges differ from the owner contract.
+    - expression: >-
+        variables.mainEnvironmentNames ==
+          'ADMISSION_RUN_ID,POLICY_REVISION,POLICY_SHA256,ADMISSION_TOOLS_IMAGE,ADMISSION_IMAGE,' +
+          'PROMOTION_REPOSITORY,PROMOTION_EVIDENCE_REPOSITORY,EVIDENCE_REPOSITORY,' +
+          'PROMOTED_PULL_REPOSITORY,EXPECTED_BUILDER_ID,EXPECTED_BUILD_TYPE,' +
+          'TRUSTED_ROLE_BASE_REPOSITORY,TRUSTED_ROLE_BASE_DIGEST,' +
+          'ROLE_RUNTIME_CONTRACT_REVISION,ROLE_RUNTIME_CONTRACT_SHA256,HOME' +
+          (variables.protected ?
+            ',INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET,INTERNAL_RPC_AUTHORITY_LOCAL_ROLE,' +
+            'IMAGE_OWNER_CONTROL_PLANE_TARGET,IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME,' +
+            'IMAGE_OWNER_CONTROL_PLANE_CA_FILE,IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE,' +
+            'IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE,IMAGE_OWNER_APPLICATION_GRANT_FILE,' +
+            'IMAGE_OWNER_STATE_FILE,IMAGE_OWNER_PROMOTION_FILE' : '') &&
+        variables.main.env.all(item,
+          !has(item.valueFrom) && has(item.value) &&
+          (item.name == 'ADMISSION_RUN_ID' ?
+             item.value == object.metadata.annotations['mattercodex.dev/admission-run-id'] :
+           item.name == 'POLICY_REVISION' ? item.value == params.data.policyRevision :
+           item.name == 'POLICY_SHA256' ? item.value == params.data.policySHA256 :
+           item.name == 'ADMISSION_TOOLS_IMAGE' ? item.value == params.data.toolsImage :
+           item.name == 'ADMISSION_IMAGE' ? item.value == params.data.admissionImage :
+           item.name == 'PROMOTION_REPOSITORY' ? item.value == params.data.promotionRepository :
+           item.name == 'PROMOTION_EVIDENCE_REPOSITORY' ? item.value == params.data.promotionEvidenceRepository :
+           item.name == 'EVIDENCE_REPOSITORY' ? item.value == params.data.evidenceRepository :
+           item.name == 'PROMOTED_PULL_REPOSITORY' ? item.value == params.data.promotedPullRepository :
+           item.name == 'EXPECTED_BUILDER_ID' ? item.value == params.data.builderIdentity :
+           item.name == 'EXPECTED_BUILD_TYPE' ? item.value == params.data.buildType :
+           item.name == 'TRUSTED_ROLE_BASE_REPOSITORY' ? item.value == params.data.trustedRoleBaseRepository :
+           item.name == 'TRUSTED_ROLE_BASE_DIGEST' ? item.value == params.data.trustedRoleBaseDigest :
+           item.name == 'ROLE_RUNTIME_CONTRACT_REVISION' ? item.value == params.data.roleRuntimeContractRevision :
+           item.name == 'ROLE_RUNTIME_CONTRACT_SHA256' ? item.value == params.data.roleRuntimeContractSHA256 :
+           item.name == 'HOME' ? item.value == '/tmp' :
+           item.name == 'INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET' ? item.value == '/run/mattercodex/internal-rpc-authority/issuer.sock' :
+           item.name == 'INTERNAL_RPC_AUTHORITY_LOCAL_ROLE' ? item.value == 'issuer' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TARGET' ? item.value == 'control-plane.mattercodex-system.svc:8443' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME' ? item.value == 'control-plane.mattercodex-system.svc.cluster.local' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_CA_FILE' ? item.value == '/control-plane/ca.pem' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE' ? item.value == '/workload-tls/tls.crt' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE' ? item.value == '/workload-tls/tls.key' :
+           item.name == 'IMAGE_OWNER_APPLICATION_GRANT_FILE' ? item.value == '/application-grant/application-grant.jws' :
+           item.name == 'IMAGE_OWNER_STATE_FILE' ? item.value == '/work/owner-claim.json' :
+           item.name == 'IMAGE_OWNER_PROMOTION_FILE' ? item.value == '/work/owner-promotion.json' :
+           false))
+      message: Image admission environment differs from the owner contract.
+    - expression: >-
+        variables.initNames ==
+          (variables.protected ?
+            'internal-rpc-authority-socket-init,internal-rpc-authority-issuer,' +
+            'platform-worker-grant-agent' : '') &&
+        (!variables.protected ||
+          (variables.pod.initContainers.size() == 3 &&
+           variables.pod.initContainers[0].image == params.data.authorityImage &&
+           variables.pod.initContainers[0].command ==
+             ['/usr/local/bin/internal-rpc-authority-socket-init'] &&
+           variables.pod.initContainers[0].name == 'internal-rpc-authority-socket-init' &&
+           variables.pod.initContainers[1].image == params.data.authorityImage &&
+           variables.pod.initContainers[1].command ==
+             ['/usr/local/bin/internal-rpc-authority-issuer'] &&
+           variables.pod.initContainers[1].name == 'internal-rpc-authority-issuer' &&
+           variables.pod.initContainers[1].restartPolicy == 'Always' &&
+           variables.pod.initContainers[2].image == params.data.authorityImage &&
+           variables.pod.initContainers[2].command ==
+             ['/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent'] &&
+           variables.pod.initContainers[2].name == 'platform-worker-grant-agent' &&
+           variables.pod.initContainers[2].restartPolicy == 'Always' &&
+           variables.pod.initContainers.all(container,
+             container.securityContext.runAsNonRoot == true &&
+             container.securityContext.allowPrivilegeEscalation == false &&
+             container.securityContext.readOnlyRootFilesystem == true &&
+             container.securityContext.capabilities.drop == ['ALL'] &&
+             !has(container.securityContext.privileged))))
+      message: Image admission internal authority sidecar differs from the owner contract.
+    - expression: >-
+        !variables.protected ||
+        (variables.issuerEnvironmentNames ==
+          'DEPLOYMENT_ENVIRONMENT,OTEL_EXPORTER_OTLP_ENDPOINT,' +
+          'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,OTEL_EXPORTER_OTLP_CA_FILE,' +
+          'OTEL_TRACES_SAMPLER_ARG,SENTRY_DSN_FILE,SENTRY_EXPECTED_HOST,' +
+          'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID,INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID,' +
+          'INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE,' +
+          'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS,' +
+          'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME,' +
+          'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE,' +
+          'INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE,' +
+          'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID,' +
+          'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID,' +
+          'INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE,' +
+          'INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER,' +
+          'INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN' &&
+         variables.issuer.env.all(item,
+           item.name == 'INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER' ?
+             has(item.valueFrom) && has(item.valueFrom.secretKeyRef) &&
+             item.valueFrom.secretKeyRef.name ==
+               'internal-rpc-authority-' + variables.workload + '-issuer-postgresql' &&
+             item.valueFrom.secretKeyRef.key == 'username' &&
+             (!has(item.valueFrom.secretKeyRef.optional) ||
+              item.valueFrom.secretKeyRef.optional == false) :
+             !has(item.valueFrom) && has(item.value) &&
+             (item.name == 'DEPLOYMENT_ENVIRONMENT' ?
+                item.value == object.spec.template.metadata.labels['mattercodex.dev/environment'] :
+              item.name == 'OTEL_EXPORTER_OTLP_ENDPOINT' ?
+                item.value == 'otel-collector.observability.svc:4317' :
+              item.name == 'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME' ?
+                item.value == 'otel-collector.observability.svc.cluster.local' :
+              item.name == 'OTEL_EXPORTER_OTLP_CA_FILE' ?
+                item.value == '/var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem' :
+              item.name == 'OTEL_TRACES_SAMPLER_ARG' ? item.value == '0.1' :
+              item.name == 'SENTRY_DSN_FILE' ?
+                item.value == '/var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn' :
+              item.name == 'SENTRY_EXPECTED_HOST' ?
+                item.value == 'sentry-relay.observability.svc:8443' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' ?
+                item.value == variables.workload :
+              item.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID' ?
+                item.value == 'spiffe://mattercodex.local/ns/mattercodex-system/sa/' + variables.workload :
+              item.name == 'INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE' ?
+                item.value == 'internal-rpc-authority-' + variables.workload :
+              item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS' ?
+                item.value == 'internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME' ?
+                item.value == 'internal-rpc-authority-readback-attestor.mattercodex-system.svc' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE' ?
+                item.value == '/var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE' ?
+                item.value == '/var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID' ? item.value == '10001' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID' ? item.value == '10001' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE' ?
+                item.value == '/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn' :
+              item.name == 'INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN' ? item.value == ':9091' :
+              false)))
+      message: Image admission authority sidecar configuration differs from the exact contract.
+    - expression: >-
+        !variables.protected ||
+        (variables.grantEnvironmentNames ==
+          'PLATFORM_WORKER_GRANT_WORKLOAD_ID,PLATFORM_WORKER_GRANT_OUTPUT_FILE' &&
+         variables.grantAgent.env.all(item,
+           !has(item.valueFrom) && has(item.value) &&
+           (item.name == 'PLATFORM_WORKER_GRANT_WORKLOAD_ID' ?
+              item.value == variables.workload :
+            item.name == 'PLATFORM_WORKER_GRANT_OUTPUT_FILE' ?
+              item.value == '/application-grant/application-grant.jws' : false)) &&
+         variables.grantAgent.volumeMounts.map(mount, mount.name).join(',') ==
+           'application-grant,platform-worker-grant-signer')
+      message: Image admission grant sidecar configuration differs from the exact contract.
+    - expression: >-
+        variables.volumeNames ==
+          (variables.protected ?
+            'work,tmp,script,identity,authority-sockets,authority-snapshot,' +
+            'authority-manifest-trust,authority-proof-trust,authority-issuer-key,' +
+            'authority-workload-tls,control-plane-ca,application-grant,' +
+            'platform-worker-grant-signer,' +
+            'authority-readback-ca,authority-vault-ca,authority-vault-token,' +
+            'authority-restore-ca,authority-restore-certificate,' +
+            'authority-restore-role-trust,authority-postgresql,' +
+            'authority-postgresql-ca,authority-observability,authority-sentry-dsn' :
+            'work,tmp,script,identity') &&
+        variables.mainMountNames ==
+          (variables.protected ?
+            'work,script,identity,tmp,authority-sockets,authority-workload-tls,' +
+            'control-plane-ca,application-grant' : 'work,script,identity,tmp')
+      message: Image admission volume set differs from the owner contract.
+    - expression: >-
+        variables.csiVolumes.all(volume,
+          has(volume.csi) &&
+          volume.csi.driver == 'secrets-store.csi.k8s.io' &&
+          volume.csi.readOnly == true &&
+          volume.csi.volumeAttributes.size() == 1)
+      message: Image admission CSI source differs from the exact driver contract.
+    - expression: >-
+        variables.pod.volumes.all(volume,
+          volume.name == 'work' ?
+            (variables.phase == 'promote' ?
+              has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) == '256Mi' :
+              has(volume.persistentVolumeClaim) &&
+              volume.persistentVolumeClaim.claimName == 'mc-admit-' + variables.admissionId &&
+              (!has(volume.persistentVolumeClaim.readOnly) ||
+               volume.persistentVolumeClaim.readOnly == false)) :
+          volume.name == 'tmp' ?
+            has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) == '64Mi' :
+          volume.name == 'script' ?
+            has(volume.configMap) &&
+            volume.configMap.name == 'mattercodex-image-admission' &&
+            volume.configMap.defaultMode == 365 :
+          volume.name == 'identity' ?
+            has(volume.csi) && volume.csi.driver == 'secrets-store.csi.k8s.io' &&
+            volume.csi.readOnly == true &&
+            volume.csi.volumeAttributes['secretProviderClass'] == variables.expectedIdentity :
+          volume.name == 'authority-sockets' ?
+            variables.protected && has(volume.emptyDir) &&
+            string(volume.emptyDir.sizeLimit) == '8Mi' :
+          volume.name == 'authority-snapshot' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-snapshot' :
+          volume.name == 'authority-manifest-trust' ?
+            variables.protected && has(volume.csi) &&
+            volume.csi.volumeAttributes['secretProviderClass'] ==
+              'internal-rpc-authority-' + variables.workload + '-manifest-trust' :
+          volume.name == 'authority-proof-trust' ?
+            variables.protected && has(volume.csi) &&
+            volume.csi.volumeAttributes['secretProviderClass'] ==
+              'internal-rpc-authority-' + variables.workload + '-proof-trust' :
+          volume.name == 'authority-issuer-key' ?
+            variables.protected && has(volume.csi) &&
+            volume.csi.volumeAttributes['secretProviderClass'] ==
+              'internal-rpc-authority-' + variables.workload + '-issuer-key' :
+          volume.name == 'authority-workload-tls' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
+              'internal-rpc-authority-' + variables.workload + '-workload-tls' :
+          volume.name == 'control-plane-ca' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'mattercodex-internal-ca' :
+          volume.name == 'application-grant' ?
+            variables.protected && has(volume.emptyDir) &&
+            string(volume.emptyDir.sizeLimit) == '1Mi' :
+          volume.name == 'platform-worker-grant-signer' ?
+            variables.protected && has(volume.csi) &&
+            volume.csi.volumeAttributes['secretProviderClass'] ==
+              variables.workload + '-platform-worker-grant-signer' :
+          volume.name == 'authority-readback-ca' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'internal-rpc-authority-readback-attestor-ca' :
+          volume.name == 'authority-vault-ca' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'internal-rpc-authority-vault-ca' :
+          volume.name == 'authority-vault-token' ?
+            variables.protected && has(volume.projected) &&
+            volume.projected.sources.size() == 1 &&
+            has(volume.projected.sources[0].serviceAccountToken) &&
+            volume.projected.sources[0].serviceAccountToken.audience == 'vault' &&
+            volume.projected.sources[0].serviceAccountToken.expirationSeconds == 600 &&
+            volume.projected.sources[0].serviceAccountToken.path == 'token' :
+          volume.name == 'authority-restore-ca' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'internal-rpc-authority-restore-controller-ca' :
+          volume.name == 'authority-restore-certificate' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-restore-controller-tls' :
+          volume.name == 'authority-restore-role-trust' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-restore-role-trust' :
+          volume.name == 'authority-postgresql' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
+              'internal-rpc-authority-' + variables.workload + '-issuer-postgresql' :
+          volume.name == 'authority-postgresql-ca' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'internal-rpc-authority-postgresql-ca' :
+          volume.name == 'authority-observability' ?
+            variables.protected && has(volume.configMap) &&
+            volume.configMap.name == 'internal-rpc-authority-otel-ca' :
+          volume.name == 'authority-sentry-dsn' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-sentry' :
+          false)
+      message: Image admission volume source is outside the exact identity contract.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-image-admission-controller-jobs
+spec:
+  policyName: mattercodex-image-admission-controller-jobs
+  validationActions: [Deny]
+  paramRef:
+    name: mattercodex-image-admission-policy
+    namespace: mattercodex-system
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-image-admission-controller-workspaces
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ['']
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [persistentvolumeclaims]
+        scope: Namespaced
+  matchConditions:
+    - name: exact-controller
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:mattercodex-system:image-admission-controller'
+  variables:
+    - name: admissionId
+      expression: object.metadata.labels['mattercodex.dev/image-admission-id']
+  validations:
+    - expression: >-
+        object.metadata.namespace == 'mattercodex-system' &&
+        has(object.metadata.labels) &&
+        variables.admissionId.matches('^[a-f0-9]{32}$') &&
+        object.metadata.name == 'mc-admit-' + variables.admissionId &&
+        object.metadata.labels['mattercodex.dev/image-admission-orchestrated'] == 'true' &&
+        has(object.metadata.annotations) &&
+        object.metadata.annotations['mattercodex.dev/admission-run-id'].matches(
+          '^v[0-9]{14}-[a-f0-9]{40}$') &&
+        object.metadata.annotations['mattercodex.dev/admission-run-sha256'].matches(
+          '^[a-f0-9]{64}$')
+      message: Image admission workspace identity is outside the owner contract.
+    - expression: >-
+        object.spec.accessModes == ['ReadWriteOnce'] &&
+        string(object.spec.resources.requests['storage']) == '2Gi' &&
+        !has(object.spec.volumeName) &&
+        !has(object.spec.selector) &&
+        !has(object.spec.dataSource) &&
+        !has(object.spec.dataSourceRef)
+      message: Image admission workspace storage differs from the bounded contract.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-image-admission-controller-workspaces
+spec:
+  policyName: mattercodex-image-admission-controller-workspaces
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system

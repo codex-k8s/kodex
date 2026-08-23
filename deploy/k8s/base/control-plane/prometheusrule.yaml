@@ -40,7 +40,7 @@ spec:
             severity: warning
           annotations:
             summary: Растёт число неожиданных control-plane RPC ошибок
-            description: Проверить PostgreSQL, Redis, NATS, authority verifier и traces.
+            description: Проверить PostgreSQL, NATS, authority verifier и traces.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneGRPCLatencyHigh
           expr: >-
@@ -70,7 +70,7 @@ spec:
         - alert: ControlPlaneOwnerLifecycleFailures
           expr: >-
             sum(rate(mattercodex_control_plane_grpc_requests_total{
-              operation=~"controlplane.manage(roledefinition|agent|agentassignment|instructionset|providerconnectionreference|providerpool|workspacebackup|workspacerestore|runtimeincident|workspacemattermostmapping|run)",
+              operation=~"platform\\.(command|assistant|runtime|role-images)\\..+",
               code=~"Internal|Unavailable|Unknown|DataLoss"
             }[5m])) > 0.05
           for: 10m

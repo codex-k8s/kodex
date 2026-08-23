@@ -4,11 +4,17 @@ metadata:
   name: interaction-gateway
   labels:
     app.kubernetes.io/name: interaction-gateway
+    app.kubernetes.io/component: interaction-adapter
 spec:
   selector:
     app.kubernetes.io/name: interaction-gateway
-    app.kubernetes.io/component: external-gateway
+    app.kubernetes.io/component: interaction-adapter
   ports:
-    - {name: https, port: 8443, targetPort: https, protocol: TCP}
-    - {name: team-grpc, port: 9443, targetPort: team-grpc, protocol: TCP}
-    - {name: metrics, port: 9090, targetPort: metrics, protocol: TCP}
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+    - name: auth-metrics
+      port: 9091
+      targetPort: auth-metrics
+      protocol: TCP

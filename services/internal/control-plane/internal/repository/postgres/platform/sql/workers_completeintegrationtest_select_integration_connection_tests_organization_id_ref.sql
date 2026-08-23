@@ -1,0 +1,2 @@
+-- name: workers_completeintegrationtest_select_integration_connection_tests_organization_id_ref :one
+SELECT t.id::text,t.connection_id::text,c.ref,t.fence_digest,t.generation,t.state,t.lease_ref,t.lease_expires_at FROM control_plane.integration_connection_tests t JOIN control_plane.integration_connections c ON c.id=t.connection_id WHERE t.organization_id=$1::uuid AND t.ref=$2 FOR UPDATE OF t,c

@@ -6,7 +6,8 @@
 
 - Доменная граница не размыта: один сервис отвечает за один bounded context или один edge-контур.
 - Зона `internal|external|jobs|dev`, deployable и bounded context выбраны согласно `docs/architecture/service-boundaries.md` и `docs/guides/repository-structure.md`.
-- Для `external` edge слой остаётся thin-edge: валидация, auth, routing, Mattermost/GitHub callback handling; доменная логика живёт глубже.
+- Для `external` edge слой остаётся thin-edge: валидация, auth, routing и
+  callback handling подключаемых интеграций; доменная логика живёт глубже.
 - Для Go-кода прочитан профильный гайд `docs/design-guidelines/go/services_design_requirements.md`.
 - Модели/типы/DTO размещены по слоям, а не ad-hoc в handler или main.
 - Повторяющиеся литералы, ключи событий и runtime status values вынесены в typed constants/value objects, если они используются больше одного раза.
@@ -31,8 +32,11 @@
 
 ## Специфика matter-codex
 
-- Mattermost является conversational surface, Control Center - surface сложной настройки; typed commands остаются debug/fallback.
-- Agent runtime проектируется как отдельный Kubernetes pod с PVC под checkout рабочей ветки.
+- Control Center является основной conversational и configuration surface;
+  typed owner API обслуживает её, а не считается debug/fallback.
+- Agent runtime проектируется как новый execution-scoped Kubernetes Pod из
+  immutable digest образа роли. PVC не переиспользует процесс, credentials,
+  env или RuntimeRevision между ходами.
 - Git/repository является optional integration; GitHub-специфика не просачивается в universal domain.
 - Состояние long-running процессов, агентных запусков и блокировок проектируется под PostgreSQL.
 - Данные гибкой структуры проектируются под `JSONB`; векторный поиск - под будущий `pgvector`.

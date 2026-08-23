@@ -83,7 +83,7 @@ func authorizedPull(request *http.Request, registryHost string) bool {
 	cn := certificate.Subject.CommonName
 	profiles := map[string]pullProfile{
 		"mattercodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"mattercodex/control-plane"}},
-		"mattercodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"mattercodex/dockerfile", "mattercodex/agent-runner"}},
+		"mattercodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"mattercodex/dockerfile", "mattercodex/agent-runner", "mattercodex/role-base-documents"}},
 		"role-image-builder-input-read":         {"/identity/input-dockerconfig.json", []string{"mattercodex/role-image-inputs"}},
 	}
 	if profile, ok := profiles[cn]; ok {

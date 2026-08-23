@@ -11,29 +11,47 @@ import (
 
 // Readiness потокобезопасно хранит статус и ограниченную причину.
 type Readiness struct {
-	ready  atomic.Bool
-	reason atomic.Value
+	snapshot atomic.Pointer[readinessSnapshot]
+}
+
+type readinessSnapshot struct {
+	ready  bool
+	reason string
 }
 
 // NewReadiness создаёт неготовое начальное состояние.
 func NewReadiness() *Readiness {
 	readiness := &Readiness{}
-	readiness.reason.Store("starting")
+	readiness.snapshot.Store(&readinessSnapshot{reason: "starting"})
 	return readiness
 }
 
-// Set атомарно обновляет готовность и причину.
-func (readiness *Readiness) Set(ready bool, reason string) {
+// Set атомарно обновляет готовность и причину и сообщает о смене снимка.
+// Возвращаемый edge позволяет логировать только отказ и восстановление, а не
+// каждую периодическую проверку.
+func (readiness *Readiness) Set(ready bool, reason string) bool {
 	if reason == "" {
 		reason = "unspecified"
 	}
-	readiness.reason.Store(reason)
-	readiness.ready.Store(ready)
+	for {
+		current := readiness.snapshot.Load()
+		if current != nil && current.ready == ready && current.reason == reason {
+			return false
+		}
+		next := &readinessSnapshot{ready: ready, reason: reason}
+		if readiness.snapshot.CompareAndSwap(current, next) {
+			return true
+		}
+	}
 }
 
 // Ready возвращает согласованный снимок готовности.
 func (readiness *Readiness) Ready() (bool, string) {
-	return readiness.ready.Load(), readiness.reason.Load().(string)
+	snapshot := readiness.snapshot.Load()
+	if snapshot == nil {
+		return false, "starting"
+	}
+	return snapshot.ready, snapshot.reason
 }
 
 // Worker выполняет фоновую работу до отмены контекста.

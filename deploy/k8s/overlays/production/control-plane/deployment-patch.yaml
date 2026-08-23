@@ -10,7 +10,7 @@ spec:
         - name: control-plane
           env:
             - name: CONTROL_PLANE_NATS_REPLICAS
-              value: "3"
+              value: "1"
           resources:
             requests:
               cpu: 250m

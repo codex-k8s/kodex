@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.4.0
-updated: 2026-08-05
+version: 0.5.0
+updated: 2026-08-22
 ---
 
 # Образы и цепочка поставки
@@ -136,6 +136,17 @@ promotion восстанавливает все доказательства и�
 rollback или retry не зависит от прежнего `emptyDir` и не повторяет сериализацию
 подписанных данных.
 
+Ожидающие admission и promotion автоматически запускает
+`image-admission-controller`. Его единственные полномочия — чтение immutable
+policy и ограниченные операции над собственными Job/PVC. Controller не имеет
+control-plane, registry, signing или Vault identity фаз. Kubernetes
+`ValidatingAdmissionPolicy` проверяет caller ServiceAccount и точный phase
+contract: закреплённые образы, команды, env, тома, ServiceAccount и отсутствие
+host authority. Поэтому компрометация controller не позволяет использовать его
+право `create jobs` для запуска произвольного Pod под scanner, signer,
+admission либо promotion identity. Состояние Job/PVC служит только устойчивым
+reconcile cursor; owner lifecycle остаётся в `control-plane`.
+
 Node pull bootstrap запускается из version-pinned admission runtime, а как
 readback target использует уже обязательный trusted `agent-runner` exact digest
 до protected role pull,
@@ -153,6 +164,7 @@ host-настройка не используются.
 | owner create/update/read | verified owner session → control-api-gateway | специализированные manage/get operations, server-owned tenant/owner/generation, version CAS и canonical hash в control-plane transaction |
 | claim/materialize | role-image-builder SPIFFE + signed build claim | exact recipe/build/attempt/fence/immutable input; pull-only OCI mTLS materializer, private cleanup, bounded failure |
 | solve/push | isolated BuildKit client/server mTLS | trusted base/runtime ABI и offline inputs; BuildKit единственный владелец staging push credential/egress |
+| orchestrate | image-admission-controller Kubernetes identity + immutable policy + VAP | создаёт только точную последовательность phase Job/PVC; не получает credential фаз и не владеет artifact lifecycle |
 | admit | image-admission SPIFFE + artifact claim | exact provenance/SBOM/policy/signature/runtime ABI; receipt и verdict owner-side |
 | authorize/promote/complete | image-promotion SPIFFE + consumed claim/token | owner verification до side effect, exact destination digest/readback и durable replay protection |
 | runtime revision | runtime-controller SPIFFE + protected read | current owner versions/evidence и exact promoted `repository@sha256` + ABI |

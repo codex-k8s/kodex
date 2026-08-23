@@ -2,12 +2,26 @@ package boundary
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+
+	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 )
+
+func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
+	statusCode, code, retryable := authenticationProblem(oidcauth.ErrSigningKeysUnavailable)
+	if statusCode != http.StatusServiceUnavailable || code != "UNAVAILABLE" || !retryable {
+		t.Fatalf("JWKS outage mapping = %d/%s/%t", statusCode, code, retryable)
+	}
+	statusCode, code, retryable = authenticationProblem(errors.New("invalid bearer"))
+	if statusCode != http.StatusUnauthorized || code != "UNAUTHENTICATED" || retryable {
+		t.Fatalf("invalid bearer mapping = %d/%s/%t", statusCode, code, retryable)
+	}
+}
 
 func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "https://control-api.mattercodex.local/api/v1/session", nil)
@@ -21,14 +35,14 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 		t.Fatal("caller-supplied authority header was accepted")
 	}
 
-	request.Header.Set("Origin", "https://control.kodex.works")
+	request.Header.Set("Origin", "https://control.example.test")
 	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
 	called := false
-	boundary := &Boundary{origins: map[string]struct{}{"https://control.kodex.works": {}}}
+	boundary := &Boundary{origins: map[string]struct{}{"https://control.example.test": {}}}
 	response := httptest.NewRecorder()
 	boundary.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
 	if called || response.Code != http.StatusNoContent ||
-		response.Header().Get("Access-Control-Allow-Origin") != "https://control.kodex.works" ||
+		response.Header().Get("Access-Control-Allow-Origin") != "https://control.example.test" ||
 		response.Header().Get("Access-Control-Allow-Credentials") != "true" ||
 		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID" {
 		t.Fatalf("credentialed preflight response is incomplete: status=%d headers=%v", response.Code, response.Header())
@@ -49,7 +63,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 func TestProjectReferenceBinding(t *testing.T) {
 	t.Parallel()
 
-	const projectID = "bf51b17a-94d2-4f7e-a7f4-1b014fceec0d"
+	const projectID = "prj_AQIDBAUGBwgJCgsMDQ4PEBES"
 	tests := []struct {
 		name      string
 		method    string
@@ -59,21 +73,20 @@ func TestProjectReferenceBinding(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "HTTP header", method: http.MethodGet, path: "/api/v1/runs", header: projectID, wantBound: true},
-		{name: "realtime query", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, wantBound: true},
+		{name: "run stream uses run eligibility", method: http.MethodGet, path: "/api/v1/runs/run_12345678/stream"},
 		{name: "exact project update path", method: http.MethodPut, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
 		{name: "project collection is unbound", method: http.MethodPost, path: "/api/v1/projects"},
 		{name: "invalid header", method: http.MethodGet, path: "/api/v1/runs", header: "invalid", wantErr: true},
 		{name: "invalid exact project path", method: http.MethodDelete, path: "/api/v1/projects/invalid", wantErr: true},
-		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
-		{name: "mismatched realtime scope", method: http.MethodGet, path: "/api/v1/realtime?projectId=" + projectID, header: "bcda470d-95dd-4839-bd59-55e1032d61f7", wantErr: true},
+		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "prj_EhEQDw4NDAsKCQgHBgUEAwIB", wantErr: true},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			request := httptest.NewRequest(test.method, "https://control.kodex.works"+test.path, nil)
+			request := httptest.NewRequest(test.method, "https://control.example.test"+test.path, nil)
 			if test.header != "" {
 				request.Header.Set(ProjectReferenceHeader, test.header)
 			}
@@ -86,5 +99,25 @@ func TestProjectReferenceBinding(t *testing.T) {
 				t.Fatalf("withProjectReference() bound = %v, want %v", result != base, test.wantBound)
 			}
 		})
+	}
+}
+
+func TestRealtimePathClassification(t *testing.T) {
+	for _, path := range []string{
+		"/api/v1/runs/run_12345678/stream",
+		"/api/v1/platform/stream",
+	} {
+		if !isRealtimePath(path) {
+			t.Fatalf("realtime path was not classified: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"/api/v1/runs",
+		"/api/v1/platform/stream/extra",
+		"/api/v1/platform",
+	} {
+		if isRealtimePath(path) {
+			t.Fatalf("ordinary HTTP path was classified as realtime: %s", path)
+		}
 	}
 }

@@ -1,84 +1,73 @@
 ---
 id: ARCH-MC-008
-title: Вложения и файлы
+title: Вложения и artifacts
 type: architecture
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 1.1.0
+updated: 2026-08-23
 ---
 
-# Вложения и файлы
+# Вложения и artifacts
 
-## Источник истины
+## Владение и хранение
 
-S3-совместимое хранилище содержит основной объект. Mattermost содержит пользовательскую копию или ссылку доставки. PostgreSQL хранит метаданные, привязки, состояние и срок хранения.
+Control-plane владеет `Artifact`, `ArtifactVersion`, scan/lifecycle, bindings,
+retention, result relation и download grants. Fresh web-only baseline хранит
+bounded object body в отдельной PostgreSQL таблице под той же organization
+boundary. Content не помещается в audit, outbox, NATS или WebSocket.
 
-## Прием входного файла
+Архитектурный port не раскрывает тип хранилища. Поздний переход к internal
+object storage меняет repository adapter, но не owner API и domain model.
 
-1. Шлюз взаимодействия получает сообщение и `file_ids`.
-2. Метаданные проверяются до скачивания.
-3. Содержимое скачивается потоком с ограничением размера.
-4. Вычисляется SHA-256 и определяется фактический media type.
-5. Выполняются проверки политик и вредоносного содержимого.
-6. Объект сохраняется по непрогнозируемому ключу хранилища.
-7. Создаются `ArtifactVersion` и `MessageArtifactBinding`.
-8. Материализатор среды выполнения размещает файл только для чтения во входном каталоге сессии.
-9. Промпт хода получает манифест, но не полное содержимое.
+## Upload
 
-## Пути рабочей области
+1. Browser отправляет metadata и bounded stream через owner endpoint.
+2. Gateway проверяет session/Origin/CSRF/rate/body limits и использует generated
+   streaming gRPC client.
+3. Control-plane разрешает User и Project, ограниченно читает stream, вычисляет
+   digest и выполняет встроенную проверку содержимого до открытия транзакции.
+4. Fresh baseline атомарно сохраняет metadata, content, audit, idempotency
+   receipt и `artifact.available`/platform invalidation с итоговым persisted
+   scan state `CLEAN`, `QUARANTINED` либо `FAILED`. Это синхронный bounded
+   inspection, а не фиктивный background scanner; только `CLEAN` version может
+   стать input, knowledge binding, preview или download.
+5. Control Center получает safe metadata event и читает body только отдельным
+   download/preview request.
 
-```text
-/workspace/.matter-codex/
-  inbox/<turn-id>/manifest.json
-  inbox/<turn-id>/<safe-name>
-  outbox/<turn-id>/
-  state/
-```
+## Generated result
 
-Исходное имя файла хранится отдельно. Безопасное имя не допускает абсолютный путь, `..`, управляющие символы и переход по символическим ссылкам. Архивы автоматически не распаковываются.
+Agent-runner завершает execution с bounded result manifest. Control-plane
+проверяет claim/fence, digest, declared size/media type и связывает Artifact с
+точными Run/node/turn/attempt в той же terminal transaction. Произвольный путь
+role Pod или provider response не становится storage locator.
 
-## Манифест промпта
+## Download
 
-Для каждого файла передаются:
+1. Browser запрашивает artifactRef из авторитетного Project/Run readback.
+2. Control-plane повторно проверяет organization/project eligibility, scan state
+   и retention.
+3. Download operation выдаёт body bounded chunks; gateway не буферизует файл
+   целиком и задаёт безопасные content headers.
+4. Filename кодируется как недоверенное display metadata, active content не
+   исполняется inline без allowlist preview.
 
-- исходное имя;
-- локальный путь;
-- тип содержимого;
-- размер;
-- контрольная сумма;
-- тип источника и сообщение;
-- краткое пользовательское описание, если задано.
+## Runtime materialization
 
-При возобновлении в новый промпт входят только новые вложения; ранее материализованные файлы остаются доступны по манифесту сессии.
+Runtime получает только exact ArtifactVersion refs из RuntimeRevision.
+Materializer скачивает их по execution-scoped bearer + mTLS, повторно сверяет
+size/digest, пишет в private workspace и не получает broad database/storage
+credential.
 
-## Публикация исходящего файла
+## Optional delivery
 
-Агент пишет файл в `MATTERCODEX_OUTPUT_DIR` и вызывает локальный инструмент MCP `publish_artifact`.
+Interaction adapter читает Artifact тем же ограниченным owner-approved path и
+фиксирует отдельный DeliveryAttempt. Его outage/retry не меняет Artifact state и
+terminal core Run. External post/thread ID остаётся только delivery metadata.
 
-Инструмент:
+## Ограничения первой версии
 
-1. канонизирует путь и проверяет, что он внутри исходящего каталога текущего хода;
-2. запрещает символические ссылки и специальные файлы;
-3. проверяет размер, тип содержимого и политику проверки;
-4. загружает основной объект в S3;
-5. создает `ArtifactVersion`;
-6. передает команду доставки шлюзу взаимодействия;
-7. шлюз загружает файл в Mattermost от учетной записи бота агента и отвечает в исходном обсуждении;
-8. сообщение получает внутренний признак `notrigger`.
-
-Если лимит Mattermost меньше файла, шлюз публикует ограниченную по области и времени ссылку скачивания и метаданные. Файл не теряется при временной ошибке доставки.
-
-## Изоляция и безопасность
-
-- Agent не получает Mattermost token и S3 master credential.
-- Инструмент среды выполнения не публикует `/etc`, подключенные секреты и файлы другой сессии.
-- Ключи хранилища разделены префиксами организации, рабочей области и сессии и проверяются слоем авторизации.
-- Sensitive filenames маскируются в logs/audit при необходимости.
-- Scan state: `pending`, `clean`, `quarantined`, `failed`.
-- Файл в карантине не материализуется и не доставляется.
-- Срок хранения и юридическая блокировка удаления задаются политикой, а не временем жизни pod или PVC.
-
-## Backup consistency
-
-Восстановление считается успешным, если восстановлены метаданные PostgreSQL и соответствующие версии объектов S3. Запуск резервного копирования сохраняет маркер и идентификатор корреляции для проверки согласованности.
+Максимальный размер upload/generated artifact задаётся server policy и не может
+быть повышен browser payload. Multipart large objects, range download и внешний
+S3 backend относятся к POST-MVP, но domain contract уже допускает смену storage
+adapter.

@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.6
-updated: 2026-08-09
+version: 1.2.8
+updated: 2026-08-23
 ---
 
 # Границы сервисов и структура репозитория
@@ -52,12 +52,12 @@ runbook и ручная проверка входят в один Issue и од�
 | Компонент                | Тип                             | Владеет                                                                                                                                    | Не владеет                                                              |
 | ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
 | `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot                                            | пользователи, роли, проекты, permissions и transport identity caller    |
-| `control-plane`          | internal service                | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process  |
+| `control-plane`          | internal service                | организации, Проекты, агенты, role image lifecycle, integrations metadata, runtime revisions, sessions, Run graph/events, schedules, memory, gates и artifact metadata | channel transport, Kubernetes resources, MCP execution и AI process  |
 | `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health                                                   | бизнесовая конфигурация, Codex process и пользовательские сообщения     |
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
 | `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
-| `interaction-gateway`    | external gateway                | Mattermost transport, idempotency, cards, bot identities и file delivery                                                                   | sessions, processes, schedules и Kubernetes state                       |
-| `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
+| `interaction-gateway`    | optional external adapter       | independent inbound/notification/result-mirror/gate-decision deliveries                                                                     | core readiness, sessions, gates, artifacts и terminal Run state          |
+| `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, credential isolation и provider effect receipts                                                          | integration metadata/grants, Human Gates, чужое domain state и agent orchestration |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
 | `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
 | `role-image-builder`     | job                             | trusted materialization, BuildKit execution, provenance и staging registry artifact                                                        | canonical build specification hash, SBOM/vulnerability/signature admission, promotion и role business state |
@@ -83,8 +83,9 @@ rollout выбирает отдельный content-addressed immutable ConfigMa
 `control-plane` материализует эту границу в
 `services/internal/control-plane`: транзакция PostgreSQL одновременно фиксирует
 агрегат, квитанцию семантической идемпотентности, аудит и каждый обязательный
-факт исходящего журнала. Redis остаётся только версионированным сквозным
-кэшем. Шлюз получает подтверждение полномочий у доменного владельца, но не
+факт исходящего журнала. Основной профиль использует только локальный bounded
+cache; Redis не является зависимостью control-plane и может появиться позднее
+только как отдельный version-bound adapter. Шлюз получает подтверждение полномочий у доменного владельца, но не
 передаёт идентификаторы actor/tenant/project как полномочия в прикладном
 payload. Команды среды исполнения, планировщика и сканера открываются только
 отдельными привязками политики с точными workload/SPIFFE, назначением
@@ -100,9 +101,18 @@ rootless BuildKit. Base-pull и staging-push identities, credentials и egress
 принадлежат только BuildKit. Tenant, owner, recipe, generation, policy и artifact eligibility
 назначает `control-plane`; installation block доступен builder только в
 immutable claim snapshot и не попадает в status/log/audit/provenance.
-Отдельный `render-image-admission-job.sh` сначала получает server-owned artifact
-claim, затем разделяет scanner, signer, admission owner и promotion по разным
-Pod/ServiceAccount/Vault/mTLS границам. Admission фиксирует exact SBOM,
+`image-admission-controller` автоматически материализует только одну
+последовательную цепочку `claim → scan → sign → admit` и отдельную
+`promote`-задачу. Он читает immutable policy и состояние собственных Job/PVC
+через Kubernetes API, но не получает registry, signing, Vault либо
+control-plane credentials. Fail-closed `ValidatingAdmissionPolicy` связывает
+его identity с точными образами, командами, ServiceAccount, env и volume
+sources каждой фазы; одного RBAC `create jobs` недостаточно. Скрипт
+`render-image-admission-job.sh` является встроенным deterministic renderer и
+read-only диагностикой, а не ручным production trigger. Созданные фазы сначала
+получают server-owned artifact claim, затем разделяют scanner, signer,
+admission owner и promotion по разным Pod/ServiceAccount/Vault/mTLS границам.
+Admission фиксирует exact SBOM,
 vulnerability, native BuildKit provenance, signature и receipt через protected
 RPC; durable evidence OCI manifest проходит readback до verdict. Только server-selected
 одноразовый owner promotion claim, включающий content/manifest receipt digests,
@@ -127,19 +137,10 @@ builder не выдаются.
 context от workload-local `internal-rpc-authority`. Payload и caller-provided
 identifier не являются источником полномочий.
 
-## Работа с legacy
+## Fresh reset
 
-`services/external/bot-service`, текущий `services/jobs/agent-runner`,
-`apps/control-center` и `specs/**` остаются только действующим legacy-контуром
-до cutover. Они:
-
-- не являются примером структуры нового кода;
-- не получают новые продуктовые возможности;
-- меняются только для критического сохранения работоспособности dogfooding;
-- не требуют постоянного compatibility facade в новых unit.
-
-После dark deploy нового контура из #197 отдельная граница #241 материализует
-TLS 1.3 source transport. Затем #196 выполняет backup, dry-run и one-shot
-forward migration; consumer switch остаётся отдельным owner-approved действием.
-Старый transport, credential и client trust выводятся только по #271 после
-authoritative `COMMITTED`, полного readback и проверенного rollback window.
+`apps/control-center`, legacy bot-service, migration/cutover jobs, compatibility
+contracts и dual-write удаляются. `services/jobs/agent-runner` не является
+legacy: это защищённый runtime ABI внутри каждого promoted role image.
+`role-image-builder` и image supply chain также остаются активными обязательными
+unit. Mattermost выносится в optional overlay без core authority.

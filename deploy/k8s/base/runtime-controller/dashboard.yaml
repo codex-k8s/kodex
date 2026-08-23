@@ -11,11 +11,8 @@ data:
       "schemaVersion": 39,
       "refresh": "30s",
       "panels": [
-        {"type":"stat","title":"Readiness","targets":[{"expr":"max(mattercodex_runtime_controller_readiness{ready=\"true\"})"}],"gridPos":{"x":0,"y":0,"w":6,"h":4}},
-        {"type":"timeseries","title":"Lifecycle operations","targets":[{"expr":"sum by (operation,outcome) (rate(mattercodex_runtime_controller_operations_total[5m]))"}],"gridPos":{"x":6,"y":0,"w":18,"h":8}},
-        {"type":"timeseries","title":"Capacity state","targets":[{"expr":"mattercodex_runtime_controller_capacity_state"}],"gridPos":{"x":0,"y":8,"w":12,"h":8}},
-        {"type":"timeseries","title":"Durable inbox and JetStream backlog","targets":[{"expr":"mattercodex_runtime_controller_inbox_state"}],"gridPos":{"x":12,"y":8,"w":12,"h":8}},
-        {"type":"timeseries","title":"Inbox outcomes","targets":[{"expr":"sum by (operation,outcome) (rate(mattercodex_runtime_controller_inbox_operations_total[5m]))"}],"gridPos":{"x":0,"y":16,"w":12,"h":8}},
-        {"type":"timeseries","title":"Go runtime","targets":[{"expr":"rate(go_gc_duration_seconds_count{job=\"runtime-controller\"}[5m])"}],"gridPos":{"x":12,"y":16,"w":12,"h":8}}
+        {"type":"stat","title":"Readiness","targets":[{"expr":"max(mattercodex_runtime_controller_readiness{ready=\"true\"})"}],"gridPos":{"x":0,"y":0,"w":8,"h":4}},
+        {"type":"timeseries","title":"Process CPU","targets":[{"expr":"rate(process_cpu_seconds_total{job=\"runtime-controller\"}[5m])"}],"gridPos":{"x":8,"y":0,"w":8,"h":8}},
+        {"type":"timeseries","title":"Go memory","targets":[{"expr":"go_memstats_heap_alloc_bytes{job=\"runtime-controller\"}"}],"gridPos":{"x":16,"y":0,"w":8,"h":8}}
       ]
     }

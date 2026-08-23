@@ -232,7 +232,9 @@ func RunReadbackAttestor(
 				},
 			)
 			if loadErr != nil {
-				readiness.Set(false, "readback-trust-reload-failed")
+				if readiness.Set(false, "readback-trust-reload-failed") {
+					logger.Error("readback trust reload unavailable", "error_class", "snapshot")
+				}
 				metrics.SetReady(false)
 				continue
 			}
@@ -241,11 +243,15 @@ func RunReadbackAttestor(
 				nextTrust,
 				readbackTrustState(nextMetadata, time.Now()),
 			); activateErr != nil {
-				readiness.Set(false, "readback-trust-watermark-rejected")
+				if readiness.Set(false, "readback-trust-watermark-rejected") {
+					logger.Error("readback trust activation rejected", "error_class", "watermark")
+				}
 				metrics.SetReady(false)
 				continue
 			}
-			readiness.Set(true, "ready")
+			if readiness.Set(true, "ready") {
+				logger.Info("readback trust readiness restored")
+			}
 			metrics.SetReady(true)
 		}
 	})
@@ -380,19 +386,12 @@ func newReadbackTechnicalServer(
 	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
 		_, _ = response.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
 		if ready, _ := readiness.Ready(); !ready {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
-		defer cancel()
-		if err := readbackApplication.Ready(ctx); err != nil {
-			metrics.SetReady(false)
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		metrics.SetReady(true)
 		_, _ = response.Write([]byte("ready\n"))
 	})
 	return &http.Server{

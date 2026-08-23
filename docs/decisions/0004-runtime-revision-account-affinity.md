@@ -4,8 +4,8 @@ title: RuntimeRevision и привязка учетной записи
 type: decision
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-08-04
+version: 1.0.0
+updated: 2026-08-23
 ---
 
 # ADR-MC-004. RuntimeRevision и привязка учетной записи
@@ -15,7 +15,9 @@ updated: 2026-08-04
 Перед каждым ходом строится неизменяемая `RuntimeRevision` и новый
 execution-scoped Pod. Session PVC можно сохранить, но env, авторизация, образ,
 подключения файлов, права и конфигурация поставщика материализуются заново
-перед app-server `thread/start` либо `thread/resume`.
+перед запуском или возобновлением provider session. Первый Codex adapter
+materialize-ит это как app-server `thread/start` либо `thread/resume`, но эти
+идентификаторы не входят в универсальную доменную модель.
 
 `AIProviderAccount` выбирается при создании сессии и после первого запуска неизменяема. Автоматическая балансировка разрешена только для новых сессий. Возобновление другой учетной записью запрещено.
 

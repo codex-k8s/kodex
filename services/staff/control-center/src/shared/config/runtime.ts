@@ -51,6 +51,30 @@ function exactUrl(value: string, protocols: readonly string[]): string {
   return parsed.toString().replace(/\/$/, "");
 }
 
+function browserOrigin(): URL {
+  const parsed = new URL(globalThis.location.origin);
+  if (parsed.protocol !== "https:") {
+    throw new Error("Runtime browser origin is invalid");
+  }
+  return parsed;
+}
+
+function sameOriginUrl(
+  value: string,
+  origin: URL,
+  websocket: boolean = false,
+): string {
+  const parsed = new URL(value, origin);
+  if (parsed.origin !== origin.origin || parsed.username || parsed.password) {
+    throw new Error("Runtime same-origin URL is invalid");
+  }
+  if (websocket) parsed.protocol = "wss:";
+  if (parsed.protocol !== (websocket ? "wss:" : "https:")) {
+    throw new Error("Runtime same-origin URL protocol is invalid");
+  }
+  return parsed.toString().replace(/\/$/, "");
+}
+
 function parseConfig(value: unknown): RuntimeConfig {
   if (!isRecord(value) || !isRecord(value.oidc)) {
     throw new Error("Runtime config shape is invalid");
@@ -82,21 +106,21 @@ function parseConfig(value: unknown): RuntimeConfig {
   ) {
     throw new Error("Runtime config request timeout is invalid");
   }
-  const apiBaseUrl = exactUrl(requiredString(value, "apiBaseUrl"), ["https:"]);
-  const realtimeUrl = exactUrl(requiredString(value, "realtimeUrl"), ["wss:"]);
-  const redirectUri = exactUrl(requiredString(value.oidc, "redirectUri"), [
-    "https:",
-  ]);
-  const postLogoutRedirectUri = exactUrl(
-    requiredString(value.oidc, "postLogoutRedirectUri"),
-    ["https:"],
+  const origin = browserOrigin();
+  const apiBaseUrl = sameOriginUrl(requiredString(value, "apiBaseUrl"), origin);
+  const realtimeUrl = sameOriginUrl(
+    requiredString(value, "realtimeUrl"),
+    origin,
+    true,
   );
-  if (
-    new URL(apiBaseUrl).origin !== new URL(redirectUri).origin ||
-    new URL(apiBaseUrl).origin !== new URL(postLogoutRedirectUri).origin ||
-    new URL(realtimeUrl).host !== new URL(apiBaseUrl).host
-  )
-    throw new Error("Runtime API origin is invalid");
+  const redirectUri = sameOriginUrl(
+    requiredString(value.oidc, "redirectUri"),
+    origin,
+  );
+  const postLogoutRedirectUri = sameOriginUrl(
+    requiredString(value.oidc, "postLogoutRedirectUri"),
+    origin,
+  );
   return {
     revision,
     environment: requiredString(value, "environment"),

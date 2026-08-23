@@ -47,6 +47,7 @@ type AuthorityProof struct {
 	Authority                    Authority `json:"authority"`
 	ProofRevision                uint64    `json:"proof_revision"`
 	SignerGeneration             uint64    `json:"signer_generation"`
+	CallerCredentialRevision     uint64    `json:"caller_credential_revision"`
 	JTI                          string    `json:"jti"`
 	IssuedAt                     int64     `json:"iat"`
 	NotBefore                    int64     `json:"nbf"`
@@ -55,26 +56,27 @@ type AuthorityProof struct {
 
 // AuthorizationClaims содержит подписанный контекст внутреннего RPC.
 type AuthorizationClaims struct {
-	Version            int       `json:"v"`
-	Issuer             string    `json:"iss"`
-	Audience           string    `json:"aud"`
-	Subject            string    `json:"sub"`
-	Caller             Workload  `json:"caller"`
-	Target             Workload  `json:"target"`
-	FullMethod         string    `json:"rpc"`
-	OperationID        string    `json:"operation_id"`
-	Authority          Authority `json:"authority"`
-	Permission         string    `json:"permission"`
-	JTI                string    `json:"jti"`
-	IssuedAt           int64     `json:"iat"`
-	NotBefore          int64     `json:"nbf"`
-	ExpiresAt          int64     `json:"exp"`
-	ReplayMode         string    `json:"replay_mode"`
-	SourceRevision     uint64    `json:"source_revision"`
-	SourceDigestSHA256 string    `json:"source_digest_sha256"`
-	KeySetRevision     uint64    `json:"key_set_revision"`
-	PolicyRevision     uint64    `json:"policy_revision"`
-	SignerGeneration   uint64    `json:"signer_generation"`
+	Version                  int       `json:"v"`
+	Issuer                   string    `json:"iss"`
+	Audience                 string    `json:"aud"`
+	Subject                  string    `json:"sub"`
+	Caller                   Workload  `json:"caller"`
+	Target                   Workload  `json:"target"`
+	FullMethod               string    `json:"rpc"`
+	OperationID              string    `json:"operation_id"`
+	Authority                Authority `json:"authority"`
+	Permission               string    `json:"permission"`
+	JTI                      string    `json:"jti"`
+	IssuedAt                 int64     `json:"iat"`
+	NotBefore                int64     `json:"nbf"`
+	ExpiresAt                int64     `json:"exp"`
+	ReplayMode               string    `json:"replay_mode"`
+	SourceRevision           uint64    `json:"source_revision"`
+	SourceDigestSHA256       string    `json:"source_digest_sha256"`
+	KeySetRevision           uint64    `json:"key_set_revision"`
+	PolicyRevision           uint64    `json:"policy_revision"`
+	SignerGeneration         uint64    `json:"signer_generation"`
+	CallerCredentialRevision uint64    `json:"caller_credential_revision"`
 }
 
 // IssuedTime возвращает время выпуска в UTC.

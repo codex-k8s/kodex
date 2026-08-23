@@ -1,0 +1,2 @@
+-- name: commands_changeinstructions_select_current_draft :one
+SELECT ref,content FROM control_plane.instruction_versions WHERE agent_id=$1::uuid AND state IN ('DRAFT','INVALID','VALID') FOR UPDATE

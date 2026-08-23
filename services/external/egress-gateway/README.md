@@ -1,3 +1,13 @@
+---
+id: EXT-MC-002
+title: Egress gateway
+type: service
+status: approved
+owner: security
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # Egress gateway
 
 `egress-gateway` — самостоятельный platform deployable для ограниченного
@@ -18,31 +28,17 @@
 | Technical Service | `egress-gateway-technical.mattercodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
-| Liveness | `GET /livez` на technical port |
+| Liveness | `GET /healthz` на technical port; проверяет только жизнь процесса |
 | Compatibility readiness | bodyless `GET /readyz` без query на `8080`: `204` только при effective `ACTIVE/READY`, иначе `503`; другие non-CONNECT routes закрыты |
 | Technical readiness | `GET /readyz` на technical port |
 | Policy readback | `GET /policy` на technical port; только process/policy/resolver state, revision и SHA-256 digest |
 
-Будущий consumer задаёт
+Consumer задаёт
 `HTTPS_PROXY=http://egress-gateway.mattercodex-system.svc.cluster.local:8080`.
 В `NO_PROXY` должны остаться `localhost`, loopback и внутренние зоны `.svc` и
 `.svc.cluster.local`, чтобы внутренние service calls не направлялись наружу.
 `NetworkPolicy` разрешает CONNECT не к объекту Service, а к указанным устойчивым
 Pod labels в точном namespace и на точном порту.
-
-### Контракт rebase PR #243
-
-После merge этого prerequisite сохранённая developer session PR #243
-перебазируется на новый `main`, удаляет локальные
-`cmd/management-egress-proxy/main.go` и
-`deploy/k8s/base/integration-gateway/management-egress-proxy.yaml`, их
-Kustomize/OCI target и сохраняет management lifecycle у `integration-gateway`.
-Единый `ManagementEgressProxyURL` получает значение
-`http://egress-gateway.mattercodex-system.svc.cluster.local:8080`: provider/Git
-clients используют его как `HTTPS_PROXY`, а существующий `GET <url>/readyz`
-получает совместимый effective readiness на том же порту. `NO_PROXY` сохраняет
-внутренние `.svc`/`.svc.cluster.local` calls; consumer policy не открывает
-`9090` и не получает direct external `443`.
 
 Нулевой image digest в repository base — только явный render input pattern.
 Принадлежащие unit overlays находятся в
@@ -88,7 +84,7 @@ Wildcard, suffix/pattern, IP literal, uppercase/trailing-dot alias и любой
 | DNS NXDOMAIN, timeout, truncated без TCP recovery, loop, CNAME/answer overflow, mixed public/private либо private-only | Server-owned A/AAAA resolver с полной validation snapshot | Fail closed; unsafe snapshot не кэшируется |
 | Public snapshot сменяется private после TTL | Повторный resolve после expiry и revalidation каждого cached address перед dial | Rebinding отклонён; dial получает только literal AddrPort |
 | Caller пытается выбрать policy, version или destination | Immutable loaded policy и expected version/digest Deployment | Request не расширяет authority |
-| Компрометация gateway | Нет application secrets, SA token, RBAC, host access; restricted runtime и resource bounds | Скомпрометированный процесс сохраняет сетевой доступ к достижимому TCP/443; дополнительное L3/L4 ограничение вынесено в [Issue #248](https://github.com/codex-k8s/matter-codex/issues/248) |
+| Компрометация gateway | Нет application secrets, SA token, RBAC, host access; restricted runtime, resource bounds и exact external destinations | Скомпрометированный процесс ограничен утверждёнными FQDN:443 и не получает application identity потребителя |
 | Slowloris, oversized input, half-open tunnel, connection flood | Header/ClientHello bounds, deadlines, global/per-source limits, cancel/join | Нет неограниченных goroutine и buffers |
 | Policy partial, invalid или digest mismatch | Startup validation и readiness barrier | Process не готов и CONNECT listener не обслуживает трафик |
 | Consumer пытается обойти gateway | Итоговая consumer NetworkPolicy без direct external HTTPS | Consumer достигает только gateway Pod labels:8080 |
@@ -139,7 +135,7 @@ documentation или другому IANA special-purpose prefix, отверга�
 
 ## Проверенные внешние спецификации
 
-- [Go 1.26.5 `net`](https://pkg.go.dev/net),
+- [Go 1.26.6 `net`](https://pkg.go.dev/net),
   [`net/netip`](https://pkg.go.dev/net/netip) и
   [`crypto/tls`](https://pkg.go.dev/crypto/tls);
 - [miekg/dns v1.1.72](https://pkg.go.dev/github.com/miekg/dns);

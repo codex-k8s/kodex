@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mattercodex:contract:runtime:agent-runner-input:v4",
+  "title": "MatterCodex immutable agent runner input v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "mode",
+    "workload_instance",
+    "session_ref",
+    "agent_ref",
+    "runtime_revision_ref",
+    "runtime_revision_version",
+    "runtime_revision_digest",
+    "image_reference",
+    "image_manifest_digest",
+    "role_runtime_contract_revision",
+    "role_runtime_contract_sha256",
+    "system_assistant",
+    "instructions",
+    "provider",
+    "model",
+    "provider_account_ref",
+    "provider_credential_revision_ref",
+    "provider_credential_revision",
+    "provider_credential_sha256",
+    "codex_sandbox",
+    "codex_approval_policy",
+    "callback_url",
+    "callback_tls",
+    "execution_ticket_file",
+    "provider_auth_file",
+    "provider_auth_sha256_file",
+    "workspace_root",
+    "outbox_root",
+    "codex_home"
+  ],
+  "properties": {
+    "schema": {"const": "mattercodex.agent-runner-input.v4"},
+    "mode": {"enum": ["TURN", "WARM"]},
+    "workload_instance": {"type": "string", "minLength": 1, "maxLength": 128},
+    "run_ref": {"$ref": "#/$defs/opaque_ref"},
+    "node_ref": {"$ref": "#/$defs/opaque_ref"},
+    "session_ref": {"$ref": "#/$defs/opaque_ref"},
+    "turn_ref": {"$ref": "#/$defs/opaque_ref"},
+    "agent_ref": {"$ref": "#/$defs/opaque_ref"},
+    "attempt": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "lease_ref": {"$ref": "#/$defs/opaque_ref"},
+    "lease_fence": {"type": "string", "minLength": 1, "maxLength": 128},
+    "lease_generation": {"type": "integer", "minimum": 1},
+    "runtime_revision_ref": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}|system-assistant-core-v[1-9][0-9]*)$"
+    },
+    "runtime_revision_version": {"type": "integer", "minimum": 1},
+    "runtime_revision_digest": {"$ref": "#/$defs/sha256"},
+    "image_reference": {
+      "type": "string",
+      "minLength": 73,
+      "maxLength": 512,
+      "pattern": "^[^\\s$\\{\\}]+@sha256:[a-f0-9]{64}$"
+    },
+    "image_manifest_digest": {"$ref": "#/$defs/image_digest"},
+    "role_runtime_contract_revision": {"type": "integer", "minimum": 1},
+    "role_runtime_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "system_assistant": {"type": "boolean"},
+    "instructions": {"type": "string", "minLength": 1, "maxLength": 1048576},
+    "task": {"type": "string", "minLength": 1, "maxLength": 1048576},
+    "bounded_input": {"type": "object", "maxProperties": 256},
+    "session_context": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/session_message"}
+    },
+    "delegation_targets": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/delegation_target"}
+    },
+    "integration_grants": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/integration_grant"}
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 255}
+    },
+    "provider": {"type": "string", "minLength": 1, "maxLength": 64},
+    "model": {"type": "string", "minLength": 1, "maxLength": 128},
+    "provider_account_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision": {"type": "integer", "minimum": 1},
+    "provider_credential_sha256": {"$ref": "#/$defs/sha256"},
+    "codex_sandbox": {"enum": ["read-only", "workspace-write"]},
+    "codex_approval_policy": {"enum": ["untrusted", "on-request", "never"]},
+    "codex_session_id": {"type": "string", "maxLength": 255},
+    "callback_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[^/?#]+:[0-9]+$",
+      "maxLength": 512
+    },
+    "callback_tls": {"$ref": "#/$defs/tls_binding"},
+    "execution_ticket_file": {"$ref": "#/$defs/secret_file"},
+    "provider_auth_file": {"$ref": "#/$defs/secret_file"},
+    "provider_auth_sha256_file": {"$ref": "#/$defs/secret_file"},
+    "workspace_root": {"const": "/workspace"},
+    "outbox_root": {"const": "/workspace/.matter-codex/outbox"},
+    "codex_home": {"const": "/tmp/codex-home"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "TURN"}}, "required": ["mode"]},
+      "then": {
+        "required": [
+          "run_ref",
+          "node_ref",
+          "turn_ref",
+          "attempt",
+          "lease_ref",
+          "lease_fence",
+          "lease_generation",
+          "task"
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "WARM"}}, "required": ["mode"]},
+      "then": {
+        "properties": {"system_assistant": {"const": true}},
+        "not": {
+          "anyOf": [
+            {"required": ["run_ref"]},
+            {"required": ["node_ref"]},
+            {"required": ["turn_ref"]},
+            {"required": ["attempt"]},
+            {"required": ["lease_ref"]},
+            {"required": ["lease_fence"]},
+            {"required": ["lease_generation"]},
+            {"required": ["task"]}
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$"
+    },
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "secret_file": {
+      "type": "string",
+      "pattern": "^/var/run/secrets/[^\\u0000\\r\\n]+$",
+      "maxLength": 512
+    },
+    "tls_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_name", "ca_file", "certificate_file", "private_key_file"],
+      "properties": {
+        "server_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.svc\\.cluster\\.local$",
+          "maxLength": 253
+        },
+        "ca_file": {"type": "string", "pattern": "^/var/run/(config|secrets)/[^\\u0000\\r\\n]+$", "maxLength": 512},
+        "certificate_file": {"$ref": "#/$defs/secret_file"},
+        "private_key_file": {"$ref": "#/$defs/secret_file"}
+      }
+    },
+    "session_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "content"],
+      "properties": {
+        "role": {"enum": ["USER", "ASSISTANT", "SYSTEM"]},
+        "content": {"type": "string", "maxLength": 65536}
+      }
+    },
+    "delegation_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "name", "purpose", "role_description"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "purpose": {"type": "string", "maxLength": 2000},
+        "role_description": {"type": "string", "maxLength": 4000}
+      }
+    },
+    "integration_grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "connection_ref",
+        "definition_key",
+        "connection_name",
+        "capability_key",
+        "capability_name",
+        "capability_description",
+        "risk"
+      ],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "connection_ref": {"$ref": "#/$defs/opaque_ref"},
+        "definition_key": {"type": "string", "minLength": 1, "maxLength": 128},
+        "connection_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "capability_key": {"type": "string", "minLength": 1, "maxLength": 255},
+        "capability_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "capability_description": {"type": "string", "maxLength": 2000},
+        "risk": {"enum": ["LOW", "MEDIUM", "HIGH"]}
+      }
+    }
+  }
+}

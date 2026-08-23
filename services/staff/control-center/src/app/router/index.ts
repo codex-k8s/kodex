@@ -5,48 +5,65 @@ export const router = createRouter({
   routes: [
     {
       path: "/",
-      name: "overview",
-      component: () => import("@/pages/OverviewPage.vue"),
+      name: "home",
+      component: () => import("@/pages/HomePage.vue"),
     },
     {
-      path: "/workspaces",
-      name: "workspaces",
-      component: () => import("@/pages/WorkspacesPage.vue"),
+      path: "/onboarding",
+      name: "onboarding",
+      component: () => import("@/pages/OnboardingPage.vue"),
     },
     {
-      path: "/workspaces/:projectId",
-      name: "workspace",
-      component: () => import("@/pages/WorkspacePage.vue"),
+      path: "/assistant",
+      name: "assistant",
+      component: () => import("@/pages/AssistantPage.vue"),
     },
     {
-      path: "/role-images",
-      name: "role-images",
-      component: () => import("@/pages/RoleImagesPage.vue"),
+      path: "/projects",
+      name: "projects",
+      component: () => import("@/pages/ProjectsPage.vue"),
     },
     {
-      path: "/people",
-      name: "people",
-      component: () => import("@/pages/PeoplePage.vue"),
+      path: "/projects/:projectRef",
+      name: "project",
+      component: () => import("@/pages/ProjectOverviewPage.vue"),
+      meta: { projectScoped: true },
     },
     {
-      path: "/instructions",
-      name: "instructions",
-      component: () => import("@/pages/InstructionsPage.vue"),
+      path: "/projects/:projectRef/agents",
+      name: "agents",
+      component: () => import("@/pages/AgentsPage.vue"),
+      meta: { projectScoped: true },
     },
     {
-      path: "/providers",
-      name: "providers",
-      component: () => import("@/pages/ProvidersPage.vue"),
+      path: "/projects/:projectRef/agents/:agentRef",
+      name: "agent",
+      component: () => import("@/pages/AgentDetailPage.vue"),
+      meta: { projectScoped: true },
     },
     {
-      path: "/integrations",
-      name: "integrations",
-      component: () => import("@/pages/IntegrationsPage.vue"),
+      path: "/projects/:projectRef/workflows",
+      name: "workflows",
+      component: () => import("@/pages/WorkflowsPage.vue"),
+      meta: { projectScoped: true },
     },
     {
-      path: "/automations",
-      name: "automations",
-      component: () => import("@/pages/SchedulesPage.vue"),
+      path: "/projects/:projectRef/workflows/:workflowRef",
+      name: "workflow",
+      component: () => import("@/pages/WorkflowDetailPage.vue"),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/runs/new",
+      name: "new-run",
+      component: () => import("@/pages/NewRunPage.vue"),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/projects/:projectRef/runs",
+      name: "project-runs",
+      component: () => import("@/pages/RunsPage.vue"),
+      meta: { projectScoped: true },
     },
     {
       path: "/runs",
@@ -54,34 +71,52 @@ export const router = createRouter({
       component: () => import("@/pages/RunsPage.vue"),
     },
     {
-      path: "/operations/incidents",
-      name: "incidents",
-      component: () => import("@/pages/IncidentsPage.vue"),
+      path: "/runs/:runRef",
+      name: "run",
+      component: () => import("@/pages/RunPage.vue"),
     },
     {
-      path: "/operations/backups",
-      name: "backups",
-      component: () => import("@/pages/BackupsPage.vue"),
+      path: "/projects/:projectRef/files",
+      name: "files",
+      component: () => import("@/pages/FilesPage.vue"),
+      meta: { projectScoped: true },
     },
     {
-      path: "/operations/audit",
+      path: "/projects/:projectRef/automations",
+      name: "automations",
+      component: () => import("@/pages/AutomationsPage.vue"),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/integrations",
+      name: "integrations",
+      component: () => import("@/pages/IntegrationsPage.vue"),
+    },
+    {
+      path: "/decisions",
+      name: "decisions",
+      component: () => import("@/pages/DecisionsPage.vue"),
+    },
+    {
+      path: "/administration/access",
+      name: "access",
+      component: () => import("@/pages/AccessPage.vue"),
+    },
+    {
+      path: "/projects/:projectRef/members",
+      name: "project-access",
+      component: () => import("@/pages/AccessPage.vue"),
+      meta: { projectScoped: true },
+    },
+    {
+      path: "/administration",
+      name: "administration",
+      component: () => import("@/pages/AdministrationPage.vue"),
+    },
+    {
+      path: "/administration/audit",
       name: "audit",
       component: () => import("@/pages/AuditPage.vue"),
-    },
-    {
-      path: "/operations/configuration",
-      name: "configuration",
-      component: () => import("@/pages/ConfigurationPage.vue"),
-    },
-    {
-      path: "/operations/diagnostics",
-      name: "diagnostics",
-      component: () => import("@/pages/DiagnosticsPage.vue"),
-    },
-    {
-      path: "/search",
-      name: "search",
-      component: () => import("@/pages/SearchPage.vue"),
     },
     {
       path: "/auth/callback",
@@ -91,5 +126,12 @@ export const router = createRouter({
     },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
 });
+
+declare module "vue-router" {
+  interface RouteMeta {
+    public?: boolean;
+    projectScoped?: boolean;
+  }
+}

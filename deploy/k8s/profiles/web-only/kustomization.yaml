@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - namespace.yaml
+  - ../../base/platform-state
+  - ../../base/platform-endpoints
+  - ../../overlays/production/internal-rpc-authority
+  - ../../overlays/production/image-supply-chain
+  - ../../overlays/production/control-plane
+  - ../../overlays/production/egress-gateway
+  - ../../overlays/production/role-image-builder
+  - ../../overlays/production/runtime-controller
+  - ../../overlays/production/integration-gateway
+  - ../../overlays/production/automation-scheduler
+  - ../../overlays/production/control-api-gateway
+  - ../../overlays/production/staff-control-center
+transformers:
+  - bundle-cluster-scope-transformer.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: mattercodex
+      mattercodex.dev/environment: production
+      mattercodex.dev/profile: web-only
+    includeSelectors: false
+    includeTemplates: true

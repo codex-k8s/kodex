@@ -75,7 +75,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
-		"model": input.CodexModel}
+		"model": input.Model}
 	method := "thread/start"
 	if input.CodexSessionID == "" {
 		threadParams["ephemeral"] = false
@@ -88,10 +88,10 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	if err := state.bindThread(raw, input.CodexModel, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
+	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	turnParams := map[string]any{"threadId": state.threadID, "cwd": input.WorkspaceRoot, "model": input.CodexModel,
+	turnParams := map[string]any{"threadId": state.threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
 		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
 	raw, err = server.call(ctx, state, "turn/start", turnParams)
 	if err != nil {
@@ -366,31 +366,17 @@ func verifyAccountPin(input model.Input) error {
 		return errors.New("Codex authentication snapshot metadata is invalid")
 	}
 	digest := sha256.New()
-	if _, err := io.Copy(digest, io.LimitReader(file, 1<<20+1)); err != nil ||
-		hex.EncodeToString(digest.Sum(nil)) != input.CredentialFiles.CodexAuthSHA256 {
+	expectedDigest, expectedErr := pinnedProviderDigest(input)
+	if _, err := io.Copy(digest, io.LimitReader(file, 1<<20+1)); err != nil || expectedErr != nil ||
+		hex.EncodeToString(digest.Sum(nil)) != expectedDigest {
 		return errors.New("Codex authentication snapshot does not match the pinned provider account")
 	}
 	return nil
 }
 
 func verifyRestoreArchive(input model.Input) error {
-	if input.CodexArchiveRelativePath == "" {
-		return nil
-	}
-	if !validRolloutRelativePath(input.CodexArchiveRelativePath) {
-		return errors.New("Codex restore rollout path is invalid")
-	}
-	path := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(input.CodexArchiveRelativePath))
-	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
-	if err != nil {
-		return errors.New("Codex restore rollout is not a protected regular file")
-	}
-	digest, hashErr := digestArchive(file, info)
-	closeErr := file.Close()
-	if hashErr != nil || closeErr != nil || digest != input.CodexArchiveSHA256 ||
-		!strings.HasSuffix(input.CodexArchiveProvenance, ":"+input.CodexArchiveRelativePath+":"+digest) {
-		return errors.New("Codex restore rollout verification failed")
-	}
+	// Session continuation uses the retained session PVC and server-owned
+	// context. A caller-provided archive locator is intentionally absent.
 	return nil
 }
 
@@ -404,8 +390,7 @@ func captureRollout(input model.Input, returnedPath string) (string, string, str
 		return "", "", "", errors.New("resolve Codex rollout path")
 	}
 	relativePath = filepath.ToSlash(relativePath)
-	if !validRolloutRelativePath(relativePath) ||
-		(input.CodexArchiveRelativePath != "" && relativePath != input.CodexArchiveRelativePath) {
+	if !validRolloutRelativePath(relativePath) {
 		return "", "", "", errors.New("Codex app-server rollout identity changed")
 	}
 	file, info, err := openProtectedFile(input.WorkspaceRoot, returnedPath)

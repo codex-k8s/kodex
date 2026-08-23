@@ -82,25 +82,6 @@ data:
             {
               "expr": "mattercodex_control_plane_pgx_runtime_idle_connections",
               "legendFormat": "runtime idle"
-            },
-            {
-              "expr": "mattercodex_control_plane_pgx_relay_acquired_connections",
-              "legendFormat": "relay acquired"
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "title": "Redis pool connections",
-          "type": "timeseries",
-          "targets": [
-            {
-              "expr": "mattercodex_control_plane_redis_total_connections",
-              "legendFormat": "total"
-            },
-            {
-              "expr": "mattercodex_control_plane_redis_idle_connections",
-              "legendFormat": "idle"
             }
           ]
         },
@@ -140,7 +121,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total{kind=~\"ROLE_DEFINITION|AGENT|AGENT_ASSIGNMENT|INSTRUCTION_SET|PROVIDER_CONNECTION_REFERENCE|PROVIDER_POOL|WORKSPACE_BACKUP|WORKSPACE_RESTORE|WORKSPACE_MATTERMOST_MAPPING\"}[5m]))",
+              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total{kind=~\"PROJECT|AGENT|WORKFLOW|RUN|SESSION|OWNER_GATE|ARTIFACT|INTEGRATION_CONNECTION|SCHEDULE|ROLE_IMAGE_RECIPE\"}[5m]))",
               "legendFormat": "{{kind}} {{action}}"
             }
           ]

@@ -14,9 +14,42 @@ spec:
           - image-retention
           - image-pull-readback
           - image-admission
+          - image-admission-orchestrator
   policyTypes:
     - Ingress
     - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-admission-controller-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: image-admission-controller
+      app.kubernetes.io/component: image-admission-orchestrator
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
+      ports: [{protocol: TCP, port: 9090}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - ipBlock: {cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
+      ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -32,10 +65,12 @@ spec:
     - Egress
   ingress:
     - from:
-        - ipBlock:
-            cidr: 192.0.2.0/32
-        - ipBlock:
-            cidr: 2001:db8::/128
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit
@@ -108,10 +143,48 @@ spec:
         - podSelector:
             matchLabels:
               mattercodex.dev/image-admission-phase: promote
+        - podSelector:
+            matchLabels:
+              mattercodex.dev/release-artifact-materializer: "true"
       ports:
         - protocol: TCP
           port: 5003
   egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: release-artifact-materializer-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: release-artifact-materializer
+      app.kubernetes.io/component: release-bootstrap
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: promotion
+      ports: [{protocol: TCP, port: 5003}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: vault}
+      ports: [{protocol: TCP, port: 8200}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

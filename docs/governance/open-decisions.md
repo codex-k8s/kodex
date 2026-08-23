@@ -4,8 +4,8 @@ title: Открытые решения владельца
 type: governance
 status: approved
 owner: manager
-version: 1.1.0
-updated: 2026-07-29
+version: 2.0.0
+updated: 2026-08-23
 ---
 
 # Открытые решения владельца
@@ -35,15 +35,16 @@ updated: 2026-07-29
 - статус: `закрыто`;
 - выбранный вариант: workload-local issuer/verifier sidecar с UDS, а не
   централизованный сетевой authority service;
-- что синхронизировано: architecture, roadmap, unit Issue.
+- что синхронизировано: architecture, authority policy и unit Issue.
 
 ### GOV-OD-002. Координация разработки
 
 - адресат: owner;
-- затронутые документы: `ROAD-MC-002`, `ROAD-MC-003`, #179;
+- затронутые документы: `AGENT-DOC-001`, `GUIDE-DOC-004`, #179;
 - статус: `закрыто`;
 - выбранный вариант: корневой manager и не более двух дочерних manager unit;
   director не участвует в активной policy MatterCodex;
-- что синхронизировано: roadmap, prompts, policy migration.
+- что синхронизировано: delivery guide, prompts и policy migration.
 
-Открытых блокирующих решений на начало Epic 1 нет.
+Owner-approved web-first reset заменил прежние Mattermost-first и cutover
+решения. Открытых блокирующих продуктовых решений для текущего reset нет.

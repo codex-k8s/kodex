@@ -1,55 +1,60 @@
 ---
 id: DOM-MC-008
-title: Файлы и знания
+title: Файлы, результаты и знания
 type: domain
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-16
+version: 1.1.0
+updated: 2026-08-23
 ---
 
-# Файлы и знания
+# Файлы, результаты и знания
 
-## Назначение
+## Artifact
 
-Владеет файлами, версиями, доставкой, сроками хранения, объектами инструкций и знаний и безопасной материализацией в рабочей области агента.
+`Artifact` принадлежит Organization и Project; version хранит source,
+provenance, media type, size, digest, scan status, retention и binding к Session,
+Run, node, input или result. Filename является недоверенным display metadata и
+не используется как storage key.
 
-## Входные источники
+Источники: Control Center upload, Agent result, Integration result, Knowledge
+source и optional interaction attachment. Ни один источник не требует
+Mattermost post/thread.
 
-- вложение Mattermost;
-- загрузка из центра управления;
-- результат интеграции, например вложение письма;
-- результат агента;
-- импорт из Git или набора инструкций;
-- резервное копирование и восстановление.
+## Жизненный цикл
 
-## Жизненный цикл хранения
+Fresh baseline выполняет bounded inspection синхронно до фиксации upload и
+сохраняет один из итоговых scan states: `CLEAN`, `QUARANTINED`, `FAILED`.
+Transport-состояние ongoing upload отображает клиент, но оно не является
+долговечным доменным переходом. Поля `PENDING` и `SCANNING` зарезервированы в
+схеме для будущего отдельного scanner adapter и не выдаются как успешная
+готовность без фактического consumer. Runtime получает только `CLEAN` version
+через bounded immutable materialization. Upload повторно сверяет declared
+size/digest с фактически прочитанным content.
 
-Состояния: `uploading`, `scanning`, `available`, `quarantined`, `delivery_pending`, `deleted`, `retained`.
+Download использует короткоживущий one-time grant, связанный с User,
+organization, Project, artifact version и purpose. Browser не получает storage
+credential или внутренний locator. Preview поддерживает только allowlisted safe
+media и никогда не исполняет активный контент.
 
-Объект становится доступен среде выполнения только после завершения обязательных проверок. `ArtifactVersion` неизменяема и адресуется внутренним идентификатором, а не пользовательским именем файла.
+## Knowledge
 
-## KnowledgeSpace
+Knowledge source связывает immutable Artifact versions либо typed external
+source с Agent/Project. Индекс и embeddings являются перестраиваемой проекцией и
+не расширяют eligibility исходного документа. Проекция хранит source version,
+content/model provenance и tenant/project scope. Ошибка projection не блокирует
+авторитетное чтение доступного файла.
 
-`KnowledgeSpace` группирует версионируемые документы и файлы, а также метаданные поиска и индекса. Исходные документы остаются источником истины; векторные представления и поисковый индекс являются перестраиваемой проекцией.
+## Realtime и delivery
 
-## Память проекта и роли
+`artifact.available` содержит только safe metadata и ref; файл читается
+отдельным HTTP API, не через WebSocket. Optional result mirror создаёт отдельный
+DeliveryAttempt. Его outage не меняет Artifact availability и core Run outcome.
 
-`MemoryRecord` хранит короткий подтвержденный опыт с происхождением и областью `project` либо `role`. Полнотекстовый поиск обязателен. Вектор вычисляется только локальным embedding runtime внутри управляемого кластера. Внешний embedding API не используется. Общепроектную запись публикует роль с соответствующей capability; остальные роли сохраняют опыт в своей области и передают предложение разрешенному координатору через callback. Память считается недоверенным контекстом и не переопределяет инструкции.
+## Критерии приёмки
 
-## Retention
-
-Политика учитывает организацию, вид файла, юридическую блокировку удаления, связанную активную сессию или процесс и требования аудита. Метаданные и объект удаляются согласованно и повторяемо.
-
-## Критерии приемки
-
-- PDF, изображения и текст доступны агенту по безопасным путям.
-- Имена в Unicode и повторяющиеся имена файлов не приводят к перезаписи.
-- Агент публикует Markdown, CSV, PDF и PNG от собственной учетной записи.
-- Публикация вне исходящего каталога запрещена.
-- Повтор доставки Mattermost не создает повторное сообщение.
-- Слишком большой файл получает ограниченную ссылку.
-- Доступ из другой организации отклоняется.
-- Восстановление резервной копии проверяет контрольную сумму объекта.
-- Смена embedding model полностью перестраивает индекс без изменения канонических записей.
-- Недоступность embedding runtime не блокирует чтение и полнотекстовый поиск памяти.
+- пользователь загружает input и скачивает generated result в web-only режиме;
+- Unicode/повторяющиеся имена не перезаписывают content;
+- foreign Project и expired/replayed grant закрыто отклоняются;
+- artifact со state, отличным от `CLEAN`, не materialize-ится в role Pod;
+- raw file bytes, provider payload и secret не попадают в events, logs или audit.

@@ -1,3 +1,13 @@
+---
+id: JOB-MC-002
+title: Сборка окружений ролей
+type: service
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # role-image-builder
 
 `role-image-builder` — единственный исполнитель одной fenced attempt сборки
@@ -55,8 +65,37 @@ workload владеют evidence, verdict и переносом exact digest.
    `repository@sha256` reference. `runtime-controller`, credential materializer
    и admission webhook сравнивают именно этот reference и evidence binding.
 
+Admission и promotion не требуют ручного запуска. Отдельный
+`image-admission-controller` автоматически создаёт одну последовательную
+цепочку phase Job/PVC. Он не получает owner, registry, signing или Vault
+credentials; каждая фаза сохраняет собственный ServiceAccount и secret
+boundary. RBAC дополняется `ValidatingAdmissionPolicy`, которая по exact caller
+identity отклоняет чужой image, command, env, volume либо ServiceAccount.
+`render-image-admission-job.sh` остаётся встроенным deterministic renderer и
+read-only способом сравнить будущий phase manifest.
+
 События для этого пути не публикуются: producer, admission и runtime используют
 авторитетные защищённые read/command RPC. Ложного AsyncAPI consumer нет.
+
+## Health, readiness и отказ зависимостей
+
+`/healthz` отражает только жизнь процесса. `/readyz` читает локальный
+потокобезопасный снимок, который фоновый monitor рассчитывает по workload-local
+issuer sidecar, authenticated input registry и реальному bounded BuildKit solve.
+Probe не выполняет сетевых вызовов сам.
+
+Для `image-admission-controller` действует тот же контракт: `/healthz`
+проверяет только процесс, а `/readyz` читает рассчитанный фоновым monitor
+снимок прямого Kubernetes API и immutable policy. Недоступность
+`control-plane`, registry или phase workload не делает controller Pod
+неготовым; рабочая phase Job получает типизированный отказ и повторяется через
+ограниченный reconcile.
+
+Соседний `control-plane` не входит в Kubernetes readiness builder. Его
+недоступность переводит рабочий claim/build loop в отдельное degraded-состояние
+с одним warning на отказ и одним сообщением на восстановление; Pod остаётся
+готовым принимать работу после восстановления. Полный защищённый путь до
+`control-plane` проверяется отдельной диагностикой и фактическими RPC.
 
 ## Lifecycle matrix
 
@@ -64,15 +103,15 @@ workload владеют evidence, verdict и переносом exact digest.
 |---|---|
 | create recipe | `control-plane`; server-owned owner/generation/policy, новая queued build или exact reuse |
 | update recipe | `control-plane`; version CAS, generation++, новый canonical hash и build/reuse; прежние build/admission/promotion claims отзываются одной owner-транзакцией |
-| archive/restore/delete recipe | `control-plane`; специализированная команда; незавершённые build и artifact закрываются, их lease/claims отзываются |
+| archive/restore recipe | `control-plane`; специализированная команда; незавершённые build закрываются, их lease/claims отзываются; delete отсутствует |
 | resolve/reuse | `control-plane`; только exact `ACTIVE`, admitted, signed, promoted artifact с current policy/readback |
 | claim build | `role-image-builder`; одна leased attempt, fence/generation/JTI и immutable input snapshot |
 | renew/progress | `role-image-builder`; только current token/attempt/fence, закрытые stage и percent |
 | complete/fail | `role-image-builder`; terminal owner transaction отзывает lease; complete создаёт immutable artifact |
-| cancel | owner-команда `ManageImageBuild`; закрывает claim/lease, старый worker отвергается |
-| retry | owner-команда; новая attempt/fence/generation и свежий grant, build evidence очищается |
-| expiry | owner-команда после lease deadline; старый grant закрыт |
-| dead letter | owner-команда после исчерпания maximum attempts; новых claims нет |
+| cancel | update/archive recipe атомарно закрывает её открытые build; отдельного универсального build command нет |
+| retry | следующий server-side claim после failed attempt повышает attempt/fence и выдаёт свежий lease token в пределах maximum attempts |
+| expiry | следующий server-side claim после lease deadline повышает attempt/fence; прежний token закрыто отклоняется |
+| attempts exhausted | build больше не попадает в claim selector; новый build создаётся только `REQUEST_BUILD` для актуальной recipe version |
 | claim admission | `image-admission`; одна lease/fence на exact artifact и current policy |
 | admission accepted | durable OCI evidence bundle проходит exact readback; owner transaction фиксирует receipt content и реальный OCI manifest digest, promotion identity ещё не выдана |
 | admission rejected | тот же durable evidence bundle фиксируется owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
@@ -112,19 +151,27 @@ BuildKit output и credential values отбрасываются.
 ## Локальная проверка
 
 ```bash
-go test ./...
-go build ./cmd/role-image-builder ./cmd/image-admission-bridge
+cd services/jobs/role-image-builder
+GOWORK=off go test ./...
+GOWORK=off go build ./cmd/role-image-builder ./cmd/image-admission-controller ./cmd/image-admission-bridge
+cd ../../..
+./tools/verify-image-supply-chain-fixtures.sh
+make test-web-only-release
 docker build --target runtime -f services/jobs/role-image-builder/Dockerfile .
 docker build --target admission-runtime \
   --build-arg ADMISSION_TOOLS_IMAGE="$ADMISSION_TOOLS_IMAGE" \
   -f services/jobs/role-image-builder/Dockerfile .
 ```
 
-Полные integration/E2E/deploy/lifecycle проверки отложены в Issue #216.
+Fixture и release-проверки используют синтетические digests и локальный render,
+не обращаются к production registry или Kubernetes. Реальный registry/BuildKit
+smoke и browser E2E запускаются только в disposable установке; если такая среда
+не предоставлена, они честно фиксируются как `NOT RUN`.
 
 ## Rollback
 
 Остановить новые owner-команды и вернуть Deployment на предыдущий exact image
 digest. Уже promoted digest не удалять и policy revision не откатывать.
-Queued/claimed attempts закрыть только специализированными owner-командами;
-ручное изменение PostgreSQL, claims, leases или registry tags запрещено.
+Queued/claimed attempts закрыть только update/archive recipe либо штатным
+worker terminal path; ручное изменение PostgreSQL, claims, leases или registry
+tags запрещено.

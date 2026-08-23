@@ -7,7 +7,7 @@ metadata:
     mattercodex.dev/registry-storage: staging
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 100Gi
@@ -21,7 +21,7 @@ metadata:
     mattercodex.dev/registry-storage: promoted
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 100Gi
@@ -600,23 +600,17 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mattercodex-image-registry-pull
-  annotations:
-    external-dns.alpha.kubernetes.io/hostname: registry-pull.invalid
   labels:
     app.kubernetes.io/name: mattercodex-image-registry
     mattercodex.dev/registry-scope: pull
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  loadBalancerSourceRanges:
-    - 192.0.2.0/32
-    - 2001:db8::/128
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: mattercodex-image-registry
     mattercodex.dev/registry-scope: pull
   ports:
     - name: https
-      port: 443
+      port: 5000
       targetPort: registry
 ---
 apiVersion: v1

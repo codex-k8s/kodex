@@ -1,6 +1,0 @@
-package: generated
-output: services/external/bot-service/internal/transport/http/generated/control_center.gen.go
-generate:
-  models: true
-output-options:
-  skip-prune: false

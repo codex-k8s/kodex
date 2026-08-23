@@ -150,7 +150,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
           livenessProbe:
-            httpGet: {path: /livez, port: technical}
+            httpGet: {path: /healthz, port: technical}
             timeoutSeconds: 2
             periodSeconds: 10
             failureThreshold: 3

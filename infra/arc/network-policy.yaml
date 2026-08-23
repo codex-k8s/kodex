@@ -422,7 +422,7 @@ spec:
   egress:
     - to:
         - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: matter-kodex-prod } }
+            { matchLabels: { kubernetes.io/metadata.name: __REGISTRY_NAMESPACE__ } }
           podSelector:
             matchLabels:
               app.kubernetes.io/name: matter-codex-registry

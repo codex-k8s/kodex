@@ -17,9 +17,13 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	home := filepath.Join(workspace, ".matter-codex", "state", "codex-home")
 	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)
-	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, CodexModel: "gpt-5",
+	digestFile := filepath.Join(workspace, "auth.sha256")
+	if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
 		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
-		CredentialFiles: model.CredentialFiles{CodexAuthSHA256: hex.EncodeToString(digest[:])}}
+		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 	if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 		t.Fatalf("PrepareHomeWithAuth() error = %v", err)
 	}
@@ -45,9 +49,13 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 			home := filepath.Join(workspace, ".matter-codex", "state", "codex-home")
 			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
 			digest := sha256.Sum256(auth)
-			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, CodexModel: "gpt-5",
+			digestFile := filepath.Join(workspace, "auth.sha256")
+			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
 				CodexApprovalPolicy: "never", CodexSandbox: sandbox,
-				CredentialFiles: model.CredentialFiles{CodexAuthSHA256: hex.EncodeToString(digest[:])}}
+				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
 				t.Fatal(err)
 			}

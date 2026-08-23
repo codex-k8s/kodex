@@ -4,89 +4,91 @@ title: Стратегия проверок
 type: governance
 status: approved
 owner: reviewer
-version: 1.2.0
-updated: 2026-07-30
+version: 2.0.0
+updated: 2026-08-23
 ---
 
 # Стратегия проверок
 
-Проект выбирает профиль проверок по зрелости, но не выдает отсутствие проверки
-за успешный результат.
+MatterCodex использует единый поддерживаемый профиль `Web-first baseline`.
+Проверки не обращаются к staging/production, живым данным и промышленным
+credentials. Отсутствие или незапущенный контур не выдаётся за успех.
 
-## Профили
+## Обязательные контуры
 
-### Prototype
+Для каждой изменённой области выполняются применимые проверки:
 
-Активен до отдельного решения владельца о готовности прототипа:
+- форматирование, статический разбор, сборка и `git diff --check`;
+- Proto format/lint/build и воспроизводимый codegen;
+- OpenAPI и AsyncAPI validation и воспроизводимый codegen;
+- Go unit-тесты домена, authorization, lifecycle, idempotency, OCC,
+  event ordering, redaction и provider-neutral delegation;
+- PostgreSQL component-тесты на disposable PostgreSQL для baseline schema,
+  bootstrap, concurrency, outbox, graph, gates, grants и audit;
+- frontend lint, typecheck, unit-тесты stores/reducers/forms/accessibility и
+  production build;
+- Playwright E2E обязательных web-only, realtime, Human Gate, retry,
+  nested-workflow, system-assistant и optional-Mattermost сценариев;
+- security-negative проверки owner/project/resource boundary, replay, CSRF,
+  Origin, credential leakage и exact grants;
+- render обоих профилей `web-only` и `web-with-mattermost`, schema и policy
+  assertions, immutable image refs и отсутствие запрещённых материалов.
 
-- форматирование и статический разбор изменённых файлов;
-- компиляция/сборка затронутых модулей и контрактных исходников;
-- проверка чистого diff и воспроизводимости сгенерированного кода, если
-  изменён его источник;
-- небольшие быстрые unit-тесты только для действительно сложной чистой либо
-  security-critical логики.
+Простой glue-код не получает тест ради покрытия. Тестовая оснастка обязательна,
+если без неё нельзя воспроизводимо доказать согласованный lifecycle,
+authorization boundary, realtime reducer или пользовательский сценарий.
 
-Полное покрытие, integration/E2E, contract/deploy/render/lifecycle/oracle
-suites и общий baseline в этом профиле не обязательны. Их отсутствие не
-блокирует PR и не является допустимым review finding. Простому glue-коду тест
-ради покрытия не добавляется, а тяжёлая оснастка, fixtures и test scripts не
-включаются в функциональный PR прототипа.
+## Поддерживаемые публичные точки входа
 
-Reviewer продолжает блокировать доказанный дефект production-кода, нарушение
-требования или достижимый fail-open path. Запрет относится только к требованию
-отсутствующего полного тестового контура, а не к качеству самой реализации.
+- `make test-go` — герметичные Go-модули и SQL boundary;
+- `make test-control-plane-postgres` — disposable PostgreSQL component contour;
+- `make lint-proto build-proto check-proto-codegen` — Proto source и codegen;
+- `make lint-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen` — AsyncAPI;
+- `make test-web-only-release` — fresh render web-only и optional Mattermost;
+- `make test-authority-policy-codegen` — machine policy/codegen;
+- в `services/staff/control-center`: `npm run lint`, `npm run typecheck`,
+  `npm run test:unit`, `npm run build`, `npm run test:e2e:check` и
+  `npm run test:e2e` для отдельной разрешённой disposable установки.
 
-### Bootstrap
+Новая suite становится обязательной после появления в канонической публичной
+точке входа, фиксированных fixtures, ограниченного бюджета и однозначного
+ожидаемого результата.
 
-- форматирование и статический разбор измененных файлов;
-- сборка затронутых модулей;
-- проверка codegen на измененных контрактах;
-- render измененных Kubernetes overlays;
-- targeted tests критичных инвариантов;
-- параллельные продуктовое, security и архитектурное review;
-- повторные раунды трех направлений до отсутствия замечаний;
-- human gate.
+## PostgreSQL и браузер
 
-### Staging
+PostgreSQL-тест использует только созданную оснасткой одноразовую базу. DSN
+staging/production, общая база или внешняя конечная точка без disposable proof
+отклоняются до подключения.
 
-Дополнительно обязательны:
+Browser E2E выполняется только против отдельной disposable установки с
+синтетическими данными. Если такой установки нет и её создание не входит в
+выданные полномочия, результат — `NOT RUN`, а не `PASS`. Staging/production
+deployment и проверка живой среды требуют отдельного решения владельца.
 
-- миграции на временной или staging БД;
-- integration tests внешних зависимостей;
-- OCI build;
-- staging smoke и пользовательские сценарии;
-- проверка dashboards, alerts и runbooks.
+## Классификация результата
 
-### Production
+- `PASS` — команда действительно выполнена на указанном SHA и завершилась
+  успешным проверяемым результатом;
+- `FAIL` — команда запущена и обнаружила дефект либо неисправность обязательной
+  оснастки;
+- `NOT RUN` — команда не запускалась или отсутствовала разрешённая безопасная
+  среда/credential/инструмент.
 
-Дополнительно обязательны:
+Пустой GitHub `statusCheckRollup`, отсутствие check run или описание будущего
+контура не являются успешным CI. Локальные результаты перечисляются отдельно
+от GitHub checks и привязываются к точному SHA.
 
-- централизованный CI и ruleset;
-- compatibility/breaking checks контрактов;
-- unit, integration, security и use case suites;
-- vulnerability и secret scanning;
-- backup/restore и rollback evidence;
-- нагрузочные и отказоустойчивые проверки по риску.
+## Выпуск
 
-## Доказательность
+Build выпускает неизменяемые OCI digests с provenance. Render принимает exact
+release lock и deployment profile. Apply, migration в живой среде, smoke после
+развёртывания, promotion и rollback выполняются только после отдельного допуска
+владельца и не являются частью локальной реализации.
 
-- Результат относится к точному SHA.
-- Локальная команда не называется GitHub CI.
-- Проверка должна иметь публичную точку входа и независимый ожидаемый
-  результат.
-- После изменения проверяемого поведения соответствующая проверка повторяется.
-- Heavy baseline запускается один раз на финальном SHA, если промежуточный
-  запуск не нужен для локализации дефекта и этот baseline уже активирован
-  владельцем для текущего профиля.
-- Результат review относится к указанному SHA. После пакета исправлений все три
-  направления подтверждают новый SHA по процессу `GUIDE-DOC-004`.
+## Рецензирование
 
-Для MatterCodex до отдельного решения владельца о завершении прототипа активен
-профиль `Prototype`. Unit Issue и PR фиксируют только фактически выполненные
-команды текущего профиля; отсутствие старого legacy baseline не считается
-успешной проверкой, но и не блокирует прототип.
-
-Полная поддерживаемая стратегия, переход к `Bootstrap`/`Staging` и обязательные
-integration/E2E/contract/deploy suites будут спроектированы отдельной
-owner-approved волной:
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+Доказанный production-дефект, недостижимый обязательный path или fail-open
+boundary блокирует результат независимо от наличия теста. После исправлений
+product, security и architecture review повторяются на одном новом SHA.
+`resolved` у discussion thread не заменяет перепроверку исходного failure path
+и системных аналогов.

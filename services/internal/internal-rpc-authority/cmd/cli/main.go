@@ -20,17 +20,11 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-const initialSchemaVersion int64 = 20260730000100
-
 type command string
 
 const (
-	commandExpand   command = "expand"
-	commandContract command = "contract"
-	commandDeploy   command = "deploy"
-	commandUp       command = "up"
-	commandStatus   command = "status"
-	commandVersion  command = "version"
+	commandUp     command = "up"
+	commandStatus command = "status"
 )
 
 func main() {
@@ -87,81 +81,28 @@ func run(ctx context.Context, arguments []string) error {
 		return errors.New("configure PostgreSQL migration dialect")
 	}
 	switch action {
-	case commandExpand:
-		return migrateExpand(ctx, database)
-	case commandContract:
-		return migrateContract(ctx, database)
-	case commandDeploy:
-		return migrateDeploy(ctx, database)
 	case commandUp:
-		return migrateUp(ctx, database)
+		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
+			return fmt.Errorf("apply internal-rpc-authority migrations: %w", err)
+		}
+		return nil
 	case commandStatus:
 		return migrationStatus(ctx, database)
-	case commandVersion:
-		return migrationVersion(ctx, database)
 	default:
 		return errors.New("unsupported CLI command")
 	}
 }
 
 func parseCommand(arguments []string) (command, error) {
-	if len(arguments) != 2 || arguments[0] != "migrate" {
-		return "", errors.New(
-			"usage: internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version",
-		)
+	if len(arguments) != 1 {
+		return "", errors.New("usage: internal-rpc-authority-cli <up|status>")
 	}
-	switch command(arguments[1]) {
-	case commandExpand, commandContract, commandDeploy, commandUp, commandStatus, commandVersion:
-		return command(arguments[1]), nil
+	switch command(arguments[0]) {
+	case commandUp, commandStatus:
+		return command(arguments[0]), nil
 	default:
-		return "", errors.New(
-			"usage: internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version",
-		)
+		return "", errors.New("usage: internal-rpc-authority-cli <up|status>")
 	}
-}
-
-func migrateExpand(ctx context.Context, database *sql.DB) error {
-	if err := goose.UpToContext(ctx, database, "migrations", initialSchemaVersion); err != nil {
-		return fmt.Errorf("apply internal-rpc-authority expand migrations: %w", err)
-	}
-	return nil
-}
-
-func migrateContract(ctx context.Context, database *sql.DB) error {
-	version, err := goose.GetDBVersionContext(ctx, database)
-	if err != nil {
-		return fmt.Errorf("read internal-rpc-authority migration version: %w", err)
-	}
-	if version < initialSchemaVersion {
-		return errors.New("expand migrations must complete before contract")
-	}
-	return nil
-}
-
-// migrateDeploy выполняет полный migration lifecycle для первого развертывания
-// или повторного запуска уже частично примененной forward-only цепочки.
-func migrateDeploy(ctx context.Context, database *sql.DB) error {
-	if err := migrateExpand(ctx, database); err != nil {
-		return err
-	}
-	if err := migrateContract(ctx, database); err != nil {
-		return err
-	}
-	return migrateUp(ctx, database)
-}
-
-func migrateUp(ctx context.Context, database *sql.DB) error {
-	version, err := goose.GetDBVersionContext(ctx, database)
-	if err != nil {
-		return fmt.Errorf("read internal-rpc-authority migration version: %w", err)
-	}
-	if version < initialSchemaVersion {
-		return errors.New("expand migrations must complete before up")
-	}
-	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
-		return fmt.Errorf("apply internal-rpc-authority remaining migrations: %w", err)
-	}
-	return nil
 }
 
 func migrationStatus(ctx context.Context, database *sql.DB) error {
@@ -169,13 +110,4 @@ func migrationStatus(ctx context.Context, database *sql.DB) error {
 		return fmt.Errorf("read internal-rpc-authority migration status: %w", err)
 	}
 	return nil
-}
-
-func migrationVersion(ctx context.Context, database *sql.DB) error {
-	version, err := goose.GetDBVersionContext(ctx, database)
-	if err != nil {
-		return fmt.Errorf("read internal-rpc-authority migration version: %w", err)
-	}
-	_, err = fmt.Fprintf(os.Stdout, "current migration version: %d\n", version)
-	return err
 }

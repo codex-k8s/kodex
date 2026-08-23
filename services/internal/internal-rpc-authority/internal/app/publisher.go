@@ -38,7 +38,6 @@ type PublisherConfig struct {
 	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	PodUID                       string        `env:"POD_UID"`
 	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -102,19 +101,8 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	if err := parseEnvironment(&config); err != nil {
 		return PublisherConfig{}, err
 	}
-	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if err != nil {
+	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return PublisherConfig{}, err
-	}
-	if backend == secretBackendDirectProductionPrototype {
-		if err := validatePrototypeKubernetesBoundary(
-			config.KubernetesAPIAddress,
-			config.KubernetesAPITLSServerName,
-			config.KubernetesAPICAFile,
-			config.KubernetesAPITokenFile,
-		); err != nil {
-			return PublisherConfig{}, err
-		}
 	}
 	if _, _, err := net.SplitHostPort(config.Listen); err != nil {
 		return PublisherConfig{}, errors.New("publisher listen address is invalid")
@@ -383,16 +371,14 @@ func RunPublisher(
 				publisherApplication.Ready,
 			)
 			if graphErr != nil || publishErr != nil || readyErr != nil {
-				logger.Error(
-					"authority publisher reconciliation failed",
-					"graph_error", graphErr,
-					"readback_error", publishErr,
-					"readiness_error", readyErr,
-				)
-				readiness.Set(false, "readback-publication-failed")
+				if readiness.Set(false, "readback-publication-failed") {
+					logger.Error("authority publisher reconciliation unavailable", "error_class", "postgresql_or_delivery")
+				}
 				metrics.SetReady(false)
 			} else {
-				readiness.Set(true, "ready")
+				if readiness.Set(true, "ready") {
+					logger.Info("authority publisher reconciliation restored")
+				}
 				metrics.SetReady(true)
 			}
 			select {
@@ -516,19 +502,12 @@ func newPublisherTechnicalServer(
 	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
 		_, _ = response.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
 		if ready, _ := readiness.Ready(); !ready {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
-		defer cancel()
-		if err := publisherApplication.Ready(ctx); err != nil {
-			metrics.SetReady(false)
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		metrics.SetReady(true)
 		_, _ = response.Write([]byte("ready\n"))
 	})
 	return &http.Server{

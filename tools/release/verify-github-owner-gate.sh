@@ -3,7 +3,7 @@ set -euo pipefail
 
 fail() { printf 'GitHub owner gate verification failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --workflow <path> --environment <name> --workflow-sha <40-hex> --owner-actor-id <numeric-id> --source-sha <40-hex> --mode build|dark|cutover|rollback --output <path>\n' "$0" >&2
+  printf 'Usage: %s --workflow <path> --environment <name> --workflow-sha <40-hex> --owner-actor-id <numeric-id> --source-sha <40-hex> --mode build|render --output <path>\n' "$0" >&2
 }
 
 workflow=""
@@ -33,7 +33,7 @@ done
 [[ "$workflow_sha" =~ ^[a-f0-9]{40}$ ]] || fail "workflow SHA must be exact lowercase 40-hex"
 [[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail "owner actor ID is invalid"
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
-case "$mode" in build|dark|cutover|rollback) ;; *) fail "mode is invalid" ;; esac
+case "$mode" in build|render) ;; *) fail "mode is invalid" ;; esac
 [[ -n "$output" ]] || fail "output path is required"
 for variable_name in GH_TOKEN GITHUB_REPOSITORY GITHUB_RUN_ID GITHUB_WORKFLOW_REF GITHUB_API_URL; do
   [[ -n "${!variable_name:-}" ]] || fail "$variable_name is required"
@@ -77,7 +77,7 @@ run_actor_id=$(jq -r '.actor.id' "$temporary_directory/run.json")
 triggering_actor_id=$(jq -r '.triggering_actor.id' "$temporary_directory/run.json")
 [[ "$run_actor_id" == "$owner_actor_id" && "$triggering_actor_id" == "$owner_actor_id" ]] ||
   fail "workflow dispatch and rerun actor are not the owner-authorized identity"
-if [[ "$mode" != rollback && "$workflow_head_sha" != "$source_sha" ]]; then
+if [[ "$workflow_head_sha" != "$source_sha" ]]; then
   fail "requested source SHA is not the exact workflow main SHA"
 fi
 github_api_get "repos/$GITHUB_REPOSITORY/commits/$source_sha" "$temporary_directory/commit.json"

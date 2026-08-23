@@ -1,133 +1,113 @@
-# External Dependencies Catalog
+# Каталог внешних зависимостей
 
-Назначение: единая точка, где фиксируются внешние библиотеки и инструменты, разрешённые или уже используемые в `matter-codex`.
+Назначение: единая точка, где фиксируются внешние библиотеки и инструменты,
+которые используются активным web-first профилем MatterCodex. Точная версия
+Go- или npm-зависимости определяется соответствующим `go.mod`, `package.json` и
+lock-файлом; точный image — Dockerfile либо release lock.
 
 ## Правила ведения
 
-- Новая внешняя зависимость добавляется в этот каталог тем же PR, который начинает её использовать.
-- Для Go зависимости версия фиксируется в `go.mod`.
-- Если зависимость удалена, запись переводится в `deprecated` с датой или удаляется в PR, где удалён весь её usage.
-- Для актуальных API библиотек перед изменением кода используется Context7 MCP или официальный upstream-документ.
+- Новая внешняя зависимость добавляется этим же PR.
+- Удалённая из активного профиля зависимость удаляется из каталога; Git history
+  является архивом.
+- Generated code изменяется только штатным codegen.
+- Актуальный API библиотеки проверяется через Context7 MCP. Если Context7
+  недоступен, используется официальная upstream-документация и это явно
+  фиксируется в PR.
+- В каталоге не хранятся secret values, mutable image tags либо локаторы одного
+  конкретного владельца установки.
 
-## Backend Go - in use
+## Backend Go
 
-| Dependency | Version | Scope | Why |
-|---|---:|---|---|
-| `github.com/caarlos0/env/v11` | `v11.4.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
-| `github.com/fsnotify/fsnotify` | `v1.10.1` | Runtime security | fail-closed события create/write/delete/rename/replace и ошибки очереди для per-run credential guard |
-| `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |
-| `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage repositories через `pgxpool`; `stdlib` driver для goose |
-| `github.com/mattermost/mattermost/server/public` | `v0.4.2` | Mattermost SDK/model | typed `CommandResponse` и публичные модели Mattermost вместо ручных JSON-структур |
-| `github.com/modelcontextprotocol/go-sdk` | `v1.6.0` | MCP SDK | встроенный Streamable HTTP MCP server для ограниченного чтения/записи контекста обсуждения Mattermost агентами; версия канонически разбирает MIME-параметры `Content-Type`, а transport получает явную application-owned защиту `Origin` и DNS rebinding |
-| `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | i18n | runtime `libs/go/i18n` для embedded JSON message catalogs, template variables и locale switching |
-| `github.com/pressly/goose/v3` | `v3.27.1` | PostgreSQL migrations | embedded SQL migrations с `-- +goose Up/Down` вместо самописного migration runner |
-| `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics`, Go/process collectors и Prometheus HTTP handler |
-| `golang.org/x/net` | `v0.55.0` | Транзитивная зависимость транспорта HTTP/IDNA | исправленная нормализация Punycode-меток в графе зависимостей транспорта HTTP |
-| `golang.org/x/sys` | `v0.45.0` | Linux filesystem | атомарная публикация восстановленного дерева сессий через `renameat2` без промежуточного изменения target |
-| `golang.org/x/text` | `v0.39.0` | Unicode и локализация | нормализация Unicode в доменных значениях и выбор локали; версия устраняет `GO-2026-5970` |
-| `k8s.io/api` | `v0.36.1` | Kubernetes typed API | typed `batch/v1` Job, `core/v1` Pod/PVC и `PodLogOptions` для runtime adapter |
-| `k8s.io/apimachinery` | `v0.36.1` | Kubernetes API machinery | typed meta/options, labels, resource quantities и Kubernetes API errors |
-| `k8s.io/client-go` | `v0.36.1` | Kubernetes SDK | in-cluster/kubeconfig client, Job/PVC/Secret operations, pod status/log tail и `remotecommand` exec для Codex auth handoff без shell-first runtime |
+| Dependency | Active version | Scope |
+|---|---:|---|
+| `github.com/caarlos0/env/v11` | `v11.3.1` / `v11.4.1` | типизированная конфигурация deployable units |
+| `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL adapters и disposable component tests |
+| `github.com/pressly/goose/v3` | `v3.27.3` | embedded forward-only migrations |
+| `github.com/nats-io/nats.go` | `v1.52.0` | NATS JetStream adapter за provider-neutral eventing port |
+| `github.com/coder/websocket` | `v1.8.14` | owner resumable WebSocket transport |
+| `github.com/mattermost/mattermost/server/public` | `v0.4.3` | только optional Mattermost interaction adapter |
+| `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | embedded YAML/JSON i18n catalogs и locale-aware user messages |
+| `github.com/prometheus/client_golang` | `v1.23.2` | bounded-cardinality metrics и `/metrics` |
+| `github.com/getsentry/sentry-go` | `v0.48.0` | unexpected error reporting без secret/PII |
+| `go.opentelemetry.io/otel` | `v1.44.0` | tracing и metrics API/SDK |
+| `google.golang.org/grpc` | `v1.81.x` / `v1.82.x` | generated internal RPC transport |
+| `google.golang.org/protobuf` | `v1.36.x` | generated Proto messages |
+| `k8s.io/api`, `apimachinery`, `client-go` | `v0.36.3` | runtime-controller, role-image builder и exact Kubernetes resources |
 
-## Backend Go - planned baselines
+Несовпадающие patch/minor версии между Go modules не нормализуются вручную:
+каждый module lock является авторитетным, а общий toolchain test проверяет их
+совместимость.
 
-| Dependency | Status | Scope | Why |
-|---|---|---|---|
-| `github.com/openai/openai-go/v3` | planned | Agent/OpenAI integration | официальный OpenAI Go SDK для будущего runtime-контура |
+## Control Center
 
-## Infrastructure and bootstrap tools - in use
+Точные версии находятся в `services/staff/control-center/package.json` и
+`package-lock.json`.
 
-| Tool | Scope | Why |
+| Dependency | Active version | Scope |
+|---|---:|---|
+| `vue` | `3.5.41` | production PWA |
+| `pinia` | `3.0.4` | нормализованные authoritative entity stores |
+| `vue-router` | `4.6.3` | global/project routes и guards |
+| `vue-i18n` | `11.4.8` | RU/EN user interface |
+| `oidc-client-ts` | `3.3.0` | browser OIDC/session boundary |
+| `@hey-api/client-fetch` | `0.13.1` | generated OpenAPI client runtime |
+| `@hey-api/openapi-ts` | `0.99.0` | OpenAPI TypeScript codegen |
+| `@asyncapi/parser` | `3.6.3` | AsyncAPI validation для ограниченного repository-owned codegen |
+| `vite` | `8.0.16` | production build |
+| `vitest` | `4.1.6` | frontend unit tests |
+| `@playwright/test` | `1.61.0` | browser E2E contract и live disposable execution |
+
+## Agent runtime и role images
+
+| Tool | Active version/source | Scope |
+|---|---:|---|
+| `@openai/codex` | `0.144.1` | первый provider adapter через typed app-server contract |
+| `matter-codex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
+| Node.js | `24.x` | Codex/provider process и role tooling |
+| Go | `1.26.6` | runtime/toolchain для ролей, которым это разрешено recipe |
+| `git`, `gh`, browser, office/analysis CLI | только по role recipe | инструменты конкретной роли, не обязательный core набор |
+
+Обычный Agent запускается в exact promoted role image. Наличие GitHub,
+Kubernetes, database или browser CLI определяется рецептом и grants роли, а не
+глобальной IT-ориентированной базой. System assistant использует отдельный
+promoted system role image и always-hot runtime contract.
+
+## Infrastructure и supply chain
+
+| Dependency | Source of exact version | Scope |
 |---|---|---|
-| `ssh` | remote deploy wrapper | выполнение Kubernetes операций непосредственно на целевом сервере |
-| `kubectl` | bootstrap/deploy wrapper | применение manifests и rollout/smoke diagnostics в MVP |
-| `envsubst` | manifest render | шаблонизация YAML до появления Go deploy renderer |
-| `base64`, `tar` | secret manifest render и image build context | подготовка Secret data и временного build context для Kaniko remote image build без вывода секретов |
-| `mmctl` | Mattermost bootstrap | локальное администрирование Mattermost pod без вывода секретов |
-| `openssl` | bootstrap secrets | генерация bootstrap секретов |
-| `gcr.io/kaniko-project/executor` | bot-service и agent-runner image build | default in-cluster image build без Docker daemon и без передачи готовых image с локальной машины |
-| `registry:2` | MatterCodex image registry | single-server локальный registry для Kaniko push и kubelet pull через hostPort |
-| `docker` или `nerdctl` | legacy remote image build | явный fallback только при `MATTERCODEX_IMAGE_BUILD_STRATEGY=docker` и наличии builder на целевом сервере |
+| rootless BuildKit | pinned Dockerfile/manifests | release images и изолированная сборка role images |
+| OCI registry | release environment configuration | staging, evidence, promotion и node pull boundaries |
+| Kubernetes | environment contract | платформа и execution-scoped role Pods |
+| PostgreSQL | environment contract | fresh control-plane baseline и authority state |
+| NATS JetStream | environment contract | durable domain-event transport |
+| `nsc` | `v2.15.0` | owner-side generation of fresh NATS operator, account and bounded user material |
+| `cosign` | `v3.1.3` | owner-side generation of image-signing material and runtime OCI verification |
+| `syft` | `v1.51.0` | формирование SBOM при admission role image |
+| `grype` | `v0.117.0` | проверка уязвимостей SBOM при admission role image |
+| `regctl` | `v0.11.5` | OCI readback, evidence artifacts и promotion role image |
+| Vault + Secrets Store CSI | pinned manifests/charts | workload-bound secret delivery без значений в manifests |
+| Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |
+| OpenTelemetry/Prometheus/Grafana | pinned manifests/release lock | telemetry и diagnostics |
+| Actions Runner Controller | pinned Helm chart | release image build через owner-configured registry namespace |
 
-## Project checks - in use
+Kaniko, bundled Mattermost, `bot-service`, legacy migration images,
+direct-production prototype registry и hardcoded installation domain не входят
+в активный профиль.
 
-Строка `go 1.26.5` в `go.mod` одновременно задаёт обязательный минимум и подразумеваемый `toolchain go1.26.5`. Отдельная равная ей директива `toolchain` не хранится: Go 1.26.5 удаляет её при `go mod tidy`. `Makefile`, контейнерные стадии и `scripts/check-go-toolchain.sh` закрепляют тот же toolchain и закрыто отклоняют более старую или частично обновлённую конфигурацию.
+## Codegen и проверки
 
-| Tool | Version | Scope | Why |
-|---|---:|---|---|
-| `govulncheck` | `v1.6.0` | Проверка уязвимостей Go | закреплённый сканер для воспроизводимого запуска `make govulncheck`; база уязвимостей обновляется при запуске |
+| Tool | Active version | Scope |
+|---|---:|---|
+| Go toolchain | `1.26.6` | format/build/test всех modules |
+| `buf` | `v1.71.0` | Proto lint/build/codegen |
+| `protoc-gen-go` | `v1.36.11` | Go Proto messages |
+| `protoc-gen-go-grpc` | `v1.6.2` | Go gRPC clients/servers |
+| `oapi-codegen` | `v2.7.1` | Go OpenAPI transport types |
+| `sqlc` | `v1.31.1` | проверяемый SQL codegen там, где он используется |
+| `govulncheck` | `v1.6.0` | Go vulnerability scan |
 
-## Agent runner tools - in use
-
-| Tool | Version | Scope | Why |
-|---|---:|---|---|
-| `@openai/codex` | `0.144.1` | Agent runtime и developer/reviewer image | deployable `agent-runner` использует typed `codex app-server` stdio JSON-RPC с exact generated schema, session `thread/start|resume`, `turn/start|interrupt` и required MCP; `codex exec --json` не является runtime contract unit |
-| `node` | `24.17.x` | Agent JS/TS runtime | запуск Vue/TypeScript/OpenAPI/AsyncAPI tooling; свежий `@asyncapi/cli` требует Node 24 |
-| `npm` | `11.13.x` | Agent JS package runner | запуск npm scripts и глобальных CLI packages |
-| `pnpm` | `11.8.0` | Agent JS package runner | поддержка frontend/workspace проектов на pnpm |
-| `yarn` | `1.22.22` | Agent JS package runner | поддержка проектов на Yarn classic |
-| `gh` | `2.95.0` | Agent PR publish/review | подготовленный agent-runner image вызывает `gh` из Go runner binary, а Codex agent получает `gh` для inline review comments и review-thread replies |
-| `git` | distro package | Agent checkout/push | подготовленный agent-runner image выполняет clone/branch/commit/push из Go runner binary без shell-скриптов в bot-service |
-| `tini` | distro package | Agent container init | PID 1 init для agent-runner pods/jobs; reaps orphaned/zombie child processes от `codex`, `gh`, `git`, `npm` и прокидывает сигналы |
-| `kubectl` | `1.36.2` | Agent Kubernetes diagnostics/deploy | роли с Kubernetes-доступом могут читать логи, проверять ресурсы и выполнять deploy через Kubernetes CLI |
-| `helm` | `4.2.1` | Agent Kubernetes diagnostics/deploy | inspect/render Helm releases and charts |
-| `psql` | distro package | Agent PostgreSQL diagnostics | диагностика PostgreSQL и ручная проверка данных по разрешению владельца |
-| `redis-cli` | distro package | Agent Redis diagnostics | диагностика Redis/cache состояния по разрешению владельца |
-| `jq` | distro package | Agent diagnostics/scripts | безопасная обработка JSON-выводов CLI без ad-hoc parsing |
-| `yq` | `v4.53.3` | Agent YAML diagnostics/scripts | обработка YAML manifests/config без строкового парсинга |
-| `rg`, `fd`, `nc`, `dig`, `tree` | distro packages | Agent development diagnostics | быстрый поиск, network/DNS diagnostics и обзор рабочих деревьев |
-| `just` | `1.55.1` | Agent task runner | запуск project tasks из justfile через pinned release binary, чтобы не зависеть от distro package availability |
-| `go` | `1.26.5` | Agent Go development | сборка и тестирование Go modules; Go 1.26.5 является минимальной безопасной версией MatterCodex и удовлетворяет требованию `sqlc` Go >= 1.26, при этом Go 1.25 modules проекта `kodex` остаются совместимыми |
-| `goimports` | `v0.46.0` | Agent Go formatting | форматирование импортов Go |
-| `gofumpt` | `v0.10.0` | Agent Go formatting | stricter Go formatting where requested |
-| `staticcheck` | `v0.7.0` | Agent Go static analysis | дополнительные проверки Go-кода |
-| `goose` | `v3.27.1` | Agent migration work | запуск и проверка `-- +goose Up/Down` миграций в Go/PostgreSQL сервисах |
-| `sqlc` | `v1.31.1` | Agent SQL codegen | генерация typed Go database code из SQL |
-| `mockgen` | `v0.6.0` | Agent test codegen | генерация Go mocks |
-| `oapi-codegen` | `v2.7.1` | Agent OpenAPI codegen | генерация Go transport-кода из OpenAPI спецификаций |
-| `openapi-ts` | `0.98.2` | Agent OpenAPI TypeScript codegen | генерация TypeScript clients из OpenAPI спецификаций |
-| `typescript` / `tsc` | `6.0.3` | Agent TypeScript development | type-check TypeScript фронтенда и shared packages |
-| `vue` | `3.5.38` | Agent Vue development | runtime package baseline для Vue/PWA проектов |
-| `create-vue` | `3.22.4` | Agent Vue scaffolding | создание Vue packages при необходимости |
-| `vite` | `8.0.16` | Agent Vue build/dev server | сборка и локальная проверка Vue/Vite интерфейсов |
-| `vue-tsc` | `3.3.5` | Agent Vue typecheck | type-check Vue SFC |
-| `vitest` | `4.1.9` | Agent frontend tests | запуск unit tests для frontend packages |
-| `eslint` | `10.5.0` | Agent frontend lint | lint JavaScript/TypeScript |
-| `prettier` | `3.8.4` | Agent formatting | форматирование frontend/docs files |
-| `asyncapi` | `6.0.2` | Agent AsyncAPI/WebSocket codegen | валидация AsyncAPI specs и запуск generators для event/websocket contracts |
-| `@asyncapi/studio` | `1.2.0` | AsyncAPI CLI dependency pin | воспроизводимая установка CLI без выбора несовместимой транзитивной версии Studio |
-| `@asyncapi/generator` | `3.3.0` | Agent AsyncAPI codegen | generator runtime package для AsyncAPI templates |
-| `modelina` | `5.10.1` | Agent AsyncAPI model codegen | генерация TypeScript models для AsyncAPI/WebSocket payloads |
-| `wscat` | `6.1.0` | Agent WebSocket diagnostics | ручная проверка websocket endpoints |
-| `chromium` | distro package | Agent browser diagnostics | системный browser binary для диагностики и версионных проверок; основной путь UI smoke/e2e в agent pod - Playwright CLI/API |
-| `playwright` / `@playwright/test` | `1.61.1` | Agent browser smoke/e2e | browser automation, screenshots, traces и e2e/smoke проверки developer, UI/UX и QA ролей |
-| `@playwright/mcp` | `0.0.77` | Optional agent browser MCP | MCP-сервер браузерной автоматизации для ролей, которым он явно включен в Codex `config.toml` |
-| `wait-on` | `9.0.10` | Agent frontend readiness | ожидание локального dev-server/build preview перед browser smoke/e2e |
-| `buf` | `v1.71.0` | Agent protobuf/gRPC codegen | lint/generate protobuf contracts |
-| `grpcurl` | `v1.9.3` | Agent gRPC diagnostics | инспекция и вызов gRPC сервисов |
-| `protoc` | distro package | Agent protobuf/gRPC codegen | генерация protobuf/gRPC артефактов |
-| `protoc-gen-go` | `v1.36.11` | Agent protobuf Go codegen | генерация Go protobuf типов |
-| `protoc-gen-go-grpc` | `v1.6.2` | Agent gRPC Go codegen | генерация Go gRPC server/client stubs |
-| `golangci-lint` | `v2.12.2` | Agent Go lint | запуск основного Go lint профиля, когда это требуется задачей |
-
-## Runtime images - in use
-
-| Image | Scope | Why |
-|---|---|---|
-| `golang:1.26.5-alpine` | Go build stages | закреплённый build layer для bot-service и agent-runner binaries; не используется как production runtime |
-| `golang:1.26.5-alpine` | agent-runner Go toolchain/tools stage | поставляет Go 1.26.5 и Go CLI tools в agent-runner runtime для свежего codegen/lint toolchain |
-| `alpine:3.22` | bot-service prod Dockerfile | минимальный runtime слой для собранного bot-service binary |
-| `localhost:5001/matter-codex/bot-service:<tag>` | bot-service MVP runtime | image, собранный Kaniko в кластере и опубликованный во встроенный MatterCodex registry |
-| `node:24-bookworm` | agent-runner Dockerfile base | glibc runtime слой с npm, Codex CLI, Vue/TS/OpenAPI/AsyncAPI tooling, operator/developer CLI tools и Playwright/Chromium browser tooling |
-| `localhost:5001/matter-codex/agent-runner:<tag>` | agent runner MVP runtime | non-root image, собранный Kaniko в кластере, с `matter-codex-agent-runner`, Codex CLI, GitHub/Kubernetes/DB/WebSocket clients, Go toolchain, Vue/TS и API codegen tooling для chat/session agents |
-| `quay.io/oauth2-proxy/oauth2-proxy` | Mattermost public gate | Google OAuth allowlist перед публичным Mattermost URL без встраивания OAuth-логики в Mattermost manifests |
-| `mattermost/mattermost-team-edition` | Mattermost | self-hosted Mattermost для control surface |
-| `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb` | Mattermost и MatterCodex PostgreSQL | PostgreSQL 16 с локальным `pgvector`; digest исключает незаметную смену libc/правил сортировки под существующим PVC |
-| `pgvector/pgvector:0.8.5-pg15@sha256:18d16372b8406bb38a9f94cbff15d125c463d71fde2770aa8b5c64bfcc1578ee` | только disposable PostgreSQL 15 integration tests | локальный Docker и временный Kubernetes test runner; OCI index digest проверен 2026-07-20 через authoritative Docker Registry HTTP API V2 `registry-1.docker.io/v2/pgvector/pgvector/manifests/0.8.5-pg15` |
-| `pgvector/pgvector:0.8.5-pg16@sha256:1d533553fefe4f12e5d80c7b80622ba0c382abb5758856f52983d8789179f0fb` | только disposable PostgreSQL 16 integration tests | локальный Docker и временный Kubernetes test runner; OCI index digest проверен 2026-07-20 через authoritative Docker Registry HTTP API V2 `registry-1.docker.io/v2/pgvector/pgvector/manifests/0.8.5-pg16`; Pod/контейнер не используют PVC и удаляются по exact run identity |
-| `busybox` | init/wait helpers | lightweight init helper в manifests; legacy smoke image setting сохраняется для совместимости config |
-
-## Процесс изменений каталога
-
-- PR с новой зависимостью должен обновлять этот файл, `go.mod`/lock-файлы и профильные гайды при необходимости.
-- Без обновления каталога изменение зависимости считается неполным.
+Версии developer tools для role images закрепляются в Dockerfile и release
+lock. Их наличие в образе конкретной роли не превращает соответствующую внешнюю
+систему в core dependency MatterCodex.

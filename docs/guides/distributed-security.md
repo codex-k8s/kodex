@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.3.1
-updated: 2026-08-07
+version: 1.4.0
+updated: 2026-08-23
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -90,8 +90,10 @@ Client adapter явно собирает все принятые слои:
 5. correlation, expiry и replay state, если они входят в policy.
 
 Credential не передается по незашифрованному соединению. Для gRPC
-`PerRPCCredentials` требует transport security. Health/готовность проверяют тот
-же auth path, который используют рабочие RPC, а не упрощенный обход.
+`PerRPCCredentials` требует transport security. Kubernetes readiness workload
+проверяет только workload-local issuer/verifier sidecar и прямую
+инфраструктуру. Полный межсервисный auth path проверяют рабочий RPC и отдельный
+diagnostic-контур; упрощённый незащищённый обход для них запрещён.
 
 После криптографической проверки credential сохраняет и передаёт в доменное
 решение его неизменяемые `purpose`, `producer_id`, workload/SPIFFE, полный
@@ -173,6 +175,20 @@ retired union обновляются одной транзакцией с fence 
 controller/migrator identity через явный single-winner protocol с точным
 readback. Отсутствие fence, history или genesis audit в уже существующей среде
 не является разрешением «первого запуска» и закрывает verifier readiness.
+
+При кратком сетевом отказе обновления JWKS либо подписанного control-plane
+снимка verifier может использовать только последний полностью проверенный
+снимок в течение двух минут с момента последнего успешного обновления. Ошибки
+повторного refresh не продлевают это окно. Новая сессия, token или authority
+proof не может жить дольше остатка окна. Истечение окна закрывает выдачу новых
+полномочий и проверку новых токенов.
+
+Last-known-good разрешён только для транспортной недоступности Kubernetes API,
+JWKS publisher или control-plane readback. Повреждение подписи, digest mismatch,
+rollback, повторное использование retired key identity, конфликт ревизии,
+истечение ключа, certificate либо grace-периода немедленно закрывают
+авторизацию и readiness соответствующего verifier; предыдущий снимок в этом
+случае не используется.
 
 Защищённый delivery readback требует одновременно exact mTLS peer и
 application credential, связанный с producer/purpose/workload/SPIFFE/full
@@ -542,14 +558,11 @@ MatterCodex выбирает формат проверок по `GOV-DOC-003`, �
 - соответствие исправления всем системным аналогам, а не одной отмеченной
   строке.
 
-В активном профиле `Prototype` таким доказательством служат production diff,
-сквозная карта, статический разбор, сборка и ручной сценарий; отсутствие
-integration/E2E/contract/deploy/render/lifecycle suite либо полного coverage
-не является security finding. Небольшой быстрый unit-тест сохраняется только
-для сложной чистой или security-critical логики. Достижимый fail-open path,
-ошибка authority либо нарушение границы доверия остаются блокером независимо
-от наличия тестового контура. Полный контур будет введён отдельной волной
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+В `Web-first baseline` доказательство включает production diff, сквозную карту,
+unit/component negative tests, exact environment render и ручной сценарий.
+Достижимый fail-open path, ошибка authority либо нарушение границы доверия
+остаются блокером независимо от наличия теста. Отсутствие разрешённой live или
+disposable среды фиксируется как `NOT RUN` и не ослабляет статический finding.
 
 Статус `resolved` у review thread подтверждает завершение обсуждения, но не
 заменяет проверку diff и фактического пути отказа.

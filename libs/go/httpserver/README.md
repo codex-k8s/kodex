@@ -1,6 +1,16 @@
+---
+id: GO-LIB-HTTPSERVER-001
+title: Технический HTTP server
+type: component
+status: approved
+owner: backend
+version: 1.0.0
+updated: 2026-08-23
+---
+
 # `httpserver`
 
-Общий технический HTTP server для `/livez`, `/readyz` и `/metrics`.
+Общий технический HTTP server для `/healthz`, `/readyz` и `/metrics`.
 Библиотека также принимает ограниченный набор service-owned `ExactGETRoute`
 для безопасного readback: только точный `GET` без query/body и с общими
 защитными заголовками. Библиотека не регистрирует изменяющие состояние или

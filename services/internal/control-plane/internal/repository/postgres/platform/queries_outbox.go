@@ -1,0 +1,14 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/outbox_check_outbox_table.sql
+	queryOutboxCheckOutboxTable string
+	//go:embed sql/outbox_claim_publishable_events.sql
+	queryOutboxClaimPublishableEvents string
+	//go:embed sql/outbox_markoutboxpublished_update_outbox_events_state_broker_receipt_published_at.sql
+	queryOutboxMarkoutboxpublishedUpdateOutboxEventsStateBrokerReceiptPublishedAt string
+	//go:embed sql/outbox_markoutboxfailed_update_outbox_events_state_available_at_lease_owner.sql
+	queryOutboxMarkoutboxfailedUpdateOutboxEventsStateAvailableAtLeaseOwner string
+)

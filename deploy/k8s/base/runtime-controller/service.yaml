@@ -9,3 +9,16 @@ spec:
     app.kubernetes.io/component: internal-controller
   ports:
     - {name: metrics, port: 9090, targetPort: metrics, protocol: TCP}
+    - {name: callback, port: 8444, targetPort: callback, protocol: TCP}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-controller-callback
+  labels: {app.kubernetes.io/name: runtime-controller}
+spec:
+  selector:
+    app.kubernetes.io/name: runtime-controller
+    app.kubernetes.io/component: internal-controller
+  ports:
+    - {name: callback, port: 8444, targetPort: callback, protocol: TCP}

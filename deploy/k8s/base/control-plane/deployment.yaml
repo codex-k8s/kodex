@@ -63,7 +63,27 @@ spec:
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
             - name: CONTROL_PLANE_NATS_REPLICAS
-              value: "3"
+              value: "1"
+            - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretName}}
+            - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretUID}}
+            - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretResourceVersion}}
+            - name: CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256}}
+            - name: CONTROL_PLANE_OIDC_ISSUER
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcIssuer}}
+            - name: CONTROL_PLANE_OIDC_AUDIENCE
+              value: mattercodex-control-api
+            - name: CONTROL_PLANE_OIDC_JWKS_URL
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcJwksUrl}}
+            - name: CONTROL_PLANE_OIDC_CONNECT_ADDRESS
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcConnectAddress}}
+            - name: CONTROL_PLANE_OIDC_TLS_SERVER_NAME
+              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcTlsServerName}}
+            - name: CONTROL_PLANE_OIDC_CA_FILE
+              value: /var/run/config/mattercodex/control-plane/oidc/ca.pem
             - name: CONTROL_PLANE_IMAGE_POLICY_REVISION
               valueFrom:
                 configMapKeyRef:
@@ -82,22 +102,36 @@ spec:
               value: 15m
             - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
               value: "3"
-            - name: CONTROL_PLANE_RECOVERY_POLL_INTERVAL
-              value: 1s
             - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
               value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
               value: registry-pull.invalid/mattercodex/roles
             - name: CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+            - name: CONTROL_PLANE_ROLE_ENVIRONMENT_CATALOG_FILE
+              value: /var/run/config/mattercodex/control-plane/role-environments/catalog.json
+            - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: builderSHA256}}
+            - name: CONTROL_PLANE_ROLE_IMAGE_FRONTEND_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: frontendSHA256}}
+            - name: CONTROL_PLANE_ROLE_IMAGE_TOOLCHAIN_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: toolchainSHA256}}
             - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
             - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
+            - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
+            - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
+              value: /var/run/config/mattercodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
           ports:
             - name: grpc
               containerPort: 8443
@@ -107,7 +141,7 @@ spec:
               protocol: TCP
           startupProbe:
             httpGet:
-              path: /readyz
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 2
@@ -121,7 +155,7 @@ spec:
             failureThreshold: 2
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: metrics
             timeoutSeconds: 2
             periodSeconds: 10
@@ -152,32 +186,20 @@ spec:
             - name: postgres-runtime
               mountPath: /var/run/secrets/mattercodex/control-plane/postgres-runtime
               readOnly: true
-            - name: postgres-relay
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-relay
-              readOnly: true
-            - name: postgres-context
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
-              readOnly: true
             - name: postgres-ca
               mountPath: /var/run/config/mattercodex/control-plane/postgres
               readOnly: true
-            - name: redis-credential
-              mountPath: /var/run/secrets/mattercodex/control-plane/redis
-              readOnly: true
-            - name: redis-ca
-              mountPath: /var/run/config/mattercodex/control-plane/redis
-              readOnly: true
             - name: nats-credential
               mountPath: /var/run/secrets/mattercodex/control-plane/nats
+              readOnly: true
+            - name: nats-client-tls
+              mountPath: /var/run/secrets/mattercodex/control-plane/nats-client
               readOnly: true
             - name: nats-ca
               mountPath: /var/run/config/mattercodex/control-plane/nats
               readOnly: true
             - name: lease-signing
               mountPath: /var/run/secrets/mattercodex/control-plane/lease-signing
-              readOnly: true
-            - name: runtime-workload-signing
-              mountPath: /var/run/secrets/mattercodex/control-plane/runtime-workload-signing
               readOnly: true
             - name: authority-policy
               mountPath: /var/run/config/mattercodex/control-plane/authority
@@ -188,20 +210,8 @@ spec:
             - name: application-grants
               mountPath: /var/run/config/mattercodex/control-plane/application-grants
               readOnly: true
-            - name: integration-continuation-grant-signer
-              mountPath: /var/run/secrets/mattercodex/control-plane/continuation-grant
-              readOnly: true
-            - name: interaction-readback-signer
-              mountPath: /var/run/secrets/mattercodex/control-plane/interaction-readback
-              readOnly: true
-            - name: interaction-readback-trust
-              mountPath: /var/run/config/mattercodex/control-plane/interaction-readback
-              readOnly: true
-            - name: instruction-object-store
-              mountPath: /var/run/secrets/mattercodex/control-plane/instruction-object-store
-              readOnly: true
-            - name: object-store-ca
-              mountPath: /var/run/config/mattercodex/control-plane/object-store
+            - name: role-environments
+              mountPath: /var/run/config/mattercodex/control-plane/role-environments
               readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
@@ -229,34 +239,9 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-postgres-runtime
-        - name: postgres-relay
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-relay
-        - name: postgres-context
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-context
         - name: postgres-ca
           configMap:
             name: control-plane-postgresql-ca
-            defaultMode: 0440
-            items:
-              - key: ca.pem
-                path: ca.pem
-        - name: redis-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-redis
-        - name: redis-ca
-          configMap:
-            name: control-plane-redis-ca
             defaultMode: 0440
             items:
               - key: ca.pem
@@ -267,6 +252,15 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-nats
+        - name: nats-client-tls
+          secret:
+            secretName: control-plane-nats-client-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
         - name: nats-ca
           configMap:
             name: mattercodex-nats-ca
@@ -280,12 +274,6 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-lease-signing
-        - name: runtime-workload-signing
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-runtime-workload-signing
         - name: authority-policy
           configMap:
             name: internal-rpc-authority-publisher-target-registry
@@ -306,37 +294,13 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-application-grants
-        - name: integration-continuation-grant-signer
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-integration-continuation-grant-signer
-        - name: interaction-readback-signer
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-interaction-readback-signer
-        - name: interaction-readback-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-interaction-readback-trust
-        - name: instruction-object-store
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-instruction-object-store
-        - name: object-store-ca
+        - name: role-environments
           configMap:
-            name: object-store-ca
+            name: mattercodex-role-environments
             defaultMode: 0440
             items:
-              - key: ca.pem
-                path: ca.pem
+              - key: catalog.json
+                path: catalog.json
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

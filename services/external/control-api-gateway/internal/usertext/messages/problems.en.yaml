@@ -1,0 +1,376 @@
+INTERNAL:
+  other: Internal error
+INVALID_REQUEST:
+  other: Check the request data
+UNAUTHENTICATED:
+  other: Sign in to continue
+PERMISSION_DENIED:
+  other: You do not have permission for this action
+NOT_FOUND:
+  other: The requested resource was not found
+IDEMPOTENCY_CONFLICT:
+  other: A different operation already uses this request key
+VERSION_OR_STATE_CONFLICT:
+  other: The resource changed; review the latest version and try again
+STATE_CONFLICT:
+  other: This action is not available in the current state
+RATE_LIMITED:
+  other: Too many requests; try again shortly
+UNAVAILABLE:
+  other: The service is temporarily unavailable
+DEADLINE_EXCEEDED:
+  other: The operation took too long; try again
+CSRF_REJECTED:
+  other: The session check failed; reload the page and try again
+ORIGIN_REJECTED:
+  other: This website is not allowed to access MatterCodex
+STOPPING:
+  other: The service is restarting; reconnect shortly
+PAYLOAD_TOO_LARGE:
+  other: The uploaded data is too large
+UPSTREAM_PAYLOAD_TOO_LARGE:
+  other: The generated file is too large to download
+RUN_NOT_FOUND:
+  other: The run was not found or is unavailable to you
+RUN_UNAVAILABLE:
+  other: The run stream is temporarily unavailable
+INVALID_RESUME:
+  other: The saved stream position is invalid
+STREAM_UNAVAILABLE:
+  other: Live updates are temporarily unavailable
+PLATFORM_UNAVAILABLE:
+  other: Platform updates are temporarily unavailable
+GAP_UNRECOVERABLE:
+  other: Some live updates are no longer available; the current state will be loaded again
+INTERACTION_DELIVERY_FAILED:
+  other: A message could not be delivered to an optional external channel
+INTERACTION_DELIVERY_RETRYING:
+  other: Delivery will be retried automatically; the core run is unaffected
+INTERACTION_DELIVERY_RETRY_EXHAUSTED:
+  other: Automatic retries are exhausted; check the connection in Integrations
+INTERACTION_DELIVERY_RECOVERED:
+  other: Delivery to the external channel has recovered
+INTERACTION_DELIVERY_RECOVERY_COMPLETE:
+  other: No action is required; the core run remained available
+INTERACTION_DELIVERY_SUCCEEDED:
+  other: The message was delivered to the external channel
+CANCELLED_BY_OWNER:
+  other: The run was cancelled by a user
+PROVIDER_AUTH_UNAVAILABLE:
+  other: Model access is not configured or is temporarily unavailable
+PROVIDER_UNAVAILABLE:
+  other: The model provider is temporarily unavailable
+PROVIDER_RESPONSE_INVALID:
+  other: The model provider returned an invalid response
+RUNTIME_UNAVAILABLE:
+  other: The agent runtime is temporarily unavailable
+RUNTIME_LIMIT_EXCEEDED:
+  other: The agent exceeded an execution limit
+SYSTEM_ASSISTANT_NAME:
+  other: System assistant
+SYSTEM_ASSISTANT_PURPOSE:
+  other: Configures the platform and explains its current state
+SYSTEM_ASSISTANT_ROLE_DESCRIPTION:
+  other: Built-in non-removable assistant with typed MCP tools
+DEFAULT_RUNTIME_NAME:
+  other: Default runtime
+DEFAULT_PROVIDER_ACCOUNT_NAME:
+  other: Default model account
+INSTALLATION_OWNER_NAME:
+  other: Installation owner
+OIDC_USER_NAME:
+  other: User
+SYSTEM_ASSISTANT_COMMAND:
+  other: System assistant command
+RUN_COORDINATION_ROLE:
+  other: Coordination
+RUN_CANCELLED_BY_OWNER:
+  other: Run cancelled by owner
+OWNER_GATE_REVIEW_TITLE:
+  other: Review the result
+OWNER_GATE_REVIEW_PROMPT:
+  other: Confirm whether the process should continue
+OWNER_GATE_NODE_NAME:
+  other: Decision required
+OWNER_GATE_NODE_ROLE:
+  other: Result review
+ARTIFACT_UPLOADED:
+  other: File uploaded
+ARTIFACT_DOWNLOADED:
+  other: File downloaded
+ARTIFACT_PREVIEWED:
+  other: File preview opened
+RUN_TURN_STARTED:
+  other: The AI employee started working
+ROLE_IMAGE_RECIPE_CHANGED:
+  other: The role environment configuration was updated
+ROLE_IMAGE_BUILD_COMPLETED:
+  other: The role environment image was built
+ONBOARDING_COMPLETED:
+  other: Initial setup is complete
+PROJECT_CREATED:
+  other: Project created
+PROJECT_UPDATED:
+  other: Project updated
+PROJECT_ACCESS_UPDATED:
+  other: Project access updated
+AGENT_CREATED_READY:
+  other: AI employee created and ready to run
+AGENT_UPDATED:
+  other: AI employee updated
+AGENT_INSTRUCTIONS_UPDATED:
+  other: AI employee instructions updated
+AGENT_PERMISSIONS_UPDATED:
+  other: AI employee permissions updated
+INSTRUCTIONS_TOO_SHORT:
+  other: Instructions must contain at least 20 characters
+WORKFLOW_CREATED:
+  other: Workflow created
+WORKFLOW_UPDATED:
+  other: Workflow updated
+RUN_CREATED:
+  other: Run created
+RUN_CANCELLED:
+  other: Run cancelled
+RUN_RETRY_CREATED:
+  other: New attempt created
+SESSION_CONTINUATION:
+  other: Session continuation
+SESSION_CONTINUED:
+  other: Session continued
+OWNER_GATE_RESOLVED:
+  other: Decision recorded
+SCHEDULE_CREATED:
+  other: Schedule created
+SCHEDULE_UPDATED:
+  other: Schedule updated
+SCHEDULED_RUN_TASK:
+  other: Scheduled run
+SCHEDULE_OCCURRENCE_MATERIALIZED:
+  other: Scheduled run created
+SCHEDULE_OCCURRENCE_COMPLETED:
+  other: Scheduled run completed
+INTEGRATION_CONNECTION_CREATED:
+  other: Integration connection created
+INTEGRATION_CONNECTION_UPDATED:
+  other: Integration connection updated
+INTEGRATION_GRANT_UPDATED:
+  other: Integration permission updated
+INTEGRATION_CONNECTION_TEST_COMPLETED:
+  other: Connection test completed
+INTEGRATION_TEST_SUCCEEDED:
+  other: Connection is working
+INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
+  other: Credentials have not been configured yet
+INTEGRATION_CREDENTIAL_CONFIGURED:
+  other: Credentials are configured and masked
+INTEGRATION_CREDENTIAL_INVALID:
+  other: Credentials are unavailable or rejected
+INTEGRATION_UNAVAILABLE:
+  other: The external system is temporarily unavailable
+INTEGRATION_AUTH_REJECTED:
+  other: The external system rejected the credentials
+INTEGRATION_CREDENTIAL_UNAVAILABLE:
+  other: Protected credentials have not been materialized
+INTEGRATION_CONFIGURATION_INVALID:
+  other: Connection settings failed safe validation
+INTEGRATION_REQUEST_REJECTED:
+  other: The external system rejected the request
+INTEGRATION_CAPABILITY_UNSUPPORTED:
+  other: This capability is not supported by the adapter
+INTEGRATION_RESPONSE_INVALID:
+  other: The external system returned an unsupported response
+INTEGRATION_RATE_LIMITED:
+  other: The external system temporarily limited request frequency
+NEW_ASSISTANT_CONVERSATION:
+  other: New conversation
+ASSISTANT_CONVERSATION_CREATED:
+  other: Assistant conversation created
+ASSISTANT_TURN_QUEUED:
+  other: Assistant command queued
+ASSISTANT_TURN_ACCEPTED:
+  other: Assistant command accepted
+ASSISTANT_PLAN_APPLIED:
+  other: Assistant plan applied
+ASSISTANT_PLAN_PROPOSED:
+  other: Assistant change plan proposed
+ASSISTANT_INSTRUCTIONS_UPDATED:
+  other: Assistant instruction supplement updated
+ASSISTANT_RECOVERY_REQUESTED:
+  other: Assistant recovery requested
+ASSISTANT_RECOVERING:
+  other: Assistant is recovering
+ASSISTANT_EXECUTING:
+  other: Executing the command
+ASSISTANT_READY:
+  other: Ready for a command
+SYSTEM_ASSISTANT_HEARTBEAT_RECORDED:
+  other: System assistant runtime heartbeat recorded
+SYSTEM_ASSISTANT_CORE_PROMPT_UPDATED:
+  other: System assistant core instructions upgraded
+SYSTEM_ASSISTANT_LABEL:
+  other: System · non-removable
+ARTIFACT_AVAILABLE:
+  other: File available
+RESULT_ARTIFACT_AVAILABLE:
+  other: Result file available
+ARTIFACT_BINDING_UPDATED:
+  other: File binding updated
+CHILD_AGENT_STARTED:
+  other: Child AI employee started
+CHILD_CALLBACK_REGISTERED:
+  other: Child AI employee callback registered
+CHILD_AGENT_RESULT_DELIVERED:
+  other: Child AI employee result delivered
+CHILD_RUN_DELEGATED:
+  other: Work delegated to a child AI employee
+CHILD_CALLBACK_PROCESSED:
+  other: Child AI employee result processed
+CALLBACK_CONTINUATION_QUEUED:
+  other: Coordinator will continue with the child AI employee results
+RUN_COMPLETED:
+  other: Run completed
+RUNTIME_WORK_CLAIMS_MATERIALIZED:
+  other: Available work assigned to runtime
+RUNTIME_LEASE_RENEWED:
+  other: Runtime lease renewed
+RUNTIME_PROGRESS_RECORDED:
+  other: Runtime progress recorded
+RUNTIME_EXECUTION_COMPLETED:
+  other: Runtime execution completed
+INTEGRATION_ACTION_COMPLETED:
+  other: Integration action completed
+INTEGRATION_INVOCATION_COMPLETED:
+  other: Integration invocation completed
+OWNER_DECISION_REQUIRED:
+  other: Human decision required
+OWNER_GATE_CANCELLED:
+  other: Human decision cancelled with the run
+RUN_NODE_CANCELLED:
+  other: Execution step cancelled
+ROOT_PROCESS_COMPLETED:
+  other: Root process completed
+OWNER_CHANGES_QUEUED:
+  other: Requested changes queued for the AI employee
+PLATFORM_ACCESS_UPDATED:
+  other: Platform access updated
+MATTERMOST_EVENT_ALREADY_PROCESSED:
+  other: Mattermost message already processed
+MATTERMOST_GATE_COMMAND_HELP:
+  other: Mattermost decision command was not recognized
+MATTERMOST_GATE_RESOLVED:
+  other: Mattermost decision accepted
+MATTERMOST_GATE_STALE:
+  other: The decision was already made elsewhere
+MATTERMOST_INBOUND_ROUTE_UNAVAILABLE:
+  other: The Mattermost message has no single configured recipient
+MATTERMOST_INBOUND_RUN:
+  other: Mattermost task
+MATTERMOST_RUN_ACCEPTED:
+  other: Mattermost task accepted
+WEB_ONLY_CORE_SUMMARY:
+  other: Core features work independently of external integrations
+CAPABILITY_PROJECT_MANAGE_NAME:
+  other: Manage projects
+CAPABILITY_PROJECT_MANAGE_DESCRIPTION:
+  other: Create and configure projects
+CAPABILITY_AGENT_MANAGE_NAME:
+  other: Manage AI employees
+CAPABILITY_AGENT_MANAGE_DESCRIPTION:
+  other: Configure AI employees and instructions
+CAPABILITY_RUN_LAUNCH_NAME:
+  other: Launch work
+CAPABILITY_RUN_LAUNCH_DESCRIPTION:
+  other: Launch AI employees and workflows
+CAPABILITY_RUN_DELEGATE_NAME:
+  other: Delegation
+CAPABILITY_RUN_DELEGATE_DESCRIPTION:
+  other: Launch child AI employees in the execution graph
+CAPABILITY_GATE_RESOLVE_NAME:
+  other: Human decisions
+CAPABILITY_GATE_RESOLVE_DESCRIPTION:
+  other: Resolve Human Gates
+CAPABILITY_ARTIFACT_MANAGE_NAME:
+  other: Files
+CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
+  other: Read and create result files
+CAPABILITY_SCHEDULE_MANAGE_NAME:
+  other: Automations
+CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:
+  other: Manage schedules
+CAPABILITY_INTEGRATION_GRANT_NAME:
+  other: Integrations
+CAPABILITY_INTEGRATION_GRANT_DESCRIPTION:
+  other: Assign typed integration permissions
+INTEGRATION_CATEGORY_DEVELOPMENT:
+  other: Development
+INTEGRATION_CATEGORY_INFRASTRUCTURE:
+  other: Infrastructure
+INTEGRATION_CATEGORY_COMMUNICATIONS:
+  other: Communications
+INTEGRATION_GITHUB_DESCRIPTION:
+  other: Typed read access to allowed repositories
+INTEGRATION_GITHUB_REPOSITORY_READ_NAME:
+  other: Read repository
+INTEGRATION_GITHUB_REPOSITORY_READ_DESCRIPTION:
+  other: Read an allowed repository
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_NAME:
+  other: Change pull request
+INTEGRATION_GITHUB_PULL_REQUEST_WRITE_DESCRIPTION:
+  other: Create and update pull requests
+INTEGRATION_KUBERNETES_DESCRIPTION:
+  other: Typed observation of allowed workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_NAME:
+  other: Observe workloads
+INTEGRATION_KUBERNETES_WORKLOAD_READ_DESCRIPTION:
+  other: Read allowed workloads
+INTEGRATION_MATTERMOST_DESCRIPTION:
+  other: Optional inbound messages, notifications, result mirroring, and decisions
+INTEGRATION_MATTERMOST_INBOUND_NAME:
+  other: Inbound messages
+INTEGRATION_MATTERMOST_INBOUND_DESCRIPTION:
+  other: Create tasks from Mattermost
+INTEGRATION_MATTERMOST_NOTIFICATIONS_NAME:
+  other: Notifications
+INTEGRATION_MATTERMOST_NOTIFICATIONS_DESCRIPTION:
+  other: Send notifications
+INTEGRATION_MATTERMOST_RESULT_MIRROR_NAME:
+  other: Result mirror
+INTEGRATION_MATTERMOST_RESULT_MIRROR_DESCRIPTION:
+  other: Publish safe summaries
+INTEGRATION_MATTERMOST_GATE_DECISIONS_NAME:
+  other: Human Gate decisions
+INTEGRATION_MATTERMOST_GATE_DECISIONS_DESCRIPTION:
+  other: Accept the first valid decision
+INTEGRATION_FIELD_GITHUB_OWNER_LABEL:
+  other: Repository owner
+INTEGRATION_FIELD_GITHUB_OWNER_HELP:
+  other: GitHub organization or user without a URL
+INTEGRATION_FIELD_GITHUB_OWNER_PLACEHOLDER:
+  other: example-org
+INTEGRATION_FIELD_GITHUB_REPOSITORY_LABEL:
+  other: Repository
+INTEGRATION_FIELD_GITHUB_REPOSITORY_HELP:
+  other: Allowed repository name without its owner
+INTEGRATION_FIELD_GITHUB_REPOSITORY_PLACEHOLDER:
+  other: customer-knowledge
+INTEGRATION_FIELD_SERVER_URL_LABEL:
+  other: Kubernetes API address
+INTEGRATION_FIELD_SERVER_URL_HELP:
+  other: Exact HTTPS address of the allowed API server
+INTEGRATION_FIELD_NAMESPACES_LABEL:
+  other: Allowed namespaces
+INTEGRATION_FIELD_NAMESPACES_HELP:
+  other: Separate namespaces with commas; all others are rejected
+INTEGRATION_FIELD_BASE_URL_LABEL:
+  other: Mattermost address
+INTEGRATION_FIELD_BASE_URL_HELP:
+  other: Exact HTTPS address of the Mattermost server
+INTEGRATION_FIELD_TEAM_LABEL:
+  other: Team
+INTEGRATION_FIELD_TEAM_HELP:
+  other: Team system name for notifications and result mirroring
+INTEGRATION_FIELD_CHANNEL_LABEL:
+  other: Channel
+INTEGRATION_FIELD_CHANNEL_HELP:
+  other: Channel system name without an internal ID

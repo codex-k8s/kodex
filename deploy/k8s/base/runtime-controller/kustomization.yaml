@@ -4,7 +4,6 @@ namespace: mattercodex-system
 resources:
   - configmap.yaml
   - deployment.yaml
-  - migration-job.yaml
   - service.yaml
   - serviceaccounts-rbac.yaml
   - networkpolicy.yaml
@@ -12,9 +11,5 @@ resources:
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
-  - vault-secret-provider-classes.yaml
-  - s3-security-policy.yaml
-  - workload-admission.yaml
-  - credential-authorities.yaml
 components:
   - ../../components/internal-rpc-authority-runtime-controller-issuer

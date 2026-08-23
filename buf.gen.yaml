@@ -22,36 +22,6 @@ plugins:
       - module=github.com/codex-k8s/matter-codex/libs/go/controlplaneapi
     types:
       - controlplane.v1
-  - remote: buf.build/protocolbuffers/go:v1.36.11
-    revision: 1
-    out: libs/go/integrationgatewayapi
-    opt:
-      - module=github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi
-    types:
-      - integrationgateway.v1
-  - remote: buf.build/grpc/go:v1.6.2
-    revision: 1
-    out: libs/go/integrationgatewayapi
-    opt:
-      - module=github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi
-      - require_unimplemented_servers=true
-    types:
-      - integrationgateway.v1
-  - remote: buf.build/protocolbuffers/go:v1.36.11
-    revision: 1
-    out: libs/go/interactiongatewayapi
-    opt:
-      - module=github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi
-    types:
-      - interactiongateway.v1
-  - remote: buf.build/grpc/go:v1.6.2
-    revision: 1
-    out: libs/go/interactiongatewayapi
-    opt:
-      - module=github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi
-      - require_unimplemented_servers=true
-    types:
-      - interactiongateway.v1
   - remote: buf.build/grpc/go:v1.6.2
     revision: 1
     out: libs/go/controlplaneapi

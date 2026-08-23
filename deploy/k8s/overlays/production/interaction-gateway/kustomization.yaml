@@ -2,39 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/interaction-gateway
-configMapGenerator:
-  - name: interaction-gateway-runtime
-    behavior: merge
-    literals:
-      - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_BASE_URL=https://interaction-artifacts.mattercodex.dev
-      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_EXPECTED_REVISION=production-r2
-      - INTERACTION_GATEWAY_POSTGRES_EXPECTED_SESSION_USER=interaction_gateway_runtime_g2
-      - INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=2
 patches:
   - path: deployment-patch.yaml
   - path: poddisruptionbudget-patch.yaml
-  - target: {group: batch, version: v1, kind: Job, name: interaction-gateway-migrate}
-    patch: |-
-      apiVersion: batch/v1
-      kind: Job
-      metadata:
-        name: interaction-gateway-migrate
-      spec:
-        template:
-          spec:
-            containers:
-              - name: migrate
-                env:
-                  - name: INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION
-                    value: "2"
-                  - name: INTERACTION_GATEWAY_POSTGRES_PREVIOUS_PRINCIPAL_GENERATION
-                    value: "1"
-  - target: {group: secrets.hashicorp.com, version: v1beta1, kind: VaultStaticSecret, name: interaction-gateway-mapping}
-    patch: |-
-      - op: replace
-        path: /spec/path
-        value: mattercodex/interaction-gateway/mapping/production/revisions/production-r2
 labels:
-  - pairs: {mattercodex.dev/environment: production}
+  - pairs:
+      mattercodex.dev/environment: production
     includeSelectors: false
     includeTemplates: true

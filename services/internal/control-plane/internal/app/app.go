@@ -1,851 +1,447 @@
-// Package app содержит единственный корень композиции control-plane.
+// Package app собирает web-first control-plane и владеет его lifecycle.
 package app
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"path/filepath"
+	"os"
 	"strings"
 	"time"
 
-	sharedcache "github.com/codex-k8s/matter-codex/libs/go/cache"
-	"github.com/codex-k8s/matter-codex/libs/go/cache/redisstore"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/observability"
+	"github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	continuationgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/continuationgrant"
-	grantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/grant"
-	mattermosteventauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/mattermostevent"
-	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
-	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
-	readbackgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/readbackgrant"
-	objectclient "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/objectstore"
-	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
-	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
-	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
-	internalobservability "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/observability"
-	cachecontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/cache/controlplane"
-	postgrescontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/controlplane"
-	transportgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
-	"github.com/google/uuid"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authorityproof"
+	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/roleimage"
+	platformrepository "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/platform"
+	platformgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
-	stdgrpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/credentials"
 )
 
-const (
-	verifierUID = 29002
-	verifierGID = 29000
-)
+const maximumSecretFileBytes = 64 << 10
 
-type runtimeState struct {
-	config      Config
-	logger      *slog.Logger
-	telemetry   *appTelemetry
-	metrics     *observability.Metrics
-	readiness   *serviceruntime.Readiness
-	workers     *serviceruntime.WorkerGroup
-	grpcServer  *stdgrpc.Server
-	httpServer  *http.Server
-	publisher   *natsjetstream.Publisher
-	cache       sharedcache.Store
-	oidc        *oidcauth.Verifier
-	authority   *authorityclient.LocalConnection
-	runtimePool *pgxpool.Pool
-	relayPool   *pgxpool.Pool
-}
-
-// Run запускает стартовые барьеры, gRPC, ретранслятор и ограниченное завершение.
-func Run(
-	lifecycle context.Context,
-	shutdownBase context.Context,
-	buildVersion string,
-) (resultErr error) {
+func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	config, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	state := &runtimeState{
-		config:    config,
-		readiness: serviceruntime.NewReadiness(),
-	}
-	defer func() {
-		resultErr = errors.Join(
-			resultErr,
-			state.shutdown(context.WithoutCancel(shutdownBase)),
-		)
-	}()
-
 	startup, cancelStartup := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer cancelStartup()
-	state.telemetry, state.logger, err = startTelemetry(startup, buildVersion)
+	pool, err := openPostgres(startup, config)
 	if err != nil {
 		return err
 	}
-	methods := observableMethods()
-	state.metrics = observability.NewMetrics(serviceName, buildVersion, methods)
-	state.metrics.SetReady(false)
-	businessMetrics, err := internalobservability.NewBusinessMetrics(state.metrics.Register)
+	defer pool.Close()
+	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel)
 	if err != nil {
-		return err
+		return fmt.Errorf("construct platform repository: %w", err)
 	}
-
-	loadedPolicy, err := authoritypolicy.Load(
-		config.AuthorityPolicyFile,
-		expectedOperations(),
-	)
+	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
+		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
+		SecretResourceVersion: config.DefaultProviderSecretVersion,
+		ContentSHA256:         config.DefaultProviderCredentialSHA256,
+	}); err != nil {
+		return fmt.Errorf("configure default provider credential: %w", err)
+	}
+	leaseSigningKey, err := readBoundedFile(config.LeaseSigningKeyFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("read role image lease signing key: %w", err)
 	}
-	state.runtimePool, err = openPostgres(
-		startup,
-		config.PostgresDSNFile,
-		config.PostgresCAFile,
-		config.PostgresTLSServerName,
-		config.PostgresMaxConnections,
-	)
+	if err := repository.ConfigureRoleImages(platformrepository.RoleImageConfig{
+		PolicyRevision: config.ImagePolicyRevision, PolicySHA256: config.ImagePolicySHA256,
+		RoleRuntimeContractRevision: config.RoleRuntimeContractRevision, RoleRuntimeContractSHA256: config.RoleRuntimeContractSHA256,
+		BuildLeaseDuration: config.ImageBuildLeaseDuration, AdmissionClaimTTL: config.ImageAdmissionClaimTTL,
+		PromotionClaimTTL: config.ImagePromotionClaimTTL, MaximumAttempts: config.ImageMaximumAttempts,
+		StagingRepository: config.StagingImageRepository, PromotedRepository: config.PromotedImageRepository,
+		DefaultImageReference: config.DefaultRoleImageReference, LeaseSigningKey: leaseSigningKey,
+	}); err != nil {
+		return fmt.Errorf("configure role image lifecycle: %w", err)
+	}
+	service, err := platformservice.New(repository)
 	if err != nil {
-		return err
+		return fmt.Errorf("construct platform service: %w", err)
 	}
-	state.relayPool, err = openPostgres(
-		startup,
-		config.PostgresRelayDSNFile,
-		config.PostgresCAFile,
-		config.PostgresTLSServerName,
-		4,
-	)
+	if err := service.Bootstrap(startup); err != nil {
+		return fmt.Errorf("bootstrap platform: %w", err)
+	}
+	roleEnvironmentCatalog, err := loadRoleEnvironmentCatalog(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("load role environment catalog: %w", err)
 	}
-	contextSigningKey, err := readSecret(
-		config.PostgresContextKeyFile,
-		128,
-	)
-	if err != nil || len(contextSigningKey) < 32 {
-		return errors.New("PostgreSQL context signing key is unavailable")
+	roleImageService, err := roleimageservice.New(repository, roleEnvironmentCatalog)
+	if err != nil {
+		return fmt.Errorf("construct role image service: %w", err)
 	}
-	postgresRepository, err := postgrescontrolplane.New(
-		state.runtimePool,
-		postgrescontrolplane.Config{
-			PrincipalName:       config.PostgresPrincipalName,
-			PrincipalGeneration: config.PostgresPrincipalGeneration,
-			ContextKeyID:        config.PostgresContextKeyID,
-			ContextSigningKey:   contextSigningKey,
-			ContextTTL:          5 * time.Second,
+	workerGrantTrustFiles := map[string]string{
+		"automation-scheduler": config.AutomationGrantTrustFile,
+		"integration-gateway":  config.IntegrationGrantTrustFile,
+		"runtime-controller":   config.RuntimeGrantTrustFile,
+		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
+		"image-admission":      config.ImageAdmissionGrantTrustFile,
+		"image-promotion":      config.ImagePromotionGrantTrustFile,
+	}
+	if config.InteractionGrantTrustFile != "" {
+		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
+	}
+	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
+		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
+		SignerTrustFile:       config.ProofSignerTrustFile,
+		WorkerGrantTrustFiles: workerGrantTrustFiles,
+		OIDC: oidcverifier.Config{
+			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
+			ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,
+			CAFile: config.OIDCCAFile, Timeout: config.ReadinessTimeout,
 		},
-	)
-	if err != nil {
-		return err
-	}
-	redisPassword, err := readSecret(
-		config.RedisPasswordFile,
-		maximumSecretFileBytes,
-	)
-	if err != nil || strings.TrimSpace(string(redisPassword)) == "" {
-		return errors.New("redis credential is unavailable")
-	}
-	redisCache, err := redisstore.New(redisstore.Config{
-		Address:       config.RedisAddress,
-		TLSServerName: config.RedisTLSServerName,
-		CAFile:        config.RedisCAFile,
-		Username:      config.RedisUsername,
-		Password:      strings.TrimSpace(string(redisPassword)),
-		Database:      config.RedisDatabase,
-		PoolSize:      config.RedisPoolSize,
-		DialTimeout:   config.ReadinessTimeout,
-		ReadTimeout:   config.ReadinessTimeout,
-		WriteTimeout:  config.ReadinessTimeout,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("construct authority proof resolver: %w", err)
 	}
-	state.cache = redisCache
-	cachedRepository, err := cachecontrolplane.New(
-		postgresRepository,
-		state.cache,
-		config.CacheTimeout,
-		config.CacheTTL,
-	)
+	defer proofService.Close()
+	authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
 	if err != nil {
-		return err
+		return fmt.Errorf("connect authorization verifier: %w", err)
 	}
-	leaseKey, err := readSecret(
-		config.LeaseSigningKeyFile,
-		maximumSecretFileBytes,
-	)
-	if err != nil {
-		return errors.New("turn lease signing key is unavailable")
-	}
-	decodeRuntimeSigningKey := func(path string) (ed25519.PrivateKey, error) {
-		raw, readErr := readSecret(path, maximumSecretFileBytes)
-		if readErr != nil {
-			return nil, readErr
-		}
-		decoded, decodeErr := hex.DecodeString(strings.TrimSpace(string(raw)))
-		if decodeErr != nil || len(decoded) != ed25519.SeedSize {
-			return nil, errors.New("runtime workload signing key is invalid")
-		}
-		return ed25519.NewKeyFromSeed(decoded), nil
-	}
-	admissionSigningKey, err := decodeRuntimeSigningKey(config.RuntimeAdmissionSigningKeyFile)
-	if err != nil {
-		return errors.New("runtime admission signing key is unavailable")
-	}
-	var archiveSigningKey, restoreSigningKey ed25519.PrivateKey
-	if config.RuntimeArchiveRestoreCapability == "enabled" {
-		archiveSigningKey, err = decodeRuntimeSigningKey(config.RuntimeArchiveSigningKeyFile)
-		if err != nil {
-			return errors.New("runtime archive signing key is unavailable")
-		}
-		restoreSigningKey, err = decodeRuntimeSigningKey(config.RuntimeRestoreSigningKeyFile)
-		if err != nil {
-			return errors.New("runtime restore signing key is unavailable")
-		}
-	}
-	interactionReadbackSigner, err := readbackgrantauth.New(startup, readbackgrantauth.Config{
-		Issuer:     "https://control-plane.mattercodex-system.svc.cluster.local/authority/interaction-delivery-readback",
-		Audience:   "urn:mattercodex:interaction-delivery-readback",
-		ProducerID: "control-plane.interaction-delivery-readback", Purpose: "INTERACTION_DELIVERY_READBACK_GRANT",
-		WorkloadID: "control-plane", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read",
-		PrivateJWKFile:   config.InteractionReadbackPrivateJWKFile,
-		PublicKeysetFile: config.InteractionReadbackPublicKeysetFile,
-		Generation:       config.InteractionReadbackSignerGeneration, MaximumTTL: 15 * time.Minute,
-	}, postgresRepository)
-	if err != nil {
-		return err
-	}
-	instructionObjects, err := objectclient.New(objectclient.Config{
-		Endpoint: config.InstructionS3Endpoint, TLSServerName: config.InstructionS3TLSServerName,
-		CAFile: config.InstructionS3CAFile, ClientCertificateFile: config.InstructionS3ClientCertificateFile,
-		ClientPrivateKeyFile: config.InstructionS3ClientPrivateKeyFile,
-		AccessKeyFile:        config.InstructionS3AccessKeyFile, SecretKeyFile: config.InstructionS3SecretKeyFile,
-		SessionTokenFile: config.InstructionS3SessionTokenFile, Bucket: config.InstructionS3Bucket,
-		MaximumObjectBytes: 262144, Timeout: config.ReadinessTimeout,
-	}, postgresRepository)
-	if err != nil {
-		return err
-	}
-	resourceService, err := resource.New(cachedRepository, resource.Config{
-		LeaseSigningKey:             leaseKey,
-		RuntimeAdmissionSigningKey:  admissionSigningKey,
-		ArchiveRestoreEnabled:       config.RuntimeArchiveRestoreCapability == "enabled",
-		RuntimeArchiveSigningKey:    archiveSigningKey,
-		RuntimeRestoreSigningKey:    restoreSigningKey,
-		TurnLeaseDuration:           config.TurnLeaseDuration,
-		MaximumScheduleClaims:       config.ScheduleClaimLimit,
-		ImagePolicyRevision:         config.ImagePolicyRevision,
-		ImagePolicySHA256:           config.ImagePolicySHA256,
-		ImageBuildLeaseDuration:     config.ImageBuildLeaseDuration,
-		ImageAdmissionClaimTTL:      config.ImageAdmissionClaimTTL,
-		ImagePromotionClaimTTL:      config.ImagePromotionClaimTTL,
-		ImageMaximumAttempts:        config.ImageMaximumAttempts,
-		StagingImageRepository:      config.StagingImageRepository,
-		PromotedImageRepository:     config.PromotedImageRepository,
-		RoleImageInputRepository:    config.RoleImageInputRepository,
-		TrustedRoleBaseRepository:   config.TrustedRoleBaseRepository,
-		TrustedRoleBaseDigest:       config.TrustedRoleBaseDigest,
-		RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
-		RoleRuntimeContractSHA256:   config.RoleRuntimeContractSHA256,
-		ImageBuilderWorkload:        "role-image-builder",
-		ImageBuilderSPIFFEID:        "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
-		ImageAdmissionWorkload:      "image-admission",
-		ImageAdmissionSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
-		ImagePromotionWorkload:      "image-promotion",
-		ImagePromotionSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
-		AuthorityPolicyRevision:     loadedPolicy.Revision,
-		AuthorityPolicySHA256:       loadedPolicy.Digest,
-		OwnerGateDeliveryWorkload:   "interaction-gateway",
-		OwnerGateDeliverySPIFFEID:   "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
-		ScannerWorkload:             "artifact-scanner",
-		ScannerSPIFFEID:             "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
-		SchedulerWorkload:           "automation-scheduler",
-		SchedulerSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
-		MemoryIndexerWorkload:       "memory-indexer",
-		MemoryIndexerSPIFFEID:       "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
-		RuntimeControllerWorkload:   "runtime-controller",
-		RuntimeControllerSPIFFEID:   "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
-		ArchiveWorkload:             "runtime-archive",
-		ArchiveSPIFFEID:             "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
-		IntegrationGatewayWorkload:  "integration-gateway",
-		IntegrationGatewaySPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
-		RestoreVerifierWorkload:     "runtime-restore-verifier",
-		RestoreVerifierSPIFFEID:     "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
-		CleanupAuthorizerWorkload:   "runtime-cleanup-authorizer",
-		CleanupAuthorizerSPIFFEID:   "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
-		PendingRescheduleDelay:      config.PendingRescheduleDelay,
-		InteractionReadbackIssuer:   interactionReadbackIssuer{signer: interactionReadbackSigner},
-		Observer:                    businessMetrics,
-		InstructionObjects:          instructionObjects,
+	defer authority.Close()
+	publisher, err := natsjetstream.New(natsjetstream.Config{
+		URL: config.NATSURL, TLSServerName: config.NATSTLSServerName, CAFile: config.NATSCAFile,
+		CertificateFile: config.NATSCertificateFile, PrivateKeyFile: config.NATSPrivateKeyFile,
+		CredentialsFile: config.NATSCredentialsFile, Stream: config.NATSStream,
+		Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
+		Replicas: config.NATSReplicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000,
+		MaxBytes: config.NATSMaxBytes, MaxPerSubject: 1_000_000, MaxAge: 30 * 24 * time.Hour,
+		DuplicateWindow: 2 * time.Minute, ConnectTimeout: 2 * time.Second,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("construct NATS publisher: %w", err)
 	}
-	signer, err := proofsignerfile.New(proofsignerfile.Config{
-		PrivateJWKFile:   config.ProofPrivateJWKFile,
-		TrustFile:        config.ProofTrustFile,
-		Issuer:           loadedPolicy.Issuer,
-		Audience:         loadedPolicy.ProofAudience,
-		MaximumClockSkew: 5 * time.Second,
-	})
+	defer publisher.Close()
+	if err := publisher.Check(startup); err != nil {
+		return fmt.Errorf("verify NATS stream: %w", err)
+	}
+	if err := repository.CheckOutbox(startup); err != nil {
+		return fmt.Errorf("verify outbox: %w", err)
+	}
+	transport, err := platformgrpc.NewServer(service)
+	if err != nil {
+		return fmt.Errorf("construct gRPC transport: %w", err)
+	}
+	proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)
+	if err != nil {
+		return fmt.Errorf("construct authority proof transport: %w", err)
+	}
+	roleImageTransport, err := platformgrpc.NewRoleImageServer(roleImageService)
+	if err != nil {
+		return fmt.Errorf("construct role image transport: %w", err)
+	}
+	tlsConfig, err := loadServerTLS(config)
 	if err != nil {
 		return err
 	}
-	proofService, err := authorityservice.New(
-		cachedRepository,
-		signer,
-		authorityservice.Config{
-			Issuer:                       loadedPolicy.Issuer,
-			ProofAudience:                loadedPolicy.ProofAudience,
-			AuthorizationContextAudience: loadedPolicy.AuthorizationContextAudience,
-			PolicyRevision:               loadedPolicy.Revision,
-			PolicyDigest:                 loadedPolicy.Digest,
-			Operations:                   loadedPolicy.Operations,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	state.oidc, err = oidcauth.New(startup, oidcauth.Config{
-		ProducerID:           loadedPolicy.OIDC.ID,
-		Purpose:              loadedPolicy.OIDC.Credential,
-		Issuer:               loadedPolicy.OIDC.CredentialIssuer,
-		Audience:             loadedPolicy.OIDC.CredentialAudience,
-		ConnectAddress:       config.OIDCConnectAddress,
-		TLSServerName:        config.OIDCTLSServerName,
-		CAFile:               config.OIDCCAFile,
-		ExpectedCallerSPIFFE: loadedPolicy.OIDC.CallerSPIFFEID,
-		ExpectedWorkload:     loadedPolicy.OIDC.CallerWorkload,
-		ClockSkew:            5 * time.Second,
-		HTTPTimeout:          config.ReadinessTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	authenticators := []transportgrpc.ApplicationAuthenticator{state.oidc}
-	var continuationProducer authoritypolicy.Producer
-	for producerID, producer := range loadedPolicy.Producers {
-		if producerID == loadedPolicy.OIDC.ID {
-			continue
-		}
-		if producer.Credential == "MATTERMOST_SIGNED_EVENT" {
-			verifier, verifyErr := mattermosteventauth.New(startup, mattermosteventauth.Config{
-				ProducerID: producer.ID, Purpose: producer.Credential,
-				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
-				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
-				PublicKeysetFile: filepath.Join(config.ApplicationGrantTrustDir, producerID+".public-keyset.json"),
-				MaximumTTL:       5 * time.Minute,
-			}, postgresRepository)
-			if verifyErr != nil {
-				return verifyErr
-			}
-			authenticators = append(authenticators, verifier)
-			continue
-		}
-		if producer.Credential == "INTEGRATION_CONTINUATION_GRANT" {
-			publicKeysetFile := filepath.Join(config.ApplicationGrantTrustDir, producerID+".public-keyset.json")
-			continuationProducer = producer
-			verifier, verifyErr := continuationgrantauth.New(continuationgrantauth.Config{
-				ProducerID: producer.ID, Purpose: producer.Credential,
-				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
-				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
-				PublicJWKFile: publicKeysetFile, Generation: config.ContinuationGrantSignerGeneration,
-				MaximumTTL: 8 * 24 * time.Hour, ExpectedPurpose: integrationgatewayauth.PurposeTransition,
-				CredentialMetadata: producer.CredentialMetadata,
-			})
-			if verifyErr != nil {
-				return verifyErr
-			}
-			authenticators = append(authenticators, verifier)
-			continue
-		}
-		verifier, err := grantauth.New(grantauth.Config{
-			ProducerID:     producer.ID,
-			Purpose:        producer.Credential,
-			Issuer:         producer.CredentialIssuer,
-			Audience:       producer.CredentialAudience,
-			WorkloadID:     producer.CallerWorkload,
-			CallerSPIFFEID: producer.CallerSPIFFEID,
-			PublicJWKFile: filepath.Join(
-				config.ApplicationGrantTrustDir,
-				producerID+".public.jwk",
-			),
-		})
-		if err != nil {
-			return fmt.Errorf("initialize application grant verifier for producer %q: %w", producerID, err)
-		}
-		authenticators = append(authenticators, verifier)
-	}
-	if continuationProducer.ID == "" {
-		return errors.New("integration continuation grant producer is unavailable")
-	}
-	continuationPublicJWK := filepath.Join(config.ApplicationGrantTrustDir, continuationProducer.ID+".public-keyset.json")
-	transitionSigner, err := integrationgatewayauth.NewSigner(integrationgatewayauth.Config{
-		Issuer: continuationProducer.CredentialIssuer, Audience: continuationProducer.CredentialAudience,
-		WorkloadID: "integration-gateway", CallerSPIFFEID: continuationProducer.CallerSPIFFEID,
-		Generation: config.ContinuationGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
-	}, config.ContinuationGrantPrivateJWKFile, continuationPublicJWK)
-	if err != nil {
-		return err
-	}
-	applicationRegistry, err := transportgrpc.NewApplicationRegistry(authenticators)
-	if err != nil {
-		return err
-	}
-	state.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
-		SocketPath:        authorityclient.VerifierSocketPath,
-		ExpectedServerUID: verifierUID,
-		ExpectedServerGID: verifierGID,
-		DialTimeout:       config.ReadinessTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	outboxStore, err := postgrescontrolplane.NewOutboxStore(state.relayPool, 25)
-	if err != nil {
-		return err
-	}
-	state.publisher, err = natsjetstream.New(natsjetstream.Config{
-		URL:             config.NATSURL,
-		TLSServerName:   config.NATSTLSServerName,
-		CAFile:          config.NATSCAFile,
-		CertificateFile: config.ServerCertificateFile,
-		PrivateKeyFile:  config.ServerPrivateKeyFile,
-		CredentialsFile: config.NATSCredentialsFile,
-		Stream:          config.NATSStream,
-		Subjects: []string{
-			"control_plane.runtime_configuration_changed",
-		},
-		Replicas:        config.NATSReplicas,
-		MaxMessageBytes: 256 << 10,
-		MaxMessages:     10_000_000,
-		MaxBytes:        config.NATSMaxBytes,
-		MaxPerSubject:   5_000_000,
-		MaxAge:          30 * 24 * time.Hour,
-		DuplicateWindow: 2 * time.Minute,
-		ConnectTimeout:  config.ReadinessTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	relay, err := eventing.NewRelay(eventing.RelayConfig{
-		InstanceID:      config.InstanceID,
-		BatchSize:       32,
-		PollInterval:    config.RelayPollInterval,
-		LeaseDuration:   config.RelayLeaseDuration,
-		PublishTimeout:  config.RelayPublishTimeout,
-		FinalizeTimeout: config.RelayFinalizeTimeout,
-		MaxAttempts:     25,
-		InitialBackoff:  time.Second,
-		MaximumBackoff:  time.Minute,
-	}, outboxStore, state.publisher)
-	if err != nil {
-		return err
-	}
-	if err := internalobservability.RegisterInfrastructureMetrics(
-		state.metrics.Register,
-		state.runtimePool,
-		state.relayPool,
-		redisCache,
-		relay,
-		outboxStore,
-	); err != nil {
-		return err
-	}
-	checker := &readinessChecker{
-		repository:         cachedRepository,
-		cache:              state.cache,
-		relay:              relay,
-		proof:              proofService,
-		verifier:           state.authority.Verifier(),
-		policyRevision:     loadedPolicy.Revision,
-		instructionObjects: instructionObjects,
-	}
-	if _, err := checker.Check(startup); err != nil {
-		return fmt.Errorf("startup barrier: %w", err)
-	}
-	controlServer, err := transportgrpc.NewServer(resourceService, checker, transitionSigner)
-	if err != nil {
-		return err
-	}
-	authorityServer, err := transportgrpc.NewAuthorityServer(
-		proofService,
-		applicationRegistry,
-	)
-	if err != nil {
-		return err
-	}
-	transportCredentials, err := serverCredentials(config)
-	if err != nil {
-		return err
-	}
-	state.grpcServer = stdgrpc.NewServer(
-		stdgrpc.Creds(transportCredentials),
-		stdgrpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
-		stdgrpc.MaxRecvMsgSize(9<<20),
-		stdgrpc.MaxSendMsgSize(9<<20),
-		stdgrpc.ChainUnaryInterceptor(
-			state.metrics.UnaryServerInterceptor(),
-			state.telemetry.UnaryServerInterceptor(methods),
-			grpcserver.ErrorBoundary(nil),
-			strictRequestInterceptor,
-			proofOrAuthorizationInterceptor(state.authority.Verifier()),
+	verifiedUnary := authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
+	grpcServer := grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(tlsConfig)),
+		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
+		grpc.ChainUnaryInterceptor(
+			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
+				slog.Error("unexpected gRPC failure", "method", method, "code", code.String())
+			})),
+			routeResolverUnary(verifiedUnary),
+			grpcserver.RejectMalformedUnary,
+		),
+		grpc.ChainStreamInterceptor(
+			grpcserver.StreamErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
+				slog.Error("unexpected gRPC stream failure", "method", method, "code", code.String())
+			})),
+			authorityclient.VerifierStreamServerInterceptor(authority.Verifier()),
+			grpcserver.RejectMalformedStream,
 		),
 	)
-	controlplanev1.RegisterControlPlaneServiceServer(state.grpcServer, controlServer)
-	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(
-		state.grpcServer,
-		authorityServer,
-	)
+	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
+	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
+	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
+	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
 	}
-	state.httpServer = technicalServer(
-		config.TechnicalListen,
-		state.metrics,
-		func() bool {
-			ready, _ := state.readiness.Ready()
-			return ready
-		},
-		state.logger,
+	readiness := serviceruntime.NewReadiness()
+	technical := technicalServer(config.TechnicalListen, readiness)
+	workers := serviceruntime.StartWorkers(lifecycle,
+		serveGRPC(grpcServer, listener),
+		serveHTTP(technical),
+		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
+		monitorOIDCSigningKeys(proofService, slog.Default(), config),
+		runOutboxRelay(repository, publisher, shutdownBase, config),
 	)
-	serveErrors := make(chan error, 2)
-	go func() {
-		if err := state.grpcServer.Serve(listener); err != nil &&
-			!errors.Is(err, stdgrpc.ErrServerStopped) {
-			serveErrors <- fmt.Errorf("serve gRPC: %w", err)
-		}
-	}()
-	go func() {
-		if err := state.httpServer.ListenAndServe(); err != nil &&
-			!errors.Is(err, http.ErrServerClosed) {
-			serveErrors <- fmt.Errorf("serve technical HTTP: %w", err)
-		}
-	}()
-	state.workers = serviceruntime.StartWorkers(
-		lifecycle,
-		func(ctx context.Context) error {
-			return relay.Run(ctx, context.WithoutCancel(shutdownBase))
-		},
-		func(ctx context.Context) error {
-			return reconcileReadiness(
-				ctx,
-				checker,
-				state.readiness,
-				state.metrics,
-				config,
-			)
-		},
-		func(ctx context.Context) error {
-			return runWorkspaceRecovery(ctx, postgresRepository, resourceService,
-				loadedPolicy.Revision, config.RecoveryPollInterval)
-		},
-	)
-	workerResult := make(chan error, 1)
-	go func() {
-		workerResult <- state.workers.Wait(context.WithoutCancel(shutdownBase))
-	}()
-	state.readiness.Set(true, "ready")
-	state.metrics.SetReady(true)
-	state.logger.Info("control-plane started")
+	workerDone := make(chan error, 1)
+	go func() { workerDone <- workers.Wait(lifecycle) }()
+	var workerErr error
 	select {
 	case <-lifecycle.Done():
-		return nil
-	case err := <-serveErrors:
-		return err
-	case err := <-workerResult:
-		if err != nil {
-			return fmt.Errorf("control-plane worker failed: %w", err)
-		}
-		if lifecycle.Err() == nil {
-			return errors.New("control-plane workers stopped unexpectedly")
-		}
-		return nil
+	case workerErr = <-workerDone:
 	}
+	readiness.Set(false, "shutting_down")
+	workers.Stop()
+	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
+		serviceruntime.ShutdownOperation{Name: "technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown},
+		serviceruntime.ShutdownOperation{Name: "gRPC server", Timeout: config.ShutdownTimeout, Run: func(ctx context.Context) error { return gracefulStop(ctx, grpcServer) }},
+		serviceruntime.ShutdownOperation{Name: "workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
+	)
+	return errors.Join(workerErr, shutdownErr)
 }
 
-func runWorkspaceRecovery(
-	ctx context.Context,
-	repository domainrepo.WorkspaceRecoveryCandidateRepository,
-	service *resource.Service,
-	policyRevision uint64,
-	pollInterval time.Duration,
-) error {
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-	for {
-		candidate, err := repository.NextWorkspaceRecoveryCandidate(ctx)
-		if err == nil {
-			permission := "controlplane.workspace_backup.terminal"
-			if candidate.Kind == enum.KindWorkspaceRestore {
-				permission = "controlplane.workspace_restore.terminal"
-			}
-			authorityDigest := workspaceRecoveryIntentDigest(candidate.ResourceID,
-				candidate.Version, candidate.Outcome, candidate.TerminalReasonCode)
-			principal := value.Principal{
-				ActorID: candidate.OwnerActorID, OrganizationID: candidate.OrganizationID,
-				ProjectID: candidate.ProjectID, Permission: permission,
-				CorrelationID: uuid.NewString(), PolicyRevision: policyRevision,
-				AuthorityGeneration: candidate.Generation,
-				CallerWorkload:      "control-plane-recovery-reconciler",
-				CallerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane-recovery-reconciler",
-				AuthoritySource:     "DOMAIN_STATE", AuthorityReference: candidate.ResourceID,
-				AuthorityRevision: candidate.Version,
-				AuthorityDigest:   authorityDigest,
-			}
-			input := resource.ReconcileWorkspaceRecoveryInput{
-				Principal: principal, IdempotencyKey: "workspace-recovery-" + authorityDigest,
-				ResourceID: candidate.ResourceID, ExpectedVersion: candidate.Version,
-				ExpectedAttempt: candidate.Attempt, ExpectedGeneration: candidate.Generation,
-				Outcome: candidate.Outcome, TerminalReasonCode: candidate.TerminalReasonCode,
-			}
-			if candidate.Kind == enum.KindWorkspaceBackup {
-				_, err = service.ReconcileWorkspaceBackupTerminal(ctx, input)
-			} else {
-				_, err = service.ReconcileWorkspaceRestoreTerminal(ctx, input)
-			}
-			if errors.Is(err, domainerrs.ErrStateConflict) && candidate.Outcome == "complete" {
-				// Exact terminal readback расходится с immutable snapshot. Оставлять
-				// такой candidate вечным predecessor нельзя: один bounded fallback
-				// закрывает весь envelope как FAILED. Конкурентный winner всё равно
-				// победит через version/attempt/generation OCC.
-				input.Outcome = "fail"
-				input.TerminalReasonCode = "recovery_readback_mismatch"
-				input.Principal.AuthorityDigest = workspaceRecoveryIntentDigest(input.ResourceID,
-					input.ExpectedVersion, input.Outcome, input.TerminalReasonCode)
-				input.IdempotencyKey = "workspace-recovery-" + input.Principal.AuthorityDigest
-				if candidate.Kind == enum.KindWorkspaceBackup {
-					_, err = service.ReconcileWorkspaceBackupTerminal(ctx, input)
-				} else {
-					_, err = service.ReconcileWorkspaceRestoreTerminal(ctx, input)
-				}
-			}
-		}
-		if err != nil && !errors.Is(err, domainerrs.ErrNotFound) &&
-			!errors.Is(err, domainerrs.ErrVersionMismatch) &&
-			!errors.Is(err, domainerrs.ErrStateConflict) {
-			return fmt.Errorf("workspace recovery reconcile: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func workspaceRecoveryIntentDigest(resourceID string, version uint64, outcome, reason string) string {
-	digest := sha256.Sum256([]byte(strings.Join([]string{
-		resourceID, fmt.Sprint(version), outcome, reason,
-	}, "\x00")))
-	return fmt.Sprintf("%x", digest[:])
-}
-
-func reconcileReadiness(
-	ctx context.Context,
-	checker *readinessChecker,
-	readiness *serviceruntime.Readiness,
-	metrics *observability.Metrics,
-	config Config,
-) error {
-	ticker := time.NewTicker(config.ReadinessInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			checkCtx, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			_, err := checker.Check(checkCtx)
-			cancel()
-			if err != nil {
-				readiness.Set(false, "dependency")
-				metrics.SetReady(false)
-				continue
-			}
-			readiness.Set(true, "ready")
-			metrics.SetReady(true)
-		}
-	}
-}
-
-func proofOrAuthorizationInterceptor(
-	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
-) stdgrpc.UnaryServerInterceptor {
-	authorization := authorityclient.VerifierUnaryServerInterceptor(verifier)
-	return func(
-		ctx context.Context,
-		request any,
-		info *stdgrpc.UnaryServerInfo,
-		handler stdgrpc.UnaryHandler,
-	) (any, error) {
-		if strings.HasPrefix(
-			info.FullMethod,
-			"/internalrpcauthority.v1.AuthorityProofResolverService/",
-		) {
+func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		switch info.FullMethod {
+		case internalrpcauthorityv1.AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName,
+			internalrpcauthorityv1.AuthorityProofResolverService_CheckReadiness_FullMethodName:
 			return handler(ctx, request)
+		default:
+			return protected(ctx, request, info, handler)
 		}
-		return authorization(ctx, request, info, handler)
 	}
 }
 
-func strictRequestInterceptor(
-	ctx context.Context,
-	request any,
-	_ *stdgrpc.UnaryServerInfo,
-	handler stdgrpc.UnaryHandler,
-) (any, error) {
-	if grpcserver.HasMalformedProto(request) {
-		return nil, status.Error(codes.InvalidArgument, "request protobuf is invalid")
-	}
-	return handler(ctx, request)
-}
-
-func observableMethods() map[string]string {
-	methods := map[string]string{
-		internalrpcauthorityv1.AuthorityProofResolverService_ResolveAuthorityProof_FullMethodName: "authority.resolve",
-		internalrpcauthorityv1.AuthorityProofResolverService_CheckReadiness_FullMethodName:        "authority.readiness",
-	}
-	for _, descriptor := range controlplanev1.ControlPlaneService_ServiceDesc.Methods {
-		methods["/controlplane.v1.ControlPlaneService/"+descriptor.MethodName] =
-			"controlplane." + strings.ToLower(descriptor.MethodName)
-	}
-	return methods
-}
-
-func (state *runtimeState) shutdown(background context.Context) error {
-	if state.readiness != nil {
-		state.readiness.Set(false, "stopping")
-	}
-	if state.metrics != nil {
-		state.metrics.SetReady(false)
-	}
-	var operations []serviceruntime.ShutdownOperation
-	if state.workers != nil {
-		state.workers.Stop()
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "join workers",
-			Timeout: state.config.ShutdownTimeout,
-			Run:     state.workers.Wait,
-		})
-	}
-	if state.grpcServer != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "stop gRPC",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(ctx context.Context) error {
-				done := make(chan struct{})
-				go func() {
-					state.grpcServer.GracefulStop()
-					close(done)
-				}()
-				select {
-				case <-done:
-					return nil
-				case <-ctx.Done():
-					state.grpcServer.Stop()
-					return ctx.Err()
+func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(config.OIDCRefreshInterval)
+		defer ticker.Stop()
+		degraded := false
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+				probe, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+				err := service.RefreshOIDC(probe)
+				cancel()
+				if err != nil && !degraded {
+					logger.Warn("OIDC signing-key refresh degraded")
+					degraded = true
+				} else if err == nil && degraded {
+					logger.Info("OIDC signing-key refresh restored")
+					degraded = false
 				}
-			},
-		})
+			}
+		}
 	}
-	if state.httpServer != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "stop technical HTTP",
-			Timeout: state.config.ShutdownTimeout,
-			Run:     state.httpServer.Shutdown,
-		})
+}
+
+func readBoundedFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, errors.New("open protected file")
 	}
-	if state.publisher != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "drain NATS",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				return state.publisher.Close()
-			},
-		})
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximumSecretFileBytes {
+		return nil, errors.New("protected file is invalid")
 	}
-	if state.cache != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "close Redis",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				return state.cache.Close()
-			},
-		})
+	value, err := io.ReadAll(io.LimitReader(file, maximumSecretFileBytes+1))
+	if err != nil || len(value) == 0 || len(value) > maximumSecretFileBytes {
+		return nil, errors.New("read protected file")
 	}
-	if state.oidc != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "close OIDC",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				state.oidc.Close()
+	return value, nil
+}
+
+func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
+	rawDSN, err := readBoundedFile(config.PostgresDSNFile)
+	if err != nil {
+		return nil, errors.New("load PostgreSQL configuration")
+	}
+	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(rawDSN)))
+	for index := range rawDSN {
+		rawDSN[index] = 0
+	}
+	if err != nil {
+		return nil, errors.New("parse PostgreSQL configuration")
+	}
+	ca, err := readBoundedFile(config.PostgresCAFile)
+	if err != nil {
+		return nil, errors.New("load PostgreSQL CA")
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(ca) {
+		return nil, errors.New("parse PostgreSQL CA")
+	}
+	poolConfig.ConnConfig.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: config.PostgresTLSServerName}
+	poolConfig.MaxConns = config.PostgresMaxConnections
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return nil, errors.New("open PostgreSQL pool")
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, errors.New("verify PostgreSQL connection")
+	}
+	return pool, nil
+}
+
+func loadServerTLS(config Config) (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(config.ServerCertificateFile, config.ServerPrivateKeyFile)
+	if err != nil {
+		return nil, errors.New("load control-plane server certificate")
+	}
+	ca, err := readBoundedFile(config.ClientCAFile)
+	if err != nil {
+		return nil, errors.New("load internal client CA")
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(ca) {
+		return nil, errors.New("parse internal client CA")
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}, ClientCAs: roots, ClientAuth: tls.RequireAndVerifyClientCert}, nil
+}
+
+func technicalServer(address string, readiness *serviceruntime.Readiness) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/startupz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
+		ready, reason := readiness.Ready()
+		if !ready {
+			http.Error(response, reason, http.StatusServiceUnavailable)
+			return
+		}
+		response.WriteHeader(http.StatusNoContent)
+	})
+	return &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 30 * time.Second}
+}
+
+func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		done := make(chan error, 1)
+		go func() { done <- server.Serve(listener) }()
+		select {
+		case err := <-done:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+func serveHTTP(server *http.Server) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		done := make(chan error, 1)
+		go func() { done <- server.ListenAndServe() }()
+		select {
+		case err := <-done:
+			if errors.Is(err, http.ErrServerClosed) {
 				return nil
-			},
-		})
+			}
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	if state.authority != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "close authority client",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				return state.authority.Close()
-			},
-		})
+}
+
+type readinessStore interface {
+	CheckOutbox(context.Context) error
+}
+
+type readinessPublisher interface {
+	Check(context.Context) error
+}
+
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(config.ReadinessInterval)
+		defer ticker.Stop()
+		for {
+			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
+			cancel()
+			if err == nil {
+				if readiness.Set(true, "ready") {
+					logger.InfoContext(ctx, "control-plane readiness restored")
+				}
+			} else {
+				if readiness.Set(false, "direct_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "direct_infrastructure")
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
+		}
 	}
-	if state.runtimePool != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "close runtime PostgreSQL",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				state.runtimePool.Close()
-				return nil
-			},
-		})
+}
+
+type outboxStore interface {
+	ClaimOutbox(context.Context, string, int, time.Duration) ([]platformrepository.OutboxItem, error)
+	MarkOutboxPublished(context.Context, platformrepository.OutboxItem, eventing.PublishReceipt) error
+	MarkOutboxFailed(context.Context, platformrepository.OutboxItem, time.Duration) error
+}
+
+type rawPublisher interface {
+	PublishRaw(context.Context, string, string, []byte) (eventing.PublishReceipt, error)
+}
+
+func runOutboxRelay(store outboxStore, publisher rawPublisher, finalizeBase context.Context, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		timer := time.NewTimer(0)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+				items, err := store.ClaimOutbox(ctx, config.InstanceID, 64, config.RelayLeaseDuration)
+				if err != nil {
+					return err
+				}
+				for _, item := range items {
+					publishCtx, cancelPublish := context.WithTimeout(ctx, config.RelayPublishTimeout)
+					receipt, publishErr := publisher.PublishRaw(publishCtx, item.Subject, item.EventID, item.Payload)
+					cancelPublish()
+					finalizeCtx, cancelFinalize := context.WithTimeout(finalizeBase, config.RelayFinalizeTimeout)
+					if publishErr == nil {
+						err = store.MarkOutboxPublished(finalizeCtx, item, receipt)
+					} else {
+						backoff := time.Second << min(item.Attempts, 6)
+						err = store.MarkOutboxFailed(finalizeCtx, item, backoff)
+					}
+					cancelFinalize()
+					if err != nil {
+						return err
+					}
+				}
+				timer.Reset(config.RelayPollInterval)
+			}
+		}
 	}
-	if state.relayPool != nil {
-		operations = append(operations, serviceruntime.ShutdownOperation{
-			Name:    "close relay PostgreSQL",
-			Timeout: state.config.ShutdownTimeout,
-			Run: func(context.Context) error {
-				state.relayPool.Close()
-				return nil
-			},
-		})
+}
+func gracefulStop(ctx context.Context, server *grpc.Server) error {
+	done := make(chan struct{})
+	go func() { server.GracefulStop(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		server.Stop()
+		return ctx.Err()
 	}
-	if state.telemetry != nil {
-		operations = append(
-			operations,
-			serviceruntime.ShutdownOperation{
-				Name:    "shutdown tracing",
-				Timeout: state.config.ShutdownTimeout,
-				Run:     state.telemetry.shutdownTracing,
-			},
-			serviceruntime.ShutdownOperation{
-				Name:    "flush Sentry",
-				Timeout: state.config.ShutdownTimeout,
-				Run:     state.telemetry.flushSentry,
-			},
-		)
-	}
-	return serviceruntime.RunShutdown(background, operations...)
 }

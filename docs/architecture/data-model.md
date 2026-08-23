@@ -1,129 +1,116 @@
 ---
 id: ARCH-MC-006
-title: Логическая модель данных
+title: Логическая модель данных web-first платформы
 type: architecture
 status: approved
 owner: architect
-version: 0.3.1
-updated: 2026-08-05
+version: 1.1.0
+updated: 2026-08-23
 ---
 
-# Логическая модель данных
+# Логическая модель данных web-first платформы
 
-## Организации и рабочие области
+Нормативная fresh schema находится в
+`services/internal/control-plane/cmd/cli/migrations/20260822000100_web_first_baseline.sql`.
+Документ показывает aggregates и ownership, но не заменяет SQL contract.
 
-| Сущность              | Ключевые поля                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------- |
-| `Organization`        | id, name, slug, status, settings_revision                                                       |
-| `Membership`          | organization_id, subject_id, platform_role                                                      |
-| `Workspace`           | organization_id, name, slug, mattermost_team_id, managed_by                                     |
-| `Room`                | workspace_id, mattermost_channel_id, room_type, default_agent_id, lifecycle_status, archived_at |
-| `ConversationBinding` | room_id, root_post_id, session/process reference, lifecycle_state, deletion_requested_at        |
+## Installation, Organization и доступ
 
-## Агенты и инструкции
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `installation` | stable installation identity и bootstrap revision |
+| `organizations` | tenant boundary, slug, locale и lifecycle |
+| `subjects` | server-resolved OIDC issuer/subject identity |
+| `owner_claim_contracts` | initial owner bootstrap contract без статического owner UUID |
+| `memberships` | organization platform role и status |
+| `projects` | единственный пользовательский контейнер, version/OCC и lifecycle |
 
-| Сущность             | Ключевые поля                                                            |
-| -------------------- | ------------------------------------------------------------------------ |
-| `RoleDefinition`     | organization_id nullable, name, role_type, description, default policies |
-| `Agent`              | organization_id, role_definition_id, name, bot_identity_id, enabled      |
-| `AgentAssignment`    | agent_id, workspace_id, room_id nullable                                 |
-| `InstructionSet`     | organization_id, name, source_type, managed_by, current_version_id       |
-| `InstructionVersion` | instruction_set_id, content manifest, checksum, created_by               |
-| `RuntimeProfile`     | provider type, config template, resource class, image recipe, revision   |
+## Agents, instructions и role images
 
-## Поставщики и интеграции
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `platform_capabilities` | built-in closed capability catalog |
+| `runtime_profiles` | provider/model/resource defaults без secret values |
+| `role_definitions` | переиспользуемое назначение и role image policy |
+| `agents` | Project Agent либо единственный system assistant по stable key |
+| `instruction_versions` | immutable content/digest, draft/validated/published lifecycle |
+| `role_image_recipes` | canonical source/build/toolchain spec и SHA-256 |
+| `image_builds` | fenced build attempt и безопасный progress/verdict |
+| `image_artifacts` | promoted image digest, runtime ABI, SBOM/provenance/signature receipts |
 
-| Сущность                  | Ключевые поля                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `AIProviderAccount`       | provider_type, label, credential_ref, auth_status, auth_revision                   |
-| `AccountPool`             | selection_policy, allowed account IDs                                              |
-| `AccountUsageObservation` | account_id, window, remaining/reset_at, observed_at                                |
-| `IntegrationDefinition`   | name, version, schema, capabilities, risk policies                                 |
-| `IntegrationConnection`   | definition_id, organization_id, config, credential_refs, status                    |
-| `IntegrationGrant`        | connection_id, agent_id, capability, constraints                                   |
-| `ApprovalRequest`         | initiator, capability, safe arguments, state, expires_at                           |
-| `ToolInvocation`          | session_id, turn_id, connection_id, arguments_hash, state, approval_id, result_ref |
+System assistant constraints запрещают delete/archive/disable и смену system
+purpose. RuntimeRevision ссылается только на admitted promoted role image.
 
-## Среда выполнения
+## Workflows, sessions и graph
 
-| Сущность                  | Ключевые поля                                                                                                     |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `AgentSession`            | agent_id, provider_account_id, scope, status, archive_ref                                                         |
-| `Turn`                    | session_id, source, prompt, status, runtime_revision_id, sequence                                                 |
-| `AgentDelegation`         | source session/turn, target room/thread/session/turn, role, work_item_key, status, callback turn                  |
-| `CallbackDeliveryPlan`    | delegation_id, callback_run_id, exact immutable destinations/publications, canonical plan hash                    |
-| `CallbackDelivery`        | delegation_id, callback_run_id, destination, publication, channel/root/message/props hash, lease, delivered state |
-| `RoleCapability`          | role_id, capability, constraints, enabled                                                                         |
-| `RoleRelationshipPolicy`  | revision_id, source_role_id, action, target_role_id, constraints                                                  |
-| `PolicyRevision`          | project_id, version, status, effective policy snapshot                                                            |
-| `RunLineage`              | process_run_id, root initiator, root trigger, parent run, launching turn/post                                     |
-| `RuntimeRevision`         | effective config manifest, hashes, image digest, created_at                                                       |
-| `RuntimeLease`            | session_id, pod identity, heartbeat, expires_at                                                                   |
-| `UsageObservation`        | turn/session/account, limits/tokens/duration                                                                      |
-| `RuntimeResource`         | session_id, kind, external_id, state, last_used_at, eligible_at, deleted_at                                       |
-| `ResourceRetentionPolicy` | scope, pod_ttl, temporary_ttl, pvc_grace, archive_retention, version                                              |
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `workflows` | Project aggregate и current published version |
+| `workflow_versions` | immutable coordinator/agents/input/result/gate specification |
+| `sessions` | Agent-owned durable FIFO context; каждый delegated child получает отдельную Session |
+| `session_turns` | ordered tasks with source, attempt и lifecycle |
+| `runs` | root/child execution, pinned WorkflowVersion, source, target, result, graph revision/sequence |
+| `run_nodes` | root process, Agent, Human Gate или bounded external action |
+| `run_edges` | delegation, callback, retry, continuation и waiting semantics |
+| `run_events` | immutable ordered deltas в пределах root Run |
+| `runtime_revisions` | exact immutable versions/digests/grants/input для attempt |
+| `runtime_leases` | workload/method/attempt/input/fence-bound claim lifecycle |
+| `callback_receipts` | exactly-once child-to-parent continuation effect |
 
-`provider_account_id` становится неизменяемым после первого запуска сессии. Изменение допустимо только через явное создание новой сессии и передачу контекста.
+Root lineage, parent/child route и actor назначает control-plane. Payload и
+external locator не доказывают происхождение. Exactly-once callback создаёт
+completed Turn в родительской Session, а после всех ожидаемых результатов —
+новый coordinator continuation Turn и `CONTINUES` edge.
 
-## Процессы и расписания
+## Gates, artifacts и schedules
 
-| Сущность             | Ключевые поля                                                                                                                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Playbook`           | name, coordinator policy, input schema, prompt version, gates                                                                                                              |
-| `ProcessRun`         | playbook version, parent_run_id, state, result, owner_gate                                                                                                                 |
-| `ChildRun`           | process_run_id, thread/session target, callback state                                                                                                                      |
-| `AutomationSchedule` | target, cron/interval, timezone, policies, room_id, next_run_at                                                                                                            |
-| `ScheduleOccurrence` | schedule_id, scheduled_for, immutable occurrence key, attempt, state, closed outcome                                                                                       |
-| `ScheduledRun`       | occurrence_id, root process_run_id, current turn/session/runtime references, state, attempt, immutable/current input digests, closed outcome, result artifact, finished_at |
-| `ProcessWave`        | process_run_id, coordinator role/session, title, state                                                                                                                     |
-| `WorkClaim`          | process/wave/turn, summary, domains, resource keys, state                                                                                                                  |
-| `OwnerGate`          | process/turn/attempt/input, optional exact schedule/occurrence/room, root/policy snapshot, server-owned delivery id/payload/hash/post binding, state, decision/expiry       |
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `owner_gates` | server-owned recipient policy, safe context, version и one-winner resolution |
+| `artifacts` | organization/project/run metadata, version/digest/scan/result state |
+| `artifact_bindings` | exact input/result/session/run/node relation |
+| `artifact_content` | bounded MVP content под той же PostgreSQL tenant boundary |
+| `schedules` | Agent/Workflow target, server-normalized preset, timezone, next due, input/session/notification policy |
+| `schedule_occurrences` | immutable due time, schedule version, target/input snapshot и digest, attempt/fence и materialized Run |
 
-Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
+## Integrations
 
-## Файлы
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `integration_definitions` | built-in/catalog definition и typed capability schema |
+| `integration_connections` | metadata, masked credential state и lifecycle |
+| `integration_connection_tests` | asynchronous typed readiness test receipt |
+| `integration_grants` | Agent/Workflow capability grant and policy revision |
+| `integration_invocations` | fenced typed effect, gate relation и safe result/error |
 
-| Сущность                 | Ключевые поля                                                   |
-| ------------------------ | --------------------------------------------------------------- |
-| `Artifact`               | organization_id, kind, direction, retention_policy              |
-| `ArtifactVersion`        | artifact_id, storage_key, size, media_type, sha256, scan_status |
-| `MessageArtifactBinding` | artifact_version_id, post_id, thread_id, direction              |
-| `ArtifactDelivery`       | artifact_version_id, destination, external_id, state            |
+Secret material не хранится в этих таблицах и не возвращается frontend.
 
-## Память и опыт
+## System assistant
 
-| Сущность              | Ключевые поля                                                 |
-| --------------------- | ------------------------------------------------------------- |
-| `MemoryRecord`        | project_id, scope, role_id, status, importance, provenance    |
-| `MemoryRecordVersion` | record_id, version, title, content, supersedes, content_hash  |
-| `MemoryEmbedding`     | version_id, model_revision, dimensions, embedding, indexed_at |
+| Сущность | Назначение и ключевые связи |
+| --- | --- |
+| `assistant_runtime` | desired/observed warm revision, heartbeat и readiness |
+| `assistant_conversations` | durable system Session presentation per User/Project context |
+| `assistant_plans` | safe typed configuration preview и apply receipt |
 
-Текстовая версия является источником истины. Embedding хранится как перестраиваемая локальная проекция. Активная работа хранится в `WorkClaim`, а не в памяти.
+Каждая assistant operation сохраняет initiator User и assistant attribution.
 
-## Аудит и исходящий журнал
+## Сквозные таблицы
 
-`AuditEvent` хранит инициатора, действие, цель, исход, `correlation_id` и безопасные метаданные. Необработанные секреты, полное содержимое файлов и неотфильтрованные промпты в аудите не сохраняются.
+`idempotency_receipts` связывает organization, actor, operation, key и intent
+digest. Один key с тем же intent возвращает receipt, а с другим — conflict.
+`audit_events` хранит actor/assistant attribution и safe before/after metadata.
+`outbox_events` публикует обязательные domain events после commit.
+`worker_grant_high_watermarks` обеспечивает durable replay/rollback protection.
 
-`OutboxEvent` создается в той же транзакции, что и бизнес-изменение. Обработчик фиксирует ключ идемпотентности и обработанную версию.
+## Инварианты
 
-## Ключевые инварианты
-
-- Сессия не возобновляется другой учетной записью поставщика.
-- Ходы выполняются строго последовательно внутри сессии.
-- `RuntimeRevision` неизменяема и относится к одному ходу либо группе идентичных ходов.
-- Агент не использует `IntegrationConnection` без действующего права.
-- Результат согласования нельзя применить к другому вызову инструмента.
-- Ожидающее согласование или внешний обратный вызов блокирует очистку ресурсов среды выполнения.
-- PVC удаляется только после подтвержденного архива сессии и наступления `eligible_at`.
-- ArtifactVersion immutable; изменение файла создает новую version.
-- Git-managed object не изменяется UI до explicit detach.
-- Управляемые `Project`, `Team`, `Chat`, `Role`, `PromptProfile`,
-  `CredentialBinding`, `RepositoryWorkspace`, `Integration` и `Schedule`
-  содержат `managed_by: UI` или `managed_by: GIT`. Для `GIT` обязательны неизменяемая ссылка на
-  источник и монотонно возрастающая ревизия. Изменение через UI запрещено до
-  явного `detach_git_management`; отсоединение атомарно очищает ссылку и
-  ревизию и требует отдельного полномочия.
-- Mattermost/Kubernetes external IDs не являются primary business IDs.
-- Отображаемое имя и тип роли не предоставляют полномочий.
-- Корневой инициатор и ревизия политики не меняются внутри `ProcessRun`.
-- Внешний embedding API не получает содержимое памяти.
+- все owner data содержат `organization_id`; Project-scoped data разрешается
+  через server-owned relation;
+- version/OCC проверяется после owner resolution;
+- published Instruction/Workflow и terminal attempt immutable;
+- event sequence монотонен в пределах root Run;
+- retry создаёт новую attempt/revision/lease и `RETRY_OF` edge;
+- Human Gate и callback имеют одного доменного winner;
+- external IDs и display values не являются authority;
+- legacy table aliases, backfill, dual read/write и compatibility views отсутствуют.

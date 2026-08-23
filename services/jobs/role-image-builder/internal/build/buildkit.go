@@ -35,6 +35,7 @@ type Config struct {
 	InputDockerConfig, BuildKitPullDockerConfig, WorkspaceRoot              string
 	InputRegistryTLSServerName, InputRegistryCAFile                         string
 	InputRegistryCertificateFile, InputRegistryPrivateKeyFile               string
+	AllowedRoleBaseImagesFile                                               string
 	InputRepository, TrustedRoleBaseRepository, TrustedRoleBaseDigest       string
 	FrontendRepository, StagingRepository                                   string
 	ExpectedBuilderSHA256, ExpectedFrontendSHA256, ExpectedToolchainSHA256  string
@@ -45,6 +46,7 @@ type Config struct {
 type Executor struct {
 	config       Config
 	materializer *Materializer
+	allowedBases baseAllowlist
 }
 
 type Prepared struct {
@@ -68,6 +70,7 @@ func New(config Config) (*Executor, error) {
 		!filepath.IsAbs(config.WorkspaceRoot) || !filepath.IsAbs(config.CAFile) || !filepath.IsAbs(config.CertificateFile) ||
 		!filepath.IsAbs(config.PrivateKeyFile) || !filepath.IsAbs(config.InputDockerConfig) ||
 		!filepath.IsAbs(config.BuildKitPullDockerConfig) ||
+		!filepath.IsAbs(config.AllowedRoleBaseImagesFile) ||
 		!filepath.IsAbs(config.InputRegistryCAFile) || !filepath.IsAbs(config.InputRegistryCertificateFile) ||
 		!filepath.IsAbs(config.InputRegistryPrivateKeyFile) || !validDNSName(config.InputRegistryTLSServerName) ||
 		!strings.HasPrefix(config.Address, "tcp://") || !validDNSName(config.TLSServerName) ||
@@ -85,7 +88,14 @@ func New(config Config) (*Executor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Executor{config: config, materializer: materializer}, nil
+	allowedBases, err := loadBaseAllowlist(config.AllowedRoleBaseImagesFile)
+	if err != nil {
+		return nil, err
+	}
+	if !allowedBases.Allows(config.TrustedRoleBaseRepository, config.TrustedRoleBaseDigest) {
+		return nil, errors.New("trusted runtime base is absent from role environment catalog")
+	}
+	return &Executor{config: config, materializer: materializer, allowedBases: allowedBases}, nil
 }
 
 func (executor *Executor) Check(ctx context.Context) error {
@@ -133,8 +143,7 @@ func (executor *Executor) Prepare(
 	if input == nil || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
 		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()) ||
 		input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256 || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
-		input.GetBaseImageReference() != executor.config.TrustedRoleBaseRepository ||
-		input.GetBaseImageDigest() != executor.config.TrustedRoleBaseDigest ||
+		!executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()) ||
 		input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256 ||
 		input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256 ||
 		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
@@ -166,7 +175,10 @@ func (executor *Executor) Prepare(
 	if err := os.MkdirAll(prepared.dockerfile, 0o700); err != nil {
 		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
-	if err := os.WriteFile(filepath.Join(prepared.dockerfile, "Dockerfile"), dockerfile(input, executor.config.FrontendRepository), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(prepared.dockerfile, "Dockerfile"), dockerfile(
+		input, executor.config.FrontendRepository, executor.config.TrustedRoleBaseRepository,
+		executor.config.TrustedRoleBaseDigest,
+	), 0o600); err != nil {
 		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
 	if err := os.MkdirAll(prepared.installation, 0o700); err != nil {
@@ -298,13 +310,16 @@ func provenanceBindingSHA256(input *controlplanev1.RoleImageBuildInput, manifest
 	return hex.EncodeToString(digest[:]), nil
 }
 
-func dockerfile(input *controlplanev1.RoleImageBuildInput, frontendRepository string) []byte {
+func dockerfile(
+	input *controlplanev1.RoleImageBuildInput,
+	frontendRepository, trustedRuntimeRepository, trustedRuntimeDigest string,
+) []byte {
 	mounts := []string{
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=mattercodex-install,source=install.sh,target=/run/mattercodex/install.sh,readonly",
 	}
 	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/mattercodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/mattercodex-init /usr/local/bin/mattercodex-init\nCOPY --from=trusted-runtime /usr/local/bin/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/mattercodex-init\",\"entrypoint\",\"/usr/local/bin/matter-codex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL mattercodex.dev/spec-sha256=%q mattercodex.dev/runtime-contract-sha256=%q\n",
-		frontendRepository, input.GetFrontendSha256(), input.GetBaseImageReference(), input.GetBaseImageDigest(),
+		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
 		input.GetBaseImageReference(), input.GetBaseImageDigest(), strings.Join(mounts, " "), input.GetSpecSha256(),
 		input.GetRoleRuntimeContractSha256()))
 }

@@ -2,24 +2,31 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha" >&2
+  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-revision [all|claim|scan|sign|admit|promote]" >&2
 }
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 || $# -gt 3 ]]; then
   usage
   exit 64
 fi
 
 environment_name=$1
 run_id=$2
+requested_phase=${3:-all}
 [[ $environment_name == staging || $environment_name == production ]] || { usage; exit 64; }
 [[ $run_id =~ ^v[0-9]{14}-[a-f0-9]{40}$ ]] || { echo "run_id is invalid" >&2; exit 64; }
-command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
+[[ $requested_phase =~ ^(all|claim|scan|sign|admit|promote)$ ]] || { usage; exit 64; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 69; }
 
 # Версионированный ConfigMap задаёт только owner intent. Artifact/build tuple
 # выдаётся control-plane после запуска claim phase и не принимается от caller.
-intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+if [[ -n ${IMAGE_ADMISSION_POLICY_JSON:-} ]]; then
+  [[ ${#IMAGE_ADMISSION_POLICY_JSON} -le 65536 ]] || { echo "admission policy document is too large" >&2; exit 78; }
+  intent=$IMAGE_ADMISSION_POLICY_JSON
+else
+  command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
+  intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+fi
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
 authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
@@ -76,7 +83,8 @@ claim_name="mc-admit-$suffix"
 # Claim TTL равен 15 минутам; каждый Job вместе с повторами завершается раньше.
 deadline=720
 
-cat <<EOF
+emit_pvc() {
+  cat <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -88,20 +96,21 @@ metadata:
   annotations:
     mattercodex.dev/admission-run-sha256: ${run_sha256}
 spec:
-  accessModes: [ReadWriteMany]
+  accessModes: [ReadWriteOnce]
   resources:
     requests: {storage: 2Gi}
 EOF
+}
 
 emit_job() {
   local phase=$1 service_account=$2 identity_spc=$3 protected=${4:-false}
-  local workload="" grant_spc=""
+  local workload="" grant_signer_spc=""
   if [[ $phase == claim || $phase == admit ]]; then
     workload=image-admission
-    grant_spc=image-admission-application-grant
+    grant_signer_spc=image-admission-platform-worker-grant-signer
   elif [[ $phase == promote ]]; then
     workload=image-promotion
-    grant_spc=image-promotion-application-grant
+    grant_signer_spc=image-promotion-platform-worker-grant-signer
   fi
   cat <<EOF
 ---
@@ -121,7 +130,7 @@ metadata:
 spec:
   backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
-  ttlSecondsAfterFinished: 86400
+  ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
@@ -184,7 +193,7 @@ EOF
             - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
           startupProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 5, timeoutSeconds: 3}
-          livenessProbe: {httpGet: {path: /livez, port: 9091}, periodSeconds: 10, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: 9091}, periodSeconds: 10, timeoutSeconds: 2}
           resources: {requests: {cpu: 25m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
           securityContext: {runAsNonRoot: true, runAsUser: 29001, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
@@ -204,6 +213,21 @@ EOF
             - {name: authority-postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
             - {name: authority-observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
             - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+        - name: platform-worker-grant-agent
+          restartPolicy: Always
+          image: ${authority_image}
+          command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
+          env:
+            - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: "${workload}"}
+            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /application-grant/application-grant.jws}
+          startupProbe: {httpGet: {path: /readyz, port: 9093}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: 9093}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: 9093}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3}
+          resources: {requests: {cpu: 5m, memory: 16Mi}, limits: {cpu: 100m, memory: 48Mi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 29004, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: application-grant, mountPath: /application-grant}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
 EOF
   fi
   cat <<EOF
@@ -292,7 +316,8 @@ EOF
         - {name: authority-issuer-key, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-issuer-key}}}
         - {name: authority-workload-tls, secret: {secretName: internal-rpc-authority-${workload}-workload-tls, defaultMode: 0440}}
         - {name: control-plane-ca, configMap: {name: mattercodex-internal-ca, defaultMode: 0440}}
-        - {name: application-grant, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_spc}}}}
+        - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
+        - {name: platform-worker-grant-signer, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_signer_spc}}}}
         - {name: authority-readback-ca, configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}}
         - {name: authority-vault-ca, configMap: {name: internal-rpc-authority-vault-ca, defaultMode: 0440}}
         - name: authority-vault-token
@@ -308,8 +333,11 @@ EOF
   fi
 }
 
-emit_job claim image-admission mattercodex-image-admission-owner true
-emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
-emit_job sign mattercodex-image-signer mattercodex-image-signer false
-emit_job admit image-admission mattercodex-image-admission-owner true
-emit_job promote image-promotion mattercodex-image-promotion-writer true
+if [[ $requested_phase == all || $requested_phase == claim ]]; then
+  emit_pvc
+  emit_job claim image-admission mattercodex-image-admission-owner true
+fi
+[[ $requested_phase != all && $requested_phase != scan ]] || emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
+[[ $requested_phase != all && $requested_phase != sign ]] || emit_job sign mattercodex-image-signer mattercodex-image-signer false
+[[ $requested_phase != all && $requested_phase != admit ]] || emit_job admit image-admission mattercodex-image-admission-owner true
+[[ $requested_phase != all && $requested_phase != promote ]] || emit_job promote image-promotion mattercodex-image-promotion-writer true

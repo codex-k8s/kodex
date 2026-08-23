@@ -49,14 +49,6 @@ type mcpServerConfig struct {
 	ToolTimeoutSeconds    int    `toml:"tool_timeout_sec"`
 }
 
-func PrepareHome(input model.Input, mcpURL string) error {
-	auth, err := os.ReadFile(input.CredentialFiles.CodexAuth)
-	if err != nil {
-		return errors.New("read Codex authentication snapshot")
-	}
-	return PrepareHomeWithAuth(input, mcpURL, auth)
-}
-
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if filepath.Clean(input.CodexHome) != input.CodexHome ||
 		!strings.HasPrefix(input.CodexHome, input.WorkspaceRoot+string(os.PathSeparator)) {
@@ -69,7 +61,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return errors.New("Codex authentication snapshot is invalid; use codex login --device-auth outside the runtime")
 	}
 	authDigest := sha256.Sum256(auth)
-	if hex.EncodeToString(authDigest[:]) != input.CredentialFiles.CodexAuthSHA256 {
+	expectedDigest, err := pinnedProviderDigest(input)
+	if err != nil || hex.EncodeToString(authDigest[:]) != expectedDigest {
 		return errors.New("Codex authentication snapshot does not match the pinned provider account")
 	}
 	if err := replacePrivateFile(filepath.Join(input.CodexHome, "auth.json"), auth); err != nil {
@@ -80,7 +73,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil {
 		return err
 	}
-	config := runtimeConfig{Model: input.CodexModel, ApprovalPolicy: input.CodexApprovalPolicy,
+	config := runtimeConfig{Model: input.Model, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: "save-all"},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
@@ -102,7 +95,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	}
 	var decoded runtimeConfig
 	metadata, err := toml.Decode(raw.String(), &decoded)
-	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.CodexModel ||
+	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
 		!decoded.MCPServers["mattercodex"].Required ||
 		decoded.MCPServers["mattercodex"].BearerTokenEnvVar != "MATTERCODEX_MCP_PROXY_TOKEN" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
@@ -110,6 +103,26 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
+}
+
+func readProviderDigest(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil || len(raw) < 64 || len(raw) > 66 {
+		return "", errors.New("read provider authentication digest")
+	}
+	value := strings.TrimSpace(string(raw))
+	if len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "" {
+		return "", errors.New("provider authentication digest is invalid")
+	}
+	return value, nil
+}
+
+func pinnedProviderDigest(input model.Input) (string, error) {
+	value, err := readProviderDigest(input.ProviderAuthSHA256File)
+	if err != nil || value != input.ProviderCredentialSHA256 {
+		return "", errors.New("provider authentication revision does not match RuntimeRevision")
+	}
+	return value, nil
 }
 
 func codexPermissionBase(sandbox string) (string, error) {

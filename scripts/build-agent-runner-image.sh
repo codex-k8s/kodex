@@ -95,9 +95,6 @@ case "$dockerfile" in
   services/jobs/agent-runner/Dockerfile | "$context/services/jobs/agent-runner/Dockerfile")
     allowed_build_arg=MATTERCODEX_CODEX_PACKAGE
     ;;
-  deploy/images/agent-runner/Dockerfile | "$context/deploy/images/agent-runner/Dockerfile")
-    allowed_build_arg=CODEX_PACKAGE
-    ;;
   *)
     fail "неподдерживаемый защищённый agent-runner Dockerfile: $dockerfile"
     ;;

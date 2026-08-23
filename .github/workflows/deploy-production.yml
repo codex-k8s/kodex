@@ -1,4 +1,4 @@
-name: Deploy exact production release
+name: Render exact MatterCodex release
 
 on:
   workflow_dispatch:
@@ -8,19 +8,21 @@ on:
         required: true
         type: string
       build_run_id:
-        description: Successful Build exact release workflow run ID
+        description: Successful web-only release build run ID
         required: true
         type: string
       release_lock_sha256:
         description: Exact SHA-256 of release-lock.json
         required: true
         type: string
-      mode:
-        description: Deployment mode
+      deployment_profile:
+        description: Deployment profile used by the build
         required: true
-        default: dark
+        default: web-only
         type: choice
-        options: [dark, cutover, rollback]
+        options:
+          - web-only
+          - web-with-mattermost
 
 permissions:
   actions: read
@@ -28,13 +30,13 @@ permissions:
   deployments: read
 
 concurrency:
-  group: mattercodex-production
+  group: mattercodex-production-render
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  render:
     runs-on: mattercodex-deploy
-    timeout-minutes: 30
+    timeout-minutes: 20
     environment: production
     steps:
       - name: Validate exact inputs
@@ -47,13 +49,13 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid exact source SHA' >&2; exit 1; }
           [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid build run ID' >&2; exit 1; }
           [[ "$LOCK_SHA256" =~ ^[a-f0-9]{64}$ && "$LOCK_SHA256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] || { echo 'Invalid release lock SHA-256' >&2; exit 1; }
-      - name: Checkout exact owner-authorized deployment source
+      - name: Checkout exact owner-authorized source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Verify build provenance
+      - name: Verify release provenance
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,7 +68,7 @@ jobs:
           tools/release/verify-github-owner-gate.sh \
             --workflow .github/workflows/deploy-production.yml --environment production \
             --workflow-sha "$WORKFLOW_SHA" --owner-actor-id "$OWNER_ACTOR_ID" \
-            --source-sha "$SOURCE_SHA" --mode "${{ inputs.mode }}" --output owner-gate.json
+            --source-sha "$SOURCE_SHA" --mode render --output owner-gate.json
           tools/release/verify-github-build-run.sh \
             --build-run-id "$BUILD_RUN_ID" --source-sha "$SOURCE_SHA" \
             --owner-actor-id "$OWNER_ACTOR_ID" --output build-run-evidence.json
@@ -78,33 +80,66 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ github.token }}
-      - name: Validate exact release lock
+      - name: Render immutable release manifest
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
+          PUBLIC_HOST: ${{ vars.MATTERCODEX_PUBLIC_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.MATTERCODEX_PUBLIC_ORIGIN }}
+          OIDC_ISSUER: ${{ vars.MATTERCODEX_OIDC_ISSUER }}
+          OIDC_JWKS_URL: ${{ vars.MATTERCODEX_OIDC_JWKS_URL }}
+          OIDC_CONNECT_ADDRESS: ${{ vars.MATTERCODEX_OIDC_CONNECT_ADDRESS }}
+          OIDC_TLS_SERVER_NAME: ${{ vars.MATTERCODEX_OIDC_TLS_SERVER_NAME }}
+          PROMOTED_PULL_HOST: ${{ vars.MATTERCODEX_PROMOTED_PULL_HOST }}
+          KUBERNETES_API_SERVICE_CIDR: ${{ vars.MATTERCODEX_KUBERNETES_API_SERVICE_CIDR }}
+          INGRESS_CLASS: ${{ vars.MATTERCODEX_INGRESS_CLASS }}
+          CLUSTER_ISSUER: ${{ vars.MATTERCODEX_CLUSTER_ISSUER }}
+          INGRESS_NAMESPACE: ${{ vars.MATTERCODEX_INGRESS_NAMESPACE }}
+          INGRESS_POD_NAME: ${{ vars.MATTERCODEX_INGRESS_POD_NAME }}
+          OIDC_NAMESPACE: ${{ vars.MATTERCODEX_OIDC_NAMESPACE }}
+          OIDC_POD_NAME: ${{ vars.MATTERCODEX_OIDC_POD_NAME }}
+          OIDC_POD_COMPONENT: ${{ vars.MATTERCODEX_OIDC_POD_COMPONENT }}
+          OIDC_TARGET_PORT: ${{ vars.MATTERCODEX_OIDC_TARGET_PORT }}
+          DISABLE_OBSERVABILITY: ${{ vars.MATTERCODEX_DISABLE_OBSERVABILITY }}
+          MATTERMOST_HOST: ${{ vars.MATTERCODEX_MATTERMOST_HOST }}
+          DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
         run: |
           test "$(<release-artifact/release-lock.sha256)" = "$LOCK_SHA256"
-          tools/release/validate-release-lock.sh --lock release-artifact/release-lock.json --source-sha "$SOURCE_SHA" --sha256 "$LOCK_SHA256"
-      - name: Install pinned kubectl
-        shell: bash
-        run: |
-          tools/deploy/install-pinned-kubectl.sh /var/run/mattercodex-tools/kubectl
-          tools/deploy/install-pinned-yq.sh /var/run/mattercodex-tools/yq
-      - name: Apply owner-gated production operation
-        shell: bash
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
-          MODE: ${{ inputs.mode }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          temporary_directory=$(mktemp -d)
-          trap 'rm -rf -- "$temporary_directory"' EXIT
-          tools/deploy/prepare-incluster-kubeconfig.sh "$temporary_directory/kubeconfig"
-          export KUBECONFIG="$temporary_directory/kubeconfig"
-          context=$(/var/run/mattercodex-tools/kubectl config current-context)
-          PATH="/var/run/mattercodex-tools:$PATH" tools/deploy/direct-production.sh \
-            --context "$context" --operation apply --mode "$MODE" --source-sha "$SOURCE_SHA" \
+          tools/release/validate-release-lock.sh \
+            --lock release-artifact/release-lock.json --source-sha "$SOURCE_SHA" \
+            --sha256 "$LOCK_SHA256" --profile "$DEPLOYMENT_PROFILE"
+          render_arguments=(
             --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256" \
-            --gate-evidence owner-gate.json
+            --output release.yaml --profile "$DEPLOYMENT_PROFILE" \
+            --public-host "$PUBLIC_HOST" --public-origin "$PUBLIC_ORIGIN" \
+            --oidc-issuer "$OIDC_ISSUER" --oidc-jwks-url "$OIDC_JWKS_URL" \
+            --oidc-connect-address "$OIDC_CONNECT_ADDRESS" \
+            --oidc-tls-server-name "$OIDC_TLS_SERVER_NAME" \
+            --promoted-pull-host "$PROMOTED_PULL_HOST" \
+            --kubernetes-api-service-cidr "$KUBERNETES_API_SERVICE_CIDR" \
+            --ingress-class "$INGRESS_CLASS" --cluster-issuer "$CLUSTER_ISSUER" \
+            --ingress-namespace "$INGRESS_NAMESPACE" --ingress-pod-name "$INGRESS_POD_NAME" \
+            --oidc-namespace "$OIDC_NAMESPACE" --oidc-pod-name "$OIDC_POD_NAME" \
+            --oidc-pod-component "$OIDC_POD_COMPONENT" --oidc-target-port "$OIDC_TARGET_PORT"
+          )
+          if [[ "$DEPLOYMENT_PROFILE" == "web-with-mattermost" ]]; then
+            test -n "$MATTERMOST_HOST"
+            render_arguments+=(--mattermost-host "$MATTERMOST_HOST")
+          fi
+          if [[ "$DISABLE_OBSERVABILITY" == "true" ]]; then
+            render_arguments+=(--disable-observability)
+          fi
+          tools/release/render-web-only.sh "${render_arguments[@]}"
+          sha256sum release.yaml | awk '{print $1}' > release.sha256
+      - name: Upload render for separate owner deployment
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.deployment_profile }}-render-${{ inputs.source_sha }}
+          path: |
+            release.yaml
+            release.sha256
+            owner-gate.json
+            build-run-evidence.json
+          if-no-files-found: error
+          retention-days: 30

@@ -92,7 +92,7 @@ spec:
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /livez
+              path: /healthz
               port: technical
             timeoutSeconds: 2
             periodSeconds: 10
@@ -145,12 +145,11 @@ spec:
               mountPath: /tmp
       volumes:
         - name: postgresql-credentials
-          secret:
-            secretName: internal-rpc-authority-database-credential-reconciler-postgresql
-            defaultMode: 0440
-            items:
-              - key: dsn
-                path: dsn
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-database-credential-reconciler-postgres
         - name: server-tls
           secret:
             secretName: internal-rpc-authority-database-credential-reconciler-tls

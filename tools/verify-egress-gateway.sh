@@ -53,9 +53,9 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     .spec.template.spec.dnsPolicy == "ClusterFirst" and
     .spec.template.spec.enableServiceLinks == false and
     .spec.template.spec.terminationGracePeriodSeconds == 45 and
-    .spec.template.spec.containers[0].startupProbe.httpGet.path == "/livez" and
+    .spec.template.spec.containers[0].startupProbe.httpGet.path == "/healthz" and
     .spec.template.spec.containers[0].readinessProbe.httpGet.path == "/readyz" and
-    .spec.template.spec.containers[0].livenessProbe.httpGet.path == "/livez" and
+    .spec.template.spec.containers[0].livenessProbe.httpGet.path == "/healthz" and
     .spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation == false and
     .spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem == true and
     .spec.template.spec.containers[0].securityContext.privileged != true and
@@ -92,7 +92,20 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "integration-gateway" and
-        .podSelector.matchLabels."app.kubernetes.io/component" == "external-gateway")] | length == 1) and
+        .podSelector.matchLabels."app.kubernetes.io/component" == "integration-worker")] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "interaction-gateway" and
+        .podSelector.matchLabels."app.kubernetes.io/component" == "interaction-adapter")] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "agent-runner" and
+        .podSelector.matchLabels."app.kubernetes.io/component" == "role-runtime" and
+        .podSelector.matchLabels."runtime.mattercodex.dev/managed" == "true")] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "release-artifact-materializer" and
+        .podSelector.matchLabels."app.kubernetes.io/component" == "release-bootstrap")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 9090) | .from[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "monitoring" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "prometheus")] | length == 1) and

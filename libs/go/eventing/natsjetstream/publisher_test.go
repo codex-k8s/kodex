@@ -34,3 +34,16 @@ func TestExpectedStreamContract(t *testing.T) {
 		t.Fatal("stream with another storage must be rejected")
 	}
 }
+
+func TestBoundedSubjectFilters(t *testing.T) {
+	for _, value := range []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"} {
+		if !validSubjectFilter(value) {
+			t.Fatalf("registered subject filter %q was rejected", value)
+		}
+	}
+	for _, value := range []string{"control_plane.>", "control_plane.run.foo*", "control plane.run"} {
+		if validSubjectFilter(value) {
+			t.Fatalf("unsafe subject filter %q was accepted", value)
+		}
+	}
+}

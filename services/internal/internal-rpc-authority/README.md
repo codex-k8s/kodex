@@ -4,8 +4,8 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 1.1.3
-updated: 2026-07-30
+version: 1.3.0
+updated: 2026-08-23
 ---
 
 # Внутренний сервис internal-rpc-authority
@@ -62,10 +62,10 @@ proof от домена-владельца и связывается с зара
 - `internal-rpc-authority-database-credential-reconciler` поддерживает
   выведенные сервером `CURRENT`/`NEXT` principal PostgreSQL для publisher и
   readback attestor через аутентификацию Vault Kubernetes;
-- `internal-rpc-authority-cli migrate expand|contract|deploy|up|status|version`
-  выполняет однонаправленный жизненный цикл goose без штатного отката; полный `up`
-  закрыто отклоняется, пока не завершён `expand`, а `deploy` последовательно и
-  повторяемо выполняет полный `expand -> contract check -> up` для migration Job.
+- `internal-rpc-authority-cli up|status` применяет единственную fresh baseline
+  goose без штатного отката. Legacy `expand|contract|deploy`, backfill и
+  compatibility path отсутствуют; повторный `up` выполняет идемпотентный
+  readback уже применённой baseline.
 
 Issuer и verifier загружают подписанный канонический снимок через независимый
 корень доверия манифеста. Обновление сначала проходит полную криптографическую
@@ -150,22 +150,25 @@ PostgreSQL/Vault/Kubernetes adapters`; composition root только прове�
 конфигурацию и связывает зависимости. Параллельного orchestration/source of
 truth в `internal/application` для этого lifecycle нет.
 
-## Быстрая проверка прототипа
+## Поддерживаемая локальная проверка
 
 ```bash
 find services/internal/internal-rpc-authority libs/go -name '*.go' -print0 \
   | xargs -0 gofmt -d
-(cd services/internal/internal-rpc-authority && go build ./cmd/...)
+(cd services/internal/internal-rpc-authority && GOWORK=off go test ./...)
+make test-internal-rpc-authority-postgres
+make test-authority-policy-codegen
+make test-web-only-release
 buf format --diff --exit-code contracts/proto
 buf build
 git diff --check
 ```
 
-Полные integration/E2E/contract/deploy/render/lifecycle suites и общий
-baseline намеренно не входят в активный прототипный профиль. Их отсутствие не
-блокирует PR. Полный поддерживаемый контур будет отдельной owner-approved
-волной:
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+PostgreSQL-проверка использует только disposable container и не принимает
+production DSN. Release-проверка рендерит оба профиля локально, не применяет
+manifest и проверяет точные machine policy, probes и отсутствие unresolved
+image inputs. Проверка, которая не запускалась на передаваемом SHA, в отчёте
+обозначается `NOT RUN`, а не считается успешной по наличию test entrypoint.
 
 Для ручного операционного render, а не автоматической test suite, необходим
 фактически опубликованный неизменяемый образ:
@@ -203,7 +206,7 @@ DNS и Prometheus в свой итоговый render с запретом по �
 
 ## Наблюдаемость и жизненный цикл
 
-`/livez`, `/readyz` и `/metrics` доступны только на техническом listener.
+`/healthz`, `/readyz` и `/metrics` доступны только на техническом listener.
 Готовность проверяет тот же устойчивый путь обслуживаемого снимка и защиты от
 повтора, который использует рабочий RPC. Метки gRPC-метрик ограничены реестром
 методов и каноническими кодами; произвольные значения нормализуются.

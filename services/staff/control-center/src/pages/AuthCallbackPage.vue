@@ -1,49 +1,37 @@
 <script setup lang="ts">
-import { LoaderCircle, RotateCcw } from "@lucide/vue";
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
+import { usePlatformStore } from "@/features/platform/store";
 import { useSessionStore } from "@/features/session/store";
+import type { AppProblem } from "@/shared/api/problem";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
-const router = useRouter();
 const session = useSessionStore();
-const failed = ref(false);
+const platform = usePlatformStore();
+const router = useRouter();
+const problem = ref<AppProblem>();
 
-async function complete(): Promise<void> {
-  failed.value = false;
+onMounted(async () => {
   try {
     await session.completeLogin();
-    await router.replace("/");
+    await platform.loadBootstrap();
+    await router.replace(
+      platform.bootstrap?.onboardingComplete ? "/" : "/onboarding",
+    );
   } catch {
-    failed.value = true;
+    problem.value = session.problem;
   }
-}
-
-onMounted(complete);
+});
 </script>
 
 <template>
   <main class="auth-gate">
-    <section class="auth-gate__panel">
+    <section class="auth-card">
       <div class="brand-mark" aria-hidden="true">M</div>
-      <template v-if="!failed">
-        <LoaderCircle class="spin" :size="30" aria-hidden="true" />
-        <h1>{{ $t("auth.callback") }}</h1>
-      </template>
-      <template v-else>
-        <h1>{{ $t("auth.callbackError") }}</h1>
-        <button
-          class="button button--primary"
-          type="button"
-          @click="session.canRetryAdmission ? complete() : session.beginLogin()"
-        >
-          <RotateCcw :size="16" aria-hidden="true" />{{
-            session.canRetryAdmission
-              ? $t("common.retry")
-              : $t("auth.retryLogin")
-          }}
-        </button>
-      </template>
+      <h1>{{ $t("auth.callback") }}</h1>
+      <p v-if="!problem" role="status">{{ $t("common.loading") }}</p>
+      <ProblemNotice v-else :problem="problem" />
     </section>
   </main>
 </template>

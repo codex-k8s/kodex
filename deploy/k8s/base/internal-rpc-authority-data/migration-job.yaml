@@ -40,8 +40,8 @@ spec:
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:
             - /usr/local/bin/internal-rpc-authority-cli
-            - migrate
-            - deploy
+          args:
+            - up
           env:
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
               value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
@@ -71,12 +71,11 @@ spec:
               mountPath: /tmp
       volumes:
         - name: postgresql-credentials
-          secret:
-            secretName: internal-rpc-authority-migrator-postgresql
-            defaultMode: 0440
-            items:
-              - key: dsn
-                path: dsn
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: internal-rpc-authority-postgres-migration
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

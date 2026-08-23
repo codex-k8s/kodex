@@ -7,4 +7,4 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: interaction-gateway
-      app.kubernetes.io/component: external-gateway
+      app.kubernetes.io/component: interaction-adapter

@@ -1,0 +1,66 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/role_images_list_recipes.sql
+	queryRoleImagesListRecipes string
+	//go:embed sql/role_images_get_recipe.sql
+	queryRoleImagesGetRecipe string
+	//go:embed sql/role_images_list_builds.sql
+	queryRoleImagesListBuilds string
+	//go:embed sql/role_images_get_active_artifact.sql
+	queryRoleImagesGetActiveArtifact string
+	//go:embed sql/role_images_resolve_project_role.sql
+	queryRoleImagesResolveProjectRole string
+	//go:embed sql/role_images_lock_recipe.sql
+	queryRoleImagesLockRecipe string
+	//go:embed sql/role_images_insert_recipe.sql
+	queryRoleImagesInsertRecipe string
+	//go:embed sql/role_images_update_recipe.sql
+	queryRoleImagesUpdateRecipe string
+	//go:embed sql/role_images_change_recipe_state.sql
+	queryRoleImagesChangeRecipeState string
+	//go:embed sql/role_images_cancel_open_builds.sql
+	queryRoleImagesCancelOpenBuilds string
+	//go:embed sql/role_images_find_promoted_artifact.sql
+	queryRoleImagesFindPromotedArtifact string
+	//go:embed sql/role_images_insert_build.sql
+	queryRoleImagesInsertBuild string
+	//go:embed sql/role_images_claim_build_candidate.sql
+	queryRoleImagesClaimBuildCandidate string
+	//go:embed sql/role_images_claim_build.sql
+	queryRoleImagesClaimBuild string
+	//go:embed sql/role_images_get_build_input.sql
+	queryRoleImagesGetBuildInput string
+	//go:embed sql/role_images_lock_build.sql
+	queryRoleImagesLockBuild string
+	//go:embed sql/role_images_renew_build.sql
+	queryRoleImagesRenewBuild string
+	//go:embed sql/role_images_progress_build.sql
+	queryRoleImagesProgressBuild string
+	//go:embed sql/role_images_complete_build.sql
+	queryRoleImagesCompleteBuild string
+	//go:embed sql/role_images_insert_artifact.sql
+	queryRoleImagesInsertArtifact string
+	//go:embed sql/role_images_fail_build.sql
+	queryRoleImagesFailBuild string
+	//go:embed sql/role_images_claim_admission_candidate.sql
+	queryRoleImagesClaimAdmissionCandidate string
+	//go:embed sql/role_images_claim_admission.sql
+	queryRoleImagesClaimAdmission string
+	//go:embed sql/role_images_lock_artifact.sql
+	queryRoleImagesLockArtifact string
+	//go:embed sql/role_images_record_admission.sql
+	queryRoleImagesRecordAdmission string
+	//go:embed sql/role_images_claim_promotion_candidate.sql
+	queryRoleImagesClaimPromotionCandidate string
+	//go:embed sql/role_images_claim_promotion.sql
+	queryRoleImagesClaimPromotion string
+	//go:embed sql/role_images_authorize_promotion.sql
+	queryRoleImagesAuthorizePromotion string
+	//go:embed sql/role_images_complete_promotion.sql
+	queryRoleImagesCompletePromotion string
+	//go:embed sql/role_images_activate_artifact.sql
+	queryRoleImagesActivateArtifact string
+)

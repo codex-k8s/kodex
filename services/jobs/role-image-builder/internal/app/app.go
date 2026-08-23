@@ -18,8 +18,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/runner"
 )
 
-const operationFailureMessage = "role-image-builder operation failed"
-
 type runtimeState struct {
 	config       Config
 	logger       *slog.Logger
@@ -73,6 +71,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		InputRegistryCAFile:          config.InputRegistryCAFile,
 		InputRegistryCertificateFile: config.InputRegistryCertificateFile,
 		InputRegistryPrivateKeyFile:  config.InputRegistryPrivateKeyFile,
+		AllowedRoleBaseImagesFile:    config.AllowedRoleBaseImagesFile,
 		WorkspaceRoot:                config.WorkspaceRoot, InputRepository: config.InputRepository,
 		TrustedRoleBaseRepository: config.TrustedRoleBaseRepository, TrustedRoleBaseDigest: config.TrustedRoleBaseDigest,
 		FrontendRepository: config.FrontendRepository,
@@ -84,7 +83,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	if err := state.controlPlane.Check(startup); err != nil {
+	if err := state.controlPlane.CheckLocalAuthority(startup); err != nil {
 		return err
 	}
 	if err := executor.Check(startup); err != nil {
@@ -109,21 +108,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	serveResult := make(chan error, 1)
 	go func() { serveResult <- state.httpServer.Serve(); cancelServe() }()
 	state.workers = serviceruntime.StartWorkers(serveContext,
-		periodic(config.PollInterval, job.Cycle, state.report("build_cycle")),
-		periodic(config.ReadinessInterval, func(ctx context.Context) error {
-			check, cancel := context.WithTimeout(ctx, config.RPCDeadline)
-			defer cancel()
-			return errors.Join(state.controlPlane.Check(check), executor.Check(check))
-		}, func(ctx context.Context, checkErr error) {
-			if checkErr != nil {
-				state.readiness.Set(false, "dependency_unavailable")
-				state.metrics.SetReady(false)
-				state.report("readiness")(ctx, checkErr)
-				return
-			}
-			state.readiness.Set(true, "ready")
-			state.metrics.SetReady(true)
-		}),
+		runBuildLoop(job.Cycle, state, config),
+		monitorLocalReadiness(state.controlPlane, executor, state, config),
 	)
 	state.readiness.Set(true, "ready")
 	state.metrics.SetReady(true)
@@ -145,14 +131,20 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 }
 
-func periodic(interval time.Duration, run func(context.Context) error, report func(context.Context, error)) serviceruntime.Worker {
+func runBuildLoop(run func(context.Context) error, state *runtimeState, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(config.PollInterval)
 		defer ticker.Stop()
+		degraded := false
 		for {
 			err := run(ctx)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				report(ctx, err)
+			if err != nil && !errors.Is(err, context.Canceled) && !degraded {
+				degraded = true
+				state.logger.WarnContext(ctx, "role image build delivery degraded", "error_class", "control_plane_or_buildkit")
+				state.telemetry.CaptureException(ctx, err)
+			} else if err == nil && degraded {
+				degraded = false
+				state.logger.InfoContext(ctx, "role image build delivery restored")
 			}
 			select {
 			case <-ctx.Done():
@@ -163,13 +155,38 @@ func periodic(interval time.Duration, run func(context.Context) error, report fu
 	}
 }
 
-func (state *runtimeState) report(operation string) func(context.Context, error) {
-	return func(ctx context.Context, err error) {
-		if err == nil {
-			return
+func monitorLocalReadiness(control *controlplane.Client, executor *build.Executor, state *runtimeState, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(config.ReadinessInterval)
+		defer ticker.Stop()
+		for {
+			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RPCDeadline)
+			authorityErr := control.CheckLocalAuthority(authorityCheck)
+			cancelAuthority()
+			infrastructureCheck, cancelInfrastructure := context.WithTimeout(ctx, config.RPCDeadline)
+			infrastructureErr := executor.Check(infrastructureCheck)
+			cancelInfrastructure()
+			if authorityErr == nil && infrastructureErr == nil {
+				state.metrics.SetReady(true)
+				if state.readiness.Set(true, "ready") {
+					state.logger.InfoContext(ctx, "role image builder readiness restored")
+				}
+			} else {
+				state.metrics.SetReady(false)
+				if state.readiness.Set(false, "local_infrastructure_unavailable") {
+					failureClass := "buildkit_or_registry"
+					if authorityErr != nil {
+						failureClass = "sidecar"
+					}
+					state.logger.WarnContext(ctx, "role image builder readiness lost", "error_class", failureClass)
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
 		}
-		state.logger.Error(operationFailureMessage, "operation", operation, "error_class", "bounded_failure")
-		state.telemetry.CaptureException(ctx, err)
 	}
 }
 

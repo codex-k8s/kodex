@@ -10,18 +10,22 @@ updated: 2026-07-29
 
 # Архитектурная основа MatterCodex
 
-MatterCodex строится как независимая от поставщика моделей платформа управления ИИ-сотрудниками. Mattermost предоставляет интерфейс взаимодействия, а Kubernetes — среду выполнения.
+MatterCodex строится как независимая от поставщика моделей web-платформа
+управления ИИ-сотрудниками. Control Center предоставляет полный пользовательский
+интерфейс, а Kubernetes исполняет изолированные ролевые окружения агентов.
 
 ## Основные принципы
 
-- Новые компоненты реализуются полными самостоятельно развертываемыми unit по
-  правилам `project-template`, а не выделяются слоями из монолита.
-- Действующий экземпляр остается замороженным legacy-контуром до проверяемой
-  миграции и cutover.
-- PostgreSQL является источником истины для метаданных, желаемого состояния, очередей и аудита.
-- S3-совместимое хранилище является источником истины для файлов и архивов сессий.
+- Компоненты реализуются полными самостоятельно развертываемыми unit по
+  правилам `project-template`.
+- Fresh install использует единую baseline schema без compatibility, dual-write,
+  legacy migration и cutover paths.
+- PostgreSQL является источником истины для metadata, bounded artifact content,
+  desired state, queues, graph/events и audit fresh web-only профиля.
 - Kubernetes исполняет рабочую нагрузку, но не хранит бизнес-состояние.
-- Mattermost хранит представление диалогов, но не заменяет `ProcessRun`, `Turn` и `AuditEvent`.
+- Control Center работает без внешних интеграций. Mattermost может принимать
+  входящие сообщения, доставлять уведомления, зеркалировать результаты и
+  решения Human Gate как четыре независимые optional capabilities.
 - Среда выполнения ИИ, GitHub, Kubernetes и внешние бизнес-системы подключаются через контракты поставщиков и интеграций.
 - Любое внешнее изменение имеет ключ идемпотентности, явно выданное право, политику риска и запись аудита.
 - Shell не используется как слой оркестрации прикладной логики.
@@ -44,20 +48,22 @@ MatterCodex строится как независимая от поставщи
 | `ARCH-MC-007` | `docs/architecture/runtime-and-sessions.md` | Сессии, ходы и привязка учетной записи. |
 | `ARCH-MC-008` | `docs/architecture/attachments-and-artifacts.md` | Входные и выходные файлы. |
 | `ARCH-MC-009` | `docs/architecture/automations-and-playbooks.md` | Расписания, процессы и обратные вызовы. |
+| `ARCH-MC-010` | `docs/architecture/runtime-controller.md` | Materialization role Pod и warm assistant runtime. |
+| `ARCH-MC-011` | `docs/architecture/web-first-platform-reset.md` | Нормативная архитектура product reset. |
 
 ## Технологическая основа
 
 - Go для серверных приложений, контроллеров, шлюзов и запуска агента.
 - Vue 3 и TypeScript для центра управления.
 - PostgreSQL для транзакционного состояния.
-- S3-совместимое объектное хранилище для двоичных данных.
 - Kubernetes для платформы и рабочих нагрузок агентов.
-- REST и WebSocket API Mattermost и официальный клиент Go.
+- OpenAPI owner API и resumable WebSocket stream для Control Center.
+- Официальный Mattermost client используется только optional adapter-ом.
 - OpenAPI для внешних HTTP-контрактов.
 - AsyncAPI для долговечных событий.
 - Protobuf/gRPC для всех типизированных внутренних синхронных контрактов.
-- Redis для ограниченных по TTL protobuf-снимков, но не для бизнесового
-  источника истины.
+- Redis и S3 могут добавляться специализированными cache/storage adapters, но не
+  являются обязательными зависимостями fresh web-only профиля.
 - NATS JetStream для доменных событий за broker-neutral relay/inbox API.
 - OpenTelemetry, Prometheus и Grafana для наблюдаемости.
 - BuildKit для сборки образов ролей.

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	oidcauth "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/authorization/oidc"
+	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/session"
 	"github.com/google/uuid"
@@ -104,7 +104,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				writeProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 				return
 			}
-			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
 			writer.Header().Add("Vary", "Access-Control-Request-Method")
 			writer.Header().Add("Vary", "Access-Control-Request-Headers")
@@ -125,7 +125,8 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return boundary.verifier.VerifyAuthorization(deadline, request.Header.Get("Authorization"))
 			}()
 			if err != nil {
-				writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+				statusCode, code, retryable := authenticationProblem(err)
+				writeProblem(writer, statusCode, code, retryable)
 				return
 			}
 			subjectKey := principal.OrganizationID + ":" + principal.Subject
@@ -153,7 +154,8 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			return boundary.authenticate(request)
 		}()
 		if err != nil {
-			writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+			statusCode, code, retryable := authenticationProblem(err)
+			writeProblem(writer, statusCode, code, retryable)
 			return
 		}
 		subjectKey := identity.OrganizationID + ":" + identity.Subject
@@ -163,7 +165,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 		}
 		var release func()
 		var ok bool
-		if request.URL.Path == "/api/v1/realtime" {
+		if isRealtimePath(request.URL.Path) {
 			release, ok = boundary.limiter.AcquireWebSocket(subjectKey)
 		} else {
 			release, ok = boundary.limiter.AcquireHTTP(subjectKey)
@@ -190,7 +192,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx = context.WithValue(ctx, identityContextKey{}, identity)
-		if request.URL.Path == "/api/v1/realtime" {
+		if isRealtimePath(request.URL.Path) {
 			next.ServeHTTP(writer, request.WithContext(ctx))
 			return
 		}
@@ -202,7 +204,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 
 func allowedPreflight(request *http.Request) bool {
 	switch request.Header.Get("Access-Control-Request-Method") {
-	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete:
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return false
 	}
@@ -234,7 +236,7 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 		headerReference = values[0]
 	}
 	queryReference := ""
-	if request.URL.Path == "/api/v1/realtime" {
+	if isRealtimePath(request.URL.Path) {
 		queryValues := request.URL.Query()["projectId"]
 		if len(queryValues) > 1 {
 			return nil, errors.New("multiple realtime project references are not allowed")
@@ -266,23 +268,38 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 	return controlplaneclient.WithProjectReference(ctx, reference)
 }
 
+func isRealtimePath(path string) bool {
+	return path == "/api/v1/platform/stream" || strings.HasPrefix(path, "/api/v1/runs/") && strings.HasSuffix(path, "/stream")
+}
+
 func exactProjectPathReference(request *http.Request) (string, error) {
-	if request.Method != http.MethodPut && request.Method != http.MethodDelete {
-		return "", nil
-	}
 	const prefix = "/api/v1/projects/"
 	if !strings.HasPrefix(request.URL.Path, prefix) {
 		return "", nil
 	}
-	reference := strings.TrimPrefix(request.URL.Path, prefix)
-	if reference == "" || strings.Contains(reference, "/") {
+	remainder := strings.TrimPrefix(request.URL.Path, prefix)
+	reference, _, _ := strings.Cut(remainder, "/")
+	if reference == "" {
 		return "", nil
 	}
-	parsed, err := uuid.Parse(reference)
-	if err != nil || parsed.String() != reference {
+	if !validOpaqueProjectReference(reference) {
 		return "", errors.New("invalid project reference in path")
 	}
 	return reference, nil
+}
+
+func validOpaqueProjectReference(reference string) bool {
+	if len(reference) < 13 || len(reference) > 96 || !strings.HasPrefix(reference, "prj_") {
+		return false
+	}
+	for _, character := range strings.TrimPrefix(reference, "prj_") {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '-' || character == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization string) (oidcauth.Principal, string, error) {
@@ -331,6 +348,9 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		return Identity{}, session.Claims{}, err
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+		return Identity{}, session.Claims{}, err
+	}
 	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
 		principal.SessionRevision != claims.SessionRevision {
 		return Identity{}, session.Claims{}, errors.New("owner session binding is invalid")
@@ -340,6 +360,13 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
 		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
 	}, claims, nil
+}
+
+func authenticationProblem(err error) (int, string, bool) {
+	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
+		return http.StatusServiceUnavailable, "UNAVAILABLE", true
+	}
+	return http.StatusUnauthorized, "UNAUTHENTICATED", false
 }
 
 func (boundary *Boundary) verifyCSRF(request *http.Request, claims session.Claims) bool {
@@ -367,8 +394,12 @@ func writeProblem(writer http.ResponseWriter, statusCode int, code string, retry
 		writer.Header().Set("Retry-After", "1")
 	}
 	writer.WriteHeader(statusCode)
+	title := http.StatusText(statusCode)
+	if localizer, ok := writer.(interface{ Localize(string) string }); ok {
+		title = localizer.Localize(code)
+	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type": "https://mattercodex.local/problems/" + code, "title": http.StatusText(statusCode),
+		"type": "urn:mattercodex:problem:" + strings.ToLower(code), "title": title,
 		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
 	})
 }

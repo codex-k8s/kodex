@@ -1,0 +1,101 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - namespace.yaml
+  - ../../base/platform-state
+  - ../../base/platform-endpoints
+  - ../../overlays/production/internal-rpc-authority
+  - ../../overlays/production/image-supply-chain
+  - ../../overlays/production/control-plane
+  - ../../overlays/production/egress-gateway
+  - ../../overlays/production/role-image-builder
+  - ../../overlays/production/runtime-controller
+  - ../../overlays/production/integration-gateway
+  - ../../overlays/production/automation-scheduler
+  - ../../overlays/production/control-api-gateway
+  - ../../overlays/production/staff-control-center
+  - ../../overlays/production/interaction-gateway
+  - control-plane-interaction-grant-trust.yaml
+patches:
+  - path: control-plane-patch.yaml
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: control-plane-exact-runtime-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: egress-gateway-exact-runtime-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+              app.kubernetes.io/component: interaction-adapter
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: internal-rpc-authority-readback-attestor-exact-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: internal-rpc-authority-restore-controller-exact-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: Role
+      name: internal-rpc-authority-publisher
+    patch: |-
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-delivery
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-key
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-manifest-trust
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-proof-trust
+configMapGenerator:
+  - name: internal-rpc-authority-publisher-target-registry
+    behavior: merge
+    files:
+      - key-delivery-targets.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+transformers:
+  - bundle-cluster-scope-transformer.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: mattercodex
+      mattercodex.dev/environment: production
+      mattercodex.dev/profile: web-with-mattermost
+    includeSelectors: false
+    includeTemplates: true

@@ -43,16 +43,7 @@ spec:
                 values: [claim, admit, promote]
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: artifact-scanner
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: interaction-gateway
-        - podSelector:
-            matchLabels:
               app.kubernetes.io/name: runtime-controller
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: memory-indexer
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
@@ -92,17 +83,21 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-redis
-      ports:
-        - protocol: TCP
-          port: 6379
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: nats
+              app.kubernetes.io/name: mattercodex-nats
       ports:
         - protocol: TCP
           port: 4222
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: __MATTERCODEX_OIDC_NAMESPACE__
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: __MATTERCODEX_OIDC_POD_NAME__
+              app.kubernetes.io/component: __MATTERCODEX_OIDC_POD_COMPONENT__
+      ports:
+        - protocol: TCP
+          port: __MATTERCODEX_OIDC_TARGET_PORT__
     - to:
         - namespaceSelector:
             matchLabels:
@@ -123,16 +118,6 @@ spec:
       ports:
         - protocol: TCP
           port: 8443
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: storage
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: object-store
-      ports:
-        - protocol: TCP
-          port: 443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -197,7 +182,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: nats
+              app.kubernetes.io/name: mattercodex-nats
       ports:
         - protocol: TCP
           port: 4222

@@ -5,6 +5,7 @@ import "testing"
 func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-control-api-gateway",
@@ -14,25 +15,27 @@ func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 	}
 }
 
-func TestApplyWorkloadProfileBindsDirectDeliveryWithoutVaultEnvironment(t *testing.T) {
+func TestApplyWorkloadProfileBindsInteractionGatewayPaths(t *testing.T) {
 	config := Config{
-		Mode:              ModeIssuer,
-		SecretBackend:     string(secretBackendDirectProductionPrototype),
-		DeploymentProfile: directProductionPrototypeProfile,
-		WorkloadID:        "automation-scheduler",
-		WorkloadSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
+		WorkloadID:       "interaction-gateway",
+		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
 	}
 	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply direct delivery profile: %v", err)
+		t.Fatalf("apply interaction gateway profile: %v", err)
 	}
-	if config.VaultAuthRole != "internal-rpc-authority-automation-scheduler" {
-		t.Fatal("direct delivery did not bind canonical workload identity")
+	if config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential" ||
+		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack" {
+		t.Fatal("interaction gateway Vault paths are not pinned")
 	}
 }
 
 func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-integration-gateway",
@@ -49,6 +52,7 @@ func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
 	config := Config{
 		Mode:             ModeIssuer,
+		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "automation-scheduler",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
 		VaultAuthRole:    "internal-rpc-authority-automation-scheduler",
@@ -61,23 +65,6 @@ func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
 		config.RestoreRoleCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential" ||
 		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack" {
 		t.Fatal("automation scheduler Vault paths are not pinned")
-	}
-}
-
-func TestApplyWorkloadProfileDisablesResolverForInteractionVerifier(t *testing.T) {
-	config := Config{
-		Mode:             ModeVerifier,
-		WorkloadID:       "interaction-gateway",
-		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
-		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
-	}
-	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply interaction gateway verifier profile: %v", err)
-	}
-	if config.ResolverEnabled ||
-		config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/readback-credential" ||
-		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/verifier/restore-ack" {
-		t.Fatal("interaction gateway verifier profile is not pinned")
 	}
 }
 
@@ -94,28 +81,6 @@ func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
 		restoreACKPath            string
 	}{
 		{
-			name:                      "integration gateway verifier",
-			mode:                      ModeVerifier,
-			workloadID:                "integration-gateway",
-			spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
-			vaultRole:                 "internal-rpc-authority-integration-gateway",
-			readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/readback-credential",
-			readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/readback-possession",
-			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/restore-credential",
-			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/verifier/restore-ack",
-		},
-		{
-			name:                      "legacy data migration issuer",
-			mode:                      ModeIssuer,
-			workloadID:                "legacy-data-migration",
-			spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
-			vaultRole:                 "internal-rpc-authority-legacy-data-migration",
-			readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-credential",
-			readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/readback-possession",
-			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-credential",
-			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/legacy-data-migration/issuer/restore-ack",
-		},
-		{
 			name:                      "runtime controller issuer",
 			mode:                      ModeIssuer,
 			workloadID:                "runtime-controller",
@@ -126,23 +91,13 @@ func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
 			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
 			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
 		},
-		{
-			name:                      "runtime S3 restore exchanger issuer",
-			mode:                      ModeIssuer,
-			workloadID:                "runtime-s3-restore-exchanger",
-			spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
-			vaultRole:                 "internal-rpc-authority-runtime-s3-restore-exchanger",
-			readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/readback-credential",
-			readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/readback-possession",
-			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/restore-credential",
-			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-s3-restore-exchanger/issuer/restore-ack",
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			config := Config{
 				Mode:             test.mode,
+				SecretBackend:    string(secretBackendVault),
 				WorkloadID:       test.workloadID,
 				WorkloadSPIFFEID: test.spiffeID,
 				VaultAuthRole:    test.vaultRole,
@@ -172,12 +127,30 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 		config Config
 	}{
 		{
-			name: "wrong SPIFFE ID",
+			name: "removed integration verifier",
 			config: Config{
 				Mode:             ModeVerifier,
 				WorkloadID:       "integration-gateway",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 				VaultAuthRole:    "internal-rpc-authority-integration-gateway",
+			},
+		},
+		{
+			name: "removed legacy migration issuer",
+			config: Config{
+				Mode:             ModeIssuer,
+				WorkloadID:       "legacy-data-migration",
+				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+				VaultAuthRole:    "internal-rpc-authority-legacy-data-migration",
+			},
+		},
+		{
+			name: "removed runtime S3 exchanger",
+			config: Config{
+				Mode:             ModeIssuer,
+				WorkloadID:       "runtime-s3-restore-exchanger",
+				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
+				VaultAuthRole:    "internal-rpc-authority-runtime-s3-restore-exchanger",
 			},
 		},
 		{

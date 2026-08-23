@@ -189,6 +189,55 @@ func (publisher *Publisher) Publish(
 	}, nil
 }
 
+// PublishRaw публикует уже проверенный контрактом bounded payload в конкретный
+// subject, входящий в закрытый набор stream filters. Метод нужен для AsyncAPI
+// envelope, чья JSON-схема отличается от общего eventing.Envelope.
+func (publisher *Publisher) PublishRaw(
+	ctx context.Context,
+	subject string,
+	messageID string,
+	payload []byte,
+) (eventing.PublishReceipt, error) {
+	if subject == "" || strings.ContainsAny(subject, "*> \t\r\n") ||
+		messageID == "" || len(payload) == 0 || len(payload) > int(publisher.config.MaxMessageBytes) {
+		return eventing.PublishReceipt{}, errors.New("raw NATS message is invalid")
+	}
+	allowed := false
+	for _, filter := range publisher.config.Subjects {
+		if subjectMatchesFilter(subject, filter) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return eventing.PublishReceipt{}, errors.New("raw NATS subject is not registered")
+	}
+	ack, err := publisher.jetstream.PublishMsg(
+		ctx,
+		&nats.Msg{Subject: subject, Data: payload},
+		jetstream.WithMsgID(messageID),
+		jetstream.WithExpectStream(publisher.config.Stream),
+		jetstream.WithRetryAttempts(0),
+	)
+	if err != nil || ack == nil || ack.Stream != publisher.config.Stream || ack.Sequence == 0 {
+		return eventing.PublishReceipt{}, errors.New("publish raw NATS JetStream event")
+	}
+	return eventing.PublishReceipt{Stream: ack.Stream, Sequence: ack.Sequence, Duplicate: ack.Duplicate}, nil
+}
+
+func subjectMatchesFilter(subject, filter string) bool {
+	subjectTokens, filterTokens := strings.Split(subject, "."), strings.Split(filter, ".")
+	if len(subjectTokens) != len(filterTokens) {
+		return false
+	}
+	for index, token := range filterTokens {
+		if token != "*" && token != subjectTokens[index] {
+			return false
+		}
+	}
+	return true
+}
+
 // Close ограниченно очищает и закрывает connection.
 func (publisher *Publisher) Close() error {
 	if publisher == nil || publisher.connection == nil {
@@ -229,8 +278,7 @@ func validateConfig(config Config) error {
 	}
 	seen := make(map[string]struct{}, len(config.Subjects))
 	for _, subject := range config.Subjects {
-		if subject == "" || strings.TrimSpace(subject) != subject ||
-			strings.ContainsAny(subject, "*> \t\r\n") {
+		if !validSubjectFilter(subject) {
 			return errors.New("NATS JetStream subject is invalid")
 		}
 		if _, duplicate := seen[subject]; duplicate {
@@ -239,6 +287,25 @@ func validateConfig(config Config) error {
 		seen[subject] = struct{}{}
 	}
 	return nil
+}
+
+func validSubjectFilter(subject string) bool {
+	if subject == "" || strings.TrimSpace(subject) != subject || strings.ContainsAny(subject, " \t\r\n") {
+		return false
+	}
+	tokens := strings.Split(subject, ".")
+	for index, token := range tokens {
+		if token == "" || token == ">" || strings.Contains(token, ">") {
+			return false
+		}
+		if token == "*" {
+			continue
+		}
+		if strings.Contains(token, "*") || (index == len(tokens)-1 && token == ">") {
+			return false
+		}
+	}
+	return true
 }
 
 func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.Certificate, error) {

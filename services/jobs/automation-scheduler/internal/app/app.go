@@ -1,4 +1,4 @@
-// Package app содержит единственный composition root automation-scheduler.
+// Package app содержит composition root server-owned automation scheduler.
 package app
 
 import (
@@ -9,136 +9,114 @@ import (
 	"os"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/matter-codex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/jobs/automation-scheduler/internal/clients/controlplane"
-	internalobservability "github.com/codex-k8s/matter-codex/services/jobs/automation-scheduler/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/jobs/automation-scheduler/internal/scheduler"
+	"github.com/google/uuid"
 )
 
-const operationFailureMessage = "automation-scheduler operation failed"
+const (
+	issuerUID = 29001
+	issuerGID = 29000
+)
 
-type runtimeState struct {
-	config       Config
-	logger       *slog.Logger
-	telemetry    *sharedobservability.Runtime
-	metrics      *sharedobservability.Metrics
-	readiness    *serviceruntime.Readiness
-	workers      *serviceruntime.WorkerGroup
-	httpServer   *httpserver.Server
-	controlPlane *controlplane.Client
-	business     *internalobservability.Metrics
-}
-
-func Run(lifecycle context.Context, shutdownBase context.Context, buildVersion string) (resultErr error) {
+func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	state := &runtimeState{config: config, readiness: serviceruntime.NewReadiness()}
-	defer func() {
-		resultErr = errors.Join(resultErr, state.shutdown(context.WithoutCancel(shutdownBase)))
-	}()
 	startup, cancelStartup := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer cancelStartup()
 	telemetryConfig, err := sharedobservability.RuntimeConfigFromEnv(serviceName, buildVersion)
 	if err != nil {
 		return err
 	}
-	state.telemetry, err = sharedobservability.NewRuntime(startup, telemetryConfig)
+	telemetry, err := sharedobservability.NewRuntime(startup, telemetryConfig)
 	if err != nil {
 		return err
 	}
-	state.logger = state.telemetry.Logger(os.Stdout)
-	state.metrics = sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
-	state.metrics.SetReady(false)
-	state.business, err = internalobservability.New(state.metrics.Register)
-	if err != nil {
-		return err
-	}
-	state.controlPlane, err = controlplane.Dial(startup, controlplane.Config{
+	logger := telemetry.Logger(os.Stdout)
+	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
+	readiness := serviceruntime.NewReadiness()
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
-		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
-		ApplicationGrantFile: config.ApplicationGrantFile,
-		OperationGrantFile:   config.OperationGrantFile,
-		ExpectedIssuerUID:    29001, ExpectedIssuerGID: 29000,
-		DialTimeout: 2 * time.Second, RPCDeadline: config.RPCDeadline,
+		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCDeadline,
+		Operations: controlplaneclient.AutomationSchedulerOperations(),
 	})
 	if err != nil {
 		return err
 	}
-	if err := state.controlPlane.Check(startup); err != nil {
-		return err
+	if err := control.CheckLocalAuthority(startup); err != nil {
+		return errors.Join(
+			fmt.Errorf("automation scheduler startup barrier failed: %w", err),
+			control.Close(),
+		)
 	}
-	job, err := scheduler.New(state.controlPlane, state.business, scheduler.Config{
-		DueLimit: config.DueLimit, ClaimLimit: config.ClaimLimit,
-		MaximumTrackedClaims: config.MaximumTrackedClaims,
-	})
+	technical, err := httpserver.New(httpserver.Config{
+		Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
+		WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 32 << 10, MaximumConnections: 128,
+	}, readiness, metrics.PrometheusHandler())
 	if err != nil {
 		return err
 	}
-	state.httpServer, err = httpserver.New(httpserver.Config{
-		Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second,
-		ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second,
-		IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 64 << 10, MaximumConnections: 128,
-	}, state.readiness, state.metrics.PrometheusHandler())
-	if err != nil {
+	if err := technical.Listen(); err != nil {
 		return err
 	}
-	if err := state.httpServer.Listen(); err != nil {
-		return err
-	}
-	serveCtx, cancelServe := context.WithCancel(lifecycle)
-	defer cancelServe()
-	serveResult := make(chan error, 1)
-	go func() {
-		serveResult <- state.httpServer.Serve()
-		cancelServe()
-	}()
-	state.workers = serviceruntime.StartWorkers(
-		serveCtx,
-		periodic(config.PollInterval, job.Cycle, state.report("poll")),
-		periodic(config.ReadinessInterval, state.controlPlane.Check, func(ctx context.Context, checkErr error) {
-			if checkErr != nil {
-				state.readiness.Set(false, "dependency_unavailable")
-				state.metrics.SetReady(false)
-				state.report("readiness")(ctx, checkErr)
-				return
-			}
-			state.readiness.Set(true, "ready")
-			state.metrics.SetReady(true)
-		}),
+	workers := serviceruntime.StartWorkers(
+		lifecycle,
+		serveTechnical(technical),
+		monitorLocalReadiness(control, readiness, metrics, logger, config),
+		runScheduleLoop(control, logger, config),
 	)
-	state.readiness.Set(true, "ready")
-	state.metrics.SetReady(true)
-	workerResult := make(chan error, 1)
-	go func() { workerResult <- state.workers.Wait(serveCtx) }()
-	select {
-	case <-lifecycle.Done():
-		return nil
-	case err := <-serveResult:
-		if err != nil {
-			return fmt.Errorf("serve technical HTTP: %w", err)
+	err = workers.Wait(context.WithoutCancel(lifecycle))
+	readiness.Set(false, "stopping")
+	metrics.SetReady(false)
+	workers.Stop()
+	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
+		serviceruntime.ShutdownOperation{Name: "scheduler workers", Timeout: config.ShutdownTimeout / 2, Run: workers.Wait},
+		serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: config.ShutdownTimeout / 4, Run: func(context.Context) error { return control.Close() }},
+		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 4, Run: technical.Shutdown},
+		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
+		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
+	)
+	return errors.Join(err, shutdownErr)
+}
+
+func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		done := make(chan error, 1)
+		go func() { done <- server.Serve() }()
+		select {
+		case err := <-done:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		return errors.New("technical HTTP server stopped unexpectedly")
-	case err := <-workerResult:
-		if err != nil {
-			return fmt.Errorf("automation scheduler workers stopped: %w", err)
-		}
-		return errors.New("automation scheduler workers stopped unexpectedly")
 	}
 }
 
-func periodic(interval time.Duration, run func(context.Context) error, report func(context.Context, error)) serviceruntime.Worker {
+func monitorLocalReadiness(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
-			err := run(ctx)
-			if !errors.Is(err, context.Canceled) {
-				report(ctx, err)
+			check, cancel := context.WithTimeout(ctx, config.RPCDeadline)
+			err := control.CheckLocalAuthority(check)
+			cancel()
+			if err == nil {
+				if readiness.Set(true, "ready") {
+					logger.InfoContext(ctx, "automation scheduler readiness restored")
+				}
+				metrics.SetReady(true)
+			} else {
+				if readiness.Set(false, "local_authority_unavailable") {
+					logger.WarnContext(ctx, "automation scheduler readiness lost", "error_class", "sidecar")
+				}
+				metrics.SetReady(false)
 			}
 			select {
 			case <-ctx.Done():
@@ -149,53 +127,48 @@ func periodic(interval time.Duration, run func(context.Context) error, report fu
 	}
 }
 
-func (state *runtimeState) report(operation string) func(context.Context, error) {
-	return func(ctx context.Context, err error) {
-		if err == nil {
-			return
+func runScheduleLoop(control *controlplaneclient.Client, logger *slog.Logger, config Config) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(config.PollInterval)
+		defer ticker.Stop()
+		degraded := false
+		for {
+			cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
+			err := materializeDue(cycle, control, config)
+			cancel()
+			if err != nil && !degraded {
+				degraded = true
+				logger.WarnContext(ctx, "schedule materialization degraded", "error_class", "control_plane")
+			} else if err == nil && degraded {
+				degraded = false
+				logger.InfoContext(ctx, "schedule materialization restored")
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
 		}
-		state.logger.Error(operationFailureMessage, "operation", operation, "error", err)
-		state.telemetry.CaptureException(ctx, err)
 	}
 }
 
-func (state *runtimeState) shutdown(base context.Context) error {
-	if state.readiness != nil {
-		state.readiness.Set(false, "stopping")
+func materializeDue(ctx context.Context, control *controlplaneclient.Client, config Config) error {
+	claimed, err := control.Runtime.ClaimDueSchedules(ctx, &controlplanev1.ClaimDueSchedulesRequest{WorkloadInstance: config.InstanceID, Limit: int32(config.DueLimit)})
+	if err != nil {
+		return err
 	}
-	if state.metrics != nil {
-		state.metrics.SetReady(false)
+	for _, claim := range claimed.GetClaims() {
+		lease := claim.GetLease()
+		if claim.GetOccurrenceRef() == "" || lease == nil {
+			return errors.New("schedule claim is incomplete")
+		}
+		_, err := control.Runtime.MaterializeScheduleOccurrence(ctx, &controlplanev1.MaterializeScheduleOccurrenceRequest{
+			Mutation:      &controlplanev1.MutationContext{IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceOID, []byte(claim.GetOccurrenceRef()+"\x00materialize")).String()},
+			OccurrenceRef: claim.GetOccurrenceRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
+		})
+		if err != nil {
+			return err
+		}
 	}
-	if state.workers != nil {
-		state.workers.Stop()
-	}
-	return serviceruntime.RunShutdown(base,
-		serviceruntime.ShutdownOperation{Name: "automation scheduler workers", Timeout: state.config.ShutdownTimeout / 2, Run: func(ctx context.Context) error {
-			if state.workers == nil {
-				return nil
-			}
-			return state.workers.Wait(ctx)
-		}},
-		serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: state.config.ShutdownTimeout / 4, Run: func(context.Context) error {
-			return state.controlPlane.Close()
-		}},
-		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: state.config.ShutdownTimeout / 4, Run: func(ctx context.Context) error {
-			if state.httpServer == nil {
-				return nil
-			}
-			return state.httpServer.Shutdown(ctx)
-		}},
-		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: func(ctx context.Context) error {
-			if state.telemetry == nil {
-				return nil
-			}
-			return state.telemetry.ShutdownTracing(ctx)
-		}},
-		serviceruntime.ShutdownOperation{Name: "Sentry", Timeout: 5 * time.Second, Run: func(ctx context.Context) error {
-			if state.telemetry == nil {
-				return nil
-			}
-			return state.telemetry.FlushSentry(ctx)
-		}},
-	)
+	return nil
 }

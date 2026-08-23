@@ -27,7 +27,22 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
-              app.kubernetes.io/component: external-gateway
+              app.kubernetes.io/component: integration-worker
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-runner
+              app.kubernetes.io/component: role-runtime
+              runtime.mattercodex.dev/managed: "true"
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: release-artifact-materializer
+              app.kubernetes.io/component: release-bootstrap
       ports:
         - {protocol: TCP, port: 8080}
     - from:

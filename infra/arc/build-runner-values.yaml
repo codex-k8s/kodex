@@ -57,7 +57,7 @@ template:
           - {name: ACTIONS_RUNNER_HOOK_JOB_STARTED, value: /var/run/mattercodex-owner-gate/job-started.sh}
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
-          - {name: NO_PROXY, value: "matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1"}
+          - {name: NO_PROXY, value: "__REGISTRY_HOST__,localhost,127.0.0.1"}
         resources:
           requests: {cpu: 250m, memory: 512Mi}
           limits: {memory: 2Gi}
@@ -83,7 +83,7 @@ template:
         env:
           - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
           - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
-          - {name: NO_PROXY, value: "matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1"}
+          - {name: NO_PROXY, value: "__REGISTRY_HOST__,localhost,127.0.0.1"}
         startupProbe:
           exec: {command: [buildctl, --addr, unix:///var/run/buildkit/buildkitd.sock, debug, workers]}
           periodSeconds: 3

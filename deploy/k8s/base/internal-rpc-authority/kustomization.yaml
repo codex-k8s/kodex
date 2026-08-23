@@ -4,6 +4,7 @@ namespace: mattercodex-system
 resources:
   - serviceaccount.yaml
   - configmap.yaml
+  - vault-secret-provider-class.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml

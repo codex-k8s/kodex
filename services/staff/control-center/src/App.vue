@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
 import { useRoute } from "vue-router";
 
 import AppShell from "@/app/AppShell.vue";
@@ -8,10 +7,6 @@ import { useSessionStore } from "@/features/session/store";
 
 const route = useRoute();
 const session = useSessionStore();
-
-onMounted(async () => {
-  if (!route.meta.public) await session.probe();
-});
 </script>
 
 <template>

@@ -149,7 +149,7 @@ func probeDatabaseCredential(
 	var status string
 	if err := pool.QueryRow(
 		ctx,
-		"SELECT internal_rpc_authority.record_database_credential_session_readback($1, $2::uuid)",
+		queryRecordDatabaseCredentialSessionReadback,
 		digest,
 		config.PodUID,
 	).Scan(&status); err != nil {

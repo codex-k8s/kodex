@@ -1,0 +1,171 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mattercodex-installation-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  ca:
+    secretName: mattercodex-installation-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-postgresql
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: mattercodex-postgresql-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - mattercodex-postgresql
+    - mattercodex-postgresql.mattercodex-system.svc
+    - mattercodex-postgresql.mattercodex-system.svc.cluster.local
+    - control-plane-postgresql-rw.mattercodex-system.svc
+    - control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
+    - internal-rpc-authority-postgresql-rw.mattercodex-system.svc
+    - internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: staff-control-center-backend-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - staff-control-center
+    - staff-control-center.mattercodex-system.svc
+    - staff-control-center.mattercodex-system.svc.cluster.local
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-ingress-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: staff-control-center-ingress-client-tls
+  duration: 720h
+  renewBefore: 120h
+  commonName: mattercodex-public-ingress
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-nats
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: mattercodex-nats-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - mattercodex-nats
+    - mattercodex-nats.mattercodex-system.svc
+    - mattercodex-nats.mattercodex-system.svc.cluster.local
+    - nats.mattercodex-system.svc
+    - nats.mattercodex-system.svc.cluster.local
+  usages:
+    - server auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: control-plane-nats-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: control-plane-nats-client-tls
+  duration: 720h
+  renewBefore: 120h
+  commonName: control-plane
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: control-plane-nats-bootstrap-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: control-plane-nats-bootstrap-client-tls
+  duration: 720h
+  renewBefore: 120h
+  commonName: control-plane-broker-bootstrap
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: control-api-gateway-nats-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: control-api-gateway-nats-client-tls
+  duration: 720h
+  renewBefore: 120h
+  commonName: control-api-gateway
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: mattercodex-installation-ca
+    kind: Issuer

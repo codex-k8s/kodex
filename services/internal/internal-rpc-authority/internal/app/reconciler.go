@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -53,7 +54,6 @@ type ReconcilerConfig struct {
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedSessionUser  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
 	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	DeploymentProfile            string        `env:"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE"`
 	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
 	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
 	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
@@ -97,19 +97,8 @@ func LoadReconcilerConfig() (ReconcilerConfig, error) {
 	if err := parseEnvironment(&config); err != nil {
 		return ReconcilerConfig{}, err
 	}
-	backend, err := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if err != nil {
+	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return ReconcilerConfig{}, err
-	}
-	if backend == secretBackendDirectProductionPrototype {
-		if err := validatePrototypeKubernetesBoundary(
-			config.KubernetesAPIAddress,
-			config.KubernetesAPITLSServerName,
-			config.KubernetesAPICAFile,
-			config.KubernetesAPITokenFile,
-		); err != nil {
-			return ReconcilerConfig{}, err
-		}
 	}
 	if !runtimeUUIDPattern.MatchString(config.HolderID) ||
 		config.AllowedCallerSPIFFEID == "" ||
@@ -186,12 +175,6 @@ func RunDatabaseCredentialReconciler(
 		config.SourceRevision,
 		config.SourceDigest,
 	)
-	backend, _ := selectSecretBackend(config.SecretBackend, config.DeploymentProfile)
-	if backend == secretBackendDirectProductionPrototype {
-		// Owner materializer уже создал exact g3/g4/g5 credentials и PostgreSQL
-		// principals; runtime подтверждает и продвигает этот immutable набор.
-		baseline = registered
-	}
 	credentialService, err := service.NewDatabaseCredentialLifecycle(
 		config.HolderID,
 		config.LeaseDuration,
@@ -272,7 +255,7 @@ func RunDatabaseCredentialReconciler(
 		credentialService,
 	)
 	workers := serviceruntime.StartWorkers(lifecycle, func(ctx context.Context) error {
-		return runCredentialReconciliation(ctx, config, credentialService, readiness, metrics)
+		return runCredentialReconciliation(ctx, config, credentialService, readiness, metrics, logger)
 	})
 	serveErrors := make(chan error, 2)
 	go func() {
@@ -520,6 +503,7 @@ func runCredentialReconciliation(
 	credentialService *service.DatabaseCredentialLifecycle,
 	readiness *serviceruntime.Readiness,
 	metrics *observability.Metrics,
+	logger *slog.Logger,
 ) error {
 	ticker := time.NewTicker(config.ReconcileInterval)
 	defer ticker.Stop()
@@ -530,10 +514,14 @@ func runCredentialReconciliation(
 			_, err = credentialService.Ready(ctx)
 		}
 		if err == nil {
-			readiness.Set(true, "ready")
+			if readiness.Set(true, "ready") {
+				logger.Info("database credential reconciliation restored")
+			}
 			metrics.SetReady(true)
 		} else {
-			readiness.Set(false, "reconciliation-failed")
+			if readiness.Set(false, "reconciliation-failed") {
+				logger.Error("database credential reconciliation unavailable", "error_class", "postgresql_or_vault")
+			}
 			metrics.SetReady(false)
 		}
 		select {
@@ -612,19 +600,12 @@ func newCredentialTechnicalServer(
 	mux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) {
 		_, _ = response.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("/readyz", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
 		if ready, _ := readiness.Ready(); !ready {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-		ctx, cancel := context.WithTimeout(request.Context(), 5*time.Second)
-		defer cancel()
-		if _, err := credentialService.Ready(ctx); err != nil {
-			metrics.SetReady(false)
-			http.Error(response, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		metrics.SetReady(true)
 		_, _ = response.Write([]byte("ready\n"))
 	})
 	return &http.Server{

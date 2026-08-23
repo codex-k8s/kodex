@@ -1,158 +1,57 @@
 ---
-id: RUNBOOK-DOC-INTERACTION-GATEWAY
-title: Interaction gateway
+id: RUN-MC-022
+title: Диагностика optional interaction-gateway
 type: runbook
 status: approved
-owner: manager
-version: 1.7.0
-updated: 2026-08-09
+owner: sre
+version: 1.0.0
+updated: 2026-08-23
 ---
 
-# Interaction gateway
+# Диагностика optional interaction-gateway
 
-## Сигналы
+Компонент существует только в профиле `web-with-mattermost`. В `web-only` нет
+его Deployment, authority trust, credential mount и NetworkPolicy. Его
+отсутствие никогда не блокирует core startup, Run, Human Gate или artifact.
 
-- `InteractionGatewayUnavailable` — нет доступной реплики;
-- `InteractionGatewayNotReady` — exact dependency path не готов;
-- `InteractionGatewayDeliveryFailures` — delivery worker не получает durable
-  provider receipt либо domain acknowledgement;
-- `InteractionGatewayInboundFailures` — inbound не проходит mapping, artifact
-  scan или control-plane command;
-- `InteractionGatewayTeamRecoveryFailures` — неоднозначный Mattermost Team
-  effect не подтверждён exact provider readback и требует диагностики;
-- `InteractionGatewayMappingRecoveryFailures` — специализированная mapping-команда
-  не подтверждена авторитетным control-plane readback;
-- `InteractionGatewayAgentBotRecoveryFailures` — Agent bot provider effect,
-  credential materialization или owner receipt не восстановлены exact readback;
-- `InteractionGatewayPostgresqlUnavailable` — недостаточно готовых CNPG Pod.
+## Capabilities
 
-## Диагностика
+- `mattermost.inbound`;
+- `mattermost.notifications`;
+- `mattermost.result_mirror`;
+- `mattermost.gate_decisions`.
 
-1. Проверить `/readyz` и метрики gateway, authority issuer и authority verifier
-   без чтения значений Secret.
-2. Проверить готовность CNPG, control-plane, Mattermost REST/WebSocket и S3
-   bucket по тем же TLS identities, которые использует рабочий путь.
-3. Для delivery прочитать защищённый
-   `/internal/v1/deliveries/{deliveryId}`: сверить state, payload digest,
-   attempts и provider receipt. Помимо mTLS обязателен producer-specific bearer
-   credential с exact organization/project/delivery; gateway должен получить
-   положительный online readback durable issue/digest/revocation у control-plane.
-   Claim token в readback не возвращается.
-4. При ambiguous Mattermost POST проверять exact `PendingPostId`, client-owned
-   `matter_codex_*` props, bot/channel/root и payload digest. Если exact
-   readback отсутствует, outcome `AMBIGUOUS_PROVIDER_EFFECT_REQUIRES_RECONCILIATION`
-   terminal: автоматический или ручной повтор effect запрещён.
-5. При owner decision сверить Gate version, claim fence/expiry, recipient,
-   Mattermost post/channel и process/session/turn/attempt/input lineage.
-6. `DEAD_LETTER` не объявлять успешным и не изменять SQL вручную; recovery
-   оформляется отдельным owner-approved repair Issue.
-7. При зависшем inbound проверить DB-time lease/fence/token: expired
-   `PROCESSING` reclaim-ится worker, а `WAITING_SCAN` poll не уменьшает terminal
-   retry budget. Запись stale worker должна иметь нулевую cardinality.
-8. При `DELETION_PENDING` проверить исходный delete event, Chat/Session version,
-   24-часовой cleanup и отсутствие новых Turn/callback. Restore обязан отменить
-   тот же cleanup receipt; SQL-переход вручную запрещён.
-9. Для result больше Mattermost upload limit сверить `CLEAN`, exact private S3
-   metadata/project prefix и одноразовый download audit. Direct S3 URL быть не
-   должно; gateway повторно проверяет Mattermost User/channel membership и
-   current `BOUND` mapping у control-plane до чтения object.
-10. При Team create сверить immutable normalized intent, request SHA-256,
-    project-scoped single-winner fence, operation lease, случайную correlation,
-    operation-bound provider slug и момент `EFFECT_PENDING`. После
-    неоднозначного ответа `CreateTeam` запрещено повторять provider mutation:
-    recovery читает exact operation slug через `GetTeamByName` и до изменения
-    membership проверяет correlation marker, display/type и causality digest.
-    Чужая/raced Team не принимается и не изменяется. Transient readback
-    сохраняет `AMBIGUOUS`; только PostgreSQL clock после durable deadline
-    назначает `RECOVERY_TIMEOUT`/`REPAIR_REQUIRED`.
-11. Raw Mattermost Team ID допустим только в RLS-scoped selector/operation
-    checkpoint, подписанном internal provider receipt и авторитетной mapping
-    spec control-plane. gRPC DTO, логи и метрики его не раскрывают;
-    selector/cursor повторно разрешаются в actor/organization/project scope.
-    Состояние `PROVIDER_ACCEPTED` означает только завершённый provider effect;
-    ответ create считается успешным лишь после exact `BOUND` readback control-plane.
-12. При bind/relink/unlink сверить semantic idempotency key, immutable request
-    digest, local `effect_generation`/receipt JTI и авторитетные mapping
-    version/generation. До каждого нового JTI и owner retry обязателен fresh
-    exact Team+owner membership readback. Receipt обязан содержать exact `aud`,
-    совпадающий с authority policy. После ambiguous RPC worker сначала
-    выполняет signed `ListWorkspaceMattermostMappings` и
-    `GetWorkspaceMattermostMapping`; повтор `ManageWorkspaceMattermostMapping`
-    допустим только для доказанного прежнего owner-state. Durable outcome
-    читается через `GetMattermostTeamMappingOperation`; `REPAIR_REQUIRED` и
-    открытый Chat/Session/Turn/delivery graph не обходятся ручным SQL.
-13. Для отказов inbound/delivery проверить PostgreSQL joined route: exact
-    current `BOUND` mapping ID/version/generation/digest, fresh Mattermost
-    Team/channel и отдельный monotonic high-watermark. `UNLINKED`, stale Team,
-    недоступный provider либо неоднозначный owner list закрывают путь до любого
-    provider effect. Проверка обязательна после reclaim queued inbound, для
-    direct/owner delivery, catch-up, прямо перед publish и artifact download,
-    а также в readiness; environment manifest не содержит current Team
-    authority и старый tenant/project snapshot её не заменяет.
-    Runtime identity имеет organization-wide допуск к динамическим Project,
-    но не к другому Organization: management RPC получает точный Project
-    только из проверенного authority context, а inbound/delivery — только из
-    server-owned route scope. Immutable manifest закрепляет единственного
-    Mattermost User владельца Organization; несколько разных owner User
-    считаются неоднозначной конфигурацией и закрыто отклоняются.
-14. Для Agent bot bind/rebind/revoke сверить один PostgreSQL winner по exact
-    Agent predecessor сразу для всех конкурирующих actor/action, semantic
-    idempotency key и immutable request digest, checkpoint до первого
-    Mattermost mutation, exact provider correlation/readback, Vault KV version
-    и подписанный `ProviderEffectReadbackReceipt`. Timeout/crash после
-    возможного effect переводит операцию только в readback recovery: повторный
-    `CreateBot` запрещён. `rebind`/`revoke` сначала закрывают прежний generation;
-    queued inbound, delivery, dialog, artifact card и readiness обязаны
-    отклонить старый tuple `stable_key + provider_user_id + generation`.
-    Credential не читать и не копировать вручную; для approved bootstrap
-    применяется `tools/interaction-gateway/configure-agent-bot-credential-vault.sh`.
-    Gauge `mattercodex_interaction_gateway_agent_bot_identity_repairs` берётся
-    из durable `REPAIR_REQUIRED`, а не из памяти worker. При
-    `reason="recovery_timeout"` PostgreSQL уже выбрал terminal winner своим
-    `clock_timestamp()`; не сравнивать deadline с часами Pod и не переводить
-    операцию вручную. Устранить owner/provider/readback причину и пройти
-    согласованный repair path до исчезновения backlog.
-15. До первой Agent identity общий `/readyz` остаётся закрытым, но mTLS gRPC
-    доступен через внутренний `interaction-gateway-management:9443`, который
-    публикует только management port для unready Pod. Static bot token не
-    является запасным runtime credential. После bind проверить exact Agent,
-    Vault version/digest, provider membership и joined route; только затем
-    readiness должна открыться автоматически.
+Каждая capability включается отдельным server-owned IntegrationGrant. Единого
+`mattermostMode` нет. External Team/Channel/Post/User IDs являются только
+локаторами adapter-а и не доказывают actor/project authority.
 
-## Ротация ключей и PostgreSQL identity
+## Конфигурация
 
-- Mattermost JWK публикуется как `NEXT`, затем новый generation становится
-  `CURRENT`, старый ограниченно обслуживается как `PREVIOUS`, после overlap —
-  только `RETIRED`. Control-plane admission readback должен показать тот же
-  high-watermark; откат и повторный ввод retired generation запрещены.
-- Первый запуск не трактует пустую таблицу как доверие: migration job с
-  `KEYSET_GENESIS_ENABLED=true` выполняет single-winner genesis, затем сверяет
-  exact revision/digest и каждую пару generation/kid/RFC7638 thumbprint. Такой
-  же lifecycle применяется к delivery-readback signer и verifier; отсутствие
-  genesis audit закрывает startup.
-- PostgreSQL migration job сверяет served high-watermark и immutable
-  principal→organization/projects mapping.
-  Следующее поколение вводится отдельным code-first изменением с overlap;
-  `POSTGRES_EXPECTED_SESSION_USER` при этом обязан быть ровно
-  `interaction_gateway_runtime_g<N>` для выбранного generation. До следующей
-  ротации единственный `PREVIOUS` principal должен быть retired;
-  retire выполняется `interaction_gateway_retire_runtime_identity` минимальной
-  controller identity, делает `NOLOGIN`, revoke membership, завершает backend
-  и не имеет rollback.
+Server URL должен совпасть с exact allowed-host catalog deployment-а. Credential
+читается по безопасной file reference; symlink, broad mode, oversized/nonregular
+file и путь вне root закрыто отклоняются. В manifest и log нет token value.
 
-## Rollback
+## Probes
 
-1. Остановить rollout и вернуть предыдущие immutable image digests и
-   environment overlay.
-2. Не выполнять `goose down`: миграция forward-only и совместима с отсутствием
-   новой версии Pod.
-3. Не удалять gateway PostgreSQL, S3 objects, provider receipts, cursors и
-   delivery rows: они нужны для dedup/recovery.
-4. Не удалять и не перезаписывать Vault bot credential versions: старый image
-   может только дочитать уже записанный exact version; revocation forward-only.
-5. Если изменился mapping, вернуть одновременно предыдущие Git-pinned Vault
-   revision path, KV version, expected revision и digest. Mutable alias не
-   использовать; опубликованный CAS=0 revision не перезаписывать.
-6. Восстановить readiness и только затем возобновить входящие callbacks.
+`/healthz` проверяет процесс. `/readyz` читает локальный config/authority
+snapshot; Mattermost и control-plane не вызываются на каждую probe. Недоступный
+external WebSocket/REST переводит конкретный source/delivery в degraded либо
+retryable state, но Pod и core Run не становятся failed автоматически.
 
-Production-действия требуют отдельного подтверждения владельца.
+## Решение Human Gate
+
+Adapter переводит разрешённую локализованную команду в typed control-plane
+resolution с verified source/grant. Web и Mattermost конкурируют за одну
+server-owned version: первый valid winner продолжает Run, второй получает
+stale/conflict readback. Adapter не создаёт continuation самостоятельно.
+
+## Диагностика delivery
+
+Проверить connection/grant state, exact source locator, attempt count,
+next-attempt time и safe error key через Administration. После terminal delivery
+failure создаётся optional incident `CoreAffected=false`. Не публиковать
+результат вручную и не менять успешный core Run.
+
+Пользовательские ответы выбираются из `internal/i18n/messages.ru.yaml` или
+`messages.en.yaml` по проверенной locale. Runtime diagnostics остаются на
+английском и не содержат message text, post body или credentials.

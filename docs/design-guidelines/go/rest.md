@@ -5,7 +5,7 @@
 ## Стек
 
 - Для простых служебных и integration callbacks допустим стандартный `net/http`.
-- Для стабильных gateway API после согласования контракта используется OpenAPI YAML и Go codegen.
+- Для стабильных gateway API используется OpenAPI YAML и Go codegen.
 - Конкретный HTTP framework добавляется только после записи в `docs/design-guidelines/common/external_dependencies_catalog.md`.
 
 ## Где хранится OpenAPI
@@ -48,4 +48,4 @@ make gen-openapi-go SVC=services/<zone>/<service>
 ## Документация API
 
 - Для gateway API спецификация лежит в `contracts/openapi/**`.
-- Swagger UI или аналогичный viewer включается только осознанным отдельным решением; для Mattermost slash callback на MVP это не требуется.
+- Swagger UI или аналогичный viewer включается только осознанным отдельным решением.

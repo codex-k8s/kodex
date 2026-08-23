@@ -1,14 +1,12 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: integration-gateway-deny-all
+  name: integration-gateway-default-deny
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: integration-gateway
-  policyTypes:
-    - Ingress
-    - Egress
+  policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -18,26 +16,9 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: integration-gateway
-      app.kubernetes.io/component: external-gateway
-  policyTypes:
-    - Ingress
-    - Egress
+      app.kubernetes.io/component: integration-worker
+  policyTypes: [Ingress, Egress]
   ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: agent-runner
-      ports:
-        - {protocol: TCP, port: 8443}
-        - {protocol: TCP, port: 9443}
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: control-api-gateway
-              app.kubernetes.io/component: external-gateway
-      ports:
-        - {protocol: TCP, port: 8443}
-        - {protocol: TCP, port: 9443}
     - from:
         - namespaceSelector:
             matchLabels:
@@ -48,7 +29,6 @@ spec:
       ports:
         - {protocol: TCP, port: 9090}
         - {protocol: TCP, port: 9091}
-        - {protocol: TCP, port: 9092}
   egress:
     - to:
         - namespaceSelector:
@@ -61,21 +41,12 @@ spec:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
     - to:
-        - podSelector:
+        - namespaceSelector:
             matchLabels:
-              cnpg.io/cluster: integration-gateway-postgresql
-      ports:
-        - {protocol: TCP, port: 5432}
-    - to:
-        - podSelector:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: control-plane
-      ports:
-        - {protocol: TCP, port: 8443}
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: integration-egress-proxy
       ports:
         - {protocol: TCP, port: 8443}
     - to:
@@ -88,39 +59,6 @@ spec:
               app.kubernetes.io/component: platform-egress
       ports:
         - {protocol: TCP, port: 8080}
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: identity
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: sso
-      ports:
-        - {protocol: TCP, port: 443}
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: vault
-      ports:
-        - {protocol: TCP, port: 8200}
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-postgresql
-      ports:
-        - {protocol: TCP, port: 5432}
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-readback-attestor
-      ports:
-        - {protocol: TCP, port: 8443}
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-restore-controller
-      ports:
-        - {protocol: TCP, port: 8443}
     - to:
         - namespaceSelector:
             matchLabels:
@@ -139,34 +77,3 @@ spec:
               app.kubernetes.io/name: sentry-relay
       ports:
         - {protocol: TCP, port: 8443}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: integration-gateway-migration-exact-paths
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: integration-gateway
-      app.kubernetes.io/component: migration
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress: []
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - {protocol: UDP, port: 53}
-        - {protocol: TCP, port: 53}
-    - to:
-        - podSelector:
-            matchLabels:
-              cnpg.io/cluster: integration-gateway-postgresql
-      ports:
-        - {protocol: TCP, port: 5432}

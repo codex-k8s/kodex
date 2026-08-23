@@ -43,28 +43,10 @@ spec:
           command:
             - /usr/local/bin/control-plane-cli
           args:
-            - migrate
-            - expand
+            - up
           env:
-            - name: CONTROL_PLANE_POSTGRES_MIGRATION_DSN_FILE
+            - name: CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE
               value: /var/run/secrets/mattercodex/control-plane/postgres-migration/dsn
-            - name: CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME
-              value: control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
-            - name: CONTROL_PLANE_POSTGRES_RUNTIME_CURRENT_DSN_FILE
-              value: /var/run/secrets/mattercodex/control-plane/postgres-migration/runtime-current-dsn
-            - name: CONTROL_PLANE_POSTGRES_CA_FILE
-              value: /var/run/config/mattercodex/control-plane/postgres/ca.pem
-            - name: CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE
-              value: /var/run/secrets/mattercodex/control-plane/postgres-context/key
-            - name: CONTROL_PLANE_KEYSET_GENESIS_ENABLED
-              value: "true"
-            - name: CONTROL_PLANE_MATTERMOST_EVENT_PUBLIC_KEYSET_FILE
-              value: /var/run/config/mattercodex/control-plane/keyset-genesis/mattermost-event.public-keyset.json
-            - name: CONTROL_PLANE_INTERACTION_READBACK_PUBLIC_KEYSET_FILE
-              value: /var/run/config/mattercodex/control-plane/keyset-genesis/interaction-readback.public-keyset.json
-          envFrom:
-            - configMapRef:
-                name: control-plane-db-principals
           resources:
             requests:
               cpu: 25m
@@ -88,12 +70,6 @@ spec:
             - name: postgres-ca
               mountPath: /var/run/config/mattercodex/control-plane/postgres
               readOnly: true
-            - name: postgres-context
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
-              readOnly: true
-            - name: keyset-genesis
-              mountPath: /var/run/config/mattercodex/control-plane/keyset-genesis
-              readOnly: true
       volumes:
         - name: postgres-migration
           csi:
@@ -108,15 +84,3 @@ spec:
             items:
               - key: ca.pem
                 path: ca.pem
-        - name: postgres-context
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-context-migration
-        - name: keyset-genesis
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-keyset-genesis

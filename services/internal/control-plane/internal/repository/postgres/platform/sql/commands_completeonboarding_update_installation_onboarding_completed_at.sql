@@ -1,0 +1,2 @@
+-- name: commands_completeonboarding_update_installation_onboarding_completed_at :exec
+UPDATE control_plane.installation SET onboarding_completed_at=COALESCE(onboarding_completed_at,clock_timestamp()) WHERE singleton

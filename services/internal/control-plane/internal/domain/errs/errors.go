@@ -1,76 +1,16 @@
-// Package errs задаёт безопасные доменные ошибки control-plane.
+// Package errs содержит стабильные доменные классы ошибок control-plane.
 package errs
 
 import "errors"
 
-type safeCoded interface {
-	SafeCode() string
-}
-
-type safeCodedError struct {
-	cause error
-	code  string
-}
-
-func (err safeCodedError) Error() string    { return err.cause.Error() }
-func (err safeCodedError) Unwrap() error    { return err.cause }
-func (err safeCodedError) SafeCode() string { return err.code }
-
-// WithSafeCode добавляет закрытый диагностический код без изменения типа
-// доменной ошибки и без включения приватных значений в transport response.
-func WithSafeCode(cause error, code string) error {
-	if cause == nil || code == "" {
-		return cause
-	}
-	return safeCodedError{cause: cause, code: code}
-}
-
-// SafeCode возвращает только явно назначенный доменным слоем код.
-func SafeCode(err error) string {
-	var coded safeCoded
-	if errors.As(err, &coded) {
-		return coded.SafeCode()
-	}
-	return ""
-}
-
-// IsDomain сообщает adapter-слою, что ошибка уже прошла доменную
-// классификацию и не должна быть заменена общей ошибкой зависимости.
-func IsDomain(err error) bool {
-	for _, target := range domainErrors {
-		if errors.Is(err, target) {
-			return true
-		}
-	}
-	return false
-}
-
 var (
-	ErrInvalidInput        = errors.New("invalid control-plane input")
-	ErrUnauthenticated     = errors.New("control-plane authentication required")
-	ErrPermissionDenied    = errors.New("control-plane permission denied")
-	ErrNotFound            = errors.New("control-plane resource not found")
-	ErrStateConflict       = errors.New("control-plane state conflict")
-	ErrIdempotencyConflict = errors.New("control-plane idempotency conflict")
-	ErrAborted             = errors.New("control-plane operation aborted")
-	ErrVersionMismatch     = errors.New("control-plane version mismatch")
-	ErrFailedPrecondition  = errors.New("control-plane precondition failed")
-	ErrDataLoss            = errors.New("control-plane stored data is corrupt")
-	ErrUnavailable         = errors.New("control-plane dependency unavailable")
-	ErrInternal            = errors.New("control-plane internal error")
+	ErrInvalid          = errors.New("invalid input")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrForbidden        = errors.New("forbidden")
+	ErrNotFound         = errors.New("not found")
+	ErrConflict         = errors.New("conflict")
+	ErrVersionMismatch  = errors.New("version mismatch")
+	ErrIdempotencyReuse = errors.New("idempotency key reused with different intent")
+	ErrProtected        = errors.New("protected system resource")
+	ErrUnavailable      = errors.New("temporarily unavailable")
 )
-
-var domainErrors = []error{
-	ErrInvalidInput,
-	ErrUnauthenticated,
-	ErrPermissionDenied,
-	ErrNotFound,
-	ErrStateConflict,
-	ErrIdempotencyConflict,
-	ErrAborted,
-	ErrVersionMismatch,
-	ErrFailedPrecondition,
-	ErrDataLoss,
-	ErrUnavailable,
-	ErrInternal,
-}

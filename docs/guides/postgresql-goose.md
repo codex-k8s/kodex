@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-07-31
+version: 1.2.0
+updated: 2026-08-23
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -227,31 +227,21 @@ CREATE TABLE domain_entities (
   порядок;
 - production CLI не предоставляет штатную команду `down`;
 - rollback схемы выполняется новой компенсирующей forward migration;
-- destructive изменение проходит `expand -> migrate -> contract`;
 - миграции не запускаются неявно при старте application server;
-- deploy явно выполняет `migrate expand`, управляемый quiesce,
-  `migrate contract`, затем `migrate up` и application rollout.
+- deploy явно выполняет CLI-команду `up` отдельным Kubernetes Job до rollout.
 
-Изменение заполненной таблицы выполняется отдельными проверяемыми этапами:
+Для owner-approved web-first reset установка создаётся с нуля. Активный
+control-plane содержит одну baseline migration, которая создаёт только новую
+схему. В этом reset запрещены legacy backfill, aliases, compatibility tables,
+dual-read и dual-write. Повторный `up` на уже применённой baseline является
+идемпотентным readback, а не новой миграцией данных.
 
-1. `expand` добавляет nullable-колонки и ограничения `NOT VALID`, не выполняя
-   массовые `UPDATE` и не создавая обычные индексы под блокировкой writers;
-2. `backfill` использует `-- +goose NO TRANSACTION`, ограниченные порции,
-   `FOR UPDATE SKIP LOCKED` и commit после каждой порции; повторный запуск
-   продолжает незавершенную работу; если предыдущая версия приложения пишет
-   только legacy-поля, на этом этапе устанавливается временный dual-write
-   bridge;
-3. индексы создаются отдельной migration через
-   `CREATE INDEX CONCURRENTLY`; каждый restart-safe этап сначала удаляет
-   оставшийся после неудачного build index, unique constraint подключается
-   позднее через `UNIQUE USING INDEX`;
-4. `contract` сначала выполняет `VALIDATE CONSTRAINT`, затем краткие
-   `SET NOT NULL`/переключение ограничений и удаляет временные backfill
-   procedures и bridge. До запуска `contract` все replica предыдущей версии
-   должны быть остановлены, а новые записи временно quiesced; запуск contract
-   при legacy writers запрещен. SQL contract дополнительно требует
-   одноразовую запись в `<service>_migration_gates`, которую CLI создает
-   только при явном `<SERVICE>_MIGRATION_CONTRACT_QUIESCED=true`.
+После первого развертывания baseline любое изменение заполненной схемы требует
+отдельного owner-approved lifecycle. Совместимые добавления, bounded backfill,
+online indexes и destructive contract описываются точными последовательными
+forward migrations и проверяются на disposable копии поддерживаемой схемы.
+Наличие такой будущей последовательности не разрешает возвращать в текущий
+reset compatibility facade или параллельный старый/новый путь.
 
 `-- +goose NO TRANSACTION` ставится до `-- +goose Up` и применяется только к
 файлу, где PostgreSQL запрещает transaction wrapper или где backfill сам
@@ -268,11 +258,11 @@ history без обратного изменения схемы создает �
 
 `cmd/cli` предоставляет как минимум:
 
-- `migrate expand` - применить совместимые этапы до online indexes;
-- `migrate contract` - применить contract после подтвержденного quiesce;
-- `migrate up` - применить оставшиеся миграции только после contract;
-- `migrate status` - показать безопасный статус без DSN;
-- `migrate version` - показать текущую версию.
+- `up` — применить все миграции deployable в forward-only порядке;
+- `status` — показать безопасный статус без DSN.
+
+Дополнительные команды, например bootstrap broker state, не маскируются под
+миграции PostgreSQL и документируются контрактом соответствующего deployable.
 
 CLI:
 
@@ -281,14 +271,13 @@ CLI:
 - завершает процесс ненулевым кодом при partial/failed migration;
 - не печатает DSN, password или значения секретов;
 - пригоден для повторяемого Kubernetes Job.
-- не позволяет полному `up` неявно пройти contract на новой базе.
 
 ## Проверки
 
-Профиль определяется `GOV-DOC-003`. До применения миграции обязательны как
-минимум синтаксическая проверка, запуск на пустой временной PostgreSQL и
-проверка пути upgrade с последней поддерживаемой схемы. Для `expand`,
-`backfill` и `contract` проверяются restart safety и preconditions.
+Профиль определяется `GOV-DOC-003`. Для fresh baseline обязательны как минимум
+синтаксическая проверка, запуск на пустой disposable PostgreSQL, повторный `up`,
+bootstrap readback и отсутствие legacy объектов. Upgrade-path становится
+обязательным только после появления второй поддерживаемой версии схемы.
 
 ## Проверенная документация
 

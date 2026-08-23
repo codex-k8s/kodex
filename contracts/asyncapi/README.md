@@ -165,15 +165,16 @@ gateway каждый раз читает авторитетное состоян
 `control-plane` RPC. Модели генерируются командой
 `make gen-control-api-gateway-asyncapi`.
 
-Для этого contract каждый используемый envelope, payload, closed enum,
-projection alias и list wrapper обязан быть named component со стабильными
-`title` и `$id`. Имена generated Go models выводятся только из source
-component, а не из порядка обхода schema. Target удаляет принадлежащий gateway
-generated directory и напрямую запускает AsyncAPI CLI; после generation
-fail-only check запрещает `anonymous_schema_*.go`, `AnonymousSchema` symbols и
-generated JSON codecs. Скрипты, которые выбирают numeric anonymous type и
-переписывают generated output, а также ручные правки generated files
-запрещены.
+Для этого contract каждый используемый envelope, payload и closed enum обязан
+быть named component. Имена generated Go/TypeScript models выводятся только из
+source component, а не из порядка обхода schema. Актуальный
+`@asyncapi/parser` сначала валидирует весь документ, затем небольшой
+repository-owned generator закрыто принимает только local refs, string enums,
+closed object schemas, bounded arrays и простые scalar fields. Неизвестная
+schema shape завершает generation ошибкой до изменения output. Generator
+воспроизводимо пересоздаёт только принадлежащие ему generated directories;
+fail-only check запрещает anonymous symbols, потерю wire-name `type` и
+generated JSON codecs. Ручные правки generated files запрещены.
 
 Generated models служат воспроизводимым structural contract. Строгая JSON
 граница расположена вне generated directory: входные closed enums и все

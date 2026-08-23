@@ -85,23 +85,3 @@ spec:
       templates:
         current.hex: {text: '{{ get .Secrets "current-hex" }}'}
         previous.hex: {text: '{{ get .Secrets "previous-hex" }}'}
----
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
-metadata:
-  name: control-api-gateway-application-grant
-  annotations: {argocd.argoproj.io/sync-wave: "-6"}
-spec:
-  vaultAuthRef: control-api-gateway
-  mount: kv
-  type: kv-v2
-  path: mattercodex/control-plane/application-grants/control-api-gateway
-  refreshAfter: 5m
-  destination:
-    create: true
-    name: control-api-gateway-application-grant
-    overwrite: false
-    transformation:
-      excludeRaw: true
-      templates:
-        readiness.jwt: {text: '{{ get .Secrets "readiness-jwt" }}'}

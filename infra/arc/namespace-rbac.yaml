@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: mattercodex-ci
   labels:
-    mattercodex.dev/profile: direct-production-single-node-prototype
+    mattercodex.dev/profile: web-first-release-build
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
@@ -16,7 +16,7 @@ kind: Namespace
 metadata:
   name: mattercodex-ci-deploy
   labels:
-    mattercodex.dev/profile: direct-production-single-node-prototype
+    mattercodex.dev/profile: web-first-release-build
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
@@ -37,7 +37,7 @@ data:
       rootless = true
       snapshotter = "overlayfs"
       gc = true
-    [registry."matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000"]
+    [registry."__REGISTRY_HOST__:5000"]
       http = true
       insecure = true
 ---

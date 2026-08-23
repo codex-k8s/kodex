@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/app"
-	"github.com/google/uuid"
 )
 
 var buildVersion = "dev"
@@ -18,11 +17,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(base, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := app.Run(base, ctx, os.Args, buildVersion); err != nil {
-		executionID := os.Getenv("MATTERCODEX_EXECUTION_ID")
-		if uuid.Validate(executionID) != nil {
-			executionID = "unbound"
-		}
-		fmt.Fprintf(os.Stderr, "agent-runner execution failed: execution_id=%s\n", executionID)
+		fmt.Fprintln(os.Stderr, "agent-runner execution failed")
 		os.Exit(1)
 	}
 }

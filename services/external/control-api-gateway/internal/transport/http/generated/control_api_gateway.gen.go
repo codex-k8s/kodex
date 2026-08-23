@@ -7,7 +7,6 @@ package generated
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,700 +17,265 @@ import (
 )
 
 const (
-	OidcBearerScopes   oidcBearerContextKey   = "oidcBearer.Scopes"
-	OwnerSessionScopes ownerSessionContextKey = "ownerSession.Scopes"
+	OidcBearerScopes    oidcBearerContextKey    = "oidcBearer.Scopes"
+	SessionCookieScopes sessionCookieContextKey = "sessionCookie.Scopes"
 )
 
-// Defines values for AccessResourceKind.
+// Defines values for AdministrationStateProfile.
 const (
-	AccessResourceKindPROMPTPROFILE AccessResourceKind = "PROMPT_PROFILE"
-	AccessResourceKindROLE          AccessResourceKind = "ROLE"
-	AccessResourceKindTEAM          AccessResourceKind = "TEAM"
+	WEBONLY                 AdministrationStateProfile = "WEB_ONLY"
+	WEBWITHOPTIONALADAPTERS AdministrationStateProfile = "WEB_WITH_OPTIONAL_ADAPTERS"
 )
 
-// Valid indicates whether the value is a known member of the AccessResourceKind enum.
-func (e AccessResourceKind) Valid() bool {
+// Valid indicates whether the value is a known member of the AdministrationStateProfile enum.
+func (e AdministrationStateProfile) Valid() bool {
 	switch e {
-	case AccessResourceKindPROMPTPROFILE:
+	case WEBONLY:
 		return true
-	case AccessResourceKindROLE:
-		return true
-	case AccessResourceKindTEAM:
+	case WEBWITHOPTIONALADAPTERS:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentAssignmentCommandAction.
+// Defines values for AgentState.
 const (
-	ASSIGN   AgentAssignmentCommandAction = "ASSIGN"
-	UNASSIGN AgentAssignmentCommandAction = "UNASSIGN"
+	AgentStateARCHIVED AgentState = "ARCHIVED"
+	AgentStateDISABLED AgentState = "DISABLED"
+	AgentStateDRAFT    AgentState = "DRAFT"
+	AgentStateREADY    AgentState = "READY"
+	AgentStateRUNNING  AgentState = "RUNNING"
 )
 
-// Valid indicates whether the value is a known member of the AgentAssignmentCommandAction enum.
-func (e AgentAssignmentCommandAction) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentState enum.
+func (e AgentState) Valid() bool {
 	switch e {
-	case ASSIGN:
+	case AgentStateARCHIVED:
 		return true
-	case UNASSIGN:
+	case AgentStateDISABLED:
+		return true
+	case AgentStateDRAFT:
+		return true
+	case AgentStateREADY:
+		return true
+	case AgentStateRUNNING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentBindingStatus.
+// Defines values for AgentCommandAction.
 const (
-	AgentBindingStatusBOUND   AgentBindingStatus = "BOUND"
-	AgentBindingStatusREVOKED AgentBindingStatus = "REVOKED"
-	AgentBindingStatusUNBOUND AgentBindingStatus = "UNBOUND"
+	AgentCommandActionARCHIVE           AgentCommandAction = "ARCHIVE"
+	AgentCommandActionDISABLE           AgentCommandAction = "DISABLE"
+	AgentCommandActionENABLE            AgentCommandAction = "ENABLE"
+	AgentCommandActionGRANTCAPABILITY   AgentCommandAction = "GRANT_CAPABILITY"
+	AgentCommandActionGRANTINTEGRATION  AgentCommandAction = "GRANT_INTEGRATION"
+	AgentCommandActionREVOKECAPABILITY  AgentCommandAction = "REVOKE_CAPABILITY"
+	AgentCommandActionREVOKEINTEGRATION AgentCommandAction = "REVOKE_INTEGRATION"
 )
 
-// Valid indicates whether the value is a known member of the AgentBindingStatus enum.
-func (e AgentBindingStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentCommandAction enum.
+func (e AgentCommandAction) Valid() bool {
 	switch e {
-	case AgentBindingStatusBOUND:
+	case AgentCommandActionARCHIVE:
 		return true
-	case AgentBindingStatusREVOKED:
+	case AgentCommandActionDISABLE:
 		return true
-	case AgentBindingStatusUNBOUND:
+	case AgentCommandActionENABLE:
+		return true
+	case AgentCommandActionGRANTCAPABILITY:
+		return true
+	case AgentCommandActionGRANTINTEGRATION:
+		return true
+	case AgentCommandActionREVOKECAPABILITY:
+		return true
+	case AgentCommandActionREVOKEINTEGRATION:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentBotIdentityAction.
+// Defines values for ArtifactScanState.
 const (
-	AgentBotIdentityActionBIND          AgentBotIdentityAction = "BIND"
-	AgentBotIdentityActionCREATEANDBIND AgentBotIdentityAction = "CREATE_AND_BIND"
-	AgentBotIdentityActionREBIND        AgentBotIdentityAction = "REBIND"
-	AgentBotIdentityActionREVOKE        AgentBotIdentityAction = "REVOKE"
+	ArtifactScanStateCLEAN       ArtifactScanState = "CLEAN"
+	ArtifactScanStateFAILED      ArtifactScanState = "FAILED"
+	ArtifactScanStatePENDING     ArtifactScanState = "PENDING"
+	ArtifactScanStateQUARANTINED ArtifactScanState = "QUARANTINED"
+	ArtifactScanStateSCANNING    ArtifactScanState = "SCANNING"
 )
 
-// Valid indicates whether the value is a known member of the AgentBotIdentityAction enum.
-func (e AgentBotIdentityAction) Valid() bool {
+// Valid indicates whether the value is a known member of the ArtifactScanState enum.
+func (e ArtifactScanState) Valid() bool {
 	switch e {
-	case AgentBotIdentityActionBIND:
+	case ArtifactScanStateCLEAN:
 		return true
-	case AgentBotIdentityActionCREATEANDBIND:
+	case ArtifactScanStateFAILED:
 		return true
-	case AgentBotIdentityActionREBIND:
+	case ArtifactScanStatePENDING:
 		return true
-	case AgentBotIdentityActionREVOKE:
+	case ArtifactScanStateQUARANTINED:
+		return true
+	case ArtifactScanStateSCANNING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentBotIdentityOperationState.
+// Defines values for ArtifactSource.
 const (
-	AgentBotIdentityOperationStateAMBIGUOUS         AgentBotIdentityOperationState = "AMBIGUOUS"
-	AgentBotIdentityOperationStateBOUND             AgentBotIdentityOperationState = "BOUND"
-	AgentBotIdentityOperationStateEFFECTPENDING     AgentBotIdentityOperationState = "EFFECT_PENDING"
-	AgentBotIdentityOperationStateMEMBERSHIPPENDING AgentBotIdentityOperationState = "MEMBERSHIP_PENDING"
-	AgentBotIdentityOperationStatePROVIDERACCEPTED  AgentBotIdentityOperationState = "PROVIDER_ACCEPTED"
-	AgentBotIdentityOperationStateREPAIRREQUIRED    AgentBotIdentityOperationState = "REPAIR_REQUIRED"
-	AgentBotIdentityOperationStateREVOKED           AgentBotIdentityOperationState = "REVOKED"
+	ArtifactSourceAGENTRESULT           ArtifactSource = "AGENT_RESULT"
+	ArtifactSourceCONTROLCENTER         ArtifactSource = "CONTROL_CENTER"
+	ArtifactSourceINTEGRATIONRESULT     ArtifactSource = "INTEGRATION_RESULT"
+	ArtifactSourceINTERACTIONATTACHMENT ArtifactSource = "INTERACTION_ATTACHMENT"
+	ArtifactSourceKNOWLEDGESOURCE       ArtifactSource = "KNOWLEDGE_SOURCE"
 )
 
-// Valid indicates whether the value is a known member of the AgentBotIdentityOperationState enum.
-func (e AgentBotIdentityOperationState) Valid() bool {
+// Valid indicates whether the value is a known member of the ArtifactSource enum.
+func (e ArtifactSource) Valid() bool {
 	switch e {
-	case AgentBotIdentityOperationStateAMBIGUOUS:
+	case ArtifactSourceAGENTRESULT:
 		return true
-	case AgentBotIdentityOperationStateBOUND:
+	case ArtifactSourceCONTROLCENTER:
 		return true
-	case AgentBotIdentityOperationStateEFFECTPENDING:
+	case ArtifactSourceINTEGRATIONRESULT:
 		return true
-	case AgentBotIdentityOperationStateMEMBERSHIPPENDING:
+	case ArtifactSourceINTERACTIONATTACHMENT:
 		return true
-	case AgentBotIdentityOperationStatePROVIDERACCEPTED:
-		return true
-	case AgentBotIdentityOperationStateREPAIRREQUIRED:
-		return true
-	case AgentBotIdentityOperationStateREVOKED:
+	case ArtifactSourceKNOWLEDGESOURCE:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentBotIdentityStatus.
+// Defines values for AssistantPlanOperationType.
 const (
-	AgentBotIdentityStatusAVAILABLE AgentBotIdentityStatus = "AVAILABLE"
-	AgentBotIdentityStatusDELETED   AgentBotIdentityStatus = "DELETED"
-	AgentBotIdentityStatusREVOKED   AgentBotIdentityStatus = "REVOKED"
-	AgentBotIdentityStatusUNKNOWN   AgentBotIdentityStatus = "UNKNOWN"
+	AssistantPlanOperationTypeCHANGECAPABILITY            AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT      AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                 AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT               AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATESCHEDULE              AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATEWORKFLOW              AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                   AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION   AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
 )
 
-// Valid indicates whether the value is a known member of the AgentBotIdentityStatus enum.
-func (e AgentBotIdentityStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
+func (e AssistantPlanOperationType) Valid() bool {
 	switch e {
-	case AgentBotIdentityStatusAVAILABLE:
+	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
-	case AgentBotIdentityStatusDELETED:
+	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
 		return true
-	case AgentBotIdentityStatusREVOKED:
+	case AssistantPlanOperationTypeCREATEAGENT:
 		return true
-	case AgentBotIdentityStatusUNKNOWN:
+	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
+		return true
+	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATESCHEDULE:
+		return true
+	case AssistantPlanOperationTypeCREATEWORKFLOW:
+		return true
+	case AssistantPlanOperationTypeLAUNCHRUN:
+		return true
+	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for AgentHistoryAction.
+// Defines values for AssistantTurnRole.
 const (
-	AgentHistoryActionARCHIVE      AgentHistoryAction = "ARCHIVE"
-	AgentHistoryActionBINDBOT      AgentHistoryAction = "BIND_BOT"
-	AgentHistoryActionCREATE       AgentHistoryAction = "CREATE"
-	AgentHistoryActionDELETE       AgentHistoryAction = "DELETE"
-	AgentHistoryActionDISABLE      AgentHistoryAction = "DISABLE"
-	AgentHistoryActionENABLE       AgentHistoryAction = "ENABLE"
-	AgentHistoryActionPAUSE        AgentHistoryAction = "PAUSE"
-	AgentHistoryActionREBINDBOT    AgentHistoryAction = "REBIND_BOT"
-	AgentHistoryActionRECONCILEGIT AgentHistoryAction = "RECONCILE_GIT"
-	AgentHistoryActionRESUME       AgentHistoryAction = "RESUME"
-	AgentHistoryActionREVOKEBOT    AgentHistoryAction = "REVOKE_BOT"
-	AgentHistoryActionUPDATE       AgentHistoryAction = "UPDATE"
+	ASSISTANT     AssistantTurnRole = "ASSISTANT"
+	SYSTEMRECEIPT AssistantTurnRole = "SYSTEM_RECEIPT"
+	USER          AssistantTurnRole = "USER"
 )
 
-// Valid indicates whether the value is a known member of the AgentHistoryAction enum.
-func (e AgentHistoryAction) Valid() bool {
+// Valid indicates whether the value is a known member of the AssistantTurnRole enum.
+func (e AssistantTurnRole) Valid() bool {
 	switch e {
-	case AgentHistoryActionARCHIVE:
+	case ASSISTANT:
 		return true
-	case AgentHistoryActionBINDBOT:
-		return true
-	case AgentHistoryActionCREATE:
-		return true
-	case AgentHistoryActionDELETE:
-		return true
-	case AgentHistoryActionDISABLE:
-		return true
-	case AgentHistoryActionENABLE:
-		return true
-	case AgentHistoryActionPAUSE:
-		return true
-	case AgentHistoryActionREBINDBOT:
-		return true
-	case AgentHistoryActionRECONCILEGIT:
-		return true
-	case AgentHistoryActionRESUME:
-		return true
-	case AgentHistoryActionREVOKEBOT:
-		return true
-	case AgentHistoryActionUPDATE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ArtifactScanStatus.
-const (
-	ArtifactScanStatusCLEAN       ArtifactScanStatus = "CLEAN"
-	ArtifactScanStatusFAILED      ArtifactScanStatus = "FAILED"
-	ArtifactScanStatusPENDING     ArtifactScanStatus = "PENDING"
-	ArtifactScanStatusQUARANTINED ArtifactScanStatus = "QUARANTINED"
-	ArtifactScanStatusSCANNING    ArtifactScanStatus = "SCANNING"
-)
-
-// Valid indicates whether the value is a known member of the ArtifactScanStatus enum.
-func (e ArtifactScanStatus) Valid() bool {
-	switch e {
-	case ArtifactScanStatusCLEAN:
-		return true
-	case ArtifactScanStatusFAILED:
-		return true
-	case ArtifactScanStatusPENDING:
-		return true
-	case ArtifactScanStatusQUARANTINED:
-		return true
-	case ArtifactScanStatusSCANNING:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BackupScope.
-const (
-	BackupScopeSESSION BackupScope = "SESSION"
-)
-
-// Valid indicates whether the value is a known member of the BackupScope enum.
-func (e BackupScope) Valid() bool {
-	switch e {
-	case BackupScopeSESSION:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for BackupState.
-const (
-	BackupStateAVAILABLE        BackupState = "AVAILABLE"
-	BackupStateEXPIRED          BackupState = "EXPIRED"
-	BackupStateRESTORECANCELLED BackupState = "RESTORE_CANCELLED"
-	BackupStateRESTORED         BackupState = "RESTORED"
-	BackupStateRESTOREEXPIRED   BackupState = "RESTORE_EXPIRED"
-	BackupStateRESTOREFAILED    BackupState = "RESTORE_FAILED"
-	BackupStateRESTORING        BackupState = "RESTORING"
-	BackupStateRETENTIONPENDING BackupState = "RETENTION_PENDING"
-	BackupStateUNAVAILABLE      BackupState = "UNAVAILABLE"
-	BackupStateVERIFYING        BackupState = "VERIFYING"
-)
-
-// Valid indicates whether the value is a known member of the BackupState enum.
-func (e BackupState) Valid() bool {
-	switch e {
-	case BackupStateAVAILABLE:
-		return true
-	case BackupStateEXPIRED:
-		return true
-	case BackupStateRESTORECANCELLED:
-		return true
-	case BackupStateRESTORED:
-		return true
-	case BackupStateRESTOREEXPIRED:
-		return true
-	case BackupStateRESTOREFAILED:
-		return true
-	case BackupStateRESTORING:
-		return true
-	case BackupStateRETENTIONPENDING:
-		return true
-	case BackupStateUNAVAILABLE:
-		return true
-	case BackupStateVERIFYING:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ChatRoomType.
-const (
-	COORDINATION ChatRoomType = "COORDINATION"
-	RUNS         ChatRoomType = "RUNS"
-	USER         ChatRoomType = "USER"
-	WORKCONTROL  ChatRoomType = "WORK_CONTROL"
-)
-
-// Valid indicates whether the value is a known member of the ChatRoomType enum.
-func (e ChatRoomType) Valid() bool {
-	switch e {
-	case COORDINATION:
-		return true
-	case RUNS:
+	case SYSTEMRECEIPT:
 		return true
 	case USER:
 		return true
-	case WORKCONTROL:
+	default:
+		return false
+	}
+}
+
+// Defines values for AssistantTurnState.
+const (
+	AssistantTurnStateCOMPLETED AssistantTurnState = "COMPLETED"
+	AssistantTurnStateFAILED    AssistantTurnState = "FAILED"
+	AssistantTurnStateQUEUED    AssistantTurnState = "QUEUED"
+	AssistantTurnStateRUNNING   AssistantTurnState = "RUNNING"
+)
+
+// Valid indicates whether the value is a known member of the AssistantTurnState enum.
+func (e AssistantTurnState) Valid() bool {
+	switch e {
+	case AssistantTurnStateCOMPLETED:
+		return true
+	case AssistantTurnStateFAILED:
+		return true
+	case AssistantTurnStateQUEUED:
+		return true
+	case AssistantTurnStateRUNNING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ConfigurationChangeAction.
+// Defines values for AuditEventOutcome.
 const (
-	ConfigurationChangeActionCopyAccessConfiguration     ConfigurationChangeAction = "copy_access_configuration"
-	ConfigurationChangeActionCreate                      ConfigurationChangeAction = "create"
-	ConfigurationChangeActionCreateSchedule              ConfigurationChangeAction = "create_schedule"
-	ConfigurationChangeActionDelete                      ConfigurationChangeAction = "delete"
-	ConfigurationChangeActionDeleteProject               ConfigurationChangeAction = "delete_project"
-	ConfigurationChangeActionDeleteProjectPending        ConfigurationChangeAction = "delete_project_pending"
-	ConfigurationChangeActionDetachAccessConfiguration   ConfigurationChangeAction = "detach_access_configuration"
-	ConfigurationChangeActionManageScheduleACTIVATE      ConfigurationChangeAction = "manage_schedule_ACTIVATE"
-	ConfigurationChangeActionManageScheduleARCHIVE       ConfigurationChangeAction = "manage_schedule_ARCHIVE"
-	ConfigurationChangeActionManageScheduleDELETE        ConfigurationChangeAction = "manage_schedule_DELETE"
-	ConfigurationChangeActionManageScheduleDELETEARCHIVE ConfigurationChangeAction = "manage_schedule_DELETE_ARCHIVE"
-	ConfigurationChangeActionManageScheduleDELETEPENDING ConfigurationChangeAction = "manage_schedule_DELETE_PENDING"
-	ConfigurationChangeActionManageSchedulePAUSE         ConfigurationChangeAction = "manage_schedule_PAUSE"
-	ConfigurationChangeActionManageScheduleUPDATE        ConfigurationChangeAction = "manage_schedule_UPDATE"
-	ConfigurationChangeActionTransition                  ConfigurationChangeAction = "transition"
-	ConfigurationChangeActionUpdate                      ConfigurationChangeAction = "update"
-	ConfigurationChangeActionUpdateProject               ConfigurationChangeAction = "update_project"
+	AuditEventOutcomeFAILED    AuditEventOutcome = "FAILED"
+	AuditEventOutcomeREJECTED  AuditEventOutcome = "REJECTED"
+	AuditEventOutcomeSUCCEEDED AuditEventOutcome = "SUCCEEDED"
 )
 
-// Valid indicates whether the value is a known member of the ConfigurationChangeAction enum.
-func (e ConfigurationChangeAction) Valid() bool {
+// Valid indicates whether the value is a known member of the AuditEventOutcome enum.
+func (e AuditEventOutcome) Valid() bool {
 	switch e {
-	case ConfigurationChangeActionCopyAccessConfiguration:
+	case AuditEventOutcomeFAILED:
 		return true
-	case ConfigurationChangeActionCreate:
+	case AuditEventOutcomeREJECTED:
 		return true
-	case ConfigurationChangeActionCreateSchedule:
-		return true
-	case ConfigurationChangeActionDelete:
-		return true
-	case ConfigurationChangeActionDeleteProject:
-		return true
-	case ConfigurationChangeActionDeleteProjectPending:
-		return true
-	case ConfigurationChangeActionDetachAccessConfiguration:
-		return true
-	case ConfigurationChangeActionManageScheduleACTIVATE:
-		return true
-	case ConfigurationChangeActionManageScheduleARCHIVE:
-		return true
-	case ConfigurationChangeActionManageScheduleDELETE:
-		return true
-	case ConfigurationChangeActionManageScheduleDELETEARCHIVE:
-		return true
-	case ConfigurationChangeActionManageScheduleDELETEPENDING:
-		return true
-	case ConfigurationChangeActionManageSchedulePAUSE:
-		return true
-	case ConfigurationChangeActionManageScheduleUPDATE:
-		return true
-	case ConfigurationChangeActionTransition:
-		return true
-	case ConfigurationChangeActionUpdate:
-		return true
-	case ConfigurationChangeActionUpdateProject:
+	case AuditEventOutcomeSUCCEEDED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ConfigurationChangeDisplay.
+// Defines values for GateResolutionDecision.
 const (
-	REDACTED ConfigurationChangeDisplay = "REDACTED"
-	TEXT     ConfigurationChangeDisplay = "TEXT"
+	GateResolutionDecisionAPPROVE        GateResolutionDecision = "APPROVE"
+	GateResolutionDecisionCANCEL         GateResolutionDecision = "CANCEL"
+	GateResolutionDecisionREJECT         GateResolutionDecision = "REJECT"
+	GateResolutionDecisionREQUESTCHANGES GateResolutionDecision = "REQUEST_CHANGES"
 )
 
-// Valid indicates whether the value is a known member of the ConfigurationChangeDisplay enum.
-func (e ConfigurationChangeDisplay) Valid() bool {
+// Valid indicates whether the value is a known member of the GateResolutionDecision enum.
+func (e GateResolutionDecision) Valid() bool {
 	switch e {
-	case REDACTED:
+	case GateResolutionDecisionAPPROVE:
 		return true
-	case TEXT:
+	case GateResolutionDecisionCANCEL:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ConfigurationChangeKind.
-const (
-	ADDED   ConfigurationChangeKind = "ADDED"
-	CHANGED ConfigurationChangeKind = "CHANGED"
-	REMOVED ConfigurationChangeKind = "REMOVED"
-)
-
-// Valid indicates whether the value is a known member of the ConfigurationChangeKind enum.
-func (e ConfigurationChangeKind) Valid() bool {
-	switch e {
-	case ADDED:
+	case GateResolutionDecisionREJECT:
 		return true
-	case CHANGED:
-		return true
-	case REMOVED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ConfigurationChangeOutcome.
-const (
-	Succeeded ConfigurationChangeOutcome = "succeeded"
-)
-
-// Valid indicates whether the value is a known member of the ConfigurationChangeOutcome enum.
-func (e ConfigurationChangeOutcome) Valid() bool {
-	switch e {
-	case Succeeded:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ConfigurationDrift.
-const (
-	ConfigurationDriftDRIFTED       ConfigurationDrift = "DRIFTED"
-	ConfigurationDriftINSYNC        ConfigurationDrift = "IN_SYNC"
-	ConfigurationDriftNOTAPPLICABLE ConfigurationDrift = "NOT_APPLICABLE"
-	ConfigurationDriftUNKNOWN       ConfigurationDrift = "UNKNOWN"
-)
-
-// Valid indicates whether the value is a known member of the ConfigurationDrift enum.
-func (e ConfigurationDrift) Valid() bool {
-	switch e {
-	case ConfigurationDriftDRIFTED:
-		return true
-	case ConfigurationDriftINSYNC:
-		return true
-	case ConfigurationDriftNOTAPPLICABLE:
-		return true
-	case ConfigurationDriftUNKNOWN:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ConfigurationManagedBy.
-const (
-	Git ConfigurationManagedBy = "git"
-	Ui  ConfigurationManagedBy = "ui"
-)
-
-// Valid indicates whether the value is a known member of the ConfigurationManagedBy enum.
-func (e ConfigurationManagedBy) Valid() bool {
-	switch e {
-	case Git:
-		return true
-	case Ui:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CredentialBindingSourceKind.
-const (
-	CredentialBindingSourceKindCREDENTIALBINDING           CredentialBindingSourceKind = "CREDENTIAL_BINDING"
-	CredentialBindingSourceKindPROVIDERCONNECTIONREFERENCE CredentialBindingSourceKind = "PROVIDER_CONNECTION_REFERENCE"
-)
-
-// Valid indicates whether the value is a known member of the CredentialBindingSourceKind enum.
-func (e CredentialBindingSourceKind) Valid() bool {
-	switch e {
-	case CredentialBindingSourceKindCREDENTIALBINDING:
-		return true
-	case CredentialBindingSourceKindPROVIDERCONNECTIONREFERENCE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for DecideIntegrationApprovalDecision.
-const (
-	APPROVE DecideIntegrationApprovalDecision = "APPROVE"
-	REJECT  DecideIntegrationApprovalDecision = "REJECT"
-)
-
-// Valid indicates whether the value is a known member of the DecideIntegrationApprovalDecision enum.
-func (e DecideIntegrationApprovalDecision) Valid() bool {
-	switch e {
-	case APPROVE:
-		return true
-	case REJECT:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for HealthObservationSource.
-const (
-	CONTROLPLANE       HealthObservationSource = "CONTROL_PLANE"
-	INTEGRATIONGATEWAY HealthObservationSource = "INTEGRATION_GATEWAY"
-	INTERACTIONGATEWAY HealthObservationSource = "INTERACTION_GATEWAY"
-)
-
-// Valid indicates whether the value is a known member of the HealthObservationSource enum.
-func (e HealthObservationSource) Valid() bool {
-	switch e {
-	case CONTROLPLANE:
-		return true
-	case INTEGRATIONGATEWAY:
-		return true
-	case INTERACTIONGATEWAY:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for HealthObservationStatus.
-const (
-	HealthObservationStatusDEGRADED    HealthObservationStatus = "DEGRADED"
-	HealthObservationStatusOK          HealthObservationStatus = "OK"
-	HealthObservationStatusUNAVAILABLE HealthObservationStatus = "UNAVAILABLE"
-	HealthObservationStatusUNKNOWN     HealthObservationStatus = "UNKNOWN"
-)
-
-// Valid indicates whether the value is a known member of the HealthObservationStatus enum.
-func (e HealthObservationStatus) Valid() bool {
-	switch e {
-	case HealthObservationStatusDEGRADED:
-		return true
-	case HealthObservationStatusOK:
-		return true
-	case HealthObservationStatusUNAVAILABLE:
-		return true
-	case HealthObservationStatusUNKNOWN:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for HealthSeriesComplete.
-const (
-	HealthSeriesCompleteTrue HealthSeriesComplete = true
-)
-
-// Valid indicates whether the value is a known member of the HealthSeriesComplete enum.
-func (e HealthSeriesComplete) Valid() bool {
-	switch e {
-	case HealthSeriesCompleteTrue:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ImageAdmissionVerdict.
-const (
-	ImageAdmissionVerdictACCEPTED ImageAdmissionVerdict = "ACCEPTED"
-	ImageAdmissionVerdictREJECTED ImageAdmissionVerdict = "REJECTED"
-)
-
-// Valid indicates whether the value is a known member of the ImageAdmissionVerdict enum.
-func (e ImageAdmissionVerdict) Valid() bool {
-	switch e {
-	case ImageAdmissionVerdictACCEPTED:
-		return true
-	case ImageAdmissionVerdictREJECTED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ImageBuildStage.
-const (
-	ImageBuildStageBASEPULL                   ImageBuildStage = "BASE_PULL"
-	ImageBuildStageCANCELLED                  ImageBuildStage = "CANCELLED"
-	ImageBuildStageCOMPLETED                  ImageBuildStage = "COMPLETED"
-	ImageBuildStageCONTEXTVALIDATION          ImageBuildStage = "CONTEXT_VALIDATION"
-	ImageBuildStageDEADLETTER                 ImageBuildStage = "DEAD_LETTER"
-	ImageBuildStageEXPIRED                    ImageBuildStage = "EXPIRED"
-	ImageBuildStageFAILED                     ImageBuildStage = "FAILED"
-	ImageBuildStageINSTALLATION               ImageBuildStage = "INSTALLATION"
-	ImageBuildStageMATERIALIZATION            ImageBuildStage = "MATERIALIZATION"
-	ImageBuildStagePROVENANCE                 ImageBuildStage = "PROVENANCE"
-	ImageBuildStageQUEUED                     ImageBuildStage = "QUEUED"
-	ImageBuildStageSOLVING                    ImageBuildStage = "SOLVING"
-	ImageBuildStageSTAGINGPUSH                ImageBuildStage = "STAGING_PUSH"
-	ImageBuildStageTRUSTEDRUNTIMEFINALIZATION ImageBuildStage = "TRUSTED_RUNTIME_FINALIZATION"
-)
-
-// Valid indicates whether the value is a known member of the ImageBuildStage enum.
-func (e ImageBuildStage) Valid() bool {
-	switch e {
-	case ImageBuildStageBASEPULL:
-		return true
-	case ImageBuildStageCANCELLED:
-		return true
-	case ImageBuildStageCOMPLETED:
-		return true
-	case ImageBuildStageCONTEXTVALIDATION:
-		return true
-	case ImageBuildStageDEADLETTER:
-		return true
-	case ImageBuildStageEXPIRED:
-		return true
-	case ImageBuildStageFAILED:
-		return true
-	case ImageBuildStageINSTALLATION:
-		return true
-	case ImageBuildStageMATERIALIZATION:
-		return true
-	case ImageBuildStagePROVENANCE:
-		return true
-	case ImageBuildStageQUEUED:
-		return true
-	case ImageBuildStageSOLVING:
-		return true
-	case ImageBuildStageSTAGINGPUSH:
-		return true
-	case ImageBuildStageTRUSTEDRUNTIMEFINALIZATION:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for IncidentCommandAction.
-const (
-	IncidentCommandActionACKNOWLEDGE IncidentCommandAction = "ACKNOWLEDGE"
-	IncidentCommandActionCLOSE       IncidentCommandAction = "CLOSE"
-	IncidentCommandActionRELEASE     IncidentCommandAction = "RELEASE"
-	IncidentCommandActionRETRY       IncidentCommandAction = "RETRY"
-)
-
-// Valid indicates whether the value is a known member of the IncidentCommandAction enum.
-func (e IncidentCommandAction) Valid() bool {
-	switch e {
-	case IncidentCommandActionACKNOWLEDGE:
-		return true
-	case IncidentCommandActionCLOSE:
-		return true
-	case IncidentCommandActionRELEASE:
-		return true
-	case IncidentCommandActionRETRY:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for IncidentHistoryEntryAction.
-const (
-	IncidentHistoryEntryActionACKNOWLEDGE IncidentHistoryEntryAction = "ACKNOWLEDGE"
-	IncidentHistoryEntryActionCLOSE       IncidentHistoryEntryAction = "CLOSE"
-	IncidentHistoryEntryActionRELEASE     IncidentHistoryEntryAction = "RELEASE"
-	IncidentHistoryEntryActionRETRY       IncidentHistoryEntryAction = "RETRY"
-)
-
-// Valid indicates whether the value is a known member of the IncidentHistoryEntryAction enum.
-func (e IncidentHistoryEntryAction) Valid() bool {
-	switch e {
-	case IncidentHistoryEntryActionACKNOWLEDGE:
-		return true
-	case IncidentHistoryEntryActionCLOSE:
-		return true
-	case IncidentHistoryEntryActionRELEASE:
-		return true
-	case IncidentHistoryEntryActionRETRY:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for IncidentNextAction.
-const (
-	IncidentNextActionACKNOWLEDGE IncidentNextAction = "ACKNOWLEDGE"
-	IncidentNextActionCLOSE       IncidentNextAction = "CLOSE"
-	IncidentNextActionRELEASE     IncidentNextAction = "RELEASE"
-	IncidentNextActionRETRY       IncidentNextAction = "RETRY"
-)
-
-// Valid indicates whether the value is a known member of the IncidentNextAction enum.
-func (e IncidentNextAction) Valid() bool {
-	switch e {
-	case IncidentNextActionACKNOWLEDGE:
-		return true
-	case IncidentNextActionCLOSE:
-		return true
-	case IncidentNextActionRELEASE:
-		return true
-	case IncidentNextActionRETRY:
+	case GateResolutionDecisionREQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -722,6 +286,7 @@ func (e IncidentNextAction) Valid() bool {
 const (
 	CRITICAL IncidentSeverity = "CRITICAL"
 	ERROR    IncidentSeverity = "ERROR"
+	INFO     IncidentSeverity = "INFO"
 	WARNING  IncidentSeverity = "WARNING"
 )
 
@@ -732,6 +297,8 @@ func (e IncidentSeverity) Valid() bool {
 		return true
 	case ERROR:
 		return true
+	case INFO:
+		return true
 	case WARNING:
 		return true
 	default:
@@ -741,64 +308,40 @@ func (e IncidentSeverity) Valid() bool {
 
 // Defines values for IncidentState.
 const (
-	IncidentStateACKNOWLEDGED IncidentState = "ACKNOWLEDGED"
-	IncidentStateCLOSED       IncidentState = "CLOSED"
-	IncidentStateOPEN         IncidentState = "OPEN"
-	IncidentStateRELEASED     IncidentState = "RELEASED"
-	IncidentStateRETRYING     IncidentState = "RETRYING"
+	IncidentStateOPEN       IncidentState = "OPEN"
+	IncidentStateRECOVERING IncidentState = "RECOVERING"
+	IncidentStateRESOLVED   IncidentState = "RESOLVED"
 )
 
 // Valid indicates whether the value is a known member of the IncidentState enum.
 func (e IncidentState) Valid() bool {
 	switch e {
-	case IncidentStateACKNOWLEDGED:
-		return true
-	case IncidentStateCLOSED:
-		return true
 	case IncidentStateOPEN:
 		return true
-	case IncidentStateRELEASED:
+	case IncidentStateRECOVERING:
 		return true
-	case IncidentStateRETRYING:
+	case IncidentStateRESOLVED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for InstructionSetCommandAction.
+// Defines values for InstructionCommandAction.
 const (
-	InstructionSetCommandActionARCHIVE  InstructionSetCommandAction = "ARCHIVE"
-	InstructionSetCommandActionCOPY     InstructionSetCommandAction = "COPY"
-	InstructionSetCommandActionCREATE   InstructionSetCommandAction = "CREATE"
-	InstructionSetCommandActionDELETE   InstructionSetCommandAction = "DELETE"
-	InstructionSetCommandActionDETACH   InstructionSetCommandAction = "DETACH"
-	InstructionSetCommandActionPUBLISH  InstructionSetCommandAction = "PUBLISH"
-	InstructionSetCommandActionROLLBACK InstructionSetCommandAction = "ROLLBACK"
-	InstructionSetCommandActionUPDATE   InstructionSetCommandAction = "UPDATE"
-	InstructionSetCommandActionVALIDATE InstructionSetCommandAction = "VALIDATE"
+	InstructionCommandActionPUBLISH  InstructionCommandAction = "PUBLISH"
+	InstructionCommandActionROLLBACK InstructionCommandAction = "ROLLBACK"
+	InstructionCommandActionVALIDATE InstructionCommandAction = "VALIDATE"
 )
 
-// Valid indicates whether the value is a known member of the InstructionSetCommandAction enum.
-func (e InstructionSetCommandAction) Valid() bool {
+// Valid indicates whether the value is a known member of the InstructionCommandAction enum.
+func (e InstructionCommandAction) Valid() bool {
 	switch e {
-	case InstructionSetCommandActionARCHIVE:
+	case InstructionCommandActionPUBLISH:
 		return true
-	case InstructionSetCommandActionCOPY:
+	case InstructionCommandActionROLLBACK:
 		return true
-	case InstructionSetCommandActionCREATE:
-		return true
-	case InstructionSetCommandActionDELETE:
-		return true
-	case InstructionSetCommandActionDETACH:
-		return true
-	case InstructionSetCommandActionPUBLISH:
-		return true
-	case InstructionSetCommandActionROLLBACK:
-		return true
-	case InstructionSetCommandActionUPDATE:
-		return true
-	case InstructionSetCommandActionVALIDATE:
+	case InstructionCommandActionVALIDATE:
 		return true
 	default:
 		return false
@@ -807,421 +350,331 @@ func (e InstructionSetCommandAction) Valid() bool {
 
 // Defines values for InstructionVersionState.
 const (
-	InstructionVersionStateARCHIVED  InstructionVersionState = "ARCHIVED"
 	InstructionVersionStateDRAFT     InstructionVersionState = "DRAFT"
+	InstructionVersionStateINVALID   InstructionVersionState = "INVALID"
 	InstructionVersionStatePUBLISHED InstructionVersionState = "PUBLISHED"
-	InstructionVersionStateREJECTED  InstructionVersionState = "REJECTED"
-	InstructionVersionStateVALIDATED InstructionVersionState = "VALIDATED"
+	InstructionVersionStateVALID     InstructionVersionState = "VALID"
 )
 
 // Valid indicates whether the value is a known member of the InstructionVersionState enum.
 func (e InstructionVersionState) Valid() bool {
 	switch e {
-	case InstructionVersionStateARCHIVED:
-		return true
 	case InstructionVersionStateDRAFT:
+		return true
+	case InstructionVersionStateINVALID:
 		return true
 	case InstructionVersionStatePUBLISHED:
 		return true
-	case InstructionVersionStateREJECTED:
-		return true
-	case InstructionVersionStateVALIDATED:
+	case InstructionVersionStateVALID:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for IntegrationApprovalStatus.
+// Defines values for IntegrationCapabilityRisk.
 const (
-	IntegrationApprovalStatusAPPROVED  IntegrationApprovalStatus = "APPROVED"
-	IntegrationApprovalStatusCANCELLED IntegrationApprovalStatus = "CANCELLED"
-	IntegrationApprovalStatusEXPIRED   IntegrationApprovalStatus = "EXPIRED"
-	IntegrationApprovalStatusPENDING   IntegrationApprovalStatus = "PENDING"
-	IntegrationApprovalStatusREJECTED  IntegrationApprovalStatus = "REJECTED"
+	DESTRUCTIVE IntegrationCapabilityRisk = "DESTRUCTIVE"
+	READ        IntegrationCapabilityRisk = "READ"
+	SENSITIVE   IntegrationCapabilityRisk = "SENSITIVE"
+	WRITE       IntegrationCapabilityRisk = "WRITE"
 )
 
-// Valid indicates whether the value is a known member of the IntegrationApprovalStatus enum.
-func (e IntegrationApprovalStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the IntegrationCapabilityRisk enum.
+func (e IntegrationCapabilityRisk) Valid() bool {
 	switch e {
-	case IntegrationApprovalStatusAPPROVED:
+	case DESTRUCTIVE:
 		return true
-	case IntegrationApprovalStatusCANCELLED:
+	case READ:
 		return true
-	case IntegrationApprovalStatusEXPIRED:
+	case SENSITIVE:
 		return true
-	case IntegrationApprovalStatusPENDING:
-		return true
-	case IntegrationApprovalStatusREJECTED:
+	case WRITE:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for IntegrationConfigurationState.
+// Defines values for IntegrationConfigurationFieldValueType.
 const (
-	IntegrationConfigurationStateACTIVE   IntegrationConfigurationState = "ACTIVE"
-	IntegrationConfigurationStateARCHIVED IntegrationConfigurationState = "ARCHIVED"
+	IntegrationConfigurationFieldValueTypeSTRINGLIST IntegrationConfigurationFieldValueType = "STRING_LIST"
+	IntegrationConfigurationFieldValueTypeTEXT       IntegrationConfigurationFieldValueType = "TEXT"
+	IntegrationConfigurationFieldValueTypeURL        IntegrationConfigurationFieldValueType = "URL"
 )
 
-// Valid indicates whether the value is a known member of the IntegrationConfigurationState enum.
-func (e IntegrationConfigurationState) Valid() bool {
+// Valid indicates whether the value is a known member of the IntegrationConfigurationFieldValueType enum.
+func (e IntegrationConfigurationFieldValueType) Valid() bool {
 	switch e {
-	case IntegrationConfigurationStateACTIVE:
+	case IntegrationConfigurationFieldValueTypeSTRINGLIST:
 		return true
-	case IntegrationConfigurationStateARCHIVED:
+	case IntegrationConfigurationFieldValueTypeTEXT:
+		return true
+	case IntegrationConfigurationFieldValueTypeURL:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for IntegrationDefinitionState.
+// Defines values for IntegrationConnectionState.
 const (
-	IntegrationDefinitionStateACTIVE   IntegrationDefinitionState = "ACTIVE"
-	IntegrationDefinitionStateARCHIVED IntegrationDefinitionState = "ARCHIVED"
+	CONNECTED    IntegrationConnectionState = "CONNECTED"
+	DEGRADED     IntegrationConnectionState = "DEGRADED"
+	DISABLED     IntegrationConnectionState = "DISABLED"
+	NOTCONNECTED IntegrationConnectionState = "NOT_CONNECTED"
+	TESTING      IntegrationConnectionState = "TESTING"
 )
 
-// Valid indicates whether the value is a known member of the IntegrationDefinitionState enum.
-func (e IntegrationDefinitionState) Valid() bool {
+// Valid indicates whether the value is a known member of the IntegrationConnectionState enum.
+func (e IntegrationConnectionState) Valid() bool {
 	switch e {
-	case IntegrationDefinitionStateACTIVE:
+	case CONNECTED:
 		return true
-	case IntegrationDefinitionStateARCHIVED:
+	case DEGRADED:
+		return true
+	case DISABLED:
+		return true
+	case NOTCONNECTED:
+		return true
+	case TESTING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for IntegrationEffectKind.
+// Defines values for IntegrationConnectionCommandAction.
 const (
-	CLI         IntegrationEffectKind = "CLI"
-	ENVIRONMENT IntegrationEffectKind = "ENVIRONMENT"
-	MCPTOOL     IntegrationEffectKind = "MCP_TOOL"
+	IntegrationConnectionCommandActionDISABLE IntegrationConnectionCommandAction = "DISABLE"
+	IntegrationConnectionCommandActionENABLE  IntegrationConnectionCommandAction = "ENABLE"
+	IntegrationConnectionCommandActionTEST    IntegrationConnectionCommandAction = "TEST"
 )
 
-// Valid indicates whether the value is a known member of the IntegrationEffectKind enum.
-func (e IntegrationEffectKind) Valid() bool {
+// Valid indicates whether the value is a known member of the IntegrationConnectionCommandAction enum.
+func (e IntegrationConnectionCommandAction) Valid() bool {
 	switch e {
-	case CLI:
+	case IntegrationConnectionCommandActionDISABLE:
 		return true
-	case ENVIRONMENT:
+	case IntegrationConnectionCommandActionENABLE:
 		return true
-	case MCPTOOL:
+	case IntegrationConnectionCommandActionTEST:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for IntegrationTestCategory.
+// Defines values for MembershipPermissions.
 const (
-	IntegrationTestCategoryCREDENTIALUNAVAILABLE IntegrationTestCategory = "CREDENTIAL_UNAVAILABLE"
-	IntegrationTestCategoryENDPOINTUNAVAILABLE   IntegrationTestCategory = "ENDPOINT_UNAVAILABLE"
-	IntegrationTestCategoryFORBIDDEN             IntegrationTestCategory = "FORBIDDEN"
-	IntegrationTestCategoryOK                    IntegrationTestCategory = "OK"
-	IntegrationTestCategoryPENDING               IntegrationTestCategory = "PENDING"
-	IntegrationTestCategoryPROTOCOLERROR         IntegrationTestCategory = "PROTOCOL_ERROR"
-	IntegrationTestCategoryTIMEOUT               IntegrationTestCategory = "TIMEOUT"
-	IntegrationTestCategoryUNAUTHORIZED          IntegrationTestCategory = "UNAUTHORIZED"
+	MembershipPermissionsCANCELRUNS         MembershipPermissions = "CANCEL_RUNS"
+	MembershipPermissionsLAUNCHRUNS         MembershipPermissions = "LAUNCH_RUNS"
+	MembershipPermissionsMANAGE             MembershipPermissions = "MANAGE"
+	MembershipPermissionsMANAGEAGENTS       MembershipPermissions = "MANAGE_AGENTS"
+	MembershipPermissionsMANAGEARTIFACTS    MembershipPermissions = "MANAGE_ARTIFACTS"
+	MembershipPermissionsMANAGEINTEGRATIONS MembershipPermissions = "MANAGE_INTEGRATIONS"
+	MembershipPermissionsMANAGEMEMBERS      MembershipPermissions = "MANAGE_MEMBERS"
+	MembershipPermissionsMANAGESCHEDULES    MembershipPermissions = "MANAGE_SCHEDULES"
+	MembershipPermissionsMANAGEWORKFLOWS    MembershipPermissions = "MANAGE_WORKFLOWS"
+	MembershipPermissionsRESOLVEGATES       MembershipPermissions = "RESOLVE_GATES"
+	MembershipPermissionsVIEW               MembershipPermissions = "VIEW"
+	MembershipPermissionsVIEWAUDIT          MembershipPermissions = "VIEW_AUDIT"
 )
 
-// Valid indicates whether the value is a known member of the IntegrationTestCategory enum.
-func (e IntegrationTestCategory) Valid() bool {
+// Valid indicates whether the value is a known member of the MembershipPermissions enum.
+func (e MembershipPermissions) Valid() bool {
 	switch e {
-	case IntegrationTestCategoryCREDENTIALUNAVAILABLE:
+	case MembershipPermissionsCANCELRUNS:
 		return true
-	case IntegrationTestCategoryENDPOINTUNAVAILABLE:
+	case MembershipPermissionsLAUNCHRUNS:
 		return true
-	case IntegrationTestCategoryFORBIDDEN:
+	case MembershipPermissionsMANAGE:
 		return true
-	case IntegrationTestCategoryOK:
+	case MembershipPermissionsMANAGEAGENTS:
 		return true
-	case IntegrationTestCategoryPENDING:
+	case MembershipPermissionsMANAGEARTIFACTS:
 		return true
-	case IntegrationTestCategoryPROTOCOLERROR:
+	case MembershipPermissionsMANAGEINTEGRATIONS:
 		return true
-	case IntegrationTestCategoryTIMEOUT:
+	case MembershipPermissionsMANAGEMEMBERS:
 		return true
-	case IntegrationTestCategoryUNAUTHORIZED:
+	case MembershipPermissionsMANAGESCHEDULES:
+		return true
+	case MembershipPermissionsMANAGEWORKFLOWS:
+		return true
+	case MembershipPermissionsRESOLVEGATES:
+		return true
+	case MembershipPermissionsVIEW:
+		return true
+	case MembershipPermissionsVIEWAUDIT:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for LifecycleState.
+// Defines values for MembershipPlatformRole.
 const (
-	LifecycleStateACTIVE          LifecycleState = "ACTIVE"
-	LifecycleStateARCHIVED        LifecycleState = "ARCHIVED"
-	LifecycleStateBLOCKED         LifecycleState = "BLOCKED"
-	LifecycleStateCANCELLED       LifecycleState = "CANCELLED"
-	LifecycleStateCLAIMED         LifecycleState = "CLAIMED"
-	LifecycleStateDELETED         LifecycleState = "DELETED"
-	LifecycleStateDELETIONPENDING LifecycleState = "DELETION_PENDING"
-	LifecycleStateEXPIRED         LifecycleState = "EXPIRED"
-	LifecycleStateFAILED          LifecycleState = "FAILED"
-	LifecycleStatePAUSED          LifecycleState = "PAUSED"
-	LifecycleStateQUEUED          LifecycleState = "QUEUED"
-	LifecycleStateRUNNING         LifecycleState = "RUNNING"
-	LifecycleStateSUCCEEDED       LifecycleState = "SUCCEEDED"
-	LifecycleStateWAITINGEXTERNAL LifecycleState = "WAITING_EXTERNAL"
-	LifecycleStateWAITINGOWNER    LifecycleState = "WAITING_OWNER"
+	MembershipPlatformRoleADMINISTRATOR MembershipPlatformRole = "ADMINISTRATOR"
+	MembershipPlatformRoleAUDITOR       MembershipPlatformRole = "AUDITOR"
+	MembershipPlatformRoleMEMBER        MembershipPlatformRole = "MEMBER"
+	MembershipPlatformRoleOPERATOR      MembershipPlatformRole = "OPERATOR"
+	MembershipPlatformRoleOWNER         MembershipPlatformRole = "OWNER"
 )
 
-// Valid indicates whether the value is a known member of the LifecycleState enum.
-func (e LifecycleState) Valid() bool {
+// Valid indicates whether the value is a known member of the MembershipPlatformRole enum.
+func (e MembershipPlatformRole) Valid() bool {
 	switch e {
-	case LifecycleStateACTIVE:
+	case MembershipPlatformRoleADMINISTRATOR:
 		return true
-	case LifecycleStateARCHIVED:
+	case MembershipPlatformRoleAUDITOR:
 		return true
-	case LifecycleStateBLOCKED:
+	case MembershipPlatformRoleMEMBER:
 		return true
-	case LifecycleStateCANCELLED:
+	case MembershipPlatformRoleOPERATOR:
 		return true
-	case LifecycleStateCLAIMED:
-		return true
-	case LifecycleStateDELETED:
-		return true
-	case LifecycleStateDELETIONPENDING:
-		return true
-	case LifecycleStateEXPIRED:
-		return true
-	case LifecycleStateFAILED:
-		return true
-	case LifecycleStatePAUSED:
-		return true
-	case LifecycleStateQUEUED:
-		return true
-	case LifecycleStateRUNNING:
-		return true
-	case LifecycleStateSUCCEEDED:
-		return true
-	case LifecycleStateWAITINGEXTERNAL:
-		return true
-	case LifecycleStateWAITINGOWNER:
+	case MembershipPlatformRoleOWNER:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ManageAccessResourceAction.
+// Defines values for NextAction.
 const (
-	ManageAccessResourceActionACTIVATE ManageAccessResourceAction = "ACTIVATE"
-	ManageAccessResourceActionARCHIVE  ManageAccessResourceAction = "ARCHIVE"
-	ManageAccessResourceActionCREATE   ManageAccessResourceAction = "CREATE"
-	ManageAccessResourceActionDELETE   ManageAccessResourceAction = "DELETE"
-	ManageAccessResourceActionPAUSE    ManageAccessResourceAction = "PAUSE"
-	ManageAccessResourceActionUPDATE   ManageAccessResourceAction = "UPDATE"
+	NextActionADDTURN            NextAction = "ADD_TURN"
+	NextActionAPPLYPLAN          NextAction = "APPLY_PLAN"
+	NextActionARCHIVE            NextAction = "ARCHIVE"
+	NextActionBIND               NextAction = "BIND"
+	NextActionCANCEL             NextAction = "CANCEL"
+	NextActionCOMPLETEONBOARDING NextAction = "COMPLETE_ONBOARDING"
+	NextActionCREATEAGENT        NextAction = "CREATE_AGENT"
+	NextActionCREATECONNECTION   NextAction = "CREATE_CONNECTION"
+	NextActionCREATECONVERSATION NextAction = "CREATE_CONVERSATION"
+	NextActionCREATEPROJECT      NextAction = "CREATE_PROJECT"
+	NextActionCREATERUN          NextAction = "CREATE_RUN"
+	NextActionCREATESCHEDULE     NextAction = "CREATE_SCHEDULE"
+	NextActionCREATEWORKFLOW     NextAction = "CREATE_WORKFLOW"
+	NextActionDISABLE            NextAction = "DISABLE"
+	NextActionDOWNLOAD           NextAction = "DOWNLOAD"
+	NextActionEDIT               NextAction = "EDIT"
+	NextActionENABLE             NextAction = "ENABLE"
+	NextActionLAUNCH             NextAction = "LAUNCH"
+	NextActionMANAGECAPABILITIES NextAction = "MANAGE_CAPABILITIES"
+	NextActionMANAGEGRANTS       NextAction = "MANAGE_GRANTS"
+	NextActionMANAGEINTEGRATIONS NextAction = "MANAGE_INTEGRATIONS"
+	NextActionMANAGEMEMBERS      NextAction = "MANAGE_MEMBERS"
+	NextActionOPEN               NextAction = "OPEN"
+	NextActionPUBLISH            NextAction = "PUBLISH"
+	NextActionRECOVER            NextAction = "RECOVER"
+	NextActionREQUESTBUILD       NextAction = "REQUEST_BUILD"
+	NextActionRESOLVEGATE        NextAction = "RESOLVE_GATE"
+	NextActionRESTORE            NextAction = "RESTORE"
+	NextActionRETRY              NextAction = "RETRY"
+	NextActionREVOKE             NextAction = "REVOKE"
+	NextActionROLLBACK           NextAction = "ROLLBACK"
+	NextActionTEST               NextAction = "TEST"
+	NextActionUPDATE             NextAction = "UPDATE"
+	NextActionUPLOADARTIFACT     NextAction = "UPLOAD_ARTIFACT"
+	NextActionVALIDATE           NextAction = "VALIDATE"
 )
 
-// Valid indicates whether the value is a known member of the ManageAccessResourceAction enum.
-func (e ManageAccessResourceAction) Valid() bool {
+// Valid indicates whether the value is a known member of the NextAction enum.
+func (e NextAction) Valid() bool {
 	switch e {
-	case ManageAccessResourceActionACTIVATE:
+	case NextActionADDTURN:
 		return true
-	case ManageAccessResourceActionARCHIVE:
+	case NextActionAPPLYPLAN:
 		return true
-	case ManageAccessResourceActionCREATE:
+	case NextActionARCHIVE:
 		return true
-	case ManageAccessResourceActionDELETE:
+	case NextActionBIND:
 		return true
-	case ManageAccessResourceActionPAUSE:
+	case NextActionCANCEL:
 		return true
-	case ManageAccessResourceActionUPDATE:
+	case NextActionCOMPLETEONBOARDING:
+		return true
+	case NextActionCREATEAGENT:
+		return true
+	case NextActionCREATECONNECTION:
+		return true
+	case NextActionCREATECONVERSATION:
+		return true
+	case NextActionCREATEPROJECT:
+		return true
+	case NextActionCREATERUN:
+		return true
+	case NextActionCREATESCHEDULE:
+		return true
+	case NextActionCREATEWORKFLOW:
+		return true
+	case NextActionDISABLE:
+		return true
+	case NextActionDOWNLOAD:
+		return true
+	case NextActionEDIT:
+		return true
+	case NextActionENABLE:
+		return true
+	case NextActionLAUNCH:
+		return true
+	case NextActionMANAGECAPABILITIES:
+		return true
+	case NextActionMANAGEGRANTS:
+		return true
+	case NextActionMANAGEINTEGRATIONS:
+		return true
+	case NextActionMANAGEMEMBERS:
+		return true
+	case NextActionOPEN:
+		return true
+	case NextActionPUBLISH:
+		return true
+	case NextActionRECOVER:
+		return true
+	case NextActionREQUESTBUILD:
+		return true
+	case NextActionRESOLVEGATE:
+		return true
+	case NextActionRESTORE:
+		return true
+	case NextActionRETRY:
+		return true
+	case NextActionREVOKE:
+		return true
+	case NextActionROLLBACK:
+		return true
+	case NextActionTEST:
+		return true
+	case NextActionUPDATE:
+		return true
+	case NextActionUPLOADARTIFACT:
+		return true
+	case NextActionVALIDATE:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ManageImageBuildAction.
+// Defines values for OwnerGateAllowedDecisions.
 const (
-	ManageImageBuildActionCANCEL     ManageImageBuildAction = "CANCEL"
-	ManageImageBuildActionDEADLETTER ManageImageBuildAction = "DEAD_LETTER"
-	ManageImageBuildActionEXPIRE     ManageImageBuildAction = "EXPIRE"
-	ManageImageBuildActionRETRY      ManageImageBuildAction = "RETRY"
+	OwnerGateAllowedDecisionsAPPROVE        OwnerGateAllowedDecisions = "APPROVE"
+	OwnerGateAllowedDecisionsCANCEL         OwnerGateAllowedDecisions = "CANCEL"
+	OwnerGateAllowedDecisionsREJECT         OwnerGateAllowedDecisions = "REJECT"
+	OwnerGateAllowedDecisionsREQUESTCHANGES OwnerGateAllowedDecisions = "REQUEST_CHANGES"
 )
 
-// Valid indicates whether the value is a known member of the ManageImageBuildAction enum.
-func (e ManageImageBuildAction) Valid() bool {
+// Valid indicates whether the value is a known member of the OwnerGateAllowedDecisions enum.
+func (e OwnerGateAllowedDecisions) Valid() bool {
 	switch e {
-	case ManageImageBuildActionCANCEL:
+	case OwnerGateAllowedDecisionsAPPROVE:
 		return true
-	case ManageImageBuildActionDEADLETTER:
+	case OwnerGateAllowedDecisionsCANCEL:
 		return true
-	case ManageImageBuildActionEXPIRE:
+	case OwnerGateAllowedDecisionsREJECT:
 		return true
-	case ManageImageBuildActionRETRY:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ManageRoleImageRecipeAction.
-const (
-	ManageRoleImageRecipeActionARCHIVE      ManageRoleImageRecipeAction = "ARCHIVE"
-	ManageRoleImageRecipeActionCREATE       ManageRoleImageRecipeAction = "CREATE"
-	ManageRoleImageRecipeActionDELETE       ManageRoleImageRecipeAction = "DELETE"
-	ManageRoleImageRecipeActionREQUESTBUILD ManageRoleImageRecipeAction = "REQUEST_BUILD"
-	ManageRoleImageRecipeActionRESTORE      ManageRoleImageRecipeAction = "RESTORE"
-	ManageRoleImageRecipeActionUPDATE       ManageRoleImageRecipeAction = "UPDATE"
-)
-
-// Valid indicates whether the value is a known member of the ManageRoleImageRecipeAction enum.
-func (e ManageRoleImageRecipeAction) Valid() bool {
-	switch e {
-	case ManageRoleImageRecipeActionARCHIVE:
-		return true
-	case ManageRoleImageRecipeActionCREATE:
-		return true
-	case ManageRoleImageRecipeActionDELETE:
-		return true
-	case ManageRoleImageRecipeActionREQUESTBUILD:
-		return true
-	case ManageRoleImageRecipeActionRESTORE:
-		return true
-	case ManageRoleImageRecipeActionUPDATE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MattermostMappingOperationAction.
-const (
-	MattermostMappingOperationActionBIND   MattermostMappingOperationAction = "BIND"
-	MattermostMappingOperationActionRELINK MattermostMappingOperationAction = "RELINK"
-	MattermostMappingOperationActionUNLINK MattermostMappingOperationAction = "UNLINK"
-)
-
-// Valid indicates whether the value is a known member of the MattermostMappingOperationAction enum.
-func (e MattermostMappingOperationAction) Valid() bool {
-	switch e {
-	case MattermostMappingOperationActionBIND:
-		return true
-	case MattermostMappingOperationActionRELINK:
-		return true
-	case MattermostMappingOperationActionUNLINK:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MattermostMappingOperationState.
-const (
-	MattermostMappingOperationStateAMBIGUOUS      MattermostMappingOperationState = "AMBIGUOUS"
-	MattermostMappingOperationStateBOUND          MattermostMappingOperationState = "BOUND"
-	MattermostMappingOperationStatePENDING        MattermostMappingOperationState = "PENDING"
-	MattermostMappingOperationStateREPAIRREQUIRED MattermostMappingOperationState = "REPAIR_REQUIRED"
-	MattermostMappingOperationStateUNLINKED       MattermostMappingOperationState = "UNLINKED"
-)
-
-// Valid indicates whether the value is a known member of the MattermostMappingOperationState enum.
-func (e MattermostMappingOperationState) Valid() bool {
-	switch e {
-	case MattermostMappingOperationStateAMBIGUOUS:
-		return true
-	case MattermostMappingOperationStateBOUND:
-		return true
-	case MattermostMappingOperationStatePENDING:
-		return true
-	case MattermostMappingOperationStateREPAIRREQUIRED:
-		return true
-	case MattermostMappingOperationStateUNLINKED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MattermostTeamBindingState.
-const (
-	MattermostTeamBindingStateBOUND    MattermostTeamBindingState = "BOUND"
-	MattermostTeamBindingStateUNLINKED MattermostTeamBindingState = "UNLINKED"
-)
-
-// Valid indicates whether the value is a known member of the MattermostTeamBindingState enum.
-func (e MattermostTeamBindingState) Valid() bool {
-	switch e {
-	case MattermostTeamBindingStateBOUND:
-		return true
-	case MattermostTeamBindingStateUNLINKED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MattermostTeamMutationResultProviderOperationState.
-const (
-	MattermostTeamMutationResultProviderOperationStateAMBIGUOUS        MattermostTeamMutationResultProviderOperationState = "AMBIGUOUS"
-	MattermostTeamMutationResultProviderOperationStateEFFECTPENDING    MattermostTeamMutationResultProviderOperationState = "EFFECT_PENDING"
-	MattermostTeamMutationResultProviderOperationStatePENDING          MattermostTeamMutationResultProviderOperationState = "PENDING"
-	MattermostTeamMutationResultProviderOperationStatePROVIDERACCEPTED MattermostTeamMutationResultProviderOperationState = "PROVIDER_ACCEPTED"
-	MattermostTeamMutationResultProviderOperationStateREPAIRREQUIRED   MattermostTeamMutationResultProviderOperationState = "REPAIR_REQUIRED"
-)
-
-// Valid indicates whether the value is a known member of the MattermostTeamMutationResultProviderOperationState enum.
-func (e MattermostTeamMutationResultProviderOperationState) Valid() bool {
-	switch e {
-	case MattermostTeamMutationResultProviderOperationStateAMBIGUOUS:
-		return true
-	case MattermostTeamMutationResultProviderOperationStateEFFECTPENDING:
-		return true
-	case MattermostTeamMutationResultProviderOperationStatePENDING:
-		return true
-	case MattermostTeamMutationResultProviderOperationStatePROVIDERACCEPTED:
-		return true
-	case MattermostTeamMutationResultProviderOperationStateREPAIRREQUIRED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MattermostTeamStatus.
-const (
-	MattermostTeamStatusACTIVE  MattermostTeamStatus = "ACTIVE"
-	MattermostTeamStatusDELETED MattermostTeamStatus = "DELETED"
-)
-
-// Valid indicates whether the value is a known member of the MattermostTeamStatus enum.
-func (e MattermostTeamStatus) Valid() bool {
-	switch e {
-	case MattermostTeamStatusACTIVE:
-		return true
-	case MattermostTeamStatusDELETED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MutableResourceKind.
-const (
-	MutableResourceKindCHAT                MutableResourceKind = "CHAT"
-	MutableResourceKindCREDENTIALBINDING   MutableResourceKind = "CREDENTIAL_BINDING"
-	MutableResourceKindINTEGRATION         MutableResourceKind = "INTEGRATION"
-	MutableResourceKindREPOSITORYWORKSPACE MutableResourceKind = "REPOSITORY_WORKSPACE"
-)
-
-// Valid indicates whether the value is a known member of the MutableResourceKind enum.
-func (e MutableResourceKind) Valid() bool {
-	switch e {
-	case MutableResourceKindCHAT:
-		return true
-	case MutableResourceKindCREDENTIALBINDING:
-		return true
-	case MutableResourceKindINTEGRATION:
-		return true
-	case MutableResourceKindREPOSITORYWORKSPACE:
+	case OwnerGateAllowedDecisionsREQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -1230,747 +683,270 @@ func (e MutableResourceKind) Valid() bool {
 
 // Defines values for OwnerGateDecision.
 const (
-	OwnerGateDecisionAPPROVED         OwnerGateDecision = "APPROVED"
-	OwnerGateDecisionCANCELLED        OwnerGateDecision = "CANCELLED"
-	OwnerGateDecisionCHANGESREQUESTED OwnerGateDecision = "CHANGES_REQUESTED"
-	OwnerGateDecisionPENDING          OwnerGateDecision = "PENDING"
-	OwnerGateDecisionREJECTED         OwnerGateDecision = "REJECTED"
+	OwnerGateDecisionAPPROVE        OwnerGateDecision = "APPROVE"
+	OwnerGateDecisionCANCEL         OwnerGateDecision = "CANCEL"
+	OwnerGateDecisionREJECT         OwnerGateDecision = "REJECT"
+	OwnerGateDecisionREQUESTCHANGES OwnerGateDecision = "REQUEST_CHANGES"
 )
 
 // Valid indicates whether the value is a known member of the OwnerGateDecision enum.
 func (e OwnerGateDecision) Valid() bool {
 	switch e {
-	case OwnerGateDecisionAPPROVED:
+	case OwnerGateDecisionAPPROVE:
 		return true
-	case OwnerGateDecisionCANCELLED:
+	case OwnerGateDecisionCANCEL:
 		return true
-	case OwnerGateDecisionCHANGESREQUESTED:
+	case OwnerGateDecisionREJECT:
 		return true
-	case OwnerGateDecisionPENDING:
-		return true
-	case OwnerGateDecisionREJECTED:
+	case OwnerGateDecisionREQUESTCHANGES:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerGateDeliveryState.
+// Defines values for OwnerGateState.
 const (
-	OwnerGateDeliveryStateAWAITINGDELIVERYPROOF OwnerGateDeliveryState = "AWAITING_DELIVERY_PROOF"
-	OwnerGateDeliveryStateEXPIRED               OwnerGateDeliveryState = "EXPIRED"
-	OwnerGateDeliveryStateREADY                 OwnerGateDeliveryState = "READY"
-	OwnerGateDeliveryStateTERMINAL              OwnerGateDeliveryState = "TERMINAL"
+	OwnerGateStateAPPROVED         OwnerGateState = "APPROVED"
+	OwnerGateStateCANCELLED        OwnerGateState = "CANCELLED"
+	OwnerGateStateCHANGESREQUESTED OwnerGateState = "CHANGES_REQUESTED"
+	OwnerGateStateEXPIRED          OwnerGateState = "EXPIRED"
+	OwnerGateStateOPEN             OwnerGateState = "OPEN"
+	OwnerGateStateREJECTED         OwnerGateState = "REJECTED"
 )
 
-// Valid indicates whether the value is a known member of the OwnerGateDeliveryState enum.
-func (e OwnerGateDeliveryState) Valid() bool {
+// Valid indicates whether the value is a known member of the OwnerGateState enum.
+func (e OwnerGateState) Valid() bool {
 	switch e {
-	case OwnerGateDeliveryStateAWAITINGDELIVERYPROOF:
+	case OwnerGateStateAPPROVED:
 		return true
-	case OwnerGateDeliveryStateEXPIRED:
+	case OwnerGateStateCANCELLED:
 		return true
-	case OwnerGateDeliveryStateREADY:
+	case OwnerGateStateCHANGESREQUESTED:
 		return true
-	case OwnerGateDeliveryStateTERMINAL:
+	case OwnerGateStateEXPIRED:
+		return true
+	case OwnerGateStateOPEN:
+		return true
+	case OwnerGateStateREJECTED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerGateNextAction.
+// Defines values for PlatformMembershipChangeInputPlatformRole.
 const (
-	OwnerGateNextActionNONE            OwnerGateNextAction = "NONE"
-	OwnerGateNextActionREADTERMINAL    OwnerGateNextAction = "READ_TERMINAL"
-	OwnerGateNextActionRESOLVE         OwnerGateNextAction = "RESOLVE"
-	OwnerGateNextActionWAITFORDELIVERY OwnerGateNextAction = "WAIT_FOR_DELIVERY"
+	PlatformMembershipChangeInputPlatformRoleADMINISTRATOR PlatformMembershipChangeInputPlatformRole = "ADMINISTRATOR"
+	PlatformMembershipChangeInputPlatformRoleAUDITOR       PlatformMembershipChangeInputPlatformRole = "AUDITOR"
+	PlatformMembershipChangeInputPlatformRoleMEMBER        PlatformMembershipChangeInputPlatformRole = "MEMBER"
+	PlatformMembershipChangeInputPlatformRoleOPERATOR      PlatformMembershipChangeInputPlatformRole = "OPERATOR"
+	PlatformMembershipChangeInputPlatformRoleOWNER         PlatformMembershipChangeInputPlatformRole = "OWNER"
 )
 
-// Valid indicates whether the value is a known member of the OwnerGateNextAction enum.
-func (e OwnerGateNextAction) Valid() bool {
+// Valid indicates whether the value is a known member of the PlatformMembershipChangeInputPlatformRole enum.
+func (e PlatformMembershipChangeInputPlatformRole) Valid() bool {
 	switch e {
-	case OwnerGateNextActionNONE:
+	case PlatformMembershipChangeInputPlatformRoleADMINISTRATOR:
 		return true
-	case OwnerGateNextActionREADTERMINAL:
+	case PlatformMembershipChangeInputPlatformRoleAUDITOR:
 		return true
-	case OwnerGateNextActionRESOLVE:
+	case PlatformMembershipChangeInputPlatformRoleMEMBER:
 		return true
-	case OwnerGateNextActionWAITFORDELIVERY:
+	case PlatformMembershipChangeInputPlatformRoleOPERATOR:
+		return true
+	case PlatformMembershipChangeInputPlatformRoleOWNER:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerProjectionStatus.
+// Defines values for PlatformMembershipCreateInputPlatformRole.
 const (
-	OwnerProjectionStatusINELIGIBLE  OwnerProjectionStatus = "INELIGIBLE"
-	OwnerProjectionStatusPRESENT     OwnerProjectionStatus = "PRESENT"
-	OwnerProjectionStatusSTALE       OwnerProjectionStatus = "STALE"
-	OwnerProjectionStatusUNAVAILABLE OwnerProjectionStatus = "UNAVAILABLE"
+	ADMINISTRATOR PlatformMembershipCreateInputPlatformRole = "ADMINISTRATOR"
+	AUDITOR       PlatformMembershipCreateInputPlatformRole = "AUDITOR"
+	MEMBER        PlatformMembershipCreateInputPlatformRole = "MEMBER"
+	OPERATOR      PlatformMembershipCreateInputPlatformRole = "OPERATOR"
+	OWNER         PlatformMembershipCreateInputPlatformRole = "OWNER"
 )
 
-// Valid indicates whether the value is a known member of the OwnerProjectionStatus enum.
-func (e OwnerProjectionStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the PlatformMembershipCreateInputPlatformRole enum.
+func (e PlatformMembershipCreateInputPlatformRole) Valid() bool {
 	switch e {
-	case OwnerProjectionStatusINELIGIBLE:
+	case ADMINISTRATOR:
 		return true
-	case OwnerProjectionStatusPRESENT:
+	case AUDITOR:
 		return true
-	case OwnerProjectionStatusSTALE:
+	case MEMBER:
 		return true
-	case OwnerProjectionStatusUNAVAILABLE:
+	case OPERATOR:
+		return true
+	case OWNER:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerScheduleAdvancedOverridesCalendar.
+// Defines values for ProjectLanguage.
 const (
-	OwnerScheduleAdvancedOverridesCalendarBUSINESS  OwnerScheduleAdvancedOverridesCalendar = "BUSINESS"
-	OwnerScheduleAdvancedOverridesCalendarGREGORIAN OwnerScheduleAdvancedOverridesCalendar = "GREGORIAN"
+	ProjectLanguageEn ProjectLanguage = "en"
+	ProjectLanguageRu ProjectLanguage = "ru"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleAdvancedOverridesCalendar enum.
-func (e OwnerScheduleAdvancedOverridesCalendar) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectLanguage enum.
+func (e ProjectLanguage) Valid() bool {
 	switch e {
-	case OwnerScheduleAdvancedOverridesCalendarBUSINESS:
+	case ProjectLanguageEn:
 		return true
-	case OwnerScheduleAdvancedOverridesCalendarGREGORIAN:
+	case ProjectLanguageRu:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerScheduleAdvancedOverridesDeliveryPolicy.
+// Defines values for ProjectLifecycle.
 const (
-	OwnerScheduleAdvancedOverridesDeliveryPolicyATLEASTONCE       OwnerScheduleAdvancedOverridesDeliveryPolicy = "AT_LEAST_ONCE"
-	OwnerScheduleAdvancedOverridesDeliveryPolicyEXACTLYONCEEFFECT OwnerScheduleAdvancedOverridesDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+	ProjectLifecycleACTIVE   ProjectLifecycle = "ACTIVE"
+	ProjectLifecycleARCHIVED ProjectLifecycle = "ARCHIVED"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleAdvancedOverridesDeliveryPolicy enum.
-func (e OwnerScheduleAdvancedOverridesDeliveryPolicy) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectLifecycle enum.
+func (e ProjectLifecycle) Valid() bool {
 	switch e {
-	case OwnerScheduleAdvancedOverridesDeliveryPolicyATLEASTONCE:
+	case ProjectLifecycleACTIVE:
 		return true
-	case OwnerScheduleAdvancedOverridesDeliveryPolicyEXACTLYONCEEFFECT:
+	case ProjectLifecycleARCHIVED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerScheduleNextAction.
+// Defines values for ProjectInputLanguage.
 const (
-	OwnerScheduleNextActionDELETE          OwnerScheduleNextAction = "DELETE"
-	OwnerScheduleNextActionPAUSE           OwnerScheduleNextAction = "PAUSE"
-	OwnerScheduleNextActionRESUME          OwnerScheduleNextAction = "RESUME"
-	OwnerScheduleNextActionRUNNOW          OwnerScheduleNextAction = "RUN_NOW"
-	OwnerScheduleNextActionUPDATE          OwnerScheduleNextAction = "UPDATE"
-	OwnerScheduleNextActionVIEWOCCURRENCES OwnerScheduleNextAction = "VIEW_OCCURRENCES"
+	ProjectInputLanguageEn ProjectInputLanguage = "en"
+	ProjectInputLanguageRu ProjectInputLanguage = "ru"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleNextAction enum.
-func (e OwnerScheduleNextAction) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectInputLanguage enum.
+func (e ProjectInputLanguage) Valid() bool {
 	switch e {
-	case OwnerScheduleNextActionDELETE:
+	case ProjectInputLanguageEn:
 		return true
-	case OwnerScheduleNextActionPAUSE:
-		return true
-	case OwnerScheduleNextActionRESUME:
-		return true
-	case OwnerScheduleNextActionRUNNOW:
-		return true
-	case OwnerScheduleNextActionUPDATE:
-		return true
-	case OwnerScheduleNextActionVIEWOCCURRENCES:
+	case ProjectInputLanguageRu:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerSchedulePromptViewKind.
+// Defines values for ProjectMembershipChangeInputPermissions.
 const (
-	INLINE   OwnerSchedulePromptViewKind = "INLINE"
-	SELECTOR OwnerSchedulePromptViewKind = "SELECTOR"
+	ProjectMembershipChangeInputPermissionsCANCELRUNS         ProjectMembershipChangeInputPermissions = "CANCEL_RUNS"
+	ProjectMembershipChangeInputPermissionsLAUNCHRUNS         ProjectMembershipChangeInputPermissions = "LAUNCH_RUNS"
+	ProjectMembershipChangeInputPermissionsMANAGE             ProjectMembershipChangeInputPermissions = "MANAGE"
+	ProjectMembershipChangeInputPermissionsMANAGEAGENTS       ProjectMembershipChangeInputPermissions = "MANAGE_AGENTS"
+	ProjectMembershipChangeInputPermissionsMANAGEARTIFACTS    ProjectMembershipChangeInputPermissions = "MANAGE_ARTIFACTS"
+	ProjectMembershipChangeInputPermissionsMANAGEINTEGRATIONS ProjectMembershipChangeInputPermissions = "MANAGE_INTEGRATIONS"
+	ProjectMembershipChangeInputPermissionsMANAGEMEMBERS      ProjectMembershipChangeInputPermissions = "MANAGE_MEMBERS"
+	ProjectMembershipChangeInputPermissionsMANAGESCHEDULES    ProjectMembershipChangeInputPermissions = "MANAGE_SCHEDULES"
+	ProjectMembershipChangeInputPermissionsMANAGEWORKFLOWS    ProjectMembershipChangeInputPermissions = "MANAGE_WORKFLOWS"
+	ProjectMembershipChangeInputPermissionsRESOLVEGATES       ProjectMembershipChangeInputPermissions = "RESOLVE_GATES"
+	ProjectMembershipChangeInputPermissionsVIEW               ProjectMembershipChangeInputPermissions = "VIEW"
+	ProjectMembershipChangeInputPermissionsVIEWAUDIT          ProjectMembershipChangeInputPermissions = "VIEW_AUDIT"
 )
 
-// Valid indicates whether the value is a known member of the OwnerSchedulePromptViewKind enum.
-func (e OwnerSchedulePromptViewKind) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectMembershipChangeInputPermissions enum.
+func (e ProjectMembershipChangeInputPermissions) Valid() bool {
 	switch e {
-	case INLINE:
+	case ProjectMembershipChangeInputPermissionsCANCELRUNS:
 		return true
-	case SELECTOR:
+	case ProjectMembershipChangeInputPermissionsLAUNCHRUNS:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGE:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGEAGENTS:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGEARTIFACTS:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGEINTEGRATIONS:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGEMEMBERS:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGESCHEDULES:
+		return true
+	case ProjectMembershipChangeInputPermissionsMANAGEWORKFLOWS:
+		return true
+	case ProjectMembershipChangeInputPermissionsRESOLVEGATES:
+		return true
+	case ProjectMembershipChangeInputPermissionsVIEW:
+		return true
+	case ProjectMembershipChangeInputPermissionsVIEWAUDIT:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerScheduleViewCalendar.
+// Defines values for ProjectMembershipCreateInputPermissions.
 const (
-	OwnerScheduleViewCalendarBUSINESS  OwnerScheduleViewCalendar = "BUSINESS"
-	OwnerScheduleViewCalendarGREGORIAN OwnerScheduleViewCalendar = "GREGORIAN"
+	CANCELRUNS         ProjectMembershipCreateInputPermissions = "CANCEL_RUNS"
+	LAUNCHRUNS         ProjectMembershipCreateInputPermissions = "LAUNCH_RUNS"
+	MANAGE             ProjectMembershipCreateInputPermissions = "MANAGE"
+	MANAGEAGENTS       ProjectMembershipCreateInputPermissions = "MANAGE_AGENTS"
+	MANAGEARTIFACTS    ProjectMembershipCreateInputPermissions = "MANAGE_ARTIFACTS"
+	MANAGEINTEGRATIONS ProjectMembershipCreateInputPermissions = "MANAGE_INTEGRATIONS"
+	MANAGEMEMBERS      ProjectMembershipCreateInputPermissions = "MANAGE_MEMBERS"
+	MANAGESCHEDULES    ProjectMembershipCreateInputPermissions = "MANAGE_SCHEDULES"
+	MANAGEWORKFLOWS    ProjectMembershipCreateInputPermissions = "MANAGE_WORKFLOWS"
+	RESOLVEGATES       ProjectMembershipCreateInputPermissions = "RESOLVE_GATES"
+	VIEW               ProjectMembershipCreateInputPermissions = "VIEW"
+	VIEWAUDIT          ProjectMembershipCreateInputPermissions = "VIEW_AUDIT"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleViewCalendar enum.
-func (e OwnerScheduleViewCalendar) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectMembershipCreateInputPermissions enum.
+func (e ProjectMembershipCreateInputPermissions) Valid() bool {
 	switch e {
-	case OwnerScheduleViewCalendarBUSINESS:
+	case CANCELRUNS:
 		return true
-	case OwnerScheduleViewCalendarGREGORIAN:
+	case LAUNCHRUNS:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OwnerScheduleViewDeliveryPolicy.
-const (
-	OwnerScheduleViewDeliveryPolicyATLEASTONCE       OwnerScheduleViewDeliveryPolicy = "AT_LEAST_ONCE"
-	OwnerScheduleViewDeliveryPolicyEXACTLYONCEEFFECT OwnerScheduleViewDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
-)
-
-// Valid indicates whether the value is a known member of the OwnerScheduleViewDeliveryPolicy enum.
-func (e OwnerScheduleViewDeliveryPolicy) Valid() bool {
-	switch e {
-	case OwnerScheduleViewDeliveryPolicyATLEASTONCE:
+	case MANAGE:
 		return true
-	case OwnerScheduleViewDeliveryPolicyEXACTLYONCEEFFECT:
+	case MANAGEAGENTS:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProjectLocale.
-const (
-	En ProjectLocale = "en"
-	Ru ProjectLocale = "ru"
-)
-
-// Valid indicates whether the value is a known member of the ProjectLocale enum.
-func (e ProjectLocale) Valid() bool {
-	switch e {
-	case En:
+	case MANAGEARTIFACTS:
 		return true
-	case Ru:
+	case MANAGEINTEGRATIONS:
+		return true
+	case MANAGEMEMBERS:
+		return true
+	case MANAGESCHEDULES:
+		return true
+	case MANAGEWORKFLOWS:
+		return true
+	case RESOLVEGATES:
+		return true
+	case VIEW:
+		return true
+	case VIEWAUDIT:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ProtectedConfigurationAction.
+// Defines values for RoleEnvironmentPlatformArchitecture.
 const (
-	ProtectedConfigurationActionARCHIVE ProtectedConfigurationAction = "ARCHIVE"
-	ProtectedConfigurationActionCREATE  ProtectedConfigurationAction = "CREATE"
-	ProtectedConfigurationActionDELETE  ProtectedConfigurationAction = "DELETE"
-	ProtectedConfigurationActionDISABLE ProtectedConfigurationAction = "DISABLE"
-	ProtectedConfigurationActionENABLE  ProtectedConfigurationAction = "ENABLE"
-	ProtectedConfigurationActionPAUSE   ProtectedConfigurationAction = "PAUSE"
-	ProtectedConfigurationActionRESUME  ProtectedConfigurationAction = "RESUME"
-	ProtectedConfigurationActionUPDATE  ProtectedConfigurationAction = "UPDATE"
+	Amd64 RoleEnvironmentPlatformArchitecture = "amd64"
+	Arm64 RoleEnvironmentPlatformArchitecture = "arm64"
 )
 
-// Valid indicates whether the value is a known member of the ProtectedConfigurationAction enum.
-func (e ProtectedConfigurationAction) Valid() bool {
-	switch e {
-	case ProtectedConfigurationActionARCHIVE:
-		return true
-	case ProtectedConfigurationActionCREATE:
-		return true
-	case ProtectedConfigurationActionDELETE:
-		return true
-	case ProtectedConfigurationActionDISABLE:
-		return true
-	case ProtectedConfigurationActionENABLE:
-		return true
-	case ProtectedConfigurationActionPAUSE:
-		return true
-	case ProtectedConfigurationActionRESUME:
-		return true
-	case ProtectedConfigurationActionUPDATE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderAuthorizationState.
-const (
-	ProviderAuthorizationStateAUTHORIZED ProviderAuthorizationState = "AUTHORIZED"
-	ProviderAuthorizationStateCANCELLED  ProviderAuthorizationState = "CANCELLED"
-	ProviderAuthorizationStateCODEISSUED ProviderAuthorizationState = "CODE_ISSUED"
-	ProviderAuthorizationStateDENIED     ProviderAuthorizationState = "DENIED"
-	ProviderAuthorizationStateEXPIRED    ProviderAuthorizationState = "EXPIRED"
-	ProviderAuthorizationStateFAILED     ProviderAuthorizationState = "FAILED"
-	ProviderAuthorizationStatePENDING    ProviderAuthorizationState = "PENDING"
-)
-
-// Valid indicates whether the value is a known member of the ProviderAuthorizationState enum.
-func (e ProviderAuthorizationState) Valid() bool {
-	switch e {
-	case ProviderAuthorizationStateAUTHORIZED:
-		return true
-	case ProviderAuthorizationStateCANCELLED:
-		return true
-	case ProviderAuthorizationStateCODEISSUED:
-		return true
-	case ProviderAuthorizationStateDENIED:
-		return true
-	case ProviderAuthorizationStateEXPIRED:
-		return true
-	case ProviderAuthorizationStateFAILED:
-		return true
-	case ProviderAuthorizationStatePENDING:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderConnectionMaskedStatus.
-const (
-	ProviderConnectionMaskedStatusARCHIVED   ProviderConnectionMaskedStatus = "ARCHIVED"
-	ProviderConnectionMaskedStatusAVAILABLE  ProviderConnectionMaskedStatus = "AVAILABLE"
-	ProviderConnectionMaskedStatusDEGRADED   ProviderConnectionMaskedStatus = "DEGRADED"
-	ProviderConnectionMaskedStatusINELIGIBLE ProviderConnectionMaskedStatus = "INELIGIBLE"
-)
-
-// Valid indicates whether the value is a known member of the ProviderConnectionMaskedStatus enum.
-func (e ProviderConnectionMaskedStatus) Valid() bool {
-	switch e {
-	case ProviderConnectionMaskedStatusARCHIVED:
-		return true
-	case ProviderConnectionMaskedStatusAVAILABLE:
-		return true
-	case ProviderConnectionMaskedStatusDEGRADED:
-		return true
-	case ProviderConnectionMaskedStatusINELIGIBLE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderConnectionState.
-const (
-	ProviderConnectionStateINVALID ProviderConnectionState = "INVALID"
-	ProviderConnectionStatePENDING ProviderConnectionState = "PENDING"
-	ProviderConnectionStateREVOKED ProviderConnectionState = "REVOKED"
-	ProviderConnectionStateVALID   ProviderConnectionState = "VALID"
-)
-
-// Valid indicates whether the value is a known member of the ProviderConnectionState enum.
-func (e ProviderConnectionState) Valid() bool {
-	switch e {
-	case ProviderConnectionStateINVALID:
-		return true
-	case ProviderConnectionStatePENDING:
-		return true
-	case ProviderConnectionStateREVOKED:
-		return true
-	case ProviderConnectionStateVALID:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderPoolCommandAction.
-const (
-	ProviderPoolCommandActionARCHIVE ProviderPoolCommandAction = "ARCHIVE"
-	ProviderPoolCommandActionCREATE  ProviderPoolCommandAction = "CREATE"
-	ProviderPoolCommandActionDELETE  ProviderPoolCommandAction = "DELETE"
-	ProviderPoolCommandActionUPDATE  ProviderPoolCommandAction = "UPDATE"
-)
-
-// Valid indicates whether the value is a known member of the ProviderPoolCommandAction enum.
-func (e ProviderPoolCommandAction) Valid() bool {
-	switch e {
-	case ProviderPoolCommandActionARCHIVE:
-		return true
-	case ProviderPoolCommandActionCREATE:
-		return true
-	case ProviderPoolCommandActionDELETE:
-		return true
-	case ProviderPoolCommandActionUPDATE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderPoolCommandPolicy.
-const (
-	ProviderPoolCommandPolicyLeastUsed ProviderPoolCommandPolicy = "least_used"
-	ProviderPoolCommandPolicyWeighted  ProviderPoolCommandPolicy = "weighted"
-)
-
-// Valid indicates whether the value is a known member of the ProviderPoolCommandPolicy enum.
-func (e ProviderPoolCommandPolicy) Valid() bool {
-	switch e {
-	case ProviderPoolCommandPolicyLeastUsed:
-		return true
-	case ProviderPoolCommandPolicyWeighted:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderPoolPolicy.
-const (
-	ProviderPoolPolicyLeastUsed ProviderPoolPolicy = "least_used"
-	ProviderPoolPolicyWeighted  ProviderPoolPolicy = "weighted"
-)
-
-// Valid indicates whether the value is a known member of the ProviderPoolPolicy enum.
-func (e ProviderPoolPolicy) Valid() bool {
-	switch e {
-	case ProviderPoolPolicyLeastUsed:
-		return true
-	case ProviderPoolPolicyWeighted:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderPoolState.
-const (
-	ProviderPoolStateACTIVE   ProviderPoolState = "ACTIVE"
-	ProviderPoolStateARCHIVED ProviderPoolState = "ARCHIVED"
-	ProviderPoolStateDELETED  ProviderPoolState = "DELETED"
-	ProviderPoolStatePENDING  ProviderPoolState = "PENDING"
-)
-
-// Valid indicates whether the value is a known member of the ProviderPoolState enum.
-func (e ProviderPoolState) Valid() bool {
-	switch e {
-	case ProviderPoolStateACTIVE:
-		return true
-	case ProviderPoolStateARCHIVED:
-		return true
-	case ProviderPoolStateDELETED:
-		return true
-	case ProviderPoolStatePENDING:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderPoolViewPolicy.
-const (
-	LeastUsed ProviderPoolViewPolicy = "least_used"
-	Weighted  ProviderPoolViewPolicy = "weighted"
-)
-
-// Valid indicates whether the value is a known member of the ProviderPoolViewPolicy enum.
-func (e ProviderPoolViewPolicy) Valid() bool {
-	switch e {
-	case LeastUsed:
-		return true
-	case Weighted:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ResolveOwnerGateDecision.
-const (
-	ResolveOwnerGateDecisionAPPROVED         ResolveOwnerGateDecision = "APPROVED"
-	ResolveOwnerGateDecisionCANCELLED        ResolveOwnerGateDecision = "CANCELLED"
-	ResolveOwnerGateDecisionCHANGESREQUESTED ResolveOwnerGateDecision = "CHANGES_REQUESTED"
-	ResolveOwnerGateDecisionREJECTED         ResolveOwnerGateDecision = "REJECTED"
-)
-
-// Valid indicates whether the value is a known member of the ResolveOwnerGateDecision enum.
-func (e ResolveOwnerGateDecision) Valid() bool {
-	switch e {
-	case ResolveOwnerGateDecisionAPPROVED:
-		return true
-	case ResolveOwnerGateDecisionCANCELLED:
-		return true
-	case ResolveOwnerGateDecisionCHANGESREQUESTED:
-		return true
-	case ResolveOwnerGateDecisionREJECTED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ResourceKind.
-const (
-	ResourceKindAGENT                       ResourceKind = "AGENT"
-	ResourceKindAGENTASSIGNMENT             ResourceKind = "AGENT_ASSIGNMENT"
-	ResourceKindARTIFACT                    ResourceKind = "ARTIFACT"
-	ResourceKindCHAT                        ResourceKind = "CHAT"
-	ResourceKindCREDENTIALBINDING           ResourceKind = "CREDENTIAL_BINDING"
-	ResourceKindIMAGEARTIFACT               ResourceKind = "IMAGE_ARTIFACT"
-	ResourceKindIMAGEBUILD                  ResourceKind = "IMAGE_BUILD"
-	ResourceKindINSTRUCTIONSET              ResourceKind = "INSTRUCTION_SET"
-	ResourceKindINTEGRATION                 ResourceKind = "INTEGRATION"
-	ResourceKindMEMORYRECORD                ResourceKind = "MEMORY_RECORD"
-	ResourceKindOWNERGATE                   ResourceKind = "OWNER_GATE"
-	ResourceKindPROCESSRUN                  ResourceKind = "PROCESS_RUN"
-	ResourceKindPROJECT                     ResourceKind = "PROJECT"
-	ResourceKindPROMPTPROFILE               ResourceKind = "PROMPT_PROFILE"
-	ResourceKindPROVIDERCONNECTIONREFERENCE ResourceKind = "PROVIDER_CONNECTION_REFERENCE"
-	ResourceKindPROVIDERPOOL                ResourceKind = "PROVIDER_POOL"
-	ResourceKindREPOSITORYWORKSPACE         ResourceKind = "REPOSITORY_WORKSPACE"
-	ResourceKindROLE                        ResourceKind = "ROLE"
-	ResourceKindROLEDEFINITION              ResourceKind = "ROLE_DEFINITION"
-	ResourceKindROLEIMAGERECIPE             ResourceKind = "ROLE_IMAGE_RECIPE"
-	ResourceKindRUNTIMEREVISION             ResourceKind = "RUNTIME_REVISION"
-	ResourceKindSCHEDULE                    ResourceKind = "SCHEDULE"
-	ResourceKindSESSION                     ResourceKind = "SESSION"
-	ResourceKindTEAM                        ResourceKind = "TEAM"
-	ResourceKindTURN                        ResourceKind = "TURN"
-	ResourceKindWORKCLAIM                   ResourceKind = "WORK_CLAIM"
-	ResourceKindWORKSPACEBACKUP             ResourceKind = "WORKSPACE_BACKUP"
-	ResourceKindWORKSPACEMATTERMOSTMAPPING  ResourceKind = "WORKSPACE_MATTERMOST_MAPPING"
-	ResourceKindWORKSPACERESTORE            ResourceKind = "WORKSPACE_RESTORE"
-)
-
-// Valid indicates whether the value is a known member of the ResourceKind enum.
-func (e ResourceKind) Valid() bool {
-	switch e {
-	case ResourceKindAGENT:
-		return true
-	case ResourceKindAGENTASSIGNMENT:
-		return true
-	case ResourceKindARTIFACT:
-		return true
-	case ResourceKindCHAT:
-		return true
-	case ResourceKindCREDENTIALBINDING:
-		return true
-	case ResourceKindIMAGEARTIFACT:
-		return true
-	case ResourceKindIMAGEBUILD:
-		return true
-	case ResourceKindINSTRUCTIONSET:
-		return true
-	case ResourceKindINTEGRATION:
-		return true
-	case ResourceKindMEMORYRECORD:
-		return true
-	case ResourceKindOWNERGATE:
-		return true
-	case ResourceKindPROCESSRUN:
-		return true
-	case ResourceKindPROJECT:
-		return true
-	case ResourceKindPROMPTPROFILE:
-		return true
-	case ResourceKindPROVIDERCONNECTIONREFERENCE:
-		return true
-	case ResourceKindPROVIDERPOOL:
-		return true
-	case ResourceKindREPOSITORYWORKSPACE:
-		return true
-	case ResourceKindROLE:
-		return true
-	case ResourceKindROLEDEFINITION:
-		return true
-	case ResourceKindROLEIMAGERECIPE:
-		return true
-	case ResourceKindRUNTIMEREVISION:
-		return true
-	case ResourceKindSCHEDULE:
-		return true
-	case ResourceKindSESSION:
-		return true
-	case ResourceKindTEAM:
-		return true
-	case ResourceKindTURN:
-		return true
-	case ResourceKindWORKCLAIM:
-		return true
-	case ResourceKindWORKSPACEBACKUP:
-		return true
-	case ResourceKindWORKSPACEMATTERMOSTMAPPING:
-		return true
-	case ResourceKindWORKSPACERESTORE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ResourceNextAction.
-const (
-	ResourceNextActionACTIVATE ResourceNextAction = "ACTIVATE"
-	ResourceNextActionARCHIVE  ResourceNextAction = "ARCHIVE"
-	ResourceNextActionCOPY     ResourceNextAction = "COPY"
-	ResourceNextActionDELETE   ResourceNextAction = "DELETE"
-	ResourceNextActionDETACH   ResourceNextAction = "DETACH"
-	ResourceNextActionPAUSE    ResourceNextAction = "PAUSE"
-	ResourceNextActionUPDATE   ResourceNextAction = "UPDATE"
-)
-
-// Valid indicates whether the value is a known member of the ResourceNextAction enum.
-func (e ResourceNextAction) Valid() bool {
-	switch e {
-	case ResourceNextActionACTIVATE:
-		return true
-	case ResourceNextActionARCHIVE:
-		return true
-	case ResourceNextActionCOPY:
-		return true
-	case ResourceNextActionDELETE:
-		return true
-	case ResourceNextActionDETACH:
-		return true
-	case ResourceNextActionPAUSE:
-		return true
-	case ResourceNextActionUPDATE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RestoreBackupScope.
-const (
-	RestoreBackupScopeSESSION RestoreBackupScope = "SESSION"
-)
-
-// Valid indicates whether the value is a known member of the RestoreBackupScope enum.
-func (e RestoreBackupScope) Valid() bool {
-	switch e {
-	case RestoreBackupScopeSESSION:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RestoreOperationScope.
-const (
-	SESSION RestoreOperationScope = "SESSION"
-)
-
-// Valid indicates whether the value is a known member of the RestoreOperationScope enum.
-func (e RestoreOperationScope) Valid() bool {
-	switch e {
-	case SESSION:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RestoreOperationNextAction.
-const (
-	RestoreOperationNextActionNONE         RestoreOperationNextAction = "NONE"
-	RestoreOperationNextActionREADBACKUP   RestoreOperationNextAction = "READ_BACKUP"
-	RestoreOperationNextActionRETRYRUNTIME RestoreOperationNextAction = "RETRY_RUNTIME"
-	RestoreOperationNextActionWAIT         RestoreOperationNextAction = "WAIT"
-)
-
-// Valid indicates whether the value is a known member of the RestoreOperationNextAction enum.
-func (e RestoreOperationNextAction) Valid() bool {
-	switch e {
-	case RestoreOperationNextActionNONE:
-		return true
-	case RestoreOperationNextActionREADBACKUP:
-		return true
-	case RestoreOperationNextActionRETRYRUNTIME:
-		return true
-	case RestoreOperationNextActionWAIT:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RestoreOperationState.
-const (
-	RestoreOperationStateASSIGNED      RestoreOperationState = "ASSIGNED"
-	RestoreOperationStateCANCELLED     RestoreOperationState = "CANCELLED"
-	RestoreOperationStateEXPIRED       RestoreOperationState = "EXPIRED"
-	RestoreOperationStateFAILED        RestoreOperationState = "FAILED"
-	RestoreOperationStateMATERIALIZING RestoreOperationState = "MATERIALIZING"
-	RestoreOperationStateQUEUED        RestoreOperationState = "QUEUED"
-	RestoreOperationStateREADY         RestoreOperationState = "READY"
-	RestoreOperationStateRETRYING      RestoreOperationState = "RETRYING"
-	RestoreOperationStateRUNNING       RestoreOperationState = "RUNNING"
-	RestoreOperationStateSUCCEEDED     RestoreOperationState = "SUCCEEDED"
-)
-
-// Valid indicates whether the value is a known member of the RestoreOperationState enum.
-func (e RestoreOperationState) Valid() bool {
-	switch e {
-	case RestoreOperationStateASSIGNED:
-		return true
-	case RestoreOperationStateCANCELLED:
-		return true
-	case RestoreOperationStateEXPIRED:
-		return true
-	case RestoreOperationStateFAILED:
-		return true
-	case RestoreOperationStateMATERIALIZING:
-		return true
-	case RestoreOperationStateQUEUED:
-		return true
-	case RestoreOperationStateREADY:
-		return true
-	case RestoreOperationStateRETRYING:
-		return true
-	case RestoreOperationStateRUNNING:
-		return true
-	case RestoreOperationStateSUCCEEDED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RoleImagePackageManager.
-const (
-	Apk RoleImagePackageManager = "apk"
-	Apt RoleImagePackageManager = "apt"
-	Dnf RoleImagePackageManager = "dnf"
-	Npm RoleImagePackageManager = "npm"
-	Pip RoleImagePackageManager = "pip"
-)
-
-// Valid indicates whether the value is a known member of the RoleImagePackageManager enum.
-func (e RoleImagePackageManager) Valid() bool {
-	switch e {
-	case Apk:
-		return true
-	case Apt:
-		return true
-	case Dnf:
-		return true
-	case Npm:
-		return true
-	case Pip:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RoleImagePlatformArchitecture.
-const (
-	Amd64 RoleImagePlatformArchitecture = "amd64"
-	Arm64 RoleImagePlatformArchitecture = "arm64"
-)
-
-// Valid indicates whether the value is a known member of the RoleImagePlatformArchitecture enum.
-func (e RoleImagePlatformArchitecture) Valid() bool {
+// Valid indicates whether the value is a known member of the RoleEnvironmentPlatformArchitecture enum.
+func (e RoleEnvironmentPlatformArchitecture) Valid() bool {
 	switch e {
 	case Amd64:
 		return true
@@ -1981,13 +957,13 @@ func (e RoleImagePlatformArchitecture) Valid() bool {
 	}
 }
 
-// Defines values for RoleImagePlatformOS.
+// Defines values for RoleEnvironmentPlatformOs.
 const (
-	Linux RoleImagePlatformOS = "linux"
+	Linux RoleEnvironmentPlatformOs = "linux"
 )
 
-// Valid indicates whether the value is a known member of the RoleImagePlatformOS enum.
-func (e RoleImagePlatformOS) Valid() bool {
+// Valid indicates whether the value is a known member of the RoleEnvironmentPlatformOs enum.
+func (e RoleEnvironmentPlatformOs) Valid() bool {
 	switch e {
 	case Linux:
 		return true
@@ -1996,27 +972,156 @@ func (e RoleImagePlatformOS) Valid() bool {
 	}
 }
 
-// Defines values for RunArtifactStatus.
+// Defines values for RoleImageBuildStage.
 const (
-	RunArtifactStatusCLEAN       RunArtifactStatus = "CLEAN"
-	RunArtifactStatusFAILED      RunArtifactStatus = "FAILED"
-	RunArtifactStatusPENDING     RunArtifactStatus = "PENDING"
-	RunArtifactStatusQUARANTINED RunArtifactStatus = "QUARANTINED"
-	RunArtifactStatusSCANNING    RunArtifactStatus = "SCANNING"
+	RoleImageBuildStageBASEPULL                   RoleImageBuildStage = "BASE_PULL"
+	RoleImageBuildStageCANCELLED                  RoleImageBuildStage = "CANCELLED"
+	RoleImageBuildStageCOMPLETED                  RoleImageBuildStage = "COMPLETED"
+	RoleImageBuildStageCONTEXTVALIDATION          RoleImageBuildStage = "CONTEXT_VALIDATION"
+	RoleImageBuildStageDEADLETTER                 RoleImageBuildStage = "DEAD_LETTER"
+	RoleImageBuildStageEXPIRED                    RoleImageBuildStage = "EXPIRED"
+	RoleImageBuildStageFAILED                     RoleImageBuildStage = "FAILED"
+	RoleImageBuildStageINSTALLATION               RoleImageBuildStage = "INSTALLATION"
+	RoleImageBuildStageMATERIALIZATION            RoleImageBuildStage = "MATERIALIZATION"
+	RoleImageBuildStagePROVENANCE                 RoleImageBuildStage = "PROVENANCE"
+	RoleImageBuildStageQUEUED                     RoleImageBuildStage = "QUEUED"
+	RoleImageBuildStageSOLVING                    RoleImageBuildStage = "SOLVING"
+	RoleImageBuildStageSTAGINGPUSH                RoleImageBuildStage = "STAGING_PUSH"
+	RoleImageBuildStageTRUSTEDRUNTIMEFINALIZATION RoleImageBuildStage = "TRUSTED_RUNTIME_FINALIZATION"
 )
 
-// Valid indicates whether the value is a known member of the RunArtifactStatus enum.
-func (e RunArtifactStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the RoleImageBuildStage enum.
+func (e RoleImageBuildStage) Valid() bool {
 	switch e {
-	case RunArtifactStatusCLEAN:
+	case RoleImageBuildStageBASEPULL:
 		return true
-	case RunArtifactStatusFAILED:
+	case RoleImageBuildStageCANCELLED:
 		return true
-	case RunArtifactStatusPENDING:
+	case RoleImageBuildStageCOMPLETED:
 		return true
-	case RunArtifactStatusQUARANTINED:
+	case RoleImageBuildStageCONTEXTVALIDATION:
 		return true
-	case RunArtifactStatusSCANNING:
+	case RoleImageBuildStageDEADLETTER:
+		return true
+	case RoleImageBuildStageEXPIRED:
+		return true
+	case RoleImageBuildStageFAILED:
+		return true
+	case RoleImageBuildStageINSTALLATION:
+		return true
+	case RoleImageBuildStageMATERIALIZATION:
+		return true
+	case RoleImageBuildStagePROVENANCE:
+		return true
+	case RoleImageBuildStageQUEUED:
+		return true
+	case RoleImageBuildStageSOLVING:
+		return true
+	case RoleImageBuildStageSTAGINGPUSH:
+		return true
+	case RoleImageBuildStageTRUSTEDRUNTIMEFINALIZATION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageRecipeState.
+const (
+	RoleImageRecipeStateACTIVE   RoleImageRecipeState = "ACTIVE"
+	RoleImageRecipeStateARCHIVED RoleImageRecipeState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageRecipeState enum.
+func (e RoleImageRecipeState) Valid() bool {
+	switch e {
+	case RoleImageRecipeStateACTIVE:
+		return true
+	case RoleImageRecipeStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageRecipeCommandAction.
+const (
+	ARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	REQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RESTORE      RoleImageRecipeCommandAction = "RESTORE"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageRecipeCommandAction enum.
+func (e RoleImageRecipeCommandAction) Valid() bool {
+	switch e {
+	case ARCHIVE:
+		return true
+	case REQUESTBUILD:
+		return true
+	case RESTORE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSource.
+const (
+	RunSourceAGENTDELEGATION RunSource = "AGENT_DELEGATION"
+	RunSourceCONTROLCENTER   RunSource = "CONTROL_CENTER"
+	RunSourceINTEGRATION     RunSource = "INTEGRATION"
+	RunSourceMATTERMOST      RunSource = "MATTERMOST"
+	RunSourceSCHEDULE        RunSource = "SCHEDULE"
+	RunSourceSYSTEMASSISTANT RunSource = "SYSTEM_ASSISTANT"
+)
+
+// Valid indicates whether the value is a known member of the RunSource enum.
+func (e RunSource) Valid() bool {
+	switch e {
+	case RunSourceAGENTDELEGATION:
+		return true
+	case RunSourceCONTROLCENTER:
+		return true
+	case RunSourceINTEGRATION:
+		return true
+	case RunSourceMATTERMOST:
+		return true
+	case RunSourceSCHEDULE:
+		return true
+	case RunSourceSYSTEMASSISTANT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunState.
+const (
+	RunStateCANCELLED    RunState = "CANCELLED"
+	RunStateCANCELLING   RunState = "CANCELLING"
+	RunStateFAILED       RunState = "FAILED"
+	RunStateQUEUED       RunState = "QUEUED"
+	RunStateRUNNING      RunState = "RUNNING"
+	RunStateSUCCEEDED    RunState = "SUCCEEDED"
+	RunStateWAITINGHUMAN RunState = "WAITING_HUMAN"
+)
+
+// Valid indicates whether the value is a known member of the RunState enum.
+func (e RunState) Valid() bool {
+	switch e {
+	case RunStateCANCELLED:
+		return true
+	case RunStateCANCELLING:
+		return true
+	case RunStateFAILED:
+		return true
+	case RunStateQUEUED:
+		return true
+	case RunStateRUNNING:
+		return true
+	case RunStateSUCCEEDED:
+		return true
+	case RunStateWAITINGHUMAN:
 		return true
 	default:
 		return false
@@ -2041,255 +1146,312 @@ func (e RunCommandAction) Valid() bool {
 	}
 }
 
-// Defines values for RunLineageKind.
+// Defines values for RunDeltaState.
 const (
-	ATTEMPT RunLineageKind = "ATTEMPT"
-	PROCESS RunLineageKind = "PROCESS"
+	RunDeltaStateCANCELLED    RunDeltaState = "CANCELLED"
+	RunDeltaStateCANCELLING   RunDeltaState = "CANCELLING"
+	RunDeltaStateFAILED       RunDeltaState = "FAILED"
+	RunDeltaStateQUEUED       RunDeltaState = "QUEUED"
+	RunDeltaStateRUNNING      RunDeltaState = "RUNNING"
+	RunDeltaStateSUCCEEDED    RunDeltaState = "SUCCEEDED"
+	RunDeltaStateWAITINGHUMAN RunDeltaState = "WAITING_HUMAN"
 )
 
-// Valid indicates whether the value is a known member of the RunLineageKind enum.
-func (e RunLineageKind) Valid() bool {
+// Valid indicates whether the value is a known member of the RunDeltaState enum.
+func (e RunDeltaState) Valid() bool {
 	switch e {
-	case ATTEMPT:
+	case RunDeltaStateCANCELLED:
 		return true
-	case PROCESS:
+	case RunDeltaStateCANCELLING:
+		return true
+	case RunDeltaStateFAILED:
+		return true
+	case RunDeltaStateQUEUED:
+		return true
+	case RunDeltaStateRUNNING:
+		return true
+	case RunDeltaStateSUCCEEDED:
+		return true
+	case RunDeltaStateWAITINGHUMAN:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for RunLineageState.
+// Defines values for RunEdgeType.
 const (
-	RunLineageStateADMITTED        RunLineageState = "ADMITTED"
-	RunLineageStateBLOCKED         RunLineageState = "BLOCKED"
-	RunLineageStateCANCELLED       RunLineageState = "CANCELLED"
-	RunLineageStateCLAIMED         RunLineageState = "CLAIMED"
-	RunLineageStateEXPIRED         RunLineageState = "EXPIRED"
-	RunLineageStateFAILED          RunLineageState = "FAILED"
-	RunLineageStatePENDING         RunLineageState = "PENDING"
-	RunLineageStateQUEUED          RunLineageState = "QUEUED"
-	RunLineageStateRETRIED         RunLineageState = "RETRIED"
-	RunLineageStateRUNNING         RunLineageState = "RUNNING"
-	RunLineageStateSUCCEEDED       RunLineageState = "SUCCEEDED"
-	RunLineageStateSUSPENDED       RunLineageState = "SUSPENDED"
-	RunLineageStateWAITINGEXTERNAL RunLineageState = "WAITING_EXTERNAL"
-	RunLineageStateWAITINGOWNER    RunLineageState = "WAITING_OWNER"
+	CALLBACKTO  RunEdgeType = "CALLBACK_TO"
+	CONTINUES   RunEdgeType = "CONTINUES"
+	DELEGATEDTO RunEdgeType = "DELEGATED_TO"
+	RETRYOF     RunEdgeType = "RETRY_OF"
+	WAITINGFOR  RunEdgeType = "WAITING_FOR"
 )
 
-// Valid indicates whether the value is a known member of the RunLineageState enum.
-func (e RunLineageState) Valid() bool {
+// Valid indicates whether the value is a known member of the RunEdgeType enum.
+func (e RunEdgeType) Valid() bool {
 	switch e {
-	case RunLineageStateADMITTED:
+	case CALLBACKTO:
 		return true
-	case RunLineageStateBLOCKED:
+	case CONTINUES:
 		return true
-	case RunLineageStateCANCELLED:
+	case DELEGATEDTO:
 		return true
-	case RunLineageStateCLAIMED:
+	case RETRYOF:
 		return true
-	case RunLineageStateEXPIRED:
-		return true
-	case RunLineageStateFAILED:
-		return true
-	case RunLineageStatePENDING:
-		return true
-	case RunLineageStateQUEUED:
-		return true
-	case RunLineageStateRETRIED:
-		return true
-	case RunLineageStateRUNNING:
-		return true
-	case RunLineageStateSUCCEEDED:
-		return true
-	case RunLineageStateSUSPENDED:
-		return true
-	case RunLineageStateWAITINGEXTERNAL:
-		return true
-	case RunLineageStateWAITINGOWNER:
+	case WAITINGFOR:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for RunNextAction.
+// Defines values for RunEventNodeState.
 const (
-	RunNextActionCANCEL RunNextAction = "CANCEL"
-	RunNextActionRETRY  RunNextAction = "RETRY"
+	RunEventNodeStateCANCELLED RunEventNodeState = "CANCELLED"
+	RunEventNodeStateFAILED    RunEventNodeState = "FAILED"
+	RunEventNodeStateQUEUED    RunEventNodeState = "QUEUED"
+	RunEventNodeStateRUNNING   RunEventNodeState = "RUNNING"
+	RunEventNodeStateSKIPPED   RunEventNodeState = "SKIPPED"
+	RunEventNodeStateSUCCEEDED RunEventNodeState = "SUCCEEDED"
+	RunEventNodeStateWAITING   RunEventNodeState = "WAITING"
 )
 
-// Valid indicates whether the value is a known member of the RunNextAction enum.
-func (e RunNextAction) Valid() bool {
+// Valid indicates whether the value is a known member of the RunEventNodeState enum.
+func (e RunEventNodeState) Valid() bool {
 	switch e {
-	case RunNextActionCANCEL:
+	case RunEventNodeStateCANCELLED:
 		return true
-	case RunNextActionRETRY:
+	case RunEventNodeStateFAILED:
+		return true
+	case RunEventNodeStateQUEUED:
+		return true
+	case RunEventNodeStateRUNNING:
+		return true
+	case RunEventNodeStateSKIPPED:
+		return true
+	case RunEventNodeStateSUCCEEDED:
+		return true
+	case RunEventNodeStateWAITING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for RunTimelineKind.
+// Defines values for RunEventRunState.
 const (
-	STATECHANGE RunTimelineKind = "STATE_CHANGE"
+	RunEventRunStateCANCELLED    RunEventRunState = "CANCELLED"
+	RunEventRunStateCANCELLING   RunEventRunState = "CANCELLING"
+	RunEventRunStateFAILED       RunEventRunState = "FAILED"
+	RunEventRunStateQUEUED       RunEventRunState = "QUEUED"
+	RunEventRunStateRUNNING      RunEventRunState = "RUNNING"
+	RunEventRunStateSUCCEEDED    RunEventRunState = "SUCCEEDED"
+	RunEventRunStateWAITINGHUMAN RunEventRunState = "WAITING_HUMAN"
 )
 
-// Valid indicates whether the value is a known member of the RunTimelineKind enum.
-func (e RunTimelineKind) Valid() bool {
+// Valid indicates whether the value is a known member of the RunEventRunState enum.
+func (e RunEventRunState) Valid() bool {
 	switch e {
-	case STATECHANGE:
+	case RunEventRunStateCANCELLED:
+		return true
+	case RunEventRunStateCANCELLING:
+		return true
+	case RunEventRunStateFAILED:
+		return true
+	case RunEventRunStateQUEUED:
+		return true
+	case RunEventRunStateRUNNING:
+		return true
+	case RunEventRunStateSUCCEEDED:
+		return true
+	case RunEventRunStateWAITINGHUMAN:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for RunTimelineOutcome.
+// Defines values for RunEventType.
 const (
-	RunTimelineOutcomeCANCELLED     RunTimelineOutcome = "CANCELLED"
-	RunTimelineOutcomeEXPIRED       RunTimelineOutcome = "EXPIRED"
-	RunTimelineOutcomeFAILED        RunTimelineOutcome = "FAILED"
-	RunTimelineOutcomeOTHER         RunTimelineOutcome = "OTHER"
-	RunTimelineOutcomeREQUIRESOWNER RunTimelineOutcome = "REQUIRES_OWNER"
-	RunTimelineOutcomeRETRIED       RunTimelineOutcome = "RETRIED"
-	RunTimelineOutcomeSUCCEEDED     RunTimelineOutcome = "SUCCEEDED"
+	ARTIFACTAVAILABLE RunEventType = "ARTIFACT_AVAILABLE"
+	CALLBACKDELIVERED RunEventType = "CALLBACK_DELIVERED"
+	DELEGATIONCREATED RunEventType = "DELEGATION_CREATED"
+	EDGEADDED         RunEventType = "EDGE_ADDED"
+	INCIDENTLINKED    RunEventType = "INCIDENT_LINKED"
+	NODEADDED         RunEventType = "NODE_ADDED"
+	NODESTATECHANGED  RunEventType = "NODE_STATE_CHANGED"
+	OWNERGATEOPENED   RunEventType = "OWNER_GATE_OPENED"
+	OWNERGATERESOLVED RunEventType = "OWNER_GATE_RESOLVED"
+	RUNCREATED        RunEventType = "RUN_CREATED"
+	RUNSTATECHANGED   RunEventType = "RUN_STATE_CHANGED"
+	TURNCOMPLETED     RunEventType = "TURN_COMPLETED"
+	TURNPROGRESS      RunEventType = "TURN_PROGRESS"
+	TURNQUEUED        RunEventType = "TURN_QUEUED"
+	TURNSTARTED       RunEventType = "TURN_STARTED"
 )
 
-// Valid indicates whether the value is a known member of the RunTimelineOutcome enum.
-func (e RunTimelineOutcome) Valid() bool {
+// Valid indicates whether the value is a known member of the RunEventType enum.
+func (e RunEventType) Valid() bool {
 	switch e {
-	case RunTimelineOutcomeCANCELLED:
+	case ARTIFACTAVAILABLE:
 		return true
-	case RunTimelineOutcomeEXPIRED:
+	case CALLBACKDELIVERED:
 		return true
-	case RunTimelineOutcomeFAILED:
+	case DELEGATIONCREATED:
 		return true
-	case RunTimelineOutcomeOTHER:
+	case EDGEADDED:
 		return true
-	case RunTimelineOutcomeREQUIRESOWNER:
+	case INCIDENTLINKED:
 		return true
-	case RunTimelineOutcomeRETRIED:
+	case NODEADDED:
 		return true
-	case RunTimelineOutcomeSUCCEEDED:
+	case NODESTATECHANGED:
+		return true
+	case OWNERGATEOPENED:
+		return true
+	case OWNERGATERESOLVED:
+		return true
+	case RUNCREATED:
+		return true
+	case RUNSTATECHANGED:
+		return true
+	case TURNCOMPLETED:
+		return true
+	case TURNPROGRESS:
+		return true
+	case TURNQUEUED:
+		return true
+	case TURNSTARTED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for RuntimeIncidentKind.
+// Defines values for RunInputTargetType.
 const (
-	HEARTBEATMISSED     RuntimeIncidentKind = "HEARTBEAT_MISSED"
-	RECONCILEFAILED     RuntimeIncidentKind = "RECONCILE_FAILED"
-	WORKLOADUNAVAILABLE RuntimeIncidentKind = "WORKLOAD_UNAVAILABLE"
+	RunInputTargetTypeAGENT    RunInputTargetType = "AGENT"
+	RunInputTargetTypeWORKFLOW RunInputTargetType = "WORKFLOW"
 )
 
-// Valid indicates whether the value is a known member of the RuntimeIncidentKind enum.
-func (e RuntimeIncidentKind) Valid() bool {
+// Valid indicates whether the value is a known member of the RunInputTargetType enum.
+func (e RunInputTargetType) Valid() bool {
 	switch e {
-	case HEARTBEATMISSED:
+	case RunInputTargetTypeAGENT:
 		return true
-	case RECONCILEFAILED:
-		return true
-	case WORKLOADUNAVAILABLE:
+	case RunInputTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ScheduleCalendar.
+// Defines values for RunNodeState.
 const (
-	ScheduleCalendarBUSINESS  ScheduleCalendar = "BUSINESS"
-	ScheduleCalendarGREGORIAN ScheduleCalendar = "GREGORIAN"
+	RunNodeStateCANCELLED RunNodeState = "CANCELLED"
+	RunNodeStateFAILED    RunNodeState = "FAILED"
+	RunNodeStateQUEUED    RunNodeState = "QUEUED"
+	RunNodeStateRUNNING   RunNodeState = "RUNNING"
+	RunNodeStateSKIPPED   RunNodeState = "SKIPPED"
+	RunNodeStateSUCCEEDED RunNodeState = "SUCCEEDED"
+	RunNodeStateWAITING   RunNodeState = "WAITING"
 )
 
-// Valid indicates whether the value is a known member of the ScheduleCalendar enum.
-func (e ScheduleCalendar) Valid() bool {
+// Valid indicates whether the value is a known member of the RunNodeState enum.
+func (e RunNodeState) Valid() bool {
 	switch e {
-	case ScheduleCalendarBUSINESS:
+	case RunNodeStateCANCELLED:
 		return true
-	case ScheduleCalendarGREGORIAN:
+	case RunNodeStateFAILED:
+		return true
+	case RunNodeStateQUEUED:
+		return true
+	case RunNodeStateRUNNING:
+		return true
+	case RunNodeStateSKIPPED:
+		return true
+	case RunNodeStateSUCCEEDED:
+		return true
+	case RunNodeStateWAITING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ScheduleDefaultsCalendar.
+// Defines values for RunNodeType.
 const (
-	ScheduleDefaultsCalendarBUSINESS  ScheduleDefaultsCalendar = "BUSINESS"
-	ScheduleDefaultsCalendarGREGORIAN ScheduleDefaultsCalendar = "GREGORIAN"
+	AGENTEXECUTION RunNodeType = "AGENT_EXECUTION"
+	EXTERNALACTION RunNodeType = "EXTERNAL_ACTION"
+	HUMANGATE      RunNodeType = "HUMAN_GATE"
+	ROOTPROCESS    RunNodeType = "ROOT_PROCESS"
 )
 
-// Valid indicates whether the value is a known member of the ScheduleDefaultsCalendar enum.
-func (e ScheduleDefaultsCalendar) Valid() bool {
+// Valid indicates whether the value is a known member of the RunNodeType enum.
+func (e RunNodeType) Valid() bool {
 	switch e {
-	case ScheduleDefaultsCalendarBUSINESS:
+	case AGENTEXECUTION:
 		return true
-	case ScheduleDefaultsCalendarGREGORIAN:
+	case EXTERNALACTION:
+		return true
+	case HUMANGATE:
+		return true
+	case ROOTPROCESS:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ScheduleDefaultsDeliveryPolicy.
+// Defines values for RunTargetType.
 const (
-	ScheduleDefaultsDeliveryPolicyATLEASTONCE       ScheduleDefaultsDeliveryPolicy = "AT_LEAST_ONCE"
-	ScheduleDefaultsDeliveryPolicyEXACTLYONCEEFFECT ScheduleDefaultsDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+	RunTargetTypeAGENT    RunTargetType = "AGENT"
+	RunTargetTypeWORKFLOW RunTargetType = "WORKFLOW"
 )
 
-// Valid indicates whether the value is a known member of the ScheduleDefaultsDeliveryPolicy enum.
-func (e ScheduleDefaultsDeliveryPolicy) Valid() bool {
+// Valid indicates whether the value is a known member of the RunTargetType enum.
+func (e RunTargetType) Valid() bool {
 	switch e {
-	case ScheduleDefaultsDeliveryPolicyATLEASTONCE:
+	case RunTargetTypeAGENT:
 		return true
-	case ScheduleDefaultsDeliveryPolicyEXACTLYONCEEFFECT:
+	case RunTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ScheduleDeliveryPolicy.
+// Defines values for ScheduleDayOfWeek.
 const (
-	ScheduleDeliveryPolicyATLEASTONCE       ScheduleDeliveryPolicy = "AT_LEAST_ONCE"
-	ScheduleDeliveryPolicyEXACTLYONCEEFFECT ScheduleDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+	ScheduleDayOfWeekEmpty     ScheduleDayOfWeek = ""
+	ScheduleDayOfWeekFRIDAY    ScheduleDayOfWeek = "FRIDAY"
+	ScheduleDayOfWeekMONDAY    ScheduleDayOfWeek = "MONDAY"
+	ScheduleDayOfWeekSATURDAY  ScheduleDayOfWeek = "SATURDAY"
+	ScheduleDayOfWeekSUNDAY    ScheduleDayOfWeek = "SUNDAY"
+	ScheduleDayOfWeekTHURSDAY  ScheduleDayOfWeek = "THURSDAY"
+	ScheduleDayOfWeekTUESDAY   ScheduleDayOfWeek = "TUESDAY"
+	ScheduleDayOfWeekWEDNESDAY ScheduleDayOfWeek = "WEDNESDAY"
 )
 
-// Valid indicates whether the value is a known member of the ScheduleDeliveryPolicy enum.
-func (e ScheduleDeliveryPolicy) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleDayOfWeek enum.
+func (e ScheduleDayOfWeek) Valid() bool {
 	switch e {
-	case ScheduleDeliveryPolicyATLEASTONCE:
+	case ScheduleDayOfWeekEmpty:
 		return true
-	case ScheduleDeliveryPolicyEXACTLYONCEEFFECT:
+	case ScheduleDayOfWeekFRIDAY:
 		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleMisfirePolicy.
-const (
-	ScheduleMisfirePolicyCATCHUP     ScheduleMisfirePolicy = "CATCH_UP"
-	ScheduleMisfirePolicyRUNONCE     ScheduleMisfirePolicy = "RUN_ONCE"
-	ScheduleMisfirePolicySKIP        ScheduleMisfirePolicy = "SKIP"
-	ScheduleMisfirePolicyWITHINGRACE ScheduleMisfirePolicy = "WITHIN_GRACE"
-)
-
-// Valid indicates whether the value is a known member of the ScheduleMisfirePolicy enum.
-func (e ScheduleMisfirePolicy) Valid() bool {
-	switch e {
-	case ScheduleMisfirePolicyCATCHUP:
+	case ScheduleDayOfWeekMONDAY:
 		return true
-	case ScheduleMisfirePolicyRUNONCE:
+	case ScheduleDayOfWeekSATURDAY:
 		return true
-	case ScheduleMisfirePolicySKIP:
+	case ScheduleDayOfWeekSUNDAY:
 		return true
-	case ScheduleMisfirePolicyWITHINGRACE:
+	case ScheduleDayOfWeekTHURSDAY:
+		return true
+	case ScheduleDayOfWeekTUESDAY:
+		return true
+	case ScheduleDayOfWeekWEDNESDAY:
 		return true
 	default:
 		return false
@@ -2298,148 +1460,16 @@ func (e ScheduleMisfirePolicy) Valid() bool {
 
 // Defines values for ScheduleNotificationPolicy.
 const (
-	ALWAYS            ScheduleNotificationPolicy = "ALWAYS"
-	AUDITONLY         ScheduleNotificationPolicy = "AUDIT_ONLY"
-	ONACTION          ScheduleNotificationPolicy = "ON_ACTION"
-	ONACTIONORFAILURE ScheduleNotificationPolicy = "ON_ACTION_OR_FAILURE"
-	ONFAILURE         ScheduleNotificationPolicy = "ON_FAILURE"
+	ScheduleNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
+	ScheduleNotificationPolicyCONTROLCENTERONLY                ScheduleNotificationPolicy = "CONTROL_CENTER_ONLY"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleNotificationPolicy enum.
 func (e ScheduleNotificationPolicy) Valid() bool {
 	switch e {
-	case ALWAYS:
+	case ScheduleNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS:
 		return true
-	case AUDITONLY:
-		return true
-	case ONACTION:
-		return true
-	case ONACTIONORFAILURE:
-		return true
-	case ONFAILURE:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleOccurrenceState.
-const (
-	ScheduleOccurrenceStateCANCELLED       ScheduleOccurrenceState = "CANCELLED"
-	ScheduleOccurrenceStateCLAIMED         ScheduleOccurrenceState = "CLAIMED"
-	ScheduleOccurrenceStateCONTINUATION    ScheduleOccurrenceState = "CONTINUATION"
-	ScheduleOccurrenceStateDEADLETTER      ScheduleOccurrenceState = "DEAD_LETTER"
-	ScheduleOccurrenceStateFAILED          ScheduleOccurrenceState = "FAILED"
-	ScheduleOccurrenceStateQUEUED          ScheduleOccurrenceState = "QUEUED"
-	ScheduleOccurrenceStateRECOVERYBLOCKED ScheduleOccurrenceState = "RECOVERY_BLOCKED"
-	ScheduleOccurrenceStateRESERVED        ScheduleOccurrenceState = "RESERVED"
-	ScheduleOccurrenceStateSKIPPED         ScheduleOccurrenceState = "SKIPPED"
-	ScheduleOccurrenceStateSUCCEEDED       ScheduleOccurrenceState = "SUCCEEDED"
-	ScheduleOccurrenceStateWAITINGOWNER    ScheduleOccurrenceState = "WAITING_OWNER"
-)
-
-// Valid indicates whether the value is a known member of the ScheduleOccurrenceState enum.
-func (e ScheduleOccurrenceState) Valid() bool {
-	switch e {
-	case ScheduleOccurrenceStateCANCELLED:
-		return true
-	case ScheduleOccurrenceStateCLAIMED:
-		return true
-	case ScheduleOccurrenceStateCONTINUATION:
-		return true
-	case ScheduleOccurrenceStateDEADLETTER:
-		return true
-	case ScheduleOccurrenceStateFAILED:
-		return true
-	case ScheduleOccurrenceStateQUEUED:
-		return true
-	case ScheduleOccurrenceStateRECOVERYBLOCKED:
-		return true
-	case ScheduleOccurrenceStateRESERVED:
-		return true
-	case ScheduleOccurrenceStateSKIPPED:
-		return true
-	case ScheduleOccurrenceStateSUCCEEDED:
-		return true
-	case ScheduleOccurrenceStateWAITINGOWNER:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleOverlapPolicy.
-const (
-	ScheduleOverlapPolicyFORBID ScheduleOverlapPolicy = "FORBID"
-	ScheduleOverlapPolicyQUEUE  ScheduleOverlapPolicy = "QUEUE"
-	ScheduleOverlapPolicySKIP   ScheduleOverlapPolicy = "SKIP"
-)
-
-// Valid indicates whether the value is a known member of the ScheduleOverlapPolicy enum.
-func (e ScheduleOverlapPolicy) Valid() bool {
-	switch e {
-	case ScheduleOverlapPolicyFORBID:
-		return true
-	case ScheduleOverlapPolicyQUEUE:
-		return true
-	case ScheduleOverlapPolicySKIP:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleRecoveryAction.
-const (
-	ScheduleRecoveryActionCANCEL ScheduleRecoveryAction = "CANCEL"
-	ScheduleRecoveryActionREPAIR ScheduleRecoveryAction = "REPAIR"
-	ScheduleRecoveryActionSKIP   ScheduleRecoveryAction = "SKIP"
-)
-
-// Valid indicates whether the value is a known member of the ScheduleRecoveryAction enum.
-func (e ScheduleRecoveryAction) Valid() bool {
-	switch e {
-	case ScheduleRecoveryActionCANCEL:
-		return true
-	case ScheduleRecoveryActionREPAIR:
-		return true
-	case ScheduleRecoveryActionSKIP:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleSelectorKind.
-const (
-	ScheduleSelectorKindAGENT          ScheduleSelectorKind = "AGENT"
-	ScheduleSelectorKindINSTRUCTIONSET ScheduleSelectorKind = "INSTRUCTION_SET"
-	ScheduleSelectorKindPROVIDERPOOL   ScheduleSelectorKind = "PROVIDER_POOL"
-)
-
-// Valid indicates whether the value is a known member of the ScheduleSelectorKind enum.
-func (e ScheduleSelectorKind) Valid() bool {
-	switch e {
-	case ScheduleSelectorKindAGENT:
-		return true
-	case ScheduleSelectorKindINSTRUCTIONSET:
-		return true
-	case ScheduleSelectorKindPROVIDERPOOL:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScheduleSelectorCatalogComplete.
-const (
-	ScheduleSelectorCatalogCompleteTrue ScheduleSelectorCatalogComplete = true
-)
-
-// Valid indicates whether the value is a known member of the ScheduleSelectorCatalogComplete enum.
-func (e ScheduleSelectorCatalogComplete) Valid() bool {
-	switch e {
-	case ScheduleSelectorCatalogCompleteTrue:
+	case ScheduleNotificationPolicyCONTROLCENTERONLY:
 		return true
 	default:
 		return false
@@ -2448,2532 +1478,1560 @@ func (e ScheduleSelectorCatalogComplete) Valid() bool {
 
 // Defines values for ScheduleSessionPolicy.
 const (
-	NEW        ScheduleSessionPolicy = "NEW"
-	PERSISTENT ScheduleSessionPolicy = "PERSISTENT"
-	ROLLING    ScheduleSessionPolicy = "ROLLING"
+	ScheduleSessionPolicyCONTINUEONE ScheduleSessionPolicy = "CONTINUE_ONE"
+	ScheduleSessionPolicyNEWEACHRUN  ScheduleSessionPolicy = "NEW_EACH_RUN"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleSessionPolicy enum.
 func (e ScheduleSessionPolicy) Valid() bool {
 	switch e {
-	case NEW:
+	case ScheduleSessionPolicyCONTINUEONE:
 		return true
-	case PERSISTENT:
-		return true
-	case ROLLING:
+	case ScheduleSessionPolicyNEWEACHRUN:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ScheduleTargetType.
+// Defines values for ScheduleState.
 const (
-	ScheduleTargetTypeAGENT    ScheduleTargetType = "AGENT"
-	ScheduleTargetTypePLAYBOOK ScheduleTargetType = "PLAYBOOK"
+	ACTIVE         ScheduleState = "ACTIVE"
+	ARCHIVED       ScheduleState = "ARCHIVED"
+	NEEDSATTENTION ScheduleState = "NEEDS_ATTENTION"
+	PAUSED         ScheduleState = "PAUSED"
 )
 
-// Valid indicates whether the value is a known member of the ScheduleTargetType enum.
-func (e ScheduleTargetType) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleState enum.
+func (e ScheduleState) Valid() bool {
 	switch e {
-	case ScheduleTargetTypeAGENT:
+	case ACTIVE:
 		return true
-	case ScheduleTargetTypePLAYBOOK:
+	case ARCHIVED:
+		return true
+	case NEEDSATTENTION:
+		return true
+	case PAUSED:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceBackupCommandAction.
+// Defines values for ScheduleCommandAction.
 const (
-	WorkspaceBackupCommandActionCANCEL WorkspaceBackupCommandAction = "CANCEL"
-	WorkspaceBackupCommandActionCREATE WorkspaceBackupCommandAction = "CREATE"
-	WorkspaceBackupCommandActionRETRY  WorkspaceBackupCommandAction = "RETRY"
+	ENABLE ScheduleCommandAction = "ENABLE"
+	PAUSE  ScheduleCommandAction = "PAUSE"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceBackupCommandAction enum.
-func (e WorkspaceBackupCommandAction) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleCommandAction enum.
+func (e ScheduleCommandAction) Valid() bool {
 	switch e {
-	case WorkspaceBackupCommandActionCANCEL:
+	case ENABLE:
 		return true
-	case WorkspaceBackupCommandActionCREATE:
-		return true
-	case WorkspaceBackupCommandActionRETRY:
+	case PAUSE:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceBackupCommandScope.
+// Defines values for ScheduleInputDayOfWeek.
 const (
-	WorkspaceBackupCommandScopeALLWORKSPACES WorkspaceBackupCommandScope = "ALL_WORKSPACES"
-	WorkspaceBackupCommandScopeWORKSPACE     WorkspaceBackupCommandScope = "WORKSPACE"
+	ScheduleInputDayOfWeekFRIDAY    ScheduleInputDayOfWeek = "FRIDAY"
+	ScheduleInputDayOfWeekMONDAY    ScheduleInputDayOfWeek = "MONDAY"
+	ScheduleInputDayOfWeekSATURDAY  ScheduleInputDayOfWeek = "SATURDAY"
+	ScheduleInputDayOfWeekSUNDAY    ScheduleInputDayOfWeek = "SUNDAY"
+	ScheduleInputDayOfWeekTHURSDAY  ScheduleInputDayOfWeek = "THURSDAY"
+	ScheduleInputDayOfWeekTUESDAY   ScheduleInputDayOfWeek = "TUESDAY"
+	ScheduleInputDayOfWeekWEDNESDAY ScheduleInputDayOfWeek = "WEDNESDAY"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceBackupCommandScope enum.
-func (e WorkspaceBackupCommandScope) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleInputDayOfWeek enum.
+func (e ScheduleInputDayOfWeek) Valid() bool {
 	switch e {
-	case WorkspaceBackupCommandScopeALLWORKSPACES:
+	case ScheduleInputDayOfWeekFRIDAY:
 		return true
-	case WorkspaceBackupCommandScopeWORKSPACE:
+	case ScheduleInputDayOfWeekMONDAY:
+		return true
+	case ScheduleInputDayOfWeekSATURDAY:
+		return true
+	case ScheduleInputDayOfWeekSUNDAY:
+		return true
+	case ScheduleInputDayOfWeekTHURSDAY:
+		return true
+	case ScheduleInputDayOfWeekTUESDAY:
+		return true
+	case ScheduleInputDayOfWeekWEDNESDAY:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceBackupScope.
+// Defines values for ScheduleInputNotificationPolicy.
 const (
-	WorkspaceBackupScopeALLWORKSPACES WorkspaceBackupScope = "ALL_WORKSPACES"
-	WorkspaceBackupScopeWORKSPACE     WorkspaceBackupScope = "WORKSPACE"
+	ScheduleInputNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleInputNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
+	ScheduleInputNotificationPolicyCONTROLCENTERONLY                ScheduleInputNotificationPolicy = "CONTROL_CENTER_ONLY"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceBackupScope enum.
-func (e WorkspaceBackupScope) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleInputNotificationPolicy enum.
+func (e ScheduleInputNotificationPolicy) Valid() bool {
 	switch e {
-	case WorkspaceBackupScopeALLWORKSPACES:
+	case ScheduleInputNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS:
 		return true
-	case WorkspaceBackupScopeWORKSPACE:
+	case ScheduleInputNotificationPolicyCONTROLCENTERONLY:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceBackupState.
+// Defines values for ScheduleInputPreset.
 const (
-	WorkspaceBackupStateAVAILABLE WorkspaceBackupState = "AVAILABLE"
-	WorkspaceBackupStateCANCELLED WorkspaceBackupState = "CANCELLED"
-	WorkspaceBackupStateEXPIRED   WorkspaceBackupState = "EXPIRED"
-	WorkspaceBackupStateFAILED    WorkspaceBackupState = "FAILED"
-	WorkspaceBackupStateVERIFYING WorkspaceBackupState = "VERIFYING"
+	DAILY    ScheduleInputPreset = "DAILY"
+	HOURLY   ScheduleInputPreset = "HOURLY"
+	WEEKDAYS ScheduleInputPreset = "WEEKDAYS"
+	WEEKLY   ScheduleInputPreset = "WEEKLY"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceBackupState enum.
-func (e WorkspaceBackupState) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleInputPreset enum.
+func (e ScheduleInputPreset) Valid() bool {
 	switch e {
-	case WorkspaceBackupStateAVAILABLE:
+	case DAILY:
 		return true
-	case WorkspaceBackupStateCANCELLED:
+	case HOURLY:
 		return true
-	case WorkspaceBackupStateEXPIRED:
+	case WEEKDAYS:
 		return true
-	case WorkspaceBackupStateFAILED:
-		return true
-	case WorkspaceBackupStateVERIFYING:
+	case WEEKLY:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceMattermostMappingState.
+// Defines values for ScheduleInputSessionPolicy.
 const (
-	BOUND    WorkspaceMattermostMappingState = "BOUND"
-	UNLINKED WorkspaceMattermostMappingState = "UNLINKED"
+	ScheduleInputSessionPolicyCONTINUEONE ScheduleInputSessionPolicy = "CONTINUE_ONE"
+	ScheduleInputSessionPolicyNEWEACHRUN  ScheduleInputSessionPolicy = "NEW_EACH_RUN"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceMattermostMappingState enum.
-func (e WorkspaceMattermostMappingState) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleInputSessionPolicy enum.
+func (e ScheduleInputSessionPolicy) Valid() bool {
 	switch e {
-	case BOUND:
+	case ScheduleInputSessionPolicyCONTINUEONE:
 		return true
-	case UNLINKED:
+	case ScheduleInputSessionPolicyNEWEACHRUN:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceRestoreCommandAction.
+// Defines values for ScheduleInputTargetType.
 const (
-	WorkspaceRestoreCommandActionCANCEL WorkspaceRestoreCommandAction = "CANCEL"
-	WorkspaceRestoreCommandActionCREATE WorkspaceRestoreCommandAction = "CREATE"
-	WorkspaceRestoreCommandActionRETRY  WorkspaceRestoreCommandAction = "RETRY"
+	ScheduleInputTargetTypeAGENT    ScheduleInputTargetType = "AGENT"
+	ScheduleInputTargetTypeWORKFLOW ScheduleInputTargetType = "WORKFLOW"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceRestoreCommandAction enum.
-func (e WorkspaceRestoreCommandAction) Valid() bool {
+// Valid indicates whether the value is a known member of the ScheduleInputTargetType enum.
+func (e ScheduleInputTargetType) Valid() bool {
 	switch e {
-	case WorkspaceRestoreCommandActionCANCEL:
+	case ScheduleInputTargetTypeAGENT:
 		return true
-	case WorkspaceRestoreCommandActionCREATE:
-		return true
-	case WorkspaceRestoreCommandActionRETRY:
+	case ScheduleInputTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceRestoreNextAction.
+// Defines values for SearchResultKind.
 const (
-	WorkspaceRestoreNextActionCANCEL WorkspaceRestoreNextAction = "CANCEL"
-	WorkspaceRestoreNextActionRETRY  WorkspaceRestoreNextAction = "RETRY"
+	SearchResultKindAGENT    SearchResultKind = "AGENT"
+	SearchResultKindPROJECT  SearchResultKind = "PROJECT"
+	SearchResultKindRUN      SearchResultKind = "RUN"
+	SearchResultKindWORKFLOW SearchResultKind = "WORKFLOW"
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceRestoreNextAction enum.
-func (e WorkspaceRestoreNextAction) Valid() bool {
+// Valid indicates whether the value is a known member of the SearchResultKind enum.
+func (e SearchResultKind) Valid() bool {
 	switch e {
-	case WorkspaceRestoreNextActionCANCEL:
+	case SearchResultKindAGENT:
 		return true
-	case WorkspaceRestoreNextActionRETRY:
+	case SearchResultKindPROJECT:
+		return true
+	case SearchResultKindRUN:
+		return true
+	case SearchResultKindWORKFLOW:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for WorkspaceRestoreState.
+// Defines values for SystemAssistantRemovable.
 const (
-	CANCELLED WorkspaceRestoreState = "CANCELLED"
-	EXPIRED   WorkspaceRestoreState = "EXPIRED"
-	FAILED    WorkspaceRestoreState = "FAILED"
-	QUEUED    WorkspaceRestoreState = "QUEUED"
-	RUNNING   WorkspaceRestoreState = "RUNNING"
-	SUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
+	False SystemAssistantRemovable = false
 )
 
-// Valid indicates whether the value is a known member of the WorkspaceRestoreState enum.
-func (e WorkspaceRestoreState) Valid() bool {
+// Valid indicates whether the value is a known member of the SystemAssistantRemovable enum.
+func (e SystemAssistantRemovable) Valid() bool {
 	switch e {
-	case CANCELLED:
+	case False:
 		return true
-	case EXPIRED:
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantRuntimeState.
+const (
+	BUSY         SystemAssistantRuntimeState = "BUSY"
+	FAILED       SystemAssistantRuntimeState = "FAILED"
+	PROVISIONING SystemAssistantRuntimeState = "PROVISIONING"
+	READY        SystemAssistantRuntimeState = "READY"
+	RECOVERING   SystemAssistantRuntimeState = "RECOVERING"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantRuntimeState enum.
+func (e SystemAssistantRuntimeState) Valid() bool {
+	switch e {
+	case BUSY:
 		return true
 	case FAILED:
 		return true
-	case QUEUED:
+	case PROVISIONING:
 		return true
-	case RUNNING:
+	case READY:
 		return true
-	case SUCCEEDED:
+	case RECOVERING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for GetConfigurationSourceDetailParamsKind.
+// Defines values for SystemAssistantSystem.
 const (
-	AGENT          GetConfigurationSourceDetailParamsKind = "AGENT"
-	INSTRUCTIONSET GetConfigurationSourceDetailParamsKind = "INSTRUCTION_SET"
-	PROVIDERPOOL   GetConfigurationSourceDetailParamsKind = "PROVIDER_POOL"
-	ROLEDEFINITION GetConfigurationSourceDetailParamsKind = "ROLE_DEFINITION"
+	True SystemAssistantSystem = true
 )
 
-// Valid indicates whether the value is a known member of the GetConfigurationSourceDetailParamsKind enum.
-func (e GetConfigurationSourceDetailParamsKind) Valid() bool {
+// Valid indicates whether the value is a known member of the SystemAssistantSystem enum.
+func (e SystemAssistantSystem) Valid() bool {
 	switch e {
-	case AGENT:
-		return true
-	case INSTRUCTIONSET:
-		return true
-	case PROVIDERPOOL:
-		return true
-	case ROLEDEFINITION:
+	case True:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for GetMattermostTeamMappingOperationParamsAction.
+// Defines values for WorkflowState.
 const (
-	BIND   GetMattermostTeamMappingOperationParamsAction = "BIND"
-	RELINK GetMattermostTeamMappingOperationParamsAction = "RELINK"
-	UNLINK GetMattermostTeamMappingOperationParamsAction = "UNLINK"
+	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
+	WorkflowStateDRAFT     WorkflowState = "DRAFT"
+	WorkflowStatePUBLISHED WorkflowState = "PUBLISHED"
+	WorkflowStateVALID     WorkflowState = "VALID"
 )
 
-// Valid indicates whether the value is a known member of the GetMattermostTeamMappingOperationParamsAction enum.
-func (e GetMattermostTeamMappingOperationParamsAction) Valid() bool {
+// Valid indicates whether the value is a known member of the WorkflowState enum.
+func (e WorkflowState) Valid() bool {
 	switch e {
-	case BIND:
+	case WorkflowStateARCHIVED:
 		return true
-	case RELINK:
+	case WorkflowStateDRAFT:
 		return true
-	case UNLINK:
+	case WorkflowStatePUBLISHED:
+		return true
+	case WorkflowStateVALID:
 		return true
 	default:
 		return false
 	}
 }
 
-// AccessResourceKind defines model for AccessResourceKind.
-type AccessResourceKind string
+// Defines values for WorkflowCommandAction.
+const (
+	WorkflowCommandActionARCHIVE  WorkflowCommandAction = "ARCHIVE"
+	WorkflowCommandActionPUBLISH  WorkflowCommandAction = "PUBLISH"
+	WorkflowCommandActionVALIDATE WorkflowCommandAction = "VALIDATE"
+)
 
-// AccessSpecInput defines model for AccessSpecInput.
-type AccessSpecInput struct {
-	PromptProfile *PromptProfileSpec `json:"promptProfile,omitempty"`
-	Role          *RoleSpec          `json:"role,omitempty"`
-	Team          *TeamSpec          `json:"team,omitempty"`
+// Valid indicates whether the value is a known member of the WorkflowCommandAction enum.
+func (e WorkflowCommandAction) Valid() bool {
+	switch e {
+	case WorkflowCommandActionARCHIVE:
+		return true
+	case WorkflowCommandActionPUBLISH:
+		return true
+	case WorkflowCommandActionVALIDATE:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentAssignmentCommand defines model for AgentAssignmentCommand.
-type AgentAssignmentCommand struct {
-	Action         AgentAssignmentCommandAction `json:"action"`
-	AgentStableKey *string                      `json:"agentStableKey,omitempty"`
-	Name           *string                      `json:"name,omitempty"`
-	ResourceRef    *string                      `json:"resourceRef,omitempty"`
-	RoomStableKey  *string                      `json:"roomStableKey,omitempty"`
+// Defines values for WorkflowInputFieldValueType.
+const (
+	WorkflowInputFieldValueTypeBOOLEAN  WorkflowInputFieldValueType = "BOOLEAN"
+	WorkflowInputFieldValueTypeDATE     WorkflowInputFieldValueType = "DATE"
+	WorkflowInputFieldValueTypeLONGTEXT WorkflowInputFieldValueType = "LONG_TEXT"
+	WorkflowInputFieldValueTypeNUMBER   WorkflowInputFieldValueType = "NUMBER"
+	WorkflowInputFieldValueTypeSELECT   WorkflowInputFieldValueType = "SELECT"
+	WorkflowInputFieldValueTypeTEXT     WorkflowInputFieldValueType = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the WorkflowInputFieldValueType enum.
+func (e WorkflowInputFieldValueType) Valid() bool {
+	switch e {
+	case WorkflowInputFieldValueTypeBOOLEAN:
+		return true
+	case WorkflowInputFieldValueTypeDATE:
+		return true
+	case WorkflowInputFieldValueTypeLONGTEXT:
+		return true
+	case WorkflowInputFieldValueTypeNUMBER:
+		return true
+	case WorkflowInputFieldValueTypeSELECT:
+		return true
+	case WorkflowInputFieldValueTypeTEXT:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentAssignmentCommandAction defines model for AgentAssignmentCommand.Action.
-type AgentAssignmentCommandAction string
+// Defines values for WorkflowInputFieldInputValueType.
+const (
+	BOOLEAN  WorkflowInputFieldInputValueType = "BOOLEAN"
+	DATE     WorkflowInputFieldInputValueType = "DATE"
+	LONGTEXT WorkflowInputFieldInputValueType = "LONG_TEXT"
+	NUMBER   WorkflowInputFieldInputValueType = "NUMBER"
+	SELECT   WorkflowInputFieldInputValueType = "SELECT"
+	TEXT     WorkflowInputFieldInputValueType = "TEXT"
+)
 
-// AgentAssignmentProjection defines model for AgentAssignmentProjection.
-type AgentAssignmentProjection struct {
-	AgentRef     string  `json:"agentRef"`
-	Generation   int64   `json:"generation"`
-	RoomRef      *string `json:"roomRef,omitempty"`
-	WorkspaceRef string  `json:"workspaceRef"`
+// Valid indicates whether the value is a known member of the WorkflowInputFieldInputValueType enum.
+func (e WorkflowInputFieldInputValueType) Valid() bool {
+	switch e {
+	case BOOLEAN:
+		return true
+	case DATE:
+		return true
+	case LONGTEXT:
+		return true
+	case NUMBER:
+		return true
+	case SELECT:
+		return true
+	case TEXT:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentBindingStatus defines model for AgentBindingStatus.
-type AgentBindingStatus string
+// Defines values for WorkflowStepGateDecisions.
+const (
+	WorkflowStepGateDecisionsAPPROVE        WorkflowStepGateDecisions = "APPROVE"
+	WorkflowStepGateDecisionsCANCEL         WorkflowStepGateDecisions = "CANCEL"
+	WorkflowStepGateDecisionsREJECT         WorkflowStepGateDecisions = "REJECT"
+	WorkflowStepGateDecisionsREQUESTCHANGES WorkflowStepGateDecisions = "REQUEST_CHANGES"
+)
 
-// AgentBotIdentity defines model for AgentBotIdentity.
-type AgentBotIdentity struct {
-	DisplayName            string                 `json:"displayName"`
-	ObservedAt             time.Time              `json:"observedAt"`
-	ProviderGeneration     int64                  `json:"providerGeneration"`
-	ProviderSnapshotSha256 Sha256                 `json:"providerSnapshotSha256"`
-	ProviderVersion        int64                  `json:"providerVersion"`
-	Selector               string                 `json:"selector"`
-	Status                 AgentBotIdentityStatus `json:"status"`
-	UpdatedAt              time.Time              `json:"updatedAt"`
-	Username               string                 `json:"username"`
+// Valid indicates whether the value is a known member of the WorkflowStepGateDecisions enum.
+func (e WorkflowStepGateDecisions) Valid() bool {
+	switch e {
+	case WorkflowStepGateDecisionsAPPROVE:
+		return true
+	case WorkflowStepGateDecisionsCANCEL:
+		return true
+	case WorkflowStepGateDecisionsREJECT:
+		return true
+	case WorkflowStepGateDecisionsREQUESTCHANGES:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentBotIdentityAction defines model for AgentBotIdentityAction.
-type AgentBotIdentityAction string
+// Defines values for WorkflowStepInputGateDecisions.
+const (
+	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
+	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+)
 
-// AgentBotIdentityBinding defines model for AgentBotIdentityBinding.
-type AgentBotIdentityBinding struct {
-	AgentRef      string           `json:"agentRef"`
-	AgentVersion  int64            `json:"agentVersion"`
-	Identity      AgentBotIdentity `json:"identity"`
-	ReceiptSha256 Sha256           `json:"receiptSha256"`
-	UpdatedAt     time.Time        `json:"updatedAt"`
+// Valid indicates whether the value is a known member of the WorkflowStepInputGateDecisions enum.
+func (e WorkflowStepInputGateDecisions) Valid() bool {
+	switch e {
+	case WorkflowStepInputGateDecisionsAPPROVE:
+		return true
+	case WorkflowStepInputGateDecisionsCANCEL:
+		return true
+	case WorkflowStepInputGateDecisionsREJECT:
+		return true
+	case WorkflowStepInputGateDecisionsREQUESTCHANGES:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentBotIdentityCommand defines model for AgentBotIdentityCommand.
-type AgentBotIdentityCommand struct {
-	Action                     AgentBotIdentityAction `json:"action"`
-	DisplayName                *string                `json:"displayName,omitempty"`
-	ExpectedProviderGeneration *int64                 `json:"expectedProviderGeneration,omitempty"`
-	IdentitySelector           *string                `json:"identitySelector,omitempty"`
-	UsernameIntent             *string                `json:"usernameIntent,omitempty"`
+// Defines values for DownloadArtifactParamsPurpose.
+const (
+	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
+	PREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
+)
+
+// Valid indicates whether the value is a known member of the DownloadArtifactParamsPurpose enum.
+func (e DownloadArtifactParamsPurpose) Valid() bool {
+	switch e {
+	case DOWNLOAD:
+		return true
+	case PREVIEW:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentBotIdentityCommandResult defines model for AgentBotIdentityCommandResult.
-type AgentBotIdentityCommandResult struct {
-	Binding   *AgentBotIdentityBinding  `json:"binding,omitempty"`
-	Operation AgentBotIdentityOperation `json:"operation"`
+// Defines values for CommandSystemAssistantJSONBodyAction.
+const (
+	RECOVER CommandSystemAssistantJSONBodyAction = "RECOVER"
+)
+
+// Valid indicates whether the value is a known member of the CommandSystemAssistantJSONBodyAction enum.
+func (e CommandSystemAssistantJSONBodyAction) Valid() bool {
+	switch e {
+	case RECOVER:
+		return true
+	default:
+		return false
+	}
 }
 
-// AgentBotIdentityOperation defines model for AgentBotIdentityOperation.
-type AgentBotIdentityOperation struct {
-	Action                AgentBotIdentityAction         `json:"action"`
-	AgentRef              string                         `json:"agentRef"`
-	CreatedAt             time.Time                      `json:"createdAt"`
-	ExpectedAgentVersion  int64                          `json:"expectedAgentVersion"`
-	FailureCode           *string                        `json:"failureCode,omitempty"`
-	OperationRef          string                         `json:"operationRef"`
-	PredecessorGeneration int64                          `json:"predecessorGeneration"`
-	RecoveryDeadline      *time.Time                     `json:"recoveryDeadline,omitempty"`
-	Result                *AgentBotIdentityBinding       `json:"result,omitempty"`
-	RetryNotBefore        *time.Time                     `json:"retryNotBefore,omitempty"`
-	State                 AgentBotIdentityOperationState `json:"state"`
-	UpdatedAt             time.Time                      `json:"updatedAt"`
+// AdministrationState defines model for AdministrationState.
+type AdministrationState struct {
+	Assistant        SystemAssistant            `json:"assistant"`
+	CoreReady        bool                       `json:"coreReady"`
+	CoreSummary      string                     `json:"coreSummary"`
+	Incidents        []Incident                 `json:"incidents"`
+	ObservedAt       Timestamp                  `json:"observedAt"`
+	OptionalAdapters []IntegrationDefinition    `json:"optionalAdapters"`
+	Profile          AdministrationStateProfile `json:"profile"`
 }
 
-// AgentBotIdentityOperationState defines model for AgentBotIdentityOperationState.
-type AgentBotIdentityOperationState string
+// AdministrationStateProfile defines model for AdministrationState.Profile.
+type AdministrationStateProfile string
 
-// AgentBotIdentityPage defines model for AgentBotIdentityPage.
-type AgentBotIdentityPage struct {
-	Identities    []AgentBotIdentity `json:"identities"`
-	NextPageToken *string            `json:"nextPageToken,omitempty"`
+// Agent defines model for Agent.
+type Agent struct {
+	AvatarUrl             *string              `json:"avatarUrl,omitempty"`
+	Capabilities          []PlatformCapability `json:"capabilities"`
+	CurrentActivity       *string              `json:"currentActivity,omitempty"`
+	DraftInstructions     *InstructionVersion  `json:"draftInstructions,omitempty"`
+	Enabled               bool                 `json:"enabled"`
+	Integrations          []string             `json:"integrations"`
+	KnowledgeArtifactRefs []OpaqueRef          `json:"knowledgeArtifactRefs"`
+	Name                  string               `json:"name"`
+	NextActions           []NextAction         `json:"nextActions"`
+	ProjectRef            OpaqueRef            `json:"projectRef"`
+	PublishedInstructions *InstructionVersion  `json:"publishedInstructions,omitempty"`
+	Purpose               string               `json:"purpose"`
+	Ref                   OpaqueRef            `json:"ref"`
+	RoleDefinitionName    *string              `json:"roleDefinitionName,omitempty"`
+	RoleDefinitionRef     *OpaqueRef           `json:"roleDefinitionRef,omitempty"`
+	RoleDescription       string               `json:"roleDescription"`
+	RuntimeModel          *string              `json:"runtimeModel,omitempty"`
+	RuntimeName           string               `json:"runtimeName"`
+	RuntimeProvider       *string              `json:"runtimeProvider,omitempty"`
+	RuntimeReady          bool                 `json:"runtimeReady"`
+	RuntimeRef            OpaqueRef            `json:"runtimeRef"`
+	RuntimeRevision       *string              `json:"runtimeRevision,omitempty"`
+	State                 AgentState           `json:"state"`
+	System                bool                 `json:"system"`
+	UpdatedAt             Timestamp            `json:"updatedAt"`
+	Version               int64                `json:"version"`
 }
 
-// AgentBotIdentityStatus defines model for AgentBotIdentityStatus.
-type AgentBotIdentityStatus string
-
-// AgentBotIdentitySummary defines model for AgentBotIdentitySummary.
-type AgentBotIdentitySummary struct {
-	MaskedStatus       string             `json:"maskedStatus"`
-	ProviderGeneration int64              `json:"providerGeneration"`
-	Status             AgentBindingStatus `json:"status"`
-	Username           string             `json:"username"`
-}
+// AgentState defines model for Agent.State.
+type AgentState string
 
 // AgentCommand defines model for AgentCommand.
 type AgentCommand struct {
-	Action                  ProtectedConfigurationAction `json:"action"`
-	Capabilities            *[]string                    `json:"capabilities,omitempty"`
-	Enabled                 *bool                        `json:"enabled,omitempty"`
-	InstructionSetStableKey *string                      `json:"instructionSetStableKey,omitempty"`
-	Name                    *string                      `json:"name,omitempty"`
-	ProviderPoolStableKey   *string                      `json:"providerPoolStableKey,omitempty"`
-	ResourceRef             *string                      `json:"resourceRef,omitempty"`
-
-	// RuntimeSelectionKey Только selectionKey из authoritative owner configuration catalog.
-	RuntimeSelectionKey *string `json:"runtimeSelectionKey,omitempty"`
-	StableKey           *string `json:"stableKey,omitempty"`
+	Action        AgentCommandAction `json:"action"`
+	CapabilityKey *string            `json:"capabilityKey,omitempty"`
+	GrantRef      *OpaqueRef         `json:"grantRef,omitempty"`
 }
 
-// AgentHistoryAction defines model for AgentHistoryAction.
-type AgentHistoryAction string
+// AgentCommandAction defines model for AgentCommand.Action.
+type AgentCommandAction string
 
-// AgentHistoryEntry defines model for AgentHistoryEntry.
-type AgentHistoryEntry struct {
-	Action         AgentHistoryAction `json:"action"`
-	Agent          AgentView          `json:"agent"`
-	OccurredAt     time.Time          `json:"occurredAt"`
-	SnapshotSha256 Sha256             `json:"snapshotSha256"`
-}
+// AgentInput defines model for AgentInput.
+type AgentInput struct {
+	AvatarUrl           *string `json:"avatarUrl,omitempty"`
+	InitialInstructions *string `json:"initialInstructions,omitempty"`
+	Name                string  `json:"name"`
+	Purpose             string  `json:"purpose"`
 
-// AgentHistoryPage defines model for AgentHistoryPage.
-type AgentHistoryPage struct {
-	Entries       []AgentHistoryEntry `json:"entries"`
-	NextPageToken *string             `json:"nextPageToken,omitempty"`
+	// RoleDefinitionRef Непрозрачный ref роли из авторитетного каталога; при отсутствии сервер атомарно создаёт роль агента
+	RoleDefinitionRef *OpaqueRef `json:"roleDefinitionRef,omitempty"`
+	RoleDescription   string     `json:"roleDescription"`
+
+	// RuntimeRef Непрозрачный ref из runtime catalog; при отсутствии сервер выбирает безопасный default
+	RuntimeRef *OpaqueRef `json:"runtimeRef,omitempty"`
 }
 
 // AgentPage defines model for AgentPage.
 type AgentPage struct {
-	Agents        []AgentView `json:"agents"`
-	NextPageToken *string     `json:"nextPageToken,omitempty"`
+	Items         []Agent `json:"items"`
+	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
-// AgentProjection defines model for AgentProjection.
-type AgentProjection struct {
-	BotMaskedStatus   *string                          `json:"botMaskedStatus,omitempty"`
-	BotUsername       *string                          `json:"botUsername,omitempty"`
-	Capabilities      []string                         `json:"capabilities"`
-	Enabled           bool                             `json:"enabled"`
-	InstructionSetRef string                           `json:"instructionSetRef"`
-	Ownership         ConfigurationOwnershipProjection `json:"ownership"`
-	ProviderPoolRef   string                           `json:"providerPoolRef"`
-	RoleDefinitionRef string                           `json:"roleDefinitionRef"`
-	RuntimeProfileRef *string                          `json:"runtimeProfileRef,omitempty"`
-	StableKey         string                           `json:"stableKey"`
+// Artifact defines model for Artifact.
+type Artifact struct {
+	AgentBindings    []OpaqueRef       `json:"agentBindings"`
+	CreatedAt        Timestamp         `json:"createdAt"`
+	Digest           string            `json:"digest"`
+	FileName         string            `json:"fileName"`
+	MediaType        string            `json:"mediaType"`
+	NextActions      []NextAction      `json:"nextActions"`
+	PreviewAvailable bool              `json:"previewAvailable"`
+	ProjectRef       OpaqueRef         `json:"projectRef"`
+	Ref              OpaqueRef         `json:"ref"`
+	Revision         int               `json:"revision"`
+	RunRef           *OpaqueRef        `json:"runRef,omitempty"`
+	ScanState        ArtifactScanState `json:"scanState"`
+	SessionRef       *OpaqueRef        `json:"sessionRef,omitempty"`
+	SizeBytes        int64             `json:"sizeBytes"`
+	Source           ArtifactSource    `json:"source"`
+	Version          int64             `json:"version"`
 }
 
-// AgentRuntimeSelection defines model for AgentRuntimeSelection.
-type AgentRuntimeSelection struct {
-	DisplayName           string                `json:"displayName"`
-	RoleDefinitionSha256  Sha256                `json:"roleDefinitionSha256"`
-	RoleDefinitionVersion int64                 `json:"roleDefinitionVersion"`
-	RuntimeProfileSha256  Sha256                `json:"runtimeProfileSha256"`
-	RuntimeProfileVersion int64                 `json:"runtimeProfileVersion"`
-	SelectionKey          string                `json:"selectionKey"`
-	Status                OwnerProjectionStatus `json:"status"`
+// ArtifactScanState defines model for Artifact.ScanState.
+type ArtifactScanState string
+
+// ArtifactSource defines model for Artifact.Source.
+type ArtifactSource string
+
+// ArtifactBindingInput defines model for ArtifactBindingInput.
+type ArtifactBindingInput struct {
+	AgentRef OpaqueRef `json:"agentRef"`
+	Enabled  bool      `json:"enabled"`
 }
 
-// AgentView defines model for AgentView.
-type AgentView struct {
-	AgentRef              string                  `json:"agentRef"`
-	BotIdentity           AgentBotIdentitySummary `json:"botIdentity"`
-	Capabilities          []string                `json:"capabilities"`
-	DisplayName           string                  `json:"displayName"`
-	Enabled               bool                    `json:"enabled"`
-	InstructionSelection  OwnerSafeSelection      `json:"instructionSelection"`
-	ProviderPoolSelection OwnerSafeSelection      `json:"providerPoolSelection"`
-	RuntimeSelection      AgentRuntimeSelection   `json:"runtimeSelection"`
-	StableKey             string                  `json:"stableKey"`
-	State                 LifecycleState          `json:"state"`
-	Version               int64                   `json:"version"`
+// ArtifactPage defines model for ArtifactPage.
+type ArtifactPage struct {
+	Items         []Artifact `json:"items"`
+	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
-// ArtifactProjection defines model for ArtifactProjection.
-type ArtifactProjection struct {
-	ArtifactKind       string             `json:"artifactKind"`
-	Direction          string             `json:"direction"`
-	MediaType          string             `json:"mediaType"`
-	ScanEvidenceSha256 *string            `json:"scanEvidenceSha256,omitempty"`
-	ScanPolicyRevision int64              `json:"scanPolicyRevision"`
-	ScanStatus         ArtifactScanStatus `json:"scanStatus"`
-	ScannedAt          *time.Time         `json:"scannedAt,omitempty"`
-	Sha256             string             `json:"sha256"`
-	SizeBytes          int64              `json:"sizeBytes"`
+// AssistantConversation defines model for AssistantConversation.
+type AssistantConversation struct {
+	ProjectRef *OpaqueRef      `json:"projectRef,omitempty"`
+	Ref        OpaqueRef       `json:"ref"`
+	Title      string          `json:"title"`
+	Turns      []AssistantTurn `json:"turns"`
+	UpdatedAt  Timestamp       `json:"updatedAt"`
+	Version    int64           `json:"version"`
 }
 
-// ArtifactScanStatus defines model for ArtifactScanStatus.
-type ArtifactScanStatus string
+// AssistantPlan defines model for AssistantPlan.
+type AssistantPlan struct {
+	Applied         bool                     `json:"applied"`
+	AuditSummary    string                   `json:"auditSummary"`
+	ConversationRef OpaqueRef                `json:"conversationRef"`
+	NextActions     []NextAction             `json:"nextActions"`
+	Operations      []AssistantPlanOperation `json:"operations"`
+	ProjectRef      *OpaqueRef               `json:"projectRef,omitempty"`
+	Ref             OpaqueRef                `json:"ref"`
+	Version         int64                    `json:"version"`
+}
+
+// AssistantPlanOperation defines model for AssistantPlanOperation.
+type AssistantPlanOperation struct {
+	Permitted         bool                       `json:"permitted"`
+	Ref               OpaqueRef                  `json:"ref"`
+	Summary           string                     `json:"summary"`
+	Title             string                     `json:"title"`
+	Type              AssistantPlanOperationType `json:"type"`
+	UnavailableReason *string                    `json:"unavailableReason,omitempty"`
+}
+
+// AssistantPlanOperationType defines model for AssistantPlanOperation.Type.
+type AssistantPlanOperationType string
+
+// AssistantPlanReceipt defines model for AssistantPlanReceipt.
+type AssistantPlanReceipt struct {
+	Conversation        AssistantConversation `json:"conversation"`
+	CreatedResourceRefs []OpaqueRef           `json:"createdResourceRefs"`
+	Plan                AssistantPlan         `json:"plan"`
+}
+
+// AssistantTurn defines model for AssistantTurn.
+type AssistantTurn struct {
+	Content   string             `json:"content"`
+	CreatedAt Timestamp          `json:"createdAt"`
+	Plan      *AssistantPlan     `json:"plan,omitempty"`
+	Ref       OpaqueRef          `json:"ref"`
+	Role      AssistantTurnRole  `json:"role"`
+	Sequence  int64              `json:"sequence"`
+	State     AssistantTurnState `json:"state"`
+}
+
+// AssistantTurnRole defines model for AssistantTurn.Role.
+type AssistantTurnRole string
+
+// AssistantTurnState defines model for AssistantTurn.State.
+type AssistantTurnState string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
-	Action          string             `json:"action"`
-	ActorId         openapi_types.UUID `json:"actorId"`
-	CorrelationId   openapi_types.UUID `json:"correlationId"`
-	Id              openapi_types.UUID `json:"id"`
-	OccurredAt      time.Time          `json:"occurredAt"`
-	Outcome         string             `json:"outcome"`
-	PolicyRevision  int64              `json:"policyRevision"`
-	ResourceId      openapi_types.UUID `json:"resourceId"`
-	ResourceKind    ResourceKind       `json:"resourceKind"`
-	ResourceVersion int64              `json:"resourceVersion"`
+	Action        string            `json:"action"`
+	Executor      string            `json:"executor"`
+	Initiator     UserSummary       `json:"initiator"`
+	OccurredAt    Timestamp         `json:"occurredAt"`
+	Outcome       AuditEventOutcome `json:"outcome"`
+	ProjectRef    *OpaqueRef        `json:"projectRef,omitempty"`
+	Ref           OpaqueRef         `json:"ref"`
+	ResourceName  string            `json:"resourceName"`
+	ResourceRef   OpaqueRef         `json:"resourceRef"`
+	ResourceType  string            `json:"resourceType"`
+	SafeErrorCode *string           `json:"safeErrorCode,omitempty"`
+	SafeSummary   string            `json:"safeSummary"`
+	Source        string            `json:"source"`
 }
 
-// AuditPage defines model for AuditPage.
-type AuditPage struct {
-	Events        []AuditEvent `json:"events"`
-	NextPageToken *string      `json:"nextPageToken,omitempty"`
+// AuditEventOutcome defines model for AuditEvent.Outcome.
+type AuditEventOutcome string
+
+// BootstrapState defines model for BootstrapState.
+type BootstrapState struct {
+	Assistant          SystemAssistant `json:"assistant"`
+	CurrentUser        UserSummary     `json:"currentUser"`
+	Initialized        bool            `json:"initialized"`
+	NextActions        []NextAction    `json:"nextActions"`
+	OnboardingComplete bool            `json:"onboardingComplete"`
+	WebOnlyReady       bool            `json:"webOnlyReady"`
 }
 
-// Backup Безопасный read model без DSN, object key, credential, private reference/evidence или worker grant.
-type Backup struct {
-	ArchiveSha256               string              `json:"archiveSha256"`
-	AvailableAt                 *time.Time          `json:"availableAt,omitempty"`
-	BackupId                    openapi_types.UUID  `json:"backupId"`
-	CreatedAt                   time.Time           `json:"createdAt"`
-	ProvenanceSha256            string              `json:"provenanceSha256"`
-	Restorable                  bool                `json:"restorable"`
-	RestoreOperationId          *openapi_types.UUID `json:"restoreOperationId,omitempty"`
-	RetainUntil                 *time.Time          `json:"retainUntil,omitempty"`
-	Scope                       BackupScope         `json:"scope"`
-	ScopeId                     openapi_types.UUID  `json:"scopeId"`
-	SourceImmutableInputSha256  string              `json:"sourceImmutableInputSha256"`
-	SourceRuntimeRevisionSha256 string              `json:"sourceRuntimeRevisionSha256"`
-	SourceVersion               int64               `json:"sourceVersion"`
-	State                       BackupState         `json:"state"`
-	UpdatedAt                   time.Time           `json:"updatedAt"`
-	Version                     int64               `json:"version"`
+// GateResolution defines model for GateResolution.
+type GateResolution struct {
+	Comment  *string                `json:"comment,omitempty"`
+	Decision GateResolutionDecision `json:"decision"`
 }
 
-// BackupScope defines model for Backup.Scope.
-type BackupScope string
+// GateResolutionDecision defines model for GateResolution.Decision.
+type GateResolutionDecision string
 
-// BackupPage defines model for BackupPage.
-type BackupPage struct {
-	Backups       []Backup `json:"backups"`
-	NextPageToken *string  `json:"nextPageToken,omitempty"`
+// GateResolutionReceipt defines model for GateResolutionReceipt.
+type GateResolutionReceipt struct {
+	Gate  OwnerGate `json:"gate"`
+	Graph RunGraph  `json:"graph"`
+	Run   Run       `json:"run"`
 }
 
-// BackupState defines model for BackupState.
-type BackupState string
-
-// BindScheduleConfiguration defines model for BindScheduleConfiguration.
-type BindScheduleConfiguration struct {
-	AgentStableKey          string              `json:"agentStableKey"`
-	InstructionSetStableKey string              `json:"instructionSetStableKey"`
-	Intent                  OwnerScheduleIntent `json:"intent"`
-	Name                    string              `json:"name"`
-	ProviderPoolStableKey   string              `json:"providerPoolStableKey"`
+// Incident defines model for Incident.
+type Incident struct {
+	Category     string           `json:"category"`
+	CoreAffected bool             `json:"coreAffected"`
+	CreatedAt    Timestamp        `json:"createdAt"`
+	ProjectRef   *OpaqueRef       `json:"projectRef,omitempty"`
+	Ref          OpaqueRef        `json:"ref"`
+	RunRef       *OpaqueRef       `json:"runRef,omitempty"`
+	SafeNextStep string           `json:"safeNextStep"`
+	SafeSummary  string           `json:"safeSummary"`
+	Severity     IncidentSeverity `json:"severity"`
+	State        IncidentState    `json:"state"`
 }
 
-// ChatProjection defines model for ChatProjection.
-type ChatProjection struct {
-	DefaultAgentStatus    string                           `json:"defaultAgentStatus"`
-	Ownership             ConfigurationOwnershipProjection `json:"ownership"`
-	ProviderChannelStatus string                           `json:"providerChannelStatus"`
-	RoomType              ChatRoomType                     `json:"roomType"`
-	StableKey             string                           `json:"stableKey"`
-	WorkPolicy            string                           `json:"workPolicy"`
-}
-
-// ChatRoomType defines model for ChatRoomType.
-type ChatRoomType string
-
-// ChatSpec defines model for ChatSpec.
-type ChatSpec struct {
-	ChannelSelector      *string      `json:"channelSelector,omitempty"`
-	DefaultAgentSelector *string      `json:"defaultAgentSelector,omitempty"`
-	RoomType             ChatRoomType `json:"roomType"`
-	StableKey            string       `json:"stableKey"`
-	WorkPolicy           string       `json:"workPolicy"`
-}
-
-// ConfigurationChange defines model for ConfigurationChange.
-type ConfigurationChange struct {
-	Action          ConfigurationChangeAction  `json:"action"`
-	ActorId         openapi_types.UUID         `json:"actorId"`
-	CorrelationId   openapi_types.UUID         `json:"correlationId"`
-	Id              openapi_types.UUID         `json:"id"`
-	OccurredAt      time.Time                  `json:"occurredAt"`
-	Outcome         ConfigurationChangeOutcome `json:"outcome"`
-	PolicyRevision  int64                      `json:"policyRevision"`
-	ResourceId      openapi_types.UUID         `json:"resourceId"`
-	ResourceKind    ResourceKind               `json:"resourceKind"`
-	ResourceVersion int64                      `json:"resourceVersion"`
-}
-
-// ConfigurationChangeAction defines model for ConfigurationChangeAction.
-type ConfigurationChangeAction string
-
-// ConfigurationChangeDisplay defines model for ConfigurationChangeDisplay.
-type ConfigurationChangeDisplay string
-
-// ConfigurationChangeKind defines model for ConfigurationChangeKind.
-type ConfigurationChangeKind string
-
-// ConfigurationChangeOutcome defines model for ConfigurationChangeOutcome.
-type ConfigurationChangeOutcome string
-
-// ConfigurationChangePage defines model for ConfigurationChangePage.
-type ConfigurationChangePage struct {
-	Changes       []ConfigurationChange `json:"changes"`
-	NextPageToken *string               `json:"nextPageToken,omitempty"`
-}
-
-// ConfigurationDiff defines model for ConfigurationDiff.
-type ConfigurationDiff struct {
-	Changes       []ConfigurationDiffChange `json:"changes"`
-	Left          ConfigurationVersionRef   `json:"left"`
-	NextPageToken *string                   `json:"nextPageToken,omitempty"`
-	Right         ConfigurationVersionRef   `json:"right"`
-	Truncated     bool                      `json:"truncated"`
-}
-
-// ConfigurationDiffChange defines model for ConfigurationDiffChange.
-type ConfigurationDiffChange struct {
-	After   string                     `json:"after"`
-	Before  string                     `json:"before"`
-	Display ConfigurationChangeDisplay `json:"display"`
-	Kind    ConfigurationChangeKind    `json:"kind"`
-	Path    string                     `json:"path"`
-}
-
-// ConfigurationDrift defines model for ConfigurationDrift.
-type ConfigurationDrift string
-
-// ConfigurationManagedBy defines model for ConfigurationManagedBy.
-type ConfigurationManagedBy string
-
-// ConfigurationOwnershipProjection defines model for ConfigurationOwnershipProjection.
-type ConfigurationOwnershipProjection struct {
-	Drift        ConfigurationDrift     `json:"drift"`
-	ManagedBy    ConfigurationManagedBy `json:"managedBy"`
-	Revision     int64                  `json:"revision"`
-	Source       string                 `json:"source"`
-	SourceSha256 *Sha256                `json:"sourceSha256,omitempty"`
-}
-
-// ConfigurationSourceDetail defines model for ConfigurationSourceDetail.
-type ConfigurationSourceDetail struct {
-	DisplayName    string                 `json:"displayName"`
-	Drift          ConfigurationDrift     `json:"drift"`
-	ManagedBy      ConfigurationManagedBy `json:"managedBy"`
-	ResourceRef    string                 `json:"resourceRef"`
-	Source         string                 `json:"source"`
-	SourceRevision int64                  `json:"sourceRevision"`
-	SourceSha256   *Sha256                `json:"sourceSha256,omitempty"`
-	UpdatedAt      time.Time              `json:"updatedAt"`
-	Version        int64                  `json:"version"`
-}
-
-// ConfigurationVersionRef defines model for ConfigurationVersionRef.
-type ConfigurationVersionRef struct {
-	ContentSha256  Sha256 `json:"contentSha256"`
-	SnapshotSha256 Sha256 `json:"snapshotSha256"`
-	Version        int64  `json:"version"`
-}
-
-// ConfigureIntegration defines model for ConfigureIntegration.
-type ConfigureIntegration struct {
-	Capabilities           []string              `json:"capabilities"`
-	ConfigurationRef       *string               `json:"configurationRef,omitempty"`
-	ConnectionGeneration   int64                 `json:"connectionGeneration"`
-	ConnectionRef          string                `json:"connectionRef"`
-	ConnectionVersion      int64                 `json:"connectionVersion"`
-	DefinitionDigestSha256 Sha256                `json:"definitionDigestSha256"`
-	DefinitionRef          string                `json:"definitionRef"`
-	DefinitionVersion      int64                 `json:"definitionVersion"`
-	EffectKind             IntegrationEffectKind `json:"effectKind"`
-	StableKey              string                `json:"stableKey"`
-}
-
-// CopyAccessResource defines model for CopyAccessResource.
-type CopyAccessResource struct {
-	Kind AccessResourceKind `json:"kind"`
-	Name string             `json:"name"`
-}
-
-// CreateMattermostTeam defines model for CreateMattermostTeam.
-type CreateMattermostTeam struct {
-	DisplayName string `json:"displayName"`
-	SlugIntent  string `json:"slugIntent"`
-}
-
-// CreateProject defines model for CreateProject.
-type CreateProject struct {
-	Name string      `json:"name"`
-	Spec ProjectSpec `json:"spec"`
-}
-
-// CreateResource defines model for CreateResource.
-type CreateResource struct {
-	Kind     MutableResourceKind `json:"kind"`
-	Name     string              `json:"name"`
-	ParentId *openapi_types.UUID `json:"parentId,omitempty"`
-	Spec     ResourceSpecInput   `json:"spec"`
-}
-
-// CreateSchedule defines model for CreateSchedule.
-type CreateSchedule struct {
-	Input ScheduleInput `json:"input"`
-	Name  string        `json:"name"`
-}
-
-// CreateScheduleFromSelections defines model for CreateScheduleFromSelections.
-type CreateScheduleFromSelections struct {
-	AgentStableKey          string              `json:"agentStableKey"`
-	InstructionSetStableKey string              `json:"instructionSetStableKey"`
-	Intent                  OwnerScheduleIntent `json:"intent"`
-	Name                    string              `json:"name"`
-	ProviderPoolStableKey   string              `json:"providerPoolStableKey"`
-}
-
-// CredentialBindingProjection defines model for CredentialBindingProjection.
-type CredentialBindingProjection struct {
-	BindingStatus               string                           `json:"bindingStatus"`
-	ContentSha256               string                           `json:"contentSha256"`
-	ExpiresAt                   *time.Time                       `json:"expiresAt,omitempty"`
-	Ownership                   ConfigurationOwnershipProjection `json:"ownership"`
-	ProviderCapabilities        []string                         `json:"providerCapabilities"`
-	ProviderEligible            bool                             `json:"providerEligible"`
-	ProviderObservationRevision int64                            `json:"providerObservationRevision"`
-	ProviderObservedAt          *time.Time                       `json:"providerObservedAt,omitempty"`
-	Purpose                     string                           `json:"purpose"`
-	Revision                    int64                            `json:"revision"`
-}
-
-// CredentialBindingSourceKind defines model for CredentialBindingSourceKind.
-type CredentialBindingSourceKind string
-
-// CredentialBindingSpec Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
-type CredentialBindingSpec struct {
-	Purpose        string                       `json:"purpose"`
-	Revision       int64                        `json:"revision"`
-	SourceKind     *CredentialBindingSourceKind `json:"sourceKind,omitempty"`
-	SourceSelector *string                      `json:"sourceSelector,omitempty"`
-}
-
-// DecideIntegrationApproval defines model for DecideIntegrationApproval.
-type DecideIntegrationApproval struct {
-	Decision            DecideIntegrationApprovalDecision `json:"decision"`
-	ExpectedRequestHash string                            `json:"expectedRequestHash"`
-	ReasonCode          string                            `json:"reasonCode"`
-}
-
-// DecideIntegrationApprovalDecision defines model for DecideIntegrationApproval.Decision.
-type DecideIntegrationApprovalDecision string
-
-// DetachAccessResource defines model for DetachAccessResource.
-type DetachAccessResource struct {
-	Kind AccessResourceKind `json:"kind"`
-}
-
-// Diagnostics defines model for Diagnostics.
-type Diagnostics struct {
-	ActiveTurnLeases           int64   `json:"activeTurnLeases"`
-	OldestPendingAgeSeconds    float64 `json:"oldestPendingAgeSeconds"`
-	PendingOutboxEvents        int64   `json:"pendingOutboxEvents"`
-	QueuedScheduleOccurrences  int64   `json:"queuedScheduleOccurrences"`
-	RuntimePrincipalGeneration int64   `json:"runtimePrincipalGeneration"`
-	RuntimePrincipalStatus     string  `json:"runtimePrincipalStatus"`
-	SchemaVersion              int64   `json:"schemaVersion"`
-	TerminalOutboxEvents       int64   `json:"terminalOutboxEvents"`
-}
-
-// HealthObservation defines model for HealthObservation.
-type HealthObservation struct {
-	Component    string                  `json:"component"`
-	DigestSha256 *Sha256                 `json:"digestSha256,omitempty"`
-	ObservedAt   time.Time               `json:"observedAt"`
-	Source       HealthObservationSource `json:"source"`
-	Status       HealthObservationStatus `json:"status"`
-	Value        int64                   `json:"value"`
-	Version      int64                   `json:"version"`
-}
-
-// HealthObservationSource defines model for HealthObservationSource.
-type HealthObservationSource string
-
-// HealthObservationStatus defines model for HealthObservationStatus.
-type HealthObservationStatus string
-
-// HealthSeries defines model for HealthSeries.
-type HealthSeries struct {
-	Complete     HealthSeriesComplete `json:"complete"`
-	Observations []HealthObservation  `json:"observations"`
-}
-
-// HealthSeriesComplete defines model for HealthSeries.Complete.
-type HealthSeriesComplete bool
-
-// ImageAdmissionVerdict defines model for ImageAdmissionVerdict.
-type ImageAdmissionVerdict string
-
-// ImageArtifactProjection defines model for ImageArtifactProjection.
-type ImageArtifactProjection struct {
-	AdmissionReceiptOciManifestDigest *string                `json:"admissionReceiptOciManifestDigest,omitempty"`
-	AdmissionReceiptSha256            *string                `json:"admissionReceiptSha256,omitempty"`
-	AdmissionRevision                 int64                  `json:"admissionRevision"`
-	AdmissionVerdict                  *ImageAdmissionVerdict `json:"admissionVerdict,omitempty"`
-	BaseImageDigest                   string                 `json:"baseImageDigest"`
-	BuildAttempt                      int                    `json:"buildAttempt"`
-	BuildId                           openapi_types.UUID     `json:"buildId"`
-	BuildVersion                      int64                  `json:"buildVersion"`
-	BuilderSha256                     string                 `json:"builderSha256"`
-	ContextSha256                     string                 `json:"contextSha256"`
-	FrontendSha256                    string                 `json:"frontendSha256"`
-	ImmutableBuildSha256              string                 `json:"immutableBuildSha256"`
-	ManifestDigest                    string                 `json:"manifestDigest"`
-	Platforms                         []RoleImagePlatform    `json:"platforms"`
-	PolicyRevision                    int64                  `json:"policyRevision"`
-	PolicySha256                      string                 `json:"policySha256"`
-	PromotedAt                        *time.Time             `json:"promotedAt,omitempty"`
-	PromotedReference                 *string                `json:"promotedReference,omitempty"`
-	PromotionReadbackSha256           *string                `json:"promotionReadbackSha256,omitempty"`
-	ProvenanceSha256                  string                 `json:"provenanceSha256"`
-	RecipeGeneration                  int64                  `json:"recipeGeneration"`
-	RecipeId                          openapi_types.UUID     `json:"recipeId"`
-	RecipeVersion                     int64                  `json:"recipeVersion"`
-	RoleRuntimeContractRevision       int64                  `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSha256         string                 `json:"roleRuntimeContractSha256"`
-	SbomSha256                        *string                `json:"sbomSha256,omitempty"`
-	SignatureIdentity                 *string                `json:"signatureIdentity,omitempty"`
-	SignatureSha256                   *string                `json:"signatureSha256,omitempty"`
-	SourceSha256                      string                 `json:"sourceSha256"`
-	SpecSha256                        string                 `json:"specSha256"`
-	StagingReference                  string                 `json:"stagingReference"`
-	ToolchainSha256                   string                 `json:"toolchainSha256"`
-	VulnerabilityEvidenceSha256       *string                `json:"vulnerabilityEvidenceSha256,omitempty"`
-}
-
-// ImageBuildProjection defines model for ImageBuildProjection.
-type ImageBuildProjection struct {
-	Attempt              int                `json:"attempt"`
-	AvailableAt          time.Time          `json:"availableAt"`
-	DiagnosticCode       *string            `json:"diagnosticCode,omitempty"`
-	DiagnosticSummary    *string            `json:"diagnosticSummary,omitempty"`
-	ErrorCode            *string            `json:"errorCode,omitempty"`
-	ImmutableBuildSha256 string             `json:"immutableBuildSha256"`
-	ManifestDigest       *string            `json:"manifestDigest,omitempty"`
-	MaximumAttempts      int                `json:"maximumAttempts"`
-	ProgressPercent      int                `json:"progressPercent"`
-	ProvenanceSha256     *string            `json:"provenanceSha256,omitempty"`
-	RecipeGeneration     int64              `json:"recipeGeneration"`
-	RecipeId             openapi_types.UUID `json:"recipeId"`
-	RecipeVersion        int64              `json:"recipeVersion"`
-	SpecSha256           string             `json:"specSha256"`
-	Stage                ImageBuildStage    `json:"stage"`
-	StagingReference     *string            `json:"stagingReference,omitempty"`
-}
-
-// ImageBuildStage defines model for ImageBuildStage.
-type ImageBuildStage string
-
-// IncidentCommand defines model for IncidentCommand.
-type IncidentCommand struct {
-	Action     IncidentCommandAction `json:"action"`
-	ReasonCode string                `json:"reasonCode"`
-}
-
-// IncidentCommandAction defines model for IncidentCommand.Action.
-type IncidentCommandAction string
-
-// IncidentCommandResult defines model for IncidentCommandResult.
-type IncidentCommandResult struct {
-	Incident IncidentView `json:"incident"`
-}
-
-// IncidentHistoryEntry defines model for IncidentHistoryEntry.
-type IncidentHistoryEntry struct {
-	Action         IncidentHistoryEntryAction `json:"action"`
-	ExecutionFence int64                      `json:"executionFence"`
-	NextActions    []IncidentNextAction       `json:"nextActions"`
-	OccurredAt     time.Time                  `json:"occurredAt"`
-	ReasonCode     string                     `json:"reasonCode"`
-	State          IncidentState              `json:"state"`
-	Version        int64                      `json:"version"`
-}
-
-// IncidentHistoryEntryAction defines model for IncidentHistoryEntry.Action.
-type IncidentHistoryEntryAction string
-
-// IncidentHistoryPage defines model for IncidentHistoryPage.
-type IncidentHistoryPage struct {
-	Entries       []IncidentHistoryEntry `json:"entries"`
-	NextActions   []IncidentNextAction   `json:"nextActions"`
-	NextPageToken *string                `json:"nextPageToken,omitempty"`
-}
-
-// IncidentNextAction defines model for IncidentNextAction.
-type IncidentNextAction string
-
-// IncidentPage defines model for IncidentPage.
-type IncidentPage struct {
-	Incidents     []IncidentView `json:"incidents"`
-	NextPageToken *string        `json:"nextPageToken,omitempty"`
-}
-
-// IncidentSeverity defines model for IncidentSeverity.
+// IncidentSeverity defines model for Incident.Severity.
 type IncidentSeverity string
 
-// IncidentState defines model for IncidentState.
+// IncidentState defines model for Incident.State.
 type IncidentState string
 
-// IncidentView defines model for IncidentView.
-type IncidentView struct {
-	DiagnosticSummary string               `json:"diagnosticSummary"`
-	ExecutionFence    int64                `json:"executionFence"`
-	Impact            string               `json:"impact"`
-	IncidentRef       string               `json:"incidentRef"`
-	Kind              RuntimeIncidentKind  `json:"kind"`
-	NextActions       []IncidentNextAction `json:"nextActions"`
-	OccurredAt        time.Time            `json:"occurredAt"`
-	Run               OwnerDisplayValue    `json:"run"`
-	RunbookUrl        string               `json:"runbookUrl"`
-	SafeCorrelation   string               `json:"safeCorrelation"`
-	Severity          IncidentSeverity     `json:"severity"`
-	State             IncidentState        `json:"state"`
-	UpdatedAt         time.Time            `json:"updatedAt"`
-	Version           int64                `json:"version"`
-	Workspace         OwnerDisplayValue    `json:"workspace"`
+// InstructionCommand defines model for InstructionCommand.
+type InstructionCommand struct {
+	Action                  InstructionCommandAction `json:"action"`
+	PublishedInstructionRef *OpaqueRef               `json:"publishedInstructionRef,omitempty"`
 }
 
-// InstructionSetCommand defines model for InstructionSetCommand.
-type InstructionSetCommand struct {
-	Action        InstructionSetCommandAction `json:"action"`
-	Content       *string                     `json:"content,omitempty"`
-	Locale        *string                     `json:"locale,omitempty"`
-	Name          *string                     `json:"name,omitempty"`
-	ResourceRef   *string                     `json:"resourceRef,omitempty"`
-	StableKey     *string                     `json:"stableKey,omitempty"`
-	TargetVersion *int64                      `json:"targetVersion,omitempty"`
+// InstructionCommandAction defines model for InstructionCommand.Action.
+type InstructionCommandAction string
+
+// InstructionVersion defines model for InstructionVersion.
+type InstructionVersion struct {
+	Content            string                  `json:"content"`
+	CreatedAt          Timestamp               `json:"createdAt"`
+	PublishedAt        *Timestamp              `json:"publishedAt,omitempty"`
+	Ref                OpaqueRef               `json:"ref"`
+	Revision           int                     `json:"revision"`
+	State              InstructionVersionState `json:"state"`
+	ValidationMessages []string                `json:"validationMessages"`
+	Version            int64                   `json:"version"`
 }
 
-// InstructionSetCommandAction defines model for InstructionSetCommand.Action.
-type InstructionSetCommandAction string
-
-// InstructionSetComparison defines model for InstructionSetComparison.
-type InstructionSetComparison struct {
-	ComparisonSha256 Sha256               `json:"comparisonSha256"`
-	ContentEqual     bool                 `json:"contentEqual"`
-	Left             ResourceHistoryEntry `json:"left"`
-	Right            ResourceHistoryEntry `json:"right"`
-}
-
-// InstructionSetProjection defines model for InstructionSetProjection.
-type InstructionSetProjection struct {
-	Content             string                           `json:"content"`
-	ContentSha256       Sha256                           `json:"contentSha256"`
-	CurrentVersion      int64                            `json:"currentVersion"`
-	Locale              string                           `json:"locale"`
-	Ownership           ConfigurationOwnershipProjection `json:"ownership"`
-	PublishedVersion    int64                            `json:"publishedVersion"`
-	StableKey           string                           `json:"stableKey"`
-	ValidationProblems  []InstructionValidationProblem   `json:"validationProblems"`
-	ValidationSucceeded bool                             `json:"validationSucceeded"`
-	VersionState        InstructionVersionState          `json:"versionState"`
-}
-
-// InstructionValidationProblem defines model for InstructionValidationProblem.
-type InstructionValidationProblem struct {
-	Code    string `json:"code"`
-	Column  int    `json:"column"`
-	Field   string `json:"field"`
-	Line    int    `json:"line"`
-	Message string `json:"message"`
-}
-
-// InstructionVersionState defines model for InstructionVersionState.
+// InstructionVersionState defines model for InstructionVersion.State.
 type InstructionVersionState string
 
-// IntegrationApproval defines model for IntegrationApproval.
-type IntegrationApproval struct {
-	ApprovalRef     string                             `json:"approvalRef"`
-	DecidedAt       *time.Time                         `json:"decidedAt,omitempty"`
-	ExpiresAt       time.Time                          `json:"expiresAt"`
-	InvocationRef   string                             `json:"invocationRef"`
-	ReasonCode      *string                            `json:"reasonCode,omitempty"`
-	RedactedPreview IntegrationApprovalRedactedPreview `json:"redactedPreview"`
-	RequestHash     string                             `json:"requestHash"`
-	Status          IntegrationApprovalStatus          `json:"status"`
-	Version         int64                              `json:"version"`
+// IntegrationCapability defines model for IntegrationCapability.
+type IntegrationCapability struct {
+	ApprovalRequired bool                      `json:"approvalRequired"`
+	Description      string                    `json:"description"`
+	Key              string                    `json:"key"`
+	Name             string                    `json:"name"`
+	Risk             IntegrationCapabilityRisk `json:"risk"`
 }
 
-// IntegrationApprovalPage defines model for IntegrationApprovalPage.
-type IntegrationApprovalPage struct {
-	Approvals     []IntegrationApproval `json:"approvals"`
-	NextPageToken *string               `json:"nextPageToken,omitempty"`
+// IntegrationCapabilityRisk defines model for IntegrationCapability.Risk.
+type IntegrationCapabilityRisk string
+
+// IntegrationConfigurationField defines model for IntegrationConfigurationField.
+type IntegrationConfigurationField struct {
+	Help        string                                 `json:"help"`
+	Key         string                                 `json:"key"`
+	Label       string                                 `json:"label"`
+	Placeholder *string                                `json:"placeholder,omitempty"`
+	Required    bool                                   `json:"required"`
+	ValueType   IntegrationConfigurationFieldValueType `json:"valueType"`
 }
 
-// IntegrationApprovalRedactedPreview defines model for IntegrationApprovalRedactedPreview.
-type IntegrationApprovalRedactedPreview struct {
-	Fields  []string `json:"fields"`
-	Summary string   `json:"summary"`
+// IntegrationConfigurationFieldValueType defines model for IntegrationConfigurationField.ValueType.
+type IntegrationConfigurationFieldValueType string
+
+// IntegrationConnection defines model for IntegrationConnection.
+type IntegrationConnection struct {
+	Capabilities          []IntegrationCapability    `json:"capabilities"`
+	CredentialsConfigured bool                       `json:"credentialsConfigured"`
+	CredentialsHint       string                     `json:"credentialsHint"`
+	DefinitionKey         string                     `json:"definitionKey"`
+	Grants                []IntegrationGrant         `json:"grants"`
+	LastTestOutcome       *string                    `json:"lastTestOutcome,omitempty"`
+	LastTestedAt          *Timestamp                 `json:"lastTestedAt,omitempty"`
+	Name                  string                     `json:"name"`
+	NextActions           []NextAction               `json:"nextActions"`
+	Ref                   OpaqueRef                  `json:"ref"`
+	State                 IntegrationConnectionState `json:"state"`
+	Version               int64                      `json:"version"`
 }
 
-// IntegrationApprovalStatus defines model for IntegrationApprovalStatus.
-type IntegrationApprovalStatus string
+// IntegrationConnectionState defines model for IntegrationConnection.State.
+type IntegrationConnectionState string
 
-// IntegrationConfiguration defines model for IntegrationConfiguration.
-type IntegrationConfiguration struct {
-	Capabilities           []string                      `json:"capabilities"`
-	CapabilityDigestSha256 Sha256                        `json:"capabilityDigestSha256"`
-	ConfigurationRef       string                        `json:"configurationRef"`
-	ConnectionGeneration   int64                         `json:"connectionGeneration"`
-	ConnectionRef          string                        `json:"connectionRef"`
-	ConnectionVersion      int64                         `json:"connectionVersion"`
-	DefinitionDigestSha256 Sha256                        `json:"definitionDigestSha256"`
-	DefinitionRef          string                        `json:"definitionRef"`
-	DefinitionVersion      int64                         `json:"definitionVersion"`
-	DigestSha256           Sha256                        `json:"digestSha256"`
-	EffectKind             IntegrationEffectKind         `json:"effectKind"`
-	StableKey              string                        `json:"stableKey"`
-	State                  IntegrationConfigurationState `json:"state"`
-	UpdatedAt              time.Time                     `json:"updatedAt"`
-	Version                int64                         `json:"version"`
+// IntegrationConnectionCommand defines model for IntegrationConnectionCommand.
+type IntegrationConnectionCommand struct {
+	Action IntegrationConnectionCommandAction `json:"action"`
 }
 
-// IntegrationConfigurationPage defines model for IntegrationConfigurationPage.
-type IntegrationConfigurationPage struct {
-	Configurations []IntegrationConfiguration `json:"configurations"`
-	NextPageToken  *string                    `json:"nextPageToken,omitempty"`
-}
+// IntegrationConnectionCommandAction defines model for IntegrationConnectionCommand.Action.
+type IntegrationConnectionCommandAction string
 
-// IntegrationConfigurationState defines model for IntegrationConfigurationState.
-type IntegrationConfigurationState string
+// IntegrationConnectionInput defines model for IntegrationConnectionInput.
+type IntegrationConnectionInput struct {
+	DefinitionKey       string                  `json:"definitionKey"`
+	Name                string                  `json:"name"`
+	PublicConfiguration *map[string]interface{} `json:"publicConfiguration,omitempty"`
+}
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Capabilities  []ProviderCapability       `json:"capabilities"`
-	DefinitionRef string                     `json:"definitionRef"`
-	DigestSha256  Sha256                     `json:"digestSha256"`
-	DisplayName   string                     `json:"displayName"`
-	State         IntegrationDefinitionState `json:"state"`
-	Version       int64                      `json:"version"`
+	Available           bool                            `json:"available"`
+	BuiltIn             bool                            `json:"builtIn"`
+	Capabilities        []IntegrationCapability         `json:"capabilities"`
+	Category            string                          `json:"category"`
+	ConfigurationFields []IntegrationConfigurationField `json:"configurationFields"`
+	Description         string                          `json:"description"`
+	Key                 string                          `json:"key"`
+	Name                string                          `json:"name"`
 }
 
-// IntegrationDefinitionPage defines model for IntegrationDefinitionPage.
-type IntegrationDefinitionPage struct {
-	Definitions []IntegrationDefinition `json:"definitions"`
+// IntegrationGrant defines model for IntegrationGrant.
+type IntegrationGrant struct {
+	AgentRef      *OpaqueRef `json:"agentRef,omitempty"`
+	CapabilityKey string     `json:"capabilityKey"`
+	Enabled       bool       `json:"enabled"`
+	Ref           OpaqueRef  `json:"ref"`
+	TargetName    string     `json:"targetName"`
+	Version       int64      `json:"version"`
+	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
 }
 
-// IntegrationDefinitionState defines model for IntegrationDefinitionState.
-type IntegrationDefinitionState string
-
-// IntegrationEffectKind defines model for IntegrationEffectKind.
-type IntegrationEffectKind string
-
-// IntegrationProjection defines model for IntegrationProjection.
-type IntegrationProjection struct {
-	Capabilities           []string                         `json:"capabilities"`
-	CredentialBindingCount int                              `json:"credentialBindingCount"`
-	DefinitionRef          string                           `json:"definitionRef"`
-	DefinitionVersion      int64                            `json:"definitionVersion"`
-	EndpointStatus         string                           `json:"endpointStatus"`
-	Ownership              ConfigurationOwnershipProjection `json:"ownership"`
+// IntegrationGrantInput defines model for IntegrationGrantInput.
+type IntegrationGrantInput struct {
+	AgentRef      *OpaqueRef `json:"agentRef,omitempty"`
+	CapabilityKey string     `json:"capabilityKey"`
+	Enabled       bool       `json:"enabled"`
+	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
 }
 
-// IntegrationSpec defines model for IntegrationSpec.
-type IntegrationSpec struct {
-	Capabilities               []string `json:"capabilities"`
-	CredentialBindingSelectors []string `json:"credentialBindingSelectors"`
-	DefinitionRef              string   `json:"definitionRef"`
-	DefinitionVersion          int64    `json:"definitionVersion"`
-	SourceSelector             *string  `json:"sourceSelector,omitempty"`
+// Membership defines model for Membership.
+type Membership struct {
+	Active       bool                    `json:"active"`
+	NextActions  []NextAction            `json:"nextActions"`
+	Permissions  []MembershipPermissions `json:"permissions"`
+	PlatformRole MembershipPlatformRole  `json:"platformRole"`
+	Ref          OpaqueRef               `json:"ref"`
+	UpdatedAt    *Timestamp              `json:"updatedAt,omitempty"`
+	User         UserSummary             `json:"user"`
+	Version      int64                   `json:"version"`
 }
 
-// IntegrationTestCategory defines model for IntegrationTestCategory.
-type IntegrationTestCategory string
+// MembershipPermissions defines model for Membership.Permissions.
+type MembershipPermissions string
 
-// IntegrationTestReceipt defines model for IntegrationTestReceipt.
-type IntegrationTestReceipt struct {
-	Category                  IntegrationTestCategory `json:"category"`
-	ConfigurationDigestSha256 *Sha256                 `json:"configurationDigestSha256,omitempty"`
-	ConfigurationRef          *string                 `json:"configurationRef,omitempty"`
-	ConfigurationVersion      *int64                  `json:"configurationVersion,omitempty"`
-	ConnectionGeneration      int64                   `json:"connectionGeneration"`
-	ConnectionRef             string                  `json:"connectionRef"`
-	ConnectionVersion         int64                   `json:"connectionVersion"`
-	DefinitionDigestSha256    Sha256                  `json:"definitionDigestSha256"`
-	DefinitionRef             string                  `json:"definitionRef"`
-	DefinitionVersion         int64                   `json:"definitionVersion"`
-	ExpiresAt                 time.Time               `json:"expiresAt"`
-	ReceiptSha256             Sha256                  `json:"receiptSha256"`
-	TestRef                   string                  `json:"testRef"`
-	TestedAt                  time.Time               `json:"testedAt"`
+// MembershipPlatformRole defines model for Membership.PlatformRole.
+type MembershipPlatformRole string
+
+// NextAction defines model for NextAction.
+type NextAction string
+
+// OpaqueRef defines model for OpaqueRef.
+type OpaqueRef = string
+
+// Overview defines model for Overview.
+type Overview struct {
+	ActiveRunCount   int         `json:"activeRunCount"`
+	ActiveRuns       []Run       `json:"activeRuns"`
+	AgentCount       int         `json:"agentCount"`
+	PendingGateCount int         `json:"pendingGateCount"`
+	PendingGates     []OwnerGate `json:"pendingGates"`
+	ProjectCount     int         `json:"projectCount"`
+	RecentArtifacts  []Artifact  `json:"recentArtifacts"`
 }
 
-// LifecycleState defines model for LifecycleState.
-type LifecycleState string
-
-// LinkMattermostTeam defines model for LinkMattermostTeam.
-type LinkMattermostTeam struct {
-	Selector string `json:"selector"`
+// OwnerGate defines model for OwnerGate.
+type OwnerGate struct {
+	AllowedDecisions    []OwnerGateAllowedDecisions `json:"allowedDecisions"`
+	ArtifactRefs        []OpaqueRef                 `json:"artifactRefs"`
+	ConsequencesSummary string                      `json:"consequencesSummary"`
+	ContextSummary      string                      `json:"contextSummary"`
+	DecidedAt           *Timestamp                  `json:"decidedAt,omitempty"`
+	DecidedBy           *UserSummary                `json:"decidedBy,omitempty"`
+	Decision            *OwnerGateDecision          `json:"decision,omitempty"`
+	DecisionComment     *string                     `json:"decisionComment,omitempty"`
+	ExpiresAt           *Timestamp                  `json:"expiresAt,omitempty"`
+	NextActions         []NextAction                `json:"nextActions"`
+	NodeRef             OpaqueRef                   `json:"nodeRef"`
+	OpenedAt            Timestamp                   `json:"openedAt"`
+	ProjectRef          OpaqueRef                   `json:"projectRef"`
+	Ref                 OpaqueRef                   `json:"ref"`
+	RequestedBy         UserSummary                 `json:"requestedBy"`
+	RunRef              OpaqueRef                   `json:"runRef"`
+	State               OwnerGateState              `json:"state"`
+	Title               string                      `json:"title"`
+	Version             int64                       `json:"version"`
 }
 
-// ManageAccessResource CREATE/UPDATE требуют name+spec; остальные действия требуют resourceId+If-Match и запрещают name/spec.
-type ManageAccessResource struct {
-	Action     ManageAccessResourceAction `json:"action"`
-	Kind       AccessResourceKind         `json:"kind"`
-	Name       *string                    `json:"name,omitempty"`
-	ResourceId *openapi_types.UUID        `json:"resourceId,omitempty"`
-	Spec       *AccessSpecInput           `json:"spec,omitempty"`
-}
+// OwnerGateAllowedDecisions defines model for OwnerGate.AllowedDecisions.
+type OwnerGateAllowedDecisions string
 
-// ManageAccessResourceAction defines model for ManageAccessResource.Action.
-type ManageAccessResourceAction string
-
-// ManageImageBuild defines model for ManageImageBuild.
-type ManageImageBuild struct {
-	Action       ManageImageBuildAction `json:"action"`
-	ImageBuildId openapi_types.UUID     `json:"imageBuildId"`
-}
-
-// ManageImageBuildAction defines model for ManageImageBuild.Action.
-type ManageImageBuildAction string
-
-// ManageRoleImageRecipe CREATE требует name+input без recipeId/If-Match; UPDATE требует все поля; остальные действия требуют recipeId+If-Match без name/input.
-type ManageRoleImageRecipe struct {
-	Action   ManageRoleImageRecipeAction `json:"action"`
-	Input    *RoleImageRecipeInput       `json:"input,omitempty"`
-	Name     *string                     `json:"name,omitempty"`
-	RecipeId *openapi_types.UUID         `json:"recipeId,omitempty"`
-}
-
-// ManageRoleImageRecipeAction defines model for ManageRoleImageRecipe.Action.
-type ManageRoleImageRecipeAction string
-
-// MattermostMappingOperation defines model for MattermostMappingOperation.
-type MattermostMappingOperation struct {
-	Action           MattermostMappingOperationAction `json:"action"`
-	CreatedAt        time.Time                        `json:"createdAt"`
-	FailureCode      *string                          `json:"failureCode,omitempty"`
-	OperationRef     string                           `json:"operationRef"`
-	RecoveryDeadline *time.Time                       `json:"recoveryDeadline,omitempty"`
-	Result           *MattermostTeamBinding           `json:"result,omitempty"`
-	RetryNotBefore   *time.Time                       `json:"retryNotBefore,omitempty"`
-	State            MattermostMappingOperationState  `json:"state"`
-	UpdatedAt        time.Time                        `json:"updatedAt"`
-}
-
-// MattermostMappingOperationAction defines model for MattermostMappingOperation.Action.
-type MattermostMappingOperationAction string
-
-// MattermostMappingOperationState defines model for MattermostMappingOperation.State.
-type MattermostMappingOperationState string
-
-// MattermostTeam defines model for MattermostTeam.
-type MattermostTeam struct {
-	CreatedAt              time.Time            `json:"createdAt"`
-	DisplayName            string               `json:"displayName"`
-	ObservedAt             time.Time            `json:"observedAt"`
-	ProviderSnapshotSha256 Sha256               `json:"providerSnapshotSha256"`
-	Selector               string               `json:"selector"`
-	Slug                   string               `json:"slug"`
-	Status                 MattermostTeamStatus `json:"status"`
-	UpdatedAt              time.Time            `json:"updatedAt"`
-}
-
-// MattermostTeamBinding defines model for MattermostTeamBinding.
-type MattermostTeamBinding struct {
-	MappingGeneration        int64                      `json:"mappingGeneration"`
-	MappingRef               string                     `json:"mappingRef"`
-	MappingVersion           int64                      `json:"mappingVersion"`
-	ProviderEffectGeneration int64                      `json:"providerEffectGeneration"`
-	ProviderEffectVersion    int64                      `json:"providerEffectVersion"`
-	ProviderObservedAt       time.Time                  `json:"providerObservedAt"`
-	State                    MattermostTeamBindingState `json:"state"`
-	Team                     MattermostTeam             `json:"team"`
-	UpdatedAt                time.Time                  `json:"updatedAt"`
-}
-
-// MattermostTeamBindingState defines model for MattermostTeamBinding.State.
-type MattermostTeamBindingState string
-
-// MattermostTeamMutationResult defines model for MattermostTeamMutationResult.
-type MattermostTeamMutationResult struct {
-	Binding                *MattermostTeamBinding                              `json:"binding,omitempty"`
-	Operation              MattermostMappingOperation                          `json:"operation"`
-	ProviderOperationState *MattermostTeamMutationResultProviderOperationState `json:"providerOperationState,omitempty"`
-}
-
-// MattermostTeamMutationResultProviderOperationState defines model for MattermostTeamMutationResult.ProviderOperationState.
-type MattermostTeamMutationResultProviderOperationState string
-
-// MattermostTeamPage defines model for MattermostTeamPage.
-type MattermostTeamPage struct {
-	NextPageToken *string          `json:"nextPageToken,omitempty"`
-	Teams         []MattermostTeam `json:"teams"`
-}
-
-// MattermostTeamStatus defines model for MattermostTeamStatus.
-type MattermostTeamStatus string
-
-// MemoryRecordProjection defines model for MemoryRecordProjection.
-type MemoryRecordProjection struct {
-	ContentSha256 string              `json:"contentSha256"`
-	Importance    int                 `json:"importance"`
-	Provenance    string              `json:"provenance"`
-	RoleId        *openapi_types.UUID `json:"roleId,omitempty"`
-	Scope         string              `json:"scope"`
-	Title         string              `json:"title"`
-}
-
-// MutableResourceKind defines model for MutableResourceKind.
-type MutableResourceKind string
-
-// OwnerConfigurationCatalog defines model for OwnerConfigurationCatalog.
-type OwnerConfigurationCatalog struct {
-	NextPageToken     *string                        `json:"nextPageToken,omitempty"`
-	RuntimeSelections []RuntimeSelectionCatalogEntry `json:"runtimeSelections"`
-	ScheduleDefaults  ScheduleDefaults               `json:"scheduleDefaults"`
-	SchedulePresets   []SchedulePreset               `json:"schedulePresets"`
-}
-
-// OwnerDisplayValue defines model for OwnerDisplayValue.
-type OwnerDisplayValue struct {
-	Status OwnerProjectionStatus `json:"status"`
-	Value  string                `json:"value"`
-}
-
-// OwnerGateDecision defines model for OwnerGateDecision.
+// OwnerGateDecision defines model for OwnerGate.Decision.
 type OwnerGateDecision string
 
-// OwnerGateDeliveryState defines model for OwnerGateDeliveryState.
-type OwnerGateDeliveryState string
+// OwnerGateState defines model for OwnerGate.State.
+type OwnerGateState string
 
-// OwnerGateNextAction defines model for OwnerGateNextAction.
-type OwnerGateNextAction string
-
-// OwnerGateProjection defines model for OwnerGateProjection.
-type OwnerGateProjection struct {
-	Attempt              int                    `json:"attempt"`
-	Decision             OwnerGateDecision      `json:"decision"`
-	DeliveredAt          *time.Time             `json:"deliveredAt,omitempty"`
-	DeliveryState        OwnerGateDeliveryState `json:"deliveryState"`
-	ExpiresAt            time.Time              `json:"expiresAt"`
-	ImmutableInputSha256 string                 `json:"immutableInputSha256"`
-	NextAction           OwnerGateNextAction    `json:"nextAction"`
-	ProcessRunId         openapi_types.UUID     `json:"processRunId"`
-	Resolvable           bool                   `json:"resolvable"`
-	ResultSha256         string                 `json:"resultSha256"`
-	SessionId            openapi_types.UUID     `json:"sessionId"`
-	TurnId               openapi_types.UUID     `json:"turnId"`
+// PlatformCapability defines model for PlatformCapability.
+type PlatformCapability struct {
+	AvailableWithoutIntegration bool   `json:"availableWithoutIntegration"`
+	Category                    string `json:"category"`
+	Description                 string `json:"description"`
+	Key                         string `json:"key"`
+	Name                        string `json:"name"`
 }
 
-// OwnerProjectionStatus defines model for OwnerProjectionStatus.
-type OwnerProjectionStatus string
-
-// OwnerSafeSelection defines model for OwnerSafeSelection.
-type OwnerSafeSelection struct {
-	DigestSha256 *Sha256               `json:"digestSha256,omitempty"`
-	DisplayName  string                `json:"displayName"`
-	MaskedStatus *string               `json:"maskedStatus,omitempty"`
-	Selector     string                `json:"selector"`
-	Status       OwnerProjectionStatus `json:"status"`
-	Version      int64                 `json:"version"`
+// PlatformMembershipChangeInput defines model for PlatformMembershipChangeInput.
+type PlatformMembershipChangeInput struct {
+	Active       bool                                      `json:"active"`
+	PlatformRole PlatformMembershipChangeInputPlatformRole `json:"platformRole"`
 }
 
-// OwnerScheduleAdvancedOverrides defines model for OwnerScheduleAdvancedOverrides.
-type OwnerScheduleAdvancedOverrides struct {
-	Calendar                *OwnerScheduleAdvancedOverridesCalendar       `json:"calendar,omitempty"`
-	Coalesce                *bool                                         `json:"coalesce,omitempty"`
-	Cron                    *string                                       `json:"cron,omitempty"`
-	DeadLetterAfterSeconds  *int64                                        `json:"deadLetterAfterSeconds,omitempty"`
-	DeliveryPolicy          *OwnerScheduleAdvancedOverridesDeliveryPolicy `json:"deliveryPolicy,omitempty"`
-	InitialBackoffSeconds   *int64                                        `json:"initialBackoffSeconds,omitempty"`
-	IntervalSeconds         *int64                                        `json:"intervalSeconds,omitempty"`
-	MaximumAttempts         *int                                          `json:"maximumAttempts,omitempty"`
-	MaximumBackoffSeconds   *int64                                        `json:"maximumBackoffSeconds,omitempty"`
-	MaximumExecutionSeconds *int64                                        `json:"maximumExecutionSeconds,omitempty"`
-	MisfireGraceSeconds     *int64                                        `json:"misfireGraceSeconds,omitempty"`
-	MisfirePolicy           *ScheduleMisfirePolicy                        `json:"misfirePolicy,omitempty"`
-	NotificationPolicy      *ScheduleNotificationPolicy                   `json:"notificationPolicy,omitempty"`
-	OverlapPolicy           *ScheduleOverlapPolicy                        `json:"overlapPolicy,omitempty"`
-	SessionPolicy           *ScheduleSessionPolicy                        `json:"sessionPolicy,omitempty"`
+// PlatformMembershipChangeInputPlatformRole defines model for PlatformMembershipChangeInput.PlatformRole.
+type PlatformMembershipChangeInputPlatformRole string
+
+// PlatformMembershipCreateInput defines model for PlatformMembershipCreateInput.
+type PlatformMembershipCreateInput struct {
+	PlatformRole PlatformMembershipCreateInputPlatformRole `json:"platformRole"`
+	UserRef      OpaqueRef                                 `json:"userRef"`
 }
 
-// OwnerScheduleAdvancedOverridesCalendar defines model for OwnerScheduleAdvancedOverrides.Calendar.
-type OwnerScheduleAdvancedOverridesCalendar string
-
-// OwnerScheduleAdvancedOverridesDeliveryPolicy defines model for OwnerScheduleAdvancedOverrides.DeliveryPolicy.
-type OwnerScheduleAdvancedOverridesDeliveryPolicy string
-
-// OwnerScheduleIntent defines model for OwnerScheduleIntent.
-type OwnerScheduleIntent struct {
-	AdvancedOverrides *OwnerScheduleAdvancedOverrides `json:"advancedOverrides,omitempty"`
-	PresetKey         string                          `json:"presetKey"`
-	Prompt            OwnerSchedulePromptIntent       `json:"prompt"`
-	RoomStableKey     *string                         `json:"roomStableKey,omitempty"`
-	Timezone          string                          `json:"timezone"`
-}
-
-// OwnerScheduleNextAction defines model for OwnerScheduleNextAction.
-type OwnerScheduleNextAction string
-
-// OwnerSchedulePage defines model for OwnerSchedulePage.
-type OwnerSchedulePage struct {
-	Items         []OwnerScheduleView `json:"items"`
-	NextPageToken *string             `json:"nextPageToken,omitempty"`
-}
-
-// OwnerSchedulePromptIntent defines model for OwnerSchedulePromptIntent.
-type OwnerSchedulePromptIntent struct {
-	ArtifactSelector *string `json:"artifactSelector,omitempty"`
-	InlineMarkdown   *string `json:"inlineMarkdown,omitempty"`
-}
-
-// OwnerSchedulePromptView defines model for OwnerSchedulePromptView.
-type OwnerSchedulePromptView struct {
-	ArtifactSelector *string                     `json:"artifactSelector,omitempty"`
-	DigestSha256     *Sha256                     `json:"digestSha256,omitempty"`
-	DisplayName      string                      `json:"displayName"`
-	InlineMarkdown   *string                     `json:"inlineMarkdown,omitempty"`
-	Kind             OwnerSchedulePromptViewKind `json:"kind"`
-	Status           OwnerProjectionStatus       `json:"status"`
-	Version          int64                       `json:"version"`
-}
-
-// OwnerSchedulePromptViewKind defines model for OwnerSchedulePromptView.Kind.
-type OwnerSchedulePromptViewKind string
-
-// OwnerScheduleView defines model for OwnerScheduleView.
-type OwnerScheduleView struct {
-	AdvancedOverrides       []string                        `json:"advancedOverrides"`
-	AgentSelection          OwnerSafeSelection              `json:"agentSelection"`
-	Calendar                OwnerScheduleViewCalendar       `json:"calendar"`
-	Coalesce                bool                            `json:"coalesce"`
-	Cron                    *string                         `json:"cron,omitempty"`
-	DeadLetterAfterSeconds  int64                           `json:"deadLetterAfterSeconds"`
-	DefaultsRevision        int64                           `json:"defaultsRevision"`
-	DefaultsSha256          Sha256                          `json:"defaultsSha256"`
-	DeliveryPolicy          OwnerScheduleViewDeliveryPolicy `json:"deliveryPolicy"`
-	DisplayName             string                          `json:"displayName"`
-	InitialBackoffSeconds   int64                           `json:"initialBackoffSeconds"`
-	InstructionSelection    OwnerSafeSelection              `json:"instructionSelection"`
-	IntervalSeconds         *int64                          `json:"intervalSeconds,omitempty"`
-	MaximumAttempts         int                             `json:"maximumAttempts"`
-	MaximumBackoffSeconds   int64                           `json:"maximumBackoffSeconds"`
-	MaximumExecutionSeconds int64                           `json:"maximumExecutionSeconds"`
-	MisfireGraceSeconds     int64                           `json:"misfireGraceSeconds"`
-	MisfirePolicy           ScheduleMisfirePolicy           `json:"misfirePolicy"`
-	NextActions             []OwnerScheduleNextAction       `json:"nextActions"`
-	NextRunAt               *time.Time                      `json:"nextRunAt,omitempty"`
-	NotificationPolicy      ScheduleNotificationPolicy      `json:"notificationPolicy"`
-	OverlapPolicy           ScheduleOverlapPolicy           `json:"overlapPolicy"`
-	PresetKey               string                          `json:"presetKey"`
-	PresetRevision          int64                           `json:"presetRevision"`
-	PresetSha256            Sha256                          `json:"presetSha256"`
-	Prompt                  OwnerSchedulePromptView         `json:"prompt"`
-	ProviderPoolSelection   OwnerSafeSelection              `json:"providerPoolSelection"`
-	RoomSelection           OwnerSafeSelection              `json:"roomSelection"`
-	ScheduleRef             string                          `json:"scheduleRef"`
-	SessionPolicy           ScheduleSessionPolicy           `json:"sessionPolicy"`
-	State                   LifecycleState                  `json:"state"`
-	Timezone                string                          `json:"timezone"`
-	Version                 int64                           `json:"version"`
-}
-
-// OwnerScheduleViewCalendar defines model for OwnerScheduleView.Calendar.
-type OwnerScheduleViewCalendar string
-
-// OwnerScheduleViewDeliveryPolicy defines model for OwnerScheduleView.DeliveryPolicy.
-type OwnerScheduleViewDeliveryPolicy string
+// PlatformMembershipCreateInputPlatformRole defines model for PlatformMembershipCreateInput.PlatformRole.
+type PlatformMembershipCreateInputPlatformRole string
 
 // Problem defines model for Problem.
 type Problem struct {
+	ActualVersion *int64             `json:"actualVersion,omitempty"`
 	Code          string             `json:"code"`
 	CorrelationId openapi_types.UUID `json:"correlationId"`
-	Retryable     bool               `json:"retryable"`
+	Detail        *string            `json:"detail,omitempty"`
 	Status        int                `json:"status"`
 	Title         string             `json:"title"`
 	Type          string             `json:"type"`
+	WinnerSummary *string            `json:"winnerSummary,omitempty"`
 }
 
-// ProcessRunProjection defines model for ProcessRunProjection.
-type ProcessRunProjection struct {
-	CurrentAttempt       *int                `json:"currentAttempt,omitempty"`
-	CurrentSessionId     *openapi_types.UUID `json:"currentSessionId,omitempty"`
-	CurrentTurnId        *openapi_types.UUID `json:"currentTurnId,omitempty"`
-	ImmutableInputSha256 string              `json:"immutableInputSha256"`
-	ParentProcessRunId   *openapi_types.UUID `json:"parentProcessRunId,omitempty"`
-	PlaybookRef          string              `json:"playbookRef"`
-	PolicyRevision       int64               `json:"policyRevision"`
-	RootAttempt          int                 `json:"rootAttempt"`
-	RootSessionId        openapi_types.UUID  `json:"rootSessionId"`
-	RootTriggerRef       string              `json:"rootTriggerRef"`
-	RootTurnId           openapi_types.UUID  `json:"rootTurnId"`
-	RuntimeRevisionId    openapi_types.UUID  `json:"runtimeRevisionId"`
+// Project defines model for Project.
+type Project struct {
+	ActiveRunCount   int              `json:"activeRunCount"`
+	AgentCount       int              `json:"agentCount"`
+	CreatedAt        *Timestamp       `json:"createdAt,omitempty"`
+	Language         ProjectLanguage  `json:"language"`
+	Lifecycle        ProjectLifecycle `json:"lifecycle"`
+	Name             string           `json:"name"`
+	NextActions      []NextAction     `json:"nextActions"`
+	PendingGateCount int              `json:"pendingGateCount"`
+	Purpose          string           `json:"purpose"`
+	Ref              OpaqueRef        `json:"ref"`
+	UpdatedAt        Timestamp        `json:"updatedAt"`
+	Version          int64            `json:"version"`
+	WorkflowCount    int              `json:"workflowCount"`
 }
 
-// ProjectLocale defines model for ProjectLocale.
-type ProjectLocale string
+// ProjectLanguage defines model for Project.Language.
+type ProjectLanguage string
 
-// ProjectProjection defines model for ProjectProjection.
-type ProjectProjection struct {
-	Description string                           `json:"description"`
-	Locale      ProjectLocale                    `json:"locale"`
-	Ownership   ConfigurationOwnershipProjection `json:"ownership"`
-	Slug        string                           `json:"slug"`
+// ProjectLifecycle defines model for Project.Lifecycle.
+type ProjectLifecycle string
+
+// ProjectInput defines model for ProjectInput.
+type ProjectInput struct {
+	Language ProjectInputLanguage `json:"language"`
+	Name     string               `json:"name"`
+	Purpose  string               `json:"purpose"`
 }
 
-// ProjectSpec defines model for ProjectSpec.
-type ProjectSpec struct {
-	Description *string `json:"description,omitempty"`
-	Locale      string  `json:"locale"`
-	Slug        string  `json:"slug"`
+// ProjectInputLanguage defines model for ProjectInput.Language.
+type ProjectInputLanguage string
+
+// ProjectMembershipChangeInput defines model for ProjectMembershipChangeInput.
+type ProjectMembershipChangeInput struct {
+	Active      bool                                      `json:"active"`
+	Permissions []ProjectMembershipChangeInputPermissions `json:"permissions"`
 }
 
-// PromptProfileProjection defines model for PromptProfileProjection.
-type PromptProfileProjection struct {
-	ContentSha256 string                           `json:"contentSha256"`
-	Locale        string                           `json:"locale"`
-	Ownership     ConfigurationOwnershipProjection `json:"ownership"`
-	Revision      int64                            `json:"revision"`
-	SourceStatus  string                           `json:"sourceStatus"`
+// ProjectMembershipChangeInputPermissions defines model for ProjectMembershipChangeInput.Permissions.
+type ProjectMembershipChangeInputPermissions string
+
+// ProjectMembershipCreateInput defines model for ProjectMembershipCreateInput.
+type ProjectMembershipCreateInput struct {
+	Permissions []ProjectMembershipCreateInputPermissions `json:"permissions"`
+	UserRef     OpaqueRef                                 `json:"userRef"`
 }
 
-// PromptProfileSpec defines model for PromptProfileSpec.
-type PromptProfileSpec struct {
-	ContentSha256  string  `json:"contentSha256"`
-	Locale         string  `json:"locale"`
-	Revision       int64   `json:"revision"`
-	SourceSelector *string `json:"sourceSelector,omitempty"`
+// ProjectMembershipCreateInputPermissions defines model for ProjectMembershipCreateInput.Permissions.
+type ProjectMembershipCreateInputPermissions string
+
+// ProjectPage defines model for ProjectPage.
+type ProjectPage struct {
+	Items         []Project    `json:"items"`
+	NextActions   []NextAction `json:"nextActions"`
+	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
-// ProtectedConfigurationAction defines model for ProtectedConfigurationAction.
-type ProtectedConfigurationAction string
-
-// Provider defines model for Provider.
-type Provider struct {
-	AuthorizationModes []string             `json:"authorizationModes"`
-	Capabilities       []ProviderCapability `json:"capabilities"`
-	DigestSha256       Sha256               `json:"digestSha256"`
-	DisplayName        string               `json:"displayName"`
-	ProviderRef        string               `json:"providerRef"`
-	Version            int64                `json:"version"`
+// RoleEnvironment defines model for RoleEnvironment.
+type RoleEnvironment struct {
+	Available                 bool                      `json:"available"`
+	CustomInstallationAllowed bool                      `json:"customInstallationAllowed"`
+	DescriptionMessageKey     string                    `json:"descriptionMessageKey"`
+	Key                       string                    `json:"key"`
+	NameMessageKey            string                    `json:"nameMessageKey"`
+	Platforms                 []RoleEnvironmentPlatform `json:"platforms"`
+	Recommended               bool                      `json:"recommended"`
+	SoftwareMessageKeys       []string                  `json:"softwareMessageKeys"`
+	UnavailableMessageKey     *string                   `json:"unavailableMessageKey,omitempty"`
 }
 
-// ProviderAuthorization defines model for ProviderAuthorization.
-type ProviderAuthorization struct {
-	Attempt          int                        `json:"attempt"`
-	AuthorizationRef string                     `json:"authorizationRef"`
-	CodeExpiresAt    *time.Time                 `json:"codeExpiresAt,omitempty"`
-	ConnectionRef    *string                    `json:"connectionRef,omitempty"`
-	ExpiresAt        time.Time                  `json:"expiresAt"`
-	FailureCategory  *string                    `json:"failureCategory,omitempty"`
-	Generation       int64                      `json:"generation"`
-	ProviderRef      string                     `json:"providerRef"`
-	State            ProviderAuthorizationState `json:"state"`
-	UpdatedAt        time.Time                  `json:"updatedAt"`
-	UserCode         *string                    `json:"userCode,omitempty"`
-	VerificationUrl  *string                    `json:"verificationUrl,omitempty"`
-	Version          int64                      `json:"version"`
+// RoleEnvironmentPage defines model for RoleEnvironmentPage.
+type RoleEnvironmentPage struct {
+	Items []RoleEnvironment `json:"items"`
 }
 
-// ProviderAuthorizationState defines model for ProviderAuthorizationState.
-type ProviderAuthorizationState string
-
-// ProviderCapability defines model for ProviderCapability.
-type ProviderCapability struct {
-	Name             string `json:"name"`
-	RequiresApproval bool   `json:"requiresApproval"`
-	Risk             string `json:"risk"`
+// RoleEnvironmentPlatform defines model for RoleEnvironmentPlatform.
+type RoleEnvironmentPlatform struct {
+	Architecture RoleEnvironmentPlatformArchitecture `json:"architecture"`
+	Os           RoleEnvironmentPlatformOs           `json:"os"`
+	Variant      *string                             `json:"variant,omitempty"`
 }
 
-// ProviderCapacity defines model for ProviderCapacity.
-type ProviderCapacity struct {
-	DigestSha256          Sha256     `json:"digestSha256"`
-	ExpiresAt             time.Time  `json:"expiresAt"`
-	Limit                 int64      `json:"limit"`
-	ObservedAt            time.Time  `json:"observedAt"`
-	ResetsAt              *time.Time `json:"resetsAt,omitempty"`
-	Revision              int64      `json:"revision"`
-	Usage                 int64      `json:"usage"`
-	WindowDurationSeconds int64      `json:"windowDurationSeconds"`
+// RoleEnvironmentPlatformArchitecture defines model for RoleEnvironmentPlatform.Architecture.
+type RoleEnvironmentPlatformArchitecture string
+
+// RoleEnvironmentPlatformOs defines model for RoleEnvironmentPlatform.Os.
+type RoleEnvironmentPlatformOs string
+
+// RoleEnvironmentSelection defines model for RoleEnvironmentSelection.
+type RoleEnvironmentSelection struct {
+	EnvironmentKey string `json:"environmentKey"`
+
+	// InstallationBlock Дополнительный declarative build fragment; доступен только для явно разрешённого окружения
+	InstallationBlock *string   `json:"installationBlock,omitempty"`
+	PackageKeys       *[]string `json:"packageKeys,omitempty"`
+	ToolKeys          *[]string `json:"toolKeys,omitempty"`
 }
 
-// ProviderCatalog defines model for ProviderCatalog.
-type ProviderCatalog struct {
-	DigestSha256 Sha256     `json:"digestSha256"`
-	Providers    []Provider `json:"providers"`
-	Version      int64      `json:"version"`
+// RoleImageBuild defines model for RoleImageBuild.
+type RoleImageBuild struct {
+	Attempt           int                 `json:"attempt"`
+	CreatedAt         Timestamp           `json:"createdAt"`
+	DiagnosticCode    *string             `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary *string             `json:"diagnosticSummary,omitempty"`
+	ProgressPercent   int                 `json:"progressPercent"`
+	RecipeRef         OpaqueRef           `json:"recipeRef"`
+	Ref               OpaqueRef           `json:"ref"`
+	SafeErrorCode     *string             `json:"safeErrorCode,omitempty"`
+	Stage             RoleImageBuildStage `json:"stage"`
+	UpdatedAt         Timestamp           `json:"updatedAt"`
+	Version           int64               `json:"version"`
 }
 
-// ProviderConnection defines model for ProviderConnection.
-type ProviderConnection struct {
-	ActiveCredentialGeneration int64                   `json:"activeCredentialGeneration"`
-	Capabilities               []string                `json:"capabilities"`
-	CapabilityDigestSha256     Sha256                  `json:"capabilityDigestSha256"`
-	Capacity                   *ProviderCapacity       `json:"capacity,omitempty"`
-	ConnectionRef              string                  `json:"connectionRef"`
-	DisplayName                string                  `json:"displayName"`
-	Generation                 int64                   `json:"generation"`
-	MaskedAccount              string                  `json:"maskedAccount"`
-	MaskedLabel                string                  `json:"maskedLabel"`
-	ObservationDigestSha256    Sha256                  `json:"observationDigestSha256"`
-	ObservedAt                 time.Time               `json:"observedAt"`
-	ProviderRef                string                  `json:"providerRef"`
-	StableKey                  string                  `json:"stableKey"`
-	State                      ProviderConnectionState `json:"state"`
-	UpdatedAt                  time.Time               `json:"updatedAt"`
-	Version                    int64                   `json:"version"`
+// RoleImageBuildStage defines model for RoleImageBuild.Stage.
+type RoleImageBuildStage string
+
+// RoleImageRecipe defines model for RoleImageRecipe.
+type RoleImageRecipe struct {
+	CreatedAt          Timestamp                `json:"createdAt"`
+	Environment        RoleEnvironmentSelection `json:"environment"`
+	Generation         int64                    `json:"generation"`
+	Name               string                   `json:"name"`
+	NextActions        []NextAction             `json:"nextActions"`
+	ProjectRef         OpaqueRef                `json:"projectRef"`
+	PromotedImageReady bool                     `json:"promotedImageReady"`
+	Ref                OpaqueRef                `json:"ref"`
+	RoleDefinitionRef  OpaqueRef                `json:"roleDefinitionRef"`
+	State              RoleImageRecipeState     `json:"state"`
+	UpdatedAt          Timestamp                `json:"updatedAt"`
+	Version            int64                    `json:"version"`
 }
 
-// ProviderConnectionMaskedStatus defines model for ProviderConnectionMaskedStatus.
-type ProviderConnectionMaskedStatus string
+// RoleImageRecipeState defines model for RoleImageRecipe.State.
+type RoleImageRecipeState string
 
-// ProviderConnectionPage defines model for ProviderConnectionPage.
-type ProviderConnectionPage struct {
-	Connections   []ProviderConnection `json:"connections"`
-	NextPageToken *string              `json:"nextPageToken,omitempty"`
+// RoleImageRecipeCommand defines model for RoleImageRecipeCommand.
+type RoleImageRecipeCommand struct {
+	Action RoleImageRecipeCommandAction `json:"action"`
 }
 
-// ProviderConnectionReferenceProjection defines model for ProviderConnectionReferenceProjection.
-type ProviderConnectionReferenceProjection struct {
-	Capabilities         []string                       `json:"capabilities"`
-	Eligible             bool                           `json:"eligible"`
-	MaskedLabel          string                         `json:"maskedLabel"`
-	MaskedStatus         ProviderConnectionMaskedStatus `json:"maskedStatus"`
-	ObservationExpiresAt time.Time                      `json:"observationExpiresAt"`
-	ObservedAt           time.Time                      `json:"observedAt"`
-	ObservedLimit        int64                          `json:"observedLimit"`
-	ObservedUsage        int64                          `json:"observedUsage"`
-	Provider             string                         `json:"provider"`
-	ReferenceVersion     int64                          `json:"referenceVersion"`
-	StableKey            string                         `json:"stableKey"`
+// RoleImageRecipeCommandAction defines model for RoleImageRecipeCommand.Action.
+type RoleImageRecipeCommandAction string
+
+// RoleImageRecipeCommandReceipt defines model for RoleImageRecipeCommandReceipt.
+type RoleImageRecipeCommandReceipt struct {
+	ImageBuild *RoleImageBuild `json:"imageBuild,omitempty"`
+	Recipe     RoleImageRecipe `json:"recipe"`
+	Reused     bool            `json:"reused"`
 }
 
-// ProviderConnectionState defines model for ProviderConnectionState.
-type ProviderConnectionState string
-
-// ProviderPoolCommand defines model for ProviderPoolCommand.
-type ProviderPoolCommand struct {
-	Action      ProviderPoolCommandAction  `json:"action"`
-	DisplayName *string                    `json:"displayName,omitempty"`
-	Members     *[]ProviderPoolMemberInput `json:"members,omitempty"`
-	Policy      *ProviderPoolCommandPolicy `json:"policy,omitempty"`
-	PoolRef     *string                    `json:"poolRef,omitempty"`
-	StableKey   *string                    `json:"stableKey,omitempty"`
+// RoleImageRecipeCreateInput defines model for RoleImageRecipeCreateInput.
+type RoleImageRecipeCreateInput struct {
+	Environment       RoleEnvironmentSelection `json:"environment"`
+	Name              string                   `json:"name"`
+	RoleDefinitionRef OpaqueRef                `json:"roleDefinitionRef"`
 }
 
-// ProviderPoolCommandAction defines model for ProviderPoolCommand.Action.
-type ProviderPoolCommandAction string
-
-// ProviderPoolCommandPolicy defines model for ProviderPoolCommand.Policy.
-type ProviderPoolCommandPolicy string
-
-// ProviderPoolMemberInput defines model for ProviderPoolMemberInput.
-type ProviderPoolMemberInput struct {
-	ConnectionGeneration int64  `json:"connectionGeneration"`
-	ConnectionRef        string `json:"connectionRef"`
-	ConnectionVersion    int64  `json:"connectionVersion"`
-	Weight               int    `json:"weight"`
+// RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
+type RoleImageRecipeDetail struct {
+	Builds []RoleImageBuild `json:"builds"`
+	Recipe RoleImageRecipe  `json:"recipe"`
 }
 
-// ProviderPoolMemberView defines model for ProviderPoolMemberView.
-type ProviderPoolMemberView struct {
-	ConnectionGeneration    int64  `json:"connectionGeneration"`
-	ConnectionRef           string `json:"connectionRef"`
-	ConnectionVersion       int64  `json:"connectionVersion"`
-	Eligible                bool   `json:"eligible"`
-	ObservationDigestSha256 Sha256 `json:"observationDigestSha256"`
-	Weight                  int    `json:"weight"`
-}
-
-// ProviderPoolPage defines model for ProviderPoolPage.
-type ProviderPoolPage struct {
-	NextPageToken *string            `json:"nextPageToken,omitempty"`
-	Pools         []ProviderPoolView `json:"pools"`
-}
-
-// ProviderPoolPolicy defines model for ProviderPoolPolicy.
-type ProviderPoolPolicy string
-
-// ProviderPoolProjection defines model for ProviderPoolProjection.
-type ProviderPoolProjection struct {
-	BindingCount             int                `json:"bindingCount"`
-	ObservationMaxAgeSeconds int64              `json:"observationMaxAgeSeconds"`
-	Policy                   ProviderPoolPolicy `json:"policy"`
-	PolicyRevision           int64              `json:"policyRevision"`
-}
-
-// ProviderPoolResourceProjection defines model for ProviderPoolResourceProjection.
-type ProviderPoolResourceProjection struct {
-	EligibilitySnapshotSha256 Sha256                           `json:"eligibilitySnapshotSha256"`
-	EligibleMembers           int                              `json:"eligibleMembers"`
-	ObservationMaxAgeSeconds  int64                            `json:"observationMaxAgeSeconds"`
-	Ownership                 ConfigurationOwnershipProjection `json:"ownership"`
-	Policy                    ProviderPoolPolicy               `json:"policy"`
-	PolicyRevision            int64                            `json:"policyRevision"`
-	StableKey                 string                           `json:"stableKey"`
-	TotalMembers              int                              `json:"totalMembers"`
-}
-
-// ProviderPoolState defines model for ProviderPoolState.
-type ProviderPoolState string
-
-// ProviderPoolView defines model for ProviderPoolView.
-type ProviderPoolView struct {
-	DesiredDigestSha256     Sha256                   `json:"desiredDigestSha256"`
-	DisplayName             string                   `json:"displayName"`
-	EffectiveDigestSha256   Sha256                   `json:"effectiveDigestSha256"`
-	Members                 []ProviderPoolMemberView `json:"members"`
-	ObservationDigestSha256 Sha256                   `json:"observationDigestSha256"`
-	ObservationVersion      int64                    `json:"observationVersion"`
-	Policy                  ProviderPoolViewPolicy   `json:"policy"`
-	PoolRef                 string                   `json:"poolRef"`
-	StableKey               string                   `json:"stableKey"`
-	State                   ProviderPoolState        `json:"state"`
-	UpdatedAt               time.Time                `json:"updatedAt"`
-	Version                 int64                    `json:"version"`
-}
-
-// ProviderPoolViewPolicy defines model for ProviderPoolView.Policy.
-type ProviderPoolViewPolicy string
-
-// RelinkMattermostTeam defines model for RelinkMattermostTeam.
-type RelinkMattermostTeam struct {
-	ExpectedGeneration int64  `json:"expectedGeneration"`
-	Selector           string `json:"selector"`
-}
-
-// RepositoryWorkspaceProjection defines model for RepositoryWorkspaceProjection.
-type RepositoryWorkspaceProjection struct {
-	CredentialBindingStatus string                           `json:"credentialBindingStatus"`
-	DefaultBranch           string                           `json:"defaultBranch"`
-	Ownership               ConfigurationOwnershipProjection `json:"ownership"`
-	RepositoryStatus        string                           `json:"repositoryStatus"`
-	WorkspaceMode           string                           `json:"workspaceMode"`
-}
-
-// RepositoryWorkspaceSpec defines model for RepositoryWorkspaceSpec.
-type RepositoryWorkspaceSpec struct {
-	CredentialBindingSelector *string `json:"credentialBindingSelector,omitempty"`
-	DefaultBranch             string  `json:"defaultBranch"`
-	RepositorySelector        *string `json:"repositorySelector,omitempty"`
-	WorkspaceMode             string  `json:"workspaceMode"`
-}
-
-// ResolveOwnerGate defines model for ResolveOwnerGate.
-type ResolveOwnerGate struct {
-	Decision ResolveOwnerGateDecision `json:"decision"`
-	Reason   string                   `json:"reason"`
-}
-
-// ResolveOwnerGateDecision defines model for ResolveOwnerGateDecision.
-type ResolveOwnerGateDecision string
-
-// ResolveOwnerGateResult defines model for ResolveOwnerGateResult.
-type ResolveOwnerGateResult struct {
-	OwnerGate  Resource `json:"ownerGate"`
-	ProcessRun Resource `json:"processRun"`
-}
-
-// ResolveScheduleRecovery defines model for ResolveScheduleRecovery.
-type ResolveScheduleRecovery struct {
-	Action                 ScheduleRecoveryAction `json:"action"`
-	ExpectedAttempt        int                    `json:"expectedAttempt"`
-	ReasonCode             string                 `json:"reasonCode"`
-	RecoveryEvidenceSha256 string                 `json:"recoveryEvidenceSha256"`
-}
-
-// Resource defines model for Resource.
-type Resource struct {
-	CreatedAt        time.Time              `json:"createdAt"`
-	Id               openapi_types.UUID     `json:"id"`
-	Kind             ResourceKind           `json:"kind"`
-	Name             string                 `json:"name"`
-	NextActions      []ResourceNextAction   `json:"nextActions"`
-	ParentId         *openapi_types.UUID    `json:"parentId,omitempty"`
-	ProjectId        *openapi_types.UUID    `json:"projectId,omitempty"`
-	ProjectionSha256 Sha256                 `json:"projectionSha256"`
-	Spec             ResourceSpecProjection `json:"spec"`
-	State            LifecycleState         `json:"state"`
-	UpdatedAt        time.Time              `json:"updatedAt"`
-	Version          int64                  `json:"version"`
-}
-
-// ResourceHistoryEntry defines model for ResourceHistoryEntry.
-type ResourceHistoryEntry struct {
-	Action         string    `json:"action"`
-	OccurredAt     time.Time `json:"occurredAt"`
-	Resource       Resource  `json:"resource"`
-	SnapshotSha256 Sha256    `json:"snapshotSha256"`
-}
-
-// ResourceHistoryPage defines model for ResourceHistoryPage.
-type ResourceHistoryPage struct {
-	Entries       []ResourceHistoryEntry `json:"entries"`
-	NextPageToken *string                `json:"nextPageToken,omitempty"`
-}
-
-// ResourceKind defines model for ResourceKind.
-type ResourceKind string
-
-// ResourceNextAction defines model for ResourceNextAction.
-type ResourceNextAction string
-
-// ResourcePage defines model for ResourcePage.
-type ResourcePage struct {
-	NextPageToken *string    `json:"nextPageToken,omitempty"`
-	Resources     []Resource `json:"resources"`
-}
-
-// ResourceSpecInput defines model for ResourceSpecInput.
-type ResourceSpecInput struct {
-	Chat *ChatSpec `json:"chat,omitempty"`
-
-	// CredentialBinding Browser-safe выбор уже материализованной server-owned credential binding; private locator и principal не пересекают browser boundary.
-	CredentialBinding   *CredentialBindingSpec   `json:"credentialBinding,omitempty"`
-	Integration         *IntegrationSpec         `json:"integration,omitempty"`
-	RepositoryWorkspace *RepositoryWorkspaceSpec `json:"repositoryWorkspace,omitempty"`
-}
-
-// ResourceSpecProjection defines model for ResourceSpecProjection.
-type ResourceSpecProjection struct {
-	Agent                       *AgentProjection                       `json:"agent,omitempty"`
-	AgentAssignment             *AgentAssignmentProjection             `json:"agentAssignment,omitempty"`
-	Artifact                    *ArtifactProjection                    `json:"artifact,omitempty"`
-	Chat                        *ChatProjection                        `json:"chat,omitempty"`
-	CredentialBinding           *CredentialBindingProjection           `json:"credentialBinding,omitempty"`
-	ImageArtifact               *ImageArtifactProjection               `json:"imageArtifact,omitempty"`
-	ImageBuild                  *ImageBuildProjection                  `json:"imageBuild,omitempty"`
-	InstructionSet              *InstructionSetProjection              `json:"instructionSet,omitempty"`
-	Integration                 *IntegrationProjection                 `json:"integration,omitempty"`
-	MemoryRecord                *MemoryRecordProjection                `json:"memoryRecord,omitempty"`
-	OwnerGate                   *OwnerGateProjection                   `json:"ownerGate,omitempty"`
-	ProcessRun                  *ProcessRunProjection                  `json:"processRun,omitempty"`
-	Project                     *ProjectProjection                     `json:"project,omitempty"`
-	PromptProfile               *PromptProfileProjection               `json:"promptProfile,omitempty"`
-	ProviderConnectionReference *ProviderConnectionReferenceProjection `json:"providerConnectionReference,omitempty"`
-	ProviderPool                *ProviderPoolResourceProjection        `json:"providerPool,omitempty"`
-	RepositoryWorkspace         *RepositoryWorkspaceProjection         `json:"repositoryWorkspace,omitempty"`
-	Role                        *RoleProjection                        `json:"role,omitempty"`
-	RoleDefinition              *RoleDefinitionProjection              `json:"roleDefinition,omitempty"`
-	RoleImageRecipe             *RoleImageRecipeProjection             `json:"roleImageRecipe,omitempty"`
-	RuntimeRevision             *RuntimeRevisionProjection             `json:"runtimeRevision,omitempty"`
-	Schedule                    *ScheduleProjection                    `json:"schedule,omitempty"`
-	Session                     *SessionProjection                     `json:"session,omitempty"`
-	Team                        *TeamProjection                        `json:"team,omitempty"`
-	Turn                        *TurnProjection                        `json:"turn,omitempty"`
-	WorkClaim                   *WorkClaimProjection                   `json:"workClaim,omitempty"`
-	WorkspaceBackup             *WorkspaceBackupProjection             `json:"workspaceBackup,omitempty"`
-	WorkspaceMattermostMapping  *WorkspaceMattermostMappingProjection  `json:"workspaceMattermostMapping,omitempty"`
-	WorkspaceRestore            *WorkspaceRestoreProjection            `json:"workspaceRestore,omitempty"`
-}
-
-// RestoreBackup defines model for RestoreBackup.
-type RestoreBackup struct {
-	ArchiveSha256    string             `json:"archiveSha256"`
-	ProvenanceSha256 string             `json:"provenanceSha256"`
-	Scope            RestoreBackupScope `json:"scope"`
-	ScopeId          openapi_types.UUID `json:"scopeId"`
-	SourceVersion    int64              `json:"sourceVersion"`
-}
-
-// RestoreBackupScope defines model for RestoreBackup.Scope.
-type RestoreBackupScope string
-
-// RestoreOperation Versioned readback без archive locator, PVC tuple, credential, grant или private evidence.
-type RestoreOperation struct {
-	ArchiveSha256      string                     `json:"archiveSha256"`
-	BackupId           openapi_types.UUID         `json:"backupId"`
-	CreatedAt          time.Time                  `json:"createdAt"`
-	ErrorCode          *string                    `json:"errorCode,omitempty"`
-	Generation         int64                      `json:"generation"`
-	NextAction         RestoreOperationNextAction `json:"nextAction"`
-	Partial            bool                       `json:"partial"`
-	ProvenanceSha256   string                     `json:"provenanceSha256"`
-	RestoreOperationId openapi_types.UUID         `json:"restoreOperationId"`
-	Scope              RestoreOperationScope      `json:"scope"`
-	ScopeId            openapi_types.UUID         `json:"scopeId"`
-	SourceVersion      int64                      `json:"sourceVersion"`
-	State              RestoreOperationState      `json:"state"`
-	TargetAttempt      int                        `json:"targetAttempt"`
-	TargetTurnId       openapi_types.UUID         `json:"targetTurnId"`
-	UpdatedAt          time.Time                  `json:"updatedAt"`
-	Version            int64                      `json:"version"`
-}
-
-// RestoreOperationScope defines model for RestoreOperation.Scope.
-type RestoreOperationScope string
-
-// RestoreOperationNextAction defines model for RestoreOperationNextAction.
-type RestoreOperationNextAction string
-
-// RestoreOperationPage defines model for RestoreOperationPage.
-type RestoreOperationPage struct {
-	NextPageToken *string            `json:"nextPageToken,omitempty"`
-	Operations    []RestoreOperation `json:"operations"`
-}
-
-// RestoreOperationState defines model for RestoreOperationState.
-type RestoreOperationState string
-
-// RoleDefinitionCommand defines model for RoleDefinitionCommand.
-type RoleDefinitionCommand struct {
-	Action                          ProtectedConfigurationAction `json:"action"`
-	AllowedTargetRoleDefinitionRefs *[]string                    `json:"allowedTargetRoleDefinitionRefs,omitempty"`
-	Capabilities                    *[]string                    `json:"capabilities,omitempty"`
-	Description                     *string                      `json:"description,omitempty"`
-	Name                            *string                      `json:"name,omitempty"`
-	ResourceRef                     *string                      `json:"resourceRef,omitempty"`
-	RoleImageRecipeRef              *string                      `json:"roleImageRecipeRef,omitempty"`
-	RoleImageRecipeSha256           *Sha256                      `json:"roleImageRecipeSha256,omitempty"`
-	RoleImageRecipeVersion          *int64                       `json:"roleImageRecipeVersion,omitempty"`
-	StableKey                       *string                      `json:"stableKey,omitempty"`
-}
-
-// RoleDefinitionProjection defines model for RoleDefinitionProjection.
-type RoleDefinitionProjection struct {
-	AllowedTargetRoleDefinitionRefs []string                         `json:"allowedTargetRoleDefinitionRefs"`
-	Capabilities                    []string                         `json:"capabilities"`
-	Description                     string                           `json:"description"`
-	Ownership                       ConfigurationOwnershipProjection `json:"ownership"`
-	RoleImageRecipeRef              *string                          `json:"roleImageRecipeRef,omitempty"`
-	RoleImageRecipeSha256           *Sha256                          `json:"roleImageRecipeSha256,omitempty"`
-	RoleImageRecipeVersion          int64                            `json:"roleImageRecipeVersion"`
-	StableKey                       string                           `json:"stableKey"`
-}
-
-// RoleImagePackage defines model for RoleImagePackage.
-type RoleImagePackage struct {
-	Digest    string                  `json:"digest"`
-	Manager   RoleImagePackageManager `json:"manager"`
-	Name      string                  `json:"name"`
-	SourceRef string                  `json:"sourceRef"`
-	Version   string                  `json:"version"`
-}
-
-// RoleImagePackageManager defines model for RoleImagePackageManager.
-type RoleImagePackageManager string
-
-// RoleImagePlatform defines model for RoleImagePlatform.
-type RoleImagePlatform struct {
-	Architecture RoleImagePlatformArchitecture `json:"architecture"`
-	Os           RoleImagePlatformOS           `json:"os"`
-	Variant      *string                       `json:"variant,omitempty"`
-}
-
-// RoleImagePlatformArchitecture defines model for RoleImagePlatformArchitecture.
-type RoleImagePlatformArchitecture string
-
-// RoleImagePlatformOS defines model for RoleImagePlatformOS.
-type RoleImagePlatformOS string
-
-// RoleImageRecipeInput defines model for RoleImageRecipeInput.
-type RoleImageRecipeInput struct {
-	BaseImageDigest    string              `json:"baseImageDigest"`
-	BaseImageReference string              `json:"baseImageReference"`
-	BuilderSha256      string              `json:"builderSha256"`
-	ContextRef         string              `json:"contextRef"`
-	ContextSha256      string              `json:"contextSha256"`
-	FrontendSha256     string              `json:"frontendSha256"`
-	InstallationBlock  string              `json:"installationBlock"`
-	Packages           []RoleImagePackage  `json:"packages"`
-	Platforms          []RoleImagePlatform `json:"platforms"`
-	SourceRef          string              `json:"sourceRef"`
-	SourceRevision     string              `json:"sourceRevision"`
-	SourceSha256       string              `json:"sourceSha256"`
-	ToolchainSha256    string              `json:"toolchainSha256"`
-	Tools              []RoleImageTool     `json:"tools"`
-}
-
-// RoleImageRecipeProjection defines model for RoleImageRecipeProjection.
-type RoleImageRecipeProjection struct {
-	Generation int64 `json:"generation"`
-
-	// Input Безопасная read/status проекция без installation block и build secret references.
-	Input                       RoleImageRecipeStatusInput `json:"input"`
-	PolicyRevision              int64                      `json:"policyRevision"`
-	PolicySha256                string                     `json:"policySha256"`
-	RoleRuntimeContractRevision int64                      `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSha256   string                     `json:"roleRuntimeContractSha256"`
-	SpecSha256                  string                     `json:"specSha256"`
-}
-
-// RoleImageRecipeReadback Полный version-pinned owner readback без значений credentials.
-type RoleImageRecipeReadback struct {
-	Generation                  int64                `json:"generation"`
-	Input                       RoleImageRecipeInput `json:"input"`
-	PolicyRevision              int64                `json:"policyRevision"`
-	PolicySha256                string               `json:"policySha256"`
-	Recipe                      Resource             `json:"recipe"`
-	RoleRuntimeContractRevision int64                `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSha256   string               `json:"roleRuntimeContractSha256"`
-	SpecSha256                  string               `json:"specSha256"`
-}
-
-// RoleImageRecipeResult defines model for RoleImageRecipeResult.
-type RoleImageRecipeResult struct {
-	ImageArtifact *Resource `json:"imageArtifact,omitempty"`
-	ImageBuild    *Resource `json:"imageBuild,omitempty"`
-	Recipe        Resource  `json:"recipe"`
-	Reused        bool      `json:"reused"`
-}
-
-// RoleImageRecipeStatusInput Безопасная read/status проекция без installation block и build secret references.
-type RoleImageRecipeStatusInput struct {
-	BaseImageDigest    string              `json:"baseImageDigest"`
-	BaseImageReference string              `json:"baseImageReference"`
-	BuilderSha256      string              `json:"builderSha256"`
-	ContextRef         string              `json:"contextRef"`
-	ContextSha256      string              `json:"contextSha256"`
-	FrontendSha256     string              `json:"frontendSha256"`
-	Packages           []RoleImagePackage  `json:"packages"`
-	Platforms          []RoleImagePlatform `json:"platforms"`
-	SourceRef          string              `json:"sourceRef"`
-	SourceRevision     string              `json:"sourceRevision"`
-	SourceSha256       string              `json:"sourceSha256"`
-	ToolchainSha256    string              `json:"toolchainSha256"`
-	Tools              []RoleImageTool     `json:"tools"`
-}
-
-// RoleImageTool defines model for RoleImageTool.
-type RoleImageTool struct {
-	Name      string `json:"name"`
-	Sha256    string `json:"sha256"`
-	SourceRef string `json:"sourceRef"`
-	Version   string `json:"version"`
-}
-
-// RoleProjection defines model for RoleProjection.
-type RoleProjection struct {
-	AllowedTargetRoleCount         int                              `json:"allowedTargetRoleCount"`
-	Capabilities                   []string                         `json:"capabilities"`
-	IntegrationCount               int                              `json:"integrationCount"`
-	Ownership                      ConfigurationOwnershipProjection `json:"ownership"`
-	PromptProfileStatus            string                           `json:"promptProfileStatus"`
-	ProviderAccountPool            ProviderPoolProjection           `json:"providerAccountPool"`
-	ProviderCredentialBindingCount int                              `json:"providerCredentialBindingCount"`
-	RepositoryWorkspaceCount       int                              `json:"repositoryWorkspaceCount"`
-	RoleImageRecipeStatus          string                           `json:"roleImageRecipeStatus"`
-	StableKey                      string                           `json:"stableKey"`
-}
-
-// RoleSpec defines model for RoleSpec.
-type RoleSpec struct {
-	AllowedTargetRoleSelectors         []string `json:"allowedTargetRoleSelectors"`
-	Capabilities                       []string `json:"capabilities"`
-	IntegrationSelectors               []string `json:"integrationSelectors"`
-	PromptProfileSelector              *string  `json:"promptProfileSelector,omitempty"`
-	ProviderCredentialBindingSelectors []string `json:"providerCredentialBindingSelectors"`
-	RepositoryWorkspaceSelectors       []string `json:"repositoryWorkspaceSelectors"`
-	RoleImageRecipeSelector            string   `json:"roleImageRecipeSelector"`
-	StableKey                          string   `json:"stableKey"`
-}
-
-// RunArtifactPage defines model for RunArtifactPage.
-type RunArtifactPage struct {
-	Artifacts     []RunArtifactView `json:"artifacts"`
-	NextActions   []RunNextAction   `json:"nextActions"`
+// RoleImageRecipePage defines model for RoleImageRecipePage.
+type RoleImageRecipePage struct {
+	Items         []RoleImageRecipe `json:"items"`
 	NextPageToken *string           `json:"nextPageToken,omitempty"`
 }
 
-// RunArtifactStatus defines model for RunArtifactStatus.
-type RunArtifactStatus string
-
-// RunArtifactView defines model for RunArtifactView.
-type RunArtifactView struct {
-	ArtifactRef string            `json:"artifactRef"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	DisplayName string            `json:"displayName"`
-	Kind        string            `json:"kind"`
-	MediaType   string            `json:"mediaType"`
-	Sha256      Sha256            `json:"sha256"`
-	SizeBytes   int64             `json:"sizeBytes"`
-	Status      RunArtifactStatus `json:"status"`
+// RoleImageRecipeUpdateInput defines model for RoleImageRecipeUpdateInput.
+type RoleImageRecipeUpdateInput struct {
+	Environment RoleEnvironmentSelection `json:"environment"`
+	Name        string                   `json:"name"`
 }
+
+// Run defines model for Run.
+type Run struct {
+	Attempt           int          `json:"attempt"`
+	CreatedAt         Timestamp    `json:"createdAt"`
+	CurrentActivity   *string      `json:"currentActivity,omitempty"`
+	FinishedAt        *Timestamp   `json:"finishedAt,omitempty"`
+	GraphRevision     int64        `json:"graphRevision"`
+	Incidents         *[]Incident  `json:"incidents,omitempty"`
+	Initiator         UserSummary  `json:"initiator"`
+	InputSummary      *string      `json:"inputSummary,omitempty"`
+	LastEventSequence int64        `json:"lastEventSequence"`
+	NextActions       []NextAction `json:"nextActions"`
+	ParentRunRef      *OpaqueRef   `json:"parentRunRef,omitempty"`
+	ProjectRef        OpaqueRef    `json:"projectRef"`
+	Ref               OpaqueRef    `json:"ref"`
+	ResultSummary     *string      `json:"resultSummary,omitempty"`
+	RetryOfRunRef     *OpaqueRef   `json:"retryOfRunRef,omitempty"`
+	RootRunRef        OpaqueRef    `json:"rootRunRef"`
+	SafeErrorCode     *string      `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage  *string      `json:"safeErrorMessage,omitempty"`
+	SessionRef        OpaqueRef    `json:"sessionRef"`
+	Source            RunSource    `json:"source"`
+	StartedAt         *Timestamp   `json:"startedAt,omitempty"`
+	State             RunState     `json:"state"`
+	Target            RunTarget    `json:"target"`
+	Title             string       `json:"title"`
+	Version           int64        `json:"version"`
+}
+
+// RunSource defines model for Run.Source.
+type RunSource string
+
+// RunState defines model for Run.State.
+type RunState string
 
 // RunCommand defines model for RunCommand.
 type RunCommand struct {
-	Action     RunCommandAction `json:"action"`
-	ReasonCode string           `json:"reasonCode"`
+	Action RunCommandAction `json:"action"`
+	Reason *string          `json:"reason,omitempty"`
 }
 
 // RunCommandAction defines model for RunCommand.Action.
 type RunCommandAction string
 
-// RunCommandResult defines model for RunCommandResult.
-type RunCommandResult struct {
-	Incidents              []IncidentView `json:"incidents"`
-	IncidentsNextPageToken *string        `json:"incidentsNextPageToken,omitempty"`
-	Run                    RunView        `json:"run"`
+// RunDelta defines model for RunDelta.
+type RunDelta struct {
+	ArtifactRefs      []OpaqueRef   `json:"artifactRefs"`
+	FinishedAt        *Timestamp    `json:"finishedAt,omitempty"`
+	GateRefs          []OpaqueRef   `json:"gateRefs"`
+	GraphRevision     int64         `json:"graphRevision"`
+	LastEventSequence int64         `json:"lastEventSequence"`
+	NextActions       []NextAction  `json:"nextActions"`
+	Ref               OpaqueRef     `json:"ref"`
+	ResultSummary     *string       `json:"resultSummary,omitempty"`
+	SafeErrorCode     *string       `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage  *string       `json:"safeErrorMessage,omitempty"`
+	StartedAt         *Timestamp    `json:"startedAt,omitempty"`
+	State             RunDeltaState `json:"state"`
+	Version           int64         `json:"version"`
 }
 
-// RunDetail defines model for RunDetail.
-type RunDetail struct {
-	Incidents              []IncidentView  `json:"incidents"`
-	IncidentsNextPageToken *string         `json:"incidentsNextPageToken,omitempty"`
-	Run                    RunView         `json:"run"`
-	Session                *RunSessionView `json:"session,omitempty"`
-	Turn                   *RunTurnView    `json:"turn,omitempty"`
+// RunDeltaState defines model for RunDelta.State.
+type RunDeltaState string
+
+// RunEdge defines model for RunEdge.
+type RunEdge struct {
+	Label         string      `json:"label"`
+	Ref           OpaqueRef   `json:"ref"`
+	RunRef        OpaqueRef   `json:"runRef"`
+	SourceNodeRef OpaqueRef   `json:"sourceNodeRef"`
+	TargetNodeRef OpaqueRef   `json:"targetNodeRef"`
+	Type          RunEdgeType `json:"type"`
 }
 
-// RunLineage defines model for RunLineage.
-type RunLineage struct {
-	NextActions   []RunNextAction  `json:"nextActions"`
-	NextPageToken *string          `json:"nextPageToken,omitempty"`
-	Nodes         []RunLineageNode `json:"nodes"`
-	Run           RunView          `json:"run"`
-	Truncated     bool             `json:"truncated"`
+// RunEdgeType defines model for RunEdge.Type.
+type RunEdgeType string
+
+// RunEvent defines model for RunEvent.
+type RunEvent struct {
+	Artifact      *Artifact          `json:"artifact,omitempty"`
+	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
+	Edge          *RunEdge           `json:"edge,omitempty"`
+	EdgeRef       *OpaqueRef         `json:"edgeRef,omitempty"`
+	Gate          *OwnerGate         `json:"gate,omitempty"`
+	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
+	GraphRevision int64              `json:"graphRevision"`
+	Incident      *Incident          `json:"incident,omitempty"`
+	Node          *RunNode           `json:"node,omitempty"`
+	NodeRef       *OpaqueRef         `json:"nodeRef,omitempty"`
+	NodeState     *RunEventNodeState `json:"nodeState,omitempty"`
+	OccurredAt    Timestamp          `json:"occurredAt"`
+	Progress      *string            `json:"progress,omitempty"`
+	Ref           OpaqueRef          `json:"ref"`
+	Run           RunDelta           `json:"run"`
+	RunRef        OpaqueRef          `json:"runRef"`
+	RunState      *RunEventRunState  `json:"runState,omitempty"`
+	Sequence      int64              `json:"sequence"`
+	Summary       string             `json:"summary"`
+	Type          RunEventType       `json:"type"`
 }
 
-// RunLineageKind defines model for RunLineageKind.
-type RunLineageKind string
+// RunEventNodeState defines model for RunEvent.NodeState.
+type RunEventNodeState string
 
-// RunLineageNode defines model for RunLineageNode.
-type RunLineageNode struct {
-	Agent       OwnerDisplayValue `json:"agent"`
-	Attempt     int               `json:"attempt"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	DisplayName string            `json:"displayName"`
-	Kind        RunLineageKind    `json:"kind"`
-	Model       OwnerDisplayValue `json:"model"`
-	NodeRef     string            `json:"nodeRef"`
-	ParentRef   *string           `json:"parentRef,omitempty"`
-	Provider    OwnerDisplayValue `json:"provider"`
-	Role        OwnerDisplayValue `json:"role"`
-	State       RunLineageState   `json:"state"`
-	UpdatedAt   time.Time         `json:"updatedAt"`
-	Version     int64             `json:"version"`
+// RunEventRunState defines model for RunEvent.RunState.
+type RunEventRunState string
+
+// RunEventType defines model for RunEvent.Type.
+type RunEventType string
+
+// RunEventPage defines model for RunEventPage.
+type RunEventPage struct {
+	Complete        bool       `json:"complete"`
+	CurrentSequence int64      `json:"currentSequence"`
+	Items           []RunEvent `json:"items"`
 }
 
-// RunLineageState defines model for RunLineageState.
-type RunLineageState string
+// RunGraph defines model for RunGraph.
+type RunGraph struct {
+	Edges    []RunEdge `json:"edges"`
+	Nodes    []RunNode `json:"nodes"`
+	Revision int64     `json:"revision"`
+	RunRef   OpaqueRef `json:"runRef"`
+	Sequence int64     `json:"sequence"`
+}
 
-// RunNextAction defines model for RunNextAction.
-type RunNextAction string
+// RunInput defines model for RunInput.
+type RunInput struct {
+	ArtifactRefs *[]OpaqueRef            `json:"artifactRefs,omitempty"`
+	Input        *map[string]interface{} `json:"input,omitempty"`
+	ProjectRef   OpaqueRef               `json:"projectRef"`
+	SessionRef   *OpaqueRef              `json:"sessionRef,omitempty"`
+	TargetRef    OpaqueRef               `json:"targetRef"`
+	TargetType   RunInputTargetType      `json:"targetType"`
+	Task         string                  `json:"task"`
+	Title        string                  `json:"title"`
+}
+
+// RunInputTargetType defines model for RunInput.TargetType.
+type RunInputTargetType string
+
+// RunNode defines model for RunNode.
+type RunNode struct {
+	AgentRef         *OpaqueRef   `json:"agentRef,omitempty"`
+	ArtifactRefs     []OpaqueRef  `json:"artifactRefs"`
+	Attempt          int          `json:"attempt"`
+	CallbackSummary  *string      `json:"callbackSummary,omitempty"`
+	ChildRunRefs     []OpaqueRef  `json:"childRunRefs"`
+	CreatedAt        Timestamp    `json:"createdAt"`
+	DisplayName      string       `json:"displayName"`
+	FinishedAt       *Timestamp   `json:"finishedAt,omitempty"`
+	InputSummary     *string      `json:"inputSummary,omitempty"`
+	IntegrationNames *[]string    `json:"integrationNames,omitempty"`
+	NextActions      []NextAction `json:"nextActions"`
+	ParentNodeRef    *OpaqueRef   `json:"parentNodeRef,omitempty"`
+	ProgressSummary  *string      `json:"progressSummary,omitempty"`
+	Ref              OpaqueRef    `json:"ref"`
+	Role             *string      `json:"role,omitempty"`
+	RunRef           OpaqueRef    `json:"runRef"`
+	SafeErrorCode    *string      `json:"safeErrorCode,omitempty"`
+	SafeErrorMessage *string      `json:"safeErrorMessage,omitempty"`
+	StartedAt        *Timestamp   `json:"startedAt,omitempty"`
+	State            RunNodeState `json:"state"`
+	TurnRef          *OpaqueRef   `json:"turnRef,omitempty"`
+	Type             RunNodeType  `json:"type"`
+}
+
+// RunNodeState defines model for RunNode.State.
+type RunNodeState string
+
+// RunNodeType defines model for RunNode.Type.
+type RunNodeType string
 
 // RunPage defines model for RunPage.
 type RunPage struct {
-	NextPageToken *string   `json:"nextPageToken,omitempty"`
-	Runs          []RunView `json:"runs"`
+	Items         []Run   `json:"items"`
+	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
-// RunSessionView defines model for RunSessionView.
-type RunSessionView struct {
-	DisplayName string         `json:"displayName"`
-	SessionRef  string         `json:"sessionRef"`
-	State       LifecycleState `json:"state"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	Version     int64          `json:"version"`
+// RunTarget defines model for RunTarget.
+type RunTarget struct {
+	DisplayName string        `json:"displayName"`
+	Ref         OpaqueRef     `json:"ref"`
+	Type        RunTargetType `json:"type"`
+	Version     int64         `json:"version"`
 }
 
-// RunTimelineEntry defines model for RunTimelineEntry.
-type RunTimelineEntry struct {
-	Display     string             `json:"display"`
-	EventRef    string             `json:"eventRef"`
-	Kind        RunTimelineKind    `json:"kind"`
-	NextActions []RunNextAction    `json:"nextActions"`
-	OccurredAt  time.Time          `json:"occurredAt"`
-	Outcome     RunTimelineOutcome `json:"outcome"`
-	Version     int64              `json:"version"`
+// RunTargetType defines model for RunTarget.Type.
+type RunTargetType string
+
+// RunWorkspace defines model for RunWorkspace.
+type RunWorkspace struct {
+	Graph RunGraph `json:"graph"`
+	Run   Run      `json:"run"`
 }
 
-// RunTimelineKind defines model for RunTimelineKind.
-type RunTimelineKind string
-
-// RunTimelineOutcome defines model for RunTimelineOutcome.
-type RunTimelineOutcome string
-
-// RunTimelinePage defines model for RunTimelinePage.
-type RunTimelinePage struct {
-	Entries       []RunTimelineEntry `json:"entries"`
-	NextActions   []RunNextAction    `json:"nextActions"`
-	NextPageToken *string            `json:"nextPageToken,omitempty"`
-	Run           RunView            `json:"run"`
+// RuntimeSelection defines model for RuntimeSelection.
+type RuntimeSelection struct {
+	Model    string    `json:"model"`
+	Name     string    `json:"name"`
+	Provider string    `json:"provider"`
+	Ready    bool      `json:"ready"`
+	Ref      OpaqueRef `json:"ref"`
+	Revision string    `json:"revision"`
 }
 
-// RunTurnView defines model for RunTurnView.
-type RunTurnView struct {
-	DisplayName string         `json:"displayName"`
-	State       LifecycleState `json:"state"`
-	TurnRef     string         `json:"turnRef"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	Version     int64          `json:"version"`
+// Schedule defines model for Schedule.
+type Schedule struct {
+	CronExpression     *string                    `json:"cronExpression,omitempty"`
+	DayOfWeek          *ScheduleDayOfWeek         `json:"dayOfWeek,omitempty"`
+	Input              *map[string]interface{}    `json:"input,omitempty"`
+	LastOutcome        *string                    `json:"lastOutcome,omitempty"`
+	Name               string                     `json:"name"`
+	NextActions        []NextAction               `json:"nextActions"`
+	NextRunAt          *Timestamp                 `json:"nextRunAt,omitempty"`
+	NotificationPolicy ScheduleNotificationPolicy `json:"notificationPolicy"`
+	Preset             string                     `json:"preset"`
+	ProjectRef         OpaqueRef                  `json:"projectRef"`
+	Ref                OpaqueRef                  `json:"ref"`
+	SessionPolicy      ScheduleSessionPolicy      `json:"sessionPolicy"`
+	State              ScheduleState              `json:"state"`
+	Target             RunTarget                  `json:"target"`
+	TimeOfDay          *string                    `json:"timeOfDay,omitempty"`
+	Timezone           string                     `json:"timezone"`
+	Version            int64                      `json:"version"`
 }
 
-// RunView defines model for RunView.
-type RunView struct {
-	Agent           OwnerDisplayValue `json:"agent"`
-	Attempt         int               `json:"attempt"`
-	DisplayName     string            `json:"displayName"`
-	DurationSeconds int64             `json:"durationSeconds"`
-	Initiator       OwnerDisplayValue `json:"initiator"`
-	Model           OwnerDisplayValue `json:"model"`
-	NextActions     []RunNextAction   `json:"nextActions"`
-	Provider        OwnerDisplayValue `json:"provider"`
-	Role            OwnerDisplayValue `json:"role"`
-	RunRef          string            `json:"runRef"`
-	RuntimeStatus   OwnerDisplayValue `json:"runtimeStatus"`
-	StartedAt       *time.Time        `json:"startedAt,omitempty"`
-	State           LifecycleState    `json:"state"`
-	Trigger         OwnerDisplayValue `json:"trigger"`
-	UpdatedAt       time.Time         `json:"updatedAt"`
-	Version         int64             `json:"version"`
-	Workspace       OwnerDisplayValue `json:"workspace"`
+// ScheduleDayOfWeek defines model for Schedule.DayOfWeek.
+type ScheduleDayOfWeek string
+
+// ScheduleNotificationPolicy defines model for Schedule.NotificationPolicy.
+type ScheduleNotificationPolicy string
+
+// ScheduleSessionPolicy defines model for Schedule.SessionPolicy.
+type ScheduleSessionPolicy string
+
+// ScheduleState defines model for Schedule.State.
+type ScheduleState string
+
+// ScheduleCommand defines model for ScheduleCommand.
+type ScheduleCommand struct {
+	Action ScheduleCommandAction `json:"action"`
 }
 
-// RuntimeIncidentKind defines model for RuntimeIncidentKind.
-type RuntimeIncidentKind string
-
-// RuntimeRevisionProjection defines model for RuntimeRevisionProjection.
-type RuntimeRevisionProjection struct {
-	AuthorityPolicyRevision                int64               `json:"authorityPolicyRevision"`
-	ChatId                                 *openapi_types.UUID `json:"chatId,omitempty"`
-	EffectiveRuntimeSha256                 string              `json:"effectiveRuntimeSha256"`
-	ImageAdmissionReceiptOciManifestDigest string              `json:"imageAdmissionReceiptOciManifestDigest"`
-	ImageAdmissionReceiptSha256            string              `json:"imageAdmissionReceiptSha256"`
-	ImageAdmissionRevision                 int64               `json:"imageAdmissionRevision"`
-	ImageArtifactId                        openapi_types.UUID  `json:"imageArtifactId"`
-	ImageArtifactVersion                   int64               `json:"imageArtifactVersion"`
-	ImageBuildAttempt                      int                 `json:"imageBuildAttempt"`
-	ImageBuildId                           openapi_types.UUID  `json:"imageBuildId"`
-	ImageBuildVersion                      int64               `json:"imageBuildVersion"`
-	ImageManifestDigest                    string              `json:"imageManifestDigest"`
-	ImagePolicyRevision                    int64               `json:"imagePolicyRevision"`
-	ImagePolicySha256                      string              `json:"imagePolicySha256"`
-	ImagePromotionReadbackSha256           string              `json:"imagePromotionReadbackSha256"`
-	ImageReference                         string              `json:"imageReference"`
-	ImageSignatureSha256                   string              `json:"imageSignatureSha256"`
-	ManifestSha256                         string              `json:"manifestSha256"`
-	PromptProfileId                        openapi_types.UUID  `json:"promptProfileId"`
-	PromptRevision                         int64               `json:"promptRevision"`
-	RoleId                                 openapi_types.UUID  `json:"roleId"`
-	RoleImageRecipeId                      openapi_types.UUID  `json:"roleImageRecipeId"`
-	RoleImageRecipeVersion                 int64               `json:"roleImageRecipeVersion"`
-	RoleImageSpecSha256                    string              `json:"roleImageSpecSha256"`
-	RoleRuntimeContractRevision            int64               `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSha256              string              `json:"roleRuntimeContractSha256"`
-	SessionId                              openapi_types.UUID  `json:"sessionId"`
-}
-
-// RuntimeSelectionCatalogEntry defines model for RuntimeSelectionCatalogEntry.
-type RuntimeSelectionCatalogEntry struct {
-	Capabilities          []string              `json:"capabilities"`
-	Description           string                `json:"description"`
-	DisplayName           string                `json:"displayName"`
-	RoleDefinitionSha256  Sha256                `json:"roleDefinitionSha256"`
-	RoleDefinitionVersion int64                 `json:"roleDefinitionVersion"`
-	RuntimeProfileSha256  Sha256                `json:"runtimeProfileSha256"`
-	RuntimeProfileVersion int64                 `json:"runtimeProfileVersion"`
-	SelectionKey          string                `json:"selectionKey"`
-	Status                OwnerProjectionStatus `json:"status"`
-}
-
-// ScheduleCalendar defines model for ScheduleCalendar.
-type ScheduleCalendar string
-
-// ScheduleDefaults defines model for ScheduleDefaults.
-type ScheduleDefaults struct {
-	Calendar                ScheduleDefaultsCalendar       `json:"calendar"`
-	Coalesce                bool                           `json:"coalesce"`
-	DeadLetterAfterSeconds  int64                          `json:"deadLetterAfterSeconds"`
-	DeliveryPolicy          ScheduleDefaultsDeliveryPolicy `json:"deliveryPolicy"`
-	DigestSha256            Sha256                         `json:"digestSha256"`
-	InitialBackoffSeconds   int64                          `json:"initialBackoffSeconds"`
-	MaximumAttempts         int                            `json:"maximumAttempts"`
-	MaximumBackoffSeconds   int64                          `json:"maximumBackoffSeconds"`
-	MaximumExecutionSeconds int64                          `json:"maximumExecutionSeconds"`
-	MisfirePolicy           ScheduleMisfirePolicy          `json:"misfirePolicy"`
-	NotificationPolicy      ScheduleNotificationPolicy     `json:"notificationPolicy"`
-	OverlapPolicy           ScheduleOverlapPolicy          `json:"overlapPolicy"`
-	Revision                int64                          `json:"revision"`
-	SessionPolicy           ScheduleSessionPolicy          `json:"sessionPolicy"`
-}
-
-// ScheduleDefaultsCalendar defines model for ScheduleDefaults.Calendar.
-type ScheduleDefaultsCalendar string
-
-// ScheduleDefaultsDeliveryPolicy defines model for ScheduleDefaults.DeliveryPolicy.
-type ScheduleDefaultsDeliveryPolicy string
-
-// ScheduleDeliveryPolicy defines model for ScheduleDeliveryPolicy.
-type ScheduleDeliveryPolicy string
+// ScheduleCommandAction defines model for ScheduleCommand.Action.
+type ScheduleCommandAction string
 
 // ScheduleInput defines model for ScheduleInput.
 type ScheduleInput struct {
-	Calendar                ScheduleCalendar           `json:"calendar"`
-	Coalesce                bool                       `json:"coalesce"`
-	Cron                    *string                    `json:"cron,omitempty"`
-	DeadLetterAfterSeconds  int64                      `json:"deadLetterAfterSeconds"`
-	DeliveryPolicy          ScheduleDeliveryPolicy     `json:"deliveryPolicy"`
-	ExecutionSessionId      *openapi_types.UUID        `json:"executionSessionId,omitempty"`
-	InitialBackoffSeconds   int64                      `json:"initialBackoffSeconds"`
-	IntervalSeconds         *int64                     `json:"intervalSeconds,omitempty"`
-	MaximumAttempts         int                        `json:"maximumAttempts"`
-	MaximumBackoffSeconds   int64                      `json:"maximumBackoffSeconds"`
-	MaximumExecutionSeconds int64                      `json:"maximumExecutionSeconds"`
-	MisfireGraceSeconds     int64                      `json:"misfireGraceSeconds"`
-	MisfirePolicy           ScheduleMisfirePolicy      `json:"misfirePolicy"`
-	NotificationPolicy      ScheduleNotificationPolicy `json:"notificationPolicy"`
-	OverlapPolicy           ScheduleOverlapPolicy      `json:"overlapPolicy"`
-	PlaybookRef             *string                    `json:"playbookRef,omitempty"`
-	PlaybookVersion         *int64                     `json:"playbookVersion,omitempty"`
-	PromptArtifactId        openapi_types.UUID         `json:"promptArtifactId"`
-	PromptProfileId         openapi_types.UUID         `json:"promptProfileId"`
-	PromptRevision          int64                      `json:"promptRevision"`
-	RoomId                  *openapi_types.UUID        `json:"roomId,omitempty"`
-	RuntimeRevisionId       openapi_types.UUID         `json:"runtimeRevisionId"`
-	SessionPolicy           ScheduleSessionPolicy      `json:"sessionPolicy"`
-	TargetResourceId        openapi_types.UUID         `json:"targetResourceId"`
-	TargetType              ScheduleTargetType         `json:"targetType"`
-	Timezone                string                     `json:"timezone"`
-	union                   json.RawMessage
+	DayOfWeek          *ScheduleInputDayOfWeek         `json:"dayOfWeek,omitempty"`
+	Input              map[string]interface{}          `json:"input"`
+	Name               string                          `json:"name"`
+	NotificationPolicy ScheduleInputNotificationPolicy `json:"notificationPolicy"`
+	Preset             ScheduleInputPreset             `json:"preset"`
+	SessionPolicy      ScheduleInputSessionPolicy      `json:"sessionPolicy"`
+	TargetRef          OpaqueRef                       `json:"targetRef"`
+	TargetType         ScheduleInputTargetType         `json:"targetType"`
+	TimeOfDay          string                          `json:"timeOfDay"`
+	Timezone           string                          `json:"timezone"`
 }
 
-// ScheduleInput0 defines model for .
-type ScheduleInput0 = interface{}
+// ScheduleInputDayOfWeek defines model for ScheduleInput.DayOfWeek.
+type ScheduleInputDayOfWeek string
 
-// ScheduleInput1 defines model for .
-type ScheduleInput1 = interface{}
+// ScheduleInputNotificationPolicy defines model for ScheduleInput.NotificationPolicy.
+type ScheduleInputNotificationPolicy string
 
-// ScheduleMisfirePolicy defines model for ScheduleMisfirePolicy.
-type ScheduleMisfirePolicy string
+// ScheduleInputPreset defines model for ScheduleInput.Preset.
+type ScheduleInputPreset string
 
-// ScheduleNotificationPolicy defines model for ScheduleNotificationPolicy.
-type ScheduleNotificationPolicy string
+// ScheduleInputSessionPolicy defines model for ScheduleInput.SessionPolicy.
+type ScheduleInputSessionPolicy string
 
-// ScheduleOccurrence defines model for ScheduleOccurrence.
-type ScheduleOccurrence struct {
-	Attempt                int                      `json:"attempt"`
-	AuthorityGeneration    int64                    `json:"authorityGeneration"`
-	AvailableAt            time.Time                `json:"availableAt"`
-	EffectiveInputSha256   string                   `json:"effectiveInputSha256"`
-	OccurrenceId           openapi_types.UUID       `json:"occurrenceId"`
-	Outcome                *string                  `json:"outcome,omitempty"`
-	RecoveryActions        []ScheduleRecoveryAction `json:"recoveryActions"`
-	RecoveryEvidenceSha256 *string                  `json:"recoveryEvidenceSha256,omitempty"`
-	ScheduleId             openapi_types.UUID       `json:"scheduleId"`
-	ScheduledFor           time.Time                `json:"scheduledFor"`
-	State                  ScheduleOccurrenceState  `json:"state"`
-	TargetKind             ResourceKind             `json:"targetKind"`
-	TargetResourceId       openapi_types.UUID       `json:"targetResourceId"`
-	TargetVersion          int64                    `json:"targetVersion"`
-	Version                int64                    `json:"version"`
+// ScheduleInputTargetType defines model for ScheduleInput.TargetType.
+type ScheduleInputTargetType string
+
+// SearchResult defines model for SearchResult.
+type SearchResult struct {
+	Kind       SearchResultKind `json:"kind"`
+	ProjectRef OpaqueRef        `json:"projectRef"`
+	Ref        OpaqueRef        `json:"ref"`
+	State      string           `json:"state"`
+	Subtitle   string           `json:"subtitle"`
+	Title      string           `json:"title"`
+	UpdatedAt  Timestamp        `json:"updatedAt"`
 }
 
-// ScheduleOccurrencePage defines model for ScheduleOccurrencePage.
-type ScheduleOccurrencePage struct {
-	NextPageToken *string              `json:"nextPageToken,omitempty"`
-	Occurrences   []ScheduleOccurrence `json:"occurrences"`
+// SearchResultKind defines model for SearchResult.Kind.
+type SearchResultKind string
+
+// SearchResultPage defines model for SearchResultPage.
+type SearchResultPage struct {
+	Items []SearchResult `json:"items"`
 }
 
-// ScheduleOccurrenceState defines model for ScheduleOccurrenceState.
-type ScheduleOccurrenceState string
-
-// ScheduleOverlapPolicy defines model for ScheduleOverlapPolicy.
-type ScheduleOverlapPolicy string
-
-// SchedulePreset defines model for SchedulePreset.
-type SchedulePreset struct {
-	Cron         string `json:"cron"`
-	Description  string `json:"description"`
-	DigestSha256 Sha256 `json:"digestSha256"`
-	DisplayName  string `json:"displayName"`
-	Key          string `json:"key"`
-	Revision     int64  `json:"revision"`
+// SystemAssistant defines model for SystemAssistant.
+type SystemAssistant struct {
+	CorePromptRevision        string                      `json:"corePromptRevision"`
+	LastHeartbeatAt           *Timestamp                  `json:"lastHeartbeatAt,omitempty"`
+	Name                      string                      `json:"name"`
+	NextActions               []NextAction                `json:"nextActions"`
+	OwnerInstructions         string                      `json:"ownerInstructions"`
+	OwnerInstructionsRevision *int                        `json:"ownerInstructionsRevision,omitempty"`
+	ReadinessSummary          string                      `json:"readinessSummary"`
+	Ref                       OpaqueRef                   `json:"ref"`
+	Removable                 SystemAssistantRemovable    `json:"removable"`
+	RuntimeRevision           *string                     `json:"runtimeRevision,omitempty"`
+	RuntimeState              SystemAssistantRuntimeState `json:"runtimeState"`
+	System                    SystemAssistantSystem       `json:"system"`
+	Version                   int64                       `json:"version"`
+	WarmSessionRef            *OpaqueRef                  `json:"warmSessionRef,omitempty"`
 }
 
-// ScheduleProjection defines model for ScheduleProjection.
-type ScheduleProjection struct {
-	Calendar                ScheduleCalendar                 `json:"calendar"`
-	Coalesce                bool                             `json:"coalesce"`
-	Cron                    *string                          `json:"cron,omitempty"`
-	DeadLetterAfterSeconds  int64                            `json:"deadLetterAfterSeconds"`
-	DeliveryPolicy          ScheduleDeliveryPolicy           `json:"deliveryPolicy"`
-	ExecutionSessionId      *openapi_types.UUID              `json:"executionSessionId,omitempty"`
-	InitialBackoffSeconds   int64                            `json:"initialBackoffSeconds"`
-	IntervalSeconds         *int64                           `json:"intervalSeconds,omitempty"`
-	MaximumAttempts         int                              `json:"maximumAttempts"`
-	MaximumBackoffSeconds   int64                            `json:"maximumBackoffSeconds"`
-	MaximumExecutionSeconds int64                            `json:"maximumExecutionSeconds"`
-	MisfireGraceSeconds     int64                            `json:"misfireGraceSeconds"`
-	MisfirePolicy           ScheduleMisfirePolicy            `json:"misfirePolicy"`
-	NextRunAt               time.Time                        `json:"nextRunAt"`
-	NotificationPolicy      ScheduleNotificationPolicy       `json:"notificationPolicy"`
-	OverlapPolicy           ScheduleOverlapPolicy            `json:"overlapPolicy"`
-	Ownership               ConfigurationOwnershipProjection `json:"ownership"`
-	PlaybookRef             *string                          `json:"playbookRef,omitempty"`
-	PlaybookVersion         *int64                           `json:"playbookVersion,omitempty"`
-	PromptArtifactId        openapi_types.UUID               `json:"promptArtifactId"`
-	PromptProfileId         openapi_types.UUID               `json:"promptProfileId"`
-	PromptRevision          int64                            `json:"promptRevision"`
-	RoomId                  *openapi_types.UUID              `json:"roomId,omitempty"`
-	RuntimeRevisionId       openapi_types.UUID               `json:"runtimeRevisionId"`
-	SessionPolicy           ScheduleSessionPolicy            `json:"sessionPolicy"`
-	TargetKind              ResourceKind                     `json:"targetKind"`
-	TargetResourceId        openapi_types.UUID               `json:"targetResourceId"`
-	TargetType              ScheduleTargetType               `json:"targetType"`
-	TargetVersion           int64                            `json:"targetVersion"`
-	Timezone                string                           `json:"timezone"`
+// SystemAssistantRemovable defines model for SystemAssistant.Removable.
+type SystemAssistantRemovable bool
+
+// SystemAssistantRuntimeState defines model for SystemAssistant.RuntimeState.
+type SystemAssistantRuntimeState string
+
+// SystemAssistantSystem defines model for SystemAssistant.System.
+type SystemAssistantSystem bool
+
+// Timestamp defines model for Timestamp.
+type Timestamp = time.Time
+
+// TurnInput defines model for TurnInput.
+type TurnInput struct {
+	ArtifactRefs *[]OpaqueRef `json:"artifactRefs,omitempty"`
+	NodeRef      *OpaqueRef   `json:"nodeRef,omitempty"`
+	RunRef       OpaqueRef    `json:"runRef"`
+	Task         string       `json:"task"`
 }
 
-// ScheduleRecoveryAction defines model for ScheduleRecoveryAction.
-type ScheduleRecoveryAction string
-
-// ScheduleSelector defines model for ScheduleSelector.
-type ScheduleSelector struct {
-	DigestSha256 Sha256               `json:"digestSha256"`
-	DisplayName  string               `json:"displayName"`
-	Kind         ScheduleSelectorKind `json:"kind"`
-	Ref          string               `json:"ref"`
-	StableKey    string               `json:"stableKey"`
-	State        LifecycleState       `json:"state"`
-	Version      int64                `json:"version"`
+// UserSummary defines model for UserSummary.
+type UserSummary struct {
+	DisplayName string    `json:"displayName"`
+	EmailHint   *string   `json:"emailHint,omitempty"`
+	Ref         OpaqueRef `json:"ref"`
 }
 
-// ScheduleSelectorKind defines model for ScheduleSelector.Kind.
-type ScheduleSelectorKind string
-
-// ScheduleSelectorCatalog defines model for ScheduleSelectorCatalog.
-type ScheduleSelectorCatalog struct {
-	Complete          ScheduleSelectorCatalogComplete `json:"complete"`
-	Defaults          ScheduleDefaults                `json:"defaults"`
-	Presets           []SchedulePreset                `json:"presets"`
-	RuntimeSelections []RuntimeSelectionCatalogEntry  `json:"runtimeSelections"`
-	Selectors         []ScheduleSelector              `json:"selectors"`
+// Workflow defines model for Workflow.
+type Workflow struct {
+	CompletionCriteria  *string              `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef *OpaqueRef           `json:"coordinatorAgentRef,omitempty"`
+	InputFields         []WorkflowInputField `json:"inputFields"`
+	MaxConcurrency      *int                 `json:"maxConcurrency,omitempty"`
+	Name                string               `json:"name"`
+	NextActions         []NextAction         `json:"nextActions"`
+	ProjectRef          OpaqueRef            `json:"projectRef"`
+	Purpose             string               `json:"purpose"`
+	Ref                 OpaqueRef            `json:"ref"`
+	Revision            *int                 `json:"revision,omitempty"`
+	State               WorkflowState        `json:"state"`
+	Steps               []WorkflowStep       `json:"steps"`
+	TimeoutSeconds      *int                 `json:"timeoutSeconds,omitempty"`
+	UpdatedAt           Timestamp            `json:"updatedAt"`
+	ValidationMessages  []string             `json:"validationMessages"`
+	Version             int64                `json:"version"`
 }
 
-// ScheduleSelectorCatalogComplete defines model for ScheduleSelectorCatalog.Complete.
-type ScheduleSelectorCatalogComplete bool
+// WorkflowState defines model for Workflow.State.
+type WorkflowState string
 
-// ScheduleSessionPolicy defines model for ScheduleSessionPolicy.
-type ScheduleSessionPolicy string
-
-// ScheduleTargetType defines model for ScheduleTargetType.
-type ScheduleTargetType string
-
-// SessionProjection defines model for SessionProjection.
-type SessionProjection struct {
-	LastTurnSequence int64 `json:"lastTurnSequence"`
+// WorkflowCommand defines model for WorkflowCommand.
+type WorkflowCommand struct {
+	Action WorkflowCommandAction `json:"action"`
 }
 
-// Sha256 defines model for Sha256.
-type Sha256 = string
+// WorkflowCommandAction defines model for WorkflowCommand.Action.
+type WorkflowCommandAction string
 
-// StartProviderAuthorization defines model for StartProviderAuthorization.
-type StartProviderAuthorization struct {
-	ConnectionStableKey string `json:"connectionStableKey"`
-	DisplayName         string `json:"displayName"`
-	ProviderRef         string `json:"providerRef"`
+// WorkflowInput defines model for WorkflowInput.
+type WorkflowInput struct {
+	CompletionCriteria  *string                    `json:"completionCriteria,omitempty"`
+	CoordinatorAgentRef OpaqueRef                  `json:"coordinatorAgentRef"`
+	InputFields         *[]WorkflowInputFieldInput `json:"inputFields,omitempty"`
+	MaxConcurrency      *int                       `json:"maxConcurrency,omitempty"`
+	Name                string                     `json:"name"`
+	Purpose             string                     `json:"purpose"`
+	Steps               *[]WorkflowStepInput       `json:"steps,omitempty"`
+	TimeoutSeconds      *int                       `json:"timeoutSeconds,omitempty"`
 }
 
-// TeamProjection defines model for TeamProjection.
-type TeamProjection struct {
-	MemberCount           int                              `json:"memberCount"`
-	Ownership             ConfigurationOwnershipProjection `json:"ownership"`
-	ProviderBindingStatus string                           `json:"providerBindingStatus"`
-	RoleCount             int                              `json:"roleCount"`
-	StableKey             string                           `json:"stableKey"`
+// WorkflowInputField defines model for WorkflowInputField.
+type WorkflowInputField struct {
+	Description string                      `json:"description"`
+	Key         string                      `json:"key"`
+	Label       string                      `json:"label"`
+	Options     []string                    `json:"options"`
+	Required    bool                        `json:"required"`
+	ValueType   WorkflowInputFieldValueType `json:"valueType"`
 }
 
-// TeamSpec defines model for TeamSpec.
-type TeamSpec struct {
-	MemberActorSelectors []string `json:"memberActorSelectors"`
-	RoleSelectors        []string `json:"roleSelectors"`
-	SourceSelector       *string  `json:"sourceSelector,omitempty"`
-	StableKey            string   `json:"stableKey"`
+// WorkflowInputFieldValueType defines model for WorkflowInputField.ValueType.
+type WorkflowInputFieldValueType string
+
+// WorkflowInputFieldInput defines model for WorkflowInputFieldInput.
+type WorkflowInputFieldInput struct {
+	Description string                           `json:"description"`
+	Key         *string                          `json:"key,omitempty"`
+	Label       string                           `json:"label"`
+	Options     []string                         `json:"options"`
+	Required    bool                             `json:"required"`
+	ValueType   WorkflowInputFieldInputValueType `json:"valueType"`
 }
 
-// TestIntegrationConnection defines model for TestIntegrationConnection.
-type TestIntegrationConnection struct {
-	ConfigurationDigestSha256 *Sha256 `json:"configurationDigestSha256,omitempty"`
-	ConfigurationRef          *string `json:"configurationRef,omitempty"`
-	ConfigurationVersion      *int64  `json:"configurationVersion,omitempty"`
-	ConnectionGeneration      int64   `json:"connectionGeneration"`
-	ConnectionRef             string  `json:"connectionRef"`
-	ConnectionVersion         int64   `json:"connectionVersion"`
-	DefinitionDigestSha256    Sha256  `json:"definitionDigestSha256"`
-	DefinitionRef             string  `json:"definitionRef"`
-	DefinitionVersion         int64   `json:"definitionVersion"`
+// WorkflowInputFieldInputValueType defines model for WorkflowInputFieldInput.ValueType.
+type WorkflowInputFieldInputValueType string
+
+// WorkflowPage defines model for WorkflowPage.
+type WorkflowPage struct {
+	Items         []Workflow `json:"items"`
+	NextPageToken *string    `json:"nextPageToken,omitempty"`
 }
 
-// TransitionResource defines model for TransitionResource.
-type TransitionResource struct {
-	ReasonCode  string         `json:"reasonCode"`
-	TargetState LifecycleState `json:"targetState"`
+// WorkflowStep defines model for WorkflowStep.
+type WorkflowStep struct {
+	AgentRef               *OpaqueRef                  `json:"agentRef,omitempty"`
+	ExpectedResult         string                      `json:"expectedResult"`
+	GateDecisions          []WorkflowStepGateDecisions `json:"gateDecisions"`
+	HumanGate              bool                        `json:"humanGate"`
+	Name                   string                      `json:"name"`
+	Parallel               bool                        `json:"parallel"`
+	ParallelGroup          int                         `json:"parallelGroup"`
+	Position               int                         `json:"position"`
+	Purpose                string                      `json:"purpose"`
+	Ref                    OpaqueRef                   `json:"ref"`
+	RequiredCapabilityKeys []string                    `json:"requiredCapabilityKeys"`
+	TimeoutSeconds         int                         `json:"timeoutSeconds"`
 }
 
-// TurnProjection defines model for TurnProjection.
-type TurnProjection struct {
-	Attempt              int                 `json:"attempt"`
-	EffectiveInputSha256 string              `json:"effectiveInputSha256"`
-	ProcessRunId         *openapi_types.UUID `json:"processRunId,omitempty"`
-	ResultArtifactId     *openapi_types.UUID `json:"resultArtifactId,omitempty"`
-	RuntimeRevisionId    openapi_types.UUID  `json:"runtimeRevisionId"`
-	Sequence             int64               `json:"sequence"`
-	SessionId            openapi_types.UUID  `json:"sessionId"`
-	SourceRef            string              `json:"sourceRef"`
+// WorkflowStepGateDecisions defines model for WorkflowStep.GateDecisions.
+type WorkflowStepGateDecisions string
+
+// WorkflowStepInput defines model for WorkflowStepInput.
+type WorkflowStepInput struct {
+	AgentRef               OpaqueRef                        `json:"agentRef"`
+	ExpectedResult         string                           `json:"expectedResult"`
+	GateDecisions          []WorkflowStepInputGateDecisions `json:"gateDecisions"`
+	HumanGate              bool                             `json:"humanGate"`
+	Name                   string                           `json:"name"`
+	Parallel               bool                             `json:"parallel"`
+	ParallelGroup          int                              `json:"parallelGroup"`
+	Position               int                              `json:"position"`
+	Purpose                string                           `json:"purpose"`
+	RequiredCapabilityKeys []string                         `json:"requiredCapabilityKeys"`
+	TimeoutSeconds         int                              `json:"timeoutSeconds"`
 }
 
-// UpdateProject defines model for UpdateProject.
-type UpdateProject struct {
-	Name string      `json:"name"`
-	Spec ProjectSpec `json:"spec"`
-}
+// WorkflowStepInputGateDecisions defines model for WorkflowStepInput.GateDecisions.
+type WorkflowStepInputGateDecisions string
 
-// UpdateResource defines model for UpdateResource.
-type UpdateResource struct {
-	Kind MutableResourceKind `json:"kind"`
-	Name string              `json:"name"`
-	Spec ResourceSpecInput   `json:"spec"`
-}
+// AgentRef defines model for AgentRef.
+type AgentRef = OpaqueRef
 
-// UpdateSchedule defines model for UpdateSchedule.
-type UpdateSchedule struct {
-	Input ScheduleInput `json:"input"`
-	Name  string        `json:"name"`
-}
-
-// WorkClaimProjection defines model for WorkClaimProjection.
-type WorkClaimProjection struct {
-	Attempt             int                `json:"attempt"`
-	AuthorityGeneration int64              `json:"authorityGeneration"`
-	Domains             []string           `json:"domains"`
-	ExpiresAt           time.Time          `json:"expiresAt"`
-	ProcessRunId        openapi_types.UUID `json:"processRunId"`
-	ResourceKeys        []string           `json:"resourceKeys"`
-	SessionId           openapi_types.UUID `json:"sessionId"`
-	TurnId              openapi_types.UUID `json:"turnId"`
-	WorkloadId          string             `json:"workloadId"`
-}
-
-// WorkspaceBackupCommand defines model for WorkspaceBackupCommand.
-type WorkspaceBackupCommand struct {
-	Action             WorkspaceBackupCommandAction `json:"action"`
-	BackupRef          *string                      `json:"backupRef,omitempty"`
-	Name               *string                      `json:"name,omitempty"`
-	RetainUntil        *time.Time                   `json:"retainUntil,omitempty"`
-	Scope              *WorkspaceBackupCommandScope `json:"scope,omitempty"`
-	TerminalReasonCode *string                      `json:"terminalReasonCode,omitempty"`
-}
-
-// WorkspaceBackupCommandAction defines model for WorkspaceBackupCommand.Action.
-type WorkspaceBackupCommandAction string
-
-// WorkspaceBackupCommandScope defines model for WorkspaceBackupCommand.Scope.
-type WorkspaceBackupCommandScope string
-
-// WorkspaceBackupProjection defines model for WorkspaceBackupProjection.
-type WorkspaceBackupProjection struct {
-	Attempt            int                  `json:"attempt"`
-	Generation         int64                `json:"generation"`
-	MemberCount        int                  `json:"memberCount"`
-	MembershipSha256   Sha256               `json:"membershipSha256"`
-	RetainUntil        time.Time            `json:"retainUntil"`
-	Scope              WorkspaceBackupScope `json:"scope"`
-	State              WorkspaceBackupState `json:"state"`
-	TerminalReasonCode *string              `json:"terminalReasonCode,omitempty"`
-}
-
-// WorkspaceBackupScope defines model for WorkspaceBackupScope.
-type WorkspaceBackupScope string
-
-// WorkspaceBackupState defines model for WorkspaceBackupState.
-type WorkspaceBackupState string
-
-// WorkspaceMattermostMappingProjection defines model for WorkspaceMattermostMappingProjection.
-type WorkspaceMattermostMappingProjection struct {
-	MappingGeneration        int64                           `json:"mappingGeneration"`
-	ProviderEffectGeneration int64                           `json:"providerEffectGeneration"`
-	ProviderEffectVersion    int64                           `json:"providerEffectVersion"`
-	ProviderObservedAt       time.Time                       `json:"providerObservedAt"`
-	State                    WorkspaceMattermostMappingState `json:"state"`
-	WorkspaceRef             string                          `json:"workspaceRef"`
-	WorkspaceVersion         int64                           `json:"workspaceVersion"`
-}
-
-// WorkspaceMattermostMappingState defines model for WorkspaceMattermostMappingState.
-type WorkspaceMattermostMappingState string
-
-// WorkspaceRestoreCommand defines model for WorkspaceRestoreCommand.
-type WorkspaceRestoreCommand struct {
-	Action             WorkspaceRestoreCommandAction `json:"action"`
-	BackupRef          *string                       `json:"backupRef,omitempty"`
-	BackupVersion      *int64                        `json:"backupVersion,omitempty"`
-	MembershipSha256   *Sha256                       `json:"membershipSha256,omitempty"`
-	Name               *string                       `json:"name,omitempty"`
-	RestoreRef         *string                       `json:"restoreRef,omitempty"`
-	TerminalReasonCode *string                       `json:"terminalReasonCode,omitempty"`
-}
-
-// WorkspaceRestoreCommandAction defines model for WorkspaceRestoreCommand.Action.
-type WorkspaceRestoreCommandAction string
-
-// WorkspaceRestoreNextAction defines model for WorkspaceRestoreNextAction.
-type WorkspaceRestoreNextAction string
-
-// WorkspaceRestorePage defines model for WorkspaceRestorePage.
-type WorkspaceRestorePage struct {
-	NextPageToken *string                `json:"nextPageToken,omitempty"`
-	Restores      []WorkspaceRestoreView `json:"restores"`
-}
-
-// WorkspaceRestoreProjection defines model for WorkspaceRestoreProjection.
-type WorkspaceRestoreProjection struct {
-	Attempt            int                   `json:"attempt"`
-	BackupRef          string                `json:"backupRef"`
-	BackupVersion      int64                 `json:"backupVersion"`
-	Generation         int64                 `json:"generation"`
-	MemberCount        int                   `json:"memberCount"`
-	MembershipSha256   Sha256                `json:"membershipSha256"`
-	Partial            bool                  `json:"partial"`
-	State              WorkspaceRestoreState `json:"state"`
-	TerminalReasonCode *string               `json:"terminalReasonCode,omitempty"`
-}
-
-// WorkspaceRestoreState defines model for WorkspaceRestoreState.
-type WorkspaceRestoreState string
-
-// WorkspaceRestoreView defines model for WorkspaceRestoreView.
-type WorkspaceRestoreView struct {
-	Attempt            int                          `json:"attempt"`
-	CreatedAt          time.Time                    `json:"createdAt"`
-	DisplayName        string                       `json:"displayName"`
-	Generation         int64                        `json:"generation"`
-	MemberCount        int                          `json:"memberCount"`
-	NextActions        []WorkspaceRestoreNextAction `json:"nextActions"`
-	RestoreRef         string                       `json:"restoreRef"`
-	State              WorkspaceRestoreState        `json:"state"`
-	TerminalReasonCode string                       `json:"terminalReasonCode"`
-	UpdatedAt          time.Time                    `json:"updatedAt"`
-	Version            int64                        `json:"version"`
-}
-
-// ApprovalRef defines model for ApprovalRef.
-type ApprovalRef = string
-
-// AuthorizationRef defines model for AuthorizationRef.
-type AuthorizationRef = string
-
-// BackupRef defines model for BackupRef.
-type BackupRef = string
-
-// CSRFToken defines model for CSRFToken.
-type CSRFToken = string
-
-// ConfigurationRef defines model for ConfigurationRef.
-type ConfigurationRef = string
+// ArtifactRef defines model for ArtifactRef.
+type ArtifactRef = OpaqueRef
 
 // ConnectionRef defines model for ConnectionRef.
-type ConnectionRef = string
+type ConnectionRef = OpaqueRef
 
-// DefinitionRef defines model for DefinitionRef.
-type DefinitionRef = string
+// ConversationRef defines model for ConversationRef.
+type ConversationRef = OpaqueRef
+
+// CsrfToken defines model for CsrfToken.
+type CsrfToken = string
+
+// GateRef defines model for GateRef.
+type GateRef = OpaqueRef
 
 // IdempotencyKey defines model for IdempotencyKey.
-type IdempotencyKey = openapi_types.UUID
+type IdempotencyKey = string
 
 // IfMatch defines model for IfMatch.
 type IfMatch = string
 
-// IncidentRef defines model for IncidentRef.
-type IncidentRef = string
+// IfMatchOptional defines model for IfMatchOptional.
+type IfMatchOptional = string
 
-// OptionalIfMatch defines model for OptionalIfMatch.
-type OptionalIfMatch = string
+// MembershipRef defines model for MembershipRef.
+type MembershipRef = OpaqueRef
 
 // PageSize defines model for PageSize.
 type PageSize = int
@@ -4981,626 +3039,393 @@ type PageSize = int
 // PageToken defines model for PageToken.
 type PageToken = string
 
-// PoolRef defines model for PoolRef.
-type PoolRef = string
+// PlanRef defines model for PlanRef.
+type PlanRef = OpaqueRef
 
-// ProviderRef defines model for ProviderRef.
-type ProviderRef = string
+// ProjectRef defines model for ProjectRef.
+type ProjectRef = OpaqueRef
 
-// ResourceID defines model for ResourceID.
-type ResourceID = openapi_types.UUID
+// ProjectRefQuery defines model for ProjectRefQuery.
+type ProjectRefQuery = OpaqueRef
 
-// ResourceKindQuery defines model for ResourceKindQuery.
-type ResourceKindQuery = ResourceKind
+// Query defines model for Query.
+type Query = string
 
-// ResourceRef defines model for ResourceRef.
-type ResourceRef = string
+// RecipeRef defines model for RecipeRef.
+type RecipeRef = OpaqueRef
 
-// RestoreRef defines model for RestoreRef.
-type RestoreRef = string
+// RoleDefinitionRefQuery defines model for RoleDefinitionRefQuery.
+type RoleDefinitionRefQuery = OpaqueRef
 
 // RunRef defines model for RunRef.
-type RunRef = string
+type RunRef = OpaqueRef
 
-// Selector defines model for Selector.
-type Selector = string
+// RunRefQuery defines model for RunRefQuery.
+type RunRefQuery = OpaqueRef
 
-// TestRef defines model for TestRef.
-type TestRef = string
+// ScheduleRef defines model for ScheduleRef.
+type ScheduleRef = OpaqueRef
 
-// BadRequest defines model for BadRequest.
-type BadRequest = Problem
+// SessionRef defines model for SessionRef.
+type SessionRef = OpaqueRef
 
-// Conflict defines model for Conflict.
-type Conflict = Problem
-
-// Forbidden defines model for Forbidden.
-type Forbidden = Problem
-
-// Internal defines model for Internal.
-type Internal = Problem
-
-// NotFound defines model for NotFound.
-type NotFound = Problem
-
-// PreconditionFailed defines model for PreconditionFailed.
-type PreconditionFailed = Problem
-
-// TooManyRequests defines model for TooManyRequests.
-type TooManyRequests = Problem
-
-// Unauthorized defines model for Unauthorized.
-type Unauthorized = Problem
-
-// Unavailable defines model for Unavailable.
-type Unavailable = Problem
-
-// UnsupportedMediaType defines model for UnsupportedMediaType.
-type UnsupportedMediaType = Problem
+// WorkflowRef defines model for WorkflowRef.
+type WorkflowRef = OpaqueRef
 
 // oidcBearerContextKey is the context key for oidcBearer security scheme
 type oidcBearerContextKey string
 
-// ownerSessionContextKey is the context key for ownerSession security scheme
-type ownerSessionContextKey string
+// sessionCookieContextKey is the context key for sessionCookie security scheme
+type sessionCookieContextKey string
 
-// ManageAccessResourceParams defines parameters for ManageAccessResource.
-type ManageAccessResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        *string        `json:"If-Match,omitempty"`
-}
-
-// CopyAccessResourceParams defines parameters for CopyAccessResource.
-type CopyAccessResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// DetachAccessResourceParams defines parameters for DetachAccessResource.
-type DetachAccessResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListAgentAssignmentsParams defines parameters for ListAgentAssignments.
-type ListAgentAssignmentsParams struct {
-	AgentRef  *string    `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+// ListPlatformMembershipsParams defines parameters for ListPlatformMemberships.
+type ListPlatformMembershipsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// ManageAgentAssignmentParams defines parameters for ManageAgentAssignment.
-type ManageAgentAssignmentParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
+// AddPlatformMembershipParams defines parameters for AddPlatformMembership.
+type AddPlatformMembershipParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RemovePlatformMembershipParams defines parameters for RemovePlatformMembership.
+type RemovePlatformMembershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ChangePlatformMembershipParams defines parameters for ChangePlatformMembership.
+type ChangePlatformMembershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListPlatformMembershipCandidatesParams defines parameters for ListPlatformMembershipCandidates.
+type ListPlatformMembershipCandidatesParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// UpdateAgentParams defines parameters for UpdateAgent.
+type UpdateAgentParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandAgentParams defines parameters for CommandAgent.
+type CommandAgentParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandAgentInstructionsParams defines parameters for CommandAgentInstructions.
+type CommandAgentInstructionsParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CreateInstructionDraftJSONBody defines parameters for CreateInstructionDraft.
+type CreateInstructionDraftJSONBody struct {
+	Content string `json:"content"`
+}
+
+// CreateInstructionDraftParams defines parameters for CreateInstructionDraft.
+type CreateInstructionDraftParams struct {
+	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
+	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 }
 
-// ListAgentAssignmentHistoryParams defines parameters for ListAgentAssignmentHistory.
-type ListAgentAssignmentHistoryParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListAgentBotIdentitiesParams defines parameters for ListAgentBotIdentities.
-type ListAgentBotIdentitiesParams struct {
-	PageSize  *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *string   `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListAgentsParams defines parameters for ListAgents.
-type ListAgentsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageAgentParams defines parameters for ManageAgent.
-type ManageAgentParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
-}
-
-// ManageAgentBotIdentityParams defines parameters for ManageAgentBotIdentity.
-type ManageAgentBotIdentityParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+// ChangeArtifactBindingParams defines parameters for ChangeArtifactBinding.
+type ChangeArtifactBindingParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// GetAgentBotIdentityOperationParams defines parameters for GetAgentBotIdentityOperation.
-type GetAgentBotIdentityOperationParams struct {
-	Action         AgentBotIdentityAction `form:"action" json:"action"`
-	IdempotencyKey IdempotencyKey         `json:"Idempotency-Key"`
+// DownloadArtifactParams defines parameters for DownloadArtifact.
+type DownloadArtifactParams struct {
+	Purpose DownloadArtifactParamsPurpose `form:"purpose" json:"purpose"`
 }
 
-// GetAgentBotIdentityProviderReadbackParams defines parameters for GetAgentBotIdentityProviderReadback.
-type GetAgentBotIdentityProviderReadbackParams struct {
-	IdentitySelector string `form:"identitySelector" json:"identitySelector"`
+// DownloadArtifactParamsPurpose defines parameters for DownloadArtifact.
+type DownloadArtifactParamsPurpose string
+
+// ListAssistantConversationsParams defines parameters for ListAssistantConversations.
+type ListAssistantConversationsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
 }
 
-// ListAgentHistoryParams defines parameters for ListAgentHistory.
-type ListAgentHistoryParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// CreateAssistantConversationJSONBody defines parameters for CreateAssistantConversation.
+type CreateAssistantConversationJSONBody struct {
+	ProjectRef *OpaqueRef `json:"projectRef,omitempty"`
+	Title      string     `json:"title"`
+}
+
+// CreateAssistantConversationParams defines parameters for CreateAssistantConversation.
+type CreateAssistantConversationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// AddAssistantTurnJSONBody defines parameters for AddAssistantTurn.
+type AddAssistantTurnJSONBody struct {
+	ArtifactRefs *[]OpaqueRef `json:"artifactRefs,omitempty"`
+	Content      string       `json:"content"`
+}
+
+// AddAssistantTurnParams defines parameters for AddAssistantTurn.
+type AddAssistantTurnParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ApplyAssistantPlanParams defines parameters for ApplyAssistantPlan.
+type ApplyAssistantPlanParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
 type ListAuditEventsParams struct {
-	ResourceKind *ResourceKind       `form:"resourceKind,omitempty" json:"resourceKind,omitempty"`
-	ResourceId   *openapi_types.UUID `form:"resourceId,omitempty" json:"resourceId,omitempty"`
-	Action       *string             `form:"action,omitempty" json:"action,omitempty"`
-	PageSize     *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken    *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// ExportAuditParams defines parameters for ExportAudit.
-type ExportAuditParams struct {
-	ResourceKind *ResourceKind `form:"resourceKind,omitempty" json:"resourceKind,omitempty"`
-	ResourceRef  *string       `form:"resourceRef,omitempty" json:"resourceRef,omitempty"`
-	Action       *string       `form:"action,omitempty" json:"action,omitempty"`
-}
-
-// ListBackupsParams defines parameters for ListBackups.
-type ListBackupsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// RestoreBackupParams defines parameters for RestoreBackup.
-type RestoreBackupParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// CreateIntegrationConnectionParams defines parameters for CreateIntegrationConnection.
+type CreateIntegrationConnectionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandIntegrationConnectionParams defines parameters for CommandIntegrationConnection.
+type CommandIntegrationConnectionParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListConfigurationChangesParams defines parameters for ListConfigurationChanges.
-type ListConfigurationChangesParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// GetConfigurationDiffParams defines parameters for GetConfigurationDiff.
-type GetConfigurationDiffParams struct {
-	InstructionSetRef string     `form:"instructionSetRef" json:"instructionSetRef"`
-	LeftVersion       int64      `form:"leftVersion" json:"leftVersion"`
-	RightVersion      int64      `form:"rightVersion" json:"rightVersion"`
-	PageSize          *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken         *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// GetConfigurationSourceDetailParams defines parameters for GetConfigurationSourceDetail.
-type GetConfigurationSourceDetailParams struct {
-	Kind GetConfigurationSourceDetailParamsKind `form:"kind" json:"kind"`
-}
-
-// GetConfigurationSourceDetailParamsKind defines parameters for GetConfigurationSourceDetail.
-type GetConfigurationSourceDetailParamsKind string
-
-// ManageImageBuildParams defines parameters for ManageImageBuild.
-type ManageImageBuildParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ChangeIntegrationGrantParams defines parameters for ChangeIntegrationGrant.
+type ChangeIntegrationGrantParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// GetRoleImageBuildParams defines parameters for GetRoleImageBuild.
-type GetRoleImageBuildParams struct {
-	IfMatch IfMatch `json:"If-Match"`
-}
-
-// ListIncidentsParams defines parameters for ListIncidents.
-type ListIncidentsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageIncidentParams defines parameters for ManageIncident.
-type ManageIncidentParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// ListIncidentHistoryParams defines parameters for ListIncidentHistory.
-type ListIncidentHistoryParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// ListIntegrationDefinitionsParams defines parameters for ListIntegrationDefinitions.
+type ListIntegrationDefinitionsParams struct {
+	Category *string `form:"category,omitempty" json:"category,omitempty"`
 }
 
-// ListInstructionSetsParams defines parameters for ListInstructionSets.
-type ListInstructionSetsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageInstructionSetParams defines parameters for ManageInstructionSet.
-type ManageInstructionSetParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
-}
-
-// CompareInstructionSetVersionsParams defines parameters for CompareInstructionSetVersions.
-type CompareInstructionSetVersionsParams struct {
-	LeftVersion  int64 `form:"leftVersion" json:"leftVersion"`
-	RightVersion int64 `form:"rightVersion" json:"rightVersion"`
-}
-
-// ListInstructionSetHistoryParams defines parameters for ListInstructionSetHistory.
-type ListInstructionSetHistoryParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListIntegrationApprovalsParams defines parameters for ListIntegrationApprovals.
-type ListIntegrationApprovalsParams struct {
-	Status    *string    `form:"status,omitempty" json:"status,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// DecideIntegrationApprovalParams defines parameters for DecideIntegrationApproval.
-type DecideIntegrationApprovalParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// CompleteOnboardingParams defines parameters for CompleteOnboarding.
+type CompleteOnboardingParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// ListIntegrationConfigurationsParams defines parameters for ListIntegrationConfigurations.
-type ListIntegrationConfigurationsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// GetOverviewParams defines parameters for GetOverview.
+type GetOverviewParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
 }
 
-// ConfigureIntegrationParams defines parameters for ConfigureIntegration.
-type ConfigureIntegrationParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
-}
-
-// GetIntegrationDefinitionParams defines parameters for GetIntegrationDefinition.
-type GetIntegrationDefinitionParams struct {
-	Version      int64  `form:"version" json:"version"`
-	DigestSha256 Sha256 `form:"digestSha256" json:"digestSha256"`
-}
-
-// TestIntegrationConnectionParams defines parameters for TestIntegrationConnection.
-type TestIntegrationConnectionParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
-// UnlinkMattermostTeamParams defines parameters for UnlinkMattermostTeam.
-type UnlinkMattermostTeamParams struct {
-	Generation     int64          `form:"generation" json:"generation"`
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// LinkMattermostTeamParams defines parameters for LinkMattermostTeam.
-type LinkMattermostTeamParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
-// RelinkMattermostTeamParams defines parameters for RelinkMattermostTeam.
-type RelinkMattermostTeamParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// GetMattermostTeamMappingOperationParams defines parameters for GetMattermostTeamMappingOperation.
-type GetMattermostTeamMappingOperationParams struct {
-	Action         GetMattermostTeamMappingOperationParamsAction `form:"action" json:"action"`
-	IdempotencyKey IdempotencyKey                                `json:"Idempotency-Key"`
-}
-
-// GetMattermostTeamMappingOperationParamsAction defines parameters for GetMattermostTeamMappingOperation.
-type GetMattermostTeamMappingOperationParamsAction string
-
-// ListMattermostTeamsParams defines parameters for ListMattermostTeams.
-type ListMattermostTeamsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// CreateMattermostTeamParams defines parameters for CreateMattermostTeam.
-type CreateMattermostTeamParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
-// GetOwnerConfigurationCatalogParams defines parameters for GetOwnerConfigurationCatalog.
-type GetOwnerConfigurationCatalogParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// ListOwnerGatesParams defines parameters for ListOwnerGates.
+type ListOwnerGatesParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListOwnerSchedulesParams defines parameters for ListOwnerSchedules.
-type ListOwnerSchedulesParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // ListProjectsParams defines parameters for ListProjects.
 type ListProjectsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // CreateProjectParams defines parameters for CreateProject.
 type CreateProjectParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
-// DeleteProjectParams defines parameters for DeleteProject.
-type DeleteProjectParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // UpdateProjectParams defines parameters for UpdateProject.
 type UpdateProjectParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// StartProviderAuthorizationParams defines parameters for StartProviderAuthorization.
-type StartProviderAuthorizationParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// CancelProviderAuthorizationParams defines parameters for CancelProviderAuthorization.
-type CancelProviderAuthorizationParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// RestartProviderAuthorizationParams defines parameters for RestartProviderAuthorization.
-type RestartProviderAuthorizationParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListProviderConnectionsParams defines parameters for ListProviderConnections.
-type ListProviderConnectionsParams struct {
-	State     *ProviderConnectionState `form:"state,omitempty" json:"state,omitempty"`
-	PageSize  *PageSize                `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken               `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// RevokeProviderConnectionParams defines parameters for RevokeProviderConnection.
-type RevokeProviderConnectionParams struct {
-	Generation     int64          `form:"generation" json:"generation"`
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ReauthorizeProviderConnectionParams defines parameters for ReauthorizeProviderConnection.
-type ReauthorizeProviderConnectionParams struct {
-	Generation     int64          `form:"generation" json:"generation"`
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListProviderPoolsParams defines parameters for ListProviderPools.
-type ListProviderPoolsParams struct {
+// ListAgentsParams defines parameters for ListAgents.
+type ListAgentsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// ManageProviderPoolParams defines parameters for ManageProviderPool.
-type ManageProviderPoolParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
-}
-
-// GetProviderParams defines parameters for GetProvider.
-type GetProviderParams struct {
-	Version      int64  `form:"version" json:"version"`
-	DigestSha256 Sha256 `form:"digestSha256" json:"digestSha256"`
-}
-
-// ListResourcesParams defines parameters for ListResources.
-type ListResourcesParams struct {
-	Kind      ResourceKindQuery   `form:"kind" json:"kind"`
-	ParentId  *openapi_types.UUID `form:"parentId,omitempty" json:"parentId,omitempty"`
-	State     *[]LifecycleState   `form:"state,omitempty" json:"state,omitempty"`
-	PageSize  *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// CreateResourceParams defines parameters for CreateResource.
-type CreateResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// CreateAgentParams defines parameters for CreateAgent.
+type CreateAgentParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// SearchResourcesParams defines parameters for SearchResources.
-type SearchResourcesParams struct {
-	Kind      ResourceKindQuery `form:"kind" json:"kind"`
-	Query     string            `form:"query" json:"query"`
-	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
-	PageSize  *PageSize         `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken        `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// ListArtifactsParams defines parameters for ListArtifacts.
+type ListArtifactsParams struct {
+	RunRef    *RunRefQuery `form:"runRef,omitempty" json:"runRef,omitempty"`
+	Query     *Query       `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken   `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// DeleteResourceParams defines parameters for DeleteResource.
-type DeleteResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// UploadArtifactParams defines parameters for UploadArtifact.
+type UploadArtifactParams struct {
+	RunRef         *OpaqueRef     `form:"runRef,omitempty" json:"runRef,omitempty"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	XFileName      string         `json:"X-File-Name"`
+}
+
+// AddProjectMembershipParams defines parameters for AddProjectMembership.
+type AddProjectMembershipParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RemoveProjectMembershipParams defines parameters for RemoveProjectMembership.
+type RemoveProjectMembershipParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// GetResourceParams defines parameters for GetResource.
-type GetResourceParams struct {
-	ExpectedKind ResourceKind `form:"expectedKind" json:"expectedKind"`
-}
-
-// UpdateResourceParams defines parameters for UpdateResource.
-type UpdateResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ChangeProjectMembershipParams defines parameters for ChangeProjectMembership.
+type ChangeProjectMembershipParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// TransitionResourceParams defines parameters for TransitionResource.
-type TransitionResourceParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// ListProjectMembershipCandidatesParams defines parameters for ListProjectMembershipCandidates.
+type ListProjectMembershipCandidatesParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListRoleImageRecipesParams defines parameters for ListRoleImageRecipes.
+type ListRoleImageRecipesParams struct {
+	RoleDefinitionRef *RoleDefinitionRefQuery `form:"roleDefinitionRef,omitempty" json:"roleDefinitionRef,omitempty"`
+	PageSize          *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken         *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateRoleImageRecipeParams defines parameters for CreateRoleImageRecipe.
+type CreateRoleImageRecipeParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UpdateRoleImageRecipeParams defines parameters for UpdateRoleImageRecipe.
+type UpdateRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListRestoreOperationsParams defines parameters for ListRestoreOperations.
-type ListRestoreOperationsParams struct {
-	BackupId  *openapi_types.UUID `form:"backupId,omitempty" json:"backupId,omitempty"`
-	PageSize  *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListRoleDefinitionsParams defines parameters for ListRoleDefinitions.
-type ListRoleDefinitionsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageRoleDefinitionParams defines parameters for ManageRoleDefinition.
-type ManageRoleDefinitionParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
-}
-
-// ListRoleDefinitionHistoryParams defines parameters for ListRoleDefinitionHistory.
-type ListRoleDefinitionHistoryParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageRoleImageRecipeParams defines parameters for ManageRoleImageRecipe.
-type ManageRoleImageRecipeParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        *string        `json:"If-Match,omitempty"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// GetRoleImageRecipeParams defines parameters for GetRoleImageRecipe.
-type GetRoleImageRecipeParams struct {
-	IfMatch IfMatch `json:"If-Match"`
-}
-
-// ListRunsParams defines parameters for ListRuns.
-type ListRunsParams struct {
-	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
-	PageSize  *PageSize         `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken        `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListRunArtifactsParams defines parameters for ListRunArtifacts.
-type ListRunArtifactsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ManageRunParams defines parameters for ManageRun.
-type ManageRunParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+// CommandRoleImageRecipeParams defines parameters for CommandRoleImageRecipe.
+type CommandRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// GetRunLineageParams defines parameters for GetRunLineage.
-type GetRunLineageParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-}
-
-// ListRunTimelineParams defines parameters for ListRunTimeline.
-type ListRunTimelineParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // CreateScheduleParams defines parameters for CreateSchedule.
 type CreateScheduleParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// CreateScheduleFromSelectionsParams defines parameters for CreateScheduleFromSelections.
-type CreateScheduleFromSelectionsParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-}
-
-// DeleteScheduleParams defines parameters for DeleteSchedule.
-type DeleteScheduleParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// UpdateScheduleParams defines parameters for UpdateSchedule.
-type UpdateScheduleParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
-}
-
-// ListScheduleOccurrencesParams defines parameters for ListScheduleOccurrences.
-type ListScheduleOccurrencesParams struct {
+// ListWorkflowsParams defines parameters for ListWorkflows.
+type ListWorkflowsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// ResolveScheduleRecoveryParams defines parameters for ResolveScheduleRecovery.
-type ResolveScheduleRecoveryParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// CreateWorkflowParams defines parameters for CreateWorkflow.
+type CreateWorkflowParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// RunScheduleNowParams defines parameters for RunScheduleNow.
-type RunScheduleNowParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	IfMatch        IfMatch        `json:"If-Match"`
+// ListRunsParams defines parameters for ListRuns.
+type ListRunsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
-// BindScheduleConfigurationParams defines parameters for BindScheduleConfiguration.
-type BindScheduleConfigurationParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+// CreateRunParams defines parameters for CreateRun.
+type CreateRunParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandRunParams defines parameters for CommandRun.
+type CommandRunParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListRunEventsParams defines parameters for ListRunEvents.
+type ListRunEventsParams struct {
+	AfterSequence *int64 `form:"afterSequence,omitempty" json:"afterSequence,omitempty"`
+	Limit         *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UpdateScheduleParams defines parameters for UpdateSchedule.
+type UpdateScheduleParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CommandScheduleParams defines parameters for CommandSchedule.
+type CommandScheduleParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// SearchPlatformParams defines parameters for SearchPlatform.
+type SearchPlatformParams struct {
+	Query string `form:"query" json:"query"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteOwnerSessionParams defines parameters for DeleteOwnerSession.
 type DeleteOwnerSessionParams struct {
-	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
@@ -5609,886 +3434,373 @@ type CreateOwnerSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
-// ListWorkspaceBackupsParams defines parameters for ListWorkspaceBackups.
-type ListWorkspaceBackupsParams struct {
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// AddSessionTurnParams defines parameters for AddSessionTurn.
+type AddSessionTurnParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// ManageWorkspaceBackupParams defines parameters for ManageWorkspaceBackup.
-type ManageWorkspaceBackupParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
+// UpdateSystemAssistantOwnerInstructionsJSONBody defines parameters for UpdateSystemAssistantOwnerInstructions.
+type UpdateSystemAssistantOwnerInstructionsJSONBody struct {
+	OwnerInstructions string `json:"ownerInstructions"`
 }
 
-// ListWorkspaceRestoresParams defines parameters for ListWorkspaceRestores.
-type ListWorkspaceRestoresParams struct {
-	BackupRef *string    `form:"backupRef,omitempty" json:"backupRef,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+// UpdateSystemAssistantOwnerInstructionsParams defines parameters for UpdateSystemAssistantOwnerInstructions.
+type UpdateSystemAssistantOwnerInstructionsParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// ManageWorkspaceRestoreParams defines parameters for ManageWorkspaceRestore.
-type ManageWorkspaceRestoreParams struct {
-	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
-	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
-	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
+// CommandSystemAssistantJSONBody defines parameters for CommandSystemAssistant.
+type CommandSystemAssistantJSONBody struct {
+	Action CommandSystemAssistantJSONBodyAction `json:"action"`
 }
 
-// ManageAccessResourceJSONRequestBody defines body for ManageAccessResource for application/json ContentType.
-type ManageAccessResourceJSONRequestBody = ManageAccessResource
+// CommandSystemAssistantParams defines parameters for CommandSystemAssistant.
+type CommandSystemAssistantParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
 
-// CopyAccessResourceJSONRequestBody defines body for CopyAccessResource for application/json ContentType.
-type CopyAccessResourceJSONRequestBody = CopyAccessResource
+// CommandSystemAssistantJSONBodyAction defines parameters for CommandSystemAssistant.
+type CommandSystemAssistantJSONBodyAction string
 
-// DetachAccessResourceJSONRequestBody defines body for DetachAccessResource for application/json ContentType.
-type DetachAccessResourceJSONRequestBody = DetachAccessResource
+// UpdateWorkflowDraftParams defines parameters for UpdateWorkflowDraft.
+type UpdateWorkflowDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
 
-// ManageAgentAssignmentJSONRequestBody defines body for ManageAgentAssignment for application/json ContentType.
-type ManageAgentAssignmentJSONRequestBody = AgentAssignmentCommand
+// CommandWorkflowParams defines parameters for CommandWorkflow.
+type CommandWorkflowParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
 
-// ManageAgentJSONRequestBody defines body for ManageAgent for application/json ContentType.
-type ManageAgentJSONRequestBody = AgentCommand
+// AddPlatformMembershipJSONRequestBody defines body for AddPlatformMembership for application/json ContentType.
+type AddPlatformMembershipJSONRequestBody = PlatformMembershipCreateInput
 
-// ManageAgentBotIdentityJSONRequestBody defines body for ManageAgentBotIdentity for application/json ContentType.
-type ManageAgentBotIdentityJSONRequestBody = AgentBotIdentityCommand
+// ChangePlatformMembershipJSONRequestBody defines body for ChangePlatformMembership for application/json ContentType.
+type ChangePlatformMembershipJSONRequestBody = PlatformMembershipChangeInput
 
-// RestoreBackupJSONRequestBody defines body for RestoreBackup for application/json ContentType.
-type RestoreBackupJSONRequestBody = RestoreBackup
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = AgentInput
 
-// ManageImageBuildJSONRequestBody defines body for ManageImageBuild for application/json ContentType.
-type ManageImageBuildJSONRequestBody = ManageImageBuild
+// CommandAgentJSONRequestBody defines body for CommandAgent for application/json ContentType.
+type CommandAgentJSONRequestBody = AgentCommand
 
-// ManageIncidentJSONRequestBody defines body for ManageIncident for application/json ContentType.
-type ManageIncidentJSONRequestBody = IncidentCommand
+// CommandAgentInstructionsJSONRequestBody defines body for CommandAgentInstructions for application/json ContentType.
+type CommandAgentInstructionsJSONRequestBody = InstructionCommand
 
-// ManageInstructionSetJSONRequestBody defines body for ManageInstructionSet for application/json ContentType.
-type ManageInstructionSetJSONRequestBody = InstructionSetCommand
+// CreateInstructionDraftJSONRequestBody defines body for CreateInstructionDraft for application/json ContentType.
+type CreateInstructionDraftJSONRequestBody CreateInstructionDraftJSONBody
 
-// DecideIntegrationApprovalJSONRequestBody defines body for DecideIntegrationApproval for application/json ContentType.
-type DecideIntegrationApprovalJSONRequestBody = DecideIntegrationApproval
+// ChangeArtifactBindingJSONRequestBody defines body for ChangeArtifactBinding for application/json ContentType.
+type ChangeArtifactBindingJSONRequestBody = ArtifactBindingInput
 
-// ConfigureIntegrationJSONRequestBody defines body for ConfigureIntegration for application/json ContentType.
-type ConfigureIntegrationJSONRequestBody = ConfigureIntegration
+// CreateAssistantConversationJSONRequestBody defines body for CreateAssistantConversation for application/json ContentType.
+type CreateAssistantConversationJSONRequestBody CreateAssistantConversationJSONBody
 
-// TestIntegrationConnectionJSONRequestBody defines body for TestIntegrationConnection for application/json ContentType.
-type TestIntegrationConnectionJSONRequestBody = TestIntegrationConnection
+// AddAssistantTurnJSONRequestBody defines body for AddAssistantTurn for application/json ContentType.
+type AddAssistantTurnJSONRequestBody AddAssistantTurnJSONBody
 
-// LinkMattermostTeamJSONRequestBody defines body for LinkMattermostTeam for application/json ContentType.
-type LinkMattermostTeamJSONRequestBody = LinkMattermostTeam
+// CreateIntegrationConnectionJSONRequestBody defines body for CreateIntegrationConnection for application/json ContentType.
+type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
 
-// RelinkMattermostTeamJSONRequestBody defines body for RelinkMattermostTeam for application/json ContentType.
-type RelinkMattermostTeamJSONRequestBody = RelinkMattermostTeam
+// CommandIntegrationConnectionJSONRequestBody defines body for CommandIntegrationConnection for application/json ContentType.
+type CommandIntegrationConnectionJSONRequestBody = IntegrationConnectionCommand
 
-// CreateMattermostTeamJSONRequestBody defines body for CreateMattermostTeam for application/json ContentType.
-type CreateMattermostTeamJSONRequestBody = CreateMattermostTeam
+// ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
+type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
 // ResolveOwnerGateJSONRequestBody defines body for ResolveOwnerGate for application/json ContentType.
-type ResolveOwnerGateJSONRequestBody = ResolveOwnerGate
+type ResolveOwnerGateJSONRequestBody = GateResolution
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
-type CreateProjectJSONRequestBody = CreateProject
+type CreateProjectJSONRequestBody = ProjectInput
 
 // UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
-type UpdateProjectJSONRequestBody = UpdateProject
+type UpdateProjectJSONRequestBody = ProjectInput
 
-// StartProviderAuthorizationJSONRequestBody defines body for StartProviderAuthorization for application/json ContentType.
-type StartProviderAuthorizationJSONRequestBody = StartProviderAuthorization
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = AgentInput
 
-// ManageProviderPoolJSONRequestBody defines body for ManageProviderPool for application/json ContentType.
-type ManageProviderPoolJSONRequestBody = ProviderPoolCommand
+// AddProjectMembershipJSONRequestBody defines body for AddProjectMembership for application/json ContentType.
+type AddProjectMembershipJSONRequestBody = ProjectMembershipCreateInput
 
-// CreateResourceJSONRequestBody defines body for CreateResource for application/json ContentType.
-type CreateResourceJSONRequestBody = CreateResource
+// ChangeProjectMembershipJSONRequestBody defines body for ChangeProjectMembership for application/json ContentType.
+type ChangeProjectMembershipJSONRequestBody = ProjectMembershipChangeInput
 
-// UpdateResourceJSONRequestBody defines body for UpdateResource for application/json ContentType.
-type UpdateResourceJSONRequestBody = UpdateResource
+// CreateRoleImageRecipeJSONRequestBody defines body for CreateRoleImageRecipe for application/json ContentType.
+type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
 
-// TransitionResourceJSONRequestBody defines body for TransitionResource for application/json ContentType.
-type TransitionResourceJSONRequestBody = TransitionResource
+// UpdateRoleImageRecipeJSONRequestBody defines body for UpdateRoleImageRecipe for application/json ContentType.
+type UpdateRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
 
-// ManageRoleDefinitionJSONRequestBody defines body for ManageRoleDefinition for application/json ContentType.
-type ManageRoleDefinitionJSONRequestBody = RoleDefinitionCommand
-
-// ManageRoleImageRecipeJSONRequestBody defines body for ManageRoleImageRecipe for application/json ContentType.
-type ManageRoleImageRecipeJSONRequestBody = ManageRoleImageRecipe
-
-// ManageRunJSONRequestBody defines body for ManageRun for application/json ContentType.
-type ManageRunJSONRequestBody = RunCommand
+// CommandRoleImageRecipeJSONRequestBody defines body for CommandRoleImageRecipe for application/json ContentType.
+type CommandRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
-type CreateScheduleJSONRequestBody = CreateSchedule
+type CreateScheduleJSONRequestBody = ScheduleInput
 
-// CreateScheduleFromSelectionsJSONRequestBody defines body for CreateScheduleFromSelections for application/json ContentType.
-type CreateScheduleFromSelectionsJSONRequestBody = CreateScheduleFromSelections
+// CreateWorkflowJSONRequestBody defines body for CreateWorkflow for application/json ContentType.
+type CreateWorkflowJSONRequestBody = WorkflowInput
+
+// CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
+type CreateRunJSONRequestBody = RunInput
+
+// CommandRunJSONRequestBody defines body for CommandRun for application/json ContentType.
+type CommandRunJSONRequestBody = RunCommand
 
 // UpdateScheduleJSONRequestBody defines body for UpdateSchedule for application/json ContentType.
-type UpdateScheduleJSONRequestBody = UpdateSchedule
+type UpdateScheduleJSONRequestBody = ScheduleInput
 
-// ResolveScheduleRecoveryJSONRequestBody defines body for ResolveScheduleRecovery for application/json ContentType.
-type ResolveScheduleRecoveryJSONRequestBody = ResolveScheduleRecovery
+// CommandScheduleJSONRequestBody defines body for CommandSchedule for application/json ContentType.
+type CommandScheduleJSONRequestBody = ScheduleCommand
 
-// BindScheduleConfigurationJSONRequestBody defines body for BindScheduleConfiguration for application/json ContentType.
-type BindScheduleConfigurationJSONRequestBody = BindScheduleConfiguration
+// AddSessionTurnJSONRequestBody defines body for AddSessionTurn for application/json ContentType.
+type AddSessionTurnJSONRequestBody = TurnInput
 
-// ManageWorkspaceBackupJSONRequestBody defines body for ManageWorkspaceBackup for application/json ContentType.
-type ManageWorkspaceBackupJSONRequestBody = WorkspaceBackupCommand
+// UpdateSystemAssistantOwnerInstructionsJSONRequestBody defines body for UpdateSystemAssistantOwnerInstructions for application/json ContentType.
+type UpdateSystemAssistantOwnerInstructionsJSONRequestBody UpdateSystemAssistantOwnerInstructionsJSONBody
 
-// ManageWorkspaceRestoreJSONRequestBody defines body for ManageWorkspaceRestore for application/json ContentType.
-type ManageWorkspaceRestoreJSONRequestBody = WorkspaceRestoreCommand
+// CommandSystemAssistantJSONRequestBody defines body for CommandSystemAssistant for application/json ContentType.
+type CommandSystemAssistantJSONRequestBody CommandSystemAssistantJSONBody
 
-// AsScheduleInput0 returns the union data inside the ScheduleInput as a ScheduleInput0
-func (t ScheduleInput) AsScheduleInput0() (ScheduleInput0, error) {
-	var body ScheduleInput0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
+// UpdateWorkflowDraftJSONRequestBody defines body for UpdateWorkflowDraft for application/json ContentType.
+type UpdateWorkflowDraftJSONRequestBody = WorkflowInput
 
-// FromScheduleInput0 overwrites any union data inside the ScheduleInput as the provided ScheduleInput0
-func (t *ScheduleInput) FromScheduleInput0(v ScheduleInput0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeScheduleInput0 performs a merge with any union data inside the ScheduleInput, using the provided ScheduleInput0
-func (t *ScheduleInput) MergeScheduleInput0(v ScheduleInput0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsScheduleInput1 returns the union data inside the ScheduleInput as a ScheduleInput1
-func (t ScheduleInput) AsScheduleInput1() (ScheduleInput1, error) {
-	var body ScheduleInput1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromScheduleInput1 overwrites any union data inside the ScheduleInput as the provided ScheduleInput1
-func (t *ScheduleInput) FromScheduleInput1(v ScheduleInput1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeScheduleInput1 performs a merge with any union data inside the ScheduleInput, using the provided ScheduleInput1
-func (t *ScheduleInput) MergeScheduleInput1(v ScheduleInput1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ScheduleInput) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	object := make(map[string]json.RawMessage)
-	if t.union != nil {
-		err = json.Unmarshal(b, &object)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	object["calendar"], err = json.Marshal(t.Calendar)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'calendar': %w", err)
-	}
-
-	object["coalesce"], err = json.Marshal(t.Coalesce)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'coalesce': %w", err)
-	}
-
-	if t.Cron != nil {
-		object["cron"], err = json.Marshal(t.Cron)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'cron': %w", err)
-		}
-	}
-
-	object["deadLetterAfterSeconds"], err = json.Marshal(t.DeadLetterAfterSeconds)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'deadLetterAfterSeconds': %w", err)
-	}
-
-	object["deliveryPolicy"], err = json.Marshal(t.DeliveryPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'deliveryPolicy': %w", err)
-	}
-
-	if t.ExecutionSessionId != nil {
-		object["executionSessionId"], err = json.Marshal(t.ExecutionSessionId)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'executionSessionId': %w", err)
-		}
-	}
-
-	object["initialBackoffSeconds"], err = json.Marshal(t.InitialBackoffSeconds)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'initialBackoffSeconds': %w", err)
-	}
-
-	if t.IntervalSeconds != nil {
-		object["intervalSeconds"], err = json.Marshal(t.IntervalSeconds)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'intervalSeconds': %w", err)
-		}
-	}
-
-	object["maximumAttempts"], err = json.Marshal(t.MaximumAttempts)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'maximumAttempts': %w", err)
-	}
-
-	object["maximumBackoffSeconds"], err = json.Marshal(t.MaximumBackoffSeconds)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'maximumBackoffSeconds': %w", err)
-	}
-
-	object["maximumExecutionSeconds"], err = json.Marshal(t.MaximumExecutionSeconds)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'maximumExecutionSeconds': %w", err)
-	}
-
-	object["misfireGraceSeconds"], err = json.Marshal(t.MisfireGraceSeconds)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'misfireGraceSeconds': %w", err)
-	}
-
-	object["misfirePolicy"], err = json.Marshal(t.MisfirePolicy)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'misfirePolicy': %w", err)
-	}
-
-	object["notificationPolicy"], err = json.Marshal(t.NotificationPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'notificationPolicy': %w", err)
-	}
-
-	object["overlapPolicy"], err = json.Marshal(t.OverlapPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'overlapPolicy': %w", err)
-	}
-
-	if t.PlaybookRef != nil {
-		object["playbookRef"], err = json.Marshal(t.PlaybookRef)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'playbookRef': %w", err)
-		}
-	}
-
-	if t.PlaybookVersion != nil {
-		object["playbookVersion"], err = json.Marshal(t.PlaybookVersion)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'playbookVersion': %w", err)
-		}
-	}
-
-	object["promptArtifactId"], err = json.Marshal(t.PromptArtifactId)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'promptArtifactId': %w", err)
-	}
-
-	object["promptProfileId"], err = json.Marshal(t.PromptProfileId)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'promptProfileId': %w", err)
-	}
-
-	object["promptRevision"], err = json.Marshal(t.PromptRevision)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'promptRevision': %w", err)
-	}
-
-	if t.RoomId != nil {
-		object["roomId"], err = json.Marshal(t.RoomId)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'roomId': %w", err)
-		}
-	}
-
-	object["runtimeRevisionId"], err = json.Marshal(t.RuntimeRevisionId)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'runtimeRevisionId': %w", err)
-	}
-
-	object["sessionPolicy"], err = json.Marshal(t.SessionPolicy)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'sessionPolicy': %w", err)
-	}
-
-	object["targetResourceId"], err = json.Marshal(t.TargetResourceId)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'targetResourceId': %w", err)
-	}
-
-	object["targetType"], err = json.Marshal(t.TargetType)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'targetType': %w", err)
-	}
-
-	object["timezone"], err = json.Marshal(t.Timezone)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'timezone': %w", err)
-	}
-
-	b, err = json.Marshal(object)
-	return b, err
-}
-
-func (t *ScheduleInput) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	if err != nil {
-		return err
-	}
-	object := make(map[string]json.RawMessage)
-	err = json.Unmarshal(b, &object)
-	if err != nil {
-		return err
-	}
-
-	if raw, found := object["calendar"]; found {
-		err = json.Unmarshal(raw, &t.Calendar)
-		if err != nil {
-			return fmt.Errorf("error reading 'calendar': %w", err)
-		}
-	}
-
-	if raw, found := object["coalesce"]; found {
-		err = json.Unmarshal(raw, &t.Coalesce)
-		if err != nil {
-			return fmt.Errorf("error reading 'coalesce': %w", err)
-		}
-	}
-
-	if raw, found := object["cron"]; found {
-		err = json.Unmarshal(raw, &t.Cron)
-		if err != nil {
-			return fmt.Errorf("error reading 'cron': %w", err)
-		}
-	}
-
-	if raw, found := object["deadLetterAfterSeconds"]; found {
-		err = json.Unmarshal(raw, &t.DeadLetterAfterSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'deadLetterAfterSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["deliveryPolicy"]; found {
-		err = json.Unmarshal(raw, &t.DeliveryPolicy)
-		if err != nil {
-			return fmt.Errorf("error reading 'deliveryPolicy': %w", err)
-		}
-	}
-
-	if raw, found := object["executionSessionId"]; found {
-		err = json.Unmarshal(raw, &t.ExecutionSessionId)
-		if err != nil {
-			return fmt.Errorf("error reading 'executionSessionId': %w", err)
-		}
-	}
-
-	if raw, found := object["initialBackoffSeconds"]; found {
-		err = json.Unmarshal(raw, &t.InitialBackoffSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'initialBackoffSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["intervalSeconds"]; found {
-		err = json.Unmarshal(raw, &t.IntervalSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'intervalSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["maximumAttempts"]; found {
-		err = json.Unmarshal(raw, &t.MaximumAttempts)
-		if err != nil {
-			return fmt.Errorf("error reading 'maximumAttempts': %w", err)
-		}
-	}
-
-	if raw, found := object["maximumBackoffSeconds"]; found {
-		err = json.Unmarshal(raw, &t.MaximumBackoffSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'maximumBackoffSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["maximumExecutionSeconds"]; found {
-		err = json.Unmarshal(raw, &t.MaximumExecutionSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'maximumExecutionSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["misfireGraceSeconds"]; found {
-		err = json.Unmarshal(raw, &t.MisfireGraceSeconds)
-		if err != nil {
-			return fmt.Errorf("error reading 'misfireGraceSeconds': %w", err)
-		}
-	}
-
-	if raw, found := object["misfirePolicy"]; found {
-		err = json.Unmarshal(raw, &t.MisfirePolicy)
-		if err != nil {
-			return fmt.Errorf("error reading 'misfirePolicy': %w", err)
-		}
-	}
-
-	if raw, found := object["notificationPolicy"]; found {
-		err = json.Unmarshal(raw, &t.NotificationPolicy)
-		if err != nil {
-			return fmt.Errorf("error reading 'notificationPolicy': %w", err)
-		}
-	}
-
-	if raw, found := object["overlapPolicy"]; found {
-		err = json.Unmarshal(raw, &t.OverlapPolicy)
-		if err != nil {
-			return fmt.Errorf("error reading 'overlapPolicy': %w", err)
-		}
-	}
-
-	if raw, found := object["playbookRef"]; found {
-		err = json.Unmarshal(raw, &t.PlaybookRef)
-		if err != nil {
-			return fmt.Errorf("error reading 'playbookRef': %w", err)
-		}
-	}
-
-	if raw, found := object["playbookVersion"]; found {
-		err = json.Unmarshal(raw, &t.PlaybookVersion)
-		if err != nil {
-			return fmt.Errorf("error reading 'playbookVersion': %w", err)
-		}
-	}
-
-	if raw, found := object["promptArtifactId"]; found {
-		err = json.Unmarshal(raw, &t.PromptArtifactId)
-		if err != nil {
-			return fmt.Errorf("error reading 'promptArtifactId': %w", err)
-		}
-	}
-
-	if raw, found := object["promptProfileId"]; found {
-		err = json.Unmarshal(raw, &t.PromptProfileId)
-		if err != nil {
-			return fmt.Errorf("error reading 'promptProfileId': %w", err)
-		}
-	}
-
-	if raw, found := object["promptRevision"]; found {
-		err = json.Unmarshal(raw, &t.PromptRevision)
-		if err != nil {
-			return fmt.Errorf("error reading 'promptRevision': %w", err)
-		}
-	}
-
-	if raw, found := object["roomId"]; found {
-		err = json.Unmarshal(raw, &t.RoomId)
-		if err != nil {
-			return fmt.Errorf("error reading 'roomId': %w", err)
-		}
-	}
-
-	if raw, found := object["runtimeRevisionId"]; found {
-		err = json.Unmarshal(raw, &t.RuntimeRevisionId)
-		if err != nil {
-			return fmt.Errorf("error reading 'runtimeRevisionId': %w", err)
-		}
-	}
-
-	if raw, found := object["sessionPolicy"]; found {
-		err = json.Unmarshal(raw, &t.SessionPolicy)
-		if err != nil {
-			return fmt.Errorf("error reading 'sessionPolicy': %w", err)
-		}
-	}
-
-	if raw, found := object["targetResourceId"]; found {
-		err = json.Unmarshal(raw, &t.TargetResourceId)
-		if err != nil {
-			return fmt.Errorf("error reading 'targetResourceId': %w", err)
-		}
-	}
-
-	if raw, found := object["targetType"]; found {
-		err = json.Unmarshal(raw, &t.TargetType)
-		if err != nil {
-			return fmt.Errorf("error reading 'targetType': %w", err)
-		}
-	}
-
-	if raw, found := object["timezone"]; found {
-		err = json.Unmarshal(raw, &t.Timezone)
-		if err != nil {
-			return fmt.Errorf("error reading 'timezone': %w", err)
-		}
-	}
-
-	return err
-}
+// CommandWorkflowJSONRequestBody defines body for CommandWorkflow for application/json ContentType.
+type CommandWorkflowJSONRequestBody = WorkflowCommand
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Выполнить специализированную access command
-	// (POST /access-resources)
-	ManageAccessResource(w http.ResponseWriter, r *http.Request, params ManageAccessResourceParams)
-	// Создать UI-owned копию exact Git-owned access resource version
-	// (POST /access-resources/{resourceId}/copy)
-	CopyAccessResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params CopyAccessResourceParams)
-	// Явно перевести Git-owned access resource в UI ownership
-	// (POST /access-resources/{resourceId}/detach)
-	DetachAccessResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params DetachAccessResourceParams)
-	// Получить owner AgentAssignment catalog
-	// (GET /agent-assignments)
-	ListAgentAssignments(w http.ResponseWriter, r *http.Request, params ListAgentAssignmentsParams)
-	// Назначить или снять Agent
-	// (POST /agent-assignments/commands)
-	ManageAgentAssignment(w http.ResponseWriter, r *http.Request, params ManageAgentAssignmentParams)
-	// Прочитать exact AgentAssignment
-	// (GET /agent-assignments/{resourceRef})
-	GetAgentAssignment(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
-	// Получить immutable AgentAssignment history
-	// (GET /agent-assignments/{resourceRef}/history)
-	ListAgentAssignmentHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListAgentAssignmentHistoryParams)
-	// Получить безопасный Mattermost bot identity catalog
-	// (GET /agent-bot-identities)
-	ListAgentBotIdentities(w http.ResponseWriter, r *http.Request, params ListAgentBotIdentitiesParams)
-	// Получить owner Agent catalog
-	// (GET /agents)
-	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
-	// Выполнить специализированную Agent command
-	// (POST /agents/commands)
-	ManageAgent(w http.ResponseWriter, r *http.Request, params ManageAgentParams)
-	// Прочитать exact Agent
-	// (GET /agents/{resourceRef})
-	GetAgent(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
-	// Получить текущую Mattermost bot identity binding
-	// (GET /agents/{resourceRef}/bot-identity)
-	GetAgentBotIdentity(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
-	// Создать, bind, rebind или revoke Mattermost bot identity
-	// (POST /agents/{resourceRef}/bot-identity)
-	ManageAgentBotIdentity(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ManageAgentBotIdentityParams)
-	// Получить durable bot identity operation readback
-	// (GET /agents/{resourceRef}/bot-identity/operations)
-	GetAgentBotIdentityOperation(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params GetAgentBotIdentityOperationParams)
-	// Повторно разрешить opaque bot selector owner-side
-	// (GET /agents/{resourceRef}/bot-identity/provider-readback)
-	GetAgentBotIdentityProviderReadback(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params GetAgentBotIdentityProviderReadbackParams)
-	// Получить immutable Agent history
-	// (GET /agents/{resourceRef}/history)
-	ListAgentHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListAgentHistoryParams)
-	// Получить audit metadata
-	// (GET /audit)
+
+	// (GET /api/v1/administration)
+	GetAdministration(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/administration/members)
+	ListPlatformMemberships(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipsParams)
+
+	// (POST /api/v1/administration/members)
+	AddPlatformMembership(w http.ResponseWriter, r *http.Request, params AddPlatformMembershipParams)
+
+	// (DELETE /api/v1/administration/members/{membershipRef})
+	RemovePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef MembershipRef, params RemovePlatformMembershipParams)
+
+	// (PATCH /api/v1/administration/members/{membershipRef})
+	ChangePlatformMembership(w http.ResponseWriter, r *http.Request, membershipRef MembershipRef, params ChangePlatformMembershipParams)
+
+	// (GET /api/v1/administration/membership-candidates)
+	ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipCandidatesParams)
+
+	// (GET /api/v1/agents/{agentRef})
+	GetAgent(w http.ResponseWriter, r *http.Request, agentRef AgentRef)
+
+	// (PATCH /api/v1/agents/{agentRef})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params UpdateAgentParams)
+
+	// (POST /api/v1/agents/{agentRef}/commands)
+	CommandAgent(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CommandAgentParams)
+
+	// (POST /api/v1/agents/{agentRef}/instruction-commands)
+	CommandAgentInstructions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CommandAgentInstructionsParams)
+
+	// (POST /api/v1/agents/{agentRef}/instruction-drafts)
+	CreateInstructionDraft(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CreateInstructionDraftParams)
+
+	// (GET /api/v1/artifacts/{artifactRef})
+	GetArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef)
+
+	// (POST /api/v1/artifacts/{artifactRef}/bindings)
+	ChangeArtifactBinding(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params ChangeArtifactBindingParams)
+
+	// (GET /api/v1/artifacts/{artifactRef}/content)
+	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params DownloadArtifactParams)
+
+	// (GET /api/v1/assistant-conversations)
+	ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams)
+
+	// (POST /api/v1/assistant-conversations)
+	CreateAssistantConversation(w http.ResponseWriter, r *http.Request, params CreateAssistantConversationParams)
+
+	// (POST /api/v1/assistant-conversations/{conversationRef}/turns)
+	AddAssistantTurn(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params AddAssistantTurnParams)
+
+	// (POST /api/v1/assistant-plans/{planRef}/application)
+	ApplyAssistantPlan(w http.ResponseWriter, r *http.Request, planRef PlanRef, params ApplyAssistantPlanParams)
+
+	// (GET /api/v1/audit-events)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
-	// Экспортировать bounded safe audit CSV
-	// (GET /audit/export)
-	ExportAudit(w http.ResponseWriter, r *http.Request, params ExportAuditParams)
-	// Получить безопасную страницу owner backups
-	// (GET /backups)
-	ListBackups(w http.ResponseWriter, r *http.Request, params ListBackupsParams)
-	// Прочитать exact owner backup
-	// (GET /backups/{backupId})
-	GetBackup(w http.ResponseWriter, r *http.Request, backupId openapi_types.UUID)
-	// Создать server-owned restore operation для exact eligible backup
-	// (POST /backups/{backupId}/restore)
-	RestoreBackup(w http.ResponseWriter, r *http.Request, backupId openapi_types.UUID, params RestoreBackupParams)
-	// Получить проекцию изменений конфигурации
-	// (GET /configuration-changes)
-	ListConfigurationChanges(w http.ResponseWriter, r *http.Request, params ListConfigurationChangesParams)
-	// Получить authoritative InstructionSet version diff
-	// (GET /configuration-diff)
-	GetConfigurationDiff(w http.ResponseWriter, r *http.Request, params GetConfigurationDiffParams)
-	// Получить human-readable configuration source detail
-	// (GET /configuration-source/{resourceRef})
-	GetConfigurationSourceDetail(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params GetConfigurationSourceDetailParams)
-	// Получить ограниченную диагностику control-plane
-	// (GET /diagnostics)
-	GetDiagnostics(w http.ResponseWriter, r *http.Request)
-	// Получить bounded current health observations
-	// (GET /health-series)
-	GetHealthSeries(w http.ResponseWriter, r *http.Request)
-	// Выполнить закрытую owner-команду ImageBuild
-	// (POST /image-builds/commands)
-	ManageImageBuild(w http.ResponseWriter, r *http.Request, params ManageImageBuildParams)
-	// Прочитать exact version ImageBuild через специализированный owner path
-	// (GET /image-builds/{imageBuildId})
-	GetRoleImageBuild(w http.ResponseWriter, r *http.Request, imageBuildId openapi_types.UUID, params GetRoleImageBuildParams)
-	// Получить авторитетную проекцию инцидентов
-	// (GET /incidents)
-	ListIncidents(w http.ResponseWriter, r *http.Request, params ListIncidentsParams)
-	// Получить exact runtime incident
-	// (GET /incidents/{incidentRef})
-	GetIncident(w http.ResponseWriter, r *http.Request, incidentRef IncidentRef)
-	// Ack/retry/release/close exact incident
-	// (POST /incidents/{incidentRef}/commands)
-	ManageIncident(w http.ResponseWriter, r *http.Request, incidentRef IncidentRef, params ManageIncidentParams)
-	// Получить incident lifecycle history
-	// (GET /incidents/{incidentRef}/history)
-	ListIncidentHistory(w http.ResponseWriter, r *http.Request, incidentRef IncidentRef, params ListIncidentHistoryParams)
-	// Получить owner InstructionSet catalog
-	// (GET /instruction-sets)
-	ListInstructionSets(w http.ResponseWriter, r *http.Request, params ListInstructionSetsParams)
-	// Выполнить специализированную InstructionSet command
-	// (POST /instruction-sets/commands)
-	ManageInstructionSet(w http.ResponseWriter, r *http.Request, params ManageInstructionSetParams)
-	// Прочитать exact InstructionSet
-	// (GET /instruction-sets/{resourceRef})
-	GetInstructionSet(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
-	// Сравнить две immutable версии InstructionSet
-	// (GET /instruction-sets/{resourceRef}/compare)
-	CompareInstructionSetVersions(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params CompareInstructionSetVersionsParams)
-	// Получить immutable InstructionSet history
-	// (GET /instruction-sets/{resourceRef}/history)
-	ListInstructionSetHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListInstructionSetHistoryParams)
-	// Получить ApprovalRequest list
-	// (GET /integration-approvals)
-	ListIntegrationApprovals(w http.ResponseWriter, r *http.Request, params ListIntegrationApprovalsParams)
-	// Получить exact ApprovalRequest
-	// (GET /integration-approvals/{approvalRef})
-	GetIntegrationApproval(w http.ResponseWriter, r *http.Request, approvalRef ApprovalRef)
-	// Принять one-winner approval decision
-	// (POST /integration-approvals/{approvalRef}/decision)
-	DecideIntegrationApproval(w http.ResponseWriter, r *http.Request, approvalRef ApprovalRef, params DecideIntegrationApprovalParams)
-	// Получить owner integration configurations
-	// (GET /integration-configurations)
-	ListIntegrationConfigurations(w http.ResponseWriter, r *http.Request, params ListIntegrationConfigurationsParams)
-	// Настроить IntegrationDefinition через catalog refs
-	// (POST /integration-configurations)
-	ConfigureIntegration(w http.ResponseWriter, r *http.Request, params ConfigureIntegrationParams)
-	// Получить exact integration configuration
-	// (GET /integration-configurations/{configurationRef})
-	GetIntegrationConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef)
-	// Получить IntegrationDefinition catalog
-	// (GET /integration-definitions)
-	ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request)
-	// Получить exact IntegrationDefinition и capabilities
-	// (GET /integration-definitions/{definitionRef})
-	GetIntegrationDefinition(w http.ResponseWriter, r *http.Request, definitionRef DefinitionRef, params GetIntegrationDefinitionParams)
-	// Проверить exact integration configuration/connection
-	// (POST /integration-tests)
-	TestIntegrationConnection(w http.ResponseWriter, r *http.Request, params TestIntegrationConnectionParams)
-	// Получить exact integration test receipt
-	// (GET /integration-tests/{testRef})
-	GetIntegrationTestReceipt(w http.ResponseWriter, r *http.Request, testRef TestRef)
-	// Закрыть exact Workspace Team mapping
-	// (DELETE /mattermost/team-binding)
-	UnlinkMattermostTeam(w http.ResponseWriter, r *http.Request, params UnlinkMattermostTeamParams)
-	// Прочитать current Workspace Team binding
-	// (GET /mattermost/team-binding)
-	GetMattermostTeamBinding(w http.ResponseWriter, r *http.Request)
-	// Связать Workspace с Team из owner catalog
-	// (POST /mattermost/team-binding)
-	LinkMattermostTeam(w http.ResponseWriter, r *http.Request, params LinkMattermostTeamParams)
-	// Пересвязать Workspace с другой Team
-	// (PUT /mattermost/team-binding)
-	RelinkMattermostTeam(w http.ResponseWriter, r *http.Request, params RelinkMattermostTeamParams)
-	// Восстановить durable outcome mapping command
-	// (GET /mattermost/team-operations)
-	GetMattermostTeamMappingOperation(w http.ResponseWriter, r *http.Request, params GetMattermostTeamMappingOperationParams)
-	// Получить авторитетный owner Team catalog
-	// (GET /mattermost/teams)
-	ListMattermostTeams(w http.ResponseWriter, r *http.Request, params ListMattermostTeamsParams)
-	// Создать Team и получить durable readback
-	// (POST /mattermost/teams)
-	CreateMattermostTeam(w http.ResponseWriter, r *http.Request, params CreateMattermostTeamParams)
-	// Повторно разрешить opaque Team selector provider-side
-	// (GET /mattermost/teams/{selector})
-	GetMattermostTeamProviderReadback(w http.ResponseWriter, r *http.Request, selector Selector)
-	// Получить server-authored runtime и Schedule catalog
-	// (GET /owner-configuration/catalog)
-	GetOwnerConfigurationCatalog(w http.ResponseWriter, r *http.Request, params GetOwnerConfigurationCatalogParams)
-	// Принять решение по exact delivered OwnerGate
-	// (POST /owner-gates/{ownerGateId}/resolution)
-	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, ownerGateId openapi_types.UUID, params ResolveOwnerGateParams)
-	// Получить owner-facing Schedule projections
-	// (GET /owner-schedules)
-	ListOwnerSchedules(w http.ResponseWriter, r *http.Request, params ListOwnerSchedulesParams)
-	// Получить exact owner-facing Schedule projection
-	// (GET /owner-schedules/{scheduleRef})
-	GetOwnerSchedule(w http.ResponseWriter, r *http.Request, scheduleRef string)
-	// Получить доступные owner проекты
-	// (GET /projects)
+
+	// (GET /api/v1/bootstrap)
+	GetBootstrapState(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/integration-connections)
+	ListIntegrationConnections(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/integration-connections)
+	CreateIntegrationConnection(w http.ResponseWriter, r *http.Request, params CreateIntegrationConnectionParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef})
+	GetIntegrationConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/commands)
+	CommandIntegrationConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params CommandIntegrationConnectionParams)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/grants)
+	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
+
+	// (GET /api/v1/integration-definitions)
+	ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, params ListIntegrationDefinitionsParams)
+
+	// (POST /api/v1/onboarding/completion)
+	CompleteOnboarding(w http.ResponseWriter, r *http.Request, params CompleteOnboardingParams)
+
+	// (GET /api/v1/overview)
+	GetOverview(w http.ResponseWriter, r *http.Request, params GetOverviewParams)
+
+	// (GET /api/v1/owner-gates)
+	ListOwnerGates(w http.ResponseWriter, r *http.Request, params ListOwnerGatesParams)
+
+	// (GET /api/v1/owner-gates/{gateRef})
+	GetOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef)
+
+	// (POST /api/v1/owner-gates/{gateRef}/resolution)
+	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef, params ResolveOwnerGateParams)
+
+	// (GET /api/v1/platform-capabilities)
+	ListPlatformCapabilities(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
-	// Создать проект с назначенным сервером owner
-	// (POST /projects)
+
+	// (POST /api/v1/projects)
 	CreateProject(w http.ResponseWriter, r *http.Request, params CreateProjectParams)
-	// Терминально удалить пустой exact owner project
-	// (DELETE /projects/{projectId})
-	DeleteProject(w http.ResponseWriter, r *http.Request, projectId openapi_types.UUID, params DeleteProjectParams)
-	// Обновить exact owner project после tenant resolution
-	// (PUT /projects/{projectId})
-	UpdateProject(w http.ResponseWriter, r *http.Request, projectId openapi_types.UUID, params UpdateProjectParams)
-	// Начать provider authorization без secret input
-	// (POST /provider-authorizations)
-	StartProviderAuthorization(w http.ResponseWriter, r *http.Request, params StartProviderAuthorizationParams)
-	// Отменить exact provider authorization attempt
-	// (DELETE /provider-authorizations/{authorizationRef})
-	CancelProviderAuthorization(w http.ResponseWriter, r *http.Request, authorizationRef AuthorizationRef, params CancelProviderAuthorizationParams)
-	// Получить status/current code provider authorization
-	// (GET /provider-authorizations/{authorizationRef})
-	GetProviderAuthorization(w http.ResponseWriter, r *http.Request, authorizationRef AuthorizationRef)
-	// Создать fresh authorization attempt и новый short code
-	// (POST /provider-authorizations/{authorizationRef}/new-code)
-	RestartProviderAuthorization(w http.ResponseWriter, r *http.Request, authorizationRef AuthorizationRef, params RestartProviderAuthorizationParams)
-	// Получить masked provider accounts
-	// (GET /provider-connections)
-	ListProviderConnections(w http.ResponseWriter, r *http.Request, params ListProviderConnectionsParams)
-	// Отозвать provider account
-	// (DELETE /provider-connections/{connectionRef})
-	RevokeProviderConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params RevokeProviderConnectionParams)
-	// Получить masked provider account readback
-	// (GET /provider-connections/{connectionRef})
-	GetProviderConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef)
-	// Начать fresh reauthorization attempt
-	// (POST /provider-connections/{connectionRef}/reauthorize)
-	ReauthorizeProviderConnection(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ReauthorizeProviderConnectionParams)
-	// Получить provider pools
-	// (GET /provider-pools)
-	ListProviderPools(w http.ResponseWriter, r *http.Request, params ListProviderPoolsParams)
-	// Выполнить specialized provider pool command
-	// (POST /provider-pools/commands)
-	ManageProviderPool(w http.ResponseWriter, r *http.Request, params ManageProviderPoolParams)
-	// Получить exact provider pool
-	// (GET /provider-pools/{poolRef})
-	GetProviderPool(w http.ResponseWriter, r *http.Request, poolRef PoolRef)
-	// Получить versioned provider catalog
-	// (GET /providers)
-	ListProviders(w http.ResponseWriter, r *http.Request)
-	// Прочитать exact provider definition
-	// (GET /providers/{providerRef})
-	GetProvider(w http.ResponseWriter, r *http.Request, providerRef ProviderRef, params GetProviderParams)
-	// Получить авторитетную страницу ресурсов
-	// (GET /resources)
-	ListResources(w http.ResponseWriter, r *http.Request, params ListResourcesParams)
-	// Создать ресурс допустимого вида
-	// (POST /resources)
-	CreateResource(w http.ResponseWriter, r *http.Request, params CreateResourceParams)
-	// Выполнить авторитетный owner search одного закрытого resource kind
-	// (GET /resources/search)
-	SearchResources(w http.ResponseWriter, r *http.Request, params SearchResourcesParams)
-	// Удалить ресурс с optimistic concurrency
-	// (DELETE /resources/{resourceId})
-	DeleteResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params DeleteResourceParams)
-	// Получить ресурс после owner resolution
-	// (GET /resources/{resourceId})
-	GetResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params GetResourceParams)
-	// Обновить ресурс с optimistic concurrency
-	// (PUT /resources/{resourceId})
-	UpdateResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params UpdateResourceParams)
-	// Выполнить допустимый lifecycle transition
-	// (POST /resources/{resourceId}/transition)
-	TransitionResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params TransitionResourceParams)
-	// Обнаружить связанные owner restore operations после потери Location
-	// (GET /restore-operations)
-	ListRestoreOperations(w http.ResponseWriter, r *http.Request, params ListRestoreOperationsParams)
-	// Прочитать authoritative restore readback
-	// (GET /restore-operations/{restoreOperationId})
-	GetRestoreOperation(w http.ResponseWriter, r *http.Request, restoreOperationId openapi_types.UUID)
-	// Получить owner RoleDefinition catalog
-	// (GET /role-definitions)
-	ListRoleDefinitions(w http.ResponseWriter, r *http.Request, params ListRoleDefinitionsParams)
-	// Выполнить специализированную RoleDefinition command
-	// (POST /role-definitions/commands)
-	ManageRoleDefinition(w http.ResponseWriter, r *http.Request, params ManageRoleDefinitionParams)
-	// Прочитать exact RoleDefinition
-	// (GET /role-definitions/{resourceRef})
-	GetRoleDefinition(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
-	// Получить immutable RoleDefinition history
-	// (GET /role-definitions/{resourceRef}/history)
-	ListRoleDefinitionHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListRoleDefinitionHistoryParams)
-	// Выполнить закрытую owner-команду RoleImageRecipe
-	// (POST /role-image-recipes/commands)
-	ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request, params ManageRoleImageRecipeParams)
-	// Прочитать exact version полной редактируемой RoleImageRecipe specification
-	// (GET /role-image-recipes/{recipeId})
-	GetRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeId openapi_types.UUID, params GetRoleImageRecipeParams)
-	// Получить авторитетную проекцию запусков
-	// (GET /runs)
+
+	// (GET /api/v1/projects/{projectRef})
+	GetProject(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+
+	// (PATCH /api/v1/projects/{projectRef})
+	UpdateProject(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params UpdateProjectParams)
+
+	// (GET /api/v1/projects/{projectRef}/agents)
+	ListAgents(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListAgentsParams)
+
+	// (POST /api/v1/projects/{projectRef}/agents)
+	CreateAgent(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAgentParams)
+
+	// (GET /api/v1/projects/{projectRef}/artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListArtifactsParams)
+
+	// (POST /api/v1/projects/{projectRef}/artifacts)
+	UploadArtifact(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params UploadArtifactParams)
+
+	// (GET /api/v1/projects/{projectRef}/members)
+	ListProjectMemberships(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+
+	// (POST /api/v1/projects/{projectRef}/members)
+	AddProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params AddProjectMembershipParams)
+
+	// (DELETE /api/v1/projects/{projectRef}/members/{membershipRef})
+	RemoveProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, membershipRef MembershipRef, params RemoveProjectMembershipParams)
+
+	// (PATCH /api/v1/projects/{projectRef}/members/{membershipRef})
+	ChangeProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, membershipRef MembershipRef, params ChangeProjectMembershipParams)
+
+	// (GET /api/v1/projects/{projectRef}/membership-candidates)
+	ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListProjectMembershipCandidatesParams)
+
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes)
+	ListRoleImageRecipes(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListRoleImageRecipesParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes)
+	CreateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateRoleImageRecipeParams)
+
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
+	GetRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef)
+
+	// (PATCH /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
+	UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params UpdateRoleImageRecipeParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands)
+	CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params CommandRoleImageRecipeParams)
+
+	// (GET /api/v1/projects/{projectRef}/schedules)
+	ListSchedules(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+
+	// (POST /api/v1/projects/{projectRef}/schedules)
+	CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateScheduleParams)
+
+	// (GET /api/v1/projects/{projectRef}/workflows)
+	ListWorkflows(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListWorkflowsParams)
+
+	// (POST /api/v1/projects/{projectRef}/workflows)
+	CreateWorkflow(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateWorkflowParams)
+
+	// (GET /api/v1/role-environments)
+	ListRoleEnvironments(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
-	// Получить typed Run detail
-	// (GET /runs/{runRef})
-	GetRunDetail(w http.ResponseWriter, r *http.Request, runRef RunRef)
-	// Получить безопасные Run artifacts
-	// (GET /runs/{runRef}/artifacts)
-	ListRunArtifacts(w http.ResponseWriter, r *http.Request, runRef RunRef, params ListRunArtifactsParams)
-	// Cancel или retry exact Run
-	// (POST /runs/{runRef}/commands)
-	ManageRun(w http.ResponseWriter, r *http.Request, runRef RunRef, params ManageRunParams)
-	// Получить полный versioned Run lineage
-	// (GET /runs/{runRef}/lineage)
-	GetRunLineage(w http.ResponseWriter, r *http.Request, runRef RunRef, params GetRunLineageParams)
-	// Получить bounded Run timeline
-	// (GET /runs/{runRef}/timeline)
-	ListRunTimeline(w http.ResponseWriter, r *http.Request, runRef RunRef, params ListRunTimelineParams)
-	// Получить UI-friendly selectors для Schedule
-	// (GET /schedule-selectors)
-	ListScheduleSelectors(w http.ResponseWriter, r *http.Request)
-	// Создать server-owned schedule специализированной командой
-	// (POST /schedules)
-	CreateSchedule(w http.ResponseWriter, r *http.Request, params CreateScheduleParams)
-	// Создать Schedule из display selections
-	// (POST /schedules/from-selections)
-	CreateScheduleFromSelections(w http.ResponseWriter, r *http.Request, params CreateScheduleFromSelectionsParams)
-	// Удалить locked schedule при закрытом execution graph
-	// (DELETE /schedules/{scheduleId})
-	DeleteSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params DeleteScheduleParams)
-	// Обновить locked owner schedule специализированной командой
-	// (PUT /schedules/{scheduleId})
-	UpdateSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params UpdateScheduleParams)
-	// Получить ограниченную owner-visible историю запусков расписания
-	// (GET /schedules/{scheduleId}/occurrences)
-	ListScheduleOccurrences(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params ListScheduleOccurrencesParams)
-	// Разрешить exact recovery incident без частичного terminal graph
-	// (POST /schedules/{scheduleId}/occurrences/{occurrenceId}/recovery)
-	ResolveScheduleRecovery(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, occurrenceId openapi_types.UUID, params ResolveScheduleRecoveryParams)
-	// Создать отдельный немедленный запуск без сдвига watermark
-	// (POST /schedules/{scheduleId}/run-now)
-	RunScheduleNow(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params RunScheduleNowParams)
-	// Обновить Schedule basic intent и exact current selections
-	// (PUT /schedules/{scheduleRef}/configuration)
-	BindScheduleConfiguration(w http.ResponseWriter, r *http.Request, scheduleRef string, params BindScheduleConfigurationParams)
-	// Завершить локальную owner-сессию
-	// (DELETE /session)
+
+	// (POST /api/v1/runs)
+	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
+
+	// (GET /api/v1/runs/{runRef})
+	GetRun(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (POST /api/v1/runs/{runRef}/commands)
+	CommandRun(w http.ResponseWriter, r *http.Request, runRef RunRef, params CommandRunParams)
+
+	// (GET /api/v1/runs/{runRef}/events)
+	ListRunEvents(w http.ResponseWriter, r *http.Request, runRef RunRef, params ListRunEventsParams)
+
+	// (GET /api/v1/runs/{runRef}/graph)
+	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (GET /api/v1/runtime-selections)
+	ListRuntimeSelections(w http.ResponseWriter, r *http.Request)
+
+	// (PATCH /api/v1/schedules/{scheduleRef})
+	UpdateSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params UpdateScheduleParams)
+
+	// (POST /api/v1/schedules/{scheduleRef}/commands)
+	CommandSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params CommandScheduleParams)
+
+	// (GET /api/v1/search)
+	SearchPlatform(w http.ResponseWriter, r *http.Request, params SearchPlatformParams)
+
+	// (DELETE /api/v1/session)
 	DeleteOwnerSession(w http.ResponseWriter, r *http.Request, params DeleteOwnerSessionParams)
-	// Создать защищённую owner-сессию
-	// (POST /session)
+
+	// (POST /api/v1/session)
 	CreateOwnerSession(w http.ResponseWriter, r *http.Request, params CreateOwnerSessionParams)
-	// Получить Workspace/All Workspaces backups
-	// (GET /workspace-backups)
-	ListWorkspaceBackups(w http.ResponseWriter, r *http.Request, params ListWorkspaceBackupsParams)
-	// Create/cancel/retry Workspace backup
-	// (POST /workspace-backups/commands)
-	ManageWorkspaceBackup(w http.ResponseWriter, r *http.Request, params ManageWorkspaceBackupParams)
-	// Получить exact Workspace backup
-	// (GET /workspace-backups/{backupRef})
-	GetWorkspaceBackup(w http.ResponseWriter, r *http.Request, backupRef BackupRef)
-	// Получить Workspace restore operations
-	// (GET /workspace-restores)
-	ListWorkspaceRestores(w http.ResponseWriter, r *http.Request, params ListWorkspaceRestoresParams)
-	// Create/cancel/retry Workspace restore
-	// (POST /workspace-restores/commands)
-	ManageWorkspaceRestore(w http.ResponseWriter, r *http.Request, params ManageWorkspaceRestoreParams)
-	// Получить exact Workspace restore readback
-	// (GET /workspace-restores/{restoreRef})
-	GetWorkspaceRestore(w http.ResponseWriter, r *http.Request, restoreRef RestoreRef)
+
+	// (POST /api/v1/sessions/{sessionRef}/turns)
+	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
+
+	// (GET /api/v1/system-assistant)
+	GetSystemAssistant(w http.ResponseWriter, r *http.Request)
+
+	// (PATCH /api/v1/system-assistant)
+	UpdateSystemAssistantOwnerInstructions(w http.ResponseWriter, r *http.Request, params UpdateSystemAssistantOwnerInstructionsParams)
+
+	// (POST /api/v1/system-assistant/commands)
+	CommandSystemAssistant(w http.ResponseWriter, r *http.Request, params CommandSystemAssistantParams)
+
+	// (GET /api/v1/workflows/{workflowRef})
+	GetWorkflow(w http.ResponseWriter, r *http.Request, workflowRef WorkflowRef)
+
+	// (PATCH /api/v1/workflows/{workflowRef})
+	UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request, workflowRef WorkflowRef, params UpdateWorkflowDraftParams)
+
+	// (POST /api/v1/workflows/{workflowRef}/commands)
+	CommandWorkflow(w http.ResponseWriter, r *http.Request, workflowRef WorkflowRef, params CommandWorkflowParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -6500,90 +3812,17 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// ManageAccessResource operation middleware
-func (siw *ServerInterfaceWrapper) ManageAccessResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
+// GetAdministration operation middleware
+func (siw *ServerInterfaceWrapper) GetAdministration(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageAccessResourceParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageAccessResource(w, r, params)
+		siw.Handler.GetAdministration(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6593,35 +3832,101 @@ func (siw *ServerInterfaceWrapper) ManageAccessResource(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
-// CopyAccessResource operation middleware
-func (siw *ServerInterfaceWrapper) CopyAccessResource(w http.ResponseWriter, r *http.Request) {
+// ListPlatformMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListPlatformMemberships(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
-		return
-	}
-
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params CopyAccessResourceParams
+	var params ListPlatformMembershipsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlatformMemberships(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddPlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) AddPlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddPlatformMembershipParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -6642,28 +3947,42 @@ func (siw *ServerInterfaceWrapper) CopyAccessResource(w http.ResponseWriter, r *
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddPlatformMembership(w, r, params)
+	}))
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
 
-		params.IdempotencyKey = IdempotencyKey
+	handler.ServeHTTP(w, r)
+}
 
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+// RemovePlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) RemovePlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemovePlatformMembershipParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -6688,46 +4007,32 @@ func (siw *ServerInterfaceWrapper) CopyAccessResource(w http.ResponseWriter, r *
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CopyAccessResource(w, r, resourceId, params)
-	}))
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
 
-	handler.ServeHTTP(w, r)
-}
+		params.IdempotencyKey = IdempotencyKey
 
-// DetachAccessResource operation middleware
-func (siw *ServerInterfaceWrapper) DetachAccessResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
 
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DetachAccessResourceParams
-
-	headers := r.Header
-
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -6748,28 +4053,42 @@ func (siw *ServerInterfaceWrapper) DetachAccessResource(w http.ResponseWriter, r
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemovePlatformMembership(w, r, membershipRef, params)
+	}))
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
 
-		params.IdempotencyKey = IdempotencyKey
+	handler.ServeHTTP(w, r)
+}
 
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+// ChangePlatformMembership operation middleware
+func (siw *ServerInterfaceWrapper) ChangePlatformMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangePlatformMembershipParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -6794,102 +4113,32 @@ func (siw *ServerInterfaceWrapper) DetachAccessResource(w http.ResponseWriter, r
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DetachAccessResource(w, r, resourceId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListAgentAssignments operation middleware
-func (siw *ServerInterfaceWrapper) ListAgentAssignments(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentAssignmentsParams
-
-	// ------------- Optional query parameter "agentRef" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
 		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentAssignments(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageAgentAssignment operation middleware
-func (siw *ServerInterfaceWrapper) ManageAgentAssignment(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageAgentAssignmentParams
-
-	headers := r.Header
 
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -6910,50 +4159,8 @@ func (siw *ServerInterfaceWrapper) ManageAgentAssignment(w http.ResponseWriter, 
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageAgentAssignment(w, r, params)
+		siw.Handler.ChangePlatformMembership(w, r, membershipRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6963,61 +4170,33 @@ func (siw *ServerInterfaceWrapper) ManageAgentAssignment(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// GetAgentAssignment operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentAssignment(w http.ResponseWriter, r *http.Request) {
+// ListPlatformMembershipCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentAssignment(w, r, resourceRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListAgentAssignmentHistory operation middleware
-func (siw *ServerInterfaceWrapper) ListAgentAssignmentHistory(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentAssignmentHistoryParams
+	var params ListPlatformMembershipCandidatesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "pageSize" -------------
 
@@ -7046,204 +4225,7 @@ func (siw *ServerInterfaceWrapper) ListAgentAssignmentHistory(w http.ResponseWri
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentAssignmentHistory(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListAgentBotIdentities operation middleware
-func (siw *ServerInterfaceWrapper) ListAgentBotIdentities(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentBotIdentitiesParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentBotIdentities(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListAgents operation middleware
-func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgents(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageAgent operation middleware
-func (siw *ServerInterfaceWrapper) ManageAgent(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageAgentParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageAgent(w, r, params)
+		siw.Handler.ListPlatformMembershipCandidates(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7259,23 +4241,23 @@ func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Reque
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgent(w, r, resourceRef)
+		siw.Handler.GetAgent(w, r, agentRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7285,109 +4267,31 @@ func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// GetAgentBotIdentity operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentBotIdentity(w http.ResponseWriter, r *http.Request) {
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentBotIdentity(w, r, resourceRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageAgentBotIdentity operation middleware
-func (siw *ServerInterfaceWrapper) ManageAgentBotIdentity(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageAgentBotIdentityParams
+	var params UpdateAgentParams
 
 	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -7412,56 +4316,6 @@ func (siw *ServerInterfaceWrapper) ManageAgentBotIdentity(w http.ResponseWriter,
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageAgentBotIdentity(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetAgentBotIdentityOperation operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentBotIdentityOperation(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetAgentBotIdentityOperationParams
-
-	// ------------- Required query parameter "action" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
-		}
-		return
-	}
-
-	headers := r.Header
-
 	// ------------- Required header parameter "Idempotency-Key" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
 		var IdempotencyKey IdempotencyKey
@@ -7471,7 +4325,7 @@ func (siw *ServerInterfaceWrapper) GetAgentBotIdentityOperation(w http.ResponseW
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
 			return
@@ -7485,8 +4339,31 @@ func (siw *ServerInterfaceWrapper) GetAgentBotIdentityOperation(w http.ResponseW
 		return
 	}
 
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentBotIdentityOperation(w, r, resourceRef, params)
+		siw.Handler.UpdateAgent(w, r, agentRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7496,45 +4373,103 @@ func (siw *ServerInterfaceWrapper) GetAgentBotIdentityOperation(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
-// GetAgentBotIdentityProviderReadback operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentBotIdentityProviderReadback(w http.ResponseWriter, r *http.Request) {
+// CommandAgent operation middleware
+func (siw *ServerInterfaceWrapper) CommandAgent(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params GetAgentBotIdentityProviderReadbackParams
+	var params CommandAgentParams
 
-	// ------------- Required query parameter "identitySelector" -------------
+	headers := r.Header
 
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "identitySelector", r.URL.Query(), &params.IdentitySelector, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "identitySelector"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "identitySelector", Err: err})
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
 		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentBotIdentityProviderReadback(w, r, resourceRef, params)
+		siw.Handler.CommandAgent(w, r, agentRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7544,58 +4479,693 @@ func (siw *ServerInterfaceWrapper) GetAgentBotIdentityProviderReadback(w http.Re
 	handler.ServeHTTP(w, r)
 }
 
-// ListAgentHistory operation middleware
-func (siw *ServerInterfaceWrapper) ListAgentHistory(w http.ResponseWriter, r *http.Request) {
+// CommandAgentInstructions operation middleware
+func (siw *ServerInterfaceWrapper) CommandAgentInstructions(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentHistoryParams
+	var params CommandAgentInstructionsParams
 
-	// ------------- Optional query parameter "pageSize" -------------
+	headers := r.Header
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
 		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
 		return
 	}
 
-	// ------------- Optional query parameter "pageToken" -------------
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandAgentInstructions(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInstructionDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateInstructionDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateInstructionDraftParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOptional
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInstructionDraft(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, artifactRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeArtifactBinding operation middleware
+func (siw *ServerInterfaceWrapper) ChangeArtifactBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeArtifactBindingParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeArtifactBinding(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadArtifactParams
+
+	// ------------- Required query parameter "purpose" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "purpose", r.URL.Query(), &params.Purpose, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
 		}
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentHistory(w, r, resourceRef, params)
+		siw.Handler.DownloadArtifact(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAssistantConversations operation middleware
+func (siw *ServerInterfaceWrapper) ListAssistantConversations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAssistantConversationsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAssistantConversations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) CreateAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAssistantConversationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAssistantConversation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddAssistantTurn operation middleware
+func (siw *ServerInterfaceWrapper) AddAssistantTurn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddAssistantTurnParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAssistantTurn(w, r, conversationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyAssistantPlan operation middleware
+func (siw *ServerInterfaceWrapper) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planRef" -------------
+	var planRef PlanRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planRef", r.PathValue("planRef"), &planRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplyAssistantPlanParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyAssistantPlan(w, r, planRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7613,48 +5183,35 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAuditEventsParams
 
-	// ------------- Optional query parameter "resourceKind" -------------
+	// ------------- Optional query parameter "projectRef" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceKind", r.URL.Query(), &params.ResourceKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceKind"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceKind", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		}
 		return
 	}
 
-	// ------------- Optional query parameter "resourceId" -------------
+	// ------------- Optional query parameter "query" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceId", r.URL.Query(), &params.ResourceId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceId"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "action" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
 		}
 		return
 	}
@@ -7696,62 +5253,17 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// ExportAudit operation middleware
-func (siw *ServerInterfaceWrapper) ExportAudit(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
+// GetBootstrapState operation middleware
+func (siw *ServerInterfaceWrapper) GetBootstrapState(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ExportAuditParams
-
-	// ------------- Optional query parameter "resourceKind" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceKind", r.URL.Query(), &params.ResourceKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceKind"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceKind", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "resourceRef" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceRef", r.URL.Query(), &params.ResourceRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceRef"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "action" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ExportAudit(w, r, params)
+		siw.Handler.GetBootstrapState(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7761,49 +5273,17 @@ func (siw *ServerInterfaceWrapper) ExportAudit(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
-// ListBackups operation middleware
-func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
+// ListIntegrationConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListBackupsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListBackups(w, r, params)
+		siw.Handler.ListIntegrationConnections(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7813,67 +5293,49 @@ func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
-// GetBackup operation middleware
-func (siw *ServerInterfaceWrapper) GetBackup(w http.ResponseWriter, r *http.Request) {
+// CreateIntegrationConnection operation middleware
+func (siw *ServerInterfaceWrapper) CreateIntegrationConnection(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "backupId" -------------
-	var backupId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "backupId", r.PathValue("backupId"), &backupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
-		return
-	}
-
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetBackup(w, r, backupId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RestoreBackup operation middleware
-func (siw *ServerInterfaceWrapper) RestoreBackup(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "backupId" -------------
-	var backupId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "backupId", r.PathValue("backupId"), &backupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params RestoreBackupParams
+	var params CreateIntegrationConnectionParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -7894,54 +5356,8 @@ func (siw *ServerInterfaceWrapper) RestoreBackup(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RestoreBackup(w, r, backupId, params)
+		siw.Handler.CreateIntegrationConnection(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7951,49 +5367,29 @@ func (siw *ServerInterfaceWrapper) RestoreBackup(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// ListConfigurationChanges operation middleware
-func (siw *ServerInterfaceWrapper) ListConfigurationChanges(w http.ResponseWriter, r *http.Request) {
+// GetIntegrationConnection operation middleware
+func (siw *ServerInterfaceWrapper) GetIntegrationConnection(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListConfigurationChangesParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListConfigurationChanges(w, r, params)
+		siw.Handler.GetIntegrationConnection(w, r, connectionRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8003,305 +5399,29 @@ func (siw *ServerInterfaceWrapper) ListConfigurationChanges(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
-// GetConfigurationDiff operation middleware
-func (siw *ServerInterfaceWrapper) GetConfigurationDiff(w http.ResponseWriter, r *http.Request) {
+// CommandIntegrationConnection operation middleware
+func (siw *ServerInterfaceWrapper) CommandIntegrationConnection(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params GetConfigurationDiffParams
-
-	// ------------- Required query parameter "instructionSetRef" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "instructionSetRef", r.URL.Query(), &params.InstructionSetRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "instructionSetRef"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instructionSetRef", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "leftVersion" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "leftVersion", r.URL.Query(), &params.LeftVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "leftVersion"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "leftVersion", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "rightVersion" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "rightVersion", r.URL.Query(), &params.RightVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rightVersion"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rightVersion", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetConfigurationDiff(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetConfigurationSourceDetail operation middleware
-func (siw *ServerInterfaceWrapper) GetConfigurationSourceDetail(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetConfigurationSourceDetailParams
-
-	// ------------- Required query parameter "kind" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetConfigurationSourceDetail(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetDiagnostics operation middleware
-func (siw *ServerInterfaceWrapper) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetDiagnostics(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetHealthSeries operation middleware
-func (siw *ServerInterfaceWrapper) GetHealthSeries(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHealthSeries(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageImageBuild operation middleware
-func (siw *ServerInterfaceWrapper) ManageImageBuild(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageImageBuildParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageImageBuild(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetRoleImageBuild operation middleware
-func (siw *ServerInterfaceWrapper) GetRoleImageBuild(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "imageBuildId" -------------
-	var imageBuildId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "imageBuildId", r.PathValue("imageBuildId"), &imageBuildId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "imageBuildId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetRoleImageBuildParams
+	var params CommandIntegrationConnectionParams
 
 	headers := r.Header
 
@@ -8328,130 +5448,32 @@ func (siw *ServerInterfaceWrapper) GetRoleImageBuild(w http.ResponseWriter, r *h
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRoleImageBuild(w, r, imageBuildId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListIncidents operation middleware
-func (siw *ServerInterfaceWrapper) ListIncidents(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListIncidentsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
 		}
-		return
-	}
 
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
 		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIncidents(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetIncident operation middleware
-func (siw *ServerInterfaceWrapper) GetIncident(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "incidentRef" -------------
-	var incidentRef IncidentRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "incidentRef", r.PathValue("incidentRef"), &incidentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "incidentRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetIncident(w, r, incidentRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageIncident operation middleware
-func (siw *ServerInterfaceWrapper) ManageIncident(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "incidentRef" -------------
-	var incidentRef IncidentRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "incidentRef", r.PathValue("incidentRef"), &incidentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "incidentRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageIncidentParams
-
-	headers := r.Header
 
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -8472,28 +5494,42 @@ func (siw *ServerInterfaceWrapper) ManageIncident(w http.ResponseWriter, r *http
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandIntegrationConnection(w, r, connectionRef, params)
+	}))
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
 
-		params.IdempotencyKey = IdempotencyKey
+	handler.ServeHTTP(w, r)
+}
 
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+// ChangeIntegrationGrant operation middleware
+func (siw *ServerInterfaceWrapper) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeIntegrationGrantParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -8518,150 +5554,32 @@ func (siw *ServerInterfaceWrapper) ManageIncident(w http.ResponseWriter, r *http
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageIncident(w, r, incidentRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListIncidentHistory operation middleware
-func (siw *ServerInterfaceWrapper) ListIncidentHistory(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "incidentRef" -------------
-	var incidentRef IncidentRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "incidentRef", r.PathValue("incidentRef"), &incidentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "incidentRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListIncidentHistoryParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
 		}
-		return
-	}
 
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
 		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIncidentHistory(w, r, incidentRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListInstructionSets operation middleware
-func (siw *ServerInterfaceWrapper) ListInstructionSets(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListInstructionSetsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListInstructionSets(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageInstructionSet operation middleware
-func (siw *ServerInterfaceWrapper) ManageInstructionSet(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageInstructionSetParams
-
-	headers := r.Header
 
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -8682,584 +5600,8 @@ func (siw *ServerInterfaceWrapper) ManageInstructionSet(w http.ResponseWriter, r
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageInstructionSet(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetInstructionSet operation middleware
-func (siw *ServerInterfaceWrapper) GetInstructionSet(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetInstructionSet(w, r, resourceRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CompareInstructionSetVersions operation middleware
-func (siw *ServerInterfaceWrapper) CompareInstructionSetVersions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CompareInstructionSetVersionsParams
-
-	// ------------- Required query parameter "leftVersion" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "leftVersion", r.URL.Query(), &params.LeftVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "leftVersion"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "leftVersion", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "rightVersion" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "rightVersion", r.URL.Query(), &params.RightVersion, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rightVersion"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rightVersion", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CompareInstructionSetVersions(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListInstructionSetHistory operation middleware
-func (siw *ServerInterfaceWrapper) ListInstructionSetHistory(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListInstructionSetHistoryParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListInstructionSetHistory(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListIntegrationApprovals operation middleware
-func (siw *ServerInterfaceWrapper) ListIntegrationApprovals(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListIntegrationApprovalsParams
-
-	// ------------- Optional query parameter "status" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIntegrationApprovals(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetIntegrationApproval operation middleware
-func (siw *ServerInterfaceWrapper) GetIntegrationApproval(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "approvalRef" -------------
-	var approvalRef ApprovalRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "approvalRef", r.PathValue("approvalRef"), &approvalRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approvalRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetIntegrationApproval(w, r, approvalRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DecideIntegrationApproval operation middleware
-func (siw *ServerInterfaceWrapper) DecideIntegrationApproval(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "approvalRef" -------------
-	var approvalRef ApprovalRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "approvalRef", r.PathValue("approvalRef"), &approvalRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approvalRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DecideIntegrationApprovalParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DecideIntegrationApproval(w, r, approvalRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListIntegrationConfigurations operation middleware
-func (siw *ServerInterfaceWrapper) ListIntegrationConfigurations(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListIntegrationConfigurationsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIntegrationConfigurations(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ConfigureIntegration operation middleware
-func (siw *ServerInterfaceWrapper) ConfigureIntegration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ConfigureIntegrationParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ConfigureIntegration(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetIntegrationConfiguration operation middleware
-func (siw *ServerInterfaceWrapper) GetIntegrationConfiguration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "configurationRef" -------------
-	var configurationRef ConfigurationRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetIntegrationConfiguration(w, r, configurationRef)
+		siw.Handler.ChangeIntegrationGrant(w, r, connectionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9272,14 +5614,33 @@ func (siw *ServerInterfaceWrapper) GetIntegrationConfiguration(w http.ResponseWr
 // ListIntegrationDefinitions operation middleware
 func (siw *ServerInterfaceWrapper) ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIntegrationDefinitionsParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIntegrationDefinitions(w, r)
+		siw.Handler.ListIntegrationDefinitions(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9289,87 +5650,49 @@ func (siw *ServerInterfaceWrapper) ListIntegrationDefinitions(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
-// GetIntegrationDefinition operation middleware
-func (siw *ServerInterfaceWrapper) GetIntegrationDefinition(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "definitionRef" -------------
-	var definitionRef DefinitionRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "definitionRef", r.PathValue("definitionRef"), &definitionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "definitionRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetIntegrationDefinitionParams
-
-	// ------------- Required query parameter "version" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "digestSha256" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "digestSha256", r.URL.Query(), &params.DigestSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digestSha256"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digestSha256", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetIntegrationDefinition(w, r, definitionRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// TestIntegrationConnection operation middleware
-func (siw *ServerInterfaceWrapper) TestIntegrationConnection(w http.ResponseWriter, r *http.Request) {
+// CompleteOnboarding operation middleware
+func (siw *ServerInterfaceWrapper) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params TestIntegrationConnectionParams
+	var params CompleteOnboardingParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -9390,31 +5713,8 @@ func (siw *ServerInterfaceWrapper) TestIntegrationConnection(w http.ResponseWrit
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.TestIntegrationConnection(w, r, params)
+		siw.Handler.CompleteOnboarding(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9424,139 +5724,36 @@ func (siw *ServerInterfaceWrapper) TestIntegrationConnection(w http.ResponseWrit
 	handler.ServeHTTP(w, r)
 }
 
-// GetIntegrationTestReceipt operation middleware
-func (siw *ServerInterfaceWrapper) GetIntegrationTestReceipt(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "testRef" -------------
-	var testRef TestRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "testRef", r.PathValue("testRef"), &testRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "testRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetIntegrationTestReceipt(w, r, testRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UnlinkMattermostTeam operation middleware
-func (siw *ServerInterfaceWrapper) UnlinkMattermostTeam(w http.ResponseWriter, r *http.Request) {
+// GetOverview operation middleware
+func (siw *ServerInterfaceWrapper) GetOverview(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params UnlinkMattermostTeamParams
+	var params GetOverviewParams
 
-	// ------------- Required query parameter "generation" -------------
+	// ------------- Optional query parameter "projectRef" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "generation", r.URL.Query(), &params.Generation, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "generation"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		}
-		return
-	}
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UnlinkMattermostTeam(w, r, params)
+		siw.Handler.GetOverview(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9566,275 +5763,33 @@ func (siw *ServerInterfaceWrapper) UnlinkMattermostTeam(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
-// GetMattermostTeamBinding operation middleware
-func (siw *ServerInterfaceWrapper) GetMattermostTeamBinding(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetMattermostTeamBinding(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// LinkMattermostTeam operation middleware
-func (siw *ServerInterfaceWrapper) LinkMattermostTeam(w http.ResponseWriter, r *http.Request) {
+// ListOwnerGates operation middleware
+func (siw *ServerInterfaceWrapper) ListOwnerGates(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params LinkMattermostTeamParams
+	var params ListOwnerGatesParams
 
-	headers := r.Header
+	// ------------- Optional query parameter "projectRef" -------------
 
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.LinkMattermostTeam(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RelinkMattermostTeam operation middleware
-func (siw *ServerInterfaceWrapper) RelinkMattermostTeam(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RelinkMattermostTeamParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RelinkMattermostTeam(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetMattermostTeamMappingOperation operation middleware
-func (siw *ServerInterfaceWrapper) GetMattermostTeamMappingOperation(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetMattermostTeamMappingOperationParams
-
-	// ------------- Required query parameter "action" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		}
 		return
 	}
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetMattermostTeamMappingOperation(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListMattermostTeams operation middleware
-func (siw *ServerInterfaceWrapper) ListMattermostTeams(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListMattermostTeamsParams
 
 	// ------------- Optional query parameter "pageSize" -------------
 
@@ -9863,7 +5818,7 @@ func (siw *ServerInterfaceWrapper) ListMattermostTeams(w http.ResponseWriter, r 
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListMattermostTeams(w, r, params)
+		siw.Handler.ListOwnerGates(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9873,155 +5828,29 @@ func (siw *ServerInterfaceWrapper) ListMattermostTeams(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
-// CreateMattermostTeam operation middleware
-func (siw *ServerInterfaceWrapper) CreateMattermostTeam(w http.ResponseWriter, r *http.Request) {
+// GetOwnerGate operation middleware
+func (siw *ServerInterfaceWrapper) GetOwnerGate(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	ctx := r.Context()
+	// ------------- Path parameter "gateRef" -------------
+	var gateRef GateRef
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateMattermostTeamParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateMattermostTeam(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetMattermostTeamProviderReadback operation middleware
-func (siw *ServerInterfaceWrapper) GetMattermostTeamProviderReadback(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "selector" -------------
-	var selector Selector
-
-	err = runtime.BindStyledParameterWithOptions("simple", "selector", r.PathValue("selector"), &selector, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "gateRef", r.PathValue("gateRef"), &gateRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "selector", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetMattermostTeamProviderReadback(w, r, selector)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetOwnerConfigurationCatalog operation middleware
-func (siw *ServerInterfaceWrapper) GetOwnerConfigurationCatalog(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetOwnerConfigurationCatalogParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOwnerConfigurationCatalog(w, r, params)
+		siw.Handler.GetOwnerGate(w, r, gateRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10037,18 +5866,18 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 	var err error
 	_ = err
 
-	// ------------- Path parameter "ownerGateId" -------------
-	var ownerGateId openapi_types.UUID
+	// ------------- Path parameter "gateRef" -------------
+	var gateRef GateRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "ownerGateId", r.PathValue("ownerGateId"), &ownerGateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "gateRef", r.PathValue("gateRef"), &gateRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ownerGateId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gateRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -10056,52 +5885,6 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 	var params ResolveOwnerGateParams
 
 	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -10126,8 +5909,54 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ResolveOwnerGate(w, r, ownerGateId, params)
+		siw.Handler.ResolveOwnerGate(w, r, gateRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10137,81 +5966,17 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
-// ListOwnerSchedules operation middleware
-func (siw *ServerInterfaceWrapper) ListOwnerSchedules(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
+// ListPlatformCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) ListPlatformCapabilities(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListOwnerSchedulesParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListOwnerSchedules(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetOwnerSchedule operation middleware
-func (siw *ServerInterfaceWrapper) GetOwnerSchedule(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "scheduleRef" -------------
-	var scheduleRef string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleRef", r.PathValue("scheduleRef"), &scheduleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOwnerSchedule(w, r, scheduleRef)
+		siw.Handler.ListPlatformCapabilities(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10229,12 +5994,25 @@ func (siw *ServerInterfaceWrapper) ListProjects(w http.ResponseWriter, r *http.R
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListProjectsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "pageSize" -------------
 
@@ -10281,7 +6059,7 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -10290,9 +6068,32 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -10310,29 +6111,6 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 	} else {
 		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
 
@@ -10347,103 +6125,29 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// DeleteProject operation middleware
-func (siw *ServerInterfaceWrapper) DeleteProject(w http.ResponseWriter, r *http.Request) {
+// GetProject operation middleware
+func (siw *ServerInterfaceWrapper) GetProject(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "projectId" -------------
-	var projectId openapi_types.UUID
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "projectId", r.PathValue("projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteProjectParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteProject(w, r, projectId, params)
+		siw.Handler.GetProject(w, r, projectRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10459,18 +6163,18 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 	var err error
 	_ = err
 
-	// ------------- Path parameter "projectId" -------------
-	var projectId openapi_types.UUID
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "projectId", r.PathValue("projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -10479,52 +6183,6 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 
 	headers := r.Header
 
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
 		var IfMatch IfMatch
@@ -10548,37 +6206,32 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateProject(w, r, projectId, params)
-	}))
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
 	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// StartProviderAuthorization operation middleware
-func (siw *ServerInterfaceWrapper) StartProviderAuthorization(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params StartProviderAuthorizationParams
-
-	headers := r.Header
 
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -10599,31 +6252,8 @@ func (siw *ServerInterfaceWrapper) StartProviderAuthorization(w http.ResponseWri
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.StartProviderAuthorization(w, r, params)
+		siw.Handler.UpdateProject(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10633,1039 +6263,33 @@ func (siw *ServerInterfaceWrapper) StartProviderAuthorization(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
-// CancelProviderAuthorization operation middleware
-func (siw *ServerInterfaceWrapper) CancelProviderAuthorization(w http.ResponseWriter, r *http.Request) {
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "authorizationRef" -------------
-	var authorizationRef AuthorizationRef
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "authorizationRef", r.PathValue("authorizationRef"), &authorizationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "authorizationRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params CancelProviderAuthorizationParams
+	var params ListAgentsParams
 
-	headers := r.Header
+	// ------------- Optional query parameter "query" -------------
 
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CancelProviderAuthorization(w, r, authorizationRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProviderAuthorization operation middleware
-func (siw *ServerInterfaceWrapper) GetProviderAuthorization(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "authorizationRef" -------------
-	var authorizationRef AuthorizationRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "authorizationRef", r.PathValue("authorizationRef"), &authorizationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "authorizationRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProviderAuthorization(w, r, authorizationRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RestartProviderAuthorization operation middleware
-func (siw *ServerInterfaceWrapper) RestartProviderAuthorization(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "authorizationRef" -------------
-	var authorizationRef AuthorizationRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "authorizationRef", r.PathValue("authorizationRef"), &authorizationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "authorizationRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RestartProviderAuthorizationParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RestartProviderAuthorization(w, r, authorizationRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListProviderConnections operation middleware
-func (siw *ServerInterfaceWrapper) ListProviderConnections(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListProviderConnectionsParams
-
-	// ------------- Optional query parameter "state" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListProviderConnections(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RevokeProviderConnection operation middleware
-func (siw *ServerInterfaceWrapper) RevokeProviderConnection(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "connectionRef" -------------
-	var connectionRef ConnectionRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RevokeProviderConnectionParams
-
-	// ------------- Required query parameter "generation" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "generation", r.URL.Query(), &params.Generation, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "generation"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
-		}
-		return
-	}
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RevokeProviderConnection(w, r, connectionRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProviderConnection operation middleware
-func (siw *ServerInterfaceWrapper) GetProviderConnection(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "connectionRef" -------------
-	var connectionRef ConnectionRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProviderConnection(w, r, connectionRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ReauthorizeProviderConnection operation middleware
-func (siw *ServerInterfaceWrapper) ReauthorizeProviderConnection(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "connectionRef" -------------
-	var connectionRef ConnectionRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ReauthorizeProviderConnectionParams
-
-	// ------------- Required query parameter "generation" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "generation", r.URL.Query(), &params.Generation, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "generation"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
-		}
-		return
-	}
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReauthorizeProviderConnection(w, r, connectionRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListProviderPools operation middleware
-func (siw *ServerInterfaceWrapper) ListProviderPools(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListProviderPoolsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListProviderPools(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageProviderPool operation middleware
-func (siw *ServerInterfaceWrapper) ManageProviderPool(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageProviderPoolParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageProviderPool(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProviderPool operation middleware
-func (siw *ServerInterfaceWrapper) GetProviderPool(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "poolRef" -------------
-	var poolRef PoolRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "poolRef", r.PathValue("poolRef"), &poolRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "poolRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProviderPool(w, r, poolRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListProviders operation middleware
-func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListProviders(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetProvider operation middleware
-func (siw *ServerInterfaceWrapper) GetProvider(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "providerRef" -------------
-	var providerRef ProviderRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "providerRef", r.PathValue("providerRef"), &providerRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetProviderParams
-
-	// ------------- Required query parameter "version" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "digestSha256" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "digestSha256", r.URL.Query(), &params.DigestSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "digestSha256"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "digestSha256", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProvider(w, r, providerRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListResources operation middleware
-func (siw *ServerInterfaceWrapper) ListResources(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListResourcesParams
-
-	// ------------- Required query parameter "kind" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "parentId" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "parentId", r.URL.Query(), &params.ParentId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "parentId"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parentId", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "state" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListResources(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateResource operation middleware
-func (siw *ServerInterfaceWrapper) CreateResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateResourceParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateResource(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SearchResources operation middleware
-func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SearchResourcesParams
-
-	// ------------- Required query parameter "kind" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		}
-		return
-	}
-
-	// ------------- Required query parameter "query" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -11676,15 +6300,172 @@ func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// ------------- Optional query parameter "state" -------------
+	// ------------- Optional query parameter "pageSize" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgent(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactsParams
+
+	// ------------- Optional query parameter "runRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runRef", r.URL.Query(), &params.RunRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
 		}
 		return
 	}
@@ -11716,7 +6497,7 @@ func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *htt
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SearchResources(w, r, params)
+		siw.Handler.ListArtifacts(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11726,35 +6507,71 @@ func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// DeleteResource operation middleware
-func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http.Request) {
+// UploadArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UploadArtifact(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteResourceParams
+	var params UploadArtifactParams
+
+	// ------------- Optional query parameter "runRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runRef", r.URL.Query(), &params.RunRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		}
+		return
+	}
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -11775,6 +6592,98 @@ func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Required header parameter "X-File-Name" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-File-Name")]; found {
+		var XFileName string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-File-Name", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-File-Name", valueList[0], &XFileName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-File-Name", Err: err})
+			return
+		}
+
+		params.XFileName = XFileName
+
+	} else {
+		err := fmt.Errorf("Header parameter X-File-Name is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-File-Name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadArtifact(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProjectMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListProjectMemberships(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjectMemberships(w, r, projectRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddProjectMembership operation middleware
+func (siw *ServerInterfaceWrapper) AddProjectMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddProjectMembershipParams
+
+	headers := r.Header
+
 	// ------------- Required header parameter "Idempotency-Key" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
 		var IdempotencyKey IdempotencyKey
@@ -11784,7 +6693,7 @@ func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
 			return
@@ -11797,6 +6706,75 @@ func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddProjectMembership(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveProjectMembership operation middleware
+func (siw *ServerInterfaceWrapper) RemoveProjectMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveProjectMembershipParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -11821,94 +6799,32 @@ func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteResource(w, r, resourceId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetResource operation middleware
-func (siw *ServerInterfaceWrapper) GetResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetResourceParams
-
-	// ------------- Required query parameter "expectedKind" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "expectedKind", r.URL.Query(), &params.ExpectedKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedKind"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedKind", Err: err})
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
 		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetResource(w, r, resourceId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateResource operation middleware
-func (siw *ServerInterfaceWrapper) UpdateResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateResourceParams
-
-	headers := r.Header
 
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -11929,28 +6845,51 @@ func (siw *ServerInterfaceWrapper) UpdateResource(w http.ResponseWriter, r *http
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveProjectMembership(w, r, projectRef, membershipRef, params)
+	}))
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
 
-		params.IdempotencyKey = IdempotencyKey
+	handler.ServeHTTP(w, r)
+}
 
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+// ChangeProjectMembership operation middleware
+func (siw *ServerInterfaceWrapper) ChangeProjectMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
+
+	// ------------- Path parameter "membershipRef" -------------
+	var membershipRef MembershipRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "membershipRef", r.PathValue("membershipRef"), &membershipRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "membershipRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeProjectMembershipParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -11975,46 +6914,32 @@ func (siw *ServerInterfaceWrapper) UpdateResource(w http.ResponseWriter, r *http
 		return
 	}
 
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateResource(w, r, resourceId, params)
-	}))
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
 
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
 
-	handler.ServeHTTP(w, r)
-}
+		params.IdempotencyKey = IdempotencyKey
 
-// TransitionResource operation middleware
-func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceId" -------------
-	var resourceId ResourceID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
 
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params TransitionResourceParams
-
-	headers := r.Header
-
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -12035,54 +6960,8 @@ func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.TransitionResource(w, r, resourceId, params)
+		siw.Handler.ChangeProjectMembership(w, r, projectRef, membershipRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12092,30 +6971,39 @@ func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
-// ListRestoreOperations operation middleware
-func (siw *ServerInterfaceWrapper) ListRestoreOperations(w http.ResponseWriter, r *http.Request) {
+// ListProjectMembershipCandidates operation middleware
+func (siw *ServerInterfaceWrapper) ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRestoreOperationsParams
+	var params ListProjectMembershipCandidatesParams
 
-	// ------------- Optional query parameter "backupId" -------------
+	// ------------- Optional query parameter "query" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "backupId", r.URL.Query(), &params.BackupId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "backupId"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
 		}
 		return
 	}
@@ -12147,7 +7035,7 @@ func (siw *ServerInterfaceWrapper) ListRestoreOperations(w http.ResponseWriter, 
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRestoreOperations(w, r, params)
+		siw.Handler.ListProjectMembershipCandidates(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12157,52 +7045,42 @@ func (siw *ServerInterfaceWrapper) ListRestoreOperations(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// GetRestoreOperation operation middleware
-func (siw *ServerInterfaceWrapper) GetRestoreOperation(w http.ResponseWriter, r *http.Request) {
+// ListRoleImageRecipes operation middleware
+func (siw *ServerInterfaceWrapper) ListRoleImageRecipes(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "restoreOperationId" -------------
-	var restoreOperationId openapi_types.UUID
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "restoreOperationId", r.PathValue("restoreOperationId"), &restoreOperationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "restoreOperationId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRestoreOperation(w, r, restoreOperationId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListRoleDefinitions operation middleware
-func (siw *ServerInterfaceWrapper) ListRoleDefinitions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRoleDefinitionsParams
+	var params ListRoleImageRecipesParams
+
+	// ------------- Optional query parameter "roleDefinitionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "roleDefinitionRef", r.URL.Query(), &params.RoleDefinitionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "roleDefinitionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roleDefinitionRef", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "pageSize" -------------
 
@@ -12231,7 +7109,7 @@ func (siw *ServerInterfaceWrapper) ListRoleDefinitions(w http.ResponseWriter, r 
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRoleDefinitions(w, r, params)
+		siw.Handler.ListRoleImageRecipes(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12241,26 +7119,58 @@ func (siw *ServerInterfaceWrapper) ListRoleDefinitions(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
-// ManageRoleDefinition operation middleware
-func (siw *ServerInterfaceWrapper) ManageRoleDefinition(w http.ResponseWriter, r *http.Request) {
+// CreateRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CreateRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageRoleDefinitionParams
+	var params CreateRoleImageRecipeParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -12281,236 +7191,8 @@ func (siw *ServerInterfaceWrapper) ManageRoleDefinition(w http.ResponseWriter, r
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageRoleDefinition(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetRoleDefinition operation middleware
-func (siw *ServerInterfaceWrapper) GetRoleDefinition(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRoleDefinition(w, r, resourceRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListRoleDefinitionHistory operation middleware
-func (siw *ServerInterfaceWrapper) ListRoleDefinitionHistory(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "resourceRef" -------------
-	var resourceRef ResourceRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRoleDefinitionHistoryParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRoleDefinitionHistory(w, r, resourceRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageRoleImageRecipe operation middleware
-func (siw *ServerInterfaceWrapper) ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageRoleImageRecipeParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch string
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageRoleImageRecipe(w, r, params)
+		siw.Handler.CreateRoleImageRecipe(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12526,23 +7208,73 @@ func (siw *ServerInterfaceWrapper) GetRoleImageRecipe(w http.ResponseWriter, r *
 	var err error
 	_ = err
 
-	// ------------- Path parameter "recipeId" -------------
-	var recipeId openapi_types.UUID
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "recipeId", r.PathValue("recipeId"), &recipeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoleImageRecipe(w, r, projectRef, recipeRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params GetRoleImageRecipeParams
+	var params UpdateRoleImageRecipeParams
 
 	headers := r.Header
 
@@ -12569,8 +7301,461 @@ func (siw *ServerInterfaceWrapper) GetRoleImageRecipe(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRoleImageRecipe(w, r, recipeId, params)
+		siw.Handler.UpdateRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSchedules(w, r, projectRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSchedule operation middleware
+func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSchedule(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWorkflows operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkflows(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkflowsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkflows(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWorkflow operation middleware
+func (siw *ServerInterfaceWrapper) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWorkflowParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWorkflow(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRoleEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListRoleEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRoleEnvironments(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12588,22 +7773,35 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListRunsParams
 
-	// ------------- Optional query parameter "state" -------------
+	// ------------- Optional query parameter "projectRef" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
 		}
 		return
 	}
@@ -12645,128 +7843,49 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// GetRunDetail operation middleware
-func (siw *ServerInterfaceWrapper) GetRunDetail(w http.ResponseWriter, r *http.Request) {
+// CreateRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "runRef" -------------
-	var runRef RunRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
-		return
-	}
-
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRunDetail(w, r, runRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListRunArtifacts operation middleware
-func (siw *ServerInterfaceWrapper) ListRunArtifacts(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "runRef" -------------
-	var runRef RunRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRunArtifactsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRunArtifacts(w, r, runRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageRun operation middleware
-func (siw *ServerInterfaceWrapper) ManageRun(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "runRef" -------------
-	var runRef RunRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageRunParams
+	var params CreateRunParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -12787,28 +7906,74 @@ func (siw *ServerInterfaceWrapper) ManageRun(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRun(w, r, params)
+	}))
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
 
-		params.IdempotencyKey = IdempotencyKey
+	handler.ServeHTTP(w, r)
+}
 
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+// GetRun operation middleware
+func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRun(w, r, runRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandRun operation middleware
+func (siw *ServerInterfaceWrapper) CommandRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandRunParams
+
+	headers := r.Header
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -12833,8 +7998,54 @@ func (siw *ServerInterfaceWrapper) ManageRun(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageRun(w, r, runRef, params)
+		siw.Handler.CommandRun(w, r, runRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12844,8 +8055,8 @@ func (siw *ServerInterfaceWrapper) ManageRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
-// GetRunLineage operation middleware
-func (siw *ServerInterfaceWrapper) GetRunLineage(w http.ResponseWriter, r *http.Request) {
+// ListRunEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListRunEvents(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
@@ -12861,41 +8072,41 @@ func (siw *ServerInterfaceWrapper) GetRunLineage(w http.ResponseWriter, r *http.
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params GetRunLineageParams
+	var params ListRunEventsParams
 
-	// ------------- Optional query parameter "pageSize" -------------
+	// ------------- Optional query parameter "afterSequence" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "afterSequence", r.URL.Query(), &params.AfterSequence, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "afterSequence"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "afterSequence", Err: err})
 		}
 		return
 	}
 
-	// ------------- Optional query parameter "pageToken" -------------
+	// ------------- Optional query parameter "limit" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		}
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRunLineage(w, r, runRef, params)
+		siw.Handler.ListRunEvents(w, r, runRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12905,8 +8116,8 @@ func (siw *ServerInterfaceWrapper) GetRunLineage(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// ListRunTimeline operation middleware
-func (siw *ServerInterfaceWrapper) ListRunTimeline(w http.ResponseWriter, r *http.Request) {
+// GetRunGraph operation middleware
+func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
@@ -12922,41 +8133,12 @@ func (siw *ServerInterfaceWrapper) ListRunTimeline(w http.ResponseWriter, r *htt
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRunTimelineParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRunTimeline(w, r, runRef, params)
+		siw.Handler.GetRunGraph(w, r, runRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12966,271 +8148,17 @@ func (siw *ServerInterfaceWrapper) ListRunTimeline(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// ListScheduleSelectors operation middleware
-func (siw *ServerInterfaceWrapper) ListScheduleSelectors(w http.ResponseWriter, r *http.Request) {
+// ListRuntimeSelections operation middleware
+func (siw *ServerInterfaceWrapper) ListRuntimeSelections(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListScheduleSelectors(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateSchedule operation middleware
-func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateScheduleParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateSchedule(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateScheduleFromSelections operation middleware
-func (siw *ServerInterfaceWrapper) CreateScheduleFromSelections(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateScheduleFromSelectionsParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateScheduleFromSelections(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteSchedule operation middleware
-func (siw *ServerInterfaceWrapper) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "scheduleId" -------------
-	var scheduleId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteScheduleParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteSchedule(w, r, scheduleId, params)
+		siw.Handler.ListRuntimeSelections(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13246,396 +8174,8 @@ func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http
 	var err error
 	_ = err
 
-	// ------------- Path parameter "scheduleId" -------------
-	var scheduleId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateScheduleParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateSchedule(w, r, scheduleId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListScheduleOccurrences operation middleware
-func (siw *ServerInterfaceWrapper) ListScheduleOccurrences(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "scheduleId" -------------
-	var scheduleId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListScheduleOccurrencesParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListScheduleOccurrences(w, r, scheduleId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ResolveScheduleRecovery operation middleware
-func (siw *ServerInterfaceWrapper) ResolveScheduleRecovery(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "scheduleId" -------------
-	var scheduleId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "occurrenceId" -------------
-	var occurrenceId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "occurrenceId", r.PathValue("occurrenceId"), &occurrenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "occurrenceId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ResolveScheduleRecoveryParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ResolveScheduleRecovery(w, r, scheduleId, occurrenceId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RunScheduleNow operation middleware
-func (siw *ServerInterfaceWrapper) RunScheduleNow(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "scheduleId" -------------
-	var scheduleId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RunScheduleNowParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RunScheduleNow(w, r, scheduleId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// BindScheduleConfiguration operation middleware
-func (siw *ServerInterfaceWrapper) BindScheduleConfiguration(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
 	// ------------- Path parameter "scheduleRef" -------------
-	var scheduleRef string
+	var scheduleRef ScheduleRef
 
 	err = runtime.BindStyledParameterWithOptions("simple", "scheduleRef", r.PathValue("scheduleRef"), &scheduleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
@@ -13645,60 +8185,14 @@ func (siw *ServerInterfaceWrapper) BindScheduleConfiguration(w http.ResponseWrit
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params BindScheduleConfigurationParams
+	var params UpdateScheduleParams
 
 	headers := r.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
 
 	// ------------- Required header parameter "If-Match" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
@@ -13723,8 +8217,212 @@ func (siw *ServerInterfaceWrapper) BindScheduleConfiguration(w http.ResponseWrit
 		return
 	}
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.BindScheduleConfiguration(w, r, scheduleRef, params)
+		siw.Handler.UpdateSchedule(w, r, scheduleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandSchedule operation middleware
+func (siw *ServerInterfaceWrapper) CommandSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleRef" -------------
+	var scheduleRef ScheduleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleRef", r.PathValue("scheduleRef"), &scheduleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandSchedule(w, r, scheduleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchPlatform operation middleware
+func (siw *ServerInterfaceWrapper) SearchPlatform(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchPlatformParams
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchPlatform(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13742,7 +8440,7 @@ func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
@@ -13751,9 +8449,32 @@ func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -13771,29 +8492,6 @@ func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *
 	} else {
 		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
 		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
 		return
 	}
 
@@ -13857,7 +8555,7 @@ func (siw *ServerInterfaceWrapper) CreateOwnerSession(w http.ResponseWriter, r *
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
 			return
@@ -13882,78 +8580,58 @@ func (siw *ServerInterfaceWrapper) CreateOwnerSession(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
-// ListWorkspaceBackups operation middleware
-func (siw *ServerInterfaceWrapper) ListWorkspaceBackups(w http.ResponseWriter, r *http.Request) {
+// AddSessionTurn operation middleware
+func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
+	// ------------- Path parameter "sessionRef" -------------
+	var sessionRef SessionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionRef", r.PathValue("sessionRef"), &sessionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionRef", Err: err})
+		return
+	}
+
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListWorkspaceBackupsParams
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListWorkspaceBackups(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageWorkspaceBackup operation middleware
-func (siw *ServerInterfaceWrapper) ManageWorkspaceBackup(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageWorkspaceBackupParams
+	var params AddSessionTurnParams
 
 	headers := r.Header
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -13974,6 +8652,77 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceBackup(w http.ResponseWriter, 
 		return
 	}
 
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddSessionTurn(w, r, sessionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSystemAssistant operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemAssistant(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemAssistant(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSystemAssistantOwnerInstructions operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSystemAssistantOwnerInstructions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSystemAssistantOwnerInstructionsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "Idempotency-Key" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
 		var IdempotencyKey IdempotencyKey
@@ -13983,7 +8732,7 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceBackup(w http.ResponseWriter, 
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
 			return
@@ -13997,153 +8746,9 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceBackup(w http.ResponseWriter, 
 		return
 	}
 
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = &IfMatch
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageWorkspaceBackup(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetWorkspaceBackup operation middleware
-func (siw *ServerInterfaceWrapper) GetWorkspaceBackup(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "backupRef" -------------
-	var backupRef BackupRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "backupRef", r.PathValue("backupRef"), &backupRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetWorkspaceBackup(w, r, backupRef)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListWorkspaceRestores operation middleware
-func (siw *ServerInterfaceWrapper) ListWorkspaceRestores(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListWorkspaceRestoresParams
-
-	// ------------- Optional query parameter "backupRef" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "backupRef", r.URL.Query(), &params.BackupRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "backupRef"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupRef", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageSize" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "pageToken" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListWorkspaceRestores(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ManageWorkspaceRestore operation middleware
-func (siw *ServerInterfaceWrapper) ManageWorkspaceRestore(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ManageWorkspaceRestoreParams
-
-	headers := r.Header
-
 	// ------------- Required header parameter "X-CSRF-Token" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CSRFToken
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
 			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
@@ -14164,6 +8769,57 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceRestore(w http.ResponseWriter,
 		return
 	}
 
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSystemAssistantOwnerInstructions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandSystemAssistant operation middleware
+func (siw *ServerInterfaceWrapper) CommandSystemAssistant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandSystemAssistantParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
 	// ------------- Required header parameter "Idempotency-Key" -------------
 	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
 		var IdempotencyKey IdempotencyKey
@@ -14173,7 +8829,7 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceRestore(w http.ResponseWriter,
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
 			return
@@ -14187,27 +8843,31 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceRestore(w http.ResponseWriter,
 		return
 	}
 
-	// ------------- Optional header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch OptionalIfMatch
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
 		n := len(valueList)
 		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
 			return
 		}
 
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
 		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
 			return
 		}
 
-		params.IfMatch = &IfMatch
+		params.XCSRFToken = XCSRFToken
 
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ManageWorkspaceRestore(w, r, params)
+		siw.Handler.CommandSystemAssistant(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14217,29 +8877,241 @@ func (siw *ServerInterfaceWrapper) ManageWorkspaceRestore(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
-// GetWorkspaceRestore operation middleware
-func (siw *ServerInterfaceWrapper) GetWorkspaceRestore(w http.ResponseWriter, r *http.Request) {
+// GetWorkflow operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
 
-	// ------------- Path parameter "restoreRef" -------------
-	var restoreRef RestoreRef
+	// ------------- Path parameter "workflowRef" -------------
+	var workflowRef WorkflowRef
 
-	err = runtime.BindStyledParameterWithOptions("simple", "restoreRef", r.PathValue("restoreRef"), &restoreRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "workflowRef", r.PathValue("workflowRef"), &workflowRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "restoreRef", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workflowRef", Err: err})
 		return
 	}
 
 	ctx := r.Context()
 
-	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
 
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetWorkspaceRestore(w, r, restoreRef)
+		siw.Handler.GetWorkflow(w, r, workflowRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWorkflowDraft operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWorkflowDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workflowRef" -------------
+	var workflowRef WorkflowRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workflowRef", r.PathValue("workflowRef"), &workflowRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workflowRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWorkflowDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWorkflowDraft(w, r, workflowRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommandWorkflow operation middleware
+func (siw *ServerInterfaceWrapper) CommandWorkflow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workflowRef" -------------
+	var workflowRef WorkflowRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workflowRef", r.PathValue("workflowRef"), &workflowRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workflowRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CommandWorkflowParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommandWorkflow(w, r, workflowRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14369,120 +9241,80 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources", wrapper.ManageAccessResource)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/copy", wrapper.CopyAccessResource)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/detach", wrapper.DetachAccessResource)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-assignments", wrapper.ListAgentAssignments)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-assignments/commands", wrapper.ManageAgentAssignment)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-assignments/{resourceRef}", wrapper.GetAgentAssignment)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-assignments/{resourceRef}/history", wrapper.ListAgentAssignmentHistory)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-bot-identities", wrapper.ListAgentBotIdentities)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/commands", wrapper.ManageAgent)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}", wrapper.GetAgent)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity", wrapper.GetAgentBotIdentity)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity", wrapper.ManageAgentBotIdentity)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity/operations", wrapper.GetAgentBotIdentityOperation)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity/provider-readback", wrapper.GetAgentBotIdentityProviderReadback)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/history", wrapper.ListAgentHistory)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAuditEvents)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit/export", wrapper.ExportAudit)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backups", wrapper.ListBackups)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backups/{backupId}", wrapper.GetBackup)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/backups/{backupId}/restore", wrapper.RestoreBackup)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-changes", wrapper.ListConfigurationChanges)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-diff", wrapper.GetConfigurationDiff)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-source/{resourceRef}", wrapper.GetConfigurationSourceDetail)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/health-series", wrapper.GetHealthSeries)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/image-builds/commands", wrapper.ManageImageBuild)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/image-builds/{imageBuildId}", wrapper.GetRoleImageBuild)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/incidents", wrapper.ListIncidents)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/incidents/{incidentRef}", wrapper.GetIncident)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/incidents/{incidentRef}/commands", wrapper.ManageIncident)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/incidents/{incidentRef}/history", wrapper.ListIncidentHistory)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/instruction-sets", wrapper.ListInstructionSets)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/instruction-sets/commands", wrapper.ManageInstructionSet)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/instruction-sets/{resourceRef}", wrapper.GetInstructionSet)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/instruction-sets/{resourceRef}/compare", wrapper.CompareInstructionSetVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/instruction-sets/{resourceRef}/history", wrapper.ListInstructionSetHistory)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-approvals", wrapper.ListIntegrationApprovals)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-approvals/{approvalRef}", wrapper.GetIntegrationApproval)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/integration-approvals/{approvalRef}/decision", wrapper.DecideIntegrationApproval)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-configurations", wrapper.ListIntegrationConfigurations)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/integration-configurations", wrapper.ConfigureIntegration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-configurations/{configurationRef}", wrapper.GetIntegrationConfiguration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-definitions", wrapper.ListIntegrationDefinitions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-definitions/{definitionRef}", wrapper.GetIntegrationDefinition)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/integration-tests", wrapper.TestIntegrationConnection)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/integration-tests/{testRef}", wrapper.GetIntegrationTestReceipt)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/mattermost/team-binding", wrapper.UnlinkMattermostTeam)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/team-binding", wrapper.GetMattermostTeamBinding)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/team-binding", wrapper.LinkMattermostTeam)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/mattermost/team-binding", wrapper.RelinkMattermostTeam)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/team-operations", wrapper.GetMattermostTeamMappingOperation)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/teams", wrapper.ListMattermostTeams)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/teams", wrapper.CreateMattermostTeam)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/teams/{selector}", wrapper.GetMattermostTeamProviderReadback)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-configuration/catalog", wrapper.GetOwnerConfigurationCatalog)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/owner-gates/{ownerGateId}/resolution", wrapper.ResolveOwnerGate)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-schedules", wrapper.ListOwnerSchedules)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-schedules/{scheduleRef}", wrapper.GetOwnerSchedule)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/projects", wrapper.ListProjects)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/projects", wrapper.CreateProject)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/projects/{projectId}", wrapper.DeleteProject)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/projects/{projectId}", wrapper.UpdateProject)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/provider-authorizations", wrapper.StartProviderAuthorization)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/provider-authorizations/{authorizationRef}", wrapper.CancelProviderAuthorization)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/provider-authorizations/{authorizationRef}", wrapper.GetProviderAuthorization)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/provider-authorizations/{authorizationRef}/new-code", wrapper.RestartProviderAuthorization)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/provider-connections", wrapper.ListProviderConnections)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/provider-connections/{connectionRef}", wrapper.RevokeProviderConnection)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/provider-connections/{connectionRef}", wrapper.GetProviderConnection)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/provider-connections/{connectionRef}/reauthorize", wrapper.ReauthorizeProviderConnection)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/provider-pools", wrapper.ListProviderPools)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/provider-pools/commands", wrapper.ManageProviderPool)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/provider-pools/{poolRef}", wrapper.GetProviderPool)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/providers", wrapper.ListProviders)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/providers/{providerRef}", wrapper.GetProvider)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources", wrapper.ListResources)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources", wrapper.CreateResource)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/search", wrapper.SearchResources)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/resources/{resourceId}", wrapper.DeleteResource)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/{resourceId}", wrapper.GetResource)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations", wrapper.ListRestoreOperations)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations/{restoreOperationId}", wrapper.GetRestoreOperation)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-definitions", wrapper.ListRoleDefinitions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-definitions/commands", wrapper.ManageRoleDefinition)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-definitions/{resourceRef}", wrapper.GetRoleDefinition)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-definitions/{resourceRef}/history", wrapper.ListRoleDefinitionHistory)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-image-recipes/commands", wrapper.ManageRoleImageRecipe)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-image-recipes/{recipeId}", wrapper.GetRoleImageRecipe)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs", wrapper.ListRuns)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{runRef}", wrapper.GetRunDetail)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{runRef}/artifacts", wrapper.ListRunArtifacts)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/runs/{runRef}/commands", wrapper.ManageRun)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{runRef}/lineage", wrapper.GetRunLineage)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs/{runRef}/timeline", wrapper.ListRunTimeline)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedule-selectors", wrapper.ListScheduleSelectors)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules", wrapper.CreateSchedule)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/from-selections", wrapper.CreateScheduleFromSelections)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/schedules/{scheduleId}", wrapper.DeleteSchedule)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/schedules/{scheduleId}", wrapper.UpdateSchedule)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences", wrapper.ListScheduleOccurrences)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences/{occurrenceId}/recovery", wrapper.ResolveScheduleRecovery)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/run-now", wrapper.RunScheduleNow)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/schedules/{scheduleRef}/configuration", wrapper.BindScheduleConfiguration)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/session", wrapper.DeleteOwnerSession)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/session", wrapper.CreateOwnerSession)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workspace-backups", wrapper.ListWorkspaceBackups)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/workspace-backups/commands", wrapper.ManageWorkspaceBackup)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workspace-backups/{backupRef}", wrapper.GetWorkspaceBackup)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workspace-restores", wrapper.ListWorkspaceRestores)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/workspace-restores/commands", wrapper.ManageWorkspaceRestore)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/workspace-restores/{restoreRef}", wrapper.GetWorkspaceRestore)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration", wrapper.GetAdministration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/members", wrapper.ListPlatformMemberships)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/administration/members", wrapper.AddPlatformMembership)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.RemovePlatformMembership)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.ChangePlatformMembership)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/membership-candidates", wrapper.ListPlatformMembershipCandidates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/commands", wrapper.CommandAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-commands", wrapper.CommandAgentInstructions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-drafts", wrapper.CreateInstructionDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/bindings", wrapper.ChangeArtifactBinding)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/content", wrapper.DownloadArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/turns", wrapper.AddAssistantTurn)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/application", wrapper.ApplyAssistantPlan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/audit-events", wrapper.ListAuditEvents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bootstrap", wrapper.GetBootstrapState)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.ListIntegrationConnections)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.CreateIntegrationConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.GetIntegrationConnection)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-definitions", wrapper.ListIntegrationDefinitions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/resolution", wrapper.ResolveOwnerGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/platform-capabilities", wrapper.ListPlatformCapabilities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects", wrapper.ListProjects)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects", wrapper.CreateProject)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}", wrapper.GetProject)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}", wrapper.UpdateProject)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents", wrapper.CreateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.ChangeProjectMembership)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/membership-candidates", wrapper.ListProjectMembershipCandidates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.ListRoleImageRecipes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.UpdateRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands", wrapper.CommandRoleImageRecipe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.ListSchedules)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.CreateSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.ListWorkflows)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.CreateWorkflow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/role-environments", wrapper.ListRoleEnvironments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}", wrapper.GetRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}/commands", wrapper.CommandSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.SearchPlatform)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/session", wrapper.DeleteOwnerSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-assistant/commands", wrapper.CommandSystemAssistant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}", wrapper.GetWorkflow)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}", wrapper.UpdateWorkflowDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}/commands", wrapper.CommandWorkflow)
 
 	return m
 }

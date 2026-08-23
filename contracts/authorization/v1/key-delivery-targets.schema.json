@@ -144,8 +144,6 @@
         "possession_key_vault_path",
         "possession_key_mount_path",
         "possession_public_jwk_source",
-        "database_function",
-        "snapshot_database_function",
         "attestor_address",
         "attestor_tls_server_name",
         "attestor_trust_bundle_id",
@@ -201,12 +199,6 @@
         },
         "possession_public_jwk_source": {
           "const": "SIGNED_NORMAL_READBACK_CREDENTIAL"
-        },
-        "database_function": {
-          "const": "internal_rpc_authority.record_authority_key_delivery_readback(uuid)"
-        },
-        "snapshot_database_function": {
-          "const": "internal_rpc_authority.record_authority_snapshot_readback(uuid)"
         },
         "attestor_address": {
           "const": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"
@@ -393,6 +385,7 @@
             ],
             "properties": {
               "readback": {
+                "type": "object",
                 "properties": {
                   "expected_role": {
                     "const": "AUTHORIZATION_ISSUER"
@@ -418,6 +411,7 @@
           "then": {
             "properties": {
               "readback": {
+                "type": "object",
                 "properties": {
                   "expected_role": {
                     "const": "AUTHORIZATION_VERIFIER"
@@ -461,6 +455,7 @@
             ],
             "properties": {
               "readback": {
+                "type": "object",
                 "properties": {
                   "expected_role": {
                     "const": "AUTHORITY_PROOF_RESOLVER"

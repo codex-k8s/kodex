@@ -13,7 +13,7 @@ require_denied() {
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --registry-namespace <namespace> --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -22,6 +22,7 @@ github_app_id_file=""
 github_app_installation_id_file=""
 github_app_private_key_file=""
 github_pat_file=""
+registry_namespace=""
 workflow_sha_file=""
 build_owner_actor_file=""
 deploy_owner_actor_file=""
@@ -33,6 +34,7 @@ while (($# > 0)); do
     --github-app-installation-id-file) github_app_installation_id_file="${2:-}"; shift 2 ;;
     --github-app-private-key-file) github_app_private_key_file="${2:-}"; shift 2 ;;
     --github-pat-file) github_pat_file="${2:-}"; shift 2 ;;
+    --registry-namespace) registry_namespace="${2:-}"; shift 2 ;;
     --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
     --build-owner-actor-id-file) build_owner_actor_file="${2:-}"; shift 2 ;;
     --deploy-owner-actor-id-file) deploy_owner_actor_file="${2:-}"; shift 2 ;;
@@ -59,12 +61,16 @@ fi
 
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
+[[ "$registry_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+  fail "exact registry namespace is required"
+registry_host="matter-codex-registry.${registry_namespace}.svc.cluster.local"
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
-for command_name in kubectl helm sha256sum awk grep jq yq rg stat curl; do
+command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
+[[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
+for command_name in helm sha256sum awk grep jq yq rg stat curl; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$(kubectl config current-context)" == "$expected_context" ]] || fail "Kubernetes context mismatch"
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
@@ -78,7 +84,7 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 
 kubernetes_api_service_ip=$(kubectl --context "$expected_context" -n default get service kubernetes \
   -o json | jq -er '.spec.clusterIP | select(type == "string" and length > 0 and . != "None")')
-registry_service_json=$(kubectl --context "$expected_context" -n matter-kodex-prod \
+registry_service_json=$(kubectl --context "$expected_context" -n "$registry_namespace" \
   get service matter-codex-registry -o json)
 registry_service_ip=$(jq -er '
   select(.spec.selector == {
@@ -94,7 +100,7 @@ registry_service_ip=$(jq -er '
     all(split(".")[]; test("^[0-9]{1,3}$") and
       ((tonumber >= 0) and (tonumber <= 255))))
 ' <<<"$registry_service_json") || fail "registry Service binding is invalid"
-registry_endpoint_binding=$(kubectl --context "$expected_context" -n matter-kodex-prod \
+registry_endpoint_binding=$(kubectl --context "$expected_context" -n "$registry_namespace" \
   get endpointslice -l kubernetes.io/service-name=matter-codex-registry -o json | jq -er '
   [
     .items[] as $slice |
@@ -116,7 +122,7 @@ registry_endpoint_binding=$(kubectl --context "$expected_context" -n matter-kode
 IFS=$'\t' read -r registry_endpoint_ip registry_pod_name registry_endpoint_port \
   <<<"$registry_endpoint_binding"
 [[ "$registry_endpoint_port" == 5001 ]] || fail "registry endpoint port is invalid"
-kubectl --context "$expected_context" -n matter-kodex-prod get pod "$registry_pod_name" -o json |
+kubectl --context "$expected_context" -n "$registry_namespace" get pod "$registry_pod_name" -o json |
   jq -e --arg endpoint_ip "$registry_endpoint_ip" '
     .spec.hostNetwork == true and .status.podIP == $endpoint_ip and
     .metadata.labels."app.kubernetes.io/name" == "matter-codex-registry" and
@@ -129,7 +135,7 @@ kubectl --context "$expected_context" -n matter-kodex-prod get pod "$registry_po
   ' >/dev/null || fail "registry hostNetwork Pod binding is invalid"
 rendered_network_policy="$temporary_directory/network-policy.yaml"
 "$script_directory/render-network-policy.sh" "$registry_service_ip/32" \
-  "$registry_endpoint_ip/32" "$rendered_network_policy"
+  "$registry_endpoint_ip/32" "$registry_namespace" "$rendered_network_policy"
 egress_proxy_config_sha256=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-ci" and
     .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
@@ -139,7 +145,13 @@ egress_proxy_config_sha256=$(yq -r '
 rendered_values_directory="$temporary_directory/helm-values"
 mkdir -p -- "$rendered_values_directory"
 "$script_directory/render-helm-values.sh" "$kubernetes_api_service_ip" \
-  "$egress_proxy_config_sha256" "$rendered_values_directory" >/dev/null
+  "$egress_proxy_config_sha256" "$registry_host" "$rendered_values_directory" >/dev/null
+rendered_namespace_rbac="$temporary_directory/namespace-rbac.yaml"
+REGISTRY_HOST=$registry_host yq '
+  (.. | select(tag == "!!str")) |= sub("__REGISTRY_HOST__"; strenv(REGISTRY_HOST))
+' "$script_directory/namespace-rbac.yaml" >"$rendered_namespace_rbac"
+rg -q '__REGISTRY_HOST__' "$rendered_namespace_rbac" &&
+  fail "unresolved registry host in ARC namespace resources"
 controller_values="$rendered_values_directory/controller-values.yaml"
 controller_deploy_values="$rendered_values_directory/controller-deploy-values.yaml"
 build_runner_values="$rendered_values_directory/build-runner-values.yaml"
@@ -286,7 +298,7 @@ server_minor=$(kubectl --context "$expected_context" version -o json |
   jq -r '.serverVersion.minor | sub("[^0-9].*$"; "") | tonumber')
 ((server_minor >= 33)) || fail "Kubernetes 1.33 or newer is required for stable Pod user namespaces"
 
-kubectl --context "$expected_context" apply --dry-run=client -f "$script_directory/namespace-rbac.yaml" >/dev/null
+kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_namespace_rbac" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_network_policy" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$build_owner_gate" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$deploy_owner_gate" >/dev/null
@@ -305,7 +317,7 @@ if [[ "$mode" == preflight ]]; then
 fi
 
 if [[ "$mode" == apply ]]; then
-  kubectl --context "$expected_context" apply -f "$script_directory/namespace-rbac.yaml" >/dev/null
+  kubectl --context "$expected_context" apply -f "$rendered_namespace_rbac" >/dev/null
   kubectl --context "$expected_context" apply -f "$rendered_network_policy" >/dev/null
   kubectl --context "$expected_context" apply -f "$build_owner_gate" >/dev/null
   kubectl --context "$expected_context" apply -f "$deploy_owner_gate" >/dev/null
@@ -387,7 +399,7 @@ verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
 expected_buildkit_config=$(yq -o=json '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-buildkit-config") |
   .data
-' "$script_directory/namespace-rbac.yaml" | jq -Sc .)
+' "$rendered_namespace_rbac" | jq -Sc .)
 actual_buildkit_config=$(kubectl --context "$expected_context" -n "$build_namespace" \
   get configmap mattercodex-buildkit-config -o json | jq -Sc '.data')
 [[ -n "$expected_buildkit_config" && "$actual_buildkit_config" == "$expected_buildkit_config" ]] ||
@@ -450,7 +462,7 @@ readback_scale_set() {
 
 readback_scale_set "$build_namespace" mattercodex-build \
   mattercodex-build-gha-rs-no-permission false \
-  matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1
+  "$registry_host,localhost,127.0.0.1"
 readback_scale_set "$deploy_namespace" mattercodex-deploy \
   mattercodex-production-deployer true "$kubernetes_api_no_proxy"
 run_actions_policy readback >/dev/null

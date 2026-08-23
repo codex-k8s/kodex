@@ -1,7 +1,0 @@
-package: generated
-output: services/external/interaction-gateway/internal/transport/http/generated/interaction_gateway.gen.go
-generate:
-  models: true
-  std-http-server: true
-output-options:
-  skip-prune: false
