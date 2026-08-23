@@ -49,7 +49,12 @@ vault_status() {
   kubectl -n mattercodex-system exec vault-0 -- sh -ec '
     export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
     export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-    vault status -format=json
+    status_code=0
+    status_json=$(vault status -format=json) || status_code=$?
+    case "$status_code" in
+      0|2) printf "%s\n" "$status_json" ;;
+      *) exit "$status_code" ;;
+    esac
   '
 }
 
