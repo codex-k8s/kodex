@@ -104,6 +104,35 @@ require_ready_deployment_by_selector() {
   ' >/dev/null || fail "$description deployment is not fully ready"
 }
 
+require_vault_csi_provider() {
+  local daemonset_json
+
+  kubectl -n mattercodex-system rollout status daemonset/vault-csi-provider --timeout=180s >/dev/null ||
+    fail 'Vault CSI provider rollout is incomplete'
+  daemonset_json=$(kubectl -n mattercodex-system get daemonset vault-csi-provider -o json) ||
+    fail 'Vault CSI provider readback failed'
+  jq -e '
+    .status.observedGeneration == .metadata.generation and
+    (.status.desiredNumberScheduled // 0) > 0 and
+    .status.updatedNumberScheduled == .status.desiredNumberScheduled and
+    .status.numberReady == .status.desiredNumberScheduled and
+    (.spec.template.spec.containers | length) == 1 and
+    .spec.template.spec.containers[0].name == "vault-csi-provider" and
+    (.spec.template.spec.containers[0].args | index("--vault-addr=https://vault.mattercodex-system.svc:8200")) != null and
+    (.spec.template.spec.containers[0].args | index("--vault-tls-ca-cert=/vault/tls/ca.crt")) != null and
+    (.spec.template.spec.containers[0].args | index("--vault-tls-server-name=vault.mattercodex-system.svc.cluster.local")) != null and
+    ([.spec.template.spec.containers[0].args[] | select(test("vault-tls-skip-verify"))] | length) == 0 and
+    any(.spec.template.spec.containers[0].volumeMounts[];
+      .name == "vault-server-ca" and
+      .mountPath == "/vault/tls" and
+      .readOnly == true) and
+    any(.spec.template.spec.volumes[];
+      .name == "vault-server-ca" and
+      .secret.secretName == "mattercodex-vault-server-tls" and
+      .secret.items == [{"key":"ca.crt","path":"ca.crt"}])
+  ' <<<"$daemonset_json" >/dev/null || fail 'Vault CSI provider TLS contract mismatch'
+}
+
 if [[ "$mode" == apply-controllers ]]; then
   kubectl create namespace mattercodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
@@ -131,7 +160,8 @@ if [[ "$mode" == apply-vault ]]; then
   vault_chart=$(download_chart vault)
   helm upgrade --install mattercodex-vault "$vault_chart" \
     --namespace mattercodex-system --values "$script_directory/vault-values.yaml" \
-    --timeout 10m
+    --atomic --wait --timeout 10m
+  require_vault_csi_provider
 fi
 
 if [[ "$mode" == readback ]]; then
@@ -156,6 +186,7 @@ if [[ "$mode" == readback ]]; then
   if kubectl get namespace mattercodex-system >/dev/null 2>&1; then
     kubectl -n mattercodex-system get statefulset vault >/dev/null
     kubectl -n mattercodex-system get service vault >/dev/null
+    require_vault_csi_provider
   fi
 fi
 

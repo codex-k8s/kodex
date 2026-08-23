@@ -67,10 +67,25 @@ csi:
     repository: hashicorp/vault-csi-provider
     tag: 1.7.4
     pullPolicy: IfNotPresent
+  volumes:
+    - name: vault-server-ca
+      secret:
+        secretName: mattercodex-vault-server-tls
+        items:
+          - key: ca.crt
+            path: ca.crt
+  volumeMounts:
+    - name: vault-server-ca
+      mountPath: /vault/tls
+      readOnly: true
+  extraArgs:
+    - --vault-addr=https://vault.mattercodex-system.svc:8200
+    - --vault-tls-ca-cert=/vault/tls/ca.crt
+    - --vault-tls-server-name=vault.mattercodex-system.svc.cluster.local
   daemonSet:
     kubeletRootDir: /var/lib/kubelet
   agent:
-    enabled: true
+    enabled: false
     image:
       repository: hashicorp/vault
       tag: 2.0.4
