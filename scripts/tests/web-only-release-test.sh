@@ -269,6 +269,17 @@ yq -o=json 'select(.kind == "NetworkPolicy" and
       ($selector.values | sort) == ["control-plane", "internal-rpc-authority", "vault"])
   ' >/dev/null || fail 'PostgreSQL ingress does not expose the exact Vault database engine path'
 
+yq -o=json 'select(.kind == "NetworkPolicy" and
+  .metadata.name == "platform-vault-from-csi-provider")' "$render_file" |
+  jq -e '
+    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"vault"} and
+    .spec.policyTypes == ["Ingress"] and
+    (.spec.ingress | length) == 1 and
+    .spec.ingress[0].ports == [{"protocol":"TCP","port":8200}] and
+    .spec.ingress[0].from == [{"podSelector":{"matchLabels":{
+      "app.kubernetes.io/name":"vault-csi-provider"}}}]
+  ' >/dev/null || fail 'Vault ingress does not expose the exact CSI provider path'
+
 for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw nats; do
   SERVICE="$service" yq -e '
     select(.kind == "Service" and .metadata.name == strenv(SERVICE))
