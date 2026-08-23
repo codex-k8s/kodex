@@ -38,6 +38,7 @@ test-web-only-release:
 
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh
+	@./scripts/tests/nats-operator-material-test.sh
 
 test-authority-policy-codegen:
 	@./scripts/tests/authority-policy-codegen-test.sh

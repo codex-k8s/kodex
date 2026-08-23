@@ -121,16 +121,8 @@ add_application_user control-plane
 add_application_user control-plane-broker-bootstrap
 add_application_user control-api-gateway
 
-nsc -H "$nsc_home" describe operator --name MATTERCODEX --raw \
-  --output-file "$output_directory/nats/operator.jwt" >/dev/null 2>&1
-nsc -H "$nsc_home" describe account --name SYS --raw \
-  --output-file "$output_directory/nats/system-account.jwt" >/dev/null 2>&1
-nsc -H "$nsc_home" describe account --name SYS --json --field sub \
-  --output-file "$output_directory/nats/system-account.public" >/dev/null 2>&1
-nsc -H "$nsc_home" describe account --name APPLICATION --raw \
-  --output-file "$output_directory/nats/account.jwt" >/dev/null 2>&1
-nsc -H "$nsc_home" describe account --name APPLICATION --json --field sub \
-  --output-file "$output_directory/nats/account.public" >/dev/null 2>&1
+"$repository_root/tools/deploy/materialize-nats-operator-files.sh" \
+  --nsc-home "$nsc_home" --output-directory "$output_directory/nats"
 
 for file_path in \
   "$output_directory/installation-ca/tls.crt" \

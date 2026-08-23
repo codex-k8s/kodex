@@ -38,7 +38,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$expected_context" ]] || fail 'exact context is required'
-for command_name in awk kubectl openssl sha256sum; do
+for command_name in awk grep kubectl openssl sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
@@ -53,6 +53,26 @@ done
 for key in operator.jwt system-account.public system-account.jwt account.public account.jwt; do
   [[ -f "$nats_material_directory/$key" && -r "$nats_material_directory/$key" && ! -L "$nats_material_directory/$key" ]] ||
     fail "required NATS material is invalid: $key"
+done
+
+validate_nats_jwt() {
+  local file_path=$1
+  [[ $(awk 'END {print NR}' "$file_path") -eq 1 ]] &&
+    grep -Eq '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$' "$file_path"
+}
+
+validate_nats_account_nkey() {
+  local file_path=$1
+  [[ $(awk 'END {print NR}' "$file_path") -eq 1 ]] &&
+    grep -Eq '^A[A-Z2-7]{55}$' "$file_path"
+}
+
+for key in operator.jwt system-account.jwt account.jwt; do
+  validate_nats_jwt "$nats_material_directory/$key" || fail "NATS JWT is not canonical: $key"
+done
+for key in system-account.public account.public; do
+  validate_nats_account_nkey "$nats_material_directory/$key" ||
+    fail "NATS account nkey is not canonical: $key"
 done
 
 openssl x509 -in "$ca_certificate_file" -noout -checkend 86400 >/dev/null || fail 'installation CA is invalid or expires too soon'
