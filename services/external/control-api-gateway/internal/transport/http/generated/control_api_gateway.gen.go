@@ -1532,16 +1532,40 @@ func (e ScheduleInputSessionPolicy) Valid() bool {
 
 // Defines values for ScheduleInputTargetType.
 const (
-	AGENT    ScheduleInputTargetType = "AGENT"
-	WORKFLOW ScheduleInputTargetType = "WORKFLOW"
+	ScheduleInputTargetTypeAGENT    ScheduleInputTargetType = "AGENT"
+	ScheduleInputTargetTypeWORKFLOW ScheduleInputTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleInputTargetType enum.
 func (e ScheduleInputTargetType) Valid() bool {
 	switch e {
-	case AGENT:
+	case ScheduleInputTargetTypeAGENT:
 		return true
-	case WORKFLOW:
+	case ScheduleInputTargetTypeWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchResultKind.
+const (
+	SearchResultKindAGENT    SearchResultKind = "AGENT"
+	SearchResultKindPROJECT  SearchResultKind = "PROJECT"
+	SearchResultKindRUN      SearchResultKind = "RUN"
+	SearchResultKindWORKFLOW SearchResultKind = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the SearchResultKind enum.
+func (e SearchResultKind) Valid() bool {
+	switch e {
+	case SearchResultKindAGENT:
+		return true
+	case SearchResultKindPROJECT:
+		return true
+	case SearchResultKindRUN:
+		return true
+	case SearchResultKindWORKFLOW:
 		return true
 	default:
 		return false
@@ -2692,6 +2716,25 @@ type ScheduleInputSessionPolicy string
 // ScheduleInputTargetType defines model for ScheduleInput.TargetType.
 type ScheduleInputTargetType string
 
+// SearchResult defines model for SearchResult.
+type SearchResult struct {
+	Kind       SearchResultKind `json:"kind"`
+	ProjectRef OpaqueRef        `json:"projectRef"`
+	Ref        OpaqueRef        `json:"ref"`
+	State      string           `json:"state"`
+	Subtitle   string           `json:"subtitle"`
+	Title      string           `json:"title"`
+	UpdatedAt  Timestamp        `json:"updatedAt"`
+}
+
+// SearchResultKind defines model for SearchResult.Kind.
+type SearchResultKind string
+
+// SearchResultPage defines model for SearchResultPage.
+type SearchResultPage struct {
+	Items []SearchResult `json:"items"`
+}
+
 // SystemAssistant defines model for SystemAssistant.
 type SystemAssistant struct {
 	CorePromptRevision        string                      `json:"corePromptRevision"`
@@ -3262,6 +3305,12 @@ type CommandScheduleParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// SearchPlatformParams defines parameters for SearchPlatform.
+type SearchPlatformParams struct {
+	Query string `form:"query" json:"query"`
+	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // DeleteOwnerSessionParams defines parameters for DeleteOwnerSession.
 type DeleteOwnerSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -3611,6 +3660,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/schedules/{scheduleRef}/commands)
 	CommandSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params CommandScheduleParams)
+
+	// (GET /api/v1/search)
+	SearchPlatform(w http.ResponseWriter, r *http.Request, params SearchPlatformParams)
 
 	// (DELETE /api/v1/session)
 	DeleteOwnerSession(w http.ResponseWriter, r *http.Request, params DeleteOwnerSessionParams)
@@ -8217,6 +8269,58 @@ func (siw *ServerInterfaceWrapper) CommandSchedule(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// SearchPlatform operation middleware
+func (siw *ServerInterfaceWrapper) SearchPlatform(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchPlatformParams
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchPlatform(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteOwnerSession operation middleware
 func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *http.Request) {
 
@@ -9090,6 +9194,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}/commands", wrapper.CommandSchedule)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.SearchPlatform)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/session", wrapper.DeleteOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)

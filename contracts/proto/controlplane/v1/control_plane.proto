@@ -17,6 +17,7 @@ service PlatformQueryService {
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
   rpc ListPlatformCapabilities(ListPlatformCapabilitiesRequest) returns (ListPlatformCapabilitiesResponse);
   rpc ListRuntimeSelections(ListRuntimeSelectionsRequest) returns (ListRuntimeSelectionsResponse);
+  rpc SearchPlatform(SearchPlatformRequest) returns (SearchPlatformResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   // ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -924,6 +925,32 @@ message ListPlatformCapabilitiesResponse {
 message ListRuntimeSelectionsRequest {}
 message ListRuntimeSelectionsResponse {
   repeated RuntimeSelection runtimes = 1;
+}
+
+enum SearchResultKind {
+  SEARCH_RESULT_KIND_UNSPECIFIED = 0;
+  SEARCH_RESULT_KIND_PROJECT = 1;
+  SEARCH_RESULT_KIND_AGENT = 2;
+  SEARCH_RESULT_KIND_WORKFLOW = 3;
+  SEARCH_RESULT_KIND_RUN = 4;
+}
+
+message SearchResult {
+  SearchResultKind kind = 1;
+  string ref = 2;
+  string project_ref = 3;
+  string title = 4;
+  string subtitle = 5;
+  string state = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message SearchPlatformRequest {
+  string query = 1;
+  int32 limit = 2;
+}
+message SearchPlatformResponse {
+  repeated SearchResult results = 1;
 }
 
 message ListProjectsRequest {

@@ -16,7 +16,7 @@ trap cleanup EXIT
 
 (
   cd -- "${repo_root}"
-  buf generate --output "${temporary_root}"
+  ./scripts/generate-proto.sh --output "${temporary_root}"
 )
 
 for generated_path in "${generated_paths[@]}"; do

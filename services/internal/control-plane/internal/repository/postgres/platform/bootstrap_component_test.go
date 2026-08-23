@@ -455,6 +455,23 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || foreign.Project == nil {
 		t.Fatalf("create foreign project: project=%#v err=%v", foreign.Project, err)
 	}
+	visibleSearch, err := service.Search(ctx, candidate, query.Filter{Query: "Readback", Limit: 20})
+	if err != nil || len(visibleSearch) < 3 {
+		t.Fatalf("search eligible project resources: results=%#v err=%v", visibleSearch, err)
+	}
+	for _, result := range visibleSearch {
+		if result.ProjectRef != projectRef {
+			t.Fatalf("search leaked foreign project result: %#v", result)
+		}
+	}
+	foreignSearch, err := service.Search(ctx, candidate, query.Filter{Query: "Foreign access", Limit: 20})
+	if err != nil || len(foreignSearch) != 0 {
+		t.Fatalf("search exposed inaccessible project: results=%#v err=%v", foreignSearch, err)
+	}
+	ownerSearch, err := service.Search(ctx, owner, query.Filter{Query: "Foreign access", Limit: 20})
+	if err != nil || len(ownerSearch) != 1 || ownerSearch[0].Ref != foreign.Project.Ref {
+		t.Fatalf("owner search omitted accessible project: results=%#v err=%v", ownerSearch, err)
+	}
 	foreignInput := candidateInput
 	foreignInput.ProjectRef = foreign.Project.Ref
 	if _, err := repository.ResolveProofAuthority(ctx, foreignInput); !errors.Is(err, domainerrs.ErrForbidden) {

@@ -4,16 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Project,
   ProjectPage,
+  SearchResult,
+  SearchResultPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
+const searchPlatformMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/shared/api/generated/openapi/sdk.gen")
   >()),
   listProjects: listProjectsMock,
+  searchPlatform: searchPlatformMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -62,10 +66,33 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
+function searchResponse(items: SearchResult[]): {
+  data: SearchResultPage;
+  response: Response;
+} {
+  return {
+    data: { items },
+    response: new Response(null, { status: 200 }),
+  };
+}
+
+function searchResult(ref: string): SearchResult {
+  return {
+    kind: "PROJECT",
+    ref,
+    projectRef: ref,
+    title: ref,
+    subtitle: "Search result",
+    state: "ACTIVE",
+    updatedAt: "2026-08-23T00:00:00Z",
+  };
+}
+
 describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     listProjectsMock.mockReset();
+    searchPlatformMock.mockReset();
     selectProjectRef(undefined);
   });
 
@@ -86,6 +113,27 @@ describe("platform store", () => {
 
     expect(store.projectList.map((item) => item.ref)).toEqual(["project_new"]);
     expect(store.loading.projects).toBe(false);
+  });
+
+  it("не позволяет старому ответу поиска перезаписать новый", async () => {
+    const oldResponse = deferred<ReturnType<typeof searchResponse>>();
+    const newResponse = deferred<ReturnType<typeof searchResponse>>();
+    searchPlatformMock
+      .mockReturnValueOnce(oldResponse.promise)
+      .mockReturnValueOnce(newResponse.promise);
+    const store = usePlatformStore();
+
+    const oldRequest = store.search("old result");
+    const newRequest = store.search("new result");
+    newResponse.resolve(searchResponse([searchResult("project_new")]));
+    await newRequest;
+    oldResponse.resolve(searchResponse([searchResult("project_old")]));
+    await oldRequest;
+
+    expect(store.searchResults.map((item) => item.ref)).toEqual([
+      "project_new",
+    ]);
+    expect(store.loading.search).toBe(false);
   });
 
   it("заменяет authoritative collection и удаляет исчезнувший ресурс", async () => {

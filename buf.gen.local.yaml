@@ -1,0 +1,30 @@
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: libs/go/internalrpcauth
+    opt:
+      - module=github.com/codex-k8s/matter-codex/libs/go/internalrpcauth
+    types:
+      - internalrpcauthority.v1
+  - local: protoc-gen-go-grpc
+    out: libs/go/internalrpcauth
+    opt:
+      - module=github.com/codex-k8s/matter-codex/libs/go/internalrpcauth
+      - require_unimplemented_servers=true
+    types:
+      - internalrpcauthority.v1
+  - local: protoc-gen-go
+    out: libs/go/controlplaneapi
+    opt:
+      - module=github.com/codex-k8s/matter-codex/libs/go/controlplaneapi
+    types:
+      - controlplane.v1
+  - local: protoc-gen-go-grpc
+    out: libs/go/controlplaneapi
+    opt:
+      - module=github.com/codex-k8s/matter-codex/libs/go/controlplaneapi
+      - require_unimplemented_servers=true
+    types:
+      - controlplane.v1
+inputs:
+  - directory: contracts/proto

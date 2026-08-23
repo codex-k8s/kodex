@@ -88,6 +88,7 @@ Project membership отдельно задаёт typed permissions. Полном
 | `POST /api/v1/projects/{projectRef}/agents` | `CreateAgent` | Agent service | project `AGENT_CREATE`, idempotency | Agent draft + audit + `agent.created` | PWA project snapshot |
 | `POST /api/v1/agents/{agentRef}/instruction-commands` | typed instruction RPC | Instruction service | owner resolve before `If-Match` | immutable published version + `agent.instructions_published` | runtime revision resolver |
 | `POST /api/v1/projects/{projectRef}/workflows` | `CreateWorkflow` | Workflow service | project `WORKFLOW_MANAGE`, idempotency | Workflow draft + audit | authoritative reads |
+| `GET /api/v1/search` | `SearchPlatform` | Control-plane query service | OIDC actor + organization membership; eligibility каждого Project по тому же `VIEW` rule, что list/detail | bounded read-only projection без domain event | глобальная панель Control Center |
 | `POST /api/v1/workflows/{workflowRef}/commands` | validate/publish/archive | Workflow service | owner resolve + OCC | published version + `workflow.published` | run target catalog |
 | `POST /api/v1/runs` | `LaunchAgent` или `LaunchWorkflow` | Execution service | target resolve, `RUN_LAUNCH`, idempotency | Session/Turn/Run/root node/task + `run.created` | runtime-controller, WS projector |
 | `POST /api/v1/sessions/{sessionRef}/turns` | `EnqueueTurn` | Execution service | session eligibility, FIFO, idempotency | Turn + node/event + `run.turn_queued` | runtime-controller, WS projector |
@@ -100,6 +101,13 @@ Project membership отдельно задаёт typed permissions. Полном
 | assistant conversation endpoints | enqueue system turn/apply typed plan | Assistant + same domain services | user authority preserved per tool | Session/Turn, typed receipts, double attribution | warm assistant runtime, PWA |
 | schedule endpoints | typed schedule commands | Schedule service | target/grants resolved server-side | Schedule/Occurrence + `run.created` | scheduler/runtime-controller |
 | integration endpoints | metadata RPC + typed gateway client | Integration service | grants and secret boundary separated | connection metadata/audit; credential receipt only | integration-gateway, PWA |
+
+Глобальный поиск не является отдельным владельцем данных и не индексирует
+скрытые ресурсы. Gateway передаёт только ограниченные `query` и `limit` через
+generated client; control-plane повторно разрешает actor и organization,
+применяет единое project eligibility правило к Проектам, агентам, Процессам и
+запускам и возвращает только opaque refs с безопасными display metadata.
+Поскольку операция read-only, idempotency, OCC и domain event ей не нужны.
 
 ## Модель выполнения
 

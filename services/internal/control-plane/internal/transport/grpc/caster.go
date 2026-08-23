@@ -142,6 +142,10 @@ func castMembership(value entity.Membership) *controlplanev1.Membership {
 func castProject(value entity.Project) *controlplanev1.Project {
 	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
 }
+func castSearchResult(value entity.SearchResult) *controlplanev1.SearchResult {
+	kind := controlplanev1.SearchResultKind(controlplanev1.SearchResultKind_value["SEARCH_RESULT_KIND_"+value.Kind])
+	return &controlplanev1.SearchResult{Kind: kind, Ref: value.Ref, ProjectRef: value.ProjectRef, Title: value.Title, Subtitle: value.Subtitle, State: value.State, UpdatedAt: timestamp(value.UpdatedAt)}
+}
 func castCapability(value entity.IntegrationCapability) *controlplanev1.PlatformCapability {
 	return &controlplanev1.PlatformCapability{Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Risk, AvailableWithoutIntegration: strings.HasPrefix(value.Key, "platform.")}
 }

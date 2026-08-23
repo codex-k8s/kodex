@@ -62,6 +62,7 @@ import {
   listSchedules,
   listWorkflows,
   resolveOwnerGate,
+  searchPlatform,
   removeProjectMembership,
   removePlatformMembership,
   updateAgent,
@@ -112,6 +113,7 @@ import type {
   Schedule,
   ScheduleCommand,
   ScheduleInput,
+  SearchResult,
   SystemAssistant,
   TurnInput,
   UserSummary,
@@ -143,6 +145,7 @@ type QueryKey =
   | "roleEnvironments"
   | "roleImages"
   | "runtimes"
+  | "search"
   | "workflows"
   | "workflow"
   | "runs"
@@ -184,6 +187,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const administration = ref<AdministrationState>();
   const capabilities = ref<PlatformCapability[]>([]);
   const runtimes = reactive<Record<string, RuntimeSelection>>({});
+  const searchResults = ref<SearchResult[]>([]);
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
   const roleEnvironments = reactive<Record<string, RoleEnvironment>>({});
@@ -314,6 +318,29 @@ export const usePlatformStore = defineStore("platform", () => {
         upsert(runs, value.activeRuns);
         upsert(gates, value.pendingGates);
         upsert(artifacts, value.recentArtifacts);
+      },
+    );
+  }
+
+  async function search(term: string): Promise<void> {
+    const normalized = term.trim();
+    if (normalized.length < 2) {
+      searchResults.value = [];
+      return;
+    }
+    await query(
+      "search",
+      async () =>
+        (
+          await unwrap(
+            searchPlatform({
+              query: { query: normalized, limit: 20 },
+              signal: requestSignal(),
+            }),
+          )
+        ).data,
+      (value) => {
+        searchResults.value = value.items;
       },
     );
   }
@@ -1558,6 +1585,7 @@ export const usePlatformStore = defineStore("platform", () => {
     overview.value = undefined;
     administration.value = undefined;
     capabilities.value = [];
+    searchResults.value = [];
     platformMembershipActions.value = [];
     projectMembershipActions.value = [];
     projectCollectionActions.value = [];
@@ -1577,6 +1605,7 @@ export const usePlatformStore = defineStore("platform", () => {
     administration,
     capabilities,
     runtimes,
+    searchResults,
     projects,
     agents,
     roleEnvironments,
@@ -1609,6 +1638,7 @@ export const usePlatformStore = defineStore("platform", () => {
     gateList,
     loadBootstrap,
     loadOverview,
+    search,
     loadProjects,
     loadProject,
     loadAgents,

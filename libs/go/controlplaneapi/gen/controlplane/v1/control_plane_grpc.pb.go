@@ -24,6 +24,7 @@ const (
 	PlatformQueryService_GetOverview_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetOverview"
 	PlatformQueryService_ListPlatformCapabilities_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
 	PlatformQueryService_ListRuntimeSelections_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
+	PlatformQueryService_SearchPlatform_FullMethodName                   = "/controlplane.v1.PlatformQueryService/SearchPlatform"
 	PlatformQueryService_ListProjects_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListProjects"
 	PlatformQueryService_GetProject_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetProject"
 	PlatformQueryService_ListPlatformMemberships_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
@@ -59,6 +60,7 @@ type PlatformQueryServiceClient interface {
 	GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error)
+	SearchPlatform(ctx context.Context, in *SearchPlatformRequest, opts ...grpc.CallOption) (*SearchPlatformResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -139,6 +141,16 @@ func (c *platformQueryServiceClient) ListRuntimeSelections(ctx context.Context, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRuntimeSelectionsResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_ListRuntimeSelections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) SearchPlatform(ctx context.Context, in *SearchPlatformRequest, opts ...grpc.CallOption) (*SearchPlatformResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchPlatformResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_SearchPlatform_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -394,6 +406,7 @@ type PlatformQueryServiceServer interface {
 	GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error)
 	ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error)
+	SearchPlatform(context.Context, *SearchPlatformRequest) (*SearchPlatformResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -444,6 +457,9 @@ func (UnimplementedPlatformQueryServiceServer) ListPlatformCapabilities(context.
 }
 func (UnimplementedPlatformQueryServiceServer) ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSelections not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) SearchPlatform(context.Context, *SearchPlatformRequest) (*SearchPlatformResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchPlatform not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
@@ -624,6 +640,24 @@ func _PlatformQueryService_ListRuntimeSelections_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).ListRuntimeSelections(ctx, req.(*ListRuntimeSelectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_SearchPlatform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchPlatformRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).SearchPlatform(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_SearchPlatform_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).SearchPlatform(ctx, req.(*SearchPlatformRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1086,6 +1120,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRuntimeSelections",
 			Handler:    _PlatformQueryService_ListRuntimeSelections_Handler,
+		},
+		{
+			MethodName: "SearchPlatform",
+			Handler:    _PlatformQueryService_SearchPlatform_Handler,
 		},
 		{
 			MethodName: "ListProjects",

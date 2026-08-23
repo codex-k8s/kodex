@@ -12,6 +12,11 @@ type Project struct {
 	NextActions                             []string
 }
 
+type SearchResult struct {
+	Kind, Ref, ProjectRef, Title, Subtitle, State string
+	UpdatedAt                                     time.Time
+}
+
 type User struct {
 	Ref, DisplayName, EmailMasked string
 	Active                        bool

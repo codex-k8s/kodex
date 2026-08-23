@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -23,6 +30,9 @@ const { locale, t } = useI18n();
 const mobileOpen = ref(false);
 const online = ref(navigator.onLine);
 const search = ref("");
+const searchInput = ref<HTMLInputElement>();
+const searchOpen = ref(false);
+const mobileSearchOpen = ref(false);
 let disposed = false;
 
 const projectRef = computed(() => {
@@ -85,10 +95,38 @@ function changeProject(event: Event): void {
   else void router.push("/projects");
 }
 
-function submitSearch(): void {
-  if (!search.value.trim()) return;
-  void router.push({ path: "/projects", query: { q: search.value.trim() } });
+async function submitSearch(): Promise<void> {
+  if (search.value.trim().length < 2) {
+    searchOpen.value = true;
+    return;
+  }
+  searchOpen.value = true;
   mobileOpen.value = false;
+  mobileSearchOpen.value = false;
+  await platform.search(search.value);
+}
+
+function openMobileSearch(): void {
+  mobileSearchOpen.value = true;
+  searchOpen.value = false;
+  void nextTick(() => searchInput.value?.focus());
+}
+
+function closeSearch(): void {
+  searchOpen.value = false;
+  mobileSearchOpen.value = false;
+}
+
+function searchResultPath(result: {
+  kind: "PROJECT" | "AGENT" | "WORKFLOW" | "RUN";
+  ref: string;
+  projectRef?: string;
+}): string {
+  if (result.kind === "PROJECT") return `/projects/${result.ref}`;
+  if (result.kind === "RUN") return `/runs/${result.ref}`;
+  const project = encodeURIComponent(result.projectRef ?? "");
+  const resource = result.kind === "AGENT" ? "agents" : "workflows";
+  return `/projects/${project}/${resource}/${encodeURIComponent(result.ref)}`;
 }
 
 function changeLocale(event: Event): void {
@@ -113,6 +151,7 @@ watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false;
+    closeSearch();
   },
 );
 
@@ -157,17 +196,82 @@ onBeforeUnmount(() => {
         <span class="brand-mark" aria-hidden="true">M</span
         ><span>MatterCodex</span>
       </RouterLink>
-      <form class="global-search" role="search" @submit.prevent="submitSearch">
+      <form
+        class="global-search"
+        :class="{ 'global-search--open': mobileSearchOpen }"
+        role="search"
+        @submit.prevent="submitSearch"
+      >
         <label class="sr-only" for="global-search">{{
           $t("app.search")
         }}</label>
         <input
           id="global-search"
+          ref="searchInput"
           v-model="search"
           type="search"
           :placeholder="$t('app.search')"
         />
       </form>
+      <button
+        class="icon-button mobile-only"
+        type="button"
+        :aria-label="$t('app.openSearch')"
+        :aria-expanded="mobileSearchOpen"
+        @click="openMobileSearch"
+      >
+        ⌕
+      </button>
+      <section
+        v-if="searchOpen"
+        class="global-search-results"
+        :aria-label="$t('app.searchResults')"
+        aria-live="polite"
+        @keydown.esc="closeSearch"
+      >
+        <header>
+          <strong>{{ $t("app.searchResults") }}</strong>
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="$t('app.closeSearch')"
+            @click="closeSearch"
+          >
+            ×
+          </button>
+        </header>
+        <p v-if="search.trim().length < 2" class="muted">
+          {{ $t("app.searchHint") }}
+        </p>
+        <p v-else-if="platform.loading.search" class="muted" role="status">
+          {{ $t("common.loading") }}
+        </p>
+        <template v-else-if="platform.problems.search">
+          <p role="alert">{{ platform.problems.search.title }}</p>
+          <button class="button" type="button" @click="submitSearch">
+            {{ $t("common.retry") }}
+          </button>
+        </template>
+        <p v-else-if="platform.searchResults.length === 0" class="muted">
+          {{ $t("app.searchEmpty") }}
+        </p>
+        <div v-else class="search-results-list">
+          <RouterLink
+            v-for="result in platform.searchResults"
+            :key="`${result.kind}:${result.ref}`"
+            class="search-result"
+            :to="searchResultPath(result)"
+            @click="closeSearch"
+          >
+            <span>
+              <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
+              <strong>{{ result.title }}</strong>
+              <span>{{ result.subtitle }}</span>
+            </span>
+            <StatusBadge :state="result.state" />
+          </RouterLink>
+        </div>
+      </section>
       <RouterLink class="decision-link" to="/decisions">
         {{ $t("nav.decisions")
         }}<span v-if="pendingCount" class="count-badge">{{

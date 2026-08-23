@@ -77,6 +77,20 @@ export type Project = {
     nextActions: Array<NextAction>;
 };
 
+export type SearchResult = {
+    kind: 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN';
+    ref: OpaqueRef;
+    projectRef: OpaqueRef;
+    title: string;
+    subtitle: string;
+    state: string;
+    updatedAt: Timestamp;
+};
+
+export type SearchResultPage = {
+    items: Array<SearchResult>;
+};
+
 export type ProjectInput = {
     name: string;
     purpose: string;
@@ -1040,6 +1054,34 @@ export type ListRuntimeSelectionsResponses = {
 };
 
 export type ListRuntimeSelectionsResponse = ListRuntimeSelectionsResponses[keyof ListRuntimeSelectionsResponses];
+
+export type SearchPlatformData = {
+    body?: never;
+    path?: never;
+    query: {
+        query: string;
+        limit?: number;
+    };
+    url: '/api/v1/search';
+};
+
+export type SearchPlatformErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SearchPlatformError = SearchPlatformErrors[keyof SearchPlatformErrors];
+
+export type SearchPlatformResponses = {
+    /**
+     * Доступные actor результаты глобального поиска
+     */
+    200: SearchResultPage;
+};
+
+export type SearchPlatformResponse = SearchPlatformResponses[keyof SearchPlatformResponses];
 
 export type ListProjectsData = {
     body?: never;

@@ -75,6 +75,22 @@ func (server *Server) ListRuntimeSelections(ctx context.Context, _ *controlplane
 	return response, nil
 }
 
+func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev1.SearchPlatformRequest) (*controlplanev1.SearchPlatformResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_SearchPlatform_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), Limit: request.GetLimit()})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.SearchPlatformResponse{}
+	for _, item := range items {
+		response.Results = append(response.Results, castSearchResult(item))
+	}
+	return response, nil
+}
+
 func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.ListProjectsRequest) (*controlplanev1.ListProjectsResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListProjects_FullMethodName)
 	if err != nil {

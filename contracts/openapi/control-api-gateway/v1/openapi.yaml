@@ -120,6 +120,27 @@ paths:
                     items: { $ref: '#/components/schemas/RuntimeSelection' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/search:
+    get:
+      tags: [Search]
+      operationId: searchPlatform
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Доступные actor результаты глобального поиска
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResultPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/projects:
     get:
       tags: [Projects]
@@ -1442,6 +1463,27 @@ components:
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, projectRef, title, subtitle, state, updatedAt]
+      properties:
+        kind: { type: string, enum: [PROJECT, AGENT, WORKFLOW, RUN] }
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        subtitle: { type: string, maxLength: 1000 }
+        state: { type: string, minLength: 1, maxLength: 80 }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    SearchResultPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/SearchResult' }
     ProjectInput:
       type: object
       additionalProperties: false

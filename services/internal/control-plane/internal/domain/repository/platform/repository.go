@@ -91,6 +91,7 @@ type Repository interface {
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
+	Search(context.Context, value.Principal, query.Filter) ([]entity.SearchResult, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, []string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListPlatformMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)

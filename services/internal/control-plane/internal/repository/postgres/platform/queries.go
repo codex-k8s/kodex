@@ -129,6 +129,35 @@ func (repository *Repository) ListRuntimes(ctx context.Context, principal value.
 	return result, rows.Err()
 }
 
+func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, err
+	}
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	rows, err := repository.pool.Query(ctx, queryQueriesSearchSelectEligibleResources,
+		scope.organizationID, scope.role, scope.actorID, filter.Query, limit)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer rows.Close()
+	var result []entity.SearchResult
+	for rows.Next() {
+		var item entity.SearchResult
+		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle, &item.State, &item.UpdatedAt); err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
 func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {

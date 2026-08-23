@@ -93,6 +93,17 @@ func (service *Service) ListRuntimes(ctx context.Context, p value.Principal) ([]
 	}
 	return service.repository.ListRuntimes(ctx, p)
 }
+func (service *Service) Search(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.SearchResult, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if len([]rune(filter.Query)) < 2 || len([]rune(filter.Query)) > 200 {
+		return nil, errs.ErrInvalid
+	}
+	return service.repository.Search(ctx, p, filter)
+}
 func (service *Service) ListProjects(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
