@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -9,6 +10,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
 const route = useRoute();
+const i18n = useI18n();
 const query = ref("");
 const projectRef = computed(() =>
   typeof route.query.projectRef === "string"
@@ -17,6 +19,14 @@ const projectRef = computed(() =>
 );
 const list = computed(() => platform.auditEvents);
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+function auditLabel(
+  group: "executorValue" | "resourceTypeValue",
+  value: string,
+) {
+  const key = `audit.${group}.${value}`;
+  return i18n.te(key) ? i18n.t(key) : value;
+}
 
 function load(): void {
   void platform.loadAudit(projectRef.value, query.value);
@@ -69,15 +79,20 @@ onUnmounted(() => {
           }}</time>
           <div role="cell">
             <strong>{{ event.initiator.displayName }}</strong
-            ><small>{{ event.executor }}</small>
+            ><small>{{ auditLabel("executorValue", event.executor) }}</small>
           </div>
           <div role="cell">
-            <strong>{{ event.action }}</strong
-            ><small>{{ event.safeSummary }}</small>
+            <strong>{{ event.safeSummary }}</strong>
+            <details class="audit-technical">
+              <summary>{{ $t("audit.technicalDetails") }}</summary>
+              <small>{{ $t("audit.operationCode") }}: {{ event.action }}</small>
+            </details>
           </div>
           <div role="cell">
             <strong>{{ event.resourceName }}</strong
-            ><small>{{ event.resourceType }}</small>
+            ><small>{{
+              auditLabel("resourceTypeValue", event.resourceType)
+            }}</small>
           </div>
           <StatusBadge role="cell" :state="event.outcome" />
         </article>
@@ -119,6 +134,11 @@ onUnmounted(() => {
 }
 .audit-table small {
   color: var(--muted);
+}
+.audit-technical summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
 }
 @media (max-width: 800px) {
   .audit-table__header {

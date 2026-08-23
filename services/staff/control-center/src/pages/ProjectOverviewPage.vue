@@ -112,7 +112,7 @@ onMounted(() => void load());
             <p>{{ run.currentActivity ?? run.target.displayName }}</p>
           </div>
           <StatusBadge :state="run.state" /><span>{{
-            run.source
+            $t(`runs.source.${run.source}`)
           }}</span></RouterLink
         >
       </div>

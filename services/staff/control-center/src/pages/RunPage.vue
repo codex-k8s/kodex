@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
       @retry="load"
       ><div v-if="run && graph" class="run-summary">
         <span>{{ run.target.displayName }}</span
-        ><span>{{ run.source }}</span
+        ><span>{{ $t(`runs.source.${run.source}`) }}</span
         ><span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span
         ><RouterLink
           v-if="run.retryOfRunRef"
