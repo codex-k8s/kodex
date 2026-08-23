@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.5.0
-updated: 2026-08-22
+version: 0.5.1
+updated: 2026-08-23
 ---
 
 # Образы и цепочка поставки
@@ -137,8 +137,9 @@ rollback или retry не зависит от прежнего `emptyDir` и н
 подписанных данных.
 
 Ожидающие admission и promotion автоматически запускает
-`image-admission-controller`. Его единственные полномочия — чтение immutable
-policy и ограниченные операции над собственными Job/PVC. Controller не имеет
+`image-admission-controller`. Его единственные полномочия — exact-чтение
+immutable typed policy parameters и их runtime `ConfigMap`-проекции, а также
+ограниченные операции над собственными Job/PVC. Controller не имеет
 control-plane, registry, signing или Vault identity фаз. Kubernetes
 `ValidatingAdmissionPolicy` проверяет caller ServiceAccount и точный phase
 contract: закреплённые образы, команды, env, тома, ServiceAccount и отсутствие

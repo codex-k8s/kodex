@@ -4,8 +4,8 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-08-22
+version: 1.0.1
+updated: 2026-08-23
 ---
 
 # Диагностика автоматического admission образов ролей
@@ -26,7 +26,9 @@ Controller имеет только Kubernetes API token с коротким TTL.
 application grant, registry, signing, Vault либо control-plane credentials.
 Каждая phase Job запускается под собственной identity, а fail-closed
 `ValidatingAdmissionPolicy` разрешает controller создать только точные images,
-commands, env, volumes и ServiceAccount из immutable policy.
+commands, env, volumes и ServiceAccount из immutable typed parameter resource.
+Runtime читает отдельную immutable `ConfigMap`-проекцию; release render обязан
+доказать точное равенство её `data` и `spec` typed resource.
 
 ## Read-only preflight
 
@@ -36,11 +38,12 @@ commands, env, volumes и ServiceAccount из immutable policy.
    projected Kubernetes token не дольше 10 минут.
 3. Проверить `/healthz` и cached `/readyz`. Probe не должен обращаться к
    `control-plane`, registry или другой business service.
-4. Сверить Role: get immutable policy; get/list/create Job; get/list/create/
-   delete PVC. Secret, Pod, Deployment, RoleBinding и update/patch полномочия
-   отсутствуют.
+4. Сверить Role: exact get immutable typed parameters и runtime `ConfigMap`;
+   get/list/create Job; get/list/create/delete PVC. Secret, Pod, Deployment,
+   RoleBinding, list/watch parameters и update/patch полномочия отсутствуют.
 5. Сверить обе admission policy и binding: `failurePolicy: Fail`, действие
-   `Deny`, exact controller username, namespace и immutable ConfigMap parameter.
+   `Deny`, exact controller username, namespace, typed `paramKind` и
+   `parameterNotFoundAction: Deny`.
 6. По metadata Job проверить одну активную admission chain, последовательность
    фаз, отдельный promotion и отсутствие чужих ServiceAccount. Не выводить env
    и volumes работающих Pod: достаточно сравнить canonical render в репозитории.
