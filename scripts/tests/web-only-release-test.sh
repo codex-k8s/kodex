@@ -41,6 +41,7 @@ yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
 grep -Fq 'mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)' \
   "$legacy_resetter" || fail 'incompatible reset does not use the closed release profile selector'
 for cluster_kind in \
+  customresourcedefinitions.apiextensions.k8s.io \
   validatingadmissionpolicies.admissionregistration.k8s.io \
   validatingadmissionpolicybindings.admissionregistration.k8s.io \
   clusterroles.rbac.authorization.k8s.io \
@@ -51,6 +52,10 @@ for cluster_kind in \
 done
 grep -Fq 'verify_release_cluster_scope_absent' "$legacy_resetter" ||
   fail 'incompatible reset does not read back cluster-scope cleanup'
+grep -Fq 'apply_filter custom-resource-definitions' "$fresh_deployer" ||
+  fail 'fresh deploy does not establish custom resource definitions before parameters'
+grep -Fq 'kubectl wait --for=condition=Established' "$fresh_deployer" ||
+  fail 'fresh deploy does not wait for custom resource definition discovery'
 cluster_cleanup_line=$(grep -n '^[[:space:]]*delete_release_cluster_scope$' "$legacy_resetter" |
   cut -d: -f1)
 namespace_cleanup_line=$(grep -n 'kubectl delete namespace "$legacy_namespace"' "$legacy_resetter" |
@@ -201,6 +206,43 @@ for command_contract in \
 done
 [[ "$admission_command_expression" != *'variables.phase]'* ]] ||
   fail 'image admission command CEL contract still contains a heterogeneous list literal'
+
+yq -o=json '
+  select(.kind == "CustomResourceDefinition" and
+    .metadata.name == "imageadmissionpolicyparameters.supplychain.mattercodex.dev")
+' "$render_file" | jq -e '
+  .spec.group == "supplychain.mattercodex.dev" and
+  .spec.scope == "Namespaced" and
+  .spec.versions[0].name == "v1alpha1" and
+  .spec.versions[0].served == true and
+  .spec.versions[0].storage == true and
+  (.spec.versions[0].schema.openAPIV3Schema.properties.spec as $schema |
+    ($schema.required | length) == 28 and
+    ($schema.required | sort) == ($schema.properties | keys | sort) and
+    all($schema.properties[]; .type == "string") and
+    any($schema."x-kubernetes-validations"[]; .rule == "self == oldSelf"))
+' >/dev/null || fail 'typed image admission policy parameter CRD is incomplete'
+
+yq -o=json '
+  select(.kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "mattercodex-image-admission-controller-jobs")
+' "$render_file" | jq -e '
+  .spec.failurePolicy == "Fail" and
+  .spec.paramKind.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+  .spec.paramKind.kind == "ImageAdmissionPolicyParameters" and
+  all(.spec.validations[]; (.expression | contains("params.data.")) | not) and
+  any(.spec.validations[]; .expression | contains("params.spec.policyRevision"))
+' >/dev/null || fail 'image admission policy does not use typed fail-closed parameters'
+
+yq -o=json '
+  select(.kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "mattercodex-image-admission-controller-jobs")
+' "$render_file" | jq -e '
+  .spec.validationActions == ["Deny"] and
+  .spec.paramRef.name == "mattercodex-image-admission-policy" and
+  .spec.paramRef.namespace == "mattercodex-system" and
+  .spec.paramRef.parameterNotFoundAction == "Deny"
+' >/dev/null || fail 'typed image admission policy binding is not fail-closed'
 
 for stateful_set in mattercodex-postgresql mattercodex-nats; do
   STATEFUL_SET="$stateful_set" yq -e '
@@ -397,6 +439,30 @@ yq -e '
   (.data.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
   .data.pullRegistryHost == "roles.example.test"
 ' "$render_file" >/dev/null || fail 'role image release policy was not materialized'
+
+admission_policy_config_map_json=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  .data
+' "$render_file" | jq -Sc .)
+admission_policy_parameters_json=$(yq -o=json -I=0 '
+  select(.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+    .kind == "ImageAdmissionPolicyParameters" and
+    .metadata.name == "mattercodex-image-admission-policy") |
+  .spec
+' "$render_file" | jq -Sc .)
+[[ -n "$admission_policy_parameters_json" &&
+  "$admission_policy_parameters_json" == "$admission_policy_config_map_json" ]] ||
+  fail 'typed image admission parameters drifted from the runtime ConfigMap projection'
+
+yq -o=json '
+  select(.kind == "Role" and .metadata.name == "image-admission-controller")
+' "$render_file" | jq -e '
+  any(.rules[];
+    .apiGroups == ["supplychain.mattercodex.dev"] and
+    .resources == ["imageadmissionpolicyparameters"] and
+    .resourceNames == ["mattercodex-image-admission-policy"] and
+    .verbs == ["get"])
+' >/dev/null || fail 'image admission controller lacks exact typed parameter read access'
 
 role_environment_catalog=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments") | .data."catalog.json"' "$render_file")
 jq -e '

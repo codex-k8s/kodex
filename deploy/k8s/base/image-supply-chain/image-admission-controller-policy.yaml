@@ -5,8 +5,8 @@ metadata:
 spec:
   failurePolicy: Fail
   paramKind:
-    apiVersion: v1
-    kind: ConfigMap
+    apiVersion: supplychain.mattercodex.dev/v1alpha1
+    kind: ImageAdmissionPolicyParameters
   matchConstraints:
     resourceRules:
       - apiGroups: [batch]
@@ -84,11 +84,11 @@ spec:
         object.metadata.annotations['mattercodex.dev/admission-run-id'].matches(
           '^v[0-9]{14}-[a-f0-9]{40}$') &&
         object.metadata.annotations['mattercodex.dev/admission-run-id'].endsWith(
-          '-' + params.data.orchestrationRevision) &&
+          '-' + params.spec.orchestrationRevision) &&
         object.metadata.annotations['mattercodex.dev/admission-run-sha256'].matches(
           '^[a-f0-9]{64}$') &&
         object.metadata.annotations['mattercodex.dev/admission-policy-revision'] ==
-          params.data.policyRevision
+          params.spec.policyRevision
       message: Image admission Job identity is outside the owner contract.
     - expression: >-
         object.spec.backoffLimit == 1 &&
@@ -122,7 +122,7 @@ spec:
     - expression: >-
         variables.pod.containers.size() == 1 &&
         variables.main.name == variables.phase &&
-        variables.main.image == params.data.admissionImage &&
+        variables.main.image == params.spec.admissionImage &&
         variables.main.imagePullPolicy == 'IfNotPresent' &&
         has(variables.main.command) &&
         variables.main.command.size() == 3 &&
@@ -160,20 +160,20 @@ spec:
           !has(item.valueFrom) && has(item.value) &&
           (item.name == 'ADMISSION_RUN_ID' ?
              item.value == object.metadata.annotations['mattercodex.dev/admission-run-id'] :
-           item.name == 'POLICY_REVISION' ? item.value == params.data.policyRevision :
-           item.name == 'POLICY_SHA256' ? item.value == params.data.policySHA256 :
-           item.name == 'ADMISSION_TOOLS_IMAGE' ? item.value == params.data.toolsImage :
-           item.name == 'ADMISSION_IMAGE' ? item.value == params.data.admissionImage :
-           item.name == 'PROMOTION_REPOSITORY' ? item.value == params.data.promotionRepository :
-           item.name == 'PROMOTION_EVIDENCE_REPOSITORY' ? item.value == params.data.promotionEvidenceRepository :
-           item.name == 'EVIDENCE_REPOSITORY' ? item.value == params.data.evidenceRepository :
-           item.name == 'PROMOTED_PULL_REPOSITORY' ? item.value == params.data.promotedPullRepository :
-           item.name == 'EXPECTED_BUILDER_ID' ? item.value == params.data.builderIdentity :
-           item.name == 'EXPECTED_BUILD_TYPE' ? item.value == params.data.buildType :
-           item.name == 'TRUSTED_ROLE_BASE_REPOSITORY' ? item.value == params.data.trustedRoleBaseRepository :
-           item.name == 'TRUSTED_ROLE_BASE_DIGEST' ? item.value == params.data.trustedRoleBaseDigest :
-           item.name == 'ROLE_RUNTIME_CONTRACT_REVISION' ? item.value == params.data.roleRuntimeContractRevision :
-           item.name == 'ROLE_RUNTIME_CONTRACT_SHA256' ? item.value == params.data.roleRuntimeContractSHA256 :
+           item.name == 'POLICY_REVISION' ? item.value == params.spec.policyRevision :
+           item.name == 'POLICY_SHA256' ? item.value == params.spec.policySHA256 :
+           item.name == 'ADMISSION_TOOLS_IMAGE' ? item.value == params.spec.toolsImage :
+           item.name == 'ADMISSION_IMAGE' ? item.value == params.spec.admissionImage :
+           item.name == 'PROMOTION_REPOSITORY' ? item.value == params.spec.promotionRepository :
+           item.name == 'PROMOTION_EVIDENCE_REPOSITORY' ? item.value == params.spec.promotionEvidenceRepository :
+           item.name == 'EVIDENCE_REPOSITORY' ? item.value == params.spec.evidenceRepository :
+           item.name == 'PROMOTED_PULL_REPOSITORY' ? item.value == params.spec.promotedPullRepository :
+           item.name == 'EXPECTED_BUILDER_ID' ? item.value == params.spec.builderIdentity :
+           item.name == 'EXPECTED_BUILD_TYPE' ? item.value == params.spec.buildType :
+           item.name == 'TRUSTED_ROLE_BASE_REPOSITORY' ? item.value == params.spec.trustedRoleBaseRepository :
+           item.name == 'TRUSTED_ROLE_BASE_DIGEST' ? item.value == params.spec.trustedRoleBaseDigest :
+           item.name == 'ROLE_RUNTIME_CONTRACT_REVISION' ? item.value == params.spec.roleRuntimeContractRevision :
+           item.name == 'ROLE_RUNTIME_CONTRACT_SHA256' ? item.value == params.spec.roleRuntimeContractSHA256 :
            item.name == 'HOME' ? item.value == '/tmp' :
            item.name == 'INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET' ? item.value == '/run/mattercodex/internal-rpc-authority/issuer.sock' :
            item.name == 'INTERNAL_RPC_AUTHORITY_LOCAL_ROLE' ? item.value == 'issuer' :
@@ -194,16 +194,16 @@ spec:
             'platform-worker-grant-agent' : '') &&
         (!variables.protected ||
           (variables.pod.initContainers.size() == 3 &&
-           variables.pod.initContainers[0].image == params.data.authorityImage &&
+           variables.pod.initContainers[0].image == params.spec.authorityImage &&
            variables.pod.initContainers[0].command ==
              ['/usr/local/bin/internal-rpc-authority-socket-init'] &&
            variables.pod.initContainers[0].name == 'internal-rpc-authority-socket-init' &&
-           variables.pod.initContainers[1].image == params.data.authorityImage &&
+           variables.pod.initContainers[1].image == params.spec.authorityImage &&
            variables.pod.initContainers[1].command ==
              ['/usr/local/bin/internal-rpc-authority-issuer'] &&
            variables.pod.initContainers[1].name == 'internal-rpc-authority-issuer' &&
            variables.pod.initContainers[1].restartPolicy == 'Always' &&
-           variables.pod.initContainers[2].image == params.data.authorityImage &&
+           variables.pod.initContainers[2].image == params.spec.authorityImage &&
            variables.pod.initContainers[2].command ==
              ['/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent'] &&
            variables.pod.initContainers[2].name == 'platform-worker-grant-agent' &&

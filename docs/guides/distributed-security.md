@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.0
+version: 1.4.1
 updated: 2026-08-23
 ---
 
@@ -518,6 +518,15 @@ applied -> pending -> reload -> exact peer readback -> applied
   `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три
   containers с фиксированными именами/commands. Legacy repository, mutable ref
   и произвольный extra container закрыто отклоняются.
+- Security-критичные параметры `ValidatingAdmissionPolicy` задаются отдельным
+  типизированным namespaced CRD с immutable spec, schema validation и exact
+  `get`-RBAC вызывающего ServiceAccount. Core `ConfigMap` не используется как
+  `paramKind`: его informer lifecycle после delete/recreate не является
+  надёжной fail-closed границей. Если те же значения нужны runtime-компонентам,
+  immutable `ConfigMap` остаётся отдельной проекцией, а release render обязан
+  материализовать оба объекта из одного источника и доказать их точное
+  равенство. `parameterNotFoundAction: Allow`, рестарт API server и расширение
+  `list/watch` не являются допустимым восстановлением.
 
 Kubernetes API не описывается переносимым `podSelector` на компонент
 control-plane. Политика строится из фактического Service ClusterIP и готовых

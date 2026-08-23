@@ -146,8 +146,20 @@ if [[ "$mode" == apply-state ]]; then
     --material-directory "$material_directory" --render "$render_file"
 
   ensure_restore_evidence_anchor
+  apply_filter custom-resource-definitions '
+    select(.kind == "CustomResourceDefinition")
+  '
+  while IFS= read -r custom_resource_definition; do
+    [[ -n "$custom_resource_definition" ]] || continue
+    kubectl wait --for=condition=Established \
+      "customresourcedefinition/$custom_resource_definition" --timeout=2m >/dev/null ||
+      fail "CustomResourceDefinition was not established: $custom_resource_definition"
+  done < <(yq -N -r '
+    select(.kind == "CustomResourceDefinition") | .metadata.name
+  ' "$render_file" | sort -u)
   apply_filter foundation '
-    select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "DaemonSet" and
+    select(.kind != "CustomResourceDefinition" and
+      .kind != "Deployment" and .kind != "StatefulSet" and .kind != "DaemonSet" and
       .kind != "Job" and .kind != "CronJob" and
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
         .metadata.name == "internal-rpc-authority-restore-evidence") | not))

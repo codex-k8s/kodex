@@ -96,11 +96,44 @@ for policy_name in mattercodex-image-admission-controller-jobs \
     exit 1
   }
 done
-yq -e '
-  select(.kind == "Role" and .metadata.name == "image-admission-controller") |
-  ([.rules[].resources[]] | sort | join(",")) == "configmaps,jobs,persistentvolumeclaims"
-' "$temporary_directory/supply.yaml" >/dev/null || {
+yq -o=json '
+  select(.kind == "Role" and .metadata.name == "image-admission-controller")
+' "$temporary_directory/supply.yaml" | jq -e '
+  ([.rules[].resources[]] | sort | join(",")) ==
+    "configmaps,imageadmissionpolicyparameters,jobs,persistentvolumeclaims" and
+  any(.rules[];
+    .apiGroups == ["supplychain.mattercodex.dev"] and
+    .resources == ["imageadmissionpolicyparameters"] and
+    .resourceNames == ["mattercodex-image-admission-policy"] and
+    .verbs == ["get"])
+' >/dev/null || {
   echo "image admission controller RBAC expanded beyond bounded resources" >&2
+  exit 1
+}
+yq -o=json '
+  select(.kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "mattercodex-image-admission-controller-jobs")
+' "$temporary_directory/supply.yaml" | jq -e '
+  .spec.paramKind.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+  .spec.paramKind.kind == "ImageAdmissionPolicyParameters" and
+  all(.spec.validations[]; (.expression | contains("params.data.")) | not) and
+  any(.spec.validations[]; .expression | contains("params.spec.policyRevision"))
+' >/dev/null || {
+  echo "image admission policy does not use typed parameters" >&2
+  exit 1
+}
+fixture_policy_config_map=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  .data
+' "$temporary_directory/supply.yaml" | jq -Sc .)
+fixture_policy_parameters=$(yq -o=json -I=0 '
+  select(.kind == "ImageAdmissionPolicyParameters" and
+    .metadata.name == "mattercodex-image-admission-policy") |
+  .spec
+' "$temporary_directory/supply.yaml" | jq -Sc .)
+[[ -n "$fixture_policy_parameters" &&
+  "$fixture_policy_parameters" == "$fixture_policy_config_map" ]] || {
+  echo "typed admission policy parameters drifted from ConfigMap projection" >&2
   exit 1
 }
 if grep -Fq 'component: kube-apiserver' "$temporary_directory/supply.yaml" ||
@@ -158,7 +191,7 @@ fi
 [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'pullCredentialGeneration: "0"' \
-  "$temporary_directory/supply.yaml") -eq 1 ]]
+  "$temporary_directory/supply.yaml") -eq 2 ]]
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"

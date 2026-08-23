@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.2.1
+version: 1.2.2
 updated: 2026-08-23
 ---
 
@@ -107,8 +107,14 @@ hosts передаются параметрами deployment environment. Реп
    и повторяющиеся resource identities.
 8. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
    image PKI и static material, создаёт bootstrap restore evidence anchor только
-   при его отсутствии, затем применяет non-workload resources, PostgreSQL и
-   NATS и материализует database credentials. Существующий anchor только
+   при его отсутствии, отдельно применяет release-owned CRD и ждёт состояния
+   `Established`, затем применяет typed admission parameters, остальные
+   non-workload resources, PostgreSQL и NATS и материализует database
+   credentials. Image admission использует immutable typed parameter resource;
+   runtime-компоненты читают точную immutable `ConfigMap`-проекцию тех же
+   значений. Отсутствие CR, drift двух проекций или попытка заменить
+   `parameterNotFoundAction: Deny` является ошибкой release, а не основанием
+   перезапускать API server. Существующий anchor только
    проверяется по обязательной форме и не переписывается render-ом: продвинуть
    его вправе исключительно PITR executor через forward-only policy. Первый
    verified Vault database connect может попасть в короткий restart PostgreSQL

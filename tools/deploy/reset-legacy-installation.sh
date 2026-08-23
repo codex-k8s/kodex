@@ -40,6 +40,7 @@ shared_namespace=matter-kodex-prod
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 release_profile_selector='mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)'
 release_cluster_resource_kinds=(
+  customresourcedefinitions.apiextensions.k8s.io
   validatingadmissionpolicies.admissionregistration.k8s.io
   validatingadmissionpolicybindings.admissionregistration.k8s.io
   clusterroles.rbac.authorization.k8s.io

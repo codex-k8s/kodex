@@ -268,6 +268,22 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   )
 ' "$rendered"
 
+admission_policy_json=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  .data
+' "$rendered")
+[[ -n "$admission_policy_json" && "$admission_policy_json" != "null" ]] ||
+  fail 'image admission policy projection is absent'
+ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
+  with(select(
+    .apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+    .kind == "ImageAdmissionPolicyParameters" and
+    .metadata.name == "mattercodex-image-admission-policy"
+  );
+    .spec = (strenv(ADMISSION_POLICY_JSON) | from_json)
+  )
+' "$rendered"
+
 role_environment_catalog=$(jq -cn \
   --arg source_revision "$source_sha" \
   --arg source_sha256 "$role_input_source_sha256" \
