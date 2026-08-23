@@ -416,9 +416,23 @@ yq -o=json 'select(.kind == "NetworkPolicy" and
     .spec.policyTypes == ["Ingress"] and
     (.spec.ingress | length) == 1 and
     .spec.ingress[0].ports == [{"protocol":"TCP","port":8200}] and
-    .spec.ingress[0].from == [{"podSelector":{"matchLabels":{
-      "app.kubernetes.io/name":"vault-csi-provider"}}}]
-  ' >/dev/null || fail 'Vault ingress does not expose the exact CSI provider path'
+    (.spec.ingress[0].from | length) == 2 and
+    any(.spec.ingress[0].from[];
+      . == {"podSelector":{"matchLabels":{
+        "app.kubernetes.io/name":"vault-csi-provider"}}}) and
+    any(.spec.ingress[0].from[];
+      . == {
+        "namespaceSelector":{"matchLabels":{
+          "kubernetes.io/metadata.name":"vault-secrets-operator-system"}},
+        "podSelector":{"matchLabels":{
+          "app.kubernetes.io/name":"vault-secrets-operator"}}
+      }) and
+    all(.spec.ingress[0].from[];
+      has("podSelector") and
+      ((has("namespaceSelector") | not) or
+        .namespaceSelector.matchLabels == {
+          "kubernetes.io/metadata.name":"vault-secrets-operator-system"}))
+  ' >/dev/null || fail 'Vault ingress does not expose the exact CSI and Vault Secrets Operator paths'
 
 for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw nats; do
   SERVICE="$service" yq -e '

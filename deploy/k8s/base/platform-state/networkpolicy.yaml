@@ -59,6 +59,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: vault-csi-provider
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vault-secrets-operator-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault-secrets-operator
       ports:
         - protocol: TCP
           port: 8200
