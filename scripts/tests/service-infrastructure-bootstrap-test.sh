@@ -10,8 +10,23 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 bootstrap="$repository_root/infra/service-infrastructure/bootstrap.sh"
 vault_bootstrap="$repository_root/infra/service-infrastructure/vault-bootstrap.yaml"
 vault_initializer="$repository_root/tools/deploy/bootstrap-vault.sh"
+keycloak_bootstrap="$repository_root/tools/deploy/configure-keycloak.sh"
 
-bash -n "$bootstrap" "$vault_initializer"
+bash -n "$bootstrap" "$vault_initializer" "$keycloak_bootstrap"
+
+for secret_bootstrap in "$vault_initializer" "$keycloak_bootstrap"; do
+  grep -Fq 'read_single_line_secret()' "$secret_bootstrap" ||
+    fail "single-line secret validator is absent: ${secret_bootstrap#"$repository_root"/}"
+  if rg -q '\{ cat "\$[^;]+"; printf '\''\\n'\''' "$secret_bootstrap"; then
+    fail "secret bootstrap can insert an empty framing record: ${secret_bootstrap#"$repository_root"/}"
+  fi
+done
+grep -Fq '{ printf '\''%s\n'\'' "$root_token"; cat "$file_path"; }' "$vault_initializer" ||
+  fail 'Vault KV payload is not preserved byte-for-byte after token framing'
+grep -Fq 'printf '\''%s\n%s\n'\'' "$database_password" "$role_password"' "$vault_initializer" ||
+  fail 'PostgreSQL role password framing is not canonical'
+grep -Fq 'printf '\''%s\n%s\n%s\n'\'' "$admin_client_id" "$admin_client_secret" "$owner_password"' \
+  "$keycloak_bootstrap" || fail 'Keycloak owner credential framing is not canonical'
 
 grep -Fq 'require_ready_deployment_by_selector cert-manager' "$bootstrap" ||
   fail 'trust-manager does not use the strict deployment readback'

@@ -77,9 +77,20 @@ require_root_material() {
   done
 }
 
+read_single_line_secret() {
+  local file_path=$1 label=$2 value
+  [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail "$label is absent"
+  value=$(<"$file_path")
+  [[ -n "$value" && "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
+    fail "$label must be a non-empty single line"
+  printf '%s' "$value"
+}
+
 vault_cli() {
+  local root_token
   require_root_material
-  { cat "$root_token_file"; printf '\n'; } |
+  root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
+  printf '%s\n' "$root_token" |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
@@ -89,10 +100,11 @@ vault_cli() {
 }
 
 vault_input() {
-  local input_file=$1
+  local input_file=$1 root_token
   shift
   require_root_material
-  { cat "$root_token_file"; printf '\n'; cat "$input_file"; } |
+  root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
+  { printf '%s\n' "$root_token"; cat "$input_file"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
@@ -102,12 +114,13 @@ vault_input() {
 }
 
 vault_kv_put_file() {
-  local path=$1 key=$2 file_path=$3
+  local path=$1 key=$2 file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
     fail 'Vault KV seed path must be relative to the canonical mount'
   [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
   require_root_material
-  { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
+  root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
+  { printf '%s\n' "$root_token"; cat "$file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
@@ -117,12 +130,13 @@ vault_kv_put_file() {
 }
 
 vault_kv_patch_file() {
-  local path=$1 key=$2 file_path=$3
+  local path=$1 key=$2 file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
     fail 'Vault KV seed path must be relative to the canonical mount'
   [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
   require_root_material
-  { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
+  root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
+  { printf '%s\n' "$root_token"; cat "$file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
@@ -309,9 +323,11 @@ if [[ "$mode" == configure-database ]]; then
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
+  database_password=$(read_single_line_secret "$database_password_file" 'PostgreSQL bootstrap password')
   for role in control_plane_migrator control_plane_runtime_g1 internal_rpc_authority_migrator; do
     openssl rand -base64 48 >"$temporary_directory/$role"
-    { cat "$database_password_file"; printf '\n'; cat "$temporary_directory/$role"; printf '\n'; } |
+    role_password=$(read_single_line_secret "$temporary_directory/$role" 'generated PostgreSQL role password')
+    printf '%s\n%s\n' "$database_password" "$role_password" |
       kubectl -n mattercodex-system exec -i mattercodex-postgresql-0 -- sh -ec '
         IFS= read -r PGPASSWORD
         IFS= read -r role_password
@@ -321,7 +337,7 @@ if [[ "$mode" == configure-database ]]; then
       ' sh "$role" >/dev/null
   done
 
-  database_connection="postgresql://postgres:$(jq -rn --arg value "$(<"$database_password_file")" '$value|@uri')@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
+  database_connection="postgresql://postgres:$(jq -rn --arg value "$database_password" '$value|@uri')@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
   jq -cn --arg connection "$database_connection" '{
     plugin_name:"postgresql-database-plugin",
     allowed_roles:"control-plane-migrator,control-plane-runtime-g1,internal-rpc-authority-migrator,internal-rpc-authority-publisher-g3,internal-rpc-authority-publisher-g4,internal-rpc-authority-publisher-g5,internal-rpc-authority-readback-attestor-g3,internal-rpc-authority-readback-attestor-g4,internal-rpc-authority-readback-attestor-g5",
@@ -357,8 +373,9 @@ if [[ "$mode" == configure-database ]]; then
 
   write_dsn() {
     local vault_path=$1 username=$2 password_file=$3 database=$4 ca_file=$5
-    local encoded_password
-    encoded_password=$(jq -rn --arg value "$(<"$password_file")" '$value|@uri')
+    local encoded_password password
+    password=$(read_single_line_secret "$password_file" 'generated PostgreSQL role password')
+    encoded_password=$(jq -rn --arg value "$password" '$value|@uri')
     printf 'postgresql://%s:%s@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/%s?sslmode=verify-full&sslrootcert=%s\n' \
       "$username" "$encoded_password" "$database" "$ca_file" >"$temporary_directory/dsn"
     vault_kv_put_file "$vault_path" dsn "$temporary_directory/dsn"
@@ -382,9 +399,12 @@ if [[ "$mode" == configure-database-runtime ]]; then
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
+  database_password=$(read_single_line_secret "$database_password_file" 'PostgreSQL bootstrap password')
 
   openssl rand -base64 48 >"$temporary_directory/ira_database_credential_reconciler"
-  { cat "$database_password_file"; printf '\n'; cat "$temporary_directory/ira_database_credential_reconciler"; printf '\n'; } |
+  reconciler_password=$(read_single_line_secret \
+    "$temporary_directory/ira_database_credential_reconciler" 'generated PostgreSQL reconciler password')
+  printf '%s\n%s\n' "$database_password" "$reconciler_password" |
     kubectl -n mattercodex-system exec -i mattercodex-postgresql-0 -- sh -ec '
       IFS= read -r PGPASSWORD
       IFS= read -r role_password
@@ -392,7 +412,7 @@ if [[ "$mode" == configure-database-runtime ]]; then
       printf "ALTER ROLE ira_database_credential_reconciler PASSWORD '\''%s'\'';\n" "$role_password" |
         psql --host=127.0.0.1 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1
     ' >/dev/null
-  encoded_password=$(jq -rn --arg value "$(<"$temporary_directory/ira_database_credential_reconciler")" '$value|@uri')
+  encoded_password=$(jq -rn --arg value "$reconciler_password" '$value|@uri')
   printf 'postgresql://ira_database_credential_reconciler:%s@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
     "$encoded_password" >"$temporary_directory/reconciler-dsn"
   vault_kv_put_file internal-rpc-authority/database-credential-reconciler dsn \

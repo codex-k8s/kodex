@@ -118,6 +118,9 @@ hosts передаются параметрами deployment environment. Реп
    только точным внутренним workload и Vault database engine в этом же
    namespace; отсутствие пути от `app.kubernetes.io/name=vault` является
    ошибкой render, а не основанием расширять CIDR или отключать policy/TLS.
+   Однострочные credentials передаются между host и Pod как ровно одна запись;
+   уже завершённый LF secret-файла не дополняется вторым delimiter. Следующий
+   произвольный Vault KV payload сохраняется байт-в-байт без ведущего LF.
 9. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
