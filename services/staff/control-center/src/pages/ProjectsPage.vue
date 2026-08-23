@@ -44,7 +44,12 @@ async function submit(): Promise<void> {
   }
 }
 
-onMounted(() => void platform.loadProjects());
+async function load(): Promise<void> {
+  await platform.loadProjects();
+  if (route.query.create === "1" && canCreate.value) dialog.value = true;
+}
+
+onMounted(() => void load());
 </script>
 
 <template>

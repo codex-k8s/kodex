@@ -17,6 +17,7 @@ const ru = {
     reconnecting: "Восстанавливаем realtime-соединение…",
     navigation: "Основная навигация",
     projectNavigation: "Навигация Проекта",
+    breadcrumbs: "Навигационная цепочка",
     menu: "Меню",
   },
   nav: {
@@ -116,6 +117,12 @@ const ru = {
     projects: "Проекты",
     agents: "ИИ-сотрудники",
     newRun: "Новый запуск",
+    launchWork: "Запустить работу",
+    metrics: "Сводные показатели",
+    quickStart: "Быстрый старт",
+    chooseProject: "Выберите Проект",
+    chooseProjectText: "Действие будет выполнено в выбранном Проекте.",
+    noEligibleProject: "Нет доступного Проекта для этого действия.",
   },
   projects: {
     title: "Проекты",
@@ -596,6 +603,7 @@ const en = {
     reconnecting: "Restoring realtime connection…",
     navigation: "Main navigation",
     projectNavigation: "Project navigation",
+    breadcrumbs: "Breadcrumbs",
     menu: "Menu",
   },
   nav: {
@@ -699,6 +707,12 @@ const en = {
     projects: "Projects",
     agents: "AI employees",
     newRun: "New run",
+    launchWork: "Start work",
+    metrics: "Summary metrics",
+    quickStart: "Quick start",
+    chooseProject: "Choose a Project",
+    chooseProjectText: "The action will be performed in the selected Project.",
+    noEligibleProject: "No Project is available for this action.",
   },
   projects: {
     ...ru.projects,

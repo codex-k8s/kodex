@@ -162,6 +162,15 @@ async function load(): Promise<void> {
     platform.loadArtifacts(projectRef.value),
     platform.loadAgents(projectRef.value),
   ]);
+  const requested =
+    typeof route.query.artifactRef === "string"
+      ? route.query.artifactRef
+      : undefined;
+  if (
+    requested &&
+    platform.artifacts[requested]?.projectRef === projectRef.value
+  )
+    selectArtifact(requested);
 }
 
 async function upload(event: Event): Promise<void> {

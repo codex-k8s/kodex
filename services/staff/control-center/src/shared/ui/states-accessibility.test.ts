@@ -98,6 +98,21 @@ describe("authoritative UI states and accessibility", () => {
     },
   );
 
+  it("использует безопасный локализованный title из API", async () => {
+    const problem = new AppProblem({
+      status: 503,
+      code: "UNAVAILABLE",
+      retryable: true,
+      kind: "unavailable",
+      title: "Сервис временно недоступен",
+      detail: "raw-provider-secret-must-not-render",
+    });
+    const html = await render(AsyncState, { problem });
+
+    expect(html).toContain("Сервис временно недоступен");
+    expect(html).not.toContain("raw-provider-secret-must-not-render");
+  });
+
   it("задаёт dialog semantics и блокирует закрытие busy-формы", async () => {
     const html = await render(ModalDialog, {
       title: "Новый сотрудник",

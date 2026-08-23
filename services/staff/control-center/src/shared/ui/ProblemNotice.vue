@@ -8,6 +8,7 @@ const props = defineProps<{ problem?: AppProblem; compact?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
 const translator = useI18n();
 const message = computed(() => {
+  if (props.problem?.title) return props.problem.title;
   const key = `errors.${props.problem?.code ?? "default"}`;
   return translator.te(key)
     ? translator.t(key)

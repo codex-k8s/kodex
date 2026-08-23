@@ -59,14 +59,16 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
-onMounted(
-  () =>
-    void Promise.all([
-      platform.loadProject(projectRef.value),
-      platform.loadAgents(projectRef.value),
-      platform.loadRuntimes(),
-    ]),
-);
+async function load(): Promise<void> {
+  await Promise.all([
+    platform.loadProject(projectRef.value),
+    platform.loadAgents(projectRef.value),
+    platform.loadRuntimes(),
+  ]);
+  if (route.query.create === "1") openDialog();
+}
+
+onMounted(() => void load());
 </script>
 
 <template>

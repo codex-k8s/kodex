@@ -46,14 +46,21 @@ async function submit() {
     busy.value = false;
   }
 }
-onMounted(
-  () =>
-    void Promise.all([
-      platform.loadWorkflows(projectRef.value),
-      platform.loadAgents(projectRef.value),
-      platform.loadProject(projectRef.value),
-    ]),
-);
+async function load(): Promise<void> {
+  await Promise.all([
+    platform.loadWorkflows(projectRef.value),
+    platform.loadAgents(projectRef.value),
+    platform.loadProject(projectRef.value),
+  ]);
+  if (
+    route.query.create === "1" &&
+    canCreate.value &&
+    agentList.value.length > 0
+  )
+    dialog.value = true;
+}
+
+onMounted(() => void load());
 </script>
 <template>
   <PageFrame :title="$t('workflows.title')" :subtitle="$t('workflows.subtitle')"

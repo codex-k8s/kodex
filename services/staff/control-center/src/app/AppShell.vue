@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
     </aside>
 
     <div id="main-content" class="app-content">
-      <div class="breadcrumbs" aria-label="Breadcrumb">
+      <div class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
         <RouterLink to="/">{{ $t("nav.home") }}</RouterLink>
         <template v-if="project">
           <span aria-hidden="true">/</span
