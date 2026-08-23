@@ -38,7 +38,7 @@ func TestReadCredentialAllowsProjectedSymlinkInsideRoot(t *testing.T) {
 	if err := os.Mkdir(versioned, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(versioned, "token"), []byte("secret-value"), 0o640); err != nil {
+	if err := os.WriteFile(filepath.Join(versioned, "token"), []byte("secret-value"), 0o444); err != nil {
 		t.Fatal(err)
 	}
 	binding := filepath.Join(root, "github-main")

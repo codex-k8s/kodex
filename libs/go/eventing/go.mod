@@ -3,10 +3,13 @@ module github.com/codex-k8s/matter-codex/libs/go/eventing
 go 1.26.6
 
 require (
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/nats-io/nats.go v1.52.0
 )
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../securefile
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

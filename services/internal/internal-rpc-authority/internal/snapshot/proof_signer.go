@@ -27,7 +27,7 @@ func VerifyProofSigner(
 		expectedGeneration == 0 {
 		return errors.New("authority proof signer expectation is invalid")
 	}
-	privateRaw, err := readRegularFile(privateJWKFile, maxKeyFileBytes, 0o007)
+	privateRaw, err := readRegularFile(privateJWKFile, maxKeyFileBytes)
 	if err != nil {
 		return errors.New("read authority proof signer private key")
 	}
@@ -35,7 +35,7 @@ func VerifyProofSigner(
 	if err != nil {
 		return errors.New("parse authority proof signer private key")
 	}
-	trustRaw, err := readRegularFile(proofTrustJWKFile, maxKeyFileBytes, 0)
+	trustRaw, err := readRegularFile(proofTrustJWKFile, maxKeyFileBytes)
 	if err != nil {
 		return errors.New("read authority proof signer trust")
 	}

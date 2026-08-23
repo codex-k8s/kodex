@@ -7,13 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
@@ -733,25 +732,11 @@ func sameExactMaterial(left, right map[string]string) bool {
 }
 
 func readGraphFile(path string, limit int64) ([]byte, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	value, err := securefile.Read(path, limit)
 	if err != nil {
-		return nil, err
-	}
-	relative, err := filepath.Rel(filepath.Dir(path), resolved)
-	if err != nil ||
-		relative == ".." ||
-		filepath.IsAbs(relative) ||
-		strings.HasPrefix(relative, "../") {
-		return nil, errors.New("authority graph file escapes its mounted directory")
-	}
-	info, err := os.Stat(resolved)
-	if err != nil ||
-		!info.Mode().IsRegular() ||
-		info.Size() <= 0 ||
-		info.Size() > limit {
 		return nil, errors.New("authority graph file is unsafe")
 	}
-	return os.ReadFile(resolved)
+	return value, nil
 }
 
 func deterministicUUID(parts ...string) string {

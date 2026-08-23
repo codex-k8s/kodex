@@ -4,7 +4,7 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.0.1
 updated: 2026-07-28
 ---
 
@@ -228,6 +228,21 @@ publish acknowledgement и error classification, но не знает домен
 - zero/plaintext-minimizing API.
 
 Библиотека не выбирает TTL, назначение token или бизнесовую политику отзыва.
+
+### `securefile`
+
+Единая проверка projected credential/config files:
+
+- symlink остаётся внутри точного mount root;
+- читается только regular file ограниченного размера;
+- допустимы только exact read-only modes `0400`, `0440` и `0444`;
+- write/execute permissions, пустой или изменившийся при чтении файл приводят к
+  закрытому отказу;
+- ошибки не раскрывают путь и содержимое.
+
+Библиотека не определяет формат credential и не делает `0444` безопасным вне
+изолированного read-only container mount. Эта граница доказывается итоговым
+Kubernetes render по `GUIDE-DOC-003`.
 
 ### `postgrescredential`
 

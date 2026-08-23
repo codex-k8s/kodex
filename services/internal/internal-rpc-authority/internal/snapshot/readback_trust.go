@@ -118,7 +118,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	rootRaw, err := readRegularFile(options.RootPublicJWKFile, maxKeyFileBytes, 0)
+	rootRaw, err := readRegularFile(options.RootPublicJWKFile, maxKeyFileBytes)
 	if err != nil {
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("read immutable readback root key: %w", err)
 	}
@@ -126,7 +126,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if err != nil {
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("parse immutable readback root key: %w", err)
 	}
-	metadataRaw, err := readRegularFile(options.RootMetadataFile, maxKeyFileBytes, 0)
+	metadataRaw, err := readRegularFile(options.RootMetadataFile, maxKeyFileBytes)
 	if err != nil {
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("read immutable readback root metadata: %w", err)
 	}
@@ -161,7 +161,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 		!now.Before(time.Unix(root.NotAfter, 0)) {
 		return nil, ReadbackTrustMetadata{}, errors.New("immutable readback root binding rejected")
 	}
-	bundleRaw, err := readRegularFile(options.ManifestBundleJWSFile, maxSnapshotBytes, 0o004)
+	bundleRaw, err := readRegularFile(options.ManifestBundleJWSFile, maxSnapshotBytes)
 	if err != nil {
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("read signed readback manifest bundle: %w", err)
 	}
@@ -227,7 +227,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if currentCount != 1 {
 		return nil, ReadbackTrustMetadata{}, errors.New("readback manifest bundle must contain one CURRENT signer")
 	}
-	trustRaw, err := readRegularFile(options.CredentialTrustJWSFile, maxSnapshotBytes, 0o004)
+	trustRaw, err := readRegularFile(options.CredentialTrustJWSFile, maxSnapshotBytes)
 	if err != nil {
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("read readback credential trust snapshot: %w", err)
 	}

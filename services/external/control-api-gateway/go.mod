@@ -10,6 +10,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/oidcverifier v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
@@ -75,5 +76,7 @@ replace github.com/codex-k8s/matter-codex/libs/go/oidcverifier => ../../../libs/
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
 
 replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver

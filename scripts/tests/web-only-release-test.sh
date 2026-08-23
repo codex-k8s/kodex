@@ -6,6 +6,49 @@ fail() {
   exit 1
 }
 
+verify_csi_secret_mounts() {
+  local render_file=$1
+  local secret_provider_class_count=0
+
+  while IFS=$'\t' read -r provider_class encoded_objects; do
+    if [[ -z "$provider_class" && -z "$encoded_objects" ]]; then
+      continue
+    fi
+    [[ -n "$provider_class" && -n "$encoded_objects" ]] ||
+      fail 'rendered SecretProviderClass has no bounded objects'
+    printf '%s' "$encoded_objects" | base64 -d | yq -o=json '.' |
+      jq -e '(length > 0) and all(.[]; .filePermission == 292)' >/dev/null ||
+      fail "SecretProviderClass does not use exact read-only mode 0444: $provider_class"
+    ((secret_provider_class_count += 1))
+  done < <(yq -N -r '
+    select(.kind == "SecretProviderClass") |
+    [.metadata.name, (.spec.parameters.objects | @base64)] | @tsv
+  ' "$render_file")
+  ((secret_provider_class_count > 0)) || fail 'release render has no SecretProviderClass objects'
+
+  yq -o=json 'select(.spec.template.spec != null)' "$render_file" |
+    jq -s -e '
+      length > 0 and all(.[];
+        . as $workload |
+        ($workload.spec.template.spec.volumes // [] |
+          map(select(.csi.driver == "secrets-store.csi.k8s.io")) |
+          map(.name)) as $csi_volumes |
+        all($csi_volumes[];
+          . as $volume_name |
+          (($workload.spec.template.spec.volumes[] |
+            select(.name == $volume_name) | .csi.readOnly) == true) and
+          ([
+            (($workload.spec.template.spec.initContainers // []) +
+             ($workload.spec.template.spec.containers // []))[] |
+            (.volumeMounts // [])[] |
+            select(.name == $volume_name) |
+            .readOnly
+          ] | length > 0 and all(.[]; . == true))
+        )
+      )
+    ' >/dev/null || fail 'CSI secret volume or container mount is not read-only'
+}
+
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
@@ -153,6 +196,9 @@ fi
 if rg -ni 'bot-service|legacy-data-migration|mattermostMode' "$render_file" >/dev/null; then
   fail 'web-only render contains a retired interaction unit'
 fi
+
+verify_csi_secret_mounts "$render_file"
+
 if yq -e '
   select(
     (.kind == "Deployment" or .kind == "Service" or .kind == "ServiceAccount" or
@@ -564,6 +610,8 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --ingress-namespace ingress-system --ingress-pod-name public-ingress \
   --oidc-namespace identity --oidc-pod-name sso \
   --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
+
+verify_csi_secret_mounts "$mattermost_render"
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gateway")' "$mattermost_render" |
   jq -e '

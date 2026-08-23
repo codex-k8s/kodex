@@ -6,13 +6,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -270,12 +270,11 @@ func validateConfig(config Config) error {
 		config.ConnectTimeout > 10*time.Second {
 		return errors.New("NATS JetStream configuration is invalid")
 	}
-	credentials, err := os.Stat(config.CredentialsFile)
-	if err != nil || !credentials.Mode().IsRegular() ||
-		credentials.Size() <= 0 || credentials.Size() > maximumRuntimeFileBytes ||
-		credentials.Mode().Perm()&0o007 != 0 {
+	credentials, err := securefile.Read(config.CredentialsFile, maximumRuntimeFileBytes)
+	if err != nil {
 		return errors.New("NATS credential file is unsafe")
 	}
+	clear(credentials)
 	seen := make(map[string]struct{}, len(config.Subjects))
 	for _, subject := range config.Subjects {
 		if !validSubjectFilter(subject) {
@@ -309,14 +308,17 @@ func validSubjectFilter(subject string) bool {
 }
 
 func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.Certificate, error) {
-	for _, path := range []string{certificateFile, privateKeyFile} {
-		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 ||
-			info.Size() > maximumRuntimeFileBytes || info.Mode().Perm()&0o007 != 0 {
-			return tls.Certificate{}, errors.New("NATS client identity file is unsafe")
-		}
+	certificateRaw, err := securefile.Read(certificateFile, maximumRuntimeFileBytes)
+	if err != nil {
+		return tls.Certificate{}, errors.New("NATS client identity file is unsafe")
 	}
-	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
+	defer clear(certificateRaw)
+	privateKeyRaw, err := securefile.Read(privateKeyFile, maximumRuntimeFileBytes)
+	if err != nil {
+		return tls.Certificate{}, errors.New("NATS client identity file is unsafe")
+	}
+	defer clear(privateKeyRaw)
+	certificate, err := tls.X509KeyPair(certificateRaw, privateKeyRaw)
 	if err != nil {
 		return tls.Certificate{}, errors.New("load NATS client identity")
 	}
@@ -324,14 +326,9 @@ func loadClientCertificate(certificateFile string, privateKeyFile string) (tls.C
 }
 
 func loadCertificatePool(path string) (*x509.CertPool, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 ||
-		info.Size() > maximumRuntimeFileBytes || info.Mode().Perm()&0o007 != 0 {
-		return nil, errors.New("NATS CA file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, maximumRuntimeFileBytes)
 	if err != nil {
-		return nil, errors.New("read NATS CA file")
+		return nil, errors.New("NATS CA file is unsafe")
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(raw) {

@@ -14,11 +14,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
@@ -683,20 +683,9 @@ func (store *Store) apiRequest(
 }
 
 func readBoundToken(path string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	raw, err := securefile.Read(path, 16<<10)
 	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() ||
-		info.Mode().Perm()&0o007 != 0 ||
-		info.Size() <= 0 ||
-		info.Size() > 16<<10 {
 		return "", errors.New("workload token file is unsafe")
-	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil {
-		return "", err
 	}
 	token := strings.TrimSpace(string(raw))
 	if token == "" || len(token) > 16<<10 {

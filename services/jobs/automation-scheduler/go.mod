@@ -18,6 +18,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0 // indirect
+	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -58,3 +59,5 @@ replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../li
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile

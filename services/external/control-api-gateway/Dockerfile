@@ -15,6 +15,7 @@ COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
+COPY libs/go/securefile/ libs/go/securefile/
 COPY services/external/control-api-gateway/ services/external/control-api-gateway/
 
 WORKDIR /workspace/services/external/control-api-gateway

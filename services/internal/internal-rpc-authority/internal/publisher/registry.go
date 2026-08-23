@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"go.yaml.in/yaml/v2"
 )
@@ -108,13 +108,9 @@ type registryTarget struct {
 
 // LoadRegistry читает и строго проверяет реестр целей доставки.
 func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 {
-		return model.DeliveryTargetRegistry{}, errors.New("publisher target registry file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := securefile.Read(path, 1<<20)
 	if err != nil {
-		return model.DeliveryTargetRegistry{}, errors.New("read publisher target registry")
+		return model.DeliveryTargetRegistry{}, errors.New("publisher target registry file is unsafe")
 	}
 	var document registryDocument
 	if err := yaml.UnmarshalStrict(raw, &document); err != nil ||
