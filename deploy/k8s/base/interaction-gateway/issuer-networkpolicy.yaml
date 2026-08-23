@@ -35,7 +35,7 @@ spec:
               kubernetes.io/metadata.name: mattercodex-system
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-postgresql
+              app.kubernetes.io/name: mattercodex-postgresql
       ports:
         - {protocol: TCP, port: 5432}
     - to:

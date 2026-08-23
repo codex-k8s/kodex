@@ -76,7 +76,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: control-plane-postgresql
+              app.kubernetes.io/name: mattercodex-postgresql
       ports:
         - protocol: TCP
           port: 5432
@@ -148,7 +148,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: control-plane-postgresql
+              app.kubernetes.io/name: mattercodex-postgresql
       ports:
         - protocol: TCP
           port: 5432

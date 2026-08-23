@@ -240,6 +240,11 @@ destination-less TCP/5432 запрещены. Runtime, migration и bootstrap ro
 разделяются по permissions; schema credential не монтируется в application
 container.
 
+Service DNS alias разделяет базы и TLS identities логически, но не меняет labels
+одного PostgreSQL workload. Поэтому egress и ingress `NetworkPolicy` выбирают
+канонический label фактического StatefulSet, а не имя `*-postgresql-rw` Service.
+Итоговый render проверяет обе стороны пути для каждого migration/runtime client.
+
 ## Vault, TLS и namespace-local secret graph
 
 До применения `VaultStaticSecret` environment materializes Namespace,

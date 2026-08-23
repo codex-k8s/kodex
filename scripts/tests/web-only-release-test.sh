@@ -269,6 +269,40 @@ yq -o=json 'select(.kind == "NetworkPolicy" and
       ($selector.values | sort) == ["control-plane", "internal-rpc-authority", "vault"])
   ' >/dev/null || fail 'PostgreSQL ingress does not expose the exact Vault database engine path'
 
+yq -o=json -I=0 'select(.kind == "NetworkPolicy")' "$render_file" | jq -s -e '
+  all(.[];
+    ([.. | objects | select(has("app.kubernetes.io/name")) |
+      .["app.kubernetes.io/name"]] |
+      all(. != "internal-rpc-authority-postgresql" and . != "control-plane-postgresql"))) and
+  all(.[] | select(any(.spec.egress[]?.ports[]?; .port == 5432));
+    all(.spec.egress[] | select(any(.ports[]?; .port == 5432));
+      all(.to[]; .podSelector.matchLabels["app.kubernetes.io/name"] == "mattercodex-postgresql")))
+' >/dev/null || fail 'PostgreSQL NetworkPolicy points to a DNS alias instead of the actual workload label'
+
+yq -o=json 'select(.kind == "NetworkPolicy" and
+  .metadata.name == "internal-rpc-authority-postgresql-from-migrator")' "$render_file" |
+  jq -e '
+    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"mattercodex-postgresql"} and
+    .spec.ingress == [{
+      "from":[{"podSelector":{"matchLabels":{
+        "app.kubernetes.io/name":"internal-rpc-authority",
+        "app.kubernetes.io/component":"migrator"}}}],
+      "ports":[{"port":5432,"protocol":"TCP"}]
+    }]
+  ' >/dev/null || fail 'PostgreSQL migration ingress does not select the actual workload and exact client'
+
+yq -o=json 'select(.kind == "NetworkPolicy" and
+  .metadata.name == "internal-rpc-authority-postgresql-from-runtime")' "$render_file" |
+  jq -e '
+    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"mattercodex-postgresql"} and
+    any(.spec.ingress[0].from[];
+      .podSelector.matchExpressions == [{
+        "key":"mattercodex.dev/image-admission-phase",
+        "operator":"In",
+        "values":["claim","admit","promote"]
+      }])
+  ' >/dev/null || fail 'PostgreSQL runtime ingress omits the exact image admission clients'
+
 yq -o=json 'select(.kind == "NetworkPolicy" and
   .metadata.name == "platform-vault-from-csi-provider")' "$render_file" |
   jq -e '

@@ -52,7 +52,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-postgresql
+              app.kubernetes.io/name: mattercodex-postgresql
       ports:
         - port: 5432
           protocol: TCP
@@ -84,7 +84,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: internal-rpc-authority-postgresql
+      app.kubernetes.io/name: mattercodex-postgresql
   policyTypes:
     - Ingress
   ingress:
@@ -111,6 +111,11 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: internal-rpc-authority-restore-recovery
+        - podSelector:
+            matchExpressions:
+              - key: mattercodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
       ports:
         - port: 5432
           protocol: TCP
