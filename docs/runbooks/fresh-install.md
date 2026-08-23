@@ -79,7 +79,12 @@ hosts передаются параметрами deployment environment. Реп
    кавычек. Повторная материализация этих пяти файлов из сохранённого `nsc`
    store выполняется только через
    `tools/deploy/materialize-nats-operator-files.sh`; значения команда не
-   выводит.
+   выводит. Генератор включает JetStream для account `APPLICATION` через
+   `tools/deploy/configure-nats-application-account.sh` и закрыто проверяет
+   account JWT: суммарно не более 32 GiB file storage, 256 MiB memory storage,
+   8 streams, 64 consumers и 100000 pending acknowledgements; каждый stream
+   обязан иметь `max_bytes`, а его file/memory limit не может превышать
+   соответствующий account budget.
 2. Применить bootstrap registry через `infra/bootstrap-registry/bootstrap.sh`.
    Public host, IngressClass и ClusterIssuer передаются параметрами; их нельзя
    брать из константы репозитория. Выполнить `preflight`, `apply`, затем
