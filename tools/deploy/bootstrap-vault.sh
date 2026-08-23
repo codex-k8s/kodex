@@ -71,9 +71,11 @@ read_vault_boolean() {
 }
 
 require_root_material() {
-  for file_path in "$root_token_file" "$unseal_key_file"; do
-    [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault owner material is absent'
-    [[ $(stat -c '%a' "$file_path") == 600 ]] || fail 'Vault owner material mode is unsafe'
+  local material_file_path
+  for material_file_path in "$root_token_file" "$unseal_key_file"; do
+    [[ -f "$material_file_path" && -s "$material_file_path" && ! -L "$material_file_path" ]] ||
+      fail 'Vault owner material is absent'
+    [[ $(stat -c '%a' "$material_file_path") == 600 ]] || fail 'Vault owner material mode is unsafe'
   done
 }
 
@@ -114,13 +116,14 @@ vault_input() {
 }
 
 vault_kv_put_file() {
-  local path=$1 key=$2 file_path=$3 root_token
+  local path=$1 key=$2 seed_file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
     fail 'Vault KV seed path must be relative to the canonical mount'
-  [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
+  [[ -f "$seed_file_path" && -s "$seed_file_path" && ! -L "$seed_file_path" ]] ||
+    fail 'Vault seed file is invalid'
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
-  { printf '%s\n' "$root_token"; cat "$file_path"; } |
+  { printf '%s\n' "$root_token"; cat "$seed_file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
@@ -130,13 +133,14 @@ vault_kv_put_file() {
 }
 
 vault_kv_patch_file() {
-  local path=$1 key=$2 file_path=$3 root_token
+  local path=$1 key=$2 seed_file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
     fail 'Vault KV seed path must be relative to the canonical mount'
-  [[ -f "$file_path" && -s "$file_path" && ! -L "$file_path" ]] || fail 'Vault seed file is invalid'
+  [[ -f "$seed_file_path" && -s "$seed_file_path" && ! -L "$seed_file_path" ]] ||
+    fail 'Vault seed file is invalid'
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
-  { printf '%s\n' "$root_token"; cat "$file_path"; } |
+  { printf '%s\n' "$root_token"; cat "$seed_file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
       export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
