@@ -124,8 +124,11 @@ spec:
         variables.main.name == variables.phase &&
         variables.main.image == params.data.admissionImage &&
         variables.main.imagePullPolicy == 'IfNotPresent' &&
-        variables.main.command ==
-          ['/bin/sh', '/opt/mattercodex/image-admission.sh', variables.phase] &&
+        has(variables.main.command) &&
+        variables.main.command.size() == 3 &&
+        variables.main.command[0] == '/bin/sh' &&
+        variables.main.command[1] == '/opt/mattercodex/image-admission.sh' &&
+        variables.main.command[2] == variables.phase &&
         (!has(variables.main.args) || variables.main.args.size() == 0) &&
         !has(variables.main.lifecycle) &&
         !has(variables.main.livenessProbe) &&

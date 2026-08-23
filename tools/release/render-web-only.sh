@@ -354,6 +354,24 @@ EGRESS_POLICY_NAME="$egress_policy_name" yq -i '
   )
 ' "$rendered"
 
+# Kustomize versions bundled with kubectl may classify newer cluster-scoped
+# APIs as namespaced. Canonicalize their identity before duplicate detection
+# and server-side apply.
+yq -i '
+  with(select(
+    .kind == "Namespace" or
+    .kind == "CustomResourceDefinition" or
+    .kind == "ClusterRole" or
+    .kind == "ClusterRoleBinding" or
+    .kind == "ValidatingAdmissionPolicy" or
+    .kind == "ValidatingAdmissionPolicyBinding" or
+    .kind == "ValidatingWebhookConfiguration" or
+    .kind == "MutatingWebhookConfiguration" or
+    .kind == "ClusterIssuer" or
+    .kind == "Bundle"
+  ); del(.metadata.namespace))
+' "$rendered"
+
 # Canonicalize duplicate resources before validation. The web-only aggregate may
 # include a shared ConfigMap through more than one component base, but the bytes
 # must be identical.

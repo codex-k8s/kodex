@@ -137,6 +137,43 @@ if yq -e '
   fail 'web-only NetworkPolicy grants the optional interaction adapter'
 fi
 
+if yq -e '
+  select(
+    .kind == "Namespace" or
+    .kind == "CustomResourceDefinition" or
+    .kind == "ClusterRole" or
+    .kind == "ClusterRoleBinding" or
+    .kind == "ValidatingAdmissionPolicy" or
+    .kind == "ValidatingAdmissionPolicyBinding" or
+    .kind == "ValidatingWebhookConfiguration" or
+    .kind == "MutatingWebhookConfiguration" or
+    .kind == "ClusterIssuer" or
+    .kind == "Bundle"
+  ) |
+  select(.metadata.namespace != null)
+' "$render_file" >/dev/null 2>&1; then
+  fail 'web-only render assigns a namespace to a cluster-scoped resource'
+fi
+admission_command_expression=$(yq -N -r '
+  select(.kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "mattercodex-image-admission-controller-jobs") |
+  .spec.validations[] |
+  select(.message == "Image admission executable or container privileges differ from the owner contract.") |
+  .expression
+' "$render_file")
+for command_contract in \
+  'variables.main.command.size() == 3' \
+  'variables.main.command[0] ==' \
+  '/bin/sh' \
+  'variables.main.command[1] ==' \
+  '/opt/mattercodex/image-admission.sh' \
+  'variables.main.command[2] == variables.phase'; do
+  [[ "$admission_command_expression" == *"$command_contract"* ]] ||
+    fail "image admission command CEL contract is absent: $command_contract"
+done
+[[ "$admission_command_expression" != *'variables.phase]'* ]] ||
+  fail 'image admission command CEL contract still contains a heterogeneous list literal'
+
 for stateful_set in mattercodex-postgresql mattercodex-nats; do
   STATEFUL_SET="$stateful_set" yq -e '
     select(.kind == "StatefulSet" and .metadata.name == strenv(STATEFUL_SET)) |
