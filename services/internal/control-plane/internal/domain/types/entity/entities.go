@@ -256,9 +256,9 @@ type SystemAssistant struct {
 }
 
 type AuditEvent struct {
-	Ref, ProjectRef, ActorRef, ActorName, AssistantRef                  string
-	Action, ResourceKind, ResourceRef, Outcome, Summary, CorrelationRef string
-	OccurredAt                                                          time.Time
+	Ref, ProjectRef, ActorRef, ActorName, Executor, Source                            string
+	Action, ResourceKind, ResourceRef, ResourceName, Outcome, Summary, CorrelationRef string
+	OccurredAt                                                                        time.Time
 }
 
 type Incident struct {

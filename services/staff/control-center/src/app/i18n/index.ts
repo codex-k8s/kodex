@@ -500,6 +500,8 @@ const ru = {
     organizationEmptyText:
       "После первого безопасно отклонённого SSO-входа пользователь появится среди кандидатов.",
     chooseMember: "Выберите пользователя",
+    searchMember: "Поиск пользователя",
+    searchMemberPlaceholder: "Имя или email",
     noCandidates: "Нет пользователей для добавления",
     noCandidatesText:
       "Сначала добавьте пользователя в организацию, затем он появится среди кандидатов Проекта.",
@@ -557,6 +559,7 @@ const ru = {
     outcome: "Результат",
     time: "Время",
     search: "Поиск по аудиту",
+    searchPlaceholder: "Название объекта",
     emptyTitle: "События аудита не найдены",
   },
   assistant: {
@@ -1159,6 +1162,8 @@ const en = {
     organizationEmptyText:
       "After a user's first safely denied SSO sign-in, they appear as a candidate.",
     chooseMember: "Choose a user",
+    searchMember: "Search users",
+    searchMemberPlaceholder: "Name or email",
     noCandidates: "No users can be added yet",
     noCandidatesText:
       "Add the user to the organization first; they will then appear as a Project candidate.",
@@ -1216,6 +1221,7 @@ const en = {
     outcome: "Outcome",
     time: "Time",
     search: "Search audit",
+    searchPlaceholder: "Resource name",
     emptyTitle: "No audit events found",
   },
   assistant: {

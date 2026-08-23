@@ -1420,7 +1420,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction, scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, scope.role, scope.actorID, boundedPage(filter.Page))
+	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction, scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, filter.Query, scope.role, scope.actorID, boundedPage(filter.Page))
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1428,7 +1428,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	var result []entity.AuditEvent
 	for rows.Next() {
 		var item entity.AuditEvent
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.ActorRef, &item.ActorName, &item.AssistantRef, &item.Action, &item.ResourceKind, &item.ResourceRef, &item.Outcome, &item.Summary, &item.CorrelationRef, &item.OccurredAt); err != nil {
+		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.ActorRef, &item.ActorName, &item.Executor, &item.Source, &item.Action, &item.ResourceKind, &item.ResourceRef, &item.ResourceName, &item.Outcome, &item.Summary, &item.CorrelationRef, &item.OccurredAt); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		result = append(result, item)

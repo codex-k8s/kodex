@@ -446,7 +446,7 @@ func (server *Server) ListAuditEvents(ctx context.Context, request *controlplane
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

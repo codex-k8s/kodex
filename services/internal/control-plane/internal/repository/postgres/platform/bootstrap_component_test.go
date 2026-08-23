@@ -444,6 +444,19 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	}); cancelErr != nil || cancelled.Run == nil || cancelled.Run.State != "CANCELLED" {
 		t.Fatalf("close action readback run: run=%#v err=%v", cancelled.Run, cancelErr)
 	}
+	auditEvents, _, err := service.ListAuditEvents(ctx, owner, query.Filter{Query: "Readback run", Page: query.Page{Size: 20}})
+	if err != nil || len(auditEvents) < 2 {
+		t.Fatalf("search audit by safe resource name: events=%#v err=%v", auditEvents, err)
+	}
+	for _, auditEvent := range auditEvents {
+		if auditEvent.ResourceName != "Readback run" || auditEvent.ResourceRef != runResult.Run.Ref {
+			t.Fatalf("audit readback exposed an unresolved resource: %#v", auditEvent)
+		}
+	}
+	hiddenAuditEvents, _, err := service.ListAuditEvents(ctx, candidate, query.Filter{Query: "Readback run", Page: query.Page{Size: 20}})
+	if err != nil || len(hiddenAuditEvents) != 0 {
+		t.Fatalf("audit readback ignored VIEW_AUDIT eligibility: events=%#v err=%v", hiddenAuditEvents, err)
+	}
 	remaining, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("assigned member remained a candidate: candidates=%#v err=%v", remaining, err)

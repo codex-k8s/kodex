@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -59,6 +59,7 @@ const canAdd = computed(() =>
 );
 const selected = ref<Membership>();
 const dialog = ref(false);
+const candidateSearch = ref("");
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const form = reactive<AccessForm>({
@@ -105,11 +106,26 @@ function add(): void {
     active: true,
   });
   problem.value = undefined;
+  candidateSearch.value = "";
   dialog.value = true;
   if (organizationScope.value) {
     void platform.loadPlatformMembershipCandidates();
   } else {
     void platform.loadMembershipCandidates(projectRef.value);
+  }
+}
+
+let candidateSearchTimer: ReturnType<typeof setTimeout> | undefined;
+
+function loadCandidates(): void {
+  if (!dialog.value || selected.value) return;
+  if (organizationScope.value) {
+    void platform.loadPlatformMembershipCandidates(candidateSearch.value);
+  } else {
+    void platform.loadMembershipCandidates(
+      projectRef.value,
+      candidateSearch.value,
+    );
   }
 }
 
@@ -193,7 +209,14 @@ async function revoke(membership: Membership): Promise<void> {
 }
 
 watch(projectRef, () => void load());
+watch(candidateSearch, () => {
+  if (candidateSearchTimer) clearTimeout(candidateSearchTimer);
+  candidateSearchTimer = setTimeout(loadCandidates, 250);
+});
 onMounted(() => void load());
+onUnmounted(() => {
+  if (candidateSearchTimer) clearTimeout(candidateSearchTimer);
+});
 </script>
 
 <template>
@@ -310,37 +333,49 @@ onMounted(() => void load());
           <span>{{ $t("access.member") }}</span
           ><strong>{{ selected.user.displayName }}</strong>
         </div>
-        <AsyncState
-          v-else
-          class="field--wide candidate-state"
-          :loading="platform.loading[candidateKey]"
-          :problem="platform.problems[candidateKey]"
-          :empty="candidates.length === 0"
-          :empty-title="$t('access.noCandidates')"
-          :empty-text="
-            $t(
-              organizationScope
-                ? 'access.noOrganizationCandidatesText'
-                : 'access.noCandidatesText',
-            )
-          "
-          @retry="add"
-        >
+        <template v-else>
           <label class="field field--wide"
-            ><span>{{ $t("access.member") }}</span
-            ><select v-model="form.userRef" required autofocus>
-              <option value="" disabled>{{ $t("access.chooseMember") }}</option>
-              <option
-                v-for="candidate in candidates"
-                :key="candidate.ref"
-                :value="candidate.ref"
-              >
-                {{ candidate.displayName
-                }}{{ candidate.emailHint ? ` · ${candidate.emailHint}` : "" }}
-              </option>
-            </select></label
+            ><span>{{ $t("access.searchMember") }}</span
+            ><input
+              v-model="candidateSearch"
+              type="search"
+              :placeholder="$t('access.searchMemberPlaceholder')"
+              autocomplete="off"
+              autofocus
+          /></label>
+          <AsyncState
+            class="field--wide candidate-state"
+            :loading="platform.loading[candidateKey]"
+            :problem="platform.problems[candidateKey]"
+            :empty="candidates.length === 0"
+            :empty-title="$t('access.noCandidates')"
+            :empty-text="
+              $t(
+                organizationScope
+                  ? 'access.noOrganizationCandidatesText'
+                  : 'access.noCandidatesText',
+              )
+            "
+            @retry="add"
           >
-        </AsyncState>
+            <label class="field field--wide"
+              ><span>{{ $t("access.member") }}</span
+              ><select v-model="form.userRef" required>
+                <option value="" disabled>
+                  {{ $t("access.chooseMember") }}
+                </option>
+                <option
+                  v-for="candidate in candidates"
+                  :key="candidate.ref"
+                  :value="candidate.ref"
+                >
+                  {{ candidate.displayName
+                  }}{{ candidate.emailHint ? ` · ${candidate.emailHint}` : "" }}
+                </option>
+              </select></label
+            >
+          </AsyncState>
+        </template>
         <label v-if="organizationScope" class="field field--wide"
           ><span>{{ $t("access.role") }}</span
           ><select v-model="form.platformRole">

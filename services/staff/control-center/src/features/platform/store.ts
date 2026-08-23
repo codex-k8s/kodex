@@ -952,14 +952,18 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
-  async function loadAudit(projectRef?: string): Promise<void> {
+  async function loadAudit(projectRef?: string, search = ""): Promise<void> {
     await query(
       "audit",
       async () =>
         (
           await unwrap(
             listAuditEvents({
-              query: { ...(projectRef ? { projectRef } : {}), pageSize: 100 },
+              query: {
+                ...(projectRef ? { projectRef } : {}),
+                ...(search.trim() ? { query: search.trim() } : {}),
+                pageSize: 100,
+              },
               signal: requestSignal(),
             }),
           )

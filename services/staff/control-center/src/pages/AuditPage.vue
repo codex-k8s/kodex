@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -15,31 +15,40 @@ const projectRef = computed(() =>
     ? route.query.projectRef
     : undefined,
 );
-const list = computed(() => {
-  const value = query.value.trim().toLocaleLowerCase();
-  return platform.auditEvents.filter(
-    (item) =>
-      !value ||
-      `${item.initiator.displayName} ${item.executor} ${item.action} ${item.resourceName} ${item.safeSummary}`
-        .toLocaleLowerCase()
-        .includes(value),
-  );
+const list = computed(() => platform.auditEvents);
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+function load(): void {
+  void platform.loadAudit(projectRef.value, query.value);
+}
+
+watch(query, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(load, 250);
 });
-onMounted(() => void platform.loadAudit(projectRef.value));
+watch(projectRef, load);
+onMounted(load);
+onUnmounted(() => {
+  if (searchTimer) clearTimeout(searchTimer);
+});
 </script>
 
 <template>
   <PageFrame :title="$t('audit.title')" :subtitle="$t('audit.subtitle')">
     <label class="field audit-search"
       ><span>{{ $t("audit.search") }}</span
-      ><input v-model.trim="query" type="search"
+      ><input
+        v-model="query"
+        type="search"
+        :placeholder="$t('audit.searchPlaceholder')"
+        autocomplete="off"
     /></label>
     <AsyncState
       :loading="platform.loading.audit"
       :problem="platform.problems.audit"
       :empty="list.length === 0"
       :empty-title="$t('audit.emptyTitle')"
-      @retry="platform.loadAudit(projectRef)"
+      @retry="load"
     >
       <div class="audit-table" role="table" :aria-label="$t('audit.title')">
         <div class="audit-table__header" role="row">

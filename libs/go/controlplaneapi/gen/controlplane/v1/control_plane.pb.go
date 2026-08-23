@@ -14370,6 +14370,7 @@ type ListAuditEventsRequest struct {
 	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	Outcome       string                 `protobuf:"bytes,4,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Query         string                 `protobuf:"bytes,5,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -14428,6 +14429,13 @@ func (x *ListAuditEventsRequest) GetAction() string {
 func (x *ListAuditEventsRequest) GetOutcome() string {
 	if x != nil {
 		return x.Outcome
+	}
+	return ""
+}
+
+func (x *ListAuditEventsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
 	}
 	return ""
 }
@@ -19588,13 +19596,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05state\x18\x01 \x01(\v2\x1f.controlplane.v1.BootstrapStateR\x05state\"\x1a\n" +
 	"\x18GetAdministrationRequest\"W\n" +
 	"\x19GetAdministrationResponse\x12:\n" +
-	"\x05state\x18\x01 \x01(\v2$.controlplane.v1.AdministrationStateR\x05state\"\x9d\x01\n" +
+	"\x05state\x18\x01 \x01(\v2$.controlplane.v1.AdministrationStateR\x05state\"\xb3\x01\n" +
 	"\x16ListAuditEventsRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x120\n" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\x18\n" +
-	"\aoutcome\x18\x04 \x01(\tR\aoutcome\"}\n" +
+	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x12\x14\n" +
+	"\x05query\x18\x05 \x01(\tR\x05query\"}\n" +
 	"\x17ListAuditEventsResponse\x123\n" +
 	"\x06events\x18\x01 \x03(\v2\x1b.controlplane.v1.AuditEventR\x06events\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xff\n" +

@@ -11,6 +11,7 @@ import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
 const searchPlatformMock = vi.hoisted(() => vi.fn());
+const listAuditEventsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   ...(await importOriginal<
@@ -18,6 +19,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   >()),
   listProjects: listProjectsMock,
   searchPlatform: searchPlatformMock,
+  listAuditEvents: listAuditEventsMock,
 }));
 vi.mock("@/shared/api/client", () => ({
   requestSignal: () => new AbortController().signal,
@@ -93,6 +95,7 @@ describe("platform store", () => {
     setActivePinia(createPinia());
     listProjectsMock.mockReset();
     searchPlatformMock.mockReset();
+    listAuditEventsMock.mockReset();
     selectProjectRef(undefined);
   });
 
@@ -149,6 +152,26 @@ describe("platform store", () => {
 
     expect(Object.keys(store.projects)).toEqual(["project_second"]);
     expect(store.projects.project_second?.version).toBe(2);
+  });
+
+  it("передаёт поиск аудита авторитетному owner API", async () => {
+    listAuditEventsMock.mockResolvedValue({
+      data: { items: [] },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", "Квартальный отчёт");
+
+    expect(listAuditEventsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          query: "Квартальный отчёт",
+          pageSize: 100,
+        },
+      }),
+    );
   });
 
   it("заменяет разрешённые действия коллекции только авторитетным ответом", async () => {

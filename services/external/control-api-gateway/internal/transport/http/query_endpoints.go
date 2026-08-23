@@ -279,7 +279,7 @@ func (server *Server) GetAdministration(w http.ResponseWriter, r *http.Request) 
 	writeMessage(w, http.StatusOK, response, "state", "")
 }
 func (server *Server) ListAuditEvents(w http.ResponseWriter, r *http.Request, p generated.ListAuditEventsParams) {
-	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Action: stringValue(p.Query)})
+	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

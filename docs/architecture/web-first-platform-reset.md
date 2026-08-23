@@ -86,6 +86,7 @@ Project membership отдельно задаёт typed permissions. Полном
 |---|---|---|---|---|---|
 | `POST /api/v1/projects` | `CreateProject` | Project service | OIDC membership, `Idempotency-Key` | Project + audit + `project.created` | PWA global snapshot |
 | `POST /api/v1/projects/{projectRef}/agents` | `CreateAgent` | Agent service | project `AGENT_CREATE`, idempotency | Agent draft + audit + `agent.created` | PWA project snapshot |
+| `GET /api/v1/administration/membership-candidates`, `GET /api/v1/projects/{projectRef}/membership-candidates` | bounded catalog query | Membership service | OIDC actor; organization/project `MANAGE_MEMBERS`; eligibility назначается сервером | read-only список пользователей по имени/email без subject/UUID | форма управления доступом |
 | `POST /api/v1/agents/{agentRef}/instruction-commands` | typed instruction RPC | Instruction service | owner resolve before `If-Match` | immutable published version + `agent.instructions_published` | runtime revision resolver |
 | `POST /api/v1/projects/{projectRef}/workflows` | `CreateWorkflow` | Workflow service | project `WORKFLOW_MANAGE`, idempotency | Workflow draft + audit | authoritative reads |
 | `GET /api/v1/search` | `SearchPlatform` | Control-plane query service | OIDC actor + organization membership; eligibility каждого Project по тому же `VIEW` rule, что list/detail | bounded read-only projection без domain event | глобальная панель Control Center |
@@ -101,6 +102,7 @@ Project membership отдельно задаёт typed permissions. Полном
 | assistant conversation endpoints | enqueue system turn/apply typed plan | Assistant + same domain services | user authority preserved per tool | Session/Turn, typed receipts, double attribution | warm assistant runtime, PWA |
 | schedule endpoints | typed schedule commands | Schedule service | target/grants resolved server-side | Schedule/Occurrence + `run.created` | scheduler/runtime-controller |
 | integration endpoints | metadata RPC + typed gateway client | Integration service | grants and secret boundary separated | connection metadata/audit; credential receipt only | integration-gateway, PWA |
+| `GET /api/v1/audit-events` | `ListAuditEvents` с bounded поиском | Audit query service | OIDC actor; platform Auditor/Administrator/Owner либо project `VIEW_AUDIT` | read-only события с двойной attribution и server-resolved resource name; без event | экран аудита |
 
 Глобальный поиск не является отдельным владельцем данных и не индексирует
 скрытые ресурсы. Gateway передаёт только ограниченные `query` и `limit` через
@@ -108,6 +110,12 @@ generated client; control-plane повторно разрешает actor и org
 применяет единое project eligibility правило к Проектам, агентам, Процессам и
 запускам и возвращает только opaque refs с безопасными display metadata.
 Поскольку операция read-only, idempotency, OCC и domain event ей не нужны.
+
+Поиск аудита не фильтрует уже загруженный случайный срез в браузере. Gateway
+передаёт строку control-plane, а тот применяет её к разрешённому
+человекочитаемому имени ресурса после tenant/project eligibility. Исполнитель
+системной операции возвращается по имени помощника, а opaque ref остаётся
+только ссылкой из авторитетного readback и не показывается как UI-copy.
 
 ## Модель выполнения
 
