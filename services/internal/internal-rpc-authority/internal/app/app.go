@@ -31,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -678,6 +679,12 @@ func maintainServedSnapshot(
 		}
 	}
 	if err := runtime.ActivateSnapshot(ctx); err != nil {
+		if !allowsReadbackLastKnownGood(err) {
+			return lastRefresh, fmt.Errorf(
+				"refresh served snapshot readback: %w",
+				err,
+			)
+		}
 		if !servedStateChecked {
 			servedStateErr = runtime.ServedStateReady(ctx)
 		}
@@ -690,6 +697,22 @@ func maintainServedSnapshot(
 		)
 	}
 	return now, nil
+}
+
+func allowsReadbackLastKnownGood(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	switch status.Code(err) {
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+		return true
+	}
+	var networkError net.Error
+	return errors.As(err, &networkError) &&
+		(networkError.Timeout() || networkError.Temporary())
 }
 
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {

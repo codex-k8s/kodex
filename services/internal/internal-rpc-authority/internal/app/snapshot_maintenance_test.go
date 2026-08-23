@@ -5,6 +5,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type snapshotMaintenanceStub struct {
@@ -59,7 +62,9 @@ func TestMaintainServedSnapshotRefreshesBeforeReceiptExpiry(t *testing.T) {
 func TestMaintainServedSnapshotKeepsValidReceiptAfterTransientRefreshFailure(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
 	lastRefresh := now.Add(-snapshotReadbackRefreshInterval)
-	stub := &snapshotMaintenanceStub{activationErr: errors.New("readback unavailable")}
+	stub := &snapshotMaintenanceStub{
+		activationErr: status.Error(codes.Unavailable, "readback unavailable"),
+	}
 
 	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, lastRefresh, now)
 	if err != nil {
@@ -70,12 +75,28 @@ func TestMaintainServedSnapshotKeepsValidReceiptAfterTransientRefreshFailure(t *
 	}
 }
 
+func TestMaintainServedSnapshotRejectsNonTransportRefreshFailureImmediately(t *testing.T) {
+	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
+	lastRefresh := now.Add(-snapshotReadbackRefreshInterval)
+	stub := &snapshotMaintenanceStub{
+		activationErr: status.Error(codes.PermissionDenied, "readback rejected"),
+	}
+
+	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, lastRefresh, now)
+	if err == nil {
+		t.Fatal("non-transport readback failure used last-known-good state")
+	}
+	if refreshedAt != lastRefresh || stub.readyCalls != 0 || stub.activations != 1 {
+		t.Fatalf("unexpected fail-closed result: refreshed=%s ready_calls=%d activations=%d", refreshedAt, stub.readyCalls, stub.activations)
+	}
+}
+
 func TestMaintainServedSnapshotRejectsExpiredReceiptAfterRefreshFailure(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
 	lastRefresh := now.Add(-snapshotReadbackRefreshInterval)
 	stub := &snapshotMaintenanceStub{
 		readyErr:      errors.New("receipt expired"),
-		activationErr: errors.New("readback unavailable"),
+		activationErr: status.Error(codes.Unavailable, "readback unavailable"),
 	}
 
 	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, lastRefresh, now)
@@ -104,7 +125,7 @@ func TestMaintainServedSnapshotKeepsFailureClosed(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 16, 0, 0, 0, time.UTC)
 	stub := &snapshotMaintenanceStub{
 		readyErr:      errors.New("receipt expired"),
-		activationErr: errors.New("readback unavailable"),
+		activationErr: status.Error(codes.Unavailable, "readback unavailable"),
 	}
 
 	refreshedAt, err := maintainServedSnapshot(context.Background(), stub, now, now.Add(time.Second))

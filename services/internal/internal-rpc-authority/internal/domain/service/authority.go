@@ -19,13 +19,14 @@ import (
 )
 
 const (
-	contextProtectedType = "mattercodex-internal-rpc-auth+jws"
-	proofProtectedType   = "mattercodex-internal-rpc-authority-proof+jws"
-	contextKeyPurpose    = "AUTHORIZATION_CONTEXT"
-	proofKeyPurpose      = "AUTHORITY_PROOF"
-	keyStatusCurrent     = "CURRENT"
-	keyStatusPrevious    = "PREVIOUS"
-	maxProofTTL          = 15 * time.Second
+	contextProtectedType           = "mattercodex-internal-rpc-auth+jws"
+	proofProtectedType             = "mattercodex-internal-rpc-authority-proof+jws"
+	contextKeyPurpose              = "AUTHORIZATION_CONTEXT"
+	proofKeyPurpose                = "AUTHORITY_PROOF"
+	keyStatusCurrent               = "CURRENT"
+	keyStatusPrevious              = "PREVIOUS"
+	maxProofTTL                    = 15 * time.Second
+	authorizationMetadataLKGWindow = 2 * time.Minute
 )
 
 var (
@@ -45,6 +46,7 @@ type Authority struct {
 	now                  func() time.Time
 	activationMu         sync.RWMutex
 	attestationReceiptID string
+	metadataValidUntil   time.Time
 }
 
 // KeyMaterial объединяет ключ подписи и доверенные ключи проверки.
@@ -149,6 +151,11 @@ func (authority *Authority) Issue(
 	operationID string,
 	proofCompact string,
 ) (string, model.AuthorizationClaims, error) {
+	now := authority.now().UTC().Truncate(time.Second)
+	metadataValidUntil, err := authority.freshMetadataDeadline(now)
+	if err != nil {
+		return "", model.AuthorizationClaims{}, err
+	}
 	binding, ok := authority.bindings[operationID]
 	if !ok {
 		return "", model.AuthorizationClaims{}, failure.New(
@@ -194,7 +201,6 @@ func (authority *Authority) Issue(
 			err,
 		)
 	}
-	now := authority.now().UTC().Truncate(time.Second)
 	if err := internalrpcauth.ValidateTimes(
 		now,
 		time.Unix(proof.IssuedAt, 0),
@@ -276,7 +282,11 @@ func (authority *Authority) Issue(
 			err,
 		)
 	}
-	expiresAt := now.Add(time.Duration(binding.TokenTTLSeconds) * time.Second)
+	expiresAt := authorizationExpiry(
+		now,
+		time.Duration(binding.TokenTTLSeconds)*time.Second,
+		metadataValidUntil,
+	)
 	claims := model.AuthorizationClaims{
 		Version:  model.ContractVersion,
 		Issuer:   binding.Issuer,
@@ -328,6 +338,11 @@ func (authority *Authority) Verify(
 	observedFullMethod string,
 	downstreamSPIFFEID string,
 ) (model.AuthorizationClaims, error) {
+	if _, err := authority.freshMetadataDeadline(
+		authority.now().UTC().Truncate(time.Second),
+	); err != nil {
+		return model.AuthorizationClaims{}, err
+	}
 	header, err := internalrpcauth.ParseProtectedHeader(compact)
 	if err != nil || header.Type != contextProtectedType {
 		return model.AuthorizationClaims{}, failure.Wrap(
@@ -537,6 +552,8 @@ func (authority *Authority) ActivateSnapshot(
 	}
 	authority.activationMu.Lock()
 	authority.attestationReceiptID = attestationReceiptID
+	authority.metadataValidUntil = authority.now().UTC().Truncate(time.Second).
+		Add(authorizationMetadataLKGWindow)
 	authority.activationMu.Unlock()
 	return nil
 }
@@ -611,7 +628,33 @@ func validateAuthority(authority model.Authority, binding model.OperationBinding
 
 // Ready подтверждает готовность хранилища и активированного снимка.
 func (authority *Authority) Ready(ctx context.Context) error {
+	if _, err := authority.freshMetadataDeadline(
+		authority.now().UTC().Truncate(time.Second),
+	); err != nil {
+		return err
+	}
 	return authority.store.Ready(ctx, authority.SnapshotState())
+}
+
+func (authority *Authority) freshMetadataDeadline(now time.Time) (time.Time, error) {
+	authority.activationMu.RLock()
+	validUntil := authority.metadataValidUntil
+	authority.activationMu.RUnlock()
+	if validUntil.IsZero() || !now.Before(validUntil) {
+		return time.Time{}, failure.New(
+			failure.PersistenceUnavailable,
+			"authorization metadata last-known-good window expired",
+		)
+	}
+	return validUntil, nil
+}
+
+func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time) time.Time {
+	expiresAt := now.Add(ttl)
+	if validUntil.Before(expiresAt) {
+		return validUntil
+	}
+	return expiresAt
 }
 
 func newUUID() (string, error) {

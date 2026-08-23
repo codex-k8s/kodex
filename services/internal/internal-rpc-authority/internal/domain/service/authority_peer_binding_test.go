@@ -88,6 +88,12 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		t.Fatalf("create verifier authority: %v", err)
 	}
 	authority.now = func() time.Time { return now }
+	if err := authority.ActivateSnapshot(
+		context.Background(),
+		"82d62007-3a12-4c43-8a0b-1dbf694f55b4",
+	); err != nil {
+		t.Fatalf("activate verifier authority: %v", err)
+	}
 	claims := model.AuthorizationClaims{
 		Version: model.ContractVersion, Issuer: callerIssuer, Audience: audience,
 		Subject:    callerSPIFFE,
@@ -127,6 +133,41 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	}
 	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE); err == nil {
 		t.Fatal("caller generation not matching its trusted key was accepted")
+	}
+}
+
+func TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	authority := &Authority{store: testAuthorityStore{}}
+	authority.now = func() time.Time { return now }
+
+	if err := authority.ActivateSnapshot(
+		context.Background(),
+		"82d62007-3a12-4c43-8a0b-1dbf694f55b4",
+	); err != nil {
+		t.Fatalf("activate authority metadata: %v", err)
+	}
+	now = now.Add(authorizationMetadataLKGWindow - time.Second)
+	if err := authority.Ready(context.Background()); err != nil {
+		t.Fatalf("fresh last-known-good metadata was rejected: %v", err)
+	}
+	now = now.Add(time.Second)
+	if err := authority.Ready(context.Background()); err == nil {
+		t.Fatal("expired last-known-good metadata was accepted")
+	}
+}
+
+func TestAuthorizationExpiryDoesNotExceedMetadataWindow(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	validUntil := now.Add(7 * time.Second)
+
+	if got := authorizationExpiry(now, 30*time.Second, validUntil); !got.Equal(validUntil) {
+		t.Fatalf("authorization expiry exceeded metadata window: got=%s want=%s", got, validUntil)
+	}
+	if got := authorizationExpiry(now, 5*time.Second, validUntil); !got.Equal(now.Add(5 * time.Second)) {
+		t.Fatalf("authorization expiry ignored shorter binding TTL: got=%s", got)
 	}
 }
 
