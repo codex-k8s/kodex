@@ -9,6 +9,7 @@ fail() {
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 bootstrap="$repository_root/infra/service-infrastructure/bootstrap.sh"
 vault_bootstrap="$repository_root/infra/service-infrastructure/vault-bootstrap.yaml"
+vault_values="$repository_root/infra/service-infrastructure/vault-values.yaml"
 vault_initializer="$repository_root/tools/deploy/bootstrap-vault.sh"
 keycloak_bootstrap="$repository_root/tools/deploy/configure-keycloak.sh"
 
@@ -36,6 +37,41 @@ grep -Fq 'app.kubernetes.io/component=controller-manager' "$bootstrap" ||
   fail 'Vault Secrets Operator selector does not identify the controller manager'
 grep -Fq 'daemonset/mattercodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s' "$bootstrap" ||
   fail 'Secrets Store CSI Driver rollout readback is absent'
+grep -Fq 'require_vault_csi_provider' "$bootstrap" ||
+  fail 'Vault CSI provider strict readback is absent'
+[[ $(grep -Fc 'require_vault_csi_provider' "$bootstrap") -eq 3 ]] ||
+  fail 'Vault CSI provider is not checked by apply and readback modes'
+
+yq -e '.csi.enabled == true and .csi.agent.enabled == false' "$vault_values" >/dev/null ||
+  fail 'Vault CSI provider or direct mode is disabled'
+yq -e '
+  (.csi.extraArgs | length) == 3 and
+  .csi.extraArgs[0] == "--vault-addr=https://vault.mattercodex-system.svc:8200" and
+  .csi.extraArgs[1] == "--vault-tls-ca-cert=/vault/tls/ca.crt" and
+  .csi.extraArgs[2] == "--vault-tls-server-name=vault.mattercodex-system.svc.cluster.local"
+' "$vault_values" >/dev/null || fail 'Vault CSI provider endpoint or TLS args are not exact'
+yq -e '
+  (.csi.volumeMounts | length) == 1 and
+  .csi.volumeMounts[0].name == "vault-server-ca" and
+  .csi.volumeMounts[0].mountPath == "/vault/tls" and
+  .csi.volumeMounts[0].readOnly == true and
+  (.csi.volumes | length) == 1 and
+  .csi.volumes[0].name == "vault-server-ca" and
+  .csi.volumes[0].secret.secretName == "mattercodex-vault-server-tls" and
+  (.csi.volumes[0].secret.items | length) == 1 and
+  .csi.volumes[0].secret.items[0].key == "ca.crt" and
+  .csi.volumes[0].secret.items[0].path == "ca.crt"
+' "$vault_values" >/dev/null || fail 'Vault CSI provider CA mount is not exact'
+if rg -q -- '--vault-tls-skip-verify|vaultSkipTLSVerify' "$vault_values"; then
+  fail 'Vault CSI provider values allow insecure TLS'
+fi
+
+while IFS= read -r manifest; do
+  if yq -e 'select(.kind == "SecretProviderClass") | .spec.parameters | has("vaultAddress") or has("vaultTLSServerName") or has("vaultCACertPath") or has("vaultSkipTLSVerify")' \
+    "$manifest" >/dev/null 2>&1; then
+    fail "SecretProviderClass overrides provider-level Vault transport: ${manifest#"$repository_root"/}"
+  fi
+done < <(rg -l '^kind: SecretProviderClass$' "$repository_root/deploy/k8s" | sort)
 
 for readiness_contract in \
   '.status.observedGeneration == .metadata.generation' \

@@ -218,6 +218,13 @@ Vault CSI PKI выдаёт identities BuildKit/registry операцией за�
 отдельный путь чтения; render/startup/readiness проверяют фактический mTLS, а не
 только наличие `SecretProviderClass`.
 
+Сам Vault CSI provider использует единый provider-level transport contract:
+точный HTTPS address, read-only installation CA и exact TLS server name из
+pinned Helm values. Workload-specific `SecretProviderClass` задаёт только auth
+role и объекты Vault и не вправе переопределять address, CA, SNI или TLS verify.
+Неиспользуемый Vault Agent cache sidecar в этом профиле отключён, чтобы не было
+двух альтернативных путей доверия к Vault.
+
 ## PostgreSQL в Kubernetes и за его пределами
 
 Environment выбирает один явный data path:

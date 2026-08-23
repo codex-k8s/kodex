@@ -117,7 +117,12 @@ hosts передаются параметрами deployment environment. Реп
    перезапускать API server. Общий Vault ingress разрешает только
    `vault-csi-provider` в том же namespace и TCP/8200: именно provider создаёт
    сетевое соединение для CSI mount, а Vault auth role ограничивает authority
-   исходного workload. Существующий anchor только
+   исходного workload. Provider подключается к Vault напрямую по HTTPS с
+   адресом, installation CA path и exact SNI из pinned Helm values. Публичный
+   `ca.crt` монтируется read-only из `mattercodex-vault-server-tls`;
+   `SecretProviderClass` не переопределяет transport trust, а Vault Agent
+   sidecar не участвует в этом пути. `vaultSkipTLSVerify` и plaintext fallback
+   запрещены. Существующий anchor только
    проверяется по обязательной форме и не переписывается render-ом: продвинуть
    его вправе исключительно PITR executor через forward-only policy. Первый
    verified Vault database connect может попасть в короткий restart PostgreSQL
