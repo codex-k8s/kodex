@@ -48,7 +48,7 @@ spec:
       ports: [{protocol: TCP, port: 8444}]
     - to:
         - podSelector:
-            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+            matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}
       ports: [{protocol: TCP, port: 5432}]
     - to:
         - namespaceSelector:
@@ -91,7 +91,7 @@ spec:
       ports: [{protocol: TCP, port: 8443}]
     - to:
         - podSelector:
-            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+            matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}
       ports: [{protocol: TCP, port: 5432}]
     - to:
         - namespaceSelector:

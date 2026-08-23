@@ -27,7 +27,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: internal-rpc-authority-postgresql
+              app.kubernetes.io/name: mattercodex-postgresql
       ports:
         - port: 5432
           protocol: TCP
@@ -39,7 +39,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: internal-rpc-authority-postgresql
+      app.kubernetes.io/name: mattercodex-postgresql
   policyTypes:
     - Ingress
   ingress:

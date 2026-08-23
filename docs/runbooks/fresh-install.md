@@ -130,7 +130,10 @@ hosts передаются параметрами deployment environment. Реп
    backoff; semantic/configuration ошибки завершают фазу немедленно, а
    `verify_connection` не отключается. PostgreSQL ingress разрешает TCP/5432
    только точным внутренним workload и Vault database engine в этом же
-   namespace; отсутствие пути от `app.kubernetes.io/name=vault` является
+   namespace. Все egress/ingress pod selectors указывают на фактический
+   StatefulSet label `app.kubernetes.io/name=mattercodex-postgresql`; DNS aliases
+   `control-plane-postgresql-rw` и `internal-rpc-authority-postgresql-rw` не
+   являются pod labels. Отсутствие пути от `app.kubernetes.io/name=vault` является
    ошибкой render, а не основанием расширять CIDR или отключать policy/TLS.
    Однострочные credentials передаются между host и Pod как ровно одна запись;
    уже завершённый LF secret-файла не дополняется вторым delimiter. Следующий
