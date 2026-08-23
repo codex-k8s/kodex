@@ -13,8 +13,10 @@ metadata:
   name: mattercodex-release-registry
   annotations:
     cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: matter-kodex-prod-mattercodex-release-registry-auth@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   ingressClassName: __MATTERCODEX_INGRESS_CLASS__
   tls:
