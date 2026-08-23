@@ -70,6 +70,10 @@ if grep -Fq 'kubectl apply --server-side --field-manager=mattercodex-fresh-insta
   "$fresh_deployer"; then
   fail 'fresh workload deploy can overwrite the forward-only restore evidence anchor'
 fi
+grep -Fq 'select(.kind != "Job" and' "$fresh_deployer" ||
+  fail 'fresh workload deploy can mutate immutable completed Jobs through generic apply'
+[[ $(grep -c '^[[:space:]]*apply_job ' "$fresh_deployer") -eq 4 ]] ||
+  fail 'fresh deploy does not retain explicit lifecycle for all four release Jobs'
 yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
   .metadata.name == "internal-rpc-authority-restore-anchor-forward-only")' \
   "$repository_root/deploy/k8s/base/internal-rpc-authority-restore/evidence-admission.yaml" |
