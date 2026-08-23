@@ -106,21 +106,26 @@ hosts передаются параметрами deployment environment. Реп
    immutable render. Скрипт отклоняет placeholder, zero digest, другой context
    и повторяющиеся resource identities.
 8. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
-   image PKI и static material, затем применяет non-workload resources,
-   PostgreSQL и NATS и материализует database credentials. Первый verified
-   Vault database connect может попасть в короткий restart PostgreSQL после
-   init scripts: только `connection refused` повторяется с ограниченным
+   image PKI и static material, создаёт bootstrap restore evidence anchor только
+   при его отсутствии, затем применяет non-workload resources, PostgreSQL и
+   NATS и материализует database credentials. Существующий anchor только
+   проверяется по обязательной форме и не переписывается render-ом: продвинуть
+   его вправе исключительно PITR executor через forward-only policy. Первый
+   verified Vault database connect может попасть в короткий restart PostgreSQL
+   после init scripts: только `connection refused` повторяется с ограниченным
    backoff; semantic/configuration ошибки завершают фазу немедленно, а
    `verify_connection` не отключается.
 9. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
-10. Выполнить фазу `apply-workloads`. Она применяет полный render, дожидается
+10. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
+   применяет полный render за исключением этого create-once ресурса, дожидается
    image supply chain, выполняет `release-artifact-materializer`, затем ждёт
    rollout каждого Deployment и DaemonSet.
 11. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
-    Deployment, DaemonSet, Job и отсутствие terminal container waiting states.
+    Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
+    anchor и отсутствие terminal container waiting states.
 12. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
    через `--mattermost-host`; web-only запрещает этот параметр и не содержит
    interaction deployment, trust material или external credential mounts.
