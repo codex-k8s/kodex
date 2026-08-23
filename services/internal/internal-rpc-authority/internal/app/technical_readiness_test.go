@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	model "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
@@ -40,6 +45,29 @@ func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
 			}
 			readiness.Set(false, "next_case")
 		})
+	}
+}
+
+type restoreStartupReadinessStub struct{ err error }
+
+func (stub restoreStartupReadinessStub) StartupReady(context.Context) (model.RestoreState, error) {
+	return model.RestoreState{}, stub.err
+}
+
+func TestRestoreReadinessCachesOnlyDirectInfrastructureProbe(t *testing.T) {
+	t.Parallel()
+
+	readiness := serviceruntime.NewReadiness()
+	metrics := observability.NewMetrics("restore_readiness_test", "test", nil)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	refreshRestoreReadiness(context.Background(), restoreStartupReadinessStub{err: errors.New("database unavailable")}, readiness, metrics, logger)
+	if ready, reason := readiness.Ready(); ready || reason != "direct-infrastructure-unavailable" {
+		t.Fatalf("readiness = %t/%s", ready, reason)
+	}
+	refreshRestoreReadiness(context.Background(), restoreStartupReadinessStub{}, readiness, metrics, logger)
+	if ready, reason := readiness.Ready(); !ready || reason != "ready" {
+		t.Fatalf("recovered readiness = %t/%s", ready, reason)
 	}
 }
 

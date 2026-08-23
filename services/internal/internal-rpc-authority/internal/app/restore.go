@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
 	publisherclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/publisher"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	model "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
 	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
 	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
@@ -63,6 +65,8 @@ type RestoreControllerConfig struct {
 	RestoreEvidencePublicJWK string `env:"INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PUBLIC_JWK_FILE"`
 	KubernetesNamespace      string
 	KubernetesResourceName   string
+	ReadinessTimeout         time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_TIMEOUT"`
+	ReadinessInterval        time.Duration `env:"INTERNAL_RPC_AUTHORITY_READINESS_INTERVAL"`
 	ShutdownTimeout          time.Duration `env:"INTERNAL_RPC_AUTHORITY_SHUTDOWN_TIMEOUT"`
 }
 
@@ -92,6 +96,8 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 		RestoreEvidencePublicJWK: "/var/run/config/mattercodex/internal-rpc-authority/restore-trust/evidence-public.jwk",
 		KubernetesNamespace:      "mattercodex-system",
 		KubernetesResourceName:   "internal-rpc-authority-restore-coordination",
+		ReadinessTimeout:         2 * time.Second,
+		ReadinessInterval:        5 * time.Second,
 		ShutdownTimeout:          10 * time.Second,
 	}
 	if err := parseEnvironment(&config); err != nil {
@@ -109,7 +115,11 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	}
 	if config.ControllerGeneration == 0 ||
 		config.PostgresExpectedUser == "" ||
-		config.DatabaseClusterID != "internal-rpc-authority-primary" {
+		config.DatabaseClusterID != "internal-rpc-authority-primary" ||
+		config.ReadinessTimeout < 100*time.Millisecond ||
+		config.ReadinessTimeout > 5*time.Second ||
+		config.ReadinessInterval < time.Second ||
+		config.ReadinessInterval > time.Minute {
 		return RestoreControllerConfig{}, errors.New(
 			"restore controller database identity is invalid",
 		)
@@ -335,6 +345,17 @@ func RunRestoreController(
 		metrics,
 		restoreApplication,
 	)
+	workers := serviceruntime.StartWorkers(
+		lifecycle,
+		monitorRestoreReadiness(
+			restoreApplication,
+			readiness,
+			metrics,
+			logger,
+			config.ReadinessInterval,
+			config.ReadinessTimeout,
+		),
+	)
 	serveErrors := make(chan error, 2)
 	go func() {
 		if serveErr := grpcRuntime.Serve(grpcListener); serveErr != nil {
@@ -347,8 +368,6 @@ func RunRestoreController(
 			serveErrors <- errors.New("serve restore controller technical HTTP")
 		}
 	}()
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
 	logger.Info("restore controller started")
 	var runtimeErr error
 	select {
@@ -359,6 +378,14 @@ func RunRestoreController(
 	metrics.SetReady(false)
 	shutdownErr := serviceruntime.RunShutdown(
 		shutdownBase,
+		serviceruntime.ShutdownOperation{
+			Name:    "workers",
+			Timeout: config.ShutdownTimeout,
+			Run: func(ctx context.Context) error {
+				workers.Stop()
+				return workers.Wait(ctx)
+			},
+		},
 		serviceruntime.ShutdownOperation{
 			Name:    "grpc-server",
 			Timeout: config.ShutdownTimeout,
@@ -412,6 +439,42 @@ func RunRestoreController(
 	telemetryFinished = true
 	logger.Info("restore controller stopped")
 	return errors.Join(runtimeErr, shutdownErr)
+}
+
+type restoreStartupReadiness interface {
+	StartupReady(context.Context) (model.RestoreState, error)
+}
+
+func monitorRestoreReadiness(application restoreStartupReadiness, readiness *serviceruntime.Readiness, metrics *observability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			probe, cancel := context.WithTimeout(ctx, timeout)
+			refreshRestoreReadiness(probe, application, readiness, metrics, logger)
+			cancel()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
+		}
+	}
+}
+
+func refreshRestoreReadiness(ctx context.Context, application restoreStartupReadiness, readiness *serviceruntime.Readiness, metrics *observability.Metrics, logger *slog.Logger) {
+	_, err := application.StartupReady(ctx)
+	if err != nil {
+		if readiness.Set(false, "direct-infrastructure-unavailable") {
+			logger.Error("restore controller readiness unavailable", "error_class", "postgresql_or_kubernetes")
+		}
+		metrics.SetReady(false)
+		return
+	}
+	if readiness.Set(true, "ready") {
+		logger.Info("restore controller readiness restored")
+	}
+	metrics.SetReady(true)
 }
 
 func openRestorePostgres(

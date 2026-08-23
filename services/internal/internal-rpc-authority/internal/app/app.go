@@ -50,10 +50,9 @@ type authorityReadinessCondition string
 const (
 	conditionSnapshot authorityReadinessCondition = "snapshot"
 	conditionReplay   authorityReadinessCondition = "replay_cleanup"
-	conditionRestore  authorityReadinessCondition = "restore_coordination"
 )
 
-var authorityReadinessOrder = [...]authorityReadinessCondition{conditionSnapshot, conditionReplay, conditionRestore}
+var authorityReadinessOrder = [...]authorityReadinessCondition{conditionSnapshot, conditionReplay}
 
 type authorityReadiness struct {
 	mutex      sync.Mutex
@@ -387,7 +386,6 @@ func Run(
 				config,
 				restoreWorkloadAgent,
 				authorityApplication,
-				localReadiness,
 				logger,
 			)
 			return nil
@@ -476,22 +474,26 @@ func runRestoreWorkloadAgent(
 	config Config,
 	agent *restoreagent.Agent,
 	authorityApplication *application.Authority,
-	readiness *authorityReadiness,
 	logger *slog.Logger,
 ) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+	available := true
 	for {
 		pollCtx, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
 		err := agent.Poll(pollCtx, authorityApplication)
 		cancel()
 		if err != nil {
 			authorityApplication.SetRestoreBlocked(true)
-			if readiness.Set(conditionRestore, false) {
+			if available {
 				logger.Error("restore coordination unavailable", "error_class", "restore_controller")
 			}
-		} else if readiness.Set(conditionRestore, true) {
-			logger.Info("restore coordination restored")
+			available = false
+		} else {
+			if !available {
+				logger.Info("restore coordination restored")
+			}
+			available = true
 		}
 		select {
 		case <-ctx.Done():
