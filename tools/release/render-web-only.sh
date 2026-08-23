@@ -13,7 +13,8 @@ usage() {
     '  --oidc-issuer <https-url> --oidc-jwks-url <https-url>' \
     '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
     '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' \
-    '  [--profile <web-only|web-with-mattermost>]' >&2
+    '  [--profile <web-only|web-with-mattermost>]' \
+    '  [--mattermost-host <dns>; required for web-with-mattermost]' >&2
 }
 
 lock_file=""
@@ -26,6 +27,7 @@ oidc_jwks_url=""
 oidc_connect_address=""
 oidc_tls_server_name=""
 kubernetes_api_service_cidr=""
+mattermost_host=""
 profile="web-only"
 
 while (($# > 0)); do
@@ -40,6 +42,7 @@ while (($# > 0)); do
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
     --oidc-tls-server-name) oidc_tls_server_name="${2:-}"; shift 2 ;;
     --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
+    --mattermost-host) mattermost_host="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -58,6 +61,12 @@ done
 [[ "$oidc_connect_address" =~ ^[a-zA-Z0-9._-]+:[1-9][0-9]{0,4}$ ]] || fail 'OIDC connect address is invalid'
 [[ "$oidc_tls_server_name" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] ||
   fail 'OIDC TLS server name is invalid'
+if [[ "$profile" == "web-with-mattermost" ]]; then
+  [[ "$mattermost_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$mattermost_host" == *.* ]] ||
+    fail 'Mattermost host is required and must be an exact lowercase DNS name'
+elif [[ -n "$mattermost_host" ]]; then
+  fail 'Mattermost host is forbidden for the web-only profile'
+fi
 
 for command_name in go kubectl yq jq sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
@@ -125,6 +134,14 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
   )
 ' "$rendered"
+
+if [[ "$profile" == "web-with-mattermost" ]]; then
+  MATTERMOST_HOST="$mattermost_host" yq -i '
+    with(select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime");
+      .data.INTERACTION_GATEWAY_ALLOWED_HOSTS = strenv(MATTERMOST_HOST)
+    )
+  ' "$rendered"
+fi
 
 LOCK_DIGEST="$lock_sha256" \
 REGISTRY_PUSH="$registry_push" \
@@ -229,9 +246,11 @@ ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
 
 egress_revision="release-${source_sha:0:12}"
 egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$rendered" |
-  jq -cS --arg revision "$egress_revision" --arg hostname "$release_source_hostname" '
+  jq -cS --arg revision "$egress_revision" --arg hostname "$release_source_hostname" --arg mattermost "$mattermost_host" '
     .metadata.revision = $revision |
-    .spec.destinations = ((.spec.destinations + [{hostname:$hostname,port:443}]) | unique_by(.hostname) | sort_by(.hostname))
+    .spec.destinations = ((.spec.destinations + [{hostname:$hostname,port:443}] +
+      (if $mattermost == "" then [] else [{hostname:$mattermost,port:443}] end)) |
+      unique_by([.hostname,.port]) | sort_by(.hostname,.port))
   ')
 egress_policy_file="$temporary_directory/egress-policy.json"
 printf '%s' "$egress_policy" >"$egress_policy_file"

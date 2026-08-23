@@ -4,7 +4,7 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.0.1
 updated: 2026-08-23
 ---
 
@@ -62,6 +62,12 @@ Release lock создаёт `tools/release/build-release.sh`. Поддержив
 рендерит `tools/release/render-web-only.sh` с `--profile web-only` либо
 `--profile web-with-mattermost`. Несмотря на историческое имя скрипта, параметр
 профиля является авторитетным.
+
+Для `web-with-mattermost` render дополнительно требует
+`--mattermost-host <exact-dns>`. Он одновременно материализует installation-level
+allowlist interaction adapter и тот же exact destination в egress policy. В
+`web-only` этот параметр запрещён. Release workflow читает значение только из
+installation variable `MATTERCODEX_MATTERMOST_HOST` и не хранит домен в коде.
 
 Render не применяет ресурсы в кластер. Применение, reset и deploy выполняет
 только владелец после отдельного решения.

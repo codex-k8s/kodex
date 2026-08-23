@@ -220,6 +220,7 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
 "$repository_root/tools/release/render-web-only.sh" \
   --lock "$mattermost_lock" --lock-sha256 "$mattermost_lock_sha256" --output "$mattermost_render" \
   --profile web-with-mattermost \
+  --mattermost-host chat.example.test \
   --public-host console.example.test --public-origin https://console.example.test \
   --oidc-issuer https://identity.example.test/realms/mattercodex \
   --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
@@ -237,6 +238,10 @@ yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gate
     any($containers[]; .name == "internal-rpc-authority-issuer") and
     any($containers[]; .name == "platform-worker-grant-agent")
   ' >/dev/null || fail 'Mattermost profile does not materialize the optional adapter boundary'
+yq -e '
+  select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime") |
+  .data.INTERACTION_GATEWAY_ALLOWED_HOSTS == "chat.example.test"
+' "$mattermost_render" >/dev/null || fail 'Mattermost profile lost its installation-level host allowlist'
 if rg -ni 'bot-service|legacy-data-migration|interaction-gateway-postgresql|mattermostMode' "$mattermost_render" >/dev/null; then
   fail 'Mattermost profile contains a retired core dependency'
 fi
@@ -246,5 +251,8 @@ yq -o=json 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gatewa
       .podSelector.matchLabels."app.kubernetes.io/name" == "interaction-gateway" and
       .podSelector.matchLabels."app.kubernetes.io/component" == "interaction-adapter")
   ' >/dev/null || fail 'Mattermost adapter is not an exact egress-gateway client'
+mattermost_egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$mattermost_render")
+jq -e 'any(.spec.destinations[]; .hostname == "chat.example.test" and .port == 443)' \
+  <<<"$mattermost_egress_policy" >/dev/null || fail 'Mattermost host is absent from bounded egress policy'
 
 printf 'Web-only and optional Mattermost release tests passed\n'

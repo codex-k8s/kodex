@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.0.1
+version: 1.0.2
 updated: 2026-08-23
 ---
 
@@ -61,7 +61,8 @@ hosts передаются параметрами deployment environment. Реп
 4. Запустить `control-plane-cli broker bootstrap` с exact NATS material.
 5. Развернуть `control-plane`, затем runtime/scheduler/integration workers,
    gateway и Control Center.
-6. Для Mattermost выбрать профиль `web-with-mattermost`; web-only не содержит
+6. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
+   через `--mattermost-host`; web-only запрещает этот параметр и не содержит
    interaction deployment, trust material или external credential mounts.
 7. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
 
