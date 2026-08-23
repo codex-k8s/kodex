@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - certificates.yaml
+  - ca-bundles.yaml
+  - postgresql.yaml
+  - nats.yaml
+  - networkpolicy.yaml
+configMapGenerator:
+  - name: mattercodex-postgresql-init
+    files:
+      - 10-bootstrap.sql=postgresql/10-bootstrap.sql
+      - pg_hba.conf=postgresql/pg_hba.conf
+  - name: mattercodex-nats-config
+    files:
+      - nats.conf=nats/nats.conf
+      - render-config.sh=nats/render-config.sh
+generatorOptions:
+  disableNameSuffixHash: true

@@ -16,6 +16,7 @@ trap cleanup EXIT
 
 command -v docker >/dev/null 2>&1 || fail 'docker is required'
 command -v pg_isready >/dev/null 2>&1 || fail 'pg_isready is required'
+command -v psql >/dev/null 2>&1 || fail 'psql is required'
 
 docker run --rm -d --name "$container_name" \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
@@ -34,7 +35,12 @@ done
 pg_isready -h 127.0.0.1 -p "$port" -U postgres >/dev/null 2>&1 ||
   fail 'disposable PostgreSQL did not become ready'
 
-dsn="postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable"
+admin_dsn="postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable"
+psql "$admin_dsn" --no-password --file \
+  "$repository_root/deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql" \
+  >/dev/null
+dsn="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane?sslmode=disable"
+runtime_dsn="postgresql://control_plane_runtime_g1@127.0.0.1:${port}/control_plane?sslmode=disable"
 run_migration() {
   CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE=<(printf '%s' "$dsn") \
     env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli "$@"
@@ -45,7 +51,7 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
-  MATTERCODEX_CONTROL_PLANE_TEST_DSN="$dsn" \
+  MATTERCODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
       ./internal/repository/postgres/platform -run '^TestBootstrapComponent$'
 )

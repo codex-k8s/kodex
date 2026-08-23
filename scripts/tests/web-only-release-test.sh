@@ -62,6 +62,56 @@ if yq -e '
 ' "$render_file" >/dev/null 2>&1; then
   fail 'web-only render materializes the optional interaction adapter'
 fi
+
+for stateful_set in mattercodex-postgresql mattercodex-nats; do
+  STATEFUL_SET="$stateful_set" yq -e '
+    select(.kind == "StatefulSet" and .metadata.name == strenv(STATEFUL_SET)) |
+    .spec.replicas == 1 and
+    .spec.volumeClaimTemplates[0].spec.storageClassName == null and
+    (.spec.volumeClaimTemplates[0].spec.resources.requests.storage | length > 0)
+  ' "$render_file" >/dev/null ||
+    fail "fresh stateful dependency is absent or binds an installation-specific storage class: $stateful_set"
+done
+
+for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw nats; do
+  SERVICE="$service" yq -e '
+    select(.kind == "Service" and .metadata.name == strenv(SERVICE))
+  ' "$render_file" >/dev/null || fail "fresh stateful service is absent: $service"
+done
+
+for certificate in mattercodex-postgresql mattercodex-nats control-plane-nats-client control-plane-nats-bootstrap-client control-api-gateway-nats-client; do
+  CERTIFICATE="$certificate" yq -e '
+    select(.kind == "Certificate" and .metadata.name == strenv(CERTIFICATE)) |
+    .spec.issuerRef.name == "mattercodex-installation-ca"
+  ' "$render_file" >/dev/null || fail "fresh TLS certificate contract is absent: $certificate"
+done
+
+for bundle in control-plane-postgresql-ca internal-rpc-authority-postgresql-ca mattercodex-nats-ca; do
+  BUNDLE="$bundle" yq -e '
+    select(.kind == "Bundle" and .metadata.name == strenv(BUNDLE)) |
+    .metadata.namespace == null and
+    .spec.sources[0].secret.name == "mattercodex-installation-ca" and
+    .spec.target.configMap.key == "ca.pem"
+  ' "$render_file" >/dev/null || fail "fresh CA bundle contract is absent or incorrectly namespaced: $bundle"
+done
+
+yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "postgresql") |
+    .env[] | select(.name == "POSTGRES_PASSWORD_FILE") |
+    .value == "/var/run/bootstrap/password"
+  ' >/dev/null || fail 'PostgreSQL bootstrap password is not file-backed'
+yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "mattercodex-nats")' "$render_file" |
+  jq -e '
+    .spec.template.spec.volumes[] | select(.name == "credentials") |
+    .secret.secretName == "mattercodex-nats-credentials"
+  ' >/dev/null || fail 'NATS operator/account material is not secret-backed'
+yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$render_file" |
+  jq -e '
+    .spec.template.spec.containers[] | select(.name == "control-plane") |
+    .env[] | select(.name == "CONTROL_PLANE_NATS_REPLICAS") |
+    .value == "1"
+  ' >/dev/null || fail 'control-plane stream replication does not match the shipped NATS topology'
 if yq -e '
   select(.kind == "Deployment" and .metadata.name == "control-plane") |
   any(.spec.template.spec.containers[] | select(.name == "control-plane") | .env[]?;

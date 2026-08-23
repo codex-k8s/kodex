@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - namespace.yaml
+  - ../../base/platform-state
   - ../../base/platform-endpoints
   - ../../overlays/production/internal-rpc-authority
   - ../../overlays/production/image-supply-chain
@@ -14,6 +15,8 @@ resources:
   - ../../overlays/production/automation-scheduler
   - ../../overlays/production/control-api-gateway
   - ../../overlays/production/staff-control-center
+transformers:
+  - bundle-cluster-scope-transformer.yaml
 labels:
   - pairs:
       app.kubernetes.io/part-of: mattercodex

@@ -4,7 +4,7 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 1.0.1
+version: 1.1.0
 updated: 2026-08-23
 ---
 
@@ -15,8 +15,10 @@ updated: 2026-08-23
 `deploy/k8s/profiles/web-only` — основной и самодостаточный профиль. Он включает:
 
 - `staff-control-center` и `control-api-gateway`;
-- `control-plane` с единой fresh baseline PostgreSQL;
-- NATS JetStream и transactional outbox relay;
+- `platform-state`: fresh PostgreSQL для `control-plane` и internal RPC
+  authority, NATS JetStream, server/client TLS и exact NetworkPolicy;
+- `control-plane` с единой fresh baseline schema;
+- transactional outbox relay;
 - `runtime-controller`, `agent-runner` ABI и always-hot system assistant;
 - `role-image-builder` и image admission/supply chain;
 - `integration-gateway`, готовый при нуле connections и credentials;
@@ -55,6 +57,19 @@ incident и не меняет core Run outcome.
 - полный service graph проверяется после rollout отдельной диагностикой;
 - role image build и platform release build используют изолированные
   identities и разные promotion credentials.
+
+`platform-state` не фиксирует installation-specific `StorageClass`: PVC
+используют default class выбранного кластера. Shipped baseline использует один
+PostgreSQL Pod и один NATS Pod, поэтому stream replication factor равен `1`.
+Замена их на внешние HA endpoints допускается только при сохранении exact DNS,
+TLS, database role и NATS account contracts; значение replication factor тогда
+материализуется тем же release profile, а не меняется вручную после render.
+
+Manifest не содержит secret values. До применения StatefulSet владелец
+материализует `mattercodex-installation-ca`,
+`mattercodex-postgresql-bootstrap` и `mattercodex-nats-credentials` по
+`RUN-MC-002`. CA bundle переносится в клиентские ConfigMap через trust-manager;
+клиентские Pod не получают server private key.
 
 ## Render
 

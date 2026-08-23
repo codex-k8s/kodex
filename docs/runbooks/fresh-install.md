@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.0.2
+version: 1.1.0
 updated: 2026-08-23
 ---
 
@@ -48,23 +48,43 @@ keys, workload TLS, database credentials, NATS credentials, OIDC client secret,
 provider credentials и optional Mattermost credentials получают новые
 generation/revision.
 
+Минимальный secret contract stateful-слоя:
+
+| Namespace | Resource | Обязательные keys | Назначение |
+|---|---|---|---|
+| trust-manager trust namespace | `mattercodex-installation-ca` | `tls.crt` | публичный installation CA source для `Bundle` |
+| `mattercodex-system` | `mattercodex-installation-ca` | `tls.crt`, `tls.key` | cert-manager `Issuer`; доступен только cert-manager |
+| `mattercodex-system` | `mattercodex-postgresql-bootstrap` | `password` | одноразовый bootstrap PostgreSQL superuser |
+| `mattercodex-system` | `mattercodex-nats-credentials` | `operator.jwt`, `system-account.public`, `system-account.jwt`, `account.public`, `account.jwt` | NATS operator и два bounded accounts |
+
+Значения создаются криптографически стойкими средствами владельца и никогда не
+передаются как CLI argument. PostgreSQL application DSN, NATS user credentials,
+workload TLS и authority material по-прежнему материализуются через Vault/CSI
+по exact ресурсам render. Bootstrap password не используется application Pod и
+после проверки миграций ротируется и хранится в owner-controlled secret
+boundary для последующего восстановления StatefulSet; его нельзя удалять,
+пока Pod ссылается на этот Secret.
+
 Публичный домен, Origin, OIDC issuer/JWKS, registry endpoints и allowed external
 hosts передаются параметрами deployment environment. Репозиторий не задаёт
 чужой public domain по умолчанию.
 
 ## 4. Порядок новой установки
 
-1. Создать namespace и прямые stateful/security dependencies.
-2. Материализовать exact required keys и дождаться readback authority.
-3. Запустить `control-plane-cli up` с
+1. Создать namespace, installation CA source и перечисленные bootstrap secrets.
+2. Применить `Issuer`, `Certificate`, CA `Bundle`, PostgreSQL и NATS из
+   `platform-state`; дождаться готовности обоих StatefulSet и exact Service.
+3. Материализовать database roles/Vault static credentials, NATS user
+   credentials и authority keys; дождаться readback authority.
+4. Запустить `control-plane-cli up` с
    `CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE` через migration Job.
-4. Запустить `control-plane-cli broker bootstrap` с exact NATS material.
-5. Развернуть `control-plane`, затем runtime/scheduler/integration workers,
+5. Запустить `control-plane-cli broker bootstrap` с exact NATS material.
+6. Развернуть `control-plane`, затем runtime/scheduler/integration workers,
    gateway и Control Center.
-6. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
+7. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
    через `--mattermost-host`; web-only запрещает этот параметр и не содержит
    interaction deployment, trust material или external credential mounts.
-7. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
+8. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
 
 ## 5. Проверка bootstrap
 

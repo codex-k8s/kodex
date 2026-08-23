@@ -1056,6 +1056,27 @@ CREATE TABLE control_plane.outbox_events (
 CREATE INDEX outbox_pending ON control_plane.outbox_events (available_at, created_at)
     WHERE state IN ('PENDING', 'CLAIMED');
 
+REVOKE ALL ON SCHEMA control_plane FROM PUBLIC;
+GRANT USAGE ON SCHEMA control_plane TO control_plane_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON ALL TABLES IN SCHEMA control_plane
+    TO control_plane_runtime;
+GRANT USAGE, SELECT, UPDATE
+    ON ALL SEQUENCES IN SCHEMA control_plane
+    TO control_plane_runtime;
+GRANT EXECUTE
+    ON ALL FUNCTIONS IN SCHEMA control_plane
+    TO control_plane_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner
+    IN SCHEMA control_plane
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO control_plane_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner
+    IN SCHEMA control_plane
+    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO control_plane_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner
+    IN SCHEMA control_plane
+    GRANT EXECUTE ON FUNCTIONS TO control_plane_runtime;
+
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION control_plane.protect_system_agent()
 RETURNS trigger
