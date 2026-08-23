@@ -296,13 +296,27 @@ p {
   padding: 80px 30px 44px 288px;
 }
 .breadcrumbs {
-  display: flex;
-  gap: 8px;
-  align-items: center;
   min-height: 28px;
   margin-bottom: 10px;
   color: var(--subtle);
   font-size: 0.86rem;
+}
+.breadcrumbs ol {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.breadcrumbs li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.breadcrumbs li + li::before {
+  color: var(--border-strong);
+  content: "/";
 }
 .breadcrumbs a {
   text-decoration: none;

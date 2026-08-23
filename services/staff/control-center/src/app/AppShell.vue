@@ -10,6 +10,7 @@ import {
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
+import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useSessionStore } from "@/features/session/store";
@@ -45,6 +46,57 @@ const project = computed(() =>
 const pendingCount = computed(
   () => platform.gateList.filter((item) => item.state === "OPEN").length,
 );
+const breadcrumbs = computed(() => {
+  const agentRef =
+    typeof route.params.agentRef === "string"
+      ? route.params.agentRef
+      : undefined;
+  const workflowRef =
+    typeof route.params.workflowRef === "string"
+      ? route.params.workflowRef
+      : undefined;
+  const runRef =
+    typeof route.params.runRef === "string" ? route.params.runRef : undefined;
+  const labels: BreadcrumbLabels = {
+    home: t("nav.home"),
+    onboarding: t("nav.onboarding"),
+    assistant: t("nav.assistant"),
+    projects: t("nav.projects"),
+    project: t("app.project"),
+    agents: t("nav.agents"),
+    agent: t("nav.agent"),
+    workflows: t("nav.workflows"),
+    workflow: t("nav.workflow"),
+    newRun: t("nav.newRun"),
+    runs: t("nav.runs"),
+    run: t("nav.run"),
+    files: t("nav.files"),
+    automations: t("nav.automations"),
+    integrations: t("nav.integrations"),
+    decisions: t("nav.decisions"),
+    administration: t("nav.administration"),
+    access: t("nav.access"),
+    audit: t("nav.audit"),
+  };
+  return buildBreadcrumbs(
+    {
+      routeName: typeof route.name === "string" ? route.name : undefined,
+      ...(project.value
+        ? { project: { ref: project.value.ref, name: project.value.name } }
+        : {}),
+      ...(agentRef && platform.agents[agentRef]
+        ? { agentName: platform.agents[agentRef].name }
+        : {}),
+      ...(workflowRef && platform.workflows[workflowRef]
+        ? { workflowName: platform.workflows[workflowRef].name }
+        : {}),
+      ...(runRef && platform.runs[runRef]
+        ? { runName: platform.runs[runRef].title }
+        : {}),
+    },
+    labels,
+  );
+});
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/" },
@@ -368,15 +420,16 @@ onBeforeUnmount(() => {
     </aside>
 
     <div id="main-content" class="app-content">
-      <div class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
-        <RouterLink to="/">{{ $t("nav.home") }}</RouterLink>
-        <template v-if="project">
-          <span aria-hidden="true">/</span
-          ><RouterLink :to="`/projects/${project.ref}`">{{
-            project.name
-          }}</RouterLink>
-        </template>
-      </div>
+      <nav class="breadcrumbs" :aria-label="$t('app.breadcrumbs')">
+        <ol>
+          <li v-for="item in breadcrumbs" :key="`${item.path}:${item.label}`">
+            <RouterLink v-if="item.path" :to="item.path">{{
+              item.label
+            }}</RouterLink>
+            <span v-else aria-current="page">{{ item.label }}</span>
+          </li>
+        </ol>
+      </nav>
       <RouterView />
     </div>
 
