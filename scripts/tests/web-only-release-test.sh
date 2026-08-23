@@ -30,6 +30,13 @@ for cluster_kind in \
 done
 grep -Fq 'verify_release_cluster_scope_absent' "$legacy_resetter" ||
   fail 'incompatible reset does not read back cluster-scope cleanup'
+cluster_cleanup_line=$(grep -n '^[[:space:]]*delete_release_cluster_scope$' "$legacy_resetter" |
+  cut -d: -f1)
+namespace_cleanup_line=$(grep -n 'kubectl delete namespace "$legacy_namespace"' "$legacy_resetter" |
+  cut -d: -f1)
+[[ -n "$cluster_cleanup_line" && -n "$namespace_cleanup_line" &&
+  "$cluster_cleanup_line" -lt "$namespace_cleanup_line" ]] ||
+  fail 'release admission policies are not removed before namespace deletion'
 while IFS= read -r dockerfile; do
   "$dockerfile_path_validator" "$dockerfile"
   [[ -f "$repository_root/$dockerfile" ]] || {
