@@ -17,9 +17,10 @@ occurrences, attempts и lifecycle.
 ## Цикл
 
 1. Claim exact due occurrence по generated RPC.
-2. Получить occurrence/version/attempt/fence/immutable input digest.
+2. Получить occurrence/version/generation/fence/immutable input digest.
 3. Попросить control-plane создать Run source `SCHEDULE`.
-4. Зафиксировать typed completion либо отдать lease на bounded retry.
+4. Завершить цикл: terminal RuntimeWork transaction сама обновит occurrence и
+   Schedule вместе с авторитетным Run graph.
 
 Schedule запускает Agent или Workflow напрямую и не требует Mattermost room.
 Notification policy создаёт отдельную optional delivery после core result.
@@ -34,8 +35,8 @@ process failure.
 ## Инварианты
 
 - один `(scheduleRef, scheduledFor)` материализует один core Run;
-- claim связан с workload/method/version/attempt/fence/input;
-- retry occurrence повышает attempt/generation;
+- claim связан с workload/method/version/generation/fence/input;
+- повтор истёкшего claim повышает generation и заменяет lease/fence;
 - disable/archive/cancel target закрывает leases одной owner transaction;
 - actor, project и target owner не принимаются из worker payload;
 - scheduler не создаёт Pod и не вычисляет Run graph.
