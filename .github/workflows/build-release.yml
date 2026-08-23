@@ -52,6 +52,11 @@ jobs:
             --workflow .github/workflows/build-release.yml --environment production-build \
             --workflow-sha "$WORKFLOW_SHA" --owner-actor-id "$OWNER_ACTOR_ID" \
             --source-sha "$SOURCE_SHA" --mode build --output owner-gate.json
+      - name: Install exact Go toolchain
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Build and publish immutable images
         shell: bash
         env:

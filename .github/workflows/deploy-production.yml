@@ -72,6 +72,14 @@ jobs:
           tools/release/verify-github-build-run.sh \
             --build-run-id "$BUILD_RUN_ID" --source-sha "$SOURCE_SHA" \
             --owner-actor-id "$OWNER_ACTOR_ID" --output build-run-evidence.json
+      - name: Install exact Go toolchain
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install exact render toolchain
+        shell: bash
+        run: tools/release/install-render-tools.sh
       - name: Download exact release lock
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:

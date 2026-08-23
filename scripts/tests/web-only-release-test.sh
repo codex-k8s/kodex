@@ -13,6 +13,29 @@ lock_file="$temporary_directory/release-lock.json"
 render_file="$temporary_directory/web-only.yaml"
 source_sha=$(git -C "$repository_root" rev-parse HEAD)
 
+setup_go_action=actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+for workflow in build-release deploy-production; do
+  SETUP_GO_ACTION="$setup_go_action" yq -e \
+    '.jobs[] | .steps[] | select(.uses == strenv(SETUP_GO_ACTION)) | ((.with."go-version-file" == "go.mod") and (.with.cache == false))' \
+    "$repository_root/.github/workflows/$workflow.yml" >/dev/null ||
+    fail "exact Go toolchain step is absent: $workflow"
+done
+yq -e '
+  .jobs.render.steps[] |
+  select(.run == "tools/release/install-render-tools.sh")
+' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null ||
+  fail 'exact render toolchain step is absent'
+[[ -x "$repository_root/tools/release/install-render-tools.sh" ]] ||
+  fail 'render tool installer is not executable'
+for pinned_tool_contract in \
+  'kubectl_version=v1.35.5' \
+  'kubectl_sha256=90f75ea6ecc9ea5633262e1c0b83a40560003b30fc94a04cb099404fcef0c224' \
+  'yq_version=v4.53.6' \
+  'yq_sha256=c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385'; do
+  grep -Fxq "$pinned_tool_contract" "$repository_root/tools/release/install-render-tools.sh" ||
+    fail "render tool pin is absent: ${pinned_tool_contract%%=*}"
+done
+
 jq -n --arg source_sha "$source_sha" \
   --slurpfile manifest "$repository_root/tools/release/images.json" '
   {schema_version:2,profile:"web-only",source_sha:$source_sha,build_run_id:"local",
