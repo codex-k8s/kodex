@@ -47,7 +47,7 @@ chmod 0700 "$vault_directory"
 
 vault_status() {
   kubectl -n mattercodex-system exec vault-0 -- sh -ec '
-    export VAULT_ADDR=https://127.0.0.1:8200
+    export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
     export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
     vault status -format=json
   '
@@ -65,7 +65,7 @@ vault_cli() {
   { cat "$root_token_file"; printf '\n'; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault "$@"
     ' sh "$@"
@@ -78,7 +78,7 @@ vault_input() {
   { cat "$root_token_file"; printf '\n'; cat "$input_file"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault "$@"
     ' sh "$@"
@@ -91,7 +91,7 @@ vault_kv_put_file() {
   { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault kv put "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
@@ -104,7 +104,7 @@ vault_kv_patch_file() {
   { cat "$root_token_file"; printf '\n'; cat "$file_path"; } |
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault kv patch "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
@@ -117,7 +117,7 @@ if [[ "$mode" == initialize ]]; then
     umask 077
     init_file="$vault_directory/init.json"
     kubectl -n mattercodex-system exec vault-0 -- sh -ec '
-      export VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       vault operator init -format=json -key-shares=1 -key-threshold=1
     ' >"$init_file"
@@ -129,7 +129,7 @@ if [[ "$mode" == initialize ]]; then
   sealed=$(vault_status | jq -er '.sealed')
   if [[ "$sealed" == true ]]; then
     kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
-      export VAULT_ADDR=https://127.0.0.1:8200
+      export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       vault operator unseal -format=json -
     ' <"$unseal_key_file" >/dev/null
