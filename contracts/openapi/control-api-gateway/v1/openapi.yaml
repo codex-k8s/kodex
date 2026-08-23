@@ -2250,7 +2250,7 @@ components:
       required: [ref, type, title, summary, permitted]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
-        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN] }
+        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION] }
         title: { type: string, maxLength: 200 }
         summary: { type: string, maxLength: 1000 }
         permitted: { type: boolean }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -94,6 +95,70 @@ func TestTurnPodStateRejectsStaleWarmRevision(t *testing.T) {
 	}
 	if state != "CONFLICT" {
 		t.Fatalf("TurnPodState() = %q, want CONFLICT", state)
+	}
+}
+
+func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	terminal := manager.runtimePod(input, binding, ticketName("warm-"+input.RuntimeRevisionRef), "system-assistant-warm", "warm")
+	terminal.Status.Phase = corev1.PodFailed
+	if _, err := client.CoreV1().Pods("mattercodex-system").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create(terminal warm Pod) error = %v", err)
+	}
+	ready, err := manager.EnsureWarm(context.Background(), input, binding)
+	if err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if ready {
+		t.Fatal("new warm Pod cannot be ready before Kubernetes observation")
+	}
+	pod, err := client.CoreV1().Pods("mattercodex-system").Get(context.Background(), "system-assistant-warm", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(recreated warm Pod) error = %v", err)
+	}
+	if pod.Status.Phase == corev1.PodFailed || pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
+		t.Fatalf("terminal warm Pod was not recreated: phase=%q", pod.Status.Phase)
+	}
+}
+
+func TestEnsureWarmReplacesTicketFromPreviousControllerInstance(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testExecution(true).GetRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	staleInput := input
+	staleInput.WorkloadInstance = "previous-controller"
+	raw, err := runtimecontract.EncodeRunnerInput(staleInput)
+	if err != nil {
+		t.Fatalf("EncodeRunnerInput() error = %v", err)
+	}
+	immutable := true
+	secretName := ticketName("warm-" + input.RuntimeRevisionRef)
+	_, err = client.CoreV1().Secrets("mattercodex-system").Create(context.Background(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "mattercodex-system",
+			Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: "previous-controller"}},
+		Immutable: &immutable, Data: map[string][]byte{inputKey: raw, ticketKey: []byte(strings.Repeat("a", 64))},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create(stale warm ticket) error = %v", err)
+	}
+	if _, err := manager.EnsureWarm(context.Background(), input, binding); err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	current, err := client.CoreV1().Secrets("mattercodex-system").Get(context.Background(), secretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get(current warm ticket) error = %v", err)
+	}
+	bound, err := runtimecontract.DecodeRunnerInput(current.Data[inputKey])
+	if err != nil || bound.WorkloadInstance != "controller-pod-uid" || current.Annotations[controllerAnnotation] != "controller-pod-uid" {
+		t.Fatalf("warm ticket still belongs to previous controller: input=%#v err=%v", bound, err)
 	}
 }
 

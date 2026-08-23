@@ -1477,14 +1477,26 @@ func (InteractionMessageOutcome) EnumDescriptor() ([]byte, []int) {
 type AssistantPlanOperation_Type int32
 
 const (
-	AssistantPlanOperation_TYPE_UNSPECIFIED              AssistantPlanOperation_Type = 0
-	AssistantPlanOperation_TYPE_CREATE_PROJECT           AssistantPlanOperation_Type = 1
-	AssistantPlanOperation_TYPE_CREATE_AGENT             AssistantPlanOperation_Type = 2
-	AssistantPlanOperation_TYPE_CREATE_WORKFLOW          AssistantPlanOperation_Type = 3
-	AssistantPlanOperation_TYPE_CHANGE_CAPABILITY        AssistantPlanOperation_Type = 4
+	// Нулевое значение никогда не разрешает конфигурационное действие.
+	AssistantPlanOperation_TYPE_UNSPECIFIED AssistantPlanOperation_Type = 0
+	// Создать Проект через тот же специализированный command, что и Control Center.
+	AssistantPlanOperation_TYPE_CREATE_PROJECT AssistantPlanOperation_Type = 1
+	// Создать обычного ИИ-сотрудника в разрешённом Проекте.
+	AssistantPlanOperation_TYPE_CREATE_AGENT AssistantPlanOperation_Type = 2
+	// Создать draft универсального Процесса с server-owned step keys.
+	AssistantPlanOperation_TYPE_CREATE_WORKFLOW AssistantPlanOperation_Type = 3
+	// Выдать или отозвать capability с обязательной OCC-версией агента.
+	AssistantPlanOperation_TYPE_CHANGE_CAPABILITY AssistantPlanOperation_Type = 4
+	// Выдать или отозвать integration grant с обязательной OCC-версией connection.
 	AssistantPlanOperation_TYPE_CHANGE_INTEGRATION_GRANT AssistantPlanOperation_Type = 5
-	AssistantPlanOperation_TYPE_CREATE_SCHEDULE          AssistantPlanOperation_Type = 6
-	AssistantPlanOperation_TYPE_LAUNCH_RUN               AssistantPlanOperation_Type = 7
+	// Создать долговечное расписание запуска агента либо Процесса.
+	AssistantPlanOperation_TYPE_CREATE_SCHEDULE AssistantPlanOperation_Type = 6
+	// Запустить агента либо Процесс от имени проверенного пользователя.
+	AssistantPlanOperation_TYPE_LAUNCH_RUN AssistantPlanOperation_Type = 7
+	// Создать metadata подключения без передачи секретов через assistant runtime.
+	AssistantPlanOperation_TYPE_CREATE_INTEGRATION_CONNECTION AssistantPlanOperation_Type = 8
+	// Поставить проверку существующего подключения в долговечную очередь.
+	AssistantPlanOperation_TYPE_TEST_INTEGRATION_CONNECTION AssistantPlanOperation_Type = 9
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -1498,16 +1510,20 @@ var (
 		5: "TYPE_CHANGE_INTEGRATION_GRANT",
 		6: "TYPE_CREATE_SCHEDULE",
 		7: "TYPE_LAUNCH_RUN",
+		8: "TYPE_CREATE_INTEGRATION_CONNECTION",
+		9: "TYPE_TEST_INTEGRATION_CONNECTION",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
-		"TYPE_UNSPECIFIED":              0,
-		"TYPE_CREATE_PROJECT":           1,
-		"TYPE_CREATE_AGENT":             2,
-		"TYPE_CREATE_WORKFLOW":          3,
-		"TYPE_CHANGE_CAPABILITY":        4,
-		"TYPE_CHANGE_INTEGRATION_GRANT": 5,
-		"TYPE_CREATE_SCHEDULE":          6,
-		"TYPE_LAUNCH_RUN":               7,
+		"TYPE_UNSPECIFIED":                   0,
+		"TYPE_CREATE_PROJECT":                1,
+		"TYPE_CREATE_AGENT":                  2,
+		"TYPE_CREATE_WORKFLOW":               3,
+		"TYPE_CHANGE_CAPABILITY":             4,
+		"TYPE_CHANGE_INTEGRATION_GRANT":      5,
+		"TYPE_CREATE_SCHEDULE":               6,
+		"TYPE_LAUNCH_RUN":                    7,
+		"TYPE_CREATE_INTEGRATION_CONNECTION": 8,
+		"TYPE_TEST_INTEGRATION_CONNECTION":   9,
 	}
 )
 
@@ -18980,7 +18996,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\fcapabilities\x18\n" +
 	" \x03(\v2&.controlplane.v1.IntegrationCapabilityR\fcapabilities\x129\n" +
 	"\x06grants\x18\v \x03(\v2!.controlplane.v1.IntegrationGrantR\x06grants\x12>\n" +
-	"\fnext_actions\x18\f \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\"\xfe\x03\n" +
+	"\fnext_actions\x18\f \x03(\x0e2\x1b.controlplane.v1.NextActionR\vnextActions\"\xcc\x04\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -18988,7 +19004,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\asummary\x18\x04 \x01(\tR\asummary\x12<\n" +
 	"\rbounded_input\x18\x05 \x01(\v2\x17.google.protobuf.StructR\fboundedInput\x12\x1c\n" +
 	"\tpermitted\x18\x06 \x01(\bR\tpermitted\x12-\n" +
-	"\x12unavailable_reason\x18\a \x01(\tR\x11unavailableReason\"\xd4\x01\n" +
+	"\x12unavailable_reason\x18\a \x01(\tR\x11unavailableReason\"\xa2\x02\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -18997,7 +19013,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x16TYPE_CHANGE_CAPABILITY\x10\x04\x12!\n" +
 	"\x1dTYPE_CHANGE_INTEGRATION_GRANT\x10\x05\x12\x18\n" +
 	"\x14TYPE_CREATE_SCHEDULE\x10\x06\x12\x13\n" +
-	"\x0fTYPE_LAUNCH_RUN\x10\a\"\xcf\x02\n" +
+	"\x0fTYPE_LAUNCH_RUN\x10\a\x12&\n" +
+	"\"TYPE_CREATE_INTEGRATION_CONNECTION\x10\b\x12$\n" +
+	" TYPE_TEST_INTEGRATION_CONNECTION\x10\t\"\xcf\x02\n" +
 	"\rAssistantPlan\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12)\n" +

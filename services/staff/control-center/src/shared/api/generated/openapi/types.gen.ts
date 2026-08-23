@@ -727,7 +727,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN';
+    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION';
     title: string;
     summary: string;
     permitted: boolean;

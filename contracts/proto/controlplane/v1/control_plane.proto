@@ -782,14 +782,26 @@ message IntegrationConnection {
 
 message AssistantPlanOperation {
   enum Type {
+    // Нулевое значение никогда не разрешает конфигурационное действие.
     TYPE_UNSPECIFIED = 0;
+    // Создать Проект через тот же специализированный command, что и Control Center.
     TYPE_CREATE_PROJECT = 1;
+    // Создать обычного ИИ-сотрудника в разрешённом Проекте.
     TYPE_CREATE_AGENT = 2;
+    // Создать draft универсального Процесса с server-owned step keys.
     TYPE_CREATE_WORKFLOW = 3;
+    // Выдать или отозвать capability с обязательной OCC-версией агента.
     TYPE_CHANGE_CAPABILITY = 4;
+    // Выдать или отозвать integration grant с обязательной OCC-версией connection.
     TYPE_CHANGE_INTEGRATION_GRANT = 5;
+    // Создать долговечное расписание запуска агента либо Процесса.
     TYPE_CREATE_SCHEDULE = 6;
+    // Запустить агента либо Процесс от имени проверенного пользователя.
     TYPE_LAUNCH_RUN = 7;
+    // Создать metadata подключения без передачи секретов через assistant runtime.
+    TYPE_CREATE_INTEGRATION_CONNECTION = 8;
+    // Поставить проверку существующего подключения в долговечную очередь.
+    TYPE_TEST_INTEGRATION_CONNECTION = 9;
   }
   string ref = 1;
   Type type = 2;

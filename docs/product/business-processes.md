@@ -4,8 +4,8 @@ title: Бизнес-процессы web-first MatterCodex
 type: product
 status: approved
 owner: product
-version: 1.0.0
-updated: 2026-08-22
+version: 1.0.1
+updated: 2026-08-23
 ---
 
 # Бизнес-процессы web-first MatterCodex
@@ -61,8 +61,12 @@ updated: 2026-08-22
    MCP-инструмент той же специализированной команды, что использует web-форма.
 4. Команда повторно проверяет полномочия пользователя и сохраняет двойную
    атрибуцию user + system assistant.
-5. Новый Project, Agent, Workflow, grant или Schedule сразу появляется в обычном
-   интерфейсе через domain event.
+5. План может создать Project, Agent, Workflow, metadata подключения, поставить
+   проверку подключения, изменить capability/grant, создать Schedule или
+   запустить работу. Секрет подключения помощнику не передаётся: он открывает
+   обычную защищённую форму Control Center.
+6. Подтверждённое изменение сразу появляется в обычном интерфейсе через domain
+   event.
 
 ## BP-GATE-001. Решение человека
 

@@ -4,7 +4,7 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.1.1
 updated: 2026-08-23
 ---
 
@@ -38,6 +38,11 @@ materialize-ит exact system role image/revision с resource limits и heartbea
 Idle не является active Turn, а turns исполняются последовательно. После
 process/Pod restart warm state восстанавливается до положительной assistant
 readiness. Prompt/runtime revision меняется controlled forward transition.
+
+Terminal warm Pod не переиспользуется: reconciler удаляет его и materialize-ит
+новый экземпляр. Immutable ticket от прежнего controller instance либо другой
+prompt/runtime revision также заменяется до создания Pod, поэтому restart не
+может привязать помощника к устаревшей authority или revision.
 
 Warm Pod не получает database, Kubernetes или secret-store authority.
 Конфигурационные действия идут через session-scoped typed MCP tools и

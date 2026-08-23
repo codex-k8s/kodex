@@ -4,7 +4,7 @@ title: Целевая архитектура web-first платформы
 type: architecture
 status: approved
 owner: architect
-version: 1.0.1
+version: 1.0.2
 updated: 2026-08-23
 ---
 
@@ -181,6 +181,11 @@ revision и heartbeat. Readiness положительна только если 
 закрытый registry специализированных owner commands. Каждая tool invocation
 повторно использует authority проверенного пользователя и фиксирует двойную
 атрибуцию `initiator_user + system_assistant`.
+
+Registry включает создание Project, Agent, Workflow, metadata integration
+connection, постановку connection test, изменение capability/grant, создание
+Schedule и запуск. Secret value не входит ни в prompt, ни в MCP payload:
+помощник может только подготовить переход в защищённую форму Control Center.
 
 ## Интеграции и секреты
 

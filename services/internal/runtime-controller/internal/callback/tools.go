@@ -15,11 +15,11 @@ func assistantPlanTool() map[string]any {
 func assistantPlanOperationSchemas() []map[string]any {
 	return []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
-			"name": stringSchema(1, 160), "purpose": stringSchema(0, 2000), "language": enumSchema("ru", "en"),
+			"name": stringSchema(1, 160), "purpose": stringSchema(1, 2000), "language": enumSchema("ru", "en"),
 		})),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
 			"projectRef": opaqueRefSchema(), "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"purpose": stringSchema(0, 2000), "roleDescription": stringSchema(0, 2000), "avatarUrl": stringSchema(0, 500),
+			"purpose": stringSchema(1, 2000), "roleDescription": stringSchema(1, 2000), "avatarUrl": stringSchema(0, 500),
 			"runtimeRef": opaqueRefSchema(), "instructions": stringSchema(20, 65536),
 		})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema()),
@@ -27,13 +27,29 @@ func assistantPlanOperationSchemas() []map[string]any {
 			"agentRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
 			"expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 		})),
-		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, map[string]any{
-			"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
-			"enabled": map[string]any{"type": "boolean"},
+		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema()),
+		assistantOperationSchema("CREATE_INTEGRATION_CONNECTION", objectSchema([]string{"definitionKey", "name", "publicConfiguration"}, map[string]any{
+			"definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
+			"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		})),
+		assistantOperationSchema("TEST_INTEGRATION_CONNECTION", objectSchema([]string{"connectionRef", "expectedVersion"}, map[string]any{
+			"connectionRef": opaqueRefSchema(), "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
 		})),
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema()),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema()),
 	}
+}
+
+func integrationGrantInputSchema() map[string]any {
+	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled", "expectedVersion"}, map[string]any{
+		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
+		"enabled": map[string]any{"type": "boolean"}, "expectedVersion": map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+	})
+	schema["oneOf"] = []map[string]any{
+		{"required": []string{"agentRef"}, "not": map[string]any{"required": []string{"workflowRef"}}},
+		{"required": []string{"workflowRef"}, "not": map[string]any{"required": []string{"agentRef"}}},
+	}
+	return schema
 }
 
 func assistantOperationSchema(kind string, input map[string]any) map[string]any {
@@ -66,9 +82,9 @@ func workflowInputSchema() map[string]any {
 }
 
 func scheduleInputSchema() map[string]any {
-	return objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
+	return objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
 		"projectRef": opaqueRefSchema(), "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
-		"preset": stringSchema(1, 120), "cronExpression": stringSchema(0, 160), "timezone": stringSchema(1, 80),
+		"preset": stringSchema(1, 120), "timeOfDay": stringSchema(0, 5), "dayOfWeek": stringSchema(0, 9), "timezone": stringSchema(1, 80),
 		"input":              map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
 		"sessionPolicy":      enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
 		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),

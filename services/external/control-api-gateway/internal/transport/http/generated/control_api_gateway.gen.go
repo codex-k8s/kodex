@@ -155,13 +155,15 @@ func (e ArtifactSource) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeCHANGECAPABILITY       AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT            AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEPROJECT          AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATESCHEDULE         AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATEWORKFLOW         AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN              AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypeCHANGECAPABILITY            AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT      AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                 AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT               AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATESCHEDULE              AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATEWORKFLOW              AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                   AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION   AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -173,6 +175,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 		return true
 	case AssistantPlanOperationTypeCREATEAGENT:
 		return true
+	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
+		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
 		return true
 	case AssistantPlanOperationTypeCREATESCHEDULE:
@@ -180,6 +184,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEWORKFLOW:
 		return true
 	case AssistantPlanOperationTypeLAUNCHRUN:
+		return true
+	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
 		return true
 	default:
 		return false

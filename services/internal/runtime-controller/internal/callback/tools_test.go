@@ -26,9 +26,37 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("assistant plan must be bounded, got %#v", operations["maxItems"])
 	}
 	oneOf := operations["items"].(map[string]any)["oneOf"].([]map[string]any)
-	if len(oneOf) != 7 {
+	if len(oneOf) != 9 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
+	byType := make(map[string]map[string]any, len(oneOf))
+	for _, operation := range oneOf {
+		properties := operation["properties"].(map[string]any)
+		operationType := properties["type"].(map[string]any)["const"].(string)
+		byType[operationType] = properties["input"].(map[string]any)
+	}
+	for _, operationType := range []string{"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION"} {
+		if byType[operationType] == nil {
+			t.Fatalf("assistant tool lost specialized operation %q", operationType)
+		}
+	}
+	grant := byType["CHANGE_INTEGRATION_GRANT"]
+	if len(grant["oneOf"].([]map[string]any)) != 2 || !containsString(grant["required"].([]string), "expectedVersion") {
+		t.Fatalf("integration grant schema lost target exclusivity or OCC: %#v", grant)
+	}
+	scheduleProperties := byType["CREATE_SCHEDULE"]["properties"].(map[string]any)
+	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] != nil {
+		t.Fatalf("assistant schedule schema diverged from owner schedule contract: %#v", scheduleProperties)
+	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {

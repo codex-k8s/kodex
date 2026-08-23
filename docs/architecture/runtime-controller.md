@@ -4,8 +4,8 @@ title: Runtime-controller и role Pod
 type: architecture
 status: approved
 owner: architect
-version: 1.0.1
-updated: 2026-08-22
+version: 1.0.2
+updated: 2026-08-23
 ---
 
 # Runtime-controller и role Pod
@@ -75,6 +75,8 @@ one-Pod-per-turn путь не обеспечивает hot-first-request. Recon
 assistant readiness означает, что exact desired prompt/runtime revision реально
 обслуживается и может принять turn. Warm state не даёт database, Kubernetes или
 secret-store authority; typed MCP operation повторно проверяет текущего User.
+`Failed`/`Succeeded` warm Pod и immutable ticket другого controller instance или
+revision являются stale materialization и заменяются reconciler-ом.
 
 ## Health/readiness
 

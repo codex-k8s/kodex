@@ -54,3 +54,60 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 		t.Fatalf("assistant launch source must be server-owned: %#v err=%v", mapped, err)
 	}
 }
+
+func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.T) {
+	t.Parallel()
+	create := entity.AssistantPlanOperation{Type: "CREATE_INTEGRATION_CONNECTION", Summary: "Create CRM connection", Input: map[string]any{
+		"definitionKey": "crm", "name": "Primary CRM", "publicConfiguration": map[string]any{"tenant": "sales"},
+	}}
+	mapped, err := assistantOperationCommand(create)
+	if err != nil || mapped.Kind != command.CreateConnection {
+		t.Fatalf("map create connection operation: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.ConnectionInput)
+	if payload.DefinitionKey != "crm" || payload.PublicConfiguration["tenant"] != "sales" {
+		t.Fatalf("unexpected connection input: %#v", payload)
+	}
+
+	testConnection := entity.AssistantPlanOperation{Type: "TEST_INTEGRATION_CONNECTION", Summary: "Test CRM connection", Input: map[string]any{
+		"connectionRef": "con_12345678", "expectedVersion": float64(3),
+	}}
+	mapped, err = assistantOperationCommand(testConnection)
+	if err != nil || mapped.Kind != command.TestConnection || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 3 {
+		t.Fatalf("map test connection operation with OCC: command=%#v err=%v", mapped, err)
+	}
+
+	grant := entity.AssistantPlanOperation{Type: "CHANGE_INTEGRATION_GRANT", Summary: "Grant CRM read", Input: map[string]any{
+		"connectionRef": "con_12345678", "capabilityKey": "crm.read", "agentRef": "agt_12345678", "enabled": true, "expectedVersion": float64(4),
+	}}
+	mapped, err = assistantOperationCommand(grant)
+	if err != nil || mapped.Kind != command.ChangeIntegrationGrant || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 4 {
+		t.Fatalf("map integration grant operation with OCC: command=%#v err=%v", mapped, err)
+	}
+	delete(grant.Input, "expectedVersion")
+	if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("grant without authoritative connection version must be rejected, got %v", err)
+	}
+	grant.Input["expectedVersion"] = float64(4)
+	grant.Input["workflowRef"] = "wfl_12345678"
+	if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("grant with competing targets must be rejected, got %v", err)
+	}
+}
+
+func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
+	t.Parallel()
+	schedule := entity.AssistantPlanOperation{Type: "CREATE_SCHEDULE", Summary: "Schedule lead review", Input: map[string]any{
+		"projectRef": "prj_12345678", "name": "Daily lead review", "targetType": "AGENT", "targetRef": "agt_12345678",
+		"preset": "DAILY", "timeOfDay": "09:30", "timezone": "Europe/Saratov", "input": map[string]any{},
+		"sessionPolicy": "NEW_EACH_RUN", "notificationPolicy": "CONTROL_CENTER_ONLY",
+	}}
+	mapped, err := assistantOperationCommand(schedule)
+	if err != nil || mapped.Kind != command.CreateSchedule {
+		t.Fatalf("map owner-friendly schedule operation: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.ScheduleInput)
+	if payload.TimeOfDay != "09:30" || payload.CronExpression != "" {
+		t.Fatalf("assistant must not synthesize a hidden cron expression: %#v", payload)
+	}
+}

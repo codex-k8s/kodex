@@ -286,13 +286,18 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 	const podName = "system-assistant-warm"
 	secretName := ticketName("warm-" + input.RuntimeRevisionRef)
 	existing, err := manager.client.CoreV1().Pods(manager.config.Namespace).Get(ctx, podName, metav1.GetOptions{})
-	if err == nil && (existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest || existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID) {
+	if err == nil && (existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
+		existing.Annotations[controllerAnnotation] != manager.config.ControllerPodUID ||
+		existing.Status.Phase == corev1.PodFailed || existing.Status.Phase == corev1.PodSucceeded) {
 		if deleteErr := manager.client.CoreV1().Pods(manager.config.Namespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return false, errors.New("replace stale warm runtime pod")
 		}
 		err = apierrors.NewNotFound(corev1.Resource("pods"), podName)
 	}
 	if apierrors.IsNotFound(err) {
+		if ticketErr := manager.removeConflictingWarmTicket(ctx, secretName, input); ticketErr != nil {
+			return false, ticketErr
+		}
 		token, ticketErr := newTicket()
 		if ticketErr != nil {
 			return false, ticketErr
@@ -309,6 +314,24 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		return false, errors.New("read warm runtime pod")
 	}
 	return podReady(existing), nil
+}
+
+func (manager *Manager) removeConflictingWarmTicket(ctx context.Context, secretName string, input runtimecontract.RunnerInput) error {
+	secret, err := manager.client.CoreV1().Secrets(manager.config.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("read warm runtime ticket")
+	}
+	if secret.Annotations[revisionAnnotation] == input.RuntimeRevisionDigest &&
+		secret.Annotations[controllerAnnotation] == manager.config.ControllerPodUID {
+		return nil
+	}
+	if err := manager.client.CoreV1().Secrets(manager.config.Namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return errors.New("replace stale warm runtime ticket")
+	}
+	return nil
 }
 
 func (manager *Manager) RegisterWarmTurn(ctx context.Context, input runtimecontract.RunnerInput, token string) error {

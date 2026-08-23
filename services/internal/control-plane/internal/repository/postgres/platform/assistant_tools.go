@@ -133,16 +133,41 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		result.Mutation.ExpectedVersion = &expected
 		result.Payload = command.AgentBindingInput{AgentRef: assistantString(operation.Input, "agentRef"), BindingRef: assistantString(operation.Input, "capabilityKey"), Enabled: enabled}
 	case "CHANGE_INTEGRATION_GRANT":
-		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled") {
+		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "expectedVersion") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled", "expectedVersion") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		enabled, enabledOK := assistantBoolValue(operation.Input, "enabled")
+		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
 		payload := command.IntegrationGrantInput{ConnectionRef: assistantString(operation.Input, "connectionRef"), CapabilityKey: assistantString(operation.Input, "capabilityKey"),
 			AgentRef: assistantString(operation.Input, "agentRef"), WorkflowRef: assistantString(operation.Input, "workflowRef"), Enabled: enabled}
-		if !enabledOK || payload.ConnectionRef == "" || !validCapabilityKey(payload.CapabilityKey) || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
+		if !enabledOK || !expectedOK || expected < 1 || payload.ConnectionRef == "" || !validCapabilityKey(payload.CapabilityKey) || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.ChangeIntegrationGrant, payload
+		result.Mutation.ExpectedVersion = &expected
+	case "CREATE_INTEGRATION_CONNECTION":
+		if !onlyAssistantFields(operation.Input, "definitionKey", "name", "publicConfiguration") ||
+			!hasAssistantFields(operation.Input, "definitionKey", "name", "publicConfiguration") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		configuration, configurationOK := assistantObjectValue(operation.Input, "publicConfiguration")
+		payload := command.ConnectionInput{DefinitionKey: assistantString(operation.Input, "definitionKey"), Name: assistantString(operation.Input, "name"), PublicConfiguration: configuration}
+		if !configurationOK || !validCapabilityKey(payload.DefinitionKey) || payload.Name == "" || len(payload.Name) > 160 || len(configuration) > 100 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.CreateConnection, payload
+	case "TEST_INTEGRATION_CONNECTION":
+		if !onlyAssistantFields(operation.Input, "connectionRef", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "connectionRef", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
+		connectionRef := assistantString(operation.Input, "connectionRef")
+		if !expectedOK || expected < 1 || connectionRef == "" {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.TestConnection, command.ConnectionInput{Ref: connectionRef}
+		result.Mutation.ExpectedVersion = &expected
 	case "CREATE_SCHEDULE":
 		schedule, err := assistantSchedule(operation.Input)
 		if err != nil {
