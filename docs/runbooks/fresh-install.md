@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.2
+version: 1.3.3
 updated: 2026-08-24
 ---
 
@@ -149,12 +149,18 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    runtime-компоненты читают точную immutable `ConfigMap`-проекцию тех же
    значений. Отсутствие CR, drift двух проекций или попытка заменить
    `parameterNotFoundAction: Deny` является ошибкой release, а не основанием
-   перезапускать API server. Общий Vault ingress разрешает только
-   `vault-csi-provider` в том же namespace и TCP/8200: именно provider создаёт
-   сетевое соединение для CSI mount, а Vault auth role ограничивает authority
-   исходного workload. Provider подключается к Vault напрямую по HTTPS с
-   адресом, installation CA path и exact SNI из pinned Helm values. Публичный
-   `ca.crt` монтируется read-only из `mattercodex-vault-server-tls`;
+   перезапускать API server. Общий Vault ingress разрешает по TCP/8200 только
+   инфраструктурные `vault-csi-provider` и `vault-secrets-operator`, а также
+   одно прямое workload-исключение
+   `mattercodex-registry-node-pull-readback` в том же namespace. Исключение
+   требуется для получения краткоживущего node-bound client certificate и
+   ограничено exact ServiceAccount `mattercodex-image-pull-readback`, projected
+   token с `audience: vault` и Vault policy, которая разрешает только issue по
+   `pki-node-pull/issue/mattercodex-node-pull` и revoke собственного token.
+   Другие workload не подключаются к Vault напрямую. CSI provider подключается
+   к Vault по HTTPS с адресом, installation CA path и exact SNI из pinned Helm
+   values. Публичный `ca.crt` монтируется read-only из
+   `mattercodex-vault-server-tls`;
    `SecretProviderClass` не переопределяет transport trust, а Vault Agent
    sidecar не участвует в этом пути. Каждый SPC обязан запрашивать projected
    token через точный `audience: vault`; source- и release-render проверки

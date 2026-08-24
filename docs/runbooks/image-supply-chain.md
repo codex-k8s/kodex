@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.3
+version: 1.0.4
 updated: 2026-08-24
 ---
 
@@ -41,9 +41,13 @@ Runtime читает отдельную immutable `ConfigMap`-проекцию; 
 4. Сверить Role: exact get immutable typed parameters и runtime `ConfigMap`;
    get/list/create Job; get/list/create/delete PVC. Secret, Pod, Deployment,
    RoleBinding, list/watch parameters и update/patch полномочия отсутствуют.
-   Проверить общий Vault ingress от exact `vault-csi-provider` только на
-   TCP/8200: без него CSI mount не достигает Vault, даже если workload имеет
-   корректный ServiceAccount и `SecretProviderClass`.
+   Проверить общий Vault ingress только на TCP/8200 и ровно от трёх источников:
+   exact `vault-csi-provider`, exact `vault-secrets-operator` из его namespace
+   и прямого workload-исключения
+   `mattercodex-registry-node-pull-readback`. Последний получает node-bound
+   client certificate под exact ServiceAccount
+   `mattercodex-image-pull-readback`, `audience: vault` и минимальной Vault
+   policy; другие workload не должны иметь прямого Vault ingress.
 5. Сверить обе admission policy и binding: `failurePolicy: Fail`, действие
    `Deny`, exact controller username, namespace, typed `paramKind` и
    `parameterNotFoundAction: Deny`.

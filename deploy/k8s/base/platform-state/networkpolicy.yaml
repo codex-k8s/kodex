@@ -65,6 +65,9 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: vault-secrets-operator
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-registry-node-pull-readback
       ports:
         - protocol: TCP
           port: 8200
