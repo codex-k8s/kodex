@@ -25,7 +25,7 @@ Human Gate, integration grant или terminal result.
 
 Каждая роль может использовать свой Docker image с собственными утилитами,
 пакетами и программным окружением. `role-image-builder` собирает этот image через
-rootless BuildKit, а image admission проверяет provenance, SBOM, vulnerability
+BuildKit с process sandbox в обязательном Pod user namespace, а image admission проверяет provenance, SBOM, vulnerability
 policy, signature, promotion и runtime ABI. Controller допускает только
 `repository@sha256` из настроенного promoted repository.
 

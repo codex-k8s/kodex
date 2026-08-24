@@ -37,8 +37,9 @@ workload владеют evidence, verdict и переносом exact digest.
    же snapshot безопасно извлекается. Recipe/claim не содержит build credential
    refs: private external input публикуется owner-side до сборки. Secret values
    не входят в context, mounts или BuildKit.
-6. Builder генерирует Dockerfile и обращается к вынесенному rootless BuildKit по
-   exact mTLS/SNI/CA. Staging push credential/egress принадлежит только BuildKit;
+6. Builder генерирует Dockerfile и обращается к вынесенному userns BuildKit с
+   process sandbox по exact mTLS/SNI/CA. Staging push credential/egress
+   принадлежит только BuildKit;
    builder client имеет лишь input pull и BuildKit egress. Недоверенный
    installation block исполняется без credential material. После него protected
    runtime binaries восстанавливаются из exact trusted base, а output закрепляет

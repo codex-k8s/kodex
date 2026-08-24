@@ -10,7 +10,7 @@ root = "/var/lib/buildkit"
 [worker.oci]
   enabled = true
   snapshotter = "overlayfs"
-  rootless = true
+  rootless = false
 
 [registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001"]
   ca = ["/var/run/secrets/mattercodex/buildkit/tls/push-ca.pem"]

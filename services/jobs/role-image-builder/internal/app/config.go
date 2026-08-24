@@ -82,7 +82,7 @@ func loadConfig() (Config, error) {
 		TrustedRoleBaseDigest:        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		FrontendRepository:           "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile",
 		StagingRepository:            "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images",
-		ExpectedBuilderSHA256:        "995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe",
+		ExpectedBuilderSHA256:        "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4",
 		ExpectedFrontendSHA256:       "0000000000000000000000000000000000000000000000000000000000000000",
 		ExpectedToolchainSHA256:      "0000000000000000000000000000000000000000000000000000000000000000",
 		RoleRuntimeContractRevision:  1,

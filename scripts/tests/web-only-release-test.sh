@@ -236,6 +236,34 @@ fi
 
 verify_csi_secret_mounts "$render_file"
 
+buildkit_deployment=$(yq -o=json -I=0 '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-buildkit")
+' "$render_file")
+jq -e '
+  .spec.template.spec.hostUsers == false and
+  (.spec.template.spec.containers[] | select(.name == "buildkitd") |
+    .image == "moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" and
+    .securityContext.privileged == true and
+    .securityContext.runAsUser == 0 and
+    .securityContext.runAsGroup == 0)
+' <<<"$buildkit_deployment" >/dev/null ||
+  fail 'rendered BuildKit does not retain the isolated user namespace boundary'
+yq -o=json 'select(.spec.template.spec != null)' "$render_file" |
+  jq -s -e '
+    all(.[];
+      (([((.spec.template.spec.initContainers // []) +
+           (.spec.template.spec.containers // []))[] |
+         .securityContext.privileged // false] | any) | not) or
+      (.spec.template.spec.hostUsers == false))
+  ' >/dev/null ||
+  fail 'rendered privileged workload escapes the mandatory Pod user namespace'
+if grep -Fq -- '--oci-worker-no-process-sandbox' "$render_file"; then
+  fail 'rendered BuildKit disables process sandbox'
+fi
+grep -Fq 'COPY --chmod=0444 services/staff/control-center/nginx.conf /etc/nginx/nginx.conf' \
+  "$repository_root/services/staff/control-center/Dockerfile" ||
+  fail 'staff control center nginx configuration has no explicit read-only image mode'
+
 if rg -q 'REGISTRY_HTTP_TLS_CLIENTAUTH|REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED|secret/data/' \
   "$render_file"; then
   fail 'render contains unsupported registry configuration or a non-canonical Vault path'

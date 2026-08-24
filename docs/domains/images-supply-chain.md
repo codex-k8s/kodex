@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.5.1
-updated: 2026-08-23
+version: 0.5.2
+updated: 2026-08-24
 ---
 
 # Образы и цепочка поставки
@@ -43,11 +43,13 @@ Installation block необязателен: пустая строка явля�
 ## Сборщик
 
 Kaniko не используется в промышленной конфигурации, поскольку исходный проект
-архивирован. Rootless BuildKit выполняет сборку с process sandbox в отдельном
-workload, Kubernetes user namespace, `hostUsers: false`, `procMount: Unmasked`
-и rootless AppArmor/seccomp primitives. Privileged, host escape,
-`noProcessSandbox` и insecure fallback запрещены. Readiness выполняет тот же
-Dockerfile `RUN`, что и рабочая сборка.
+архивирован. BuildKit выполняет сборку с process sandbox от namespace-root в
+отдельном workload и обязательном Kubernetes Pod user namespace с
+`hostUsers: false`. Контейнер использует `privileged: true` только внутри
+remapped user namespace; host-root или host user namespace из этого не
+следуют. Профили rootless `newuidmap`, `noProcessSandbox`, host escape и
+insecure fallback запрещены. Readiness выполняет тот же Dockerfile `RUN`, что
+и рабочая сборка.
 
 Сборщик не получает промышленные учетные данные среды выполнения. Токен реестра пакетов, если нужен, выдается как краткоживущий секрет с ограниченной областью и не попадает в слои образа или логи.
 
@@ -101,7 +103,7 @@ promoted evidence repository. Authorization
 Job deadline и durable idempotency receipt. Совместный image/evidence manifest
 readback фиксируется owner-транзакцией по одноразовому token, а
 pull видит только promoted admitted content. Admin DELETE не выдаётся сборщику
-или pull. Rootless BuildKit
+или pull. Userns BuildKit
 сохраняет process sandbox, работает без Kubernetes token, прикладных owner
 secrets и persistent worker state; ослаблять mTLS или registry scopes запрещено.
 Builder сверяет заявленный builder digest с exact BuildKit image, а toolchain

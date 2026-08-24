@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.5
-updated: 2026-08-23
+version: 1.1.6
+updated: 2026-08-24
 ---
 
 # Высокоуровневая архитектура
@@ -86,7 +86,8 @@ web-only профиля.
 ## Цепочка образов ролей
 
 `role-image-builder` получает fenced build attempt и собирает отдельный
-promoted OCI image окружения роли через rootless BuildKit. Следующие фазы
+promoted OCI image окружения роли через BuildKit в изолированном Pod user
+namespace. Следующие фазы
 автоматически создаёт `image-admission-controller`: `claim`, `scan`, `sign`,
 `admit` и отдельную `promote`. Controller не получает credentials этих фаз;
 его Kubernetes identity ограничена RBAC и fail-closed
