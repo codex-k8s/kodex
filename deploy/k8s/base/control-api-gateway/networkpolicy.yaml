@@ -22,7 +22,7 @@ spec:
               app.kubernetes.io/component: staff-frontend
       ports: [{protocol: TCP, port: 8443}]
     - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
       ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]
   egress:

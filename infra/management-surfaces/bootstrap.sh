@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { printf 'Management surfaces bootstrap failed: %s\n' "$*" >&2; exit 1; }
+usage() {
+  printf '%s\n' \
+    "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback" \
+    '  --oidc-issuer <https-url> --control-center-host <dns> --grafana-host <dns>' \
+    '  --vault-host <dns> --headlamp-host <dns> --public-ipv4-cidr <ipv4/32>' \
+    '  --ingress-class <name> --cluster-issuer <name> --ingress-namespace <name>' \
+    '  --ingress-pod-name <label> --kubernetes-api-service-cidr <host-cidr>' \
+    '  --kubernetes-api-endpoint-cidrs <host-cidr[,host-cidr...]>' \
+    '  --kubernetes-api-endpoint-ports <port[,port...]>' >&2
+}
+
+context=""
+mode=""
+oidc_issuer=""
+control_center_host=""
+grafana_host=""
+vault_host=""
+headlamp_host=""
+public_ipv4_cidr=""
+ingress_class=""
+cluster_issuer=""
+ingress_namespace=""
+ingress_pod_name=""
+kubernetes_api_service_cidr=""
+kubernetes_api_endpoint_cidrs=""
+kubernetes_api_endpoint_ports=""
+while (($# > 0)); do
+  case "$1" in
+    --context) context="${2:-}"; shift 2 ;;
+    --mode) mode="${2:-}"; shift 2 ;;
+    --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
+    --control-center-host) control_center_host="${2:-}"; shift 2 ;;
+    --grafana-host) grafana_host="${2:-}"; shift 2 ;;
+    --vault-host) vault_host="${2:-}"; shift 2 ;;
+    --headlamp-host) headlamp_host="${2:-}"; shift 2 ;;
+    --public-ipv4-cidr) public_ipv4_cidr="${2:-}"; shift 2 ;;
+    --ingress-class) ingress_class="${2:-}"; shift 2 ;;
+    --cluster-issuer) cluster_issuer="${2:-}"; shift 2 ;;
+    --ingress-namespace) ingress_namespace="${2:-}"; shift 2 ;;
+    --ingress-pod-name) ingress_pod_name="${2:-}"; shift 2 ;;
+    --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
+    --kubernetes-api-endpoint-cidrs) kubernetes_api_endpoint_cidrs="${2:-}"; shift 2 ;;
+    --kubernetes-api-endpoint-ports) kubernetes_api_endpoint_ports="${2:-}"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) usage; fail "unsupported argument: $1" ;;
+  esac
+done
+
+[[ -n "$context" ]] || fail 'exact context is required'
+case "$mode" in preflight|apply-monitoring|apply-surfaces|readback) ;; *) fail 'mode is invalid' ;; esac
+[[ "$oidc_issuer" =~ ^https://[a-zA-Z0-9._:-]+/realms/[a-zA-Z0-9._-]+$ ]] || fail 'OIDC issuer is invalid'
+for host in "$control_center_host" "$grafana_host" "$vault_host" "$headlamp_host"; do
+  [[ "$host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$host" == *.* ]] || fail 'surface host is invalid'
+done
+oidc_origin=${oidc_issuer%/realms/*}
+oidc_host=${oidc_origin#https://}
+host_count=$(printf '%s\n' "$oidc_host" "$control_center_host" "$grafana_host" "$vault_host" "$headlamp_host" |
+  sort -u | wc -l)
+[[ "$host_count" -eq 5 ]] || fail 'OIDC and management hosts must be unique'
+[[ "$public_ipv4_cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]] || fail 'public IPv4 CIDR is invalid'
+for value in "$ingress_class" "$cluster_issuer" "$ingress_namespace" "$ingress_pod_name"; do
+  [[ "$value" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'deployment selector is invalid'
+done
+for command_name in go helm jq kubectl sha256sum yq; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
+done
+[[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
+
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+validator="$repository_root/tools/release/validate-host-cidr.go"
+go run "$validator" "$public_ipv4_cidr" >/dev/null || fail 'public IPv4 CIDR is invalid'
+go run "$validator" "$kubernetes_api_service_cidr" >/dev/null || fail 'Kubernetes API Service CIDR is invalid'
+IFS=',' read -r -a api_endpoint_cidrs <<<"$kubernetes_api_endpoint_cidrs"
+IFS=',' read -r -a api_endpoint_ports <<<"$kubernetes_api_endpoint_ports"
+((${#api_endpoint_cidrs[@]} >= 1 && ${#api_endpoint_cidrs[@]} <= 16)) || fail 'Kubernetes API endpoint CIDR count is invalid'
+((${#api_endpoint_ports[@]} >= 1 && ${#api_endpoint_ports[@]} <= 8)) || fail 'Kubernetes API endpoint port count is invalid'
+for cidr in "${api_endpoint_cidrs[@]}"; do go run "$validator" "$cidr" >/dev/null || fail 'Kubernetes API endpoint CIDR is invalid'; done
+for port in "${api_endpoint_ports[@]}"; do
+  if [[ ! "$port" =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$port > 65535)); then
+    fail 'Kubernetes API endpoint port is invalid'
+  fi
+done
+
+lock_file="$script_directory/charts.lock.json"
+jq -e '
+  .schemaVersion == 1 and (.charts | length) == 3 and
+  ([.charts[].name] | unique | length) == 3 and
+  all(.charts[];
+    (.name | test("^[a-z0-9-]+$")) and (.chart | test("^[a-z0-9-]+$")) and
+    (.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and (.sha256 | test("^[a-f0-9]{64}$")))
+' "$lock_file" >/dev/null || fail 'management chart lock is invalid'
+
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+download_chart() {
+  local name=$1 chart repository version expected_sha directory archive
+  chart=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .chart' "$lock_file")
+  repository=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .repository' "$lock_file")
+  version=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .version' "$lock_file")
+  expected_sha=$(jq -er --arg name "$name" '.charts[] | select(.name == $name) | .sha256' "$lock_file")
+  directory="$temporary_directory/charts/$name"
+  mkdir -p "$directory"
+  helm pull "$chart" --repo "$repository" --version "$version" --destination "$directory" >/dev/null
+  archive=$(find "$directory" -maxdepth 1 -type f -name '*.tgz' -print -quit)
+  [[ -n "$archive" ]] || fail "chart archive is absent: $name"
+  printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum --check --status || fail "chart digest mismatch: $name"
+  printf '%s\n' "$archive"
+}
+
+monitoring_chart=$(download_chart kube-prometheus-stack)
+oauth2_chart=$(download_chart oauth2-proxy)
+headlamp_chart=$(download_chart headlamp)
+
+routes="$temporary_directory/routes.yaml"
+PUBLIC_IPV4_CIDR="$public_ipv4_cidr" INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
+INGRESS_NAMESPACE="$ingress_namespace" INGRESS_POD_NAME="$ingress_pod_name" \
+GRAFANA_HOST="$grafana_host" VAULT_HOST="$vault_host" HEADLAMP_HOST="$headlamp_host" \
+KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq '
+  (.. | select(tag == "!!str")) |= (
+    sub("__MATTERCODEX_PUBLIC_IPV4_CIDR__"; strenv(PUBLIC_IPV4_CIDR)) |
+    sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__MATTERCODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
+    sub("__MATTERCODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
+    sub("__MATTERCODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME)) |
+    sub("__MATTERCODEX_GRAFANA_HOST__"; strenv(GRAFANA_HOST)) |
+    sub("__MATTERCODEX_VAULT_HOST__"; strenv(VAULT_HOST)) |
+    sub("__MATTERCODEX_HEADLAMP_HOST__"; strenv(HEADLAMP_HOST)) |
+    sub("__MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR))
+  )
+' "$script_directory/routes.yaml" >"$routes"
+endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
+endpoint_ports=$(printf '%s\n' "${api_endpoint_ports[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {protocol:"TCP",port:tonumber})')
+endpoint_rule=$(jq -cn --argjson to "$endpoint_destinations" --argjson ports "$endpoint_ports" '{to:$to,ports:$ports}')
+KUBERNETES_API_ENDPOINT_RULE="$endpoint_rule" yq -i '
+  with(select(.kind == "NetworkPolicy" and (
+    (.metadata.namespace == "platform-admin" and .metadata.name == "headlamp-exact-paths") or
+    (.metadata.namespace == "mattercodex-system" and .metadata.name == "vault-exact-egress")
+  ));
+    .spec.egress += [(strenv(KUBERNETES_API_ENDPOINT_RULE) | from_json)])
+' "$routes"
+! grep -Eq '__MATTERCODEX_[A-Z0-9_]+__' "$routes" || fail 'management route render contains placeholders'
+kubectl apply --dry-run=client --validate=false -f "$routes" >/dev/null
+
+render_monitoring_values="$temporary_directory/monitoring-values.yaml"
+GRAFANA_ORIGIN="https://$grafana_host" yq '
+  (.. | select(tag == "!!str")) |= sub("__MATTERCODEX_GRAFANA_ORIGIN__"; strenv(GRAFANA_ORIGIN))
+' "$script_directory/kube-prometheus-stack-values.yaml" >"$render_monitoring_values"
+
+render_oauth_values() {
+  local surface=$1 host=$2 role=$3 issuer=$4 output=$5
+  local cookie_name="_mattercodex_${surface//-/_}_oauth2" tls_secret
+  case "$surface" in
+    control-center) tls_secret=staff-control-center-public-tls ;;
+    grafana) tls_secret=mattercodex-grafana-public-tls ;;
+    vault) tls_secret=mattercodex-vault-ui-public-tls ;;
+    headlamp) tls_secret=mattercodex-headlamp-public-tls ;;
+    *) fail 'unsupported OAuth2 surface' ;;
+  esac
+  OAUTH2_SECRET="oauth2-$surface" OAUTH2_COOKIE_NAME="$cookie_name" OIDC_ISSUER="$issuer" \
+  SURFACE_HOST="$host" SURFACE_ORIGIN="https://$host" ALLOWED_ROLE="$role" \
+  INGRESS_CLASS="$ingress_class" SURFACE_TLS_SECRET="$tls_secret" yq '
+    .fullnameOverride = strenv(OAUTH2_SECRET) |
+    (.. | select(tag == "!!str")) |= (
+      sub("__MATTERCODEX_OAUTH2_SECRET__"; strenv(OAUTH2_SECRET)) |
+      sub("__MATTERCODEX_OAUTH2_COOKIE_NAME__"; strenv(OAUTH2_COOKIE_NAME)) |
+      sub("__MATTERCODEX_OIDC_ISSUER__"; strenv(OIDC_ISSUER)) |
+      sub("__MATTERCODEX_SURFACE_HOST__"; strenv(SURFACE_HOST)) |
+      sub("__MATTERCODEX_SURFACE_ORIGIN__"; strenv(SURFACE_ORIGIN)) |
+      sub("__MATTERCODEX_ALLOWED_ROLE__"; strenv(ALLOWED_ROLE)) |
+      sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+      sub("__MATTERCODEX_SURFACE_TLS_SECRET__"; strenv(SURFACE_TLS_SECRET))
+    )
+  ' "$script_directory/oauth2-proxy-values.yaml" >"$output"
+}
+
+if [[ "$mode" == preflight ]]; then
+  helm template mattercodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" >/dev/null
+  for binding in \
+    "control-center|mattercodex-system|$control_center_host|mattercodex-owner|$oidc_issuer" \
+    "grafana|observability|$grafana_host|mattercodex-owner|$oidc_issuer" \
+    "vault|mattercodex-system|$vault_host|mattercodex-owner|$oidc_issuer" \
+    "headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master"; do
+    IFS='|' read -r surface namespace host role issuer <<<"$binding"
+    values="$temporary_directory/oauth-$surface.yaml"
+    render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
+    helm template "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" --values "$values" >/dev/null
+  done
+  helm template mattercodex-headlamp "$headlamp_chart" --namespace platform-admin --values "$script_directory/headlamp-values.yaml" >/dev/null
+  printf 'Management surfaces preflight completed\n'
+  exit 0
+fi
+
+kubectl apply --server-side --field-manager=mattercodex-management -f "$script_directory/namespaces.yaml" >/dev/null
+if [[ "$mode" == apply-monitoring ]]; then
+  kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || fail 'Grafana admin Secret is absent'
+  helm upgrade --install mattercodex-monitoring "$monitoring_chart" --namespace observability \
+    --values "$render_monitoring_values" --atomic --wait --timeout 20m
+fi
+
+if [[ "$mode" == apply-surfaces ]]; then
+  for binding in control-center:mattercodex-system grafana:observability vault:mattercodex-system headlamp:platform-admin; do
+    surface=${binding%%:*}; namespace=${binding#*:}
+    kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
+  done
+  helm upgrade --install mattercodex-headlamp "$headlamp_chart" --namespace platform-admin \
+    --values "$script_directory/headlamp-values.yaml" --atomic --wait --timeout 10m
+  for binding in \
+    "control-center|mattercodex-system|$control_center_host|mattercodex-owner|$oidc_issuer" \
+    "grafana|observability|$grafana_host|mattercodex-owner|$oidc_issuer" \
+    "vault|mattercodex-system|$vault_host|mattercodex-owner|$oidc_issuer" \
+    "headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master"; do
+    IFS='|' read -r surface namespace host role issuer <<<"$binding"
+    values="$temporary_directory/oauth-$surface.yaml"
+    render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
+    helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
+      --values "$values" --atomic --wait --timeout 10m
+  done
+  kubectl apply --server-side --field-manager=mattercodex-management -f "$routes" >/dev/null
+fi
+
+if [[ "$mode" == readback ]]; then
+  for binding in \
+    oauth2-control-center:mattercodex-system:mattercodex-owner \
+    oauth2-grafana:observability:mattercodex-owner \
+    oauth2-vault:mattercodex-system:mattercodex-owner \
+    oauth2-headlamp:platform-admin:admin; do
+    IFS=: read -r deployment namespace role <<<"$binding"
+    kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=3m >/dev/null || fail "OAuth2 Proxy rollout failed: $deployment"
+    kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e --arg role "--allowed-role=$role" '
+      any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null)
+    ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
+  done
+  kubectl -n platform-admin rollout status deployment/mattercodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
+  [[ "$(kubectl get clusterrolebinding mattercodex-headlamp -o jsonpath='{.roleRef.name}')" == cluster-admin ]] || fail 'Headlamp cluster-admin binding mismatch'
+  kubectl -n observability rollout status deployment/mattercodex-monitoring-grafana --timeout=3m >/dev/null || fail 'Grafana rollout failed'
+  kubectl -n observability get prometheus -o json | jq -e '
+    (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
+  ' >/dev/null || fail 'Prometheus readback failed'
+  kubectl -n observability get alertmanager -o json | jq -e '
+    (.items | length) == 1 and (.items[0].status.availableReplicas // 0) >= 1
+  ' >/dev/null || fail 'Alertmanager readback failed'
+  for binding in mattercodex-grafana:observability:"$grafana_host" mattercodex-vault-ui:mattercodex-system:"$vault_host" mattercodex-headlamp:platform-admin:"$headlamp_host"; do
+    IFS=: read -r ingress namespace host <<<"$binding"
+    [[ "$(kubectl -n "$namespace" get ingress "$ingress" -o jsonpath='{.spec.rules[0].host}')" == "$host" ]] || fail "surface Ingress mismatch: $ingress"
+    kubectl -n "$namespace" get ingress "$ingress" -o json | jq -e '
+      .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] | test("oauth2-.+-chain@kubernetescrd$")
+    ' >/dev/null || fail "surface OAuth2 middleware is absent: $ingress"
+  done
+  kubectl -n mattercodex-system get ingress staff-control-center -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "mattercodex-system-oauth2-control-center-chain@kubernetescrd"
+  ' >/dev/null || fail 'Control Center OAuth2 middleware is absent'
+fi
+
+printf 'Management surfaces bootstrap completed: %s\n' "$mode"

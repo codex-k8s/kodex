@@ -4,7 +4,7 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.0.0
+version: 2.1.0
 updated: 2026-08-23
 ---
 
@@ -89,7 +89,7 @@ updated: 2026-07-28
 | `PRD-MC-005`       | `docs/product/requirements.md`                              |
 | `ARCH-MC-001`      | `docs/architecture/README.md`                               |
 | `UX-MC-002`        | `docs/design/web-first-reset-prompt-pack.md`                |
-| `UX-MC-003`        | `docs/design/mockups/index.md`                               |
+| `UX-MC-003`        | `docs/design/mockups/index.md`                              |
 | `ARCH-DOC-002`     | `docs/architecture/technology-stack.md`                     |
 | `ARCH-MC-002`      | `docs/architecture/high-level-architecture.md`              |
 | `ARCH-MC-003`      | `docs/architecture/domain-map.md`                           |
@@ -127,11 +127,12 @@ updated: 2026-07-28
 | `RUN-MC-006`       | `docs/runbooks/internal-rpc-authority.md`                   |
 | `SVC-MC-013`       | `services/external/control-api-gateway/README.md`           |
 | `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
-| `RUN-MC-001`       | `docs/runbooks/README.md`                                  |
+| `RUN-MC-001`       | `docs/runbooks/README.md`                                   |
 | `RUN-MC-002`       | `docs/runbooks/fresh-install.md`                            |
 | `RUN-MC-007`       | `docs/runbooks/control-plane.md`                            |
 | `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
 | `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
+| `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

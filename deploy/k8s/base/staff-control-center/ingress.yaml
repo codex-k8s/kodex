@@ -7,6 +7,7 @@ metadata:
     kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: mattercodex-system-oauth2-control-center-chain@kubernetescrd
     traefik.ingress.kubernetes.io/service.serverstransport: mattercodex-system-staff-control-center@kubernetescrd
 spec:
   ingressClassName: __MATTERCODEX_INGRESS_CLASS__
@@ -20,4 +21,4 @@ spec:
           - path: /
             pathType: Prefix
             backend:
-              service: {name: staff-control-center, port: {name: https}}
+              service: { name: staff-control-center, port: { name: https } }

@@ -41,7 +41,6 @@ kubectl -n mattercodex-system get pod vault-0 >/dev/null 2>&1 || fail 'Vault Pod
 
 vault_directory="$material_directory/vault"
 root_token_file="$vault_directory/root-token"
-unseal_key_file="$vault_directory/unseal-key"
 mkdir -p "$vault_directory"
 chmod 0700 "$vault_directory"
 
@@ -72,7 +71,8 @@ read_vault_boolean() {
 
 require_root_material() {
   local material_file_path
-  for material_file_path in "$root_token_file" "$unseal_key_file"; do
+  for material_file_path in "$root_token_file" \
+    "$vault_directory/unseal-key-1" "$vault_directory/unseal-key-2" "$vault_directory/unseal-key-3"; do
     [[ -f "$material_file_path" && -s "$material_file_path" && ! -L "$material_file_path" ]] ||
       fail 'Vault owner material is absent'
     [[ $(stat -c '%a' "$material_file_path") == 600 ]] || fail 'Vault owner material mode is unsafe'
@@ -158,20 +158,25 @@ if [[ "$mode" == initialize ]]; then
     kubectl -n mattercodex-system exec vault-0 -- sh -ec '
       export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-      vault operator init -format=json -key-shares=1 -key-threshold=1
+      vault operator init -format=json -key-shares=5 -key-threshold=3
     ' >"$init_file"
     jq -er '.root_token' "$init_file" >"$root_token_file"
-    jq -er '.unseal_keys_b64[0]' "$init_file" >"$unseal_key_file"
-    chmod 0600 "$root_token_file" "$unseal_key_file" "$init_file"
+    for index in 1 2 3 4 5; do
+      jq -er --argjson index "$((index - 1))" '.unseal_keys_b64[$index]' "$init_file" \
+        >"$vault_directory/unseal-key-$index"
+    done
+    chmod 0600 "$root_token_file" "$vault_directory"/unseal-key-* "$init_file"
   fi
   require_root_material
   sealed=$(vault_status | read_vault_boolean sealed)
   if [[ "$sealed" == true ]]; then
-    kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
-      export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
-      export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
-      vault write -format=json sys/unseal key=-
-    ' <"$unseal_key_file" >/dev/null
+    for index in 1 2 3; do
+      kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
+        export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+        export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
+        vault write -format=json sys/unseal key=-
+      ' <"$vault_directory/unseal-key-$index" >/dev/null
+    done
   fi
   [[ $(vault_status | jq -er '.initialized and (.sealed | not)') == true ]] || fail 'Vault initialize readback failed'
 fi

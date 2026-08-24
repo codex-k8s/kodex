@@ -1,0 +1,29 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: keycloak-database-ca
+spec:
+  ca:
+    secretName: keycloak-database-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-postgresql-tls
+spec:
+  secretName: keycloak-postgresql-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth]
+  dnsNames:
+    - keycloak-postgresql
+    - keycloak-postgresql.identity
+    - keycloak-postgresql.identity.svc
+    - keycloak-postgresql.identity.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: keycloak-database-ca

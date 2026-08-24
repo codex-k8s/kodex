@@ -20,7 +20,7 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
       ports: [{protocol: TCP, port: 9090}]
     - from:

@@ -11,7 +11,7 @@ GRPC_GO_PLUGIN_LOCAL_VERSION := 1.6.2
 CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-go test-go-all tidy-go govulncheck gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -39,6 +39,9 @@ test-web-only-release:
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh
 	@./scripts/tests/nats-operator-material-test.sh
+
+test-management-surfaces:
+	@./scripts/tests/management-surfaces-test.sh
 
 test-authority-policy-codegen:
 	@./scripts/tests/authority-policy-codegen-test.sh

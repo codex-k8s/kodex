@@ -8,39 +8,61 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode apply|readback" \
-    '  --public-origin <https-origin> [--namespace identity] [--deployment sso]' \
+    "Usage: $0 --context <exact-context> --mode apply|readback|retire-initial-passwords" \
+    '  --public-origin <https-origin> --grafana-origin <https-origin>' \
+    '  --vault-origin <https-origin> --headlamp-origin <https-origin>' \
+    '  [--namespace identity] [--deployment sso]' \
     '  [--realm mattercodex] [--admin-secret keycloak-admin-client]' \
-    '  [--bootstrap-secret keycloak-bootstrap]' >&2
+    '  [--bootstrap-secret keycloak-bootstrap]' \
+    '  [--identities-configmap keycloak-identities]' \
+    '  [--initial-password-secret keycloak-initial-passwords]' >&2
 }
 
 expected_context=""
 mode=""
 public_origin=""
+grafana_origin=""
+vault_origin=""
+headlamp_origin=""
 namespace=identity
 deployment=sso
 realm=mattercodex
 admin_secret=keycloak-admin-client
 bootstrap_secret=keycloak-bootstrap
+identities_configmap=keycloak-identities
+initial_password_secret=keycloak-initial-passwords
 while (($# > 0)); do
   case "$1" in
     --context) expected_context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --public-origin) public_origin="${2:-}"; shift 2 ;;
+    --grafana-origin) grafana_origin="${2:-}"; shift 2 ;;
+    --vault-origin) vault_origin="${2:-}"; shift 2 ;;
+    --headlamp-origin) headlamp_origin="${2:-}"; shift 2 ;;
     --namespace) namespace="${2:-}"; shift 2 ;;
     --deployment) deployment="${2:-}"; shift 2 ;;
     --realm) realm="${2:-}"; shift 2 ;;
     --admin-secret) admin_secret="${2:-}"; shift 2 ;;
     --bootstrap-secret) bootstrap_secret="${2:-}"; shift 2 ;;
+    --identities-configmap) identities_configmap="${2:-}"; shift 2 ;;
+    --initial-password-secret) initial_password_secret="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -n "$expected_context" ]] || fail 'exact context is required'
-[[ "$mode" == apply || "$mode" == readback ]] || fail 'mode is invalid'
+case "$mode" in apply|readback|retire-initial-passwords) ;; *) fail 'mode is invalid' ;; esac
 [[ "$public_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'public origin is invalid'
-for resource_name in "$namespace" "$deployment" "$realm" "$admin_secret" "$bootstrap_secret"; do
+for management_origin in "$grafana_origin" "$vault_origin" "$headlamp_origin"; do
+  [[ "$management_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'management origin is invalid'
+done
+[[ "$public_origin" != "$grafana_origin" && "$public_origin" != "$vault_origin" &&
+  "$public_origin" != "$headlamp_origin" && "$grafana_origin" != "$vault_origin" &&
+  "$grafana_origin" != "$headlamp_origin" && "$vault_origin" != "$headlamp_origin" ]] ||
+  fail 'management origins must be unique'
+for resource_name in "$namespace" "$deployment" "$realm" "$admin_secret" "$bootstrap_secret" \
+  "$identities_configmap" "$initial_password_secret"; do
   [[ "$resource_name" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'resource name is invalid'
 done
 for command_name in base64 jq kubectl stat; do
@@ -52,14 +74,27 @@ kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=300s >
   fail 'Keycloak deployment is unavailable'
 
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
 chmod 0700 "$temporary_directory"
+cleanup() {
+  rm -rf -- "$temporary_directory"
+  kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec \
+    'rm -f /tmp/mattercodex-kcadm.config /tmp/mattercodex-kcadm-bootstrap.config' \
+    >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 read_secret_key() {
   local secret_name=$1 key=$2 output_file=$3
   kubectl -n "$namespace" get secret "$secret_name" -o "jsonpath={.data['${key//./\\.}']}" |
     base64 -d >"$output_file"
   [[ -s "$output_file" && ! -L "$output_file" ]] || fail "Keycloak secret key is absent: $secret_name/$key"
+  chmod 0600 "$output_file"
+}
+
+read_config_key() {
+  local configmap_name=$1 key=$2 output_file=$3
+  kubectl -n "$namespace" get configmap "$configmap_name" -o "jsonpath={.data['${key//./\\.}']}" >"$output_file"
+  [[ -s "$output_file" && ! -L "$output_file" ]] || fail "Keycloak config key is absent: $configmap_name/$key"
   chmod 0600 "$output_file"
 }
 
@@ -74,22 +109,41 @@ read_single_line_secret() {
 
 read_secret_key "$admin_secret" client-id "$temporary_directory/admin-client-id"
 read_secret_key "$admin_secret" client-secret "$temporary_directory/admin-client-secret"
+read_secret_key "$bootstrap_secret" admin-username "$temporary_directory/bootstrap-admin-username"
+read_secret_key "$bootstrap_secret" admin-password "$temporary_directory/bootstrap-admin-password"
 read_secret_key "$bootstrap_secret" organization-id "$temporary_directory/organization-id"
-read_secret_key "$bootstrap_secret" owner-username "$temporary_directory/owner-username"
-read_secret_key "$bootstrap_secret" owner-email "$temporary_directory/owner-email"
-read_secret_key "$bootstrap_secret" owner-initial-password "$temporary_directory/owner-password"
+read_config_key "$identities_configmap" admin-username "$temporary_directory/admin-username"
+read_config_key "$identities_configmap" owner-username "$temporary_directory/owner-username"
+read_config_key "$identities_configmap" owner-email "$temporary_directory/owner-email"
 
 admin_client_id=$(read_single_line_secret "$temporary_directory/admin-client-id" 'Keycloak admin client ID')
 admin_client_secret=$(read_single_line_secret "$temporary_directory/admin-client-secret" 'Keycloak admin client secret')
+bootstrap_admin_username=$(read_single_line_secret "$temporary_directory/bootstrap-admin-username" 'Keycloak administrator username')
+bootstrap_admin_password=$(read_single_line_secret "$temporary_directory/bootstrap-admin-password" 'Keycloak administrator password')
+admin_username=$(read_single_line_secret "$temporary_directory/admin-username" 'permanent Keycloak administrator username')
 organization_id=$(read_single_line_secret "$temporary_directory/organization-id" 'bootstrap organization ID')
 owner_username=$(read_single_line_secret "$temporary_directory/owner-username" 'bootstrap owner username')
 owner_email=$(read_single_line_secret "$temporary_directory/owner-email" 'bootstrap owner email')
-owner_password=$(read_single_line_secret "$temporary_directory/owner-password" 'bootstrap owner password')
 [[ "$organization_id" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$ ]] ||
   fail 'organization ID is invalid'
+[[ "$bootstrap_admin_username" =~ ^[a-zA-Z0-9._@-]{3,128}$ ]] || fail 'Keycloak administrator username is invalid'
+[[ ${#bootstrap_admin_password} -ge 20 ]] || fail 'Keycloak administrator password is too short'
+[[ "$admin_username" =~ ^[a-zA-Z0-9._@-]{3,128}$ ]] || fail 'permanent Keycloak administrator username is invalid'
+[[ "$admin_username" != "$bootstrap_admin_username" ]] || fail 'permanent and bootstrap administrators must differ'
 [[ "$owner_username" =~ ^[a-zA-Z0-9._@-]{3,128}$ ]] || fail 'owner username is invalid'
+[[ "$owner_username" != "$admin_username" && "$owner_username" != "$bootstrap_admin_username" ]] ||
+  fail 'owner and administrator usernames must differ'
 [[ "$owner_email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail 'owner email is invalid'
-[[ ${#owner_password} -ge 16 ]] || fail 'owner password is too short'
+
+read_initial_password() {
+  local key=$1 label=$2
+  local path="$temporary_directory/$key"
+  read_secret_key "$initial_password_secret" "$key" "$path"
+  local value
+  value=$(read_single_line_secret "$path" "$label")
+  [[ ${#value} -ge 20 ]] || fail "$label is too short"
+  printf '%s' "$value"
+}
 
 keycloak_request() {
   printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret" |
@@ -104,9 +158,57 @@ keycloak_request() {
     ' sh "$@"
 }
 
+keycloak_bootstrap_request() {
+  local bootstrap_username bootstrap_password
+  bootstrap_username=$(kubectl -n "$namespace" get secret "$bootstrap_secret" -o jsonpath='{.data.admin-username}' | base64 -d)
+  bootstrap_password=$(kubectl -n "$namespace" get secret "$bootstrap_secret" -o jsonpath='{.data.admin-password}' | base64 -d)
+  printf '%s\n%s\n' "$bootstrap_username" "$bootstrap_password" |
+    kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
+      IFS= read -r username
+      IFS= read -r password
+      config=/tmp/mattercodex-kcadm-bootstrap.config
+      command=/opt/keycloak/bin/kcadm.sh
+      "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
+        --realm master --user "$username" --password "$password" >/dev/null 2>&1
+      exec "$command" "$@" --config "$config"
+    ' sh "$@"
+  unset bootstrap_password
+}
+
+ensure_admin_client() {
+  local existing client_uuid service_account_id
+  if keycloak_request get realms >/dev/null 2>&1; then
+    return
+  fi
+  [[ "$mode" == apply ]] || fail 'Keycloak admin service client is unavailable'
+  existing=$(keycloak_bootstrap_request get clients -r master -q "clientId=$admin_client_id") ||
+    fail 'Keycloak bootstrap admin authentication failed'
+  case "$(jq 'length' <<<"$existing")" in
+    0)
+      keycloak_bootstrap_request create clients -r master \
+        -s "clientId=$admin_client_id" -s enabled=true -s publicClient=false \
+        -s bearerOnly=false -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
+        -s serviceAccountsEnabled=true -s "secret=$admin_client_secret" >/dev/null
+      ;;
+    1) ;;
+    *) fail 'Keycloak admin service client is duplicated' ;;
+  esac
+  client_uuid=$(keycloak_bootstrap_request get clients -r master -q "clientId=$admin_client_id" |
+    jq -er --arg client_id "$admin_client_id" '[.[] | select(.clientId == $client_id)] | if length == 1 then .[0].id else error("admin client mismatch") end')
+  keycloak_bootstrap_request update "clients/$client_uuid" -r master \
+    -s enabled=true -s publicClient=false -s bearerOnly=false -s standardFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=true -s "secret=$admin_client_secret" >/dev/null
+  service_account_id=$(keycloak_bootstrap_request get "clients/$client_uuid/service-account-user" -r master | jq -er '.id')
+  kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec '
+    exec /opt/keycloak/bin/kcadm.sh add-roles --config /tmp/mattercodex-kcadm-bootstrap.config \
+      -r master --uid "$1" --rolename admin
+  ' sh "$service_account_id" >/dev/null
+  keycloak_request get realms >/dev/null 2>&1 || fail 'Keycloak admin service client activation failed'
+}
+
 find_client_id() {
-  local client_id=$1
-  keycloak_request get clients -r "$realm" -q "clientId=$client_id" |
+  local client_id=$1 client_realm=${2:-$realm}
+  keycloak_request get clients -r "$client_realm" -q "clientId=$client_id" |
     jq -er --arg client_id "$client_id" '
       [ .[] | select(.clientId == $client_id) ] |
       if length == 1 then .[0].id else error("client identity is ambiguous") end
@@ -123,11 +225,143 @@ find_scope_id() {
 }
 
 replace_mapper() {
-  local client_uuid=$1 mapper_name=$2 mapper_type=$3 config_json=$4
-  keycloak_request create "clients/$client_uuid/protocol-mappers/models" -r "$realm" \
+  local client_uuid=$1 mapper_name=$2 mapper_type=$3 config_json=$4 client_realm=${5:-$realm}
+  keycloak_request create "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" \
     -s "name=$mapper_name" -s protocol=openid-connect -s "protocolMapper=$mapper_type" \
     -s "config=$config_json" >/dev/null
 }
+
+read_management_client_secret() {
+  local client_id=$1 namespace_name=$2 secret_name=$3
+  local secret_json actual_client_id client_secret
+  secret_json=$(kubectl -n "$namespace_name" get secret "$secret_name" -o json) ||
+    fail "management OIDC Secret is absent: $namespace_name/$secret_name"
+  actual_client_id=$(jq -er '.data["client-id"] | @base64d' <<<"$secret_json") ||
+    fail "management OIDC client ID is absent: $secret_name"
+  client_secret=$(jq -er '.data["client-secret"] | @base64d' <<<"$secret_json") ||
+    fail "management OIDC client secret is absent: $secret_name"
+  [[ "$actual_client_id" == "$client_id" && ${#client_secret} -ge 32 ]] ||
+    fail "management OIDC Secret is invalid: $secret_name"
+  printf '%s' "$client_secret"
+}
+
+reconcile_confidential_client() {
+  local client_id=$1 origin=$2 namespace_name=$3 secret_name=$4
+  local client_realm=${5:-$realm} client_uuid client_secret attributes mapper_id
+  client_secret=$(read_management_client_secret "$client_id" "$namespace_name" "$secret_name")
+  if ! find_client_id "$client_id" "$client_realm" >/dev/null 2>&1; then
+    keycloak_request create clients -r "$client_realm" -s "clientId=$client_id" >/dev/null
+  fi
+  client_uuid=$(find_client_id "$client_id" "$client_realm")
+  attributes=$(jq -cn --arg logout "$origin/*" '{
+    "pkce.code.challenge.method":"S256",
+    "post.logout.redirect.uris":$logout
+  }')
+  keycloak_request update "clients/$client_uuid" -r "$client_realm" \
+    -s enabled=true -s publicClient=false -s bearerOnly=false -s protocol=openid-connect \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=[\"$origin/oauth2/callback\"]" \
+    -s "webOrigins=[\"$origin\"]" -s "attributes=$attributes" -s "secret=$client_secret" >/dev/null
+  unset client_secret
+  while IFS= read -r mapper_id; do
+    [[ -n "$mapper_id" ]] || continue
+    keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$client_realm" >/dev/null
+  done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" |
+    jq -r '.[] | select(.name == "mattercodex-client-audience" or .name == "mattercodex-realm-roles") | .id')
+  replace_mapper "$client_uuid" mattercodex-client-audience oidc-audience-mapper \
+    "$(jq -cn --arg audience "$client_id" '{
+      "included.client.audience":$audience,"access.token.claim":"true",
+      "id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"
+    }')" "$client_realm"
+  replace_mapper "$client_uuid" mattercodex-realm-roles oidc-usermodel-realm-role-mapper \
+    '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}' \
+    "$client_realm"
+}
+
+reconcile_vault_client() {
+  local client_id=mattercodex-vault-ui client_uuid client_secret attributes mapper_id
+  client_secret=$(read_management_client_secret "$client_id" platform-admin vault-oidc)
+  if ! find_client_id "$client_id" >/dev/null 2>&1; then
+    keycloak_request create clients -r "$realm" -s "clientId=$client_id" >/dev/null
+  fi
+  client_uuid=$(find_client_id "$client_id")
+  attributes=$(jq -cn --arg logout "$vault_origin/*" '{
+    "pkce.code.challenge.method":"S256",
+    "post.logout.redirect.uris":$logout
+  }')
+  keycloak_request update "clients/$client_uuid" -r "$realm" \
+    -s enabled=true -s publicClient=false -s bearerOnly=false -s protocol=openid-connect \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=[\"$vault_origin/ui/vault/auth/oidc/oidc/callback\"]" \
+    -s "webOrigins=[\"$vault_origin\"]" -s "attributes=$attributes" -s "secret=$client_secret" >/dev/null
+  unset client_secret
+  while IFS= read -r mapper_id; do
+    [[ -n "$mapper_id" ]] || continue
+    keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$realm" >/dev/null
+  done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$realm" |
+    jq -r '.[] | select(.name == "mattercodex-client-audience" or .name == "mattercodex-realm-roles") | .id')
+  replace_mapper "$client_uuid" mattercodex-client-audience oidc-audience-mapper \
+    '{"included.client.audience":"mattercodex-vault-ui","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+  replace_mapper "$client_uuid" mattercodex-realm-roles oidc-usermodel-realm-role-mapper \
+    '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+}
+
+readback_confidential_client() {
+  local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm} client_uuid client_json mapper_json
+  client_uuid=$(find_client_id "$client_id" "$client_realm")
+  client_json=$(keycloak_request get "clients/$client_uuid" -r "$client_realm")
+  jq -e --arg origin "$origin" --arg redirect "$redirect" '
+    .enabled == true and .publicClient == false and .standardFlowEnabled == true and
+    .implicitFlowEnabled == false and .directAccessGrantsEnabled == false and
+    .serviceAccountsEnabled == false and .redirectUris == [$redirect] and .webOrigins == [$origin]
+  ' <<<"$client_json" >/dev/null || fail "management OIDC client readback failed: $client_id"
+  mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
+  jq -e --arg client_id "$client_id" '
+    ([.[] | select(.name == "mattercodex-client-audience" and .config."included.client.audience" == $client_id)] | length == 1) and
+    ([.[] | select(.name == "mattercodex-realm-roles" and .config."claim.name" == "realm_access.roles")] | length == 1)
+  ' <<<"$mapper_json" >/dev/null || fail "management OIDC mapper readback failed: $client_id"
+}
+
+ensure_admin_client
+
+if [[ "$mode" == apply ]]; then
+  admin_count=$(keycloak_request get users -r master -q "username=$admin_username" |
+    jq -r --arg username "$admin_username" '[.[] | select(.username == $username)] | length')
+  if [[ "$admin_count" == 0 ]]; then
+    admin_initial_password=$(read_initial_password admin-initial-password 'permanent administrator initial password')
+    keycloak_request create users -r master -s "username=$admin_username" -s enabled=true >/dev/null
+    printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$admin_initial_password" |
+      kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
+        IFS= read -r client_id
+        IFS= read -r client_secret
+        IFS= read -r administrator_password
+        config=/tmp/mattercodex-kcadm.config
+        command=/opt/keycloak/bin/kcadm.sh
+        "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
+          --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
+        "$command" set-password --config "$config" -r master --username "$1" \
+          --new-password "$administrator_password" >/dev/null
+      ' sh "$admin_username"
+    unset admin_initial_password
+  elif [[ "$admin_count" != 1 ]]; then
+    fail 'Keycloak administrator identity is ambiguous'
+  fi
+  keycloak_request add-roles -r master --uusername "$admin_username" --rolename admin >/dev/null
+
+  bootstrap_count=$(keycloak_request get users -r master -q "username=$bootstrap_admin_username" |
+    jq -r --arg username "$bootstrap_admin_username" '[.[] | select(.username == $username)] | length')
+  case "$bootstrap_count" in
+    0) ;;
+    1)
+      bootstrap_id=$(keycloak_request get users -r master -q "username=$bootstrap_admin_username" |
+        jq -er --arg username "$bootstrap_admin_username" '.[] | select(.username == $username) | .id')
+      keycloak_request delete "users/$bootstrap_id" -r master >/dev/null
+      ;;
+    *) fail 'temporary Keycloak bootstrap administrator is ambiguous' ;;
+  esac
+fi
 
 if [[ "$mode" == apply ]]; then
   if ! keycloak_request get "realms/$realm" >/dev/null 2>&1; then
@@ -143,7 +377,6 @@ if [[ "$mode" == apply ]]; then
     keycloak_request create roles -r "$realm" -s name=mattercodex-owner \
       -s 'description=MatterCodex platform owner' >/dev/null
   fi
-
   if ! find_client_id mattercodex-control-api >/dev/null 2>&1; then
     keycloak_request create clients -r "$realm" -s clientId=mattercodex-control-api >/dev/null
   fi
@@ -208,6 +441,7 @@ if [[ "$mode" == apply ]]; then
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -r --arg username "$owner_username" '[.[] | select(.username == $username)] | length')
   if [[ "$owner_count" == 0 ]]; then
+    owner_password=$(read_initial_password owner-initial-password 'owner initial password')
     keycloak_request create users -r "$realm" -s "username=$owner_username" -s enabled=true \
       -s "email=$owner_email" -s emailVerified=true >/dev/null
     printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$owner_password" |
@@ -222,6 +456,7 @@ if [[ "$mode" == apply ]]; then
         "$command" set-password --config "$config" -r "$1" --username "$2" \
           --new-password "$owner_password" >/dev/null
       ' sh "$realm" "$owner_username"
+    unset owner_password
   elif [[ "$owner_count" != 1 ]]; then
     fail 'owner identity is ambiguous'
   fi
@@ -230,6 +465,16 @@ if [[ "$mode" == apply ]]; then
     -r "$realm" -s enabled=true -s "email=$owner_email" -s emailVerified=true >/dev/null
   keycloak_request add-roles -r "$realm" --uusername "$owner_username" \
     --rolename mattercodex-owner >/dev/null
+
+  reconcile_confidential_client mattercodex-control-center-proxy "$public_origin" \
+    mattercodex-system oauth2-control-center
+  reconcile_confidential_client mattercodex-grafana-proxy "$grafana_origin" \
+    observability oauth2-grafana
+  reconcile_confidential_client mattercodex-vault-proxy "$vault_origin" \
+    mattercodex-system oauth2-vault
+  reconcile_confidential_client mattercodex-headlamp-proxy "$headlamp_origin" \
+    platform-admin oauth2-headlamp master
+  reconcile_vault_client
 fi
 
 realm_json=$(keycloak_request get "realms/$realm")
@@ -262,4 +507,28 @@ owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" 
 keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
   jq -e 'any(.[]; .name == "mattercodex-owner")' >/dev/null || fail 'owner role readback failed'
 
+readback_confidential_client mattercodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
+readback_confidential_client mattercodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
+readback_confidential_client mattercodex-vault-proxy "$vault_origin" "$vault_origin/oauth2/callback"
+readback_confidential_client mattercodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
+readback_confidential_client mattercodex-vault-ui "$vault_origin" "$vault_origin/ui/vault/auth/oidc/oidc/callback"
+
+administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |
+  jq -er --arg username "$admin_username" '
+    [.[] | select(.username == $username and .enabled == true)] |
+    if length == 1 then .[0].id else error("Keycloak administrator readback failed") end
+  ')
+keycloak_request get "users/$administrator_id/role-mappings/realm" -r master |
+  jq -e 'any(.[]; .name == "admin")' >/dev/null || fail 'Keycloak administrator role readback failed'
+bootstrap_count=$(keycloak_request get users -r master -q "username=$bootstrap_admin_username" |
+  jq -r --arg username "$bootstrap_admin_username" '[.[] | select(.username == $username)] | length')
+[[ "$bootstrap_count" == 0 ]] || fail 'temporary Keycloak bootstrap administrator still exists'
+
+if [[ "$mode" == retire-initial-passwords ]]; then
+  kubectl -n "$namespace" delete secret "$initial_password_secret" --ignore-not-found >/dev/null
+  ! kubectl -n "$namespace" get secret "$initial_password_secret" >/dev/null 2>&1 ||
+    fail 'Keycloak initial password Secret still exists'
+fi
+
+unset bootstrap_admin_password admin_client_secret
 printf 'Keycloak bootstrap completed: %s\n' "$mode"

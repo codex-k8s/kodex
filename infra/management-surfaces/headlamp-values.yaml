@@ -1,0 +1,39 @@
+replicaCount: 2
+fullnameOverride: mattercodex-headlamp
+image:
+  registry: ghcr.io
+  repository: headlamp-k8s/headlamp
+  tag: v0.45.0@sha256:db3f0e0fc58d358d41daa3fe7fc852437552c7ee873c3645470f7b86a8e0db49
+  pullPolicy: IfNotPresent
+config:
+  inCluster: true
+  inClusterContextName: mattercodex-production
+  unsafeUseServiceAccountToken: true
+  enableHelm: false
+  watchPlugins: false
+  staticPlugins: { enabled: true }
+  oidc:
+    secret: { create: false, name: unused }
+serviceAccount:
+  create: true
+  name: mattercodex-headlamp
+clusterRoleBinding:
+  create: true
+  clusterRoleName: cluster-admin
+automountServiceAccountToken: true
+service:
+  type: ClusterIP
+ingress: { enabled: false }
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 1Gi }
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

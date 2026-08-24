@@ -4,8 +4,8 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-24
 ---
 
 # Безопасность и секреты
@@ -51,3 +51,22 @@ signature, конфликт revision, expiry или истечение grace н�
 
 Материализация выполняется code-first после owner approval и никогда не печатает
 значения. PR содержит только имена expected keys и проверку формы.
+
+## Identity и recovery
+
+- GitHub Environment хранит только начальные человеческие пароли; OAuth client,
+  cookie, database и service secrets генерируются на exact SHA и передаются
+  владельцу только в `age`-encrypted artifact с коротким retention;
+- приватный `age` identity не хранится в GitHub, Kubernetes, Vault этой же
+  установки или Git и имеет минимум две offline owner-controlled копии;
+- Vault использует Shamir `5/3`; plaintext root token и shares существуют
+  только внутри ограниченной bootstrap/unseal ceremony и сразу повторно
+  шифруются;
+- `master/admin` Keycloak является явной cluster-admin authority для Headlamp.
+  Назначение и отзыв этой роли рассматриваются как изменение Kubernetes
+  cluster-admin доступа и проверяются readback;
+- Control Center, Grafana и Vault UI требуют `mattercodex-owner`, но не выдают
+  Kubernetes authority. Прямой публичный backend path в обход OAuth2 Proxy
+  запрещён.
+
+Полный порядок, secret names и восстановление определяет `RUN-MC-023`.

@@ -4,8 +4,8 @@ title: MatterCodex
 type: repository-readme
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-24
 ---
 
 # MatterCodex
@@ -41,7 +41,8 @@ MatterCodex — web-first платформа управления ИИ-сотр�
 - [домены](docs/domains/README.md);
 - [утверждённые HTML-макеты](docs/design/mockups/index.md);
 - [эксплуатационные профили](docs/operations/deployment-profiles.md);
-- [чистая установка](docs/runbooks/fresh-install.md).
+- [чистая установка](docs/runbooks/fresh-install.md);
+- [Keycloak и административные интерфейсы](docs/runbooks/identity-and-management-surfaces.md).
 
 Поддерживаемые Kustomize profiles:
 

@@ -1,0 +1,85 @@
+defaultRules:
+  create: true
+kubeControllerManager: { enabled: false }
+kubeScheduler: { enabled: false }
+kubeProxy: { enabled: false }
+kubeEtcd: { enabled: false }
+grafana:
+  enabled: true
+  replicas: 1
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  ingress: { enabled: false }
+  persistence:
+    enabled: true
+    type: sts
+    accessModes: [ReadWriteOnce]
+    size: 8Gi
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+  grafana.ini:
+    server:
+      root_url: __MATTERCODEX_GRAFANA_ORIGIN__
+    auth:
+      disable_login_form: true
+      disable_signout_menu: false
+    auth.proxy:
+      enabled: true
+      header_name: X-Auth-Request-User
+      header_property: username
+      auto_sign_up: true
+      enable_login_token: true
+      sync_ttl: 15
+      headers: Email:X-Auth-Request-Email
+    users:
+      auto_assign_org: true
+      auto_assign_org_role: Admin
+      allow_sign_up: false
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 2Gi }
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 1Gi }
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 4Gi } }
+prometheusOperator:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 2Gi }
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: 1
+    retention: 21d
+    retentionSize: 45GB
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits: { memory: 16Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 64Gi } }

@@ -14,8 +14,8 @@ server:
   logLevel: info
   updateStrategyType: OnDelete
   resources:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {memory: 2Gi}
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 2Gi }
   authDelegator:
     enabled: true
   dataStorage:
@@ -42,7 +42,7 @@ server:
   standalone:
     enabled: true
     config: |-
-      ui = false
+      ui = true
       disable_mlock = true
       api_addr = "https://vault.mattercodex-system.svc:8200"
       listener "tcp" {
