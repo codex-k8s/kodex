@@ -4,8 +4,8 @@ title: Документация MatterCodex
 type: documentation-index
 status: approved
 owner: architect
-version: 2.0.0
-updated: 2026-08-23
+version: 2.1.0
+updated: 2026-08-24
 ---
 
 # Документация MatterCodex
@@ -40,7 +40,9 @@ Git history является архивом прежней Mattermost-first ре
 - role images и запуск Pod: `architecture/runtime-controller.md`;
 - runtime MCP: `architecture/integration-map.md`;
 - профили развертывания: `operations/deployment-profiles.md`;
-- чистая установка: `runbooks/fresh-install.md`.
+- чистая установка: `runbooks/fresh-install.md`;
+- identity, OAuth2 Proxy, Grafana, Vault UI и Headlamp:
+  `runbooks/identity-and-management-surfaces.md`.
 
 Все предлагаемые к слиянию документы имеют `status: approved`. Нормативный
 текст описывает только фактически обслуживаемый целевой контур.

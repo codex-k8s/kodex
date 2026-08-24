@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.2.6
+version: 1.3.0
 updated: 2026-08-24
 ---
 
@@ -50,12 +50,12 @@ generation/revision.
 
 Минимальный secret contract stateful-слоя:
 
-| Namespace | Resource | Обязательные keys | Назначение |
-|---|---|---|---|
-| trust-manager trust namespace | `mattercodex-installation-ca` | `tls.crt` | публичный installation CA source для `Bundle` |
-| `mattercodex-system` | `mattercodex-installation-ca` | `tls.crt`, `tls.key` | cert-manager `Issuer`; доступен только cert-manager |
-| `mattercodex-system` | `mattercodex-postgresql-bootstrap` | `password` | одноразовый bootstrap PostgreSQL superuser |
-| `mattercodex-system` | `mattercodex-nats-credentials` | `operator.jwt`, `system-account.public`, `system-account.jwt`, `account.public`, `account.jwt` | NATS operator и два bounded accounts |
+| Namespace                     | Resource                           | Обязательные keys                                                                              | Назначение                                          |
+| ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| trust-manager trust namespace | `mattercodex-installation-ca`      | `tls.crt`                                                                                      | публичный installation CA source для `Bundle`       |
+| `mattercodex-system`          | `mattercodex-installation-ca`      | `tls.crt`, `tls.key`                                                                           | cert-manager `Issuer`; доступен только cert-manager |
+| `mattercodex-system`          | `mattercodex-postgresql-bootstrap` | `password`                                                                                     | одноразовый bootstrap PostgreSQL superuser          |
+| `mattercodex-system`          | `mattercodex-nats-credentials`     | `operator.jwt`, `system-account.public`, `system-account.jwt`, `account.public`, `account.jwt` | NATS operator и два bounded accounts                |
 
 Значения создаются криптографически стойкими средствами владельца и никогда не
 передаются как CLI argument. PostgreSQL application DSN, NATS user credentials,
@@ -68,6 +68,13 @@ boundary для последующего восстановления StatefulSe
 Публичный домен, Origin, OIDC issuer/JWKS, registry endpoints и allowed external
 hosts передаются параметрами deployment environment. Репозиторий не задаёт
 чужой public domain по умолчанию.
+
+Identity, административные UI и Vault recovery устанавливаются по
+`RUN-MC-023`. Постоянный Keycloak administrator и initial owner credentials
+поступают только из GitHub Environment secrets в однодневный encrypted
+artifact. Временный bootstrap administrator и machine secrets генерируются
+workflow; bootstrap identity удаляется после reconciliation, а приватный
+`age` key остаётся за пределами GitHub, Kubernetes, Vault и репозитория.
 
 ## 4. Порядок новой установки
 
@@ -106,10 +113,12 @@ hosts передаются параметрами deployment environment. Реп
    Init-copy и дополнительная группа `0` не используются. Изменение
    публичного Traefik выполняется только
    `infra/public-ingress/bootstrap.sh`, после чего также обязателен `readback`.
-5. Настроить SSO через `tools/deploy/configure-keycloak.sh --mode apply` и
-   повторить `--mode readback`. Скрипт создаёт или приводит к exact состоянию
-   realm, public SPA client с Authorization Code + PKCE S256, audience и
-   обязательные owner claims; пароль существующего owner не меняется.
+5. Материализовать identity secrets, установить Keycloak и настроить SSO по
+   `RUN-MC-023`. Скрипт создаёт или приводит к exact состоянию realm, public SPA
+   client с Authorization Code + PKCE S256, отдельные confidential clients для
+   OAuth2 Proxy и обязательные owner claims; пароль существующего owner не
+   меняется. Keycloak administrator из `master` realm получает Headlamp
+   `cluster-admin` только через закрытый административный ingress.
 6. Создать namespace, installation CA source и bootstrap secrets командой
    `tools/deploy/materialize-fresh-install-secrets.sh`, затем установить Vault
    через `infra/service-infrastructure/bootstrap.sh --mode apply-vault`.
@@ -158,24 +167,28 @@ hosts передаются параметрами deployment environment. Реп
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 10. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
-   применяет workload-ресурсы за исключением этого create-once ресурса и всех
-   `Job`, дожидается image supply chain, отдельно выполняет
-   `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
-   DaemonSet. Migration/bootstrap Job принадлежат только фазе
-   `apply-migrations`: generic apply не обновляет их immutable template при
-   переходе на новый release digest. Перед generic apply state/workload-фаза
-   сравнивает semantic payload закрытого списка release-owned immutable
-   ресурсов (`mattercodex-role-environments`, image admission ConfigMap и
-   `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
-   устраняется bounded delete/create с немедленным exact readback. Добавлять в
-   этот список неизвестный ресурс без отдельного lifecycle запрещено.
+    применяет workload-ресурсы за исключением этого create-once ресурса и всех
+    `Job`, дожидается image supply chain, отдельно выполняет
+    `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
+    DaemonSet. Migration/bootstrap Job принадлежат только фазе
+    `apply-migrations`: generic apply не обновляет их immutable template при
+    переходе на новый release digest. Перед generic apply state/workload-фаза
+    сравнивает semantic payload закрытого списка release-owned immutable
+    ресурсов (`mattercodex-role-environments`, image admission ConfigMap и
+    `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
+    устраняется bounded delete/create с немедленным exact readback. Добавлять в
+    этот список неизвестный ресурс без отдельного lifecycle запрещено.
 11. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
     Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
     anchor и отсутствие terminal container waiting states.
-12. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
-   через `--mattermost-host`; web-only запрещает этот параметр и не содержит
-   interaction deployment, trust material или external credential mounts.
-13. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
+12. Настроить Vault OIDC, немедленно зашифровать Shamir 5/3 recovery material и
+    установить Grafana/OAuth2 Proxy/Headlamp по `RUN-MC-023`. До удаления
+    plaintext root token и shares необходимо проверить encrypted bundle и его
+    checksum.
+13. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
+    через `--mattermost-host`; web-only запрещает этот параметр и не содержит
+    interaction deployment, trust material или external credential mounts.
+14. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
 
 Каждый из перечисленных скриптов требует exact `--context`. После ошибки нельзя
 повторять reset или предыдущие разрушительные шаги: устраняется причина и

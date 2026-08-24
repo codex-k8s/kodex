@@ -25,9 +25,9 @@ grep -Fq 'read_single_line_secret()' "$secret_bootstrap" ||
 done
 grep -Fq 'local material_file_path' "$vault_initializer" ||
   fail 'Vault owner material validation can mutate caller locals through Bash dynamic scope'
-grep -Fq 'for material_file_path in "$root_token_file" "$unseal_key_file"; do' "$vault_initializer" ||
-  fail 'Vault owner material validation does not use its private loop variable'
-if grep -Fq 'for file_path in "$root_token_file" "$unseal_key_file"; do' "$vault_initializer"; then
+grep -Fq '"$vault_directory/unseal-key-1" "$vault_directory/unseal-key-2" "$vault_directory/unseal-key-3"; do' "$vault_initializer" ||
+  fail 'Vault owner material validation does not require the approved threshold shares'
+if grep -Fq 'for file_path in "$root_token_file" "$vault_directory/unseal-key-1"; do' "$vault_initializer"; then
   fail 'Vault owner material validation reuses the caller-owned seed file variable'
 fi
 [[ $(grep -Fc 'local path=$1 key=$2 seed_file_path=$3 root_token' "$vault_initializer") -eq 2 ]] ||
@@ -133,6 +133,8 @@ if rg -q "jq -er '\.(initialized|sealed)'" "$vault_initializer"; then
 fi
 grep -Fq 'vault write -format=json sys/unseal key=-' "$vault_initializer" ||
   fail 'Vault unseal does not use the stdin-backed API write'
+grep -Fq 'vault operator init -format=json -key-shares=5 -key-threshold=3' "$vault_initializer" ||
+  fail 'Vault initialization does not use the approved Shamir 5/3 ceremony'
 if grep -Fq 'vault operator unseal' "$vault_initializer"; then
   fail 'Vault unseal still depends on an interactive operator command'
 fi

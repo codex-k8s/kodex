@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "charts": [
+    {
+      "name": "kube-prometheus-stack",
+      "repository": "https://prometheus-community.github.io/helm-charts",
+      "chart": "kube-prometheus-stack",
+      "version": "88.5.4",
+      "sha256": "c17a08afbbaa8577b5bdc990511b3cf1a3a37ae76ce5817e7478300f9933749b"
+    },
+    {
+      "name": "oauth2-proxy",
+      "repository": "https://oauth2-proxy.github.io/manifests",
+      "chart": "oauth2-proxy",
+      "version": "10.7.0",
+      "sha256": "47b44c66fdfc42677d307cf8891f3de29863414bf265f6bef2020c273ff7e839"
+    },
+    {
+      "name": "headlamp",
+      "repository": "https://kubernetes-sigs.github.io/headlamp/",
+      "chart": "headlamp",
+      "version": "0.45.0",
+      "sha256": "38c619e0ed5db4164b02c353bcbb24e8157c1d98d961b292f99d68cc9316b8eb"
+    }
+  ]
+}

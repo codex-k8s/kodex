@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: mattercodex
+    mattercodex.dev/capability: observability
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-admin
+  labels:
+    app.kubernetes.io/part-of: mattercodex
+    mattercodex.dev/capability: platform-administration

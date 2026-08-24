@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-postgresql
+  labels:
+    app.kubernetes.io/name: keycloak-postgresql
+    app.kubernetes.io/component: database
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: keycloak-postgresql
+    app.kubernetes.io/component: database
+  ports:
+    - { name: postgresql, port: 5432, targetPort: postgresql, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak-postgresql
+  labels:
+    app.kubernetes.io/name: keycloak-postgresql
+    app.kubernetes.io/component: database
+spec:
+  serviceName: keycloak-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak-postgresql
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-postgresql
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: materialize-postgresql-tls
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          command: [sh, -ec]
+          args:
+            - |
+              set -eu
+              cp /var/run/secrets/mattercodex/postgresql-source/tls.crt /var/run/secrets/mattercodex/postgresql/tls.crt;
+              cp /var/run/secrets/mattercodex/postgresql-source/tls.key /var/run/secrets/mattercodex/postgresql/tls.key;
+              cp /var/run/secrets/mattercodex/postgresql-source/ca.crt /var/run/secrets/mattercodex/postgresql/ca.crt;
+              chmod 0644 /var/run/secrets/mattercodex/postgresql/tls.crt /var/run/secrets/mattercodex/postgresql/ca.crt;
+              chmod 0600 /var/run/secrets/mattercodex/postgresql/tls.key;
+              cat > /var/run/secrets/mattercodex/postgresql/pg_hba.conf <<'EOF'
+              local all all trust
+              hostnossl all all 0.0.0.0/0 reject
+              hostnossl all all ::0/0 reject
+              hostssl all all 0.0.0.0/0 scram-sha-256
+              hostssl all all ::0/0 scram-sha-256
+              EOF
+              chmod 0600 /var/run/secrets/mattercodex/postgresql/pg_hba.conf
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 5m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          volumeMounts:
+            - {
+                name: database-tls-source,
+                mountPath: /var/run/secrets/mattercodex/postgresql-source,
+                readOnly: true,
+              }
+            - {
+                name: database-tls,
+                mountPath: /var/run/secrets/mattercodex/postgresql,
+              }
+      containers:
+        - name: postgresql
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          imagePullPolicy: IfNotPresent
+          args:
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/var/run/secrets/mattercodex/postgresql/tls.crt
+            - -c
+            - ssl_key_file=/var/run/secrets/mattercodex/postgresql/tls.key
+            - -c
+            - ssl_ca_file=/var/run/secrets/mattercodex/postgresql/ca.crt
+            - -c
+            - ssl_min_protocol_version=TLSv1.3
+            - -c
+            - hba_file=/var/run/secrets/mattercodex/postgresql/pg_hba.conf
+            - -c
+            - password_encryption=scram-sha-256
+          ports:
+            - { name: postgresql, containerPort: 5432, protocol: TCP }
+          env:
+            - { name: POSTGRES_DB, value: keycloak }
+            - { name: POSTGRES_USER, value: keycloak }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                {
+                  secretKeyRef:
+                    { name: keycloak-bootstrap, key: database-password },
+                }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          startupProbe:
+            exec: { command: [pg_isready, -U, keycloak, -d, keycloak] }
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 90
+          readinessProbe:
+            exec: { command: [pg_isready, -U, keycloak, -d, keycloak] }
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            exec: { command: [pg_isready, -U, keycloak, -d, keycloak] }
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - {
+                name: database-tls,
+                mountPath: /var/run/secrets/mattercodex/postgresql,
+                readOnly: true,
+              }
+      volumes:
+        - name: database-tls-source
+          secret: { secretName: keycloak-postgresql-tls, defaultMode: 0440 }
+        - name: database-tls
+          emptyDir: { sizeLimit: 1Mi }
+      terminationGracePeriodSeconds: 60
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 8Gi } }

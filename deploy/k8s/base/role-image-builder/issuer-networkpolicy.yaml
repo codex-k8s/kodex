@@ -11,7 +11,7 @@ spec:
   ingress:
     - from:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: monitoring}
+            matchLabels: {kubernetes.io/metadata.name: observability}
           podSelector:
             matchLabels: {app.kubernetes.io/name: prometheus}
       ports: [{protocol: TCP, port: 9091}]

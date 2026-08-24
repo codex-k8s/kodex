@@ -1,0 +1,77 @@
+replicaCount: 2
+revisionHistoryLimit: 2
+image:
+  registry: quay.io
+  repository: oauth2-proxy/oauth2-proxy
+  tag: v7.15.3@sha256:10a1165743a192e1940b4708fb9647027185ce11a681a1c5519b442ff7f1f561
+  pullPolicy: IfNotPresent
+config:
+  existingSecret: __MATTERCODEX_OAUTH2_SECRET__
+  forceLegacyConfig: false
+  cookieName: __MATTERCODEX_OAUTH2_COOKIE_NAME__
+extraArgs:
+  provider: keycloak-oidc
+  oidc-issuer-url: __MATTERCODEX_OIDC_ISSUER__
+  redirect-url: __MATTERCODEX_SURFACE_ORIGIN__/oauth2/callback
+  upstream: static://202
+  allowed-role: __MATTERCODEX_ALLOWED_ROLE__
+  email-domain: "*"
+  scope: openid profile email roles
+  code-challenge-method: S256
+  reverse-proxy: "true"
+  set-xauthrequest: "true"
+  pass-user-headers: "true"
+  pass-access-token: "false"
+  pass-authorization-header: "false"
+  pass-basic-auth: "false"
+  prefer-email-to-user: "true"
+  cookie-secure: "true"
+  cookie-httponly: "true"
+  cookie-samesite: lax
+  cookie-expire: 8h
+  cookie-refresh: 1h
+  cookie-csrf-per-request: "true"
+  cookie-csrf-expire: 10m
+  whitelist-domain: __MATTERCODEX_SURFACE_HOST__
+  skip-provider-button: "true"
+  silence-ping-logging: "true"
+  standard-logging: "true"
+  auth-logging: "true"
+  request-logging: "true"
+serviceAccount:
+  enabled: true
+  automountServiceAccountToken: false
+service:
+  type: ClusterIP
+  portNumber: 80
+ingress:
+  enabled: true
+  className: __MATTERCODEX_INGRESS_CLASS__
+  path: /oauth2
+  pathType: Prefix
+  hosts:
+    - __MATTERCODEX_SURFACE_HOST__
+  annotations:
+    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  tls:
+    - secretName: __MATTERCODEX_SURFACE_TLS_SECRET__
+      hosts:
+        - __MATTERCODEX_SURFACE_HOST__
+resources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { memory: 256Mi }
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 2000
+  runAsGroup: 2000
+  fsGroup: 2000
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

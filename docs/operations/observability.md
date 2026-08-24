@@ -4,8 +4,8 @@ title: Наблюдаемость
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-08-24
 ---
 
 # Наблюдаемость
@@ -22,6 +22,13 @@ updated: 2026-08-23
 Основные панели: owner API, PostgreSQL/outbox, NATS/inbox/cursor, run queues,
 runtime Pod/claims, system assistant warm state, role image supply chain,
 integration effects/grants, optional deliveries, artifacts и schedules.
+
+Prometheus, Alertmanager и Grafana устанавливаются pinned chart profile в
+namespace `observability`. Prometheus и Alertmanager не получают публичный
+Ingress. Grafana принимает auth-proxy headers только от публичного ingress,
+который перед этим проверяет Keycloak role `mattercodex-owner` через отдельный
+OAuth2 Proxy client. NetworkPolicy всех scrape targets разрешает namespace
+`observability`, а не историческое имя `monitoring`.
 
 ## Health и readiness
 
