@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 var (
@@ -21,8 +22,19 @@ func Read(path string, maximumBytes int64) ([]byte, error) {
 	return ReadWithin(filepath.Dir(path), path, maximumBytes)
 }
 
+// ReadProjectedServiceAccountToken читает Kubernetes projected token, у
+// которого kubelet оставляет root owner-write для атомарной ротации, а
+// non-root workload получает только group-read.
+func ReadProjectedServiceAccountToken(path string, maximumBytes int64) ([]byte, error) {
+	return readWithin(filepath.Dir(path), path, maximumBytes, true)
+}
+
 // ReadWithin читает файл, разрешая symlink только внутри root.
 func ReadWithin(root, path string, maximumBytes int64) ([]byte, error) {
+	return readWithin(root, path, maximumBytes, false)
+}
+
+func readWithin(root, path string, maximumBytes int64, allowProjectedToken bool) ([]byte, error) {
 	if root == "" || path == "" || maximumBytes < 1 {
 		return nil, errInvalidBoundary
 	}
@@ -54,7 +66,8 @@ func ReadWithin(root, path string, maximumBytes int64) ([]byte, error) {
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || !IsReadOnlyMode(info.Mode()) ||
+	if err != nil || !info.Mode().IsRegular() ||
+		!isSafeMode(info, allowProjectedToken, os.Geteuid()) ||
 		info.Size() < 1 || info.Size() > maximumBytes {
 		return nil, errUnsafe
 	}
@@ -64,6 +77,17 @@ func ReadWithin(root, path string, maximumBytes int64) ([]byte, error) {
 		return nil, errUnavailable
 	}
 	return value, nil
+}
+
+func isSafeMode(info os.FileInfo, allowProjectedToken bool, effectiveUID int) bool {
+	if IsReadOnlyMode(info.Mode()) {
+		return true
+	}
+	if !allowProjectedToken || info.Mode().Perm() != 0o640 || effectiveUID == 0 {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == 0
 }
 
 // IsReadOnlyMode возвращает true только для утвержденных exact permissions.

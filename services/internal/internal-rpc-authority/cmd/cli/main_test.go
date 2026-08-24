@@ -140,3 +140,43 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 		t.Fatal("baseline does not contain exactly one current snapshot publication function")
 	}
 }
+
+func TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(baselineMigration)
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	text := string(content)
+	connectStart := strings.Index(text, "GRANT CONNECT ON DATABASE internal_rpc_authority")
+	if connectStart < 0 {
+		t.Fatal("baseline does not grant database CONNECT to runtime principals")
+	}
+	connectEnd := strings.Index(text[connectStart:], ";")
+	if connectEnd < 0 {
+		t.Fatal("database CONNECT grant is incomplete")
+	}
+	grant := text[connectStart : connectStart+connectEnd]
+	for _, principal := range []string{
+		"ira_database_credential_reconciler",
+		"ira_restore_controller_g1",
+		"ira_publisher_g3",
+		"ira_publisher_g4",
+		"ira_publisher_g5",
+		"ira_readback_attestor_g3",
+		"ira_readback_attestor_g4",
+		"ira_readback_attestor_g5",
+		"ira_role_image_builder_issuer_g1",
+		"ira_control_api_gateway_issuer_g1",
+		"ira_control_plane_verifier_g1",
+		"ira_runtime_controller_issuer_g1",
+	} {
+		if !strings.Contains(grant, principal) {
+			t.Fatalf("database CONNECT grant misses %q", principal)
+		}
+	}
+	if strings.Contains(grant, "PUBLIC") || strings.Contains(grant, "internal_rpc_authority_owner") {
+		t.Fatal("database CONNECT grant widened beyond exact runtime principals")
+	}
+}

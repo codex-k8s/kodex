@@ -122,6 +122,32 @@ GRANT internal_rpc_authority_verifier
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 
 SET ROLE internal_rpc_authority_owner;
+GRANT CONNECT ON DATABASE internal_rpc_authority
+    TO ira_database_credential_reconciler,
+       ira_restore_controller_g1,
+       ira_publisher_g1,
+       ira_publisher_g2,
+       ira_publisher_g3,
+       ira_publisher_g4,
+       ira_publisher_g5,
+       ira_readback_attestor_g1,
+       ira_readback_attestor_g2,
+       ira_readback_attestor_g3,
+       ira_readback_attestor_g4,
+       ira_readback_attestor_g5,
+       ira_role_image_builder_issuer_g1,
+       ira_image_admission_issuer_g1,
+       ira_image_promotion_issuer_g1,
+       ira_automation_scheduler_issuer_g1,
+       ira_control_api_gateway_issuer_g1,
+       ira_control_plane_verifier_g1,
+       ira_control_plane_resolver_g1,
+       ira_integration_gateway_issuer_g1,
+       ira_interaction_gateway_issuer_g1,
+       ira_runtime_controller_issuer_g1;
+RESET ROLE;
+
+SET ROLE internal_rpc_authority_owner;
 CREATE SCHEMA internal_rpc_authority
     AUTHORIZATION internal_rpc_authority_readback_owner;
 RESET ROLE;

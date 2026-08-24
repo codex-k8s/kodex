@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.0
-updated: 2026-08-23
+version: 1.2.1
+updated: 2026-08-24
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -122,6 +122,11 @@ rollback после отмены request выполняется через от�
 
 - Runtime, migrator, bootstrap/reconciler и read-only diagnostics используют
   разные PostgreSQL roles с минимальными permissions.
+- Если bootstrap отзывает `CONNECT` у `PUBLIC`, migration до первого runtime
+  запуска явно выдаёт `CONNECT` каждому утверждённому точному `LOGIN`
+  principal, включая `CURRENT`, `NEXT`, reconciler и restore controller.
+  Членство `NOINHERIT` в capability-role не доказывает возможность открыть
+  соединение и не заменяет этот grant.
 - Runtime и migration manifests указывают на один фактически существующий
   environment-owned `Service` или exact egress gateway, а не на
   предполагаемый pod selector.

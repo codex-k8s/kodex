@@ -362,7 +362,7 @@ func verifyAnnotations(
 }
 
 func readToken(path string) (string, error) {
-	raw, err := securefile.Read(path, maxCredentialBytes)
+	raw, err := securefile.ReadProjectedServiceAccountToken(path, maxCredentialBytes)
 	if err != nil {
 		return "", errors.New("workload token file is unsafe")
 	}

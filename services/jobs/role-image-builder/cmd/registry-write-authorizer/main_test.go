@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -59,5 +62,50 @@ func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T
 	}
 	if !allowedEvidenceRequest("image-promotion", http.MethodGet, "/v2/evidence/role-image-admission/manifests/sha256:abc") {
 		t.Fatal("promotion exact evidence read was rejected")
+	}
+}
+
+func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
+	t.Parallel()
+	reader := func(path string) ([]byte, error) {
+		switch {
+		case strings.HasSuffix(path, ".username"):
+			return []byte("probe-user\n"), nil
+		case strings.HasSuffix(path, ".password"):
+			return []byte("probe-password\n"), nil
+		default:
+			return nil, errors.New("unexpected path")
+		}
+	}
+	authorization := "Basic " + base64.StdEncoding.EncodeToString(
+		[]byte("probe-user:probe-password"),
+	)
+	if !authorizedEvidenceCredentialWithReader(
+		"mattercodex-image-registry-evidence-probe",
+		authorization,
+		reader,
+	) {
+		t.Fatal("exact evidence probe credential was rejected")
+	}
+	for _, invalid := range []string{
+		"", "basic " + strings.TrimPrefix(authorization, "Basic "), authorization + "x",
+	} {
+		if authorizedEvidenceCredentialWithReader(
+			"mattercodex-image-registry-evidence-probe",
+			invalid,
+			reader,
+		) {
+			t.Fatal("invalid evidence probe credential was accepted")
+		}
+	}
+}
+
+func TestNormalizeMethodHasBoundedCardinality(t *testing.T) {
+	t.Parallel()
+	if normalizeMethod("UNBOUNDED\nINPUT") != "OTHER" {
+		t.Fatal("unbounded method was preserved in diagnostics")
+	}
+	if normalizeMethod(http.MethodGet) != http.MethodGet {
+		t.Fatal("known method was not preserved")
 	}
 }

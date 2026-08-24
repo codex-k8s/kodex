@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.2.2
-updated: 2026-08-07
+version: 1.2.3
+updated: 2026-08-24
 ---
 
 # Infrastructure Guide
@@ -185,6 +185,10 @@ immutable source + Dockerfile/module graph
 BuildKit TCP требует точный серверный TLS и отдельные клиентские identities для
 probe и builder; UDS допустим только тогда, когда шаг сборки физически может к
 нему обратиться. Label selector остаётся сетевым слоем и не заменяет mTLS.
+Для BuildKit `v0.24` серверные `ca`, `cert` и `key` задаются только в
+`[grpc.tls]`; одноимённые ключи непосредственно в `[grpc]` не включают TLS и
+запрещены проверкой render. Неиспользуемый CDI watcher отключается явно, а
+process sandbox сохраняется.
 
 Registry pull, staging push, admin/retention и promotion разделяются физически:
 
@@ -196,6 +200,18 @@ Registry pull, staging push, admin/retention и promotion разделяются
 - admin/retention ограничен staging cleanup policy;
 - promotion является единственной стороной записи в promoted storage и не
   совмещается с builder либо публичным pull.
+
+Если registry backend намеренно слушает только loopback внутри multi-container
+Pod, его probe выполняется из того же container через `exec` к
+`127.0.0.1`. Kubelet `tcpSocket` обращается к Pod IP и для loopback listener
+недействителен. Внешний authorizer/mTLS endpoint проверяется отдельно.
+
+Fresh rollout сначала поднимает destination promotion endpoint, затем
+материализует все exact release artifacts из immutable source и только после
+этого требует pull/readback их дайджестов. Readback до materialization создаёт
+циклическую зависимость и запрещён. CLI materializer читает credentials только
+из смонтированного Docker config; password не передаётся в аргументах процесса
+и не выводится в диагностике.
 
 Kubelet/container runtime должен достичь endpoint pull до запуска Pod.
 ClusterIP/pod DNS и том CA будущего Pod этого не доказывают. Окружение

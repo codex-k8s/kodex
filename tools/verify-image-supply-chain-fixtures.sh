@@ -145,7 +145,13 @@ render_pull_host=registry-pull.invalid
 render_tools_image=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 render_admission_image=mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
 [[ $(grep -F -c "common_name: $render_pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
+[[ $(grep -F -c 'name: REGISTRY_HTTP_TLS_CLIENTCAS_0' "$temporary_directory/supply.yaml") -eq 3 ]]
+[[ $(yq '
+  select(.kind == "Deployment") |
+  .spec.template.spec.containers[].env[]? |
+  select(.name == "CLIENT_AUTH_REQUIRED" and .value == "true") |
+  .name
+' "$temporary_directory/supply.yaml" | grep -F -c CLIENT_AUTH_REQUIRED) -eq 4 ]]
 grep -Fq 'kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__' \
   "$temporary_directory/supply.yaml"
 grep -Fq 'app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__' \
@@ -197,6 +203,9 @@ grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq 'staging-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
+grep -Fq '[grpc.tls]' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
+grep -A1 -F '[cdi]' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml" |
+  grep -Fq 'disabled = true'
 grep -Fq 'staging/readiness:userns-probe,push=true' \
   "$repository_root/deploy/k8s/base/image-supply-chain/buildkit.yaml"
 buildkit_deployment=$(yq -o=json -I=0 '

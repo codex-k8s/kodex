@@ -683,7 +683,7 @@ func (store *Store) apiRequest(
 }
 
 func readBoundToken(path string) (string, error) {
-	raw, err := securefile.Read(path, 16<<10)
+	raw, err := securefile.ReadProjectedServiceAccountToken(path, 16<<10)
 	if err != nil {
 		return "", errors.New("workload token file is unsafe")
 	}
