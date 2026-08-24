@@ -626,6 +626,24 @@ if [[ "$mode" == configure-image-pki ]]; then
 
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
+
+  cat >"$temporary_directory/node-pull-bootstrap.hcl" <<'HCL'
+path "pki-node-pull/issue/mattercodex-node-pull" {
+  capabilities = ["update"]
+}
+path "auth/token/revoke-self" {
+  capabilities = ["update"]
+}
+HCL
+  vault_input "$temporary_directory/node-pull-bootstrap.hcl" \
+    policy write mattercodex-node-pull-bootstrap - >/dev/null
+  vault_cli write auth/kubernetes/role/mattercodex-node-pull-bootstrap \
+    bound_service_account_names=mattercodex-image-pull-readback \
+    bound_service_account_namespaces=mattercodex-system \
+    audience=vault \
+    token_policies=mattercodex-node-pull-bootstrap \
+    token_ttl=30m token_max_ttl=1h >/dev/null
+
   image_material="$material_directory/image-registry"
   for required_directory in pull buildkit-base-pull input-read staging-read evidence-probe evidence-admission \
     evidence-promotion admin promotion scanner signer admission promotion-staging release-source signing; do
@@ -697,6 +715,20 @@ if [[ "$mode" == readback ]]; then
   vault_cli read -format=json database/config/mattercodex-postgresql |
     jq -e '.data.password_policy == "mattercodex-database"' >/dev/null ||
     fail 'Vault database password policy binding readback failed'
+  node_pull_policy=$(vault_cli policy read mattercodex-node-pull-bootstrap)
+  grep -Fq 'path "pki-node-pull/issue/mattercodex-node-pull"' <<<"$node_pull_policy" &&
+    grep -Fq 'path "auth/token/revoke-self"' <<<"$node_pull_policy" ||
+    fail 'Vault node pull bootstrap policy readback failed'
+  vault_cli read -format=json auth/kubernetes/role/mattercodex-node-pull-bootstrap |
+    jq -e '
+      .data.bound_service_account_names == ["mattercodex-image-pull-readback"] and
+      .data.bound_service_account_namespaces == ["mattercodex-system"] and
+      .data.audience == "vault" and
+      .data.token_policies == ["mattercodex-node-pull-bootstrap"] and
+      .data.token_ttl == 1800 and .data.token_max_ttl == 3600
+    ' >/dev/null || fail 'Vault node pull bootstrap auth role readback failed'
+  vault_cli read -format=json pki-node-pull/roles/mattercodex-node-pull >/dev/null ||
+    fail 'Vault node pull certificate role readback failed'
 fi
 
 printf 'Vault bootstrap completed: %s\n' "$mode"
