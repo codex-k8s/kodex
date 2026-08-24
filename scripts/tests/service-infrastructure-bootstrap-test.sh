@@ -186,5 +186,15 @@ grep -Fq 'policy write internal-rpc-authority-restore-controller-vso' "$vault_in
   fail 'restore controller VaultStaticSecret policy is absent'
 grep -Fq 'bound_service_account_names=internal-rpc-authority-restore-controller' \
   "$vault_initializer" || fail 'restore controller Vault auth is not bound to its exact ServiceAccount'
+grep -Fq 'policy write mattercodex-node-pull-bootstrap' "$vault_initializer" ||
+  fail 'node pull bootstrap Vault policy is absent'
+grep -Fq 'path "pki-node-pull/issue/mattercodex-node-pull"' "$vault_initializer" ||
+  fail 'node pull bootstrap cannot issue its exact client certificate'
+grep -Fq 'vault_cli write auth/kubernetes/role/mattercodex-node-pull-bootstrap' \
+  "$vault_initializer" || fail 'node pull bootstrap Vault auth role is absent'
+grep -Fq 'bound_service_account_names=mattercodex-image-pull-readback' \
+  "$vault_initializer" || fail 'node pull bootstrap Vault auth is not bound to its exact ServiceAccount'
+grep -Fq '.data.audience == "vault"' "$vault_initializer" ||
+  fail 'node pull bootstrap Vault auth readback does not enforce the projected token audience'
 
 printf 'Service infrastructure bootstrap checks completed\n'
