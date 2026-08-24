@@ -209,9 +209,12 @@ tools/deploy/configure-vault-oidc.sh \
 ## 7. Grafana, OAuth2 Proxy и Headlamp
 
 Pinned charts и их SHA-256 зафиксированы в
-`infra/management-surfaces/charts.lock.json`. Сначала выполнить `preflight`,
-затем `apply-monitoring`, `apply-surfaces` и `readback` одним exact набором
-параметров:
+`infra/management-surfaces/charts.lock.json`. `preflight` и
+`apply-monitoring` выполняются после материализации bootstrap secrets, но до
+release `preflight` и `apply-state`: release render уже содержит
+`ServiceMonitor`, `PodMonitor` и `PrometheusRule` и закрыто требует
+установленные Prometheus Operator CRD. После release readback тем же exact
+набором параметров выполняются `apply-surfaces` и management `readback`:
 
 ```bash
 infra/management-surfaces/bootstrap.sh \

@@ -124,10 +124,17 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    через `infra/service-infrastructure/bootstrap.sh --mode apply-vault`.
    Materializer проверяет canonical shape NATS JWT/nkeys до создания namespace
    и Secret и закрыто отклоняет envelope, JSON-строку или неоднозначный вывод.
-7. Выполнить `tools/deploy/deploy-fresh-release.sh --mode preflight` для exact
+7. Выполнить `infra/management-surfaces/bootstrap.sh --mode preflight`, затем
+   `--mode apply-monitoring` с одним exact набором параметров по `RUN-MC-023`.
+   Этот ранний этап устанавливает pinned kube-prometheus-stack и переводит
+   внешние CRD `ServiceMonitor`, `PodMonitor` и `PrometheusRule` в состояние
+   `Established`; Grafana ещё не публикуется наружу. Release preflight и
+   `apply-state` закрыто отклоняют отсутствие этих CRD до инициализации Vault.
+8. Выполнить `tools/deploy/deploy-fresh-release.sh --mode preflight` для exact
    immutable render. Скрипт отклоняет placeholder, zero digest, другой context
-   и повторяющиеся resource identities.
-8. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
+   и повторяющиеся resource identities, а также отсутствие установленных
+   внешних observability CRD, если они используются render-ом.
+9. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
    image PKI и static material, создаёт bootstrap restore evidence anchor только
    при его отсутствии, отдельно применяет release-owned CRD и ждёт состояния
    `Established`, затем применяет typed admission parameters, остальные
@@ -162,11 +169,11 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    Однострочные credentials передаются между host и Pod как ровно одна запись;
    уже завершённый LF secret-файла не дополняется вторым delimiter. Следующий
    произвольный Vault KV payload сохраняется байт-в-байт без ведущего LF.
-9. Выполнить фазу `apply-migrations`. Она последовательно запускает
+10. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
-10. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
+11. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
     применяет workload-ресурсы за исключением этого create-once ресурса и всех
     `Job`, дожидается image supply chain, отдельно выполняет
     `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
@@ -178,17 +185,20 @@ workflow; bootstrap identity удаляется после reconciliation, а п
     `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
     устраняется bounded delete/create с немедленным exact readback. Добавлять в
     этот список неизвестный ресурс без отдельного lifecycle запрещено.
-11. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
+12. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
     Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
     anchor и отсутствие terminal container waiting states.
-12. Настроить Vault OIDC, немедленно зашифровать Shamir 5/3 recovery material и
-    установить Grafana/OAuth2 Proxy/Headlamp по `RUN-MC-023`. До удаления
+13. Настроить Vault OIDC, немедленно зашифровать Shamir 5/3 recovery material и
+    установить OAuth2 Proxy/Headlamp по `RUN-MC-023`, затем выполнить полный
+    management-surfaces `readback`. Monitoring chart уже установлен на шаге 7;
+    повторный `apply-monitoring` допускается только как идемпотентный readback
+    того же pinned release. До удаления
     plaintext root token и shares необходимо проверить encrypted bundle и его
     checksum.
-13. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
+14. Для Mattermost выбрать профиль `web-with-mattermost` и передать exact DNS
     через `--mattermost-host`; web-only запрещает этот параметр и не содержит
     interaction deployment, trust material или external credential mounts.
-14. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
+15. Выполнить отдельный service-graph smoke после локальной readiness всех Pod.
 
 Каждый из перечисленных скриптов требует exact `--context`. После ошибки нельзя
 повторять reset или предыдущие разрушительные шаги: устраняется причина и
