@@ -26,7 +26,10 @@ const (
 	maximumRotationPeriodSeconds = 24 * 60 * 60
 )
 
-var vaultNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,94}[a-z0-9])$`)
+var (
+	vaultNamePattern         = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,94}[a-z0-9])$`)
+	postgresPrincipalPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{2,62}$`)
+)
 
 // Config задаёт проверенную конфигурацию клиента Vault.
 type Config struct {
@@ -105,7 +108,7 @@ func (client *StaticRoleClient) VerifyStaticRoles(
 	seen := make(map[string]struct{}, len(roles))
 	for _, expected := range roles {
 		if !vaultNamePattern.MatchString(expected.Role) ||
-			!vaultNamePattern.MatchString(expected.Principal) ||
+			!postgresPrincipalPattern.MatchString(expected.Principal) ||
 			!vaultNamePattern.MatchString(expected.DatabaseName) {
 			return errors.New("vault static role name is outside the registry boundary")
 		}
@@ -241,7 +244,7 @@ func validateStaticRoleExpectation(
 	expected repository.VaultStaticRoleExpectation,
 ) error {
 	if !vaultNamePattern.MatchString(expected.Role) ||
-		!vaultNamePattern.MatchString(expected.Principal) ||
+		!postgresPrincipalPattern.MatchString(expected.Principal) ||
 		!vaultNamePattern.MatchString(expected.DatabaseName) {
 		return errors.New("vault static role name is outside the registry boundary")
 	}

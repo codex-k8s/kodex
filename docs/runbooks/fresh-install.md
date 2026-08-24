@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.2.5
+version: 1.2.6
 updated: 2026-08-24
 ---
 
@@ -134,8 +134,10 @@ hosts передаются параметрами deployment environment. Реп
    адресом, installation CA path и exact SNI из pinned Helm values. Публичный
    `ca.crt` монтируется read-only из `mattercodex-vault-server-tls`;
    `SecretProviderClass` не переопределяет transport trust, а Vault Agent
-   sidecar не участвует в этом пути. `vaultSkipTLSVerify` и plaintext fallback
-   запрещены. Существующий anchor только
+   sidecar не участвует в этом пути. Каждый SPC обязан запрашивать projected
+   token через точный `audience: vault`; source- и release-render проверки
+   закрыто отклоняют отсутствующую или иную аудиторию. `vaultSkipTLSVerify` и
+   plaintext fallback запрещены. Существующий anchor только
    проверяется по обязательной форме и не переписывается render-ом: продвинуть
    его вправе исключительно PITR executor через forward-only policy. Первый
    verified Vault database connect может попасть в короткий restart PostgreSQL

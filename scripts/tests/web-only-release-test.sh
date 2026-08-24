@@ -10,12 +10,14 @@ verify_csi_secret_mounts() {
   local render_file=$1
   local secret_provider_class_count=0
 
-  while IFS=$'\t' read -r provider_class encoded_objects; do
-    if [[ -z "$provider_class" && -z "$encoded_objects" ]]; then
+  while IFS=$'\t' read -r provider_class audience encoded_objects; do
+    if [[ -z "$provider_class" && -z "$audience" && -z "$encoded_objects" ]]; then
       continue
     fi
-    [[ -n "$provider_class" && -n "$encoded_objects" ]] ||
+    [[ -n "$provider_class" && -n "$audience" && -n "$encoded_objects" ]] ||
       fail 'rendered SecretProviderClass has no bounded objects'
+    [[ "$audience" == "vault" ]] ||
+      fail "SecretProviderClass does not request the exact Vault audience: $provider_class"
     printf '%s' "$encoded_objects" | base64 -d | yq -o=json '.' |
       jq -e '(length > 0) and all(.[]; .filePermission == 292)' >/dev/null ||
       fail "SecretProviderClass does not use exact read-only mode 0444: $provider_class"
@@ -25,7 +27,7 @@ verify_csi_secret_mounts() {
     ((secret_provider_class_count += 1))
   done < <(yq -N -r '
     select(.kind == "SecretProviderClass") |
-    [.metadata.name, (.spec.parameters.objects | @base64)] | @tsv
+    [.metadata.name, .spec.parameters.audience, (.spec.parameters.objects | @base64)] | @tsv
   ' "$render_file")
   ((secret_provider_class_count > 0)) || fail 'release render has no SecretProviderClass objects'
 
