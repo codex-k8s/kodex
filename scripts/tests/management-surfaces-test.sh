@@ -35,6 +35,9 @@ bash -n \
   "$repository_root/tools/deploy/restore-vault-recovery-material.sh" \
   "$repository_root/tools/deploy/seal-vault-recovery-material.sh" \
   "$vault_bootstrap"
+rg -Fq 'PGHOST=keycloak-postgresql.identity.svc.cluster.local PGHOSTADDR=127.0.0.1' \
+  "$identity_bootstrap" ||
+  fail 'Keycloak PostgreSQL TLS readback depends on denied Pod DNS egress'
 
 identity_render="$temporary_directory/identity.yaml"
 kubectl kustomize "$repository_root/infra/identity" >"$identity_render"

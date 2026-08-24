@@ -124,7 +124,8 @@ kubectl -n identity get networkpolicy sso-exact-paths -o json | jq -e '
 kubectl -n identity exec keycloak-postgresql-0 -- sh -ec '
   export PGPASSWORD=$POSTGRES_PASSWORD PGSSLMODE=verify-full
   export PGSSLROOTCERT=/var/run/secrets/mattercodex/postgresql/ca.crt
-  psql -h keycloak-postgresql.identity.svc.cluster.local -U keycloak -d keycloak -Atc \
+  export PGHOST=keycloak-postgresql.identity.svc.cluster.local PGHOSTADDR=127.0.0.1
+  psql -U keycloak -d keycloak -Atc \
     "select ssl from pg_stat_ssl where pid = pg_backend_pid()"
 ' | grep -Fxq t || fail 'Keycloak PostgreSQL TLS readback failed'
 database_tls_revision=$(kubectl -n identity get secret keycloak-postgresql-tls \
