@@ -615,20 +615,22 @@ spec:
         databaseConnectionName: mattercodex-postgresql
         rotationPeriodSeconds: 3600
         exactPaths:
+          - database/static-roles/internal-rpc-authority-publisher-g1
           - database/static-roles/internal-rpc-authority-publisher-g2
           - database/static-roles/internal-rpc-authority-publisher-g3
           - database/static-roles/internal-rpc-authority-publisher-g4
           - database/static-roles/internal-rpc-authority-publisher-g5
+          - database/static-creds/internal-rpc-authority-publisher-g4
+          - database/static-creds/internal-rpc-authority-publisher-g5
+          - database/rotate-role/internal-rpc-authority-publisher-g4
+          - database/static-roles/internal-rpc-authority-readback-attestor-g1
           - database/static-roles/internal-rpc-authority-readback-attestor-g2
           - database/static-roles/internal-rpc-authority-readback-attestor-g3
           - database/static-roles/internal-rpc-authority-readback-attestor-g4
           - database/static-roles/internal-rpc-authority-readback-attestor-g5
-          - database/rotate-role/internal-rpc-authority-publisher-g3
-          - database/rotate-role/internal-rpc-authority-publisher-g4
-          - database/rotate-role/internal-rpc-authority-readback-attestor-g3
+          - database/static-creds/internal-rpc-authority-readback-attestor-g4
+          - database/static-creds/internal-rpc-authority-readback-attestor-g5
           - database/rotate-role/internal-rpc-authority-readback-attestor-g4
-          - database/static-roles/internal-rpc-authority-publisher-g1
-          - database/static-roles/internal-rpc-authority-readback-attestor-g1
         arbitraryDatabasePathAllowed: false
       reconciliation:
         idempotency: PERSISTED_CANONICAL_REGISTERED_SET_DIGEST

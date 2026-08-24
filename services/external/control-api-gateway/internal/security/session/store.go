@@ -114,7 +114,9 @@ func (store *Store) Open(encoded string) (Claims, error) {
 		return Claims{}, errors.New("session token is invalid")
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || len(raw) < store.current.NonceSize()+store.current.Overhead() {
+	if err != nil ||
+		base64.RawURLEncoding.EncodeToString(raw) != parts[1] ||
+		len(raw) < store.current.NonceSize()+store.current.Overhead() {
 		return Claims{}, errors.New("session token is invalid")
 	}
 	plaintext, err := open(store.current, raw)

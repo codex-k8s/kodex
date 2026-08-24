@@ -4,8 +4,8 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-23
+version: 1.2.1
+updated: 2026-08-24
 ---
 
 # Диагностика и восстановление internal-rpc-authority
@@ -156,6 +156,7 @@ publisher обязан дать корректную цепочку predecessor/
 Проверить:
 
 - проецируемый токен ServiceAccount имеет аудиторию `vault` и TTL 600 секунд;
+- Vault Kubernetes auth role также закрепляет точную аудиторию `vault`;
 - Vault доступен только по HTTPS с точным SNI и CA;
 - PostgreSQL доступен только по TLS `verify-full`;
 - активная аренда с ограждением принадлежит одной реплике;
@@ -165,6 +166,20 @@ publisher обязан дать корректную цепочку predecessor/
   только через точный `SET ROLE`.
 
 Значение Secret не копировать в окружение и не сравнивать в выводе shell.
+
+На fresh install offline ceremony обязана до запуска workload создать и
+доставить:
+
+- manifest trust и подписанный restore-role trust с одним `CURRENT` и одним
+  `NEXT` signer;
+- закрытый и открытый JWK независимого PITR evidence signer;
+- минимальную policy reconciler для чтения активных static roles/credentials,
+  ротации только продвигаемого `g4` и удаления уже выведенных `g1`/`g2`.
+
+Отсутствующий `restore-role-trust.jws`, публичная часть PITR evidence либо
+Vault path из этого закрытого набора является дефектом bootstrap. Не создавать
+их вручную в кластере: повторно выполнить code-first fresh material и
+`configure-core`/`configure-policies` из того же release SHA.
 
 ## Контролируемая ротация
 
@@ -203,6 +218,12 @@ digest mismatch или readback другого Cluster закрыто прекр
 Повтор с тем же immutable intent идемпотентно читает существующий Cluster;
 rollback требует нового restore ID/epoch и не переписывает опубликованное
 evidence.
+
+Периодический PITR executor выполняет работу только при точной устойчивой фазе
+`PREPARED`. Пустая координация и штатные `OPEN`, `QUIESCING`, `COMPLETED`
+являются успешным no-op. Неизвестная сохранённая фаза закрыто отклоняется.
+Постоянные failed Job в фазе `OPEN` означают ошибку dispatch, а не запрос
+восстановления.
 
 ## Миграции
 

@@ -4,8 +4,8 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.2
-updated: 2026-08-23
+version: 1.0.3
+updated: 2026-08-24
 ---
 
 # Диагностика автоматического admission образов ролей
@@ -81,6 +81,15 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   manifest digest.
 - policy revision изменилась: новый run ID обязан включать новую revision;
   Job предыдущей revision не переиспользуется.
+- CSI доставил новый сертификат registry: guard сохраняет готовность только
+  пока endpoint выдаёт последний доказанный applied DER с остатком действия
+  не менее 15 минут. Mounted сертификат считается pending; перед окончанием
+  окна guard закрывает готовность и перезапускает именно TLS-serving process.
+  Для pull-registry это registry-pull-authorizer, для остальных защищённых
+  registry endpoint — registry. После перезапуска готовность возвращается
+  только при exact DER readback нового mounted сертификата. Частые рестарты
+  backend registry при неизменном pull-authorizer означают drift process
+  target, а не отказ хранилища.
 
 ## Восстановление и rollback
 

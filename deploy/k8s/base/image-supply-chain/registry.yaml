@@ -140,6 +140,7 @@ spec:
           env:
             - {name: TARGET_PORT, value: "5000"}
             - {name: SERVER_NAME, value: registry-pull.invalid}
+            - {name: RELOAD_PROCESS_PATTERN, value: ^/usr/local/bin/registry-pull-authorizer$}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: DOCKER_CONFIG_FILE, value: /identity/pull-dockerconfigjson}
             - {name: READBACK_IMAGE, value: "registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
