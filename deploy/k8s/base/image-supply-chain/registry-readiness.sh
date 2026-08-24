@@ -37,7 +37,7 @@ if [ "${1:-}" = validate-docker-config ]; then
   exit 0
 fi
 
-failures=0
+certificate_failures=0
 while :; do
   rm -f /tmp/registry-ready
   tls_args=""
@@ -46,23 +46,37 @@ while :; do
     tls_args="-cert /identity/probe.crt -key /identity/probe.key"
     curl_args="--cert /identity/probe.crt --key /identity/probe.key"
   fi
-  if openssl x509 -in /identity/tls.crt -checkend 900 -noout >/dev/null 2>&1 &&
+  mounted_certificate_valid=false
+  served_certificate_available=false
+  certificates_match=false
+  if openssl x509 -in /identity/tls.crt -checkend 900 -noout >/dev/null 2>&1; then
+    mounted_certificate_valid=true
+  fi
+  if [ "$mounted_certificate_valid" = true ] &&
     openssl s_client -connect "127.0.0.1:${TARGET_PORT}" \
       -servername "$SERVER_NAME" -verify_hostname "$SERVER_NAME" \
       -verify_return_error -CAfile /identity/ca.pem $tls_args </dev/null 2>/dev/null |
-      openssl x509 -outform DER > /tmp/served.der 2>/dev/null &&
+      openssl x509 -outform DER > /tmp/served.der 2>/dev/null; then
+    served_certificate_available=true
+  fi
+  if [ "$served_certificate_available" = true ] &&
     openssl x509 -in /identity/tls.crt -outform DER > /tmp/mounted.der 2>/dev/null &&
     cmp -s /tmp/served.der /tmp/mounted.der; then
+    certificates_match=true
+    certificate_failures=0
+  elif [ "$served_certificate_available" = true ]; then
+    certificate_failures=$((certificate_failures + 1))
+  fi
+
+  if [ "$certificates_match" = true ]; then
     if [ -n "${DOCKER_CONFIG_FILE:-}" ]; then
       read_pull_credentials || {
-        failures=$((failures + 1))
         sleep 10
         continue
       }
       case "${READBACK_IMAGE:-}" in
         "$SERVER_NAME"/*@sha256:*) ;;
         *)
-          failures=$((failures + 1))
           sleep 10
           continue
           ;;
@@ -71,7 +85,6 @@ while :; do
       readback_repository=${readback_path%@*}
       readback_digest=${readback_path##*@}
       echo "$readback_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || {
-        failures=$((failures + 1))
         sleep 10
         continue
       }
@@ -86,14 +99,12 @@ while :; do
         -D /tmp/registry-headers -o /dev/null \
         "https://${SERVER_NAME}:${TARGET_PORT}/v2/${readback_repository}/manifests/${readback_digest}"; then
         rm -f /tmp/registry.netrc
-        failures=$((failures + 1))
         sleep 10
         continue
       fi
       rm -f /tmp/registry.netrc
       served_digest=$(awk 'tolower($1) == "docker-content-digest:" {gsub("\\r", "", $2); print $2}' /tmp/registry-headers)
       [ "$served_digest" = "$readback_digest" ] || {
-        failures=$((failures + 1))
         sleep 10
         continue
       }
@@ -104,22 +115,20 @@ while :; do
         --resolve "${SERVER_NAME}:${TARGET_PORT}:127.0.0.1" \
         --user "$(tr -d '\r\n' <"$USERNAME_FILE"):$(tr -d '\r\n' <"$PASSWORD_FILE")" \
         "https://${SERVER_NAME}:${TARGET_PORT}/v2/" >/dev/null || {
-          failures=$((failures + 1))
           sleep 10
           continue
         }
     fi
     touch /tmp/registry-ready
-    failures=0
-  else
-    failures=$((failures + 1))
   fi
-  if [ "$failures" -ge 3 ]; then
+  if [ "$certificate_failures" -ge 3 ]; then
     # shareProcessNamespace и одинаковый uid позволяют закрыто перезапустить
-    # только registry, чтобы он перечитал уже ротированный CSI certificate.
+    # только registry при доказанном drift обслуживаемого CSI certificate.
+    # Неготовность backend, credential или readback artifact не является
+    # основанием для убийства процесса: иначе startup превращается в restart loop.
     registry_pid=$(pgrep -x registry | head -n 1 || true)
     [ -z "$registry_pid" ] || kill -TERM "$registry_pid"
-    failures=0
+    certificate_failures=0
   fi
   sleep 10
 done

@@ -4,7 +4,7 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.2
+version: 1.0.3
 updated: 2026-08-24
 ---
 
@@ -241,11 +241,14 @@ publish acknowledgement и error classification, но не знает домен
 - ошибки не раскрывают путь и содержимое.
 
 Kubernetes projected ServiceAccount token является отдельным API библиотеки.
-Kubelet может материализовать его как root-owned `0640`: root сохраняет
-owner-write для атомарной ротации, а non-root workload имеет только group-read.
-Такой режим допускается только при подтверждённых `uid=0` владельца файла и
-ненулевом effective UID процесса. Generic credential reader по-прежнему
-отклоняет `0640`, а process-owned или group-writable файл запрещён.
+Kubelet может материализовать его как root-owned `0640` либо, при назначенном
+Pod `fsGroup`, как принадлежащий non-root UID/GID процесса `0640`. Root-owned
+режим допускается только при `uid=0` владельца файла и ненулевом effective UID
+процесса. Process-owned `0640` допускается только когда попытка открыть точно
+разрешённый путь с `O_WRONLY` закрыто отклоняется ядром с `EROFS`, то есть файл
+доказанно опубликован через read-only mount. Обычный process-owned writable
+файл с теми же mode/UID запрещён. Generic credential reader по-прежнему
+отклоняет `0640`.
 
 Библиотека не определяет формат credential и не делает `0444` безопасным вне
 изолированного read-only container mount. Эта граница доказывается итоговым

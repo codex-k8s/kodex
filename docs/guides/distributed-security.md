@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.4
+version: 1.4.5
 updated: 2026-08-24
 ---
 
@@ -420,6 +420,14 @@ Projected secret file считается допустимым только пр�
   размер, не разрешает symlink выйти из mount boundary и отклоняет любые права
   записи/исполнения;
 - путь, metadata и содержимое credential не попадают в логи и внешние ошибки.
+
+Projected ServiceAccount token проверяется отдельным API. Kubelet вправе
+публиковать его с mode `0640` как root-owned либо принадлежащий UID/GID
+non-root процесса из-за Pod `fsGroup`. Во втором случае совпадение владельца и
+mode само по себе не доказывает read-only boundary: приложение обязано открыть
+точно разрешённый путь с `O_WRONLY` и принять его только при `EROFS`. Успешное
+открытие, иной errno, group-write/execute либо выход symlink из mount boundary
+приводят к закрытому отказу.
 
 `0444` означает доступность всем процессам только внутри mount namespace
 целевого контейнера, а не другим Pod или workload. Добавлять root init

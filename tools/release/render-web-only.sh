@@ -267,6 +267,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .spec.template.metadata.annotations."mattercodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull");
+    .spec.template.metadata.annotations."mattercodex.dev/pull-credential-generation" = "1" |
     (.spec.template.spec.containers[] |
       select(.name == "certificate-guard").env[] |
       select(.name == "READBACK_IMAGE").value) =

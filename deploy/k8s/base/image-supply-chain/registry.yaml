@@ -143,7 +143,8 @@ spec:
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: DOCKER_CONFIG_FILE, value: /identity/pull-dockerconfigjson}
             - {name: READBACK_IMAGE, value: "registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
-            - {name: PULL_CREDENTIAL_GENERATION, value: "0"}
+            - name: PULL_CREDENTIAL_GENERATION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}
           readinessProbe:
             exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
             periodSeconds: 5

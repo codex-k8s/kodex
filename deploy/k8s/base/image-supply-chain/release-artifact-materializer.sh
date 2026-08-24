@@ -60,10 +60,22 @@ jq -e --arg source "$RELEASE_SOURCE_REGISTRY" --arg destination "$destination_re
 ' "$DOCKER_CONFIG/config.json" >/dev/null || fail 'merged registry credential scope is invalid'
 
 regctl registry set "$RELEASE_SOURCE_REGISTRY" --tls enabled >/dev/null
-regctl registry set "$destination_registry" --tls enabled \
-  --cacert /identity/destination/ca.pem \
-  --cert /identity/destination/tls.crt \
-  --key /identity/destination/tls.key >/dev/null
+# regctl принимает PEM как значения флагов, а не пути. Не передаём private key
+# через argv: дополняем изолированный config напрямую из bounded mount.
+jq --arg registry "$destination_registry" \
+  --rawfile ca /identity/destination/ca.pem \
+  --rawfile certificate /identity/destination/tls.crt \
+  --rawfile key /identity/destination/tls.key '
+    .hosts[$registry] = {
+      hostname: $registry,
+      tls: "enabled",
+      regcert: $ca,
+      clientCert: $certificate,
+      clientKey: $key,
+      reqConcurrent: 3
+    }
+  ' "$REGCTL_CONFIG" >"$REGCTL_CONFIG.next" || fail 'configure destination registry trust'
+mv "$REGCTL_CONFIG.next" "$REGCTL_CONFIG"
 
 copy_exact() {
   source_ref=$1
