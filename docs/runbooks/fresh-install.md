@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.3
+version: 1.3.4
 updated: 2026-08-24
 ---
 
@@ -157,6 +157,9 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    ограничено exact ServiceAccount `mattercodex-image-pull-readback`, projected
    token с `audience: vault` и Vault policy, которая разрешает только issue по
    `pki-node-pull/issue/mattercodex-node-pull` и revoke собственного token.
+   Client certificate использует закрытый CN
+   `<16-hex-node-hash>.g<generation>.mattercodex-node-pull`; Vault role
+   разрешает только поддомены этого DNS root без glob и arbitrary names.
    Другие workload не подключаются к Vault напрямую. CSI provider подключается
    к Vault по HTTPS с адресом, installation CA path и exact SNI из pinned Helm
    values. Публичный `ca.crt` монтируется read-only из

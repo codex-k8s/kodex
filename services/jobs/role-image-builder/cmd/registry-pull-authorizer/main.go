@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
 const pullServerError = "registry pull authorizer failed"
@@ -90,7 +92,7 @@ func authorizedPull(request *http.Request, registryHost string) bool {
 		username, password, supplied := request.BasicAuth()
 		return supplied && dockerCredentialMatches(profile.configFile, username, password, registryHost) && pathInRepositories(request.URL.Path, profile.repositories)
 	}
-	return strings.HasPrefix(cn, "mattercodex-node-pull-") && authorizedNodePull(request, certificate, registryHost) &&
+	return authorizedNodePull(request, certificate, registryHost) &&
 		pathInRepositories(request.URL.Path, []string{"mattercodex/agent-runner", "mattercodex/roles"})
 }
 
@@ -114,7 +116,7 @@ func authorizedNodePull(request *http.Request, certificate *x509.Certificate, re
 		return false
 	}
 	generation, err := strconv.ParseUint(parts[1], 10, 64)
-	if err != nil || generation == 0 || !strings.HasSuffix(username, "-g"+parts[1]) {
+	if err != nil || !nodepullidentity.ValidCommonName(username, generation) {
 		return false
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
