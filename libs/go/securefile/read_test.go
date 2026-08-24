@@ -63,15 +63,18 @@ func TestProjectedServiceAccountTokenRejectsProcessOwnedWritableFile(t *testing.
 func TestProjectedServiceAccountTokenModeRequiresRootOwnerAndNonRootProcess(t *testing.T) {
 	t.Parallel()
 	info := syntheticFileInfo{mode: 0o640, system: &syscall.Stat_t{Uid: 0}}
-	if !isSafeMode(info, true, 29008) {
+	if !isSafeMode(info, true, 29008, false) {
 		t.Fatal("root-owned projected token was rejected for a non-root workload")
 	}
-	if isSafeMode(info, true, 0) {
+	if isSafeMode(info, true, 0, false) {
 		t.Fatal("root process accepted its writable projected token as read-only")
 	}
 	info.system = &syscall.Stat_t{Uid: 29008}
-	if isSafeMode(info, true, 29008) {
+	if isSafeMode(info, true, 29008, false) {
 		t.Fatal("process-owned projected token was accepted")
+	}
+	if !isSafeMode(info, true, 29008, true) {
+		t.Fatal("process-owned projected token on a read-only mount was rejected")
 	}
 }
 

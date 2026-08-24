@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestVaultDatabaseNameMatchesBootstrapConnection(t *testing.T) {
+	t.Parallel()
+
+	if vaultDatabaseName != "mattercodex-postgresql" {
+		t.Fatalf("unexpected Vault database connection: %q", vaultDatabaseName)
+	}
+}
+
 func TestCompleteChangedDigestSetAcceptsExactPreMaterializedSet(t *testing.T) {
 	t.Parallel()
 

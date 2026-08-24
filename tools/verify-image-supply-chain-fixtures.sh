@@ -198,6 +198,8 @@ fi
   "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'pullCredentialGeneration: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
+grep -Fq 'valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry.yaml"
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"

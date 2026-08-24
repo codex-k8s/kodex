@@ -711,8 +711,19 @@ yq -e '
   (.data.policySHA256 | test("^[a-f0-9]{64}$")) and
   (.data.trustedRoleBaseDigest | test("^sha256:[a-f0-9]{64}$")) and
   (.data.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
+  .data.pullCredentialGeneration == "1" and
   .data.pullRegistryHost == "roles.example.test"
 ' "$render_file" >/dev/null || fail 'role image release policy was not materialized'
+
+yq -o=json '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull")
+' "$render_file" | jq -e '
+  .spec.template.metadata.annotations."mattercodex.dev/pull-credential-generation" == "1" and
+  (.spec.template.spec.containers[] | select(.name == "certificate-guard") |
+    any(.env[]; .name == "PULL_CREDENTIAL_GENERATION" and
+      .valueFrom.configMapKeyRef.name == "mattercodex-image-admission-policy" and
+      .valueFrom.configMapKeyRef.key == "pullCredentialGeneration"))
+' >/dev/null || fail 'pull registry does not consume the rendered credential generation'
 
 admission_policy_config_map_json=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
@@ -761,6 +772,23 @@ grep -Fq 'export DOCKER_CONFIG="$work/docker"' \
 if grep -Fq 'regctl registry login' \
   "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh"; then
   fail 'release artifact materializer passes credentials through an imperative login path'
+fi
+grep -Fq -- '--rawfile key /identity/destination/tls.key' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh" ||
+  fail 'release artifact materializer does not load the destination key through bounded config input'
+grep -Fq 'clientKey: $key' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh" ||
+  fail 'release artifact materializer omits the destination registry client key'
+if grep -Eq -- 'regctl registry set .*--(cert|key|client-cert|client-key)([ =]|$)' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh"; then
+  fail 'release artifact materializer passes TLS private material through argv'
+fi
+grep -Fq 'if [ "$certificate_failures" -ge 3 ]; then' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh" ||
+  fail 'registry certificate guard does not isolate certificate drift restarts'
+if grep -Eq '(^|[^_])failures=' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"; then
+  fail 'registry certificate guard still counts ordinary backend failures toward restart'
 fi
 materializer_line=$(grep -n '^[[:space:]]*apply_job release-artifact-materializer$' "$fresh_deployer" |
   cut -d: -f1)

@@ -22,9 +22,8 @@ func Read(path string, maximumBytes int64) ([]byte, error) {
 	return ReadWithin(filepath.Dir(path), path, maximumBytes)
 }
 
-// ReadProjectedServiceAccountToken читает Kubernetes projected token, у
-// которого kubelet оставляет root owner-write для атомарной ротации, а
-// non-root workload получает только group-read.
+// ReadProjectedServiceAccountToken читает Kubernetes projected token с
+// отдельной проверкой root-owned либо process-owned read-only mount режима.
 func ReadProjectedServiceAccountToken(path string, maximumBytes int64) ([]byte, error) {
 	return readWithin(filepath.Dir(path), path, maximumBytes, true)
 }
@@ -67,7 +66,12 @@ func readWithin(root, path string, maximumBytes int64, allowProjectedToken bool)
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() ||
-		!isSafeMode(info, allowProjectedToken, os.Geteuid()) ||
+		!isSafeMode(
+			info,
+			allowProjectedToken,
+			os.Geteuid(),
+			projectedTokenMountIsReadOnly(resolvedPath, info, allowProjectedToken),
+		) ||
 		info.Size() < 1 || info.Size() > maximumBytes {
 		return nil, errUnsafe
 	}
@@ -79,7 +83,12 @@ func readWithin(root, path string, maximumBytes int64, allowProjectedToken bool)
 	return value, nil
 }
 
-func isSafeMode(info os.FileInfo, allowProjectedToken bool, effectiveUID int) bool {
+func isSafeMode(
+	info os.FileInfo,
+	allowProjectedToken bool,
+	effectiveUID int,
+	readOnlyMount bool,
+) bool {
 	if IsReadOnlyMode(info.Mode()) {
 		return true
 	}
@@ -87,7 +96,26 @@ func isSafeMode(info os.FileInfo, allowProjectedToken bool, effectiveUID int) bo
 		return false
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	return ok && stat.Uid == 0
+	if !ok {
+		return false
+	}
+	return stat.Uid == 0 || stat.Uid == uint32(effectiveUID) && readOnlyMount
+}
+
+func projectedTokenMountIsReadOnly(
+	path string,
+	info os.FileInfo,
+	allowProjectedToken bool,
+) bool {
+	if !allowProjectedToken || info.Mode().Perm() != 0o640 {
+		return false
+	}
+	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err == nil {
+		_ = probe.Close()
+		return false
+	}
+	return errors.Is(err, syscall.EROFS)
 }
 
 // IsReadOnlyMode возвращает true только для утвержденных exact permissions.

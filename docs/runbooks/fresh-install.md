@@ -4,8 +4,8 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.2.4
-updated: 2026-08-23
+version: 1.2.5
+updated: 2026-08-24
 ---
 
 # Чистое развертывание web-first MatterCodex
@@ -99,8 +99,11 @@ hosts передаются параметрами deployment environment. Реп
    `--mode readback`. Secrets Store CSI driver не патчится через
    `fsGroupPolicy`: live readback должен подтвердить, что каждый SPC создаёт
    файлы с mode `0444`, а каждый CSI volume и container mount read-only.
-   Non-root workload проверяет этот режим через `libs/go/securefile`; root/group
-   ownership, init-copy и дополнительная группа `0` не используются. Изменение
+   Non-root workload проверяет этот режим через `libs/go/securefile`.
+   Отдельно readback подтверждает фактический mode/UID/GID projected
+   ServiceAccount token: при process-owned `0640` точный путь обязан быть на
+   kernel-enforced read-only mount, где `O_WRONLY` возвращает `EROFS`.
+   Init-copy и дополнительная группа `0` не используются. Изменение
    публичного Traefik выполняется только
    `infra/public-ingress/bootstrap.sh`, после чего также обязателен `readback`.
 5. Настроить SSO через `tools/deploy/configure-keycloak.sh --mode apply` и

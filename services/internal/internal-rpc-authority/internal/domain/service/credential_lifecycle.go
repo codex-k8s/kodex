@@ -17,7 +17,7 @@ var lifecycleUUIDPattern = regexp.MustCompile(
 	`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
 )
 
-const vaultDatabaseName = "internal-rpc-authority"
+const vaultDatabaseName = "mattercodex-postgresql"
 
 // DatabaseCredentialLifecycle координирует доменный переход поколений
 // PostgreSQL и Vault через переданные repository/client ports.
