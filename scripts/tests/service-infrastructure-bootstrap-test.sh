@@ -84,6 +84,10 @@ while IFS= read -r manifest; do
     "$manifest" >/dev/null 2>&1; then
     fail "SecretProviderClass overrides provider-level Vault transport: ${manifest#"$repository_root"/}"
   fi
+  if yq -e 'select(.kind == "SecretProviderClass" and .spec.parameters.audience != "vault")' \
+    "$manifest" >/dev/null 2>&1; then
+    fail "SecretProviderClass does not request the exact Vault audience: ${manifest#"$repository_root"/}"
+  fi
 done < <(rg -l '^kind: SecretProviderClass$' "$repository_root/deploy/k8s" | sort)
 
 for readiness_contract in \

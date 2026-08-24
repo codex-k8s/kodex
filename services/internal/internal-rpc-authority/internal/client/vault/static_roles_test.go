@@ -57,6 +57,57 @@ func TestVerifyStaticRoleResponseBindsPrincipalAndRotation(t *testing.T) {
 	}
 }
 
+func TestValidateStaticRoleExpectationSeparatesVaultAndPostgreSQLNames(t *testing.T) {
+	t.Parallel()
+
+	valid := repository.VaultStaticRoleExpectation{
+		Role:         "internal-rpc-authority-publisher-g3",
+		Principal:    "ira_publisher_g3",
+		DatabaseName: "mattercodex-postgresql",
+	}
+	if err := validateStaticRoleExpectation(valid); err != nil {
+		t.Fatalf("valid PostgreSQL principal rejected: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		expectation repository.VaultStaticRoleExpectation
+	}{
+		{
+			name: "underscore in Vault role",
+			expectation: repository.VaultStaticRoleExpectation{
+				Role:         "internal_rpc_authority_publisher_g3",
+				Principal:    valid.Principal,
+				DatabaseName: valid.DatabaseName,
+			},
+		},
+		{
+			name: "hyphen in PostgreSQL principal",
+			expectation: repository.VaultStaticRoleExpectation{
+				Role:         valid.Role,
+				Principal:    "ira-publisher-g3",
+				DatabaseName: valid.DatabaseName,
+			},
+		},
+		{
+			name: "path in database name",
+			expectation: repository.VaultStaticRoleExpectation{
+				Role:         valid.Role,
+				Principal:    valid.Principal,
+				DatabaseName: "mattercodex/postgresql",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if err := validateStaticRoleExpectation(test.expectation); err == nil {
+				t.Fatal("invalid static role expectation accepted")
+			}
+		})
+	}
+}
+
 func TestReadTokenFileAcceptsProjectedGroupReadableMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "token")
 	if err := os.WriteFile(path, []byte("bounded-projected-token"), 0o440); err != nil {

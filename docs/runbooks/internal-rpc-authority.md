@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.1
+version: 1.2.2
 updated: 2026-08-24
 ---
 
@@ -157,6 +157,9 @@ publisher обязан дать корректную цепочку predecessor/
 
 - проецируемый токен ServiceAccount имеет аудиторию `vault` и TTL 600 секунд;
 - Vault Kubernetes auth role также закрепляет точную аудиторию `vault`;
+- каждый связанный `SecretProviderClass` содержит точный параметр
+  `audience: vault`; отсутствие параметра создаёт токен с иной аудиторией и
+  приводит к `invalid audience` до чтения Secret;
 - Vault доступен только по HTTPS с точным SNI и CA;
 - PostgreSQL доступен только по TLS `verify-full`;
 - активная аренда с ограждением принадлежит одной реплике;
@@ -164,6 +167,15 @@ publisher обязан дать корректную цепочку predecessor/
   `CURRENT`+`NEXT`;
 - `session_user` совпадает с principal reconciler, capability активирована
   только через точный `SET ROLE`.
+
+Если Kubernetes login в Vault успешен, но audit не содержит ни одного чтения
+`database/static-roles/<role>`, а таблицы lease и rotation intent пусты,
+проверить source-валидацию зарегистрированного набора. Vault role и database
+config используют имена с дефисами, PostgreSQL principal — unquoted identifier
+с подчёркиваниями. Применять к этим трём значениям одну маску запрещено. Не
+включать `LOGIN` вручную: после исправления exact release reconciler обязан сам
+создать fenced lease, записать intent и провести поколения через утверждённый
+lifecycle.
 
 Значение Secret не копировать в окружение и не сравнивать в выводе shell.
 
