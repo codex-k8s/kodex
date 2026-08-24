@@ -340,7 +340,7 @@ wait_statefulset() {
     fail "StatefulSet rollout failed: $name"
 }
 
-wait_trust_material() {
+wait_vault_static_secrets() {
   local allow_deferred_restore_secret=${1:-false}
   local resource_name
 
@@ -350,6 +350,18 @@ wait_trust_material() {
       "$resource_name" == internal-rpc-authority-restore-controller-postgresql ]]; then
       continue
     fi
+    kubectl -n "$namespace" wait --for=condition=Ready \
+      "vaultstaticsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
+      fail "VaultStaticSecret is not ready: $resource_name"
+  done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
+}
+
+wait_trust_material() {
+  local allow_deferred_restore_secret=${1:-false}
+  local resource_name
+
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
     kubectl -n "$namespace" wait --for=condition=Ready \
       "certificates.cert-manager.io/$resource_name" --timeout=5m >/dev/null ||
       fail "Certificate is not ready: $resource_name"
@@ -362,12 +374,7 @@ wait_trust_material() {
       fail "CA Bundle is not synced: $resource_name"
   done < <(yq -N -r 'select(.kind == "Bundle") | .metadata.name' "$render_file" | sort -u)
 
-  while IFS= read -r resource_name; do
-    [[ -n "$resource_name" ]] || continue
-    kubectl -n "$namespace" wait --for=condition=Ready \
-      "vaultstaticsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
-      fail "VaultStaticSecret is not ready: $resource_name"
-  done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
+  wait_vault_static_secrets "$allow_deferred_restore_secret"
 }
 
 apply_restore_controller_database_secret() {
