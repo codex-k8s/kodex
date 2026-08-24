@@ -196,5 +196,9 @@ grep -Fq 'bound_service_account_names=mattercodex-image-pull-readback' \
   "$vault_initializer" || fail 'node pull bootstrap Vault auth is not bound to its exact ServiceAccount'
 grep -Fq '.data.audience == "vault"' "$vault_initializer" ||
   fail 'node pull bootstrap Vault auth readback does not enforce the projected token audience'
+grep -Fq '.data.allowed_domains == ["mattercodex-node-pull"]' "$vault_initializer" ||
+  fail 'node pull certificate role readback does not pin the DNS root'
+grep -Fq '.data.allow_subdomains == true and .data.allow_glob_domains == false' "$vault_initializer" ||
+  fail 'node pull certificate role readback does not enforce exact subdomain semantics'
 
 printf 'Service infrastructure bootstrap checks completed\n'

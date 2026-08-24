@@ -4,7 +4,7 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.4
+version: 1.0.5
 updated: 2026-08-24
 ---
 
@@ -47,7 +47,9 @@ Runtime читает отдельную immutable `ConfigMap`-проекцию; 
    `mattercodex-registry-node-pull-readback`. Последний получает node-bound
    client certificate под exact ServiceAccount
    `mattercodex-image-pull-readback`, `audience: vault` и минимальной Vault
-   policy; другие workload не должны иметь прямого Vault ingress.
+   policy. Его CN обязан иметь вид
+   `<16-hex-node-hash>.g<generation>.mattercodex-node-pull`; другие workload не
+   должны иметь прямого Vault ingress.
 5. Сверить обе admission policy и binding: `failurePolicy: Fail`, действие
    `Deny`, exact controller username, namespace, typed `paramKind` и
    `parameterNotFoundAction: Deny`.

@@ -727,8 +727,16 @@ if [[ "$mode" == readback ]]; then
       .data.token_policies == ["mattercodex-node-pull-bootstrap"] and
       .data.token_ttl == 1800 and .data.token_max_ttl == 3600
     ' >/dev/null || fail 'Vault node pull bootstrap auth role readback failed'
-  vault_cli read -format=json pki-node-pull/roles/mattercodex-node-pull >/dev/null ||
-    fail 'Vault node pull certificate role readback failed'
+  vault_cli read -format=json pki-node-pull/roles/mattercodex-node-pull |
+    jq -e '
+      .data.allowed_domains == ["mattercodex-node-pull"] and
+      .data.allow_any_name == false and .data.allow_bare_domains == false and
+      .data.allow_subdomains == true and .data.allow_glob_domains == false and
+      .data.enforce_hostnames == true and .data.require_cn == true and
+      .data.allow_ip_sans == true and .data.server_flag == false and
+      .data.client_flag == true and .data.key_type == "rsa" and
+      .data.key_bits == 3072 and .data.ttl == 1800 and .data.max_ttl == 1800
+    ' >/dev/null || fail 'Vault node pull certificate role readback failed'
 fi
 
 printf 'Vault bootstrap completed: %s\n' "$mode"
