@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.4
+version: 1.2.5
 updated: 2026-08-24
 ---
 
@@ -210,6 +210,13 @@ post-transaction readback обязан фильтровать по этому ж
 вычисление digest только от baseline даёт ложный `registered set incomplete` и
 запрещено. Проверка repository должна выполнять этот сценарий на одноразовой
 PostgreSQL с заведомо различными digest.
+
+Если intent дошёл до `NEXT_STAGED`, session readback совпадает со staged
+digest, но pod-template annotations отсутствуют, проверить exact egress
+reconciler к Kubernetes API Service. Bounded RBAC `patch` недостаточен без
+`NetworkPolicy` на materialized host CIDR API и TCP/443. Широкий service CIDR,
+правило только по порту и ручное добавление annotations запрещены: production
+render обязан содержать один exact `ipBlock` из deployment environment.
 
 ## Контролируемая ротация
 

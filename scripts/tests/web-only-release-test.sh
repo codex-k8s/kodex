@@ -709,11 +709,12 @@ jq -e '
 api_policy_matches=$(yq -e '
   select(.kind == "NetworkPolicy" and
     (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
-     .metadata.name == "runtime-controller-exact-paths")) |
+     .metadata.name == "runtime-controller-exact-paths" or
+     .metadata.name == "internal-rpc-authority-database-credential-reconciler")) |
   .spec.egress[] | select(.to[].ipBlock.cidr == "10.96.0.1/32") |
   ((.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 443)
 ' "$render_file" | grep -c '^true$')
-if [[ $api_policy_matches -ne 2 ]]; then
+if [[ $api_policy_matches -ne 3 ]]; then
   fail 'Kubernetes API Service egress is not bound to the rendered host CIDR'
 fi
 if go run "$repository_root/tools/release/validate-host-cidr.go" 10.96.0.0/24 >/dev/null 2>&1; then
