@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
+version: 1.3.1
 updated: 2026-08-24
 ---
 
@@ -91,7 +91,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    account JWT: суммарно не более 32 GiB file storage, 256 MiB memory storage,
    8 streams, 64 consumers и 100000 pending acknowledgements; каждый stream
    обязан иметь `max_bytes`, а его file/memory limit не может превышать
-   соответствующий account budget.
+   соответствующий account budget. Генератор также создаёт отдельный пароль
+   bootstrap-generation для `internal-rpc-authority-restore-controller` и две
+   независимые пары публичных per-install корней доверия manifest/readback.
+   Эти корни нельзя заменять файлами из образа или другой установки.
 2. Применить bootstrap registry через `infra/bootstrap-registry/bootstrap.sh`.
    Public host, IngressClass и ClusterIssuer передаются параметрами; их нельзя
    брать из константы репозитория. Выполнить `preflight`, `apply`, затем
@@ -136,7 +139,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    внешних observability CRD, если они используются render-ом.
 9. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
    image PKI и static material, создаёт bootstrap restore evidence anchor только
-   при его отсутствии, отдельно применяет release-owned CRD и ждёт состояния
+   при его отсутствии, материализует четыре публичных per-install authority root
+   файла в immutable Secret с exact digest и монтирует только соответствующую
+   пару в publisher, readback attestor и restore controller, отдельно применяет
+   release-owned CRD и ждёт состояния
    `Established`, затем применяет typed admission parameters, остальные
    non-workload resources, PostgreSQL и NATS и материализует database
    credentials. Image admission использует immutable typed parameter resource;
@@ -170,7 +176,9 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    уже завершённый LF secret-файла не дополняется вторым delimiter. Следующий
    произвольный Vault KV payload сохраняется байт-в-байт без ведущего LF.
 10. Выполнить фазу `apply-migrations`. Она последовательно запускает
-   `internal-rpc-authority-migrate`, создаёт runtime database roles, запускает
+   `internal-rpc-authority-migrate`, создаёт runtime database roles, назначает
+   отдельный пароль `ira_restore_controller_g1`, сохраняет DSN только в Vault и
+   через `VaultStaticSecret` материализует exact runtime Secret, затем запускает
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 11. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и

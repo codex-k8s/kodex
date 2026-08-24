@@ -48,6 +48,7 @@ openssl req -x509 -newkey rsa:4096 -sha384 -nodes \
   -keyout "$output_directory/installation-ca/tls.key" \
   -out "$output_directory/installation-ca/tls.crt" >/dev/null 2>&1
 openssl rand -base64 48 >"$output_directory/postgresql/password"
+openssl rand -base64 48 >"$output_directory/postgresql/internal-rpc-authority-restore-controller-password"
 printf 'mattercodex-release\n' >"$output_directory/registry/username"
 openssl rand -base64 48 >"$output_directory/registry/password"
 openssl rand -hex 32 >"$output_directory/control-api/session-current.hex"
@@ -131,6 +132,7 @@ for file_path in \
   "$output_directory/installation-ca/tls.crt" \
   "$output_directory/installation-ca/tls.key" \
   "$output_directory/postgresql/password" \
+  "$output_directory/postgresql/internal-rpc-authority-restore-controller-password" \
   "$output_directory/nats/operator.jwt" \
   "$output_directory/nats/system-account.jwt" \
   "$output_directory/nats/system-account.public" \

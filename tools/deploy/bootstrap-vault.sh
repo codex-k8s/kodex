@@ -356,6 +356,18 @@ HCL
     audience=vault \
     token_policies=spc-control-api-gateway,control-api-gateway-vso \
     token_ttl=30m token_max_ttl=1h >/dev/null
+
+  cat >"$temporary_directory/internal-rpc-authority-restore-controller-vso.hcl" <<'HCL'
+path "kv/data/internal-rpc-authority/restore-controller/postgres" { capabilities = ["read"] }
+HCL
+  vault_input "$temporary_directory/internal-rpc-authority-restore-controller-vso.hcl" \
+    policy write internal-rpc-authority-restore-controller-vso - >/dev/null
+  vault_cli write auth/kubernetes/role/internal-rpc-authority-restore-controller-vso \
+    bound_service_account_names=internal-rpc-authority-restore-controller \
+    bound_service_account_namespaces=mattercodex-system \
+    audience=vault \
+    token_policies=internal-rpc-authority-restore-controller-vso \
+    token_ttl=30m token_max_ttl=1h >/dev/null
 fi
 
 if [[ "$mode" == configure-database ]]; then
@@ -470,19 +482,30 @@ if [[ "$mode" == configure-database-runtime ]]; then
     job/internal-rpc-authority-migrate --timeout=300s >/dev/null
   database_password_file="$material_directory/postgresql/password"
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
+  restore_controller_password_file="$material_directory/postgresql/internal-rpc-authority-restore-controller-password"
+  [[ -f "$restore_controller_password_file" && -s "$restore_controller_password_file" &&
+    ! -L "$restore_controller_password_file" ]] ||
+    fail 'restore controller PostgreSQL password is absent'
+  [[ $(stat -c '%a' "$restore_controller_password_file") == 600 ]] ||
+    fail 'restore controller PostgreSQL password mode is unsafe'
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   database_password=$(read_single_line_secret "$database_password_file" 'PostgreSQL bootstrap password')
+  restore_controller_password=$(read_single_line_secret \
+    "$restore_controller_password_file" 'restore controller PostgreSQL password')
 
   openssl rand -base64 48 >"$temporary_directory/ira_database_credential_reconciler"
   reconciler_password=$(read_single_line_secret \
     "$temporary_directory/ira_database_credential_reconciler" 'generated PostgreSQL reconciler password')
-  printf '%s\n%s\n' "$database_password" "$reconciler_password" |
+  printf '%s\n%s\n%s\n' "$database_password" "$reconciler_password" \
+    "$restore_controller_password" |
     kubectl -n mattercodex-system exec -i mattercodex-postgresql-0 -- sh -ec '
       IFS= read -r PGPASSWORD
-      IFS= read -r role_password
+      IFS= read -r reconciler_password
+      IFS= read -r restore_controller_password
       export PGPASSWORD
-      printf "ALTER ROLE ira_database_credential_reconciler PASSWORD '\''%s'\'';\n" "$role_password" |
+      printf "ALTER ROLE ira_database_credential_reconciler PASSWORD '\''%s'\'';\nALTER ROLE ira_restore_controller_g1 PASSWORD '\''%s'\'';\n" \
+        "$reconciler_password" "$restore_controller_password" |
         psql --host=127.0.0.1 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1
     ' >/dev/null
   encoded_password=$(jq -rn --arg value "$reconciler_password" '$value|@uri')
@@ -492,6 +515,19 @@ if [[ "$mode" == configure-database-runtime ]]; then
     >"$temporary_directory/reconciler-dsn"
   vault_kv_put_file internal-rpc-authority/database-credential-reconciler dsn \
     "$temporary_directory/reconciler-dsn"
+
+  encoded_restore_controller_password=$(jq -rn --arg value "$restore_controller_password" '$value|@uri')
+  printf 'postgresql://ira_restore_controller_g1:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
+    "$encoded_restore_controller_password" "$internal_rpc_authority_postgresql_host" \
+    >"$temporary_directory/restore-controller-dsn"
+  vault_kv_put_file internal-rpc-authority/restore-controller/postgres dsn \
+    "$temporary_directory/restore-controller-dsn"
+  vault_cli kv get -mount=kv -field=dsn \
+    internal-rpc-authority/restore-controller/postgres \
+    >"$temporary_directory/restore-controller-dsn-readback"
+  cmp -s "$temporary_directory/restore-controller-dsn" \
+    "$temporary_directory/restore-controller-dsn-readback" ||
+    fail 'restore controller PostgreSQL credential Vault readback failed'
 
   for mapping in \
     internal-rpc-authority-publisher-g3:ira_publisher_g3 \
