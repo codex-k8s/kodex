@@ -90,4 +90,56 @@ SQL
 )
 [[ "$assertion" == "t" ]] || fail 'fresh authority baseline readback rejected'
 
+lifecycle_assertion=$(psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
+  --tuples-only --no-align <<'SQL'
+BEGIN;
+SET SESSION AUTHORIZATION ira_database_credential_reconciler;
+SET ROLE internal_rpc_authority_database_credential_reconciler;
+SELECT internal_rpc_authority.reconcile_runtime_database_identity(
+  'PUBLISHER',
+  'ira_publisher_g3',
+  3,
+  'CURRENT',
+  '10000000-0000-4000-8000-000000000001',
+  repeat('a', 64)
+);
+SELECT internal_rpc_authority.reconcile_runtime_database_identity(
+  'PUBLISHER',
+  'ira_publisher_g1',
+  1,
+  'PREVIOUS',
+  '10000000-0000-4000-8000-000000000002',
+  repeat('b', 64)
+);
+SELECT internal_rpc_authority.retire_runtime_database_identity(
+  'PUBLISHER',
+  'ira_publisher_g1',
+  1,
+  '10000000-0000-4000-8000-000000000003',
+  repeat('c', 64)
+);
+ROLLBACK;
+SQL
+)
+[[ "$lifecycle_assertion" == $'BEGIN\nSET\nSET\nt\nt\nt\nROLLBACK' ]] ||
+  fail 'runtime database identity lifecycle delegation rejected'
+
+if psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
+  >/dev/null 2>&1 <<'SQL'; then
+BEGIN;
+SET SESSION AUTHORIZATION ira_database_credential_reconciler;
+SET ROLE internal_rpc_authority_database_credential_reconciler;
+SELECT internal_rpc_authority.reconcile_runtime_database_identity(
+  'PUBLISHER',
+  'postgres',
+  3,
+  'CURRENT',
+  '10000000-0000-4000-8000-000000000004',
+  repeat('d', 64)
+);
+ROLLBACK;
+SQL
+  fail 'unregistered PostgreSQL identity was accepted'
+fi
+
 printf 'Internal RPC authority PostgreSQL tests passed\n'

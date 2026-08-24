@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.2
+version: 1.2.3
 updated: 2026-08-24
 ---
 
@@ -192,6 +192,15 @@ lifecycle.
 Vault path из этого закрытого набора является дефектом bootstrap. Не создавать
 их вручную в кластере: повторно выполнить code-first fresh material и
 `configure-core`/`configure-policies` из того же release SHA.
+
+Если lease и intent созданы, но intent остаётся в `CREATED`, проверить ошибку
+`permission denied to alter role`. Security-definer lifecycle обязан иметь
+`CREATEROLE` и `ADMIN OPTION` только на закрытый набор generation roles
+`ira_publisher_g1..g5` и `ira_readback_attestor_g1..g5`; для этого членства
+`INHERIT` и `SET` запрещены. Нельзя выдавать reconciler, runtime principal или
+definer права на произвольные PostgreSQL roles. Исправление подтверждается
+вызовом reconcile/retire под реальными `session_user` и capability в
+одноразовой PostgreSQL, а не ручным `ALTER ROLE` в живой базе.
 
 ## Контролируемая ротация
 

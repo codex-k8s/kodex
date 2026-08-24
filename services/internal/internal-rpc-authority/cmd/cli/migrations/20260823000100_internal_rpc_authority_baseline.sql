@@ -62,6 +62,19 @@ CREATE ROLE ira_readback_attestor_g5
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 
+GRANT ira_publisher_g1,
+      ira_publisher_g2,
+      ira_publisher_g3,
+      ira_publisher_g4,
+      ira_publisher_g5,
+      ira_readback_attestor_g1,
+      ira_readback_attestor_g2,
+      ira_readback_attestor_g3,
+      ira_readback_attestor_g4,
+      ira_readback_attestor_g5
+    TO internal_rpc_authority_credential_lifecycle_definer
+    WITH INHERIT FALSE, SET FALSE, ADMIN TRUE;
+
 CREATE ROLE ira_role_image_builder_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
