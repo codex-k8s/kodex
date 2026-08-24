@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.3
-updated: 2026-08-23
+version: 1.4.4
+updated: 2026-08-24
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -515,8 +515,11 @@ applied -> pending -> reload -> exact peer readback -> applied
 - Staging write endpoint принимает только client certificate выделенной
   BuildKit push role из Pod, выбранного exact `NetworkPolicy`; builder client
   не получает эту identity, application secret или egress. Readiness BuildKit
-  выполняет тот же rootless `RUN` и реальный bounded push в отдельный readiness
-  repository; `debug workers` без build/push не считается готовностью пути.
+  выполняет тот же userns-isolated `RUN` с process sandbox и реальный bounded
+  push в отдельный readiness repository; `debug workers` без build/push не
+  считается готовностью пути. `privileged: true` допустим только при
+  обязательном `hostUsers: false` и namespace-root: кластерный host user
+  namespace, `newuidmap` и `noProcessSandbox` запрещены.
 - Admission evidence до owner verdict хранится как immutable OCI artifact в
   отдельном repository с собственным server-side mTLS/application authorizer.
   Он разрешает write только admission owner, exact OCI upload methods и

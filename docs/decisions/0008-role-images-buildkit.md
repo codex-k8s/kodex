@@ -4,8 +4,8 @@ title: Образы ролей и BuildKit
 type: decision
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-08-05
+version: 0.3.0
+updated: 2026-08-24
 ---
 
 # ADR-MC-008. Образы ролей и BuildKit
@@ -31,10 +31,12 @@ digest и выдаёт короткоживущий подписанный claim
 переносит exact digest в read-only для node pull контур. Среда выполнения
 использует дайджест.
 
-Rootless BuildKit работает с process sandbox, Kubernetes user namespace,
-`hostUsers: false`, `procMount: Unmasked` и требуемыми rootless
-AppArmor/seccomp primitives без privileged или insecure fallback. Readiness
-выполняет тот же Dockerfile `RUN`, что и рабочая сборка.
+BuildKit работает с process sandbox от namespace-root внутри обязательного
+Kubernetes Pod user namespace (`hostUsers: false`). Контейнеру нужен
+`privileged: true`, но эта привилегия ограничена remapped user namespace и не
+является host-root доступом. Профиль с отсутствующим либо истинным
+`hostUsers`, rootless `newuidmap`, `noProcessSandbox` или иным insecure fallback
+запрещён. Readiness выполняет тот же Dockerfile `RUN`, что и рабочая сборка.
 
 ## Последствия
 

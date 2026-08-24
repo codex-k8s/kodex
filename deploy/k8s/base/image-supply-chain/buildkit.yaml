@@ -18,19 +18,19 @@ spec:
         app.kubernetes.io/name: mattercodex-buildkit
         app.kubernetes.io/component: image-builder
     spec:
-      # Rootless process sandbox использует Kubernetes user namespaces. Кластер
-      # без этого поддерживаемого примитива обязан отклонить Pod без перехода в
-      # privileged либо noProcessSandbox режим.
+      # BuildKit работает от namespace-root внутри обязательного Kubernetes
+      # Pod user namespace. privileged действует только внутри remapped user
+      # namespace и не выдаёт процессу host-root. Кластер без hostUsers=false
+      # обязан отклонить Pod; переход в host user namespace или
+      # noProcessSandbox запрещён.
       hostUsers: false
       serviceAccountName: mattercodex-buildkit
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 60
-      securityContext:
-        runAsNonRoot: true
       containers:
         - name: buildkitd
-          image: moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe
+          image: moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4
           imagePullPolicy: IfNotPresent
           args:
             - --config=/var/run/config/mattercodex/buildkit/buildkitd.toml
@@ -60,7 +60,7 @@ spec:
                     --tlsservername mattercodex-buildkit.mattercodex-system.svc.cluster.local \
                     build --frontend dockerfile.v0 --local context="$work" --local dockerfile="$work" \
                     --opt filename=Dockerfile --opt platform=linux/amd64 \
-                    --output type=image,name=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/readiness:rootless-probe,push=true \
+                    --output type=image,name=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/readiness:userns-probe,push=true \
                     --no-cache >/dev/null
             periodSeconds: 60
             timeoutSeconds: 30
@@ -92,18 +92,9 @@ spec:
               cpu: "4"
               memory: 4Gi
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            allowPrivilegeEscalation: false
-            seccompProfile:
-              type: Unconfined
-            appArmorProfile:
-              type: Unconfined
-            procMount: Unmasked
-            capabilities:
-              drop:
-                - ALL
+            runAsUser: 0
+            runAsGroup: 0
+            privileged: true
           volumeMounts:
             - name: state
               mountPath: /var/lib/buildkit

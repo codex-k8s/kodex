@@ -25,7 +25,7 @@ RUN rm -f /etc/nginx/conf.d/default.conf && \
     mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/run/nginx && \
     chown -R 101:101 /var/cache/nginx /var/run/nginx /usr/share/nginx/html
 
-COPY services/staff/control-center/nginx.conf /etc/nginx/nginx.conf
+COPY --chmod=0444 services/staff/control-center/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0555 services/staff/control-center/nginx-entrypoint.sh /usr/local/bin/staff-control-center-entrypoint
 COPY --from=build --chown=101:101 /workspace/services/staff/control-center/dist /usr/share/nginx/html
 

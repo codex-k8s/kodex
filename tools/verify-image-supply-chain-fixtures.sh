@@ -197,8 +197,47 @@ grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq 'staging-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
-grep -Fq 'staging/readiness:rootless-probe,push=true' \
+grep -Fq 'staging/readiness:userns-probe,push=true' \
   "$repository_root/deploy/k8s/base/image-supply-chain/buildkit.yaml"
+buildkit_deployment=$(yq -o=json -I=0 '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-buildkit")
+' "$temporary_directory/supply.yaml")
+jq -e '
+  .spec.template.spec.hostUsers == false and
+  (.spec.template.spec.containers[] | select(.name == "buildkitd") |
+    .image == "moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" and
+    .securityContext.privileged == true and
+    .securityContext.runAsUser == 0 and
+    .securityContext.runAsGroup == 0)
+' <<<"$buildkit_deployment" >/dev/null || {
+  echo "BuildKit user namespace boundary is incomplete" >&2
+  exit 1
+}
+yq -o=json 'select(.spec.template.spec != null)' "$temporary_directory/supply.yaml" |
+  jq -s -e '
+    all(.[];
+      (([((.spec.template.spec.initContainers // []) +
+           (.spec.template.spec.containers // []))[] |
+         .securityContext.privileged // false] | any) | not) or
+      (.spec.template.spec.hostUsers == false))
+  ' >/dev/null || {
+    echo "privileged workload escapes the mandatory Pod user namespace" >&2
+    exit 1
+  }
+if grep -Fq -- '--oci-worker-no-process-sandbox' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/buildkit.yaml" ||
+  grep -Eq '^[[:space:]]*rootless[[:space:]]*=[[:space:]]*true' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"; then
+  echo "BuildKit process sandbox or rootful userns worker contract was weakened" >&2
+  exit 1
+fi
+for runtime_tool in curl openssl pgrep; do
+  grep -Eq "RUN for tool in .*${runtime_tool}" \
+    "$repository_root/infra/admission-tools/Dockerfile" || {
+      echo "admission tools image omits runtime readiness tool: $runtime_tool" >&2
+      exit 1
+    }
+done
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
 if rg -q 'staging-push|STAGING_DOCKER' \

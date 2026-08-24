@@ -4,8 +4,8 @@ title: Диагностика role-image-builder
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-22
+version: 1.2.1
+updated: 2026-08-24
 ---
 
 # Диагностика role-image-builder
@@ -18,7 +18,9 @@ values.
 ## Read-only preflight
 
 1. Зафиксировать exact Git SHA и проверить readiness `role-image-builder`, его
-   issuer sidecar, `control-plane`, rootless BuildKit и четыре registry scope.
+   issuer sidecar, `control-plane`, userns BuildKit и четыре registry scope.
+   У BuildKit проверить `hostUsers: false`, namespace-root и
+   `privileged: true`; последнее допустимо только внутри Pod user namespace.
 2. Сверить, что builder Pod использует ServiceAccount `role-image-builder`,
    `automountServiceAccountToken: false`, private bounded `emptyDir` и не имеет
    promotion/admin/node-pull credentials или egress.
@@ -44,7 +46,7 @@ values.
   identity. Содержимое и credential не печатать.
 - `BASE_PULL_FAILED`, `SOLVE_FAILED`, `INSTALLATION_FAILED`,
   `RUNTIME_FINALIZATION_FAILED` или
-  `STAGING_PUSH_FAILED`: сверить соответствующую достигнутую фазу, rootless
+  `STAGING_PUSH_FAILED`: сверить соответствующую достигнутую фазу, userns
   readiness, trusted base/ABI и раздельные registry scopes. Raw BuildKit output
   и insecure fallback запрещены.
 - истёкший lease: выполнить owner `EXPIRE`, затем `RETRY`; старая attempt не

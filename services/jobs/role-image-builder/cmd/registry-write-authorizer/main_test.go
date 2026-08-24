@@ -13,7 +13,7 @@ func TestAllowedRegistryWriteIsClosed(t *testing.T) {
 		{"PUT", "/v2/staging/role-images/blobs/uploads/id"},
 		{"PUT", "/v2/staging/role-images/manifests/build-1"},
 		{"HEAD", "/v2/staging/role-images/blobs/sha256:abc"},
-		{"PUT", "/v2/staging/readiness/manifests/rootless-probe"},
+		{"PUT", "/v2/staging/readiness/manifests/userns-probe"},
 	} {
 		if !allowedRegistryWrite(request.method, request.path) {
 			t.Fatalf("expected OCI staging operation rejected: %s %s", request.method, request.path)

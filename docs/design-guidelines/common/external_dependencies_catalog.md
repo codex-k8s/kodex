@@ -77,7 +77,7 @@ promoted system role image и always-hot runtime contract.
 
 | Dependency | Source of exact version | Scope |
 |---|---|---|
-| rootless BuildKit | pinned Dockerfile/manifests | release images и изолированная сборка role images |
+| userns BuildKit | pinned image/manifests | изолированная сборка role images с process sandbox и `hostUsers: false` |
 | OCI registry | release environment configuration | staging, evidence, promotion и node pull boundaries |
 | Kubernetes | environment contract | платформа и execution-scoped role Pods |
 | PostgreSQL | environment contract | fresh control-plane baseline и authority state |

@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.8
-updated: 2026-08-23
+version: 1.2.9
+updated: 2026-08-24
 ---
 
 # Границы сервисов и структура репозитория
@@ -97,7 +97,8 @@ credential, audience, полным именем метода и permission. Ск
 `services/jobs/role-image-builder`. Он получает server-owned fenced attempt
 через protected RPC, потоково читает exact OCI context/package/tool в private
 `emptyDir`, использует pull-only input identity и client-only mTLS к вынесенному
-rootless BuildKit. Base-pull и staging-push identities, credentials и egress
+BuildKit с process sandbox в обязательном Pod user namespace. Base-pull и
+staging-push identities, credentials и egress
 принадлежат только BuildKit. Tenant, owner, recipe, generation, policy и artifact eligibility
 назначает `control-plane`; installation block доступен builder только в
 immutable claim snapshot и не попадает в status/log/audit/provenance.

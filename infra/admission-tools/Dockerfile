@@ -10,13 +10,16 @@ ARG SOURCE_SHA=unknown
 RUN apk add --no-cache \
       ca-certificates=20260611-r0 \
       coreutils=9.7-r1 \
+      curl=8.14.1-r3 \
       grep=3.12-r0 \
-      jq=1.8.1-r0
+      jq=1.8.1-r0 \
+      openssl=3.5.7-r0 \
+      procps-ng=4.0.4-r3
 COPY --from=cosign --chmod=0555 /ko-app/cosign /usr/local/bin/cosign
 COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
 COPY --from=grype --chmod=0555 /grype /usr/local/bin/grype
 COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
-RUN for tool in base64 cmp cosign grype jq regctl sha256sum syft wc; do \
+RUN for tool in base64 cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
 LABEL org.opencontainers.image.title="MatterCodex image admission tools" \
