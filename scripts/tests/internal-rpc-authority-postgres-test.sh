@@ -124,6 +124,13 @@ SQL
 [[ "$lifecycle_assertion" == $'BEGIN\nSET\nSET\nt\nt\nt\nROLLBACK' ]] ||
   fail 'runtime database identity lifecycle delegation rejected'
 
+(
+  cd "$repository_root/services/internal/internal-rpc-authority"
+  INTERNAL_RPC_AUTHORITY_POSTGRES_TEST_DSN="postgresql://ira_database_credential_reconciler@127.0.0.1:${port}/internal_rpc_authority?sslmode=disable" \
+    GOWORK=off go test ./internal/repository/postgres/credentiallifecycle \
+      -run '^TestReconcileCredentialsReadsCanonicalDigest$' -count=1
+)
+
 if psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
   >/dev/null 2>&1 <<'SQL'; then
 BEGIN;

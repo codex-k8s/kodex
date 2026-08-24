@@ -115,7 +115,7 @@ func (repository *Repository) ReconcileCredentials(
 	if err := transaction.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit database credential reconciliation: %w", err)
 	}
-	return repository.ReadCredentialGenerations(ctx, registered)
+	return repository.readCredentialGenerations(ctx, registered, canonicalDigest)
 }
 
 // LoadOrCreateRotationIntent создаёт durable intent только под действующим lease.
@@ -251,11 +251,23 @@ func (repository *Repository) ReadCredentialGenerations(
 	ctx context.Context,
 	registered model.DatabaseCredentialRegisteredSet,
 ) ([]model.DatabaseCredentialGeneration, error) {
+	return repository.readCredentialGenerations(
+		ctx,
+		registered,
+		registeredDigest(registered),
+	)
+}
+
+func (repository *Repository) readCredentialGenerations(
+	ctx context.Context,
+	registered model.DatabaseCredentialRegisteredSet,
+	canonicalDigest string,
+) ([]model.DatabaseCredentialGeneration, error) {
 	rows, err := repository.pool.Query(
 		ctx,
 		readGenerationsSQL,
 		pgx.StrictNamedArgs{
-			"registered_set_digest_sha256": registeredDigest(registered),
+			"registered_set_digest_sha256": canonicalDigest,
 		},
 	)
 	if err != nil {
