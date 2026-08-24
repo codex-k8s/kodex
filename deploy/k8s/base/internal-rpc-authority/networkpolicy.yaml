@@ -57,6 +57,12 @@ spec:
         - port: 5432
           protocol: TCP
     - to:
+        - ipBlock:
+            cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: observability
