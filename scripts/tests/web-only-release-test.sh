@@ -107,6 +107,15 @@ grep -Fq 'cmp -s "$desired_payload" "$live_payload"' "$fresh_deployer" ||
   fail 'fresh deploy replaces immutable resources without semantic drift comparison'
 grep -Fq 'wait_trust_material()' "$fresh_deployer" ||
   fail 'fresh deploy does not implement bounded trust material readiness'
+vault_wait_function=$(awk '
+  /^wait_vault_static_secrets\(\) \{/ {capture=1}
+  capture {print}
+  capture && /^}$/ {exit}
+' "$fresh_deployer")
+grep -Fq '"$resource_name" == internal-rpc-authority-restore-controller-postgresql' \
+  <<<"$vault_wait_function" || fail 'deferred restore predicate is outside VaultStaticSecret readiness'
+grep -Fq 'vaultstaticsecrets.secrets.hashicorp.com/$resource_name' \
+  <<<"$vault_wait_function" || fail 'deferred restore predicate is not bound to VaultStaticSecret wait'
 [[ $(grep -c '^[[:space:]]*wait_trust_material$' "$fresh_deployer") -eq 2 &&
   $(grep -c '^[[:space:]]*wait_trust_material true$' "$fresh_deployer") -eq 1 ]] ||
   fail 'fresh deploy does not verify trust material in state, workloads and readback phases'
