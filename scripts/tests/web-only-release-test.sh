@@ -151,6 +151,21 @@ grep -Fq 'apply_filter custom-resource-definitions' "$fresh_deployer" ||
   fail 'fresh deploy does not establish custom resource definitions before parameters'
 grep -Fq 'kubectl wait --for=condition=Established' "$fresh_deployer" ||
   fail 'fresh deploy does not wait for custom resource definition discovery'
+grep -Fq 'require_external_observability_crds()' "$fresh_deployer" ||
+  fail 'fresh deploy does not implement the external observability CRD gate'
+for observability_crd in \
+  podmonitors.monitoring.coreos.com \
+  prometheusrules.monitoring.coreos.com \
+  servicemonitors.monitoring.coreos.com; do
+  grep -Fq "$observability_crd" "$fresh_deployer" ||
+    fail "fresh deploy omits an external observability CRD dependency: $observability_crd"
+done
+observability_gate_line=$(grep -n '^require_external_observability_crds$' "$fresh_deployer" |
+  cut -d: -f1)
+vault_initialize_line=$(grep -n ' --mode initialize ' "$fresh_deployer" | cut -d: -f1)
+[[ -n "$observability_gate_line" && -n "$vault_initialize_line" &&
+  "$observability_gate_line" -lt "$vault_initialize_line" ]] ||
+  fail 'fresh deploy validates observability CRDs only after Vault bootstrap'
 cluster_cleanup_line=$(grep -n '^[[:space:]]*delete_release_cluster_scope$' "$legacy_resetter" |
   cut -d: -f1)
 namespace_cleanup_line=$(grep -n 'kubectl delete namespace "$legacy_namespace"' "$legacy_resetter" |

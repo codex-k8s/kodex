@@ -58,6 +58,26 @@ yq -o=json -I=0 '.' "$render_file" | jq -s -e '
     all(.[]; length == 1))
 ' >/dev/null || fail 'release render has duplicate resource identities'
 
+require_external_observability_crds() {
+  local kind crd
+
+  while IFS=$'\t' read -r kind crd; do
+    if ! yq -e "select(.kind == \"$kind\")" "$render_file" >/dev/null 2>&1; then
+      continue
+    fi
+    kubectl get "customresourcedefinition/$crd" -o json | jq -e '
+      any(.status.conditions[]?; .type == "Established" and .status == "True")
+    ' >/dev/null 2>&1 ||
+      fail "external observability CRD is absent or not established: $crd; run management-surfaces apply-monitoring first"
+  done <<'EOF'
+PodMonitor	podmonitors.monitoring.coreos.com
+PrometheusRule	prometheusrules.monitoring.coreos.com
+ServiceMonitor	servicemonitors.monitoring.coreos.com
+EOF
+}
+
+require_external_observability_crds
+
 render_sha256=$(sha256sum "$render_file" | awk '{print $1}')
 printf 'Fresh release preflight: render_sha256=%s mode=%s\n' "$render_sha256" "$mode"
 if [[ "$mode" == preflight ]]; then
