@@ -115,6 +115,25 @@ vault_input() {
     ' sh "$@"
 }
 
+write_publisher_runtime_policy() {
+  local registry_json=$1 output_file=$2 path path_count=0
+  : >"$output_file"
+  while IFS= read -r path; do
+    [[ "$path" =~ ^kv/data/mattercodex/internal-rpc-authority/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$ ]] ||
+      fail 'publisher runtime Vault path is outside the authority registry boundary'
+    printf 'path "%s" { capabilities = ["read", "update"] }\n' "$path" >>"$output_file"
+    ((path_count += 1))
+  done < <(jq -r '
+    [
+      .. | objects | to_entries[] |
+      select((.key == "vault_path" or (.key | endswith("_vault_path"))) and
+        (.value | type) == "string" and (.value | length) > 0) |
+      .value
+    ] | unique[]
+  ' "$registry_json")
+  ((path_count >= 6)) || fail 'publisher runtime Vault policy has too few exact paths'
+}
+
 vault_kv_put_file() {
   local path=$1 key=$2 seed_file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
@@ -273,6 +292,19 @@ if [[ "$mode" == configure-policies ]]; then
   yq -o=json -I=0 '.' "$render_file" | jq -s '.' >"$temporary_directory/render.json"
   yq -o=json -I=0 'select(.kind == "SecretProviderClass") | .metadata.name as $spc | .spec.parameters.roleName as $role | (.spec.parameters.objects | from_yaml)[] | {"spc": $spc, "role": $role, "path": .secretPath, "method": (.method // "GET")}' \
     "$render_file" | jq -s '.' >"$temporary_directory/objects.json"
+  yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | (.data."key-delivery-targets.yaml" | from_yaml)' \
+    "$render_file" | jq -s -e '
+      if length == 1 and .[0].version == 1 and (.[0].source_revision | type) == "number" and
+        (.[0].targets | type) == "array" and (.[0].targets | length) >= 3
+      then .[0]
+      else error("publisher target registry is missing or ambiguous")
+      end
+    ' >"$temporary_directory/publisher-target-registry.json"
+  write_publisher_runtime_policy \
+    "$temporary_directory/publisher-target-registry.json" \
+    "$temporary_directory/internal-rpc-authority-publisher-runtime.hcl"
+  vault_input "$temporary_directory/internal-rpc-authority-publisher-runtime.hcl" \
+    policy write internal-rpc-authority-publisher-runtime - >/dev/null
 
   cat >"$temporary_directory/database-credential-reconciler-runtime.hcl" <<'HCL'
 path "database/static-roles/internal-rpc-authority-publisher-g1" { capabilities = ["read", "delete"] }
@@ -337,6 +369,9 @@ HCL
     role_policies="spc-$role"
     if [[ "$role" == internal-rpc-authority-database-credential-reconciler ]]; then
       role_policies+=,internal-rpc-authority-database-credential-reconciler-runtime
+    fi
+    if [[ "$role" == internal-rpc-authority-publisher ]]; then
+      role_policies+=,internal-rpc-authority-publisher-runtime
     fi
     vault_cli write "auth/kubernetes/role/$role" \
       bound_service_account_names="$service_accounts" \
@@ -705,6 +740,35 @@ fi
 
 if [[ "$mode" == readback ]]; then
   require_root_material
+  [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] || fail 'release render is required'
+  temporary_directory=$(mktemp -d)
+  trap 'rm -rf -- "$temporary_directory"' EXIT
+  yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | (.data."key-delivery-targets.yaml" | from_yaml)' \
+    "$render_file" | jq -s -e '
+      if length == 1 and .[0].version == 1 and (.[0].source_revision | type) == "number" and
+        (.[0].targets | type) == "array" and (.[0].targets | length) >= 3
+      then .[0]
+      else error("publisher target registry is missing or ambiguous")
+      end
+    ' >"$temporary_directory/publisher-target-registry.json"
+  write_publisher_runtime_policy \
+    "$temporary_directory/publisher-target-registry.json" \
+    "$temporary_directory/internal-rpc-authority-publisher-runtime.expected.hcl"
+  vault_cli policy read internal-rpc-authority-publisher-runtime \
+    >"$temporary_directory/internal-rpc-authority-publisher-runtime.actual.hcl"
+  cmp -s \
+    "$temporary_directory/internal-rpc-authority-publisher-runtime.expected.hcl" \
+    "$temporary_directory/internal-rpc-authority-publisher-runtime.actual.hcl" ||
+    fail 'Vault publisher runtime policy readback failed'
+  vault_cli read -format=json auth/kubernetes/role/internal-rpc-authority-publisher |
+    jq -e '
+      .data.bound_service_account_names == ["internal-rpc-authority-publisher"] and
+      .data.bound_service_account_namespaces == ["mattercodex-system"] and
+      .data.audience == "vault" and
+      (.data.token_policies | sort) ==
+        (["internal-rpc-authority-publisher-runtime", "spc-internal-rpc-authority-publisher"] | sort) and
+      .data.token_ttl == 1800 and .data.token_max_ttl == 3600
+    ' >/dev/null || fail 'Vault publisher Kubernetes auth role readback failed'
   vault_status | jq -e '.initialized == true and .sealed == false' >/dev/null || fail 'Vault status readback failed'
   vault_cli secrets list -format=json | jq -e 'has("kv/") and has("secret/") and has("database/") and has("pki/")' >/dev/null ||
     fail 'Vault engines readback failed'

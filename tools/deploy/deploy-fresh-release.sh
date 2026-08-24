@@ -511,7 +511,7 @@ fi
 
 if [[ "$mode" == readback ]]; then
   "$vault_bootstrap" --context "$expected_context" --mode readback \
-    --material-directory "$material_directory"
+    --material-directory "$material_directory" --render "$render_file"
   ensure_restore_evidence_anchor
   require_authority_bootstrap_roots
   wait_trust_material
