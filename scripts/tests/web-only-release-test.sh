@@ -269,6 +269,13 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
   --oidc-namespace identity --oidc-pod-name sso \
   --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
 
+yq -e '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  (.data."key-delivery-targets.yaml" | from_yaml | .source_revision) == 1
+' "$render_file" >/dev/null ||
+  fail 'web-only fresh install does not start authority history at revision one'
+
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
 fi
@@ -951,6 +958,13 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
 
 verify_csi_secret_mounts "$mattermost_render"
+
+yq -e '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  (.data."key-delivery-targets.yaml" | from_yaml | .source_revision) == 1
+' "$mattermost_render" >/dev/null ||
+  fail 'Mattermost fresh install does not start authority history at revision one'
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gateway")' "$mattermost_render" |
   jq -e '

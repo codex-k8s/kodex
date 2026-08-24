@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.1
+version: 1.3.2
 updated: 2026-08-24
 ---
 
@@ -185,7 +185,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
     применяет workload-ресурсы за исключением этого create-once ресурса и всех
     `Job`, дожидается image supply chain, отдельно выполняет
     `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
-    DaemonSet. Migration/bootstrap Job принадлежат только фазе
+    DaemonSet. Первая публикация authority graph в новой пустой БД обязана иметь
+    `source_revision: 1`; историческая ревизия без predecessor chain закрыто
+    отклоняется и не может использоваться как shortcut чистой установки.
+    Migration/bootstrap Job принадлежат только фазе
     `apply-migrations`: generic apply не обновляет их immutable template при
     переходе на новый release digest. Перед generic apply state/workload-фаза
     сравнивает semantic payload закрытого списка release-owned immutable
