@@ -104,10 +104,19 @@ kubectl -n identity get deployment sso -o json | jq -e \
   --arg image 'quay.io/keycloak/keycloak:26.7.1@sha256:f1f1f01e472c8a78df40d8f2a49a925274eda4d3d80d5f6edbb5c880ee3c01c6' '
     .spec.template.spec.containers[] | select(.name == "keycloak") |
     .image == $image and
-    any(.env[]; .name == "KC_HTTP_HOST" and .value == "127.0.0.1") and
+    any(.env[]; .name == "KC_HTTP_HOST" and .value == "0.0.0.0") and
+    any(.env[]; .name == "KC_HTTP_MANAGEMENT_HOST" and .value == "0.0.0.0") and
     any(.env[]; .name == "KC_DB_URL" and
       (.value | contains("sslmode=verify-full&sslrootcert=")))
   ' >/dev/null || fail 'Keycloak image readback mismatch'
+kubectl -n identity get service sso -o json | jq -e '
+  . as $service |
+  ([$service.spec.ports[] | .name] | sort) == ["https", "management"] and
+  all($service.spec.ports[]; .port != 8080 and .targetPort != 8080 and .targetPort != "http")
+' >/dev/null || fail 'Keycloak Service exposes the reconciliation HTTP listener'
+kubectl -n identity get networkpolicy sso-exact-paths -o json | jq -e '
+  all(.spec.ingress[]?.ports[]?; .port != 8080 and .port != "http")
+' >/dev/null || fail 'Keycloak NetworkPolicy exposes the reconciliation HTTP listener'
 [[ "$(kubectl -n identity get ingress sso -o jsonpath='{.spec.rules[0].host}')" == "$oidc_host" ]] ||
   fail 'Keycloak Ingress host readback mismatch'
 [[ "$(kubectl -n identity get ingress sso -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.port.name}')" == https ]] ||

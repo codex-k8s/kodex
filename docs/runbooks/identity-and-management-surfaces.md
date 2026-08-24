@@ -165,8 +165,11 @@ tools/deploy/configure-keycloak.sh \
 realm `mattercodex`. Повторить команду с `--mode readback`.
 Keycloak обращается к своему PostgreSQL только по TLS 1.3 с `verify-full` и
 installation-owned identity CA; Traefik также подключается к Keycloak по HTTPS
-с exact SNI публичного OIDC host. Внутренний HTTP Keycloak доступен только на
-loopback `127.0.0.1` для code-first reconciliation и не опубликован Service.
+с exact SNI публичного OIDC host. Keycloak bind-ит основной и management
+listener к Pod interface, иначе Kubernetes Service и probes недоступны.
+Внутренний HTTP на `8080` нужен только для code-first reconciliation внутри
+того же Pod: Service не публикует этот порт, а deny-all/allowlist
+`NetworkPolicy` не разрешает к нему ingress из других Pod.
 При ротации database certificate bootstrap переносит `resourceVersion` TLS
 Secret в Pod template, выполняет rollout PostgreSQL и проверяет exact revision.
 
