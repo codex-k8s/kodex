@@ -49,6 +49,7 @@ while :; do
   mounted_certificate_valid=false
   served_certificate_available=false
   certificates_match=false
+  served_certificate_is_applied=false
   if openssl x509 -in /identity/tls.crt -checkend 900 -noout >/dev/null 2>&1; then
     mounted_certificate_valid=true
   fi
@@ -63,12 +64,25 @@ while :; do
     openssl x509 -in /identity/tls.crt -outform DER > /tmp/mounted.der 2>/dev/null &&
     cmp -s /tmp/served.der /tmp/mounted.der; then
     certificates_match=true
+    cp /tmp/served.der /tmp/registry-applied.der
     certificate_failures=0
   elif [ "$served_certificate_available" = true ]; then
-    certificate_failures=$((certificate_failures + 1))
+    if [ -s /tmp/registry-applied.der ] &&
+      cmp -s /tmp/served.der /tmp/registry-applied.der &&
+      openssl x509 -inform DER -in /tmp/served.der -checkend 900 -noout \
+        >/dev/null 2>&1; then
+      # CSI уже доставил pending certificate, но процесс продолжает безопасно
+      # обслуживать ранее readback-проверенный applied certificate. Перезапуск
+      # требуется только перед исчерпанием его bounded validity window.
+      served_certificate_is_applied=true
+      certificate_failures=0
+    else
+      certificate_failures=$((certificate_failures + 1))
+    fi
   fi
 
-  if [ "$certificates_match" = true ]; then
+  if [ "$certificates_match" = true ] ||
+    [ "$served_certificate_is_applied" = true ]; then
     if [ -n "${DOCKER_CONFIG_FILE:-}" ]; then
       read_pull_credentials || {
         sleep 10
@@ -126,7 +140,11 @@ while :; do
     # только registry при доказанном drift обслуживаемого CSI certificate.
     # Неготовность backend, credential или readback artifact не является
     # основанием для убийства процесса: иначе startup превращается в restart loop.
-    registry_pid=$(pgrep -x registry | head -n 1 || true)
+    if [ -n "${RELOAD_PROCESS_PATTERN:-}" ]; then
+      registry_pid=$(pgrep -f "$RELOAD_PROCESS_PATTERN" | head -n 1 || true)
+    else
+      registry_pid=$(pgrep -x registry | head -n 1 || true)
+    fi
     [ -z "$registry_pid" ] || kill -TERM "$registry_pid"
     certificate_failures=0
   fi

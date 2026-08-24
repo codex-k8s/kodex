@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
 	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
 	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 )
@@ -115,5 +116,23 @@ func RunRestorePITR(
 	if err != nil {
 		return err
 	}
+	execute, err := shouldExecuteRestorePITR(state)
+	if err != nil {
+		return err
+	}
+	if !execute {
+		return nil
+	}
 	return executor.Execute(ctx, state)
+}
+
+func shouldExecuteRestorePITR(state model.RestoreState) (bool, error) {
+	switch state.Phase {
+	case "", "OPEN", "QUIESCING", "COMPLETED":
+		return false, nil
+	case "PREPARED":
+		return true, nil
+	default:
+		return false, errors.New("PITR coordination phase is invalid")
+	}
 }

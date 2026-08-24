@@ -100,6 +100,7 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
   GOWORK=off go run ./cmd/internal-rpc-authority-bootstrap-material \
     --manifest-signer "$output_directory/crypto/publisher/manifest-signer/private.jwk" \
     --readback-signer "$output_directory/crypto/publisher/readback-signer/private.jwk" \
+    --restore-signer "$output_directory/crypto/publisher/restore-signer/private.jwk" \
     --output "$output_directory/crypto/authority-bootstrap"
 )
 

@@ -53,28 +53,54 @@ type readbackCredentialKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
+type restoreRoleTrustKey struct {
+	Status     string          `json:"status"`
+	Generation uint64          `json:"credential_signer_generation"`
+	KeyID      string          `json:"kid"`
+	PublicJWK  json.RawMessage `json:"public_jwk"`
+	Thumbprint string          `json:"jwk_thumbprint_sha256"`
+	NotBefore  int64           `json:"not_before"`
+	NotAfter   int64           `json:"not_after"`
+}
+
 func main() {
 	manifestSignerFile := flag.String("manifest-signer", "", "canonical publisher manifest signer private JWK")
 	readbackSignerFile := flag.String("readback-signer", "", "canonical publisher readback signer private JWK")
+	restoreSignerFile := flag.String("restore-signer", "", "canonical publisher restore signer private JWK")
 	output := flag.String("output", "", "private output directory for the ceremony")
 	flag.Parse()
-	if *manifestSignerFile == "" || *readbackSignerFile == "" || *output == "" {
-		fatal(errors.New("manifest-signer, readback-signer and output are required"))
+	if *manifestSignerFile == "" || *readbackSignerFile == "" ||
+		*restoreSignerFile == "" || *output == "" {
+		fatal(errors.New("manifest-signer, readback-signer, restore-signer and output are required"))
 	}
 	manifestSigner := readPrivateKey(*manifestSignerFile)
 	readbackSigner := readPrivateKey(*readbackSignerFile)
-	if err := generate(*output, manifestSigner, readbackSigner, time.Now().UTC().Truncate(time.Second)); err != nil {
+	restoreSigner := readPrivateKey(*restoreSignerFile)
+	if err := generate(
+		*output,
+		manifestSigner,
+		readbackSigner,
+		restoreSigner,
+		time.Now().UTC().Truncate(time.Second),
+	); err != nil {
 		fatal(err)
 	}
 }
 
-func generate(output string, manifestSigner, readbackSigner internalrpcauth.ES256Key, now time.Time) error {
+func generate(
+	output string,
+	manifestSigner internalrpcauth.ES256Key,
+	readbackSigner internalrpcauth.ES256Key,
+	restoreSigner internalrpcauth.ES256Key,
+	now time.Time,
+) error {
 	manifestRoot := mustGenerate("ira-manifest-root-g1")
 	manifestNext := mustGenerate("ira-manifest-signer-g2")
 	readbackRoot := mustGenerate("ira-readback-root-g1")
 	readbackManifestCurrent := mustGenerate("ira-readback-manifest-g1")
 	readbackManifestNext := mustGenerate("ira-readback-manifest-g2")
 	readbackNext := mustGenerate("ira-readback-credential-g2")
+	restoreNext := mustGenerate("ira-publisher-restore-g2")
 
 	validFrom := now.Add(-5 * time.Minute).Unix()
 	validUntil := now.Add(365 * 24 * time.Hour).Unix()
@@ -207,6 +233,42 @@ func generate(output string, manifestSigner, readbackSigner internalrpcauth.ES25
 		TrustSetDigest: mustDigest(readbackCredentialKeys), ValidUntil: validUntil, Version: 1,
 	}
 	readbackCredentialJWS := mustSign(readbackCredentialTrust, readbackManifestCurrent, "mattercodex-internal-rpc-readback-credential-trust+jws")
+	restoreKeys := []restoreRoleTrustKey{
+		newRestoreRoleTrustKey("CURRENT", 1, restoreSigner, validFrom, validUntil),
+		newRestoreRoleTrustKey("NEXT", 2, restoreNext, validFrom, validUntil),
+	}
+	restoreRoleTrust := struct {
+		Version          int                   `json:"v"`
+		Issuer           string                `json:"iss"`
+		Audience         string                `json:"aud"`
+		SourceRevision   uint64                `json:"source_revision"`
+		KeySetRevision   uint64                `json:"key_set_revision"`
+		TrustSetDigest   string                `json:"trust_set_digest_sha256"`
+		Predecessor      revisionDigest        `json:"predecessor"`
+		History          []revisionDigest      `json:"history"`
+		SignerGeneration uint64                `json:"manifest_signer_generation"`
+		Keys             []restoreRoleTrustKey `json:"keys"`
+		PublishedAt      int64                 `json:"published_at"`
+		ValidUntil       int64                 `json:"valid_until"`
+	}{
+		Version:          1,
+		Issuer:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher",
+		Audience:         "urn:mattercodex:internal-rpc-authority-restore-controller",
+		SourceRevision:   1,
+		KeySetRevision:   1,
+		TrustSetDigest:   mustDigest(restoreKeys),
+		Predecessor:      predecessor,
+		History:          []revisionDigest{},
+		SignerGeneration: 1,
+		Keys:             restoreKeys,
+		PublishedAt:      now.Unix(),
+		ValidUntil:       validUntil,
+	}
+	restoreRoleTrustJWS := mustSign(
+		restoreRoleTrust,
+		manifestSigner,
+		"mattercodex-internal-rpc-restore-role-trust+jws",
+	)
 
 	for path, data := range map[string][]byte{
 		"public/manifest-root/bootstrap-public.jwk":     manifestRootPublic,
@@ -216,12 +278,14 @@ func generate(output string, manifestSigner, readbackSigner internalrpcauth.ES25
 		"external/publisher-manifest-trust.jws":         []byte(manifestBundleJWS),
 		"external/readback-manifest-root.jws":           []byte(readbackManifestJWS),
 		"external/readback-credential-trust.jws":        []byte(readbackCredentialJWS),
+		"external/restore-role-trust.jws":               []byte(restoreRoleTrustJWS),
 		"offline/manifest-root-private.jwk":             mustPrivate(manifestRoot),
 		"offline/manifest-signer-next-private.jwk":      mustPrivate(manifestNext),
 		"offline/readback-root-private.jwk":             mustPrivate(readbackRoot),
 		"offline/readback-manifest-current-private.jwk": mustPrivate(readbackManifestCurrent),
 		"offline/readback-manifest-next-private.jwk":    mustPrivate(readbackManifestNext),
 		"offline/readback-credential-next-private.jwk":  mustPrivate(readbackNext),
+		"offline/restore-signer-next-private.jwk":       mustPrivate(restoreNext),
 	} {
 		if err := writeFile(filepath.Join(output, path), data); err != nil {
 			return err
@@ -240,6 +304,24 @@ func newReadbackManifestKey(status string, generation uint64, key internalrpcaut
 
 func newReadbackCredentialKey(status string, generation uint64, key internalrpcauth.ES256Key, notBefore, notAfter int64) readbackCredentialKey {
 	return readbackCredentialKey{status, generation, key.KeyID, mustPublic(key), mustThumbprint(key), notBefore, notAfter}
+}
+
+func newRestoreRoleTrustKey(
+	status string,
+	generation uint64,
+	key internalrpcauth.ES256Key,
+	notBefore int64,
+	notAfter int64,
+) restoreRoleTrustKey {
+	return restoreRoleTrustKey{
+		status,
+		generation,
+		key.KeyID,
+		mustPublic(key),
+		mustThumbprint(key),
+		notBefore,
+		notAfter,
+	}
 }
 
 func readPrivateKey(path string) internalrpcauth.ES256Key {

@@ -57,10 +57,23 @@ dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerf
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
 legacy_resetter="$repository_root/tools/deploy/reset-legacy-installation.sh"
 fresh_materializer="$repository_root/tools/deploy/materialize-fresh-install-secrets.sh"
+vault_bootstrap="$repository_root/tools/deploy/bootstrap-vault.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
-bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter" "$fresh_materializer"
+bash -n "$dockerfile_path_validator" "$fresh_deployer" "$legacy_resetter" \
+  "$fresh_materializer" "$vault_bootstrap"
+for bootstrap_entry in \
+  'external/restore-role-trust.jws' \
+  'internal-rpc-authority/restore/trust' \
+  'internal-rpc-authority/restore/pitr-evidence public.jwk' \
+  'internal-rpc-authority-database-credential-reconciler-runtime' \
+  'database/static-creds/internal-rpc-authority-publisher-g4' \
+  'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
+  'audience=vault'; do
+  grep -Fq "$bootstrap_entry" "$vault_bootstrap" ||
+    fail "Vault bootstrap omits required fresh-install boundary: $bootstrap_entry"
+done
 if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
   fail 'fresh deploy expands a local variable in the declaration that assigns it'
 fi
@@ -786,6 +799,20 @@ fi
 grep -Fq 'if [ "$certificate_failures" -ge 3 ]; then' \
   "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh" ||
   fail 'registry certificate guard does not isolate certificate drift restarts'
+grep -Fq '/tmp/registry-applied.der' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh" ||
+  fail 'registry certificate guard does not retain the applied certificate readback'
+grep -Fq 'openssl x509 -inform DER -in /tmp/served.der -checkend 900' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh" ||
+  fail 'registry certificate guard does not bound pending certificate overlap'
+yq -o=json '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull") |
+  .spec.template.spec.containers[] | select(.name == "certificate-guard")
+' "$render_file" | jq -e '
+  any(.env[];
+    .name == "RELOAD_PROCESS_PATTERN" and
+    .value == "^/usr/local/bin/registry-pull-authorizer$")
+' >/dev/null || fail 'pull registry certificate guard cannot restart the TLS-serving process'
 if grep -Eq '(^|[^_])failures=' \
   "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"; then
   fail 'registry certificate guard still counts ordinary backend failures toward restart'

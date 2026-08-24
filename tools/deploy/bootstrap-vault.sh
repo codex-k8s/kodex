@@ -247,12 +247,18 @@ if [[ "$mode" == configure-core ]]; then
     "$material_directory/crypto/publisher/manifest-signer/private.jwk"
   vault_kv_put_file internal-rpc-authority/publisher/manifest-trust manifest-trust.jws \
     "$material_directory/crypto/authority-bootstrap/external/publisher-manifest-trust.jws"
+  vault_kv_put_file internal-rpc-authority/restore/trust manifest-trust.jws \
+    "$material_directory/crypto/authority-bootstrap/external/publisher-manifest-trust.jws"
+  vault_kv_patch_file internal-rpc-authority/restore/trust restore-role-trust.jws \
+    "$material_directory/crypto/authority-bootstrap/external/restore-role-trust.jws"
   vault_kv_put_file internal-rpc-authority/readback/trust manifest-root.jws \
     "$material_directory/crypto/authority-bootstrap/external/readback-manifest-root.jws"
   vault_kv_patch_file internal-rpc-authority/readback/trust credential-trust.jws \
     "$material_directory/crypto/authority-bootstrap/external/readback-credential-trust.jws"
   vault_kv_put_file internal-rpc-authority/restore/pitr-evidence private.jwk \
     "$material_directory/crypto/restore/pitr-evidence/private.jwk"
+  vault_kv_patch_file internal-rpc-authority/restore/pitr-evidence public.jwk \
+    "$material_directory/crypto/restore/pitr-evidence/public.jwk"
 fi
 
 if [[ "$mode" == configure-policies ]]; then
@@ -262,6 +268,27 @@ if [[ "$mode" == configure-policies ]]; then
   yq -o=json -I=0 '.' "$render_file" | jq -s '.' >"$temporary_directory/render.json"
   yq -o=json -I=0 'select(.kind == "SecretProviderClass") | .metadata.name as $spc | .spec.parameters.roleName as $role | (.spec.parameters.objects | from_yaml)[] | {"spc": $spc, "role": $role, "path": .secretPath, "method": (.method // "GET")}' \
     "$render_file" | jq -s '.' >"$temporary_directory/objects.json"
+
+  cat >"$temporary_directory/database-credential-reconciler-runtime.hcl" <<'HCL'
+path "database/static-roles/internal-rpc-authority-publisher-g1" { capabilities = ["read", "delete"] }
+path "database/static-roles/internal-rpc-authority-publisher-g2" { capabilities = ["read", "delete"] }
+path "database/static-roles/internal-rpc-authority-publisher-g3" { capabilities = ["read"] }
+path "database/static-roles/internal-rpc-authority-publisher-g4" { capabilities = ["read"] }
+path "database/static-roles/internal-rpc-authority-publisher-g5" { capabilities = ["read"] }
+path "database/static-creds/internal-rpc-authority-publisher-g4" { capabilities = ["read"] }
+path "database/static-creds/internal-rpc-authority-publisher-g5" { capabilities = ["read"] }
+path "database/rotate-role/internal-rpc-authority-publisher-g4" { capabilities = ["update"] }
+path "database/static-roles/internal-rpc-authority-readback-attestor-g1" { capabilities = ["read", "delete"] }
+path "database/static-roles/internal-rpc-authority-readback-attestor-g2" { capabilities = ["read", "delete"] }
+path "database/static-roles/internal-rpc-authority-readback-attestor-g3" { capabilities = ["read"] }
+path "database/static-roles/internal-rpc-authority-readback-attestor-g4" { capabilities = ["read"] }
+path "database/static-roles/internal-rpc-authority-readback-attestor-g5" { capabilities = ["read"] }
+path "database/static-creds/internal-rpc-authority-readback-attestor-g4" { capabilities = ["read"] }
+path "database/static-creds/internal-rpc-authority-readback-attestor-g5" { capabilities = ["read"] }
+path "database/rotate-role/internal-rpc-authority-readback-attestor-g4" { capabilities = ["update"] }
+HCL
+  vault_input "$temporary_directory/database-credential-reconciler-runtime.hcl" \
+    policy write internal-rpc-authority-database-credential-reconciler-runtime - >/dev/null
 
   while IFS= read -r role; do
     jq -r --arg role "$role" '.[] | select(.role==$role and (.path|type)=="string") | [.path,.method] | @tsv' \
@@ -302,10 +329,15 @@ if [[ "$mode" == configure-policies ]]; then
       esac
     fi
     [[ -n "$service_accounts" ]] || fail "Vault role has no exact ServiceAccount: $role"
+    role_policies="spc-$role"
+    if [[ "$role" == internal-rpc-authority-database-credential-reconciler ]]; then
+      role_policies+=,internal-rpc-authority-database-credential-reconciler-runtime
+    fi
     vault_cli write "auth/kubernetes/role/$role" \
       bound_service_account_names="$service_accounts" \
       bound_service_account_namespaces=mattercodex-system \
-      token_policies="spc-$role" token_ttl=30m token_max_ttl=1h >/dev/null
+      audience=vault \
+      token_policies="$role_policies" token_ttl=30m token_max_ttl=1h >/dev/null
   done < <(jq -r '.[].role' "$temporary_directory/objects.json" | sort -u)
 
   cat >"$temporary_directory/control-api-gateway-vso.hcl" <<'HCL'
@@ -316,6 +348,7 @@ HCL
   vault_cli write auth/kubernetes/role/control-api-gateway \
     bound_service_account_names=control-api-gateway \
     bound_service_account_namespaces=mattercodex-system \
+    audience=vault \
     token_policies=spc-control-api-gateway,control-api-gateway-vso \
     token_ttl=30m token_max_ttl=1h >/dev/null
 fi

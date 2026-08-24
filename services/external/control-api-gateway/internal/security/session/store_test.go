@@ -46,7 +46,11 @@ func TestSessionRotationAndCSRF(t *testing.T) {
 	if _, err := withoutOverlap.Open(encoded); err == nil {
 		t.Fatal("old generation accepted without overlap")
 	}
-	if _, err := rotated.Open(encoded[:len(encoded)-1] + "A"); err == nil {
+	last := "A"
+	if encoded[len(encoded)-1] == 'A' {
+		last = "B"
+	}
+	if _, err := rotated.Open(encoded[:len(encoded)-1] + last); err == nil {
 		t.Fatal("modified ciphertext accepted")
 	}
 }
