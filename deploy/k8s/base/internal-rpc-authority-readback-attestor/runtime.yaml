@@ -148,6 +148,9 @@ spec:
             - name: readback-trust
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
               readOnly: true
+            - name: authority-bootstrap-roots
+              mountPath: /usr/local/share/internal-rpc-authority/readback-root
+              readOnly: true
             - name: observability
               mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
               readOnly: true
@@ -200,6 +203,15 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: internal-rpc-authority-readback-trust
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - key: readback-root-public.jwk
+                path: bootstrap-public.jwk
+              - key: readback-root-metadata.json
+                path: bootstrap-metadata.json
         - name: observability
           configMap:
             name: internal-rpc-authority-otel-ca

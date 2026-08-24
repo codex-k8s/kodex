@@ -6,4 +6,5 @@ resources:
   - rbac.yaml
   - networkpolicy.yaml
   - vault-secret-provider-class.yaml
+  - vault-resources.yaml
   - evidence-admission.yaml

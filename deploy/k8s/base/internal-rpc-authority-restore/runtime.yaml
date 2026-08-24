@@ -167,6 +167,7 @@ spec:
             - {name: server-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls, readOnly: true}
             - {name: controller-config, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-controller, readOnly: true}
             - {name: restore-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-trust, readOnly: true}
+            - {name: authority-bootstrap-roots, mountPath: /usr/local/share/internal-rpc-authority/manifest-root, readOnly: true}
             - {name: target-registry, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-targets, readOnly: true}
             - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
             - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
@@ -195,6 +196,13 @@ spec:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes: {secretProviderClass: internal-rpc-authority-restore-role-trust}
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - name: target-registry
           configMap: {name: internal-rpc-authority-publisher-target-registry, defaultMode: 0440}
         - name: kubernetes-token

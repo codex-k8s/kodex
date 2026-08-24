@@ -182,6 +182,7 @@ release_source_registry=${registry_push%%/*}
 release_source_hostname=${release_source_registry%:443}
 agent_runner_ref=$(jq -er '.images[] | select(.component == "agent-runner") | .pull_ref' "$lock_file")
 agent_runner_digest=$(jq -er '.images[] | select(.component == "agent-runner") | .digest' "$lock_file")
+control_plane_digest=$(jq -er '.images[] | select(.component == "control-plane") | .digest' "$lock_file")
 role_base_documents_digest=$(jq -er '.images[] | select(.component == "role-base-documents") | .digest' "$lock_file")
 role_input_manifest_digest=$(jq -er '.role_image_input.manifest_digest' "$lock_file")
 role_input_payload_sha256=$(jq -er '.role_image_input.payload_sha256' "$lock_file")
@@ -305,6 +306,7 @@ REPOSITORY_PREFIX="$repository_prefix" \
 PULL_REGISTRY_HOST="$promoted_pull_host" \
 AGENT_RUNNER_REF="$agent_runner_ref" \
 AGENT_RUNNER_DIGEST="$agent_runner_digest" \
+CONTROL_PLANE_DIGEST="$control_plane_digest" \
 AUTHORITY_REF="$authority_ref" \
 ADMISSION_REF="$admission_ref" \
 ADMISSION_TOOLS_REF="$admission_tools_ref" \
@@ -348,7 +350,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
       select(.name == "certificate-guard").env[] |
       select(.name == "READBACK_IMAGE").value) =
         (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) +
-          "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST))
+          "/control-plane@" + strenv(CONTROL_PLANE_DIGEST))
   )
 ' "$rendered"
 

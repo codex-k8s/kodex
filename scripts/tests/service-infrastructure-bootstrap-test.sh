@@ -180,7 +180,11 @@ grep -Fq "internal_rpc_authority_postgresql_host=$internal_rpc_authority_postgre
   "$vault_initializer" || fail 'internal-rpc-authority PostgreSQL authority is not canonical'
 [[ $(grep -Fc '"$control_plane_postgresql_host"' "$vault_initializer") -eq 2 ]] ||
   fail 'control-plane migration and runtime DSN do not share the exact authority'
-[[ $(grep -Fc '"$internal_rpc_authority_postgresql_host"' "$vault_initializer") -eq 2 ]] ||
-  fail 'internal-rpc-authority migration and reconciler DSN do not share the exact authority'
+[[ $(grep -Fc '"$internal_rpc_authority_postgresql_host"' "$vault_initializer") -eq 3 ]] ||
+  fail 'internal-rpc-authority migration, reconciler and restore DSN do not share the exact authority'
+grep -Fq 'policy write internal-rpc-authority-restore-controller-vso' "$vault_initializer" ||
+  fail 'restore controller VaultStaticSecret policy is absent'
+grep -Fq 'bound_service_account_names=internal-rpc-authority-restore-controller' \
+  "$vault_initializer" || fail 'restore controller Vault auth is not bound to its exact ServiceAccount'
 
 printf 'Service infrastructure bootstrap checks completed\n'

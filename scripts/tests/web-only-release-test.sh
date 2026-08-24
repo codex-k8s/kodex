@@ -107,7 +107,8 @@ grep -Fq 'cmp -s "$desired_payload" "$live_payload"' "$fresh_deployer" ||
   fail 'fresh deploy replaces immutable resources without semantic drift comparison'
 grep -Fq 'wait_trust_material()' "$fresh_deployer" ||
   fail 'fresh deploy does not implement bounded trust material readiness'
-[[ $(grep -c '^[[:space:]]*wait_trust_material$' "$fresh_deployer") -eq 3 ]] ||
+[[ $(grep -c '^[[:space:]]*wait_trust_material$' "$fresh_deployer") -eq 2 &&
+  $(grep -c '^[[:space:]]*wait_trust_material true$' "$fresh_deployer") -eq 1 ]] ||
   fail 'fresh deploy does not verify trust material in state, workloads and readback phases'
 for readiness_condition in \
   'certificates.cert-manager.io/$resource_name' \
@@ -335,8 +336,48 @@ yq -o=json '
   .spec.template.spec.containers[] | select(.name == "certificate-guard") |
   .env[] | select(.name == "READBACK_IMAGE").value
 ' "$render_file" | jq -er '
-  startswith("roles.example.test/mattercodex/agent-runner@sha256:")
-' >/dev/null || fail 'pull registry readback is not pinned to the materialized agent runner'
+  startswith("roles.example.test/mattercodex/control-plane@sha256:")
+' >/dev/null || fail 'pull registry readback is not pinned to its authorized control-plane probe image'
+while IFS=$'\t' read -r deployment_name mount_path public_key metadata_key; do
+  DEPLOYMENT_NAME="$deployment_name" MOUNT_PATH="$mount_path" \
+    PUBLIC_KEY="$public_key" METADATA_KEY="$metadata_key" yq -o=json '
+      select(.kind == "Deployment" and .metadata.name == strenv(DEPLOYMENT_NAME))
+    ' "$render_file" | jq -e --arg mountPath "$mount_path" \
+      --arg publicKey "$public_key" --arg metadataKey "$metadata_key" '
+      any(.spec.template.spec.containers[] | .volumeMounts[]?;
+        .name == "authority-bootstrap-roots" and .mountPath == $mountPath and .readOnly == true) and
+      any(.spec.template.spec.volumes[];
+        .name == "authority-bootstrap-roots" and
+        .secret.secretName == "internal-rpc-authority-bootstrap-roots" and
+        .secret.defaultMode == 292 and
+        any(.secret.items[]; .key == $publicKey and .path == "bootstrap-public.jwk") and
+        any(.secret.items[]; .key == $metadataKey and .path == "bootstrap-metadata.json"))
+    ' >/dev/null || fail "installation-scoped authority roots are not mounted: $deployment_name"
+done <<'EOF'
+internal-rpc-authority-publisher	/usr/local/share/internal-rpc-authority/manifest-root	manifest-root-public.jwk	manifest-root-metadata.json
+internal-rpc-authority-readback-attestor	/usr/local/share/internal-rpc-authority/readback-root	readback-root-public.jwk	readback-root-metadata.json
+internal-rpc-authority-restore-controller	/usr/local/share/internal-rpc-authority/manifest-root	manifest-root-public.jwk	manifest-root-metadata.json
+EOF
+grep -Fq 'ensure_authority_bootstrap_roots' "$fresh_deployer" ||
+  fail 'fresh deploy does not materialize installation-scoped authority roots'
+grep -Fq 'pin_authority_root_revision' "$fresh_deployer" ||
+  fail 'authority workloads are not rolled on root bundle revision changes'
+grep -Fq 'internal-rpc-authority-restore-controller-password' \
+  "$repository_root/tools/deploy/generate-fresh-install-material.sh" ||
+  fail 'fresh material omits the restore controller PostgreSQL credential'
+grep -Fq 'internal-rpc-authority/restore-controller/postgres' \
+  "$repository_root/tools/deploy/bootstrap-vault.sh" ||
+  fail 'database runtime bootstrap omits the restore controller Vault DSN'
+yq -o=json '
+  select(.kind == "VaultStaticSecret" and
+    .metadata.name == "internal-rpc-authority-restore-controller-postgresql")
+' "$render_file" | jq -e '
+  .spec.path == "internal-rpc-authority/restore-controller/postgres" and
+  .spec.destination.name == "internal-rpc-authority-restore-controller-postgresql" and
+  .spec.destination.overwrite == false and
+  .spec.destination.transformation.excludeRaw == true and
+  (.spec.destination.transformation.templates.dsn.text | contains("dsn"))
+' >/dev/null || fail 'restore controller PostgreSQL credential is not synchronized through Vault'
 yq -o=json 'select(.kind == "DaemonSet" and
   .metadata.name == "mattercodex-registry-node-pull-readback")' "$render_file" |
   jq -e '
