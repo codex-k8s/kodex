@@ -18,6 +18,7 @@ import (
 const (
 	expectedClientCN = "mattercodex-buildkit-staging-push"
 	serverError      = "registry write authorizer failed"
+	denialLog        = "registry request denied"
 )
 
 type authorizationProfile struct {
@@ -45,14 +46,27 @@ func main() {
 		return errors.New("redirect rejected")
 	}}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.TLS == nil || len(request.TLS.PeerCertificates) != 1 {
+		if request.TLS == nil || len(request.TLS.PeerCertificates) == 0 ||
+			len(request.TLS.VerifiedChains) == 0 {
+			logRegistryDenial(profile, "unverified_mtls", request.Method)
 			http.Error(writer, "request forbidden", http.StatusForbidden)
 			return
 		}
 		commonName := request.TLS.PeerCertificates[0].Subject.CommonName
-		if (!profile.evidence && (commonName != expectedClientCN || !allowedRegistryWrite(request.Method, request.URL.Path))) ||
-			(profile.evidence && (!allowedEvidenceRequest(commonName, request.Method, request.URL.Path) ||
-				!authorizedEvidenceCredential(commonName, request.Header.Get("Authorization")))) {
+		if !profile.evidence &&
+			(commonName != expectedClientCN || !allowedRegistryWrite(request.Method, request.URL.Path)) {
+			logRegistryDenial(profile, "operation", request.Method)
+			http.Error(writer, "request forbidden", http.StatusForbidden)
+			return
+		}
+		if profile.evidence && !allowedEvidenceRequest(commonName, request.Method, request.URL.Path) {
+			logRegistryDenial(profile, "operation", request.Method)
+			http.Error(writer, "request forbidden", http.StatusForbidden)
+			return
+		}
+		if profile.evidence &&
+			!authorizedEvidenceCredential(commonName, request.Header.Get("Authorization")) {
+			logRegistryDenial(profile, "application_credential", request.Method)
 			http.Error(writer, "request forbidden", http.StatusForbidden)
 			return
 		}
@@ -87,6 +101,30 @@ func main() {
 	}
 }
 
+func logRegistryDenial(profile authorizationProfile, reason, method string) {
+	profileName := "staging"
+	if profile.evidence {
+		profileName = "evidence"
+	}
+	log.Printf(
+		"%s: profile=%s reason=%s method=%s",
+		denialLog,
+		profileName,
+		reason,
+		normalizeMethod(method),
+	)
+}
+
+func normalizeMethod(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPatch,
+		http.MethodPut, http.MethodDelete:
+		return method
+	default:
+		return "OTHER"
+	}
+}
+
 func allowedEvidenceRequest(commonName, method, path string) bool {
 	if path == "/v2/" && method == http.MethodGet {
 		return commonName == "image-admission" || commonName == "image-promotion" ||
@@ -111,6 +149,14 @@ func allowedEvidenceRequest(commonName, method, path string) bool {
 }
 
 func authorizedEvidenceCredential(commonName, authorization string) bool {
+	return authorizedEvidenceCredentialWithReader(commonName, authorization, os.ReadFile)
+}
+
+func authorizedEvidenceCredentialWithReader(
+	commonName string,
+	authorization string,
+	readFile func(string) ([]byte, error),
+) bool {
 	prefix := "/identity/"
 	switch commonName {
 	case "image-admission":
@@ -122,8 +168,8 @@ func authorizedEvidenceCredential(commonName, authorization string) bool {
 	default:
 		return false
 	}
-	username, userErr := os.ReadFile(prefix + ".username")
-	password, passwordErr := os.ReadFile(prefix + ".password")
+	username, userErr := readFile(prefix + ".username")
+	password, passwordErr := readFile(prefix + ".password")
 	if userErr != nil || passwordErr != nil || len(username) == 0 || len(password) == 0 ||
 		len(username) > 4096 || len(password) > 4096 {
 		return false

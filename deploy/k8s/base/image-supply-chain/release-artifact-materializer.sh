@@ -25,8 +25,10 @@ esac
 
 destination_registry=mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003
 work=/work/registry
-mkdir -p "$work"
+mkdir -p "$work/docker"
+umask 077
 export REGCTL_CONFIG="$work/regctl.json"
+export DOCKER_CONFIG="$work/docker"
 
 credential() {
   config_file=$1
@@ -42,26 +44,26 @@ credential() {
     *:*) ;;
     *) fail 'registry credential is invalid' ;;
   esac
-  printf '%s' "$decoded"
+  username=${decoded%%:*}
+  password=${decoded#*:}
+  test -n "$username" && test -n "$password" || fail 'registry credential is empty'
 }
 
-source_credential=$(credential /identity/source/config.json "$RELEASE_SOURCE_REGISTRY")
-source_username=${source_credential%%:*}
-source_password=${source_credential#*:}
-test -n "$source_username" && test -n "$source_password" || fail 'release source credential is empty'
-
-destination_credential=$(credential /identity/destination/config.json "$destination_registry")
-destination_username=${destination_credential%%:*}
-destination_password=${destination_credential#*:}
-test -n "$destination_username" && test -n "$destination_password" || fail 'destination credential is empty'
+credential /identity/source/config.json "$RELEASE_SOURCE_REGISTRY"
+credential /identity/destination/config.json "$destination_registry"
+jq -es '
+  {auths: (reduce .[] as $config ({}; . + $config.auths))}
+' /identity/source/config.json /identity/destination/config.json >"$DOCKER_CONFIG/config.json" ||
+  fail 'merge registry credentials'
+jq -e --arg source "$RELEASE_SOURCE_REGISTRY" --arg destination "$destination_registry" '
+  (.auths | keys | sort) == ([$source, $destination] | sort)
+' "$DOCKER_CONFIG/config.json" >/dev/null || fail 'merged registry credential scope is invalid'
 
 regctl registry set "$RELEASE_SOURCE_REGISTRY" --tls enabled >/dev/null
-regctl registry login "$RELEASE_SOURCE_REGISTRY" --user "$source_username" --pass "$source_password" >/dev/null
 regctl registry set "$destination_registry" --tls enabled \
   --cacert /identity/destination/ca.pem \
   --cert /identity/destination/tls.crt \
   --key /identity/destination/tls.key >/dev/null
-regctl registry login "$destination_registry" --user "$destination_username" --pass "$destination_password" >/dev/null
 
 copy_exact() {
   source_ref=$1
@@ -85,7 +87,5 @@ copy_exact "$AGENT_RUNNER_SOURCE_REF" mattercodex/agent-runner "$AGENT_RUNNER_DI
 copy_exact "$ROLE_BASE_DOCUMENTS_SOURCE_REF" mattercodex/role-base-documents "$ROLE_BASE_DOCUMENTS_DIGEST"
 copy_exact "$ROLE_IMAGE_INPUT_SOURCE_REF" mattercodex/role-image-inputs "$ROLE_IMAGE_INPUT_MANIFEST_DIGEST"
 
-regctl registry logout "$RELEASE_SOURCE_REGISTRY" >/dev/null 2>&1 || true
-regctl registry logout "$destination_registry" >/dev/null 2>&1 || true
-rm -f "$REGCTL_CONFIG"
+rm -f "$REGCTL_CONFIG" "$DOCKER_CONFIG/config.json"
 printf 'Release artifact materialization completed\n'

@@ -3,7 +3,9 @@ package securefile
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestReadAcceptsExactReadOnlyModes(t *testing.T) {
@@ -44,6 +46,32 @@ func TestReadRejectsWritableExecutableAndOwnerUnreadableModes(t *testing.T) {
 				t.Fatalf("Read() accepted mode %04o", mode)
 			}
 		})
+	}
+}
+
+func TestProjectedServiceAccountTokenRejectsProcessOwnedWritableFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("value"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadProjectedServiceAccountToken(path, 16); err == nil {
+		t.Fatal("projected token reader accepted a process-owned writable file")
+	}
+}
+
+func TestProjectedServiceAccountTokenModeRequiresRootOwnerAndNonRootProcess(t *testing.T) {
+	t.Parallel()
+	info := syntheticFileInfo{mode: 0o640, system: &syscall.Stat_t{Uid: 0}}
+	if !isSafeMode(info, true, 29008) {
+		t.Fatal("root-owned projected token was rejected for a non-root workload")
+	}
+	if isSafeMode(info, true, 0) {
+		t.Fatal("root process accepted its writable projected token as read-only")
+	}
+	info.system = &syscall.Stat_t{Uid: 29008}
+	if isSafeMode(info, true, 29008) {
+		t.Fatal("process-owned projected token was accepted")
 	}
 }
 
@@ -100,3 +128,15 @@ func TestReadRejectsUnboundedAndOversizedFiles(t *testing.T) {
 		t.Fatal("Read() accepted an oversized file")
 	}
 }
+
+type syntheticFileInfo struct {
+	mode   os.FileMode
+	system any
+}
+
+func (info syntheticFileInfo) Name() string       { return "token" }
+func (info syntheticFileInfo) Size() int64        { return 1 }
+func (info syntheticFileInfo) Mode() os.FileMode  { return info.mode }
+func (info syntheticFileInfo) ModTime() time.Time { return time.Time{} }
+func (info syntheticFileInfo) IsDir() bool        { return false }
+func (info syntheticFileInfo) Sys() any           { return info.system }

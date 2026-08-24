@@ -360,7 +360,7 @@ func loadCertificatePool(path string) (*x509.CertPool, error) {
 }
 
 func readTokenFile(path string) ([]byte, error) {
-	raw, err := securefile.Read(path, 16<<10)
+	raw, err := securefile.ReadProjectedServiceAccountToken(path, 16<<10)
 	if err != nil {
 		return nil, errors.New("vault Kubernetes auth token file is unsafe")
 	}

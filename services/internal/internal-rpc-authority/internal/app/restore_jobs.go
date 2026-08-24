@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/securefile"
 	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
 	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
@@ -155,7 +156,10 @@ func RunRestoreOperator(
 	if err != nil {
 		return err
 	}
-	tokenRaw, err := readPrivateFile(config.ApplicationTokenFile, 16<<10)
+	tokenRaw, err := securefile.ReadProjectedServiceAccountToken(
+		config.ApplicationTokenFile,
+		16<<10,
+	)
 	if err != nil || strings.TrimSpace(string(tokenRaw)) == "" {
 		return errors.New("read restore operator application credential")
 	}

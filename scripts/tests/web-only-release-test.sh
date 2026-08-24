@@ -260,6 +260,15 @@ yq -o=json 'select(.spec.template.spec != null)' "$render_file" |
 if grep -Fq -- '--oci-worker-no-process-sandbox' "$render_file"; then
   fail 'rendered BuildKit disables process sandbox'
 fi
+grep -Fq '[grpc.tls]' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml" ||
+  fail 'BuildKit gRPC TLS is outside the supported nested configuration'
+if sed -n '/^\[grpc\]$/,/^\[cdi\]$/p' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml" |
+  grep -Eq '^  (ca|cert|key)[[:space:]]*='; then
+  fail 'BuildKit keeps ineffective TLS keys directly under grpc'
+fi
+grep -A1 -F '[cdi]' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml" |
+  grep -Fq 'disabled = true' || fail 'unused BuildKit CDI watcher remains enabled'
 grep -Fq 'COPY --chmod=0444 services/staff/control-center/nginx.conf /etc/nginx/nginx.conf' \
   "$repository_root/services/staff/control-center/Dockerfile" ||
   fail 'staff control center nginx configuration has no explicit read-only image mode'
@@ -276,6 +285,26 @@ for registry_deployment in mattercodex-image-registry-pull mattercodex-image-reg
   ' "$render_file" | jq -er 'fromjson | .readonly.enabled == true' >/dev/null ||
     fail "registry readonly configuration is not a structured parent value: $registry_deployment"
 done
+for registry_scope in pull push evidence; do
+  REGISTRY_SCOPE="$registry_scope" yq -o=json '
+    select(.kind == "Deployment" and
+      .metadata.labels."mattercodex.dev/registry-scope" == strenv(REGISTRY_SCOPE)) |
+    .spec.template.spec.containers[] | select(.name == "registry")
+  ' "$render_file" | jq -e '
+    (.env[] | select(.name == "REGISTRY_HTTP_ADDR").value) as $address |
+    ($address | capture("^127\\.0\\.0\\.1:(?<port>[0-9]+)$").port) as $port |
+    (.readinessProbe.exec.command | join(" ") | contains("nc -z 127.0.0.1 " + $port)) and
+    (.livenessProbe.exec.command | join(" ") | contains("nc -z 127.0.0.1 " + $port)) and
+    (.readinessProbe.tcpSocket == null) and (.livenessProbe.tcpSocket == null)
+  ' >/dev/null || fail "loopback registry has a kubelet Pod-IP probe: $registry_scope"
+done
+yq -o=json '
+  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull") |
+  .spec.template.spec.containers[] | select(.name == "certificate-guard") |
+  .env[] | select(.name == "READBACK_IMAGE").value
+' "$render_file" | jq -er '
+  startswith("roles.example.test/mattercodex/agent-runner@sha256:")
+' >/dev/null || fail 'pull registry readback is not pinned to the materialized agent runner'
 yq -o=json 'select(.kind == "DaemonSet" and
   .metadata.name == "mattercodex-registry-node-pull-readback")' "$render_file" |
   jq -e '
@@ -726,6 +755,20 @@ yq -o=json 'select(.kind == "Job" and .metadata.name == "release-artifact-materi
     ($env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-base-documents@sha256:")) and
     ($env[] | select(.name == "ROLE_IMAGE_INPUT_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-image-inputs@sha256:"))
   ' >/dev/null || fail 'release artifact materializer was not pinned to the lock'
+grep -Fq 'export DOCKER_CONFIG="$work/docker"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh" ||
+  fail 'release artifact materializer does not consume mounted Docker credentials'
+if grep -Fq 'regctl registry login' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh"; then
+  fail 'release artifact materializer passes credentials through an imperative login path'
+fi
+materializer_line=$(grep -n '^[[:space:]]*apply_job release-artifact-materializer$' "$fresh_deployer" |
+  cut -d: -f1)
+full_supply_wait_line=$(grep -n '^[[:space:]]*for registry_deployment in' "$fresh_deployer" |
+  cut -d: -f1)
+[[ -n "$materializer_line" && -n "$full_supply_wait_line" &&
+  "$materializer_line" -lt "$full_supply_wait_line" ]] ||
+  fail 'pull/readback readiness still precedes release artifact materialization'
 
 egress_policy=$(yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$render_file")
 jq -e 'any(.spec.destinations[]; .hostname == "registry.example.test" and .port == 443)' \

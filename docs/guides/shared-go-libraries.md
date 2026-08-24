@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.1
-updated: 2026-07-28
+version: 1.0.2
+updated: 2026-08-24
 ---
 
 # Общие библиотеки Go
@@ -239,6 +239,13 @@ publish acknowledgement и error classification, но не знает домен
 - write/execute permissions, пустой или изменившийся при чтении файл приводят к
   закрытому отказу;
 - ошибки не раскрывают путь и содержимое.
+
+Kubernetes projected ServiceAccount token является отдельным API библиотеки.
+Kubelet может материализовать его как root-owned `0640`: root сохраняет
+owner-write для атомарной ротации, а non-root workload имеет только group-read.
+Такой режим допускается только при подтверждённых `uid=0` владельца файла и
+ненулевом effective UID процесса. Generic credential reader по-прежнему
+отклоняет `0640`, а process-owned или group-writable файл запрещён.
 
 Библиотека не определяет формат credential и не делает `0444` безопасным вне
 изолированного read-only container mount. Эта граница доказывается итоговым

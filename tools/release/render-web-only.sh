@@ -265,6 +265,13 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
     .spec.template.metadata.annotations."mattercodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
+  ) |
+  with(select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull");
+    (.spec.template.spec.containers[] |
+      select(.name == "certificate-guard").env[] |
+      select(.name == "READBACK_IMAGE").value) =
+        (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) +
+          "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST))
   )
 ' "$rendered"
 

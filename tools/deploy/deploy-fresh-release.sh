@@ -278,6 +278,11 @@ if [[ "$mode" == apply-workloads ]]; then
         .metadata.name == "internal-rpc-authority-restore-evidence") | not))
   '
   wait_trust_material
+  for materializer_dependency in egress-gateway mattercodex-image-registry-promotion; do
+    kubectl -n "$namespace" rollout status "deployment/$materializer_dependency" --timeout=15m >/dev/null ||
+      fail "release artifact materializer dependency failed: $materializer_dependency"
+  done
+  apply_job release-artifact-materializer
   for registry_deployment in \
     mattercodex-image-registry-push mattercodex-image-registry-staging-read \
     mattercodex-image-registry-evidence mattercodex-image-registry-admin \
@@ -285,8 +290,6 @@ if [[ "$mode" == apply-workloads ]]; then
     kubectl -n "$namespace" rollout status "deployment/$registry_deployment" --timeout=15m >/dev/null ||
       fail "image supply chain rollout failed: $registry_deployment"
   done
-  apply_job release-artifact-materializer
-
   while IFS= read -r deployment_name; do
     [[ -n "$deployment_name" ]] || continue
     kubectl -n "$namespace" rollout status "deployment/$deployment_name" --timeout=15m >/dev/null ||

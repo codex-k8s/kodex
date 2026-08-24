@@ -3,9 +3,13 @@ root = "/var/lib/buildkit"
 
 [grpc]
   address = ["tcp://0.0.0.0:1234"]
-  ca = "/var/run/secrets/mattercodex/buildkit/tls/ca.pem"
-  cert = "/var/run/secrets/mattercodex/buildkit/tls/server.crt"
-  key = "/var/run/secrets/mattercodex/buildkit/tls/server.key"
+  [grpc.tls]
+    ca = "/var/run/secrets/mattercodex/buildkit/tls/ca.pem"
+    cert = "/var/run/secrets/mattercodex/buildkit/tls/server.crt"
+    key = "/var/run/secrets/mattercodex/buildkit/tls/server.key"
+
+[cdi]
+  disabled = true
 
 [worker.oci]
   enabled = true
