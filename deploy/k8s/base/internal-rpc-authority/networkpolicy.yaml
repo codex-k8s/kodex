@@ -86,6 +86,31 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: internal-rpc-authority-kubernetes-api-exact-endpoints
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - internal-rpc-authority-publisher
+          - internal-rpc-authority-restore-controller
+          - internal-rpc-authority-restore-operator
+          - internal-rpc-authority-restore-pitr
+          - internal-rpc-authority-restore-recovery
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: internal-rpc-authority-postgresql-from-runtime
 spec:
   podSelector:

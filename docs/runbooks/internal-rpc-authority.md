@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.5
+version: 1.2.6
 updated: 2026-08-24
 ---
 
@@ -213,10 +213,14 @@ PostgreSQL с заведомо различными digest.
 
 Если intent дошёл до `NEXT_STAGED`, session readback совпадает со staged
 digest, но pod-template annotations отсутствуют, проверить exact egress
-reconciler к Kubernetes API Service. Bounded RBAC `patch` недостаточен без
-`NetworkPolicy` на materialized host CIDR API и TCP/443. Широкий service CIDR,
-правило только по порту и ручное добавление annotations запрещены: production
-render обязан содержать один exact `ipBlock` из deployment environment.
+reconciler к Kubernetes API. Bounded RBAC `patch` недостаточен без двух
+materialized правил `NetworkPolicy`: host CIDR ClusterIP с TCP/443 и host CIDR
+готовых EndpointSlice с их фактическими TCP-портами. На кластере с enforcement
+после DNAT правило только для ClusterIP не пропускает запрос к control plane.
+Широкий service CIDR, правило только по порту и ручное добавление annotations
+запрещены: production render получает текущие Service и EndpointSlice через
+installation variables и материализует один и тот же exact endpoint rule для
+reconciler, publisher/restore, runtime-controller и image-admission controller.
 
 ## Контролируемая ротация
 

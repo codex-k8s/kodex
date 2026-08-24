@@ -237,6 +237,8 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
   --oidc-tls-server-name identity.example.test \
   --promoted-pull-host roles.example.test \
   --kubernetes-api-service-cidr 10.96.0.1/32 \
+  --kubernetes-api-endpoint-cidrs 192.0.2.10/32,192.0.2.11/32 \
+  --kubernetes-api-endpoint-ports 6443,7443 \
   --ingress-class public --cluster-issuer public-production \
   --ingress-namespace ingress-system --ingress-pod-name public-ingress \
   --oidc-namespace identity --oidc-pod-name sso \
@@ -710,13 +712,28 @@ api_policy_matches=$(yq -e '
   select(.kind == "NetworkPolicy" and
     (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
      .metadata.name == "runtime-controller-exact-paths" or
-     .metadata.name == "internal-rpc-authority-database-credential-reconciler")) |
+     .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
+     .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints")) |
   .spec.egress[] | select(.to[].ipBlock.cidr == "10.96.0.1/32") |
   ((.ports | length) == 1 and .ports[0].protocol == "TCP" and .ports[0].port == 443)
 ' "$render_file" | grep -c '^true$')
-if [[ $api_policy_matches -ne 3 ]]; then
+if [[ $api_policy_matches -ne 4 ]]; then
   fail 'Kubernetes API Service egress is not bound to the rendered host CIDR'
 fi
+yq -o=json '
+  select(.kind == "NetworkPolicy" and
+    (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+     .metadata.name == "runtime-controller-exact-paths" or
+     .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
+     .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"))
+' "$render_file" | jq -s -e '
+  length == 4 and all(.[];
+    any(.spec.egress[];
+      ([.to[]?.ipBlock.cidr] | sort) == ["192.0.2.10/32", "192.0.2.11/32"] and
+      ([.ports[]? | select(.protocol == "TCP") | .port] | sort) == [6443, 7443]
+    )
+  )
+' >/dev/null || fail 'Kubernetes API endpoint egress is not materialized exactly for every client policy'
 if go run "$repository_root/tools/release/validate-host-cidr.go" 10.96.0.0/24 >/dev/null 2>&1; then
   fail 'non-host Kubernetes API CIDR was accepted'
 fi
@@ -861,6 +878,8 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --oidc-tls-server-name identity.example.test \
   --promoted-pull-host roles.example.test \
   --kubernetes-api-service-cidr 10.96.0.1/32 \
+  --kubernetes-api-endpoint-cidrs 192.0.2.10/32,192.0.2.11/32 \
+  --kubernetes-api-endpoint-ports 6443,7443 \
   --ingress-class public --cluster-issuer public-production \
   --ingress-namespace ingress-system --ingress-pod-name public-ingress \
   --oidc-namespace identity --oidc-pod-name sso \

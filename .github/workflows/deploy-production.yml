@@ -101,6 +101,8 @@ jobs:
           OIDC_TLS_SERVER_NAME: ${{ vars.MATTERCODEX_OIDC_TLS_SERVER_NAME }}
           PROMOTED_PULL_HOST: ${{ vars.MATTERCODEX_PROMOTED_PULL_HOST }}
           KUBERNETES_API_SERVICE_CIDR: ${{ vars.MATTERCODEX_KUBERNETES_API_SERVICE_CIDR }}
+          KUBERNETES_API_ENDPOINT_CIDRS: ${{ vars.MATTERCODEX_KUBERNETES_API_ENDPOINT_CIDRS }}
+          KUBERNETES_API_ENDPOINT_PORTS: ${{ vars.MATTERCODEX_KUBERNETES_API_ENDPOINT_PORTS }}
           INGRESS_CLASS: ${{ vars.MATTERCODEX_INGRESS_CLASS }}
           CLUSTER_ISSUER: ${{ vars.MATTERCODEX_CLUSTER_ISSUER }}
           INGRESS_NAMESPACE: ${{ vars.MATTERCODEX_INGRESS_NAMESPACE }}
@@ -126,6 +128,8 @@ jobs:
             --oidc-tls-server-name "$OIDC_TLS_SERVER_NAME" \
             --promoted-pull-host "$PROMOTED_PULL_HOST" \
             --kubernetes-api-service-cidr "$KUBERNETES_API_SERVICE_CIDR" \
+            --kubernetes-api-endpoint-cidrs "$KUBERNETES_API_ENDPOINT_CIDRS" \
+            --kubernetes-api-endpoint-ports "$KUBERNETES_API_ENDPOINT_PORTS" \
             --ingress-class "$INGRESS_CLASS" --cluster-issuer "$CLUSTER_ISSUER" \
             --ingress-namespace "$INGRESS_NAMESPACE" --ingress-pod-name "$INGRESS_POD_NAME" \
             --oidc-namespace "$OIDC_NAMESPACE" --oidc-pod-name "$OIDC_POD_NAME" \

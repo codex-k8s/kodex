@@ -14,6 +14,8 @@ usage() {
     '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
     '  --promoted-pull-host <dns>' \
     '  --kubernetes-api-service-cidr <ipv4/32|ipv6/128>' \
+    '  --kubernetes-api-endpoint-cidrs <host-cidr[,host-cidr...]>' \
+    '  --kubernetes-api-endpoint-ports <port[,port...]>' \
     '  --ingress-class <name> --cluster-issuer <name>' \
     '  --ingress-namespace <name> --ingress-pod-name <label-value>' \
     '  --oidc-namespace <name> --oidc-pod-name <label-value>' \
@@ -34,6 +36,8 @@ oidc_connect_address=""
 oidc_tls_server_name=""
 promoted_pull_host=""
 kubernetes_api_service_cidr=""
+kubernetes_api_endpoint_cidrs=""
+kubernetes_api_endpoint_ports=""
 ingress_class=""
 cluster_issuer=""
 ingress_namespace=""
@@ -59,6 +63,8 @@ while (($# > 0)); do
     --oidc-tls-server-name) oidc_tls_server_name="${2:-}"; shift 2 ;;
     --promoted-pull-host) promoted_pull_host="${2:-}"; shift 2 ;;
     --kubernetes-api-service-cidr) kubernetes_api_service_cidr="${2:-}"; shift 2 ;;
+    --kubernetes-api-endpoint-cidrs) kubernetes_api_endpoint_cidrs="${2:-}"; shift 2 ;;
+    --kubernetes-api-endpoint-ports) kubernetes_api_endpoint_ports="${2:-}"; shift 2 ;;
     --ingress-class) ingress_class="${2:-}"; shift 2 ;;
     --cluster-issuer) cluster_issuer="${2:-}"; shift 2 ;;
     --ingress-namespace) ingress_namespace="${2:-}"; shift 2 ;;
@@ -110,6 +116,47 @@ script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 go run "$repository_root/tools/release/validate-host-cidr.go" "$kubernetes_api_service_cidr" >/dev/null ||
   fail 'Kubernetes API Service CIDR is invalid'
+
+[[ -n "$kubernetes_api_endpoint_cidrs" &&
+  ! "$kubernetes_api_endpoint_cidrs" =~ [[:space:]] &&
+  "$kubernetes_api_endpoint_cidrs" != ,* &&
+  "$kubernetes_api_endpoint_cidrs" != *, &&
+  "$kubernetes_api_endpoint_cidrs" != *,,* ]] ||
+  fail 'Kubernetes API endpoint CIDRs must be a nonempty comma-separated list without whitespace'
+IFS=',' read -r -a api_endpoint_cidrs <<<"$kubernetes_api_endpoint_cidrs"
+((${#api_endpoint_cidrs[@]} >= 1 && ${#api_endpoint_cidrs[@]} <= 16)) ||
+  fail 'Kubernetes API endpoint CIDRs must contain between one and 16 values'
+declare -A seen_api_endpoint_cidrs=()
+for cidr in "${api_endpoint_cidrs[@]}"; do
+  go run "$repository_root/tools/release/validate-host-cidr.go" "$cidr" >/dev/null ||
+    fail "Kubernetes API endpoint CIDR is invalid: $cidr"
+  [[ "$cidr" != "$kubernetes_api_service_cidr" ]] ||
+    fail 'Kubernetes API endpoint CIDRs must not repeat the Service CIDR'
+  [[ -z "${seen_api_endpoint_cidrs[$cidr]:-}" ]] ||
+    fail "Kubernetes API endpoint CIDR is duplicated: $cidr"
+  seen_api_endpoint_cidrs[$cidr]=true
+done
+
+[[ -n "$kubernetes_api_endpoint_ports" &&
+  ! "$kubernetes_api_endpoint_ports" =~ [[:space:]] &&
+  "$kubernetes_api_endpoint_ports" != ,* &&
+  "$kubernetes_api_endpoint_ports" != *, &&
+  "$kubernetes_api_endpoint_ports" != *,,* ]] ||
+  fail 'Kubernetes API endpoint ports must be a nonempty comma-separated list without whitespace'
+IFS=',' read -r -a api_endpoint_ports <<<"$kubernetes_api_endpoint_ports"
+((${#api_endpoint_ports[@]} >= 1 && ${#api_endpoint_ports[@]} <= 8)) ||
+  fail 'Kubernetes API endpoint ports must contain between one and eight values'
+declare -A seen_api_endpoint_ports=()
+for port in "${api_endpoint_ports[@]}"; do
+  [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] ||
+    fail "Kubernetes API endpoint port is invalid: $port"
+  ((10#$port <= 65535)) ||
+    fail "Kubernetes API endpoint port is invalid: $port"
+  [[ -z "${seen_api_endpoint_ports[$port]:-}" ]] ||
+    fail "Kubernetes API endpoint port is duplicated: $port"
+  seen_api_endpoint_ports[$port]=true
+done
+
 source_sha=$(jq -er '.source_sha' "$lock_file")
 "$script_directory/validate-release-lock.sh" \
   --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" --profile "$profile" >/dev/null
@@ -165,6 +212,35 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
     sub("__MATTERCODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
     sub("__MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR)) |
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
+  )
+' "$rendered"
+
+api_endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" |
+  jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
+api_endpoint_tcp_ports=$(printf '%s\n' "${api_endpoint_ports[@]}" |
+  jq -Rsc 'split("\n") | map(select(length > 0) | {protocol:"TCP",port:tonumber})')
+api_endpoint_rule=$(jq -cn \
+  --argjson to "$api_endpoint_destinations" \
+  --argjson ports "$api_endpoint_tcp_ports" \
+  '{to:$to,ports:$ports}')
+api_client_policy_count=$(yq -o=json '
+  select(.kind == "NetworkPolicy" and (
+    .metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    .metadata.name == "runtime-controller-exact-paths" or
+    .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
+    .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
+  )) | .metadata.name
+' "$rendered" | jq -s 'length')
+[[ "$api_client_policy_count" == "4" ]] ||
+  fail 'release profile must contain exactly four Kubernetes API client policies'
+KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
+  with(select(.kind == "NetworkPolicy" and (
+    .metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    .metadata.name == "runtime-controller-exact-paths" or
+    .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
+    .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
+  ));
+    .spec.egress += [(strenv(KUBERNETES_API_ENDPOINT_RULE) | from_json)]
   )
 ' "$rendered"
 
