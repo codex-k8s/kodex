@@ -4,8 +4,8 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-08-23
+version: 1.1.1
+updated: 2026-08-24
 ---
 
 # Профили развертывания
@@ -47,7 +47,8 @@ incident и не меняет core Run outcome.
 
 - все внутренние images закреплены по `repository@sha256` в release lock;
 - mutable tag, zero digest и template placeholder закрыто отклоняются;
-- public host, origin, OIDC endpoints, registry и Kubernetes API CIDR являются
+- public host, origin, OIDC endpoints, registry, Kubernetes API Service CIDR,
+  список endpoint CIDR и список endpoint ports являются
   параметрами render, а не hardcoded значениями;
 - прямые инфраструктурные зависимости Pod: PostgreSQL, NATS, локальный storage,
   issuer/verifier sidecar и egress boundary;
@@ -89,6 +90,22 @@ tools image не используется: build dependency и runtime pull refe
 allowlist interaction adapter и тот же exact destination в egress policy. В
 `web-only` этот параметр запрещён. Release workflow читает значение только из
 installation variable `MATTERCODEX_MATTERMOST_HOST` и не хранит домен в коде.
+
+Оба профиля требуют три installation-level параметра Kubernetes API:
+
+- `MATTERCODEX_KUBERNETES_API_SERVICE_CIDR` — один host CIDR ClusterIP сервиса
+  `kubernetes`;
+- `MATTERCODEX_KUBERNETES_API_ENDPOINT_CIDRS` — непустой ограниченный список
+  host CIDR готовых API EndpointSlice;
+- `MATTERCODEX_KUBERNETES_API_ENDPOINT_PORTS` — непустой ограниченный список
+  фактических TCP-портов этих endpoints.
+
+Значения получают перед render из текущих Service и EndpointSlice через
+`scripts/resolve-kubernetes-api-endpoint-cidrs.sh`. Service и endpoint правила
+материализуются раздельно: на кластерах с enforcement после DNAT обращение к
+ClusterIP проверяется уже по фактическому адресу control plane. Пустой список,
+широкая подсеть, повтор CIDR/порта или ручной кластерный хардкод закрыто
+отклоняются.
 
 Render не применяет ресурсы в кластер. Применение, reset и deploy выполняет
 только владелец после отдельного решения.
