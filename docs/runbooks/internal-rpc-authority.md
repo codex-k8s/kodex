@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.3
+version: 1.2.4
 updated: 2026-08-24
 ---
 
@@ -201,6 +201,15 @@ Vault path из этого закрытого набора является де
 definer права на произвольные PostgreSQL roles. Исправление подтверждается
 вызовом reconcile/retire под реальными `session_user` и capability в
 одноразовой PostgreSQL, а не ручным `ALTER ROLE` в живой базе.
+
+Если identities уже записаны, а intent всё ещё остаётся в `CREATED`, сверить
+digest в `authority_runtime_database_identities` с canonical digest rotation
+intent. Baseline и target registered set намеренно различаются, но baseline
+identities атомарно записываются с canonical digest всего целевого перехода;
+post-transaction readback обязан фильтровать по этому же digest. Повторное
+вычисление digest только от baseline даёт ложный `registered set incomplete` и
+запрещено. Проверка repository должна выполнять этот сценарий на одноразовой
+PostgreSQL с заведомо различными digest.
 
 ## Контролируемая ротация
 
