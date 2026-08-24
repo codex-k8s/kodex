@@ -56,9 +56,20 @@ yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.name == "sso")' "$id
       .name == "keycloak" and
       any(.env[]; .name == "KC_BOOTSTRAP_ADMIN_USERNAME" and
         .valueFrom.secretKeyRef.name == "keycloak-bootstrap") and
-      any(.env[]; .name == "KC_HTTP_HOST" and .value == "127.0.0.1")) and
+      any(.env[]; .name == "KC_HTTP_HOST" and .value == "0.0.0.0") and
+      any(.env[]; .name == "KC_HTTP_MANAGEMENT_HOST" and .value == "0.0.0.0")) and
     all(.spec.template.spec.containers[] | select(.name == "keycloak").ports[]; .name != "http")
   ' >/dev/null || fail 'Keycloak bootstrap administrator is not secret-backed'
+yq -o=json -I=0 'select(.kind == "Service" and .metadata.name == "sso")' "$identity_render" |
+  jq -e '
+    . as $service |
+    ([$service.spec.ports[] | .name] | sort) == ["https", "management"] and
+    all($service.spec.ports[]; .port != 8080 and .targetPort != 8080 and .targetPort != "http")
+  ' >/dev/null || fail 'Keycloak Service exposes the reconciliation HTTP listener'
+yq -o=json -I=0 'select(.kind == "NetworkPolicy" and .metadata.name == "sso-exact-paths")' "$identity_render" |
+  jq -e '
+    all(.spec.ingress[]?.ports[]?; .port != 8080 and .port != "http")
+  ' >/dev/null || fail 'Keycloak NetworkPolicy exposes the reconciliation HTTP listener'
 yq -o=json -I=0 'select(.kind == "StatefulSet" and .metadata.name == "keycloak-postgresql")' "$identity_render" |
   jq -e '
     any(.spec.template.spec.containers[];

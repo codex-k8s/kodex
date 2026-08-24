@@ -107,7 +107,8 @@ spec:
             - { name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "false" }
             - { name: KC_PROXY_HEADERS, value: xforwarded }
             - { name: KC_HTTP_ENABLED, value: "true" }
-            - { name: KC_HTTP_HOST, value: 127.0.0.1 }
+            - { name: KC_HTTP_HOST, value: 0.0.0.0 }
+            - { name: KC_HTTP_MANAGEMENT_HOST, value: 0.0.0.0 }
             - {
                 name: KC_HTTPS_CERTIFICATE_FILE,
                 value: /var/run/secrets/mattercodex/sso/tls/tls.crt,
