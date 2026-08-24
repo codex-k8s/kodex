@@ -4,7 +4,7 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.6
+version: 1.2.7
 updated: 2026-08-24
 ---
 
@@ -20,6 +20,13 @@ production-манифеста требуется отдельный шлюз в�
 
 Не выводить DSN, полезную нагрузку JWT/JWS целиком, проецируемый токен, пароль,
 закрытый JWK, закрытый ключ сертификата или содержимое Kubernetes Secret.
+
+Publisher получает отдельную Vault policy, построенную из точных KV paths
+закрытого target registry в итоговом release render. Policy разрешает только
+`read` и `update`: wildcard, `create`, `delete` и выход за namespace
+`kv/data/mattercodex/internal-rpc-authority/` запрещены. Release `readback`
+повторно строит ожидаемую policy из того же render и сравнивает её с фактически
+обслуживаемой Vault policy и Kubernetes auth role.
 
 ## Предварительная проверка без изменений
 

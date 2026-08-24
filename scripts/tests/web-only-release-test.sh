@@ -70,12 +70,19 @@ for bootstrap_entry in \
   'internal-rpc-authority/restore/trust' \
   'internal-rpc-authority/restore/pitr-evidence public.jwk' \
   'internal-rpc-authority-database-credential-reconciler-runtime' \
+  'internal-rpc-authority-publisher-runtime' \
+  'publisher runtime Vault path is outside the authority registry boundary' \
+  'capabilities = ["read", "update"]' \
+  'Vault publisher runtime policy readback failed' \
   'database/static-creds/internal-rpc-authority-publisher-g4' \
   'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
   'audience=vault'; do
   grep -Fq "$bootstrap_entry" "$vault_bootstrap" ||
     fail "Vault bootstrap omits required fresh-install boundary: $bootstrap_entry"
 done
+grep -Fq -- '--material-directory "$material_directory" --render "$render_file"' \
+  "$fresh_deployer" ||
+  fail 'fresh readback does not bind Vault policy verification to the exact render'
 if rg -q 'local name=\$1[^\n]*\$name' "$fresh_deployer"; then
   fail 'fresh deploy expands a local variable in the declaration that assigns it'
 fi

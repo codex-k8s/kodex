@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.4
+version: 1.3.5
 updated: 2026-08-24
 ---
 
@@ -160,9 +160,13 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    Client certificate использует закрытый CN
    `<16-hex-node-hash>.g<generation>.mattercodex-node-pull`; Vault role
    разрешает только поддомены этого DNS root без glob и arbitrary names.
-   Другие workload не подключаются к Vault напрямую. CSI provider подключается
-   к Vault по HTTPS с адресом, installation CA path и exact SNI из pinned Helm
-   values. Публичный `ca.crt` монтируется read-only из
+   Базовая Vault ingress policy не разрешает другие workload. Отдельные exact
+   policies добавляют только зарегистрированные publisher/issuer paths, причём
+   publisher runtime policy строится из закрытого target registry в exact
+   release render и содержит `read/update` для каждого полного KV path без
+   wildcard, `create` и `delete`. CSI provider подключается к Vault по HTTPS с
+   адресом, installation CA path и exact SNI из pinned Helm values. Публичный
+   `ca.crt` монтируется read-only из
    `mattercodex-vault-server-tls`;
    `SecretProviderClass` не переопределяет transport trust, а Vault Agent
    sidecar не участвует в этом пути. Каждый SPC обязан запрашивать projected
@@ -205,9 +209,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
     `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
     устраняется bounded delete/create с немедленным exact readback. Добавлять в
     этот список неизвестный ресурс без отдельного lifecycle запрещено.
-12. Выполнить фазу `readback`. Она повторно проверяет Vault, StatefulSet,
-    Deployment, DaemonSet, Job, форму фактически обслуживаемого restore evidence
-    anchor и отсутствие terminal container waiting states.
+12. Выполнить фазу `readback`. Она повторно проверяет Vault, включая точное
+    совпадение publisher runtime policy с target registry этого release render,
+    StatefulSet, Deployment, DaemonSet, Job, форму фактически обслуживаемого
+    restore evidence anchor и отсутствие terminal container waiting states.
 13. Настроить Vault OIDC, немедленно зашифровать Shamir 5/3 recovery material и
     установить OAuth2 Proxy/Headlamp по `RUN-MC-023`, затем выполнить полный
     management-surfaces `readback`. Monitoring chart уже установлен на шаге 7;
