@@ -140,9 +140,13 @@ if [[ " $* " == *' get validatingadmissionpolicybinding.admissionregistration.k8
       validationActions:["Deny"],
       paramRef:{name:"kodex-image-admission-policy",namespace:"kodex-system",
         parameterNotFoundAction:"Deny"},
-      matchResources:{namespaceSelector:{matchLabels:{
-        "kubernetes.io/metadata.name":"kodex-system"
-      }}}
+      matchResources:{
+        matchPolicy:"Equivalent",
+        namespaceSelector:{matchLabels:{
+          "kubernetes.io/metadata.name":"kodex-system"
+        }},
+        objectSelector:{}
+      }
     }
   }'
   exit 0
