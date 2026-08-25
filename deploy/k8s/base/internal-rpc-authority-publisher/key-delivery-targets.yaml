@@ -8,6 +8,7 @@ targets:
     namespace: kodex-system
     service_account: role-image-builder
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -70,6 +71,7 @@ targets:
     namespace: kodex-system
     service_account: image-admission
     workload_generation: 1
+    startup_readback_required: false
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -132,6 +134,7 @@ targets:
     namespace: kodex-system
     service_account: image-promotion
     workload_generation: 1
+    startup_readback_required: false
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -194,6 +197,7 @@ targets:
     namespace: kodex-system
     service_account: automation-scheduler
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -256,6 +260,7 @@ targets:
     namespace: kodex-system
     service_account: control-api-gateway
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -318,6 +323,7 @@ targets:
     namespace: kodex-system
     service_account: control-plane
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -374,6 +380,7 @@ targets:
     namespace: kodex-system
     service_account: control-plane
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -436,6 +443,7 @@ targets:
     namespace: kodex-system
     service_account: integration-gateway
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -498,6 +506,7 @@ targets:
     namespace: kodex-system
     service_account: runtime-controller
     workload_generation: 1
+    startup_readback_required: true
     authority_snapshot:
       secret_name: internal-rpc-authority-snapshot
       mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot

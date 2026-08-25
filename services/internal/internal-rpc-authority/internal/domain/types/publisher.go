@@ -14,6 +14,7 @@ type DeliveryTarget struct {
 	Namespace                  string
 	ServiceAccount             string
 	WorkloadGeneration         uint64
+	StartupReadbackRequired    bool
 	CredentialGeneration       uint64
 	AuthoritySnapshotSecret    string
 	AuthoritySnapshotMountPath string
@@ -67,6 +68,18 @@ type DeliveryTargetRegistry struct {
 	SourceRevision uint64
 	SourceDigest   string
 	Targets        map[string]DeliveryTarget
+}
+
+// StartupReadbackTargetCount возвращает число долгоживущих workload,
+// подтверждение которых обязательно до первой активации authority snapshot.
+func (registry DeliveryTargetRegistry) StartupReadbackTargetCount() int {
+	count := 0
+	for _, target := range registry.Targets {
+		if target.StartupReadbackRequired {
+			count++
+		}
+	}
+	return count
 }
 
 // CredentialIssuanceDirective связывает выпуск с restore coordination.

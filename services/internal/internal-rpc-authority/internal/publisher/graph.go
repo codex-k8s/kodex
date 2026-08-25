@@ -53,6 +53,7 @@ func NewGraph(config GraphConfig) (*Graph, error) {
 		config.Registry.SourceRevision == 0 ||
 		!registryDigestPattern.MatchString(config.Registry.SourceDigest) ||
 		len(config.Registry.Targets) < 3 ||
+		config.Registry.StartupReadbackTargetCount() == 0 ||
 		config.Store == nil ||
 		config.Secrets == nil ||
 		config.Snapshot == nil ||
@@ -278,7 +279,7 @@ func (graph *Graph) Publish(
 		persisted, err = graph.config.Store.AppendSnapshot(
 			ctx,
 			publication,
-			len(graph.config.Registry.Targets),
+			graph.config.Registry.StartupReadbackTargetCount(),
 		)
 		if err != nil {
 			return model.AuthoritySnapshotPublication{}, errors.New(
@@ -366,7 +367,7 @@ func (graph *Graph) Ready(
 	if err := graph.config.Store.SnapshotPublicationReady(
 		ctx,
 		expected,
-		len(graph.config.Registry.Targets),
+		graph.config.Registry.StartupReadbackTargetCount(),
 	); err != nil {
 		return err
 	}
