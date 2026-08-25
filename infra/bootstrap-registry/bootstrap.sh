@@ -80,6 +80,9 @@ if [[ "$mode" == apply ]]; then
   ' "$rendered"
   kubectl apply -f "$rendered" >/dev/null
   kubectl -n "$namespace" rollout status deployment/kodex-registry --timeout=300s >/dev/null
+  kubectl -n "$namespace" wait --for=condition=Ready \
+    certificate/kodex-release-registry-tls --timeout=5m >/dev/null ||
+    fail 'registry public certificate did not become ready'
 
   if [[ -n "$docker_config_output" ]]; then
     umask 077

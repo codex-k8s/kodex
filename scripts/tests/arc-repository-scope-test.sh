@@ -22,6 +22,11 @@ kubectl kustomize "$repository_root/infra/bootstrap-registry" |
 
 bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate" \
   "$network_policy_renderer" "$helm_values_renderer"
+grep -Fq 'certificate/kodex-release-registry-tls --timeout=5m' \
+  "$repository_root/infra/bootstrap-registry/bootstrap.sh" || {
+  printf 'Bootstrap registry does not wait for the public certificate\n' >&2
+  exit 1
+}
 
 printf '%040d\n' 0 >"$temporary_directory/workflow-sha"
 printf '1\n' >"$temporary_directory/build-owner"
