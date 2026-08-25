@@ -43,6 +43,8 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
+bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
+  "$repository_root/tools/deploy/materialize-identity-secrets.sh"
 
 rg -n 'Vault|SecretProviderClass|secrets-store\.csi' \
   "$repository_root/install.sh" "$repository_root/tools/install" \
@@ -78,5 +80,28 @@ rg -Fq 'node_ready=true' "$repository_root/tools/install/prepare-host.sh" ||
 rg -Fq 'no ready Kubernetes node became available' \
   "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not report a node readiness timeout'
+
+identity_inputs="$temporary_directory/identity-inputs"
+identity_material="$temporary_directory/identity-material"
+mkdir -p "$identity_inputs" "$identity_material"
+printf '%s' kodex-admin >"$identity_inputs/admin-username"
+printf '%s' 'test-admin-initial-password' >"$identity_inputs/admin-password"
+printf '%s' kodex-owner >"$identity_inputs/owner-username"
+printf '%s' owner@example.com >"$identity_inputs/owner-email"
+printf '%s' 'test-owner-initial-password' >"$identity_inputs/owner-password"
+"$repository_root/tools/deploy/generate-identity-material.sh" \
+  --material-directory "$identity_material" \
+  --admin-username-file "$identity_inputs/admin-username" \
+  --admin-initial-password-file "$identity_inputs/admin-password" \
+  --owner-username-file "$identity_inputs/owner-username" \
+  --owner-email-file "$identity_inputs/owner-email" \
+  --owner-initial-password-file "$identity_inputs/owner-password" >/dev/null
+for surface in control-center grafana headlamp; do
+  cookie_secret="$identity_material/management/oauth2-$surface/cookie-secret"
+  [[ "$(wc -c <"$cookie_secret")" -eq 32 ]] ||
+    fail "generated OAuth2 Proxy cookie Secret length is invalid: $surface"
+  [[ "$(stat -c '%a' "$cookie_secret")" == 600 ]] ||
+    fail "generated OAuth2 Proxy cookie Secret mode is invalid: $surface"
+done
 
 printf 'Kodex install contract tests passed\n'

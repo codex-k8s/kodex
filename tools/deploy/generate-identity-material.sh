@@ -96,7 +96,7 @@ for surface in control-center grafana headlamp; do
   mkdir -p "$surface_directory"
   printf 'kodex-%s-proxy' "$surface" >"$surface_directory/client-id"
   openssl rand -base64 48 | tr -d '\n' >"$surface_directory/client-secret"
-  openssl rand -base64 32 | tr -d '\n' >"$surface_directory/cookie-secret"
+  openssl rand -hex 16 | tr -d '\n' >"$surface_directory/cookie-secret"
 done
 mkdir -p "$management_directory/grafana-admin"
 printf '%s' kodex-owner >"$management_directory/grafana-admin/admin-user"
