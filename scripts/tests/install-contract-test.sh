@@ -147,6 +147,20 @@ jq -n -e '
 rg -Fq 'reconcile_image_admission_policy_parameters' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'immutable image admission parameters do not have a release reconciliation path'
+(
+  context=default
+  namespace=kodex-system
+  render_file=/dev/null
+  kubectl() {
+    printf '%s' '{"spec":{"revision":"same"}}'
+  }
+  yq() {
+    printf '%s' '{"spec":{"revision":"same"}}'
+  }
+  source <(sed -n '/^reconcile_image_admission_policy_parameters() {$/,/^}$/p' \
+    "$repository_root/tools/install/deploy-platform.sh")
+  reconcile_image_admission_policy_parameters
+) || fail 'unchanged image admission parameters make an idempotent apply fail'
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY=true' "$repository_root/.kodex-env.example" ||
   fail 'bundled install does not disable unavailable external telemetry exporters by default'
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY:-true' \
