@@ -175,12 +175,19 @@ for command_name in cosign go helm kubectl nsc yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+api_ready=false
+node_ready=false
 for attempt in $(seq 1 120); do
-  kubectl get --raw=/readyz >/dev/null 2>&1 && break
-  ((attempt < 120)) || fail 'Kubernetes API did not become ready'
+  if kubectl get --raw=/readyz >/dev/null 2>&1; then
+    api_ready=true
+    if [[ "$(kubectl get node -o json 2>/dev/null | jq '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length')" -ge 1 ]]; then
+      node_ready=true
+      break
+    fi
+  fi
   sleep 2
 done
-[[ "$(kubectl get node -o json | jq '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length')" -ge 1 ]] ||
-  fail 'no ready Kubernetes node is available'
+[[ "$api_ready" == true ]] || fail 'Kubernetes API did not become ready'
+[[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_firewall
 printf 'Kodex host preparation completed: %s\n' "$mode"

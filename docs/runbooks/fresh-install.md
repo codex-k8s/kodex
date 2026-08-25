@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.1
+version: 2.0.2
 updated: 2026-08-25
 ---
 
@@ -131,6 +131,9 @@ Kubernetes/UFW и могла блокировать DNAT до ingress pod пос
 каждый раз строится с нуля: incoming и routed по умолчанию запрещены, pod
 forwarding ограничен CIDR `10.42.0.0/16`, служебный трафик -
 `10.43.0.0/16`, а внешний DNAT до pod разрешён только для HTTP/HTTPS.
+Host-компонент завершается только после одновременной готовности Kubernetes API
+и хотя бы одного node; краткое состояние `NotReady` во время запуска Flannel
+обрабатывается bounded wait, а не считается ошибкой установки.
 
 ## 5. Установка
 

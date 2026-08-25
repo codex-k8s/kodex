@@ -73,5 +73,10 @@ done
 rg -Fq 'legacy kodex_fw nftables policy remains active' \
   "$repository_root/tools/install/reset-host.sh" ||
   fail 'host reset does not reject the legacy nftables policy'
+rg -Fq 'node_ready=true' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal installer does not wait for a ready Kubernetes node'
+rg -Fq 'no ready Kubernetes node became available' \
+  "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal installer does not report a node readiness timeout'
 
 printf 'Kodex install contract tests passed\n'
