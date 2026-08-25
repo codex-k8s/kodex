@@ -62,7 +62,26 @@ jq -e '
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
-  fail 'dynamic Secret readback does not use the projection item registry'
+	fail 'dynamic Secret readback does not use the projection item registry'
+jq -e '
+	([.secrets[] | select(.dynamic == true and
+		(any(.items[]; .key == "issuance_directive_jti") | not))] | length) > 0 and
+	([.secrets[] | select(.dynamic == true and
+		any(.items[]; .key == "issuance_directive_jti"))] | length) > 0
+' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+	fail 'authority bootstrap and runtime projection phases are not represented'
+publisher_apply_line=$(grep -nE '^[[:space:]]+apply_render authority-publisher ' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+bootstrap_wait_line=$(grep -nE '^[[:space:]]+wait_authority_projections bootstrap$' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+workloads_apply_line=$(grep -nE '^[[:space:]]+apply_render workloads ' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+full_wait_line=$(grep -n '^wait_authority_projections all$' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+[[ "$publisher_apply_line" -lt "$bootstrap_wait_line" &&
+	"$bootstrap_wait_line" -lt "$workloads_apply_line" &&
+	"$workloads_apply_line" -lt "$full_wait_line" ]] ||
+	fail 'authority bootstrap, workload and full readback release phases are misordered'
 if rg -Fq 'gh variable get' "$repository_root/tools/install/configure-github.sh"; then
   fail 'GitHub variable readback relies on an unsupported gh subcommand'
 fi
