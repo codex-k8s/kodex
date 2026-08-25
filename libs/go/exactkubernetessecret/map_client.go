@@ -54,7 +54,7 @@ func NewMap(config MapConfig) (*MapClient, error) {
 		allowed[key] = struct{}{}
 	}
 	allowed[generationDataKey] = struct{}{}
-	if !dnsLabel.MatchString(config.ResourceName) || len(allowed) == 0 ||
+	if !validResourceName(config.ResourceName) || len(allowed) == 0 ||
 		len(allowed) > 33 || len(allowed) != len(config.AllowedDataKeys)+1 ||
 		config.Timeout < time.Second || config.Timeout > 10*time.Second {
 		return nil, errors.New("exact Kubernetes Secret map configuration is invalid")

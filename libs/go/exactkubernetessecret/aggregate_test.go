@@ -2,6 +2,7 @@ package exactkubernetessecret
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -49,5 +50,30 @@ func TestExactClientConfigAllowsOnlyBoundResourceShape(t *testing.T) {
 	if validConfig(Config{ResourceName: "../secrets", DataKey: "state.json", Timeout: 5 * time.Second}) ||
 		validConfig(Config{ResourceName: "registered", DataKey: "../token", Timeout: 5 * time.Second}) {
 		t.Fatal("alternate resource or data key was accepted")
+	}
+}
+
+func TestValidResourceNameUsesKubernetesDNSSubdomainBoundary(t *testing.T) {
+	t.Parallel()
+
+	for _, valid := range []string{
+		"internal-rpc-authority-automation-scheduler-issuer-readback-possession",
+		"authority.snapshot",
+		strings.Repeat("a", 253),
+	} {
+		if !validResourceName(valid) {
+			t.Fatalf("validResourceName(%q) = false; want true", valid)
+		}
+	}
+	for _, invalid := range []string{
+		"",
+		"authority..snapshot",
+		"Authority.snapshot",
+		"authority-.snapshot",
+		strings.Repeat("a", 254),
+	} {
+		if validResourceName(invalid) {
+			t.Fatalf("validResourceName(%q) = true; want false", invalid)
+		}
 	}
 }

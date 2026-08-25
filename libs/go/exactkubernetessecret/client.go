@@ -29,7 +29,7 @@ const (
 	maximumResponseBytes = 2 << 20
 )
 
-var dnsLabel = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$`)
+var dnsSubdomain = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$`)
 var dataKey = regexp.MustCompile(`^[A-Za-z0-9](?:[-._A-Za-z0-9]{0,252}[A-Za-z0-9])?$`)
 
 type Config struct {
@@ -123,8 +123,12 @@ func New(config Config) (*Client, error) {
 }
 
 func validConfig(config Config) bool {
-	return dnsLabel.MatchString(config.ResourceName) && dataKey.MatchString(config.DataKey) &&
+	return validResourceName(config.ResourceName) && dataKey.MatchString(config.DataKey) &&
 		config.Timeout >= time.Second && config.Timeout <= 10*time.Second
+}
+
+func validResourceName(value string) bool {
+	return len(value) <= 253 && dnsSubdomain.MatchString(value)
 }
 
 // Read получает только зарегистрированный Secret и отклоняет лишние data keys.
