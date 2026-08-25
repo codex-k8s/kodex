@@ -100,6 +100,16 @@ for policy in internal-rpc-authority-restore-controller-exact-paths \
   ' >/dev/null ||
     fail "restore workload is denied access to the Kubernetes API: $policy"
 done
+for policy in kodex-image-admission-controller-exact-paths \
+  runtime-controller-exact-paths \
+  internal-rpc-authority-publisher-exact-paths \
+  internal-rpc-authority-restore-controller-exact-paths \
+  internal-rpc-authority-restore-jobs-exact-paths \
+  internal-rpc-authority-restore-pitr-telemetry; do
+  [[ $(rg -F ".metadata.name == \"$policy\"" \
+    "$repository_root/tools/release/render-web-only.sh" | wc -l) -eq 2 ]] ||
+    fail "Kubernetes API endpoint render registry omits a client: $policy"
+done
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "role-image-builder" and
