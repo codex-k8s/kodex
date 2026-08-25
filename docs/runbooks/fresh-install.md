@@ -198,7 +198,9 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    VSO для `control-api-gateway` использует отдельную Kubernetes auth role
    `control-api-gateway-vso`, которая не разделяет token policies с workload/CSI.
    Через три `VaultStaticSecret` она материализует public TLS, session keys и
-   NATS credential. Готовность каждого static secret принимается только для
+   NATS credential, а через отдельный `VaultDynamicSecret` читает только exact
+   PostgreSQL credential `database/static-creds/control-api-gateway-issuer-g1`.
+   Готовность каждого static secret принимается только для
    текущей generation и подтверждается bounded readback непустого destination
    Secret. Профиль `web-with-mattermost` дополнительно требует отдельную пару
    platform-worker JWK для `interaction-gateway`; generator, Vault KV bootstrap,

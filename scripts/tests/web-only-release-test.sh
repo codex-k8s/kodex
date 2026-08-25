@@ -118,6 +118,7 @@ for bootstrap_entry in \
   'database/static-creds/internal-rpc-authority-publisher-g4' \
   'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
   'kv/data/mattercodex/control-api-gateway/nats' \
+  'database/static-creds/control-api-gateway-issuer-g1' \
   'auth/kubernetes/role/control-api-gateway-vso' \
   'audience=vault'; do
   grep -Fq "$bootstrap_entry" "$vault_bootstrap" ||
