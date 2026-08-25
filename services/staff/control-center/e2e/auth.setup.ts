@@ -1,9 +1,8 @@
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { expect, test } from "@playwright/test";
-
 import { loadE2EAuthEnvironment } from "./environment";
+import { expect, test } from "./fixtures";
 
 const environment = loadE2EAuthEnvironment();
 

@@ -1,6 +1,4 @@
 import {
-  expect,
-  test,
   type Browser,
   type BrowserContext,
   type Locator,
@@ -8,6 +6,7 @@ import {
 } from "@playwright/test";
 
 import { loadE2EEnvironment } from "./environment";
+import { expect, test } from "./fixtures";
 import {
   assertNoDuplicateGraphNodes,
   createAgent,
@@ -171,6 +170,7 @@ test.describe.serial("web-only fresh installation", () => {
   test("вложенный Процесс показывает live graph и Human Gate переживает reconnect", async ({
     page,
     browser,
+    browserDiagnostics,
   }) => {
     writerRef = await createAgent(page, projectRef, {
       name: writerName,
@@ -255,32 +255,46 @@ test.describe.serial("web-only fresh installation", () => {
 
     const contexts: BrowserContext[] = [];
     try {
-      const winner = await authenticatedRunPage(browser, workflowRunRef);
-      const contender = await authenticatedRunPage(browser, workflowRunRef);
+      const winner = await authenticatedRunPage(
+        browser,
+        workflowRunRef,
+        browserDiagnostics.monitorPage,
+      );
+      const contender = await authenticatedRunPage(
+        browser,
+        workflowRunRef,
+        browserDiagnostics.monitorPage,
+      );
       contexts.push(winner.context, contender.context);
-      await page.context().setOffline(true);
-      await expect(page.getByText("Вы не в сети.")).toBeVisible();
+      await browserDiagnostics.withExpectedNetworkInterruption(
+        page,
+        async () => {
+          await page.context().setOffline(true);
+          await expect(page.getByText("Вы не в сети.")).toBeVisible();
 
-      await Promise.allSettled([
-        winner.page
-          .getByRole("button", { name: "Одобрить", exact: true })
-          .click(),
-        contender.page
-          .getByRole("button", { name: "Одобрить", exact: true })
-          .click(),
-      ]);
-      await expect
-        .poll(async () => {
-          const message = "Данные изменились. Показано актуальное состояние.";
-          return (
-            Number(await winner.page.getByText(message).isVisible()) +
-            Number(await contender.page.getByText(message).isVisible())
-          );
-        })
-        .toBe(1);
+          await Promise.allSettled([
+            winner.page
+              .getByRole("button", { name: "Одобрить", exact: true })
+              .click(),
+            contender.page
+              .getByRole("button", { name: "Одобрить", exact: true })
+              .click(),
+          ]);
+          await expect
+            .poll(async () => {
+              const message =
+                "Данные изменились. Показано актуальное состояние.";
+              return (
+                Number(await winner.page.getByText(message).isVisible()) +
+                Number(await contender.page.getByText(message).isVisible())
+              );
+            })
+            .toBe(1);
 
-      await page.context().setOffline(false);
-      await expect(page.getByText("Вы не в сети.")).toHaveCount(0);
+          await page.context().setOffline(false);
+          await expect(page.getByText("Вы не в сети.")).toHaveCount(0);
+        },
+      );
       await expectRunState(page, /Выполняется|Завершён/);
       await waitForTerminalSuccess(page);
       await assertNoDuplicateGraphNodes(page);
@@ -352,6 +366,7 @@ async function fillWorkflowStep(
 async function authenticatedRunPage(
   browser: Browser,
   runRef: string,
+  monitorPage: (page: Page) => void,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     baseURL: environment.baseURL,
@@ -359,6 +374,7 @@ async function authenticatedRunPage(
     locale: "ru-RU",
   });
   const page = await context.newPage();
+  monitorPage(page);
   await page.goto(`/runs/${runRef}`);
   await expect(
     page.getByRole("button", { name: "Одобрить", exact: true }),
