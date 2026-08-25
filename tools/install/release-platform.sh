@@ -61,7 +61,7 @@ owner_actor_id=$(gh api user --jq '.id | tostring')
 
 authorize_runner_gate() {
   local namespace=$1 expected_job=$2 expected_workflow=$3 gate_json resource_version
-  local hook_sha mounted_sha pod deadline patch
+  local hook_sha mounted_sha pod deadline patch current_data
   gate_json=$(kubectl --context "$context" -n "$namespace" \
     get configmap kodex-runner-owner-gate -o json)
   resource_version=$(jq -er '.metadata.resourceVersion | select(test("^[1-9][0-9]*$"))' \
@@ -70,25 +70,26 @@ authorize_runner_gate() {
     --arg owner_actor_id "$owner_actor_id" \
     --arg expected_job "$expected_job" \
     --arg expected_workflow "$expected_workflow" '
+      def exact_line($actual; $expected):
+        $actual == $expected or $actual == ($expected + "\n");
       .data["expected-owner-actor-id"] == $owner_actor_id and
-      .data["expected-job"] == $expected_job and
-      .data["expected-workflow-ref"] == $expected_workflow and
+      exact_line(.data["expected-job"]; $expected_job) and
+      exact_line(.data["expected-workflow-ref"]; $expected_workflow) and
       (.data["expected-workflow-sha"] | test("^[a-f0-9]{40}$")) and
       (.data["job-started.sh"] | type == "string" and length > 0)
     ' <<<"$gate_json" >/dev/null || fail "runner owner gate contract mismatch: $namespace"
   hook_sha=$(jq -j '.data["job-started.sh"]' <<<"$gate_json" | sha256sum | awk '{print $1}')
   [[ "$hook_sha" == "$(sha256sum "$repository_root/infra/arc/job-started-owner-gate.sh" | awk '{print $1}')" ]] ||
     fail "runner owner gate hook mismatch: $namespace"
+  current_data=$(jq -c '.data' <<<"$gate_json")
   patch=$(jq -cn \
     --arg resource_version "$resource_version" \
-    --arg owner_actor_id "$owner_actor_id" \
-    --arg expected_job "$expected_job" \
-    --arg expected_workflow "$expected_workflow" \
+    --argjson current_data "$current_data" \
     --arg source_sha "$source_sha" '[
       {op:"test",path:"/metadata/resourceVersion",value:$resource_version},
-      {op:"test",path:"/data/expected-owner-actor-id",value:$owner_actor_id},
-      {op:"test",path:"/data/expected-job",value:$expected_job},
-      {op:"test",path:"/data/expected-workflow-ref",value:$expected_workflow},
+      {op:"test",path:"/data/expected-owner-actor-id",value:$current_data["expected-owner-actor-id"]},
+      {op:"test",path:"/data/expected-job",value:$current_data["expected-job"]},
+      {op:"test",path:"/data/expected-workflow-ref",value:$current_data["expected-workflow-ref"]},
       {op:"replace",path:"/data/expected-workflow-sha",value:$source_sha}
     ]')
   kubectl --context "$context" -n "$namespace" patch configmap kodex-runner-owner-gate \
