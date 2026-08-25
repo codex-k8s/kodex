@@ -124,6 +124,7 @@ fi
 after_sha=$(sha256sum "$temporary_directory/output/operator.jwt" | awk '{print $1}')
 [[ "$before_sha" == "$after_sha" ]] || fail 'failed materialization changed existing canonical output'
 
-bash -n "$account_configurer" "$materializer" "$repository_root/tools/deploy/generate-fresh-install-material.sh" \
-  "$repository_root/tools/deploy/materialize-fresh-install-secrets.sh"
+bash -n "$account_configurer" "$materializer" \
+  "$repository_root/tools/install/generate-material.sh" \
+  "$repository_root/tools/install/materialize-secrets.sh"
 printf 'NATS operator material tests passed\n'

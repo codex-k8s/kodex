@@ -46,9 +46,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/registry-pull-authorizer ./cmd/registry-pull-authorizer
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
-    -ldflags="-s -w" \
-    -o /out/node-pull-bootstrap ./cmd/node-pull-bootstrap
 
 FROM moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe AS runtime
 USER 0:0
@@ -64,6 +61,5 @@ COPY --from=build --chmod=0555 /out/image-admission-bridge /usr/local/bin/image-
 COPY --from=build --chmod=0555 /out/image-admission-controller /usr/local/bin/image-admission-controller
 COPY --from=build --chmod=0555 /out/registry-write-authorizer /usr/local/bin/registry-write-authorizer
 COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
-COPY --from=build --chmod=0555 /out/node-pull-bootstrap /usr/local/bin/node-pull-bootstrap
 COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
 USER 10001:10001

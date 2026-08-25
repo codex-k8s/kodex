@@ -40,6 +40,9 @@ func TestReadbackContentionMigrationUsesScopedAdvisoryLock(t *testing.T) {
 	}
 	text := string(content)
 	for _, required := range []string{
+		"ira_restore_controller_g1",
+		"ira_publisher_g4",
+		"ira_readback_attestor_g4",
 		"pg_advisory_xact_lock",
 		"p_idempotency_key::text",
 		"FOR UPDATE",
@@ -135,6 +138,17 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 			t.Fatalf("baseline is missing current workload principal %q", required)
 		}
 	}
+	for _, retired := range []string{
+		"ira_database_credential_reconciler",
+		"ira_publisher_g3",
+		"ira_readback_attestor_g3",
+		"reconcile_runtime_database_identity",
+		"retire_runtime_database_identity",
+	} {
+		if strings.Contains(text, retired) {
+			t.Fatalf("baseline still contains retired credential lifecycle %q", retired)
+		}
+	}
 	if strings.Count(text, strings.TrimSpace(publicationFunctionDeclaration)) != 1 ||
 		!strings.Contains(text, `"p_published_at" timestamp with time zone) RETURNS boolean`) {
 		t.Fatal("baseline does not contain exactly one current snapshot publication function")
@@ -159,17 +173,18 @@ func TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals(t *testing.T) {
 	}
 	grant := text[connectStart : connectStart+connectEnd]
 	for _, principal := range []string{
-		"ira_database_credential_reconciler",
 		"ira_restore_controller_g1",
-		"ira_publisher_g3",
 		"ira_publisher_g4",
-		"ira_publisher_g5",
-		"ira_readback_attestor_g3",
 		"ira_readback_attestor_g4",
-		"ira_readback_attestor_g5",
 		"ira_role_image_builder_issuer_g1",
+		"ira_image_admission_issuer_g1",
+		"ira_image_promotion_issuer_g1",
+		"ira_automation_scheduler_issuer_g1",
 		"ira_control_api_gateway_issuer_g1",
 		"ira_control_plane_verifier_g1",
+		"ira_control_plane_resolver_g1",
+		"ira_integration_gateway_issuer_g1",
+		"ira_interaction_gateway_issuer_g1",
 		"ira_runtime_controller_issuer_g1",
 	} {
 		if !strings.Contains(grant, principal) {

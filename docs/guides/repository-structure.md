@@ -222,7 +222,7 @@ PostgreSQL, именованные SQL-запросы и goose задает `GO-
 `lifecycleCtx` и базовый shutdown context в `internal/app`; production-пакеты
 ниже `cmd` не создают собственные `context.Background()`/`context.TODO()`.
 
-Технический Docker/Kubernetes/Vault/NetworkPolicy каркас нового Go-компонента
+Технический Docker/Kubernetes Secret/NetworkPolicy каркас нового Go-компонента
 создается через `tools/go-service-template`, затем переносится в канонические
 пути и дополняется сервисными параметрами. Сгенерированный каркас не заменяет
 domain/transport/repository реализацию и не применяется в кластер напрямую из

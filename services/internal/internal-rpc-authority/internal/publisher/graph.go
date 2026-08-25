@@ -22,7 +22,7 @@ import (
 type GraphConfig struct {
 	Registry                   model.DeliveryTargetRegistry
 	Store                      repository.PublisherStore
-	Vault                      repository.SecretDelivery
+	Secrets                    repository.SecretDelivery
 	Snapshot                   repository.SnapshotDelivery
 	ManifestSigner             internalrpcauth.ES256Key
 	ManifestSignerGeneration   uint64
@@ -54,7 +54,7 @@ func NewGraph(config GraphConfig) (*Graph, error) {
 		!registryDigestPattern.MatchString(config.Registry.SourceDigest) ||
 		len(config.Registry.Targets) < 3 ||
 		config.Store == nil ||
-		config.Vault == nil ||
+		config.Secrets == nil ||
 		config.Snapshot == nil ||
 		config.ManifestSigner.Private == nil ||
 		config.ManifestSignerGeneration == 0 ||
@@ -167,7 +167,7 @@ func (graph *Graph) Publish(
 		case "AUTHORIZATION_ISSUER":
 			keySet, ensureErr := graph.ensureKeySet(
 				ctx,
-				target.AuthPrivateKeyVaultPath,
+				target.AuthPrivateKeySecret,
 				target.TargetID+"-auth",
 			)
 			if ensureErr != nil {
@@ -186,7 +186,7 @@ func (graph *Graph) Publish(
 		case "AUTHORITY_PROOF_RESOLVER":
 			keySet, ensureErr := graph.ensureKeySet(
 				ctx,
-				target.ProofPrivateKeyVaultPath,
+				target.ProofPrivateKeySecret,
 				target.TargetID+"-proof",
 			)
 			if ensureErr != nil {
@@ -291,9 +291,9 @@ func (graph *Graph) Publish(
 	for _, target := range graph.config.Registry.Targets {
 		if _, err := graph.putExact(
 			ctx,
-			target.ManifestTrustVaultPath,
+			target.ManifestTrustSecret,
 			map[string]string{
-				"manifest-trust.jws": string(manifestBundle),
+				"bundle.jws": string(manifestBundle),
 				"source_revision": strconv.FormatUint(
 					graph.config.Registry.SourceRevision,
 					10,
@@ -303,12 +303,12 @@ func (graph *Graph) Publish(
 		); err != nil {
 			return model.AuthoritySnapshotPublication{}, err
 		}
-		if target.ProofTrustVaultPath != "" {
+		if target.ProofTrustSecret != "" {
 			if _, err := graph.putExact(
 				ctx,
-				target.ProofTrustVaultPath,
+				target.ProofTrustSecret,
 				map[string]string{
-					"proof-trust.jwk": string(built.ProofTrustJSON),
+					"jwks.json": string(built.ProofTrustJSON),
 					"source_revision": strconv.FormatUint(
 						graph.config.Registry.SourceRevision,
 						10,
@@ -376,22 +376,22 @@ func (graph *Graph) Ready(
 func (graph *Graph) deliveryReady(ctx context.Context) error {
 	for _, target := range graph.config.Registry.Targets {
 		for _, path := range []string{
-			target.AuthPrivateKeyVaultPath,
-			target.ManifestTrustVaultPath,
-			target.ProofTrustVaultPath,
-			target.ProofPrivateKeyVaultPath,
+			target.AuthPrivateKeySecret,
+			target.ManifestTrustSecret,
+			target.ProofTrustSecret,
+			target.ProofPrivateKeySecret,
 			target.ReadbackCredentialPath,
 			target.ReadbackPossessionKeyPath,
 		} {
 			if path == "" {
 				continue
 			}
-			material, found, err := graph.config.Vault.ReadKV2(ctx, path)
+			material, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
 			if err != nil || !found || material.Version == 0 ||
 				len(material.Digest) != 64 || len(material.Data) == 0 {
 				return errors.New("authority graph delivery backend readback rejected")
 			}
-			if (path == target.ManifestTrustVaultPath || path == target.ProofTrustVaultPath) &&
+			if (path == target.ManifestTrustSecret || path == target.ProofTrustSecret) &&
 				(material.Data["source_revision"] != strconv.FormatUint(graph.config.Registry.SourceRevision, 10) ||
 					material.Data["source_digest_sha256"] != graph.config.Registry.SourceDigest) {
 				return errors.New("authority graph delivery source binding rejected")
@@ -406,7 +406,7 @@ func (graph *Graph) ensureKeySet(
 	path string,
 	prefix string,
 ) (rotatingKeySet, error) {
-	existing, found, err := graph.config.Vault.ReadKV2(ctx, path)
+	existing, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
 	if err != nil {
 		return rotatingKeySet{}, errors.New("read authority signing key lifecycle")
 	}
@@ -423,9 +423,9 @@ func (graph *Graph) ensureKeySet(
 		if dataErr != nil {
 			return rotatingKeySet{}, dataErr
 		}
-		existing, err = graph.config.Vault.CreateKV2(ctx, path, data)
+		existing, err = graph.config.Secrets.CreateVersioned(ctx, path, data)
 		if err != nil {
-			existing, found, err = graph.config.Vault.ReadKV2(ctx, path)
+			existing, found, err = graph.config.Secrets.ReadVersioned(ctx, path)
 			if err != nil || !found {
 				return rotatingKeySet{}, errors.New(
 					"recover concurrent authority signing key creation",
@@ -484,14 +484,14 @@ func (graph *Graph) ensureKeySet(
 	if dataErr != nil {
 		return rotatingKeySet{}, dataErr
 	}
-	updated, err := graph.config.Vault.WriteKV2CAS(
+	updated, err := graph.config.Secrets.WriteVersionedCAS(
 		ctx,
 		path,
 		existing.Version,
 		data,
 	)
 	if err != nil {
-		updated, found, err = graph.config.Vault.ReadKV2(ctx, path)
+		updated, found, err = graph.config.Secrets.ReadVersioned(ctx, path)
 		if err != nil || !found {
 			return rotatingKeySet{}, errors.New(
 				"recover concurrent authority signing key rotation",
@@ -643,7 +643,7 @@ func (graph *Graph) putExact(
 	path string,
 	data map[string]string,
 ) (repository.SecretMaterial, error) {
-	existing, found, err := graph.config.Vault.ReadKV2(ctx, path)
+	existing, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
 	if err != nil {
 		return repository.SecretMaterial{}, errors.New("read authority graph delivery")
 	}
@@ -681,14 +681,14 @@ func (graph *Graph) putExact(
 				"authority graph delivery rollback rejected",
 			)
 		}
-		updated, updateErr := graph.config.Vault.WriteKV2CAS(
+		updated, updateErr := graph.config.Secrets.WriteVersionedCAS(
 			ctx,
 			path,
 			existing.Version,
 			data,
 		)
 		if updateErr != nil {
-			updated, found, updateErr = graph.config.Vault.ReadKV2(ctx, path)
+			updated, found, updateErr = graph.config.Secrets.ReadVersioned(ctx, path)
 			if updateErr != nil || !found || !sameExactMaterial(updated.Data, data) {
 				return repository.SecretMaterial{}, errors.New(
 					"recover concurrent authority graph delivery",
@@ -702,9 +702,9 @@ func (graph *Graph) putExact(
 		}
 		return updated, nil
 	}
-	created, createErr := graph.config.Vault.CreateKV2(ctx, path, data)
+	created, createErr := graph.config.Secrets.CreateVersioned(ctx, path, data)
 	if createErr != nil {
-		created, found, createErr = graph.config.Vault.ReadKV2(ctx, path)
+		created, found, createErr = graph.config.Secrets.ReadVersioned(ctx, path)
 		if createErr != nil || !found || !sameExactMaterial(created.Data, data) {
 			return repository.SecretMaterial{}, errors.New(
 				"recover concurrent authority graph creation",

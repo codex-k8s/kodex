@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
+	github.com/codex-k8s/kodex/libs/go/exactkubernetessecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
@@ -66,6 +67,8 @@ require (
 )
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
+
+replace github.com/codex-k8s/kodex/libs/go/exactkubernetessecret => ../../../libs/go/exactkubernetessecret
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 

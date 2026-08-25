@@ -204,7 +204,7 @@
         "ack_key_kid",
         "ack_key_generation",
         "ack_key_thumbprint_sha256",
-        "vault_metadata_version",
+        "secret_generation",
         "delivery_readback_digest_sha256",
         "iat",
         "nbf",
@@ -268,7 +268,7 @@
         "ack_key_thumbprint_sha256": {
           "$ref": "#/$defs/digest"
         },
-        "vault_metadata_version": {
+        "secret_generation": {
           "$ref": "#/$defs/positiveRevision"
         },
         "delivery_readback_digest_sha256": {

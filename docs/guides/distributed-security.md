@@ -275,22 +275,15 @@ readback/ключ владения имеют разные явные `typ`, е�
 собственные `CURRENT/NEXT/PREVIOUS`, верхнюю принятую отметку,
 криптографическое контрольное чтение обслуживаемого состояния и готовность.
 
-Ротация учётных данных, использующая отдельные LOGIN principals либо ключи
-приложения, допускает ограниченное перекрытие `CURRENT`+`NEXT` и не более одного
-`PREVIOUS`. `NEXT` обязан пройти независимый readback, пока `CURRENT`
-продолжает обслуживать запросы. Продвижение атомарно меняет статусы; отзыв
-прежнего principal происходит только после фиксации транзакции, перекрытия и
-контрольного чтения нового `CURRENT`. Булев флаг активности с ограничением
-уникальности, запрещающим перекрытие, недопустим.
-
 Исполняемый процесс не подключается к PostgreSQL через общую capability-роль
 `NOLOGIN`. Нужен точный несуперпользовательский `LOGIN` principal с минимальным
-членством, явным `SET ROLE` при `NOINHERIT`, управляемыми Vault выдачей,
-обновлением, ротацией и отзывом учётных данных, TLS `verify-full` с точными
-SNI/CA и закреплённой по назначению `NetworkPolicy`. Готовность проверяет
-фактические привилегии реальным principal процесса; суперпользовательский
-`SET SESSION AUTHORIZATION` в поведенческом контракте не доказывает
-достижимость production-границы.
+членством и явным `SET ROLE` при `NOINHERIT`. Fresh install создаёт закрытый
+реестр principals, генерирует независимые пароли, передаёт их одноразовой
+reconciliation Job через Kubernetes Secret и проверяет фактические роли до
+миграций и запуска runtime. TLS использует `verify-full`, точные SNI/CA и
+NetworkPolicy. Ротация выполняется отдельной owner-approved installation
+revision с новым Secret, повторным reconciliation/readback и управляемым
+rollout; скрытого runtime controller учётных данных нет.
 
 Независимый verifier подписанного снимка не получает ключ доверия к его
 подписанту из того же подконтрольного publisher канала. Отдельный владелец
@@ -328,21 +321,11 @@ principal.
 блокировку, после чего вывод из обращения завершается, а повторная попытка
 видит `RETIRED`.
 
-Владелец жизненного цикла учётных данных базы является реальным исполняемым
-компонентом, а не строковой меткой. Он имеет версионированный интерфейс или
-детерминированную задачу согласования, отдельный ServiceAccount, точные права
-Vault/PostgreSQL, лидера с ограждением/CAS, восстановление после аварии,
-контрольное чтение обслуживаемого состояния и готовность. Он получает желаемые
-principals/поколения из версионированного реестра и не принимает их как
-источник полномочий из RPC-запроса.
-
-Такой controller должен иметь фактически применимые минимальные полномочия, а
-не только декларативное имя роли. Bootstrap code-first создаёт или принимает
-каждый точный LOGIN, выдаёт controller ограниченный `ADMIN OPTION`, управление
-ролью и возможность завершения backends, затем читает фактические привилегии.
-`NOINHERIT`, `SET ROLE`, владение `SECURITY DEFINER` и поддерживаемые версии
-PostgreSQL проверяются как исполняемый путь. Выдавать `CREATEROLE` runtime
-principal запрещено.
+Reconciliation Job является installation-компонентом, а не постоянным runtime
+controller. Она получает только bootstrap credential и закрытый Secret с
+паролями известных principals, не принимает имена ролей через RPC и завершается
+до запуска workloads. Runtime principal не получает `CREATEROLE`, `ADMIN
+OPTION` или право менять пароль другого principal.
 
 Одноразовые подпись/JTI не отменяют семантическую идемпотентность изменяющего
 состояние RPC. Одна устойчивая CAS-транзакция хранит ключ идемпотентности,
@@ -398,20 +381,12 @@ principal запрещено.
 - workload получает только минимальный набор ключей через отдельный локальный
   для пространства имён граф аутентификации.
 
-Vault CSI object для PKI `issue/<role>` является операцией записи: он задаёт
-поддерживаемый `PUT`/`POST`, точный `common_name`, SAN, ограниченный TTL и
-назначение сертификата. Серверные и клиентские роли разделены по EKU, Vault
-policy, ServiceAccount и `SecretProviderClass`; CA читается отдельным путём.
-Render, startup и readback закрыто проверяют метод, разрешённые имена, EKU,
-TTL, SNI и фактически обслуживаемый путь mTLS. Синтаксически корректный GET к
-PKI issue path не считается доставкой сертификата.
-
-При node-published CSI mount сетевое соединение с Vault устанавливает Pod
-provider, а не workload-потребитель. Итоговая `NetworkPolicy` разрешает exact
-provider identity только к Vault TCP/8200; workload authority по-прежнему
-задают переданный projected token, Vault Kubernetes auth role и policy.
-Отсутствие provider ingress нельзя исправлять CIDR, wildcard namespace или
-выдачей provider дополнительных Kubernetes полномочий.
+Installation CA выпускает точные server/client certificates по закрытому
+реестру профилей, `common_name`, SAN и EKU. Installer материализует static
+Kubernetes Secrets; runtime publisher обновляет только зарегистрированные
+dynamic Secrets через exact `resourceNames` RBAC и монотонную generation.
+Render, startup и readback проверяют разрешённые имена, EKU, TTL, SNI и
+фактически обслуживаемый путь mTLS.
 
 Projected secret file считается допустимым только при полном совпадении
 следующего контракта:
@@ -479,7 +454,7 @@ applied -> pending -> reload -> exact peer readback -> applied
 Политика запрета по умолчанию разрешает только фактические исполняемые пути.
 
 - Правило исходящего трафика без `to`/назначения запрещено для базы, брокера,
-  Vault, телеметрии и Kubernetes API.
+  secret publisher, телеметрии и Kubernetes API.
 - Исполняемые процессы и задачи миграции получают отдельные назначения и
   учётные данные.
 - Внешний SaaS доступен через разрешённый прокси исходящего трафика, если
@@ -550,9 +525,9 @@ applied -> pending -> reload -> exact peer readback -> applied
   exact rendered node CIDR, а DaemonSet с `imagePullPolicy: Always` доказывает
   реальный CRI pull path на каждом node. Общий push/admin/promotion credential,
   `0.0.0.0/0`, `::/0` и readiness только из registry Pod запрещены.
-  Bootstrap, вызывающий host CRI через Unix socket, не использует
-  `hostNetwork`: его собственный egress ограничен exact DNS/Vault, а registry
-  соединение выполняет host runtime с per-node identity.
+  Host runtime получает pull credential code-first через k3s `registries.yaml`;
+  конфигурация использует HTTPS и exact registry host, а её изменение требует
+  restart/readback k3s на каждом node.
 - `RuntimeRevision`, runtime-controller client, credential broker, workload
   admission и `ValidatingAdmissionPolicy` используют один exact promoted
   `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три
@@ -588,8 +563,8 @@ Sidecar, verifier, issuer, publisher, reconciler, задача миграции 
 - ограниченного завершения и порядка закрытия зависимостей;
 - порядка применения из кода, диагностики и инструкции отката/восстановления.
 
-`emptyDir`, который некому заполнить, ссылка на отсутствующий `VaultAuth`,
-selector несуществующей базы или ручной ConfigMap не являются допустимой
+`emptyDir`, который некому заполнить, ссылка на отсутствующий Kubernetes
+Secret, selector несуществующей базы или ручной ConfigMap не являются допустимой
 production-зависимостью.
 
 ## Доказательство результата
@@ -637,11 +612,10 @@ disposable среды фиксируется как `NOT RUN` и не ослаб
 
 - `/nats-io/nats.docs` — JetStream acknowledgement, quorum и влияние
   `sync_interval`/`fsync` на потерю уже подтвержденных сообщений;
-- `/websites/developer_hashicorp_vault` — TLS TCP listener, неизменность путей
-  certificate/key при reload и необходимость restart при изменении listener
-  configuration;
 - `/kubernetes/website` — selectors и destinations `NetworkPolicy`, а также
-  discovery Service endpoints через `EndpointSlice`.
+  discovery Service endpoints через `EndpointSlice`;
+- официальная документация K3s — `registries.yaml`, TLS/auth private registry
+  и обязательный restart K3s после изменения конфигурации.
 
 Связанные документы: `AGENT-DOC-001`, `GO-DOC-001`, `GO-DOC-003`,
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `INFRA-DOC-001`.

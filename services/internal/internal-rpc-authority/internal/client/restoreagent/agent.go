@@ -50,8 +50,8 @@ type AuthorityAdmission interface {
 type Config struct {
 	Address                    string
 	TLS                        *tls.Config
-	RoleCredentialVaultPath    string
-	ACKPrivateJWKVaultPath     string
+	RoleCredentialSecret       string
+	ACKPrivateJWKSecret        string
 	Delivery                   SecretReader
 	ControllerCertificateFile  string
 	ManifestRootPublicJWKFile  string
@@ -67,9 +67,9 @@ type Config struct {
 	UnaryInterceptor           grpc.UnaryClientInterceptor
 }
 
-// SecretReader читает версионированный материал из Vault KV v2.
+// SecretReader читает версионированный материал из Kubernetes Secret.
 type SecretReader interface {
-	ReadKV2(context.Context, string) (repository.SecretMaterial, bool, error)
+	ReadVersioned(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
 // Agent обрабатывает директиву и отправляет одноразовое подтверждение.
@@ -87,8 +87,8 @@ func New(config Config) (*Agent, error) {
 		config.TLS == nil ||
 		config.TLS.ServerName == "" ||
 		config.TLS.InsecureSkipVerify ||
-		config.RoleCredentialVaultPath == "" ||
-		config.ACKPrivateJWKVaultPath == "" ||
+		config.RoleCredentialSecret == "" ||
+		config.ACKPrivateJWKSecret == "" ||
 		config.Delivery == nil ||
 		config.ControllerCertificateFile == "" ||
 		config.ManifestRootPublicJWKFile == "" ||
@@ -164,9 +164,9 @@ func (agent *Agent) Poll(
 	if admission.Inflight() != 0 {
 		return errors.New("restore workload inflight drain is incomplete")
 	}
-	ackMaterial, found, err := agent.config.Delivery.ReadKV2(
+	ackMaterial, found, err := agent.config.Delivery.ReadVersioned(
 		ctx,
-		agent.config.ACKPrivateJWKVaultPath,
+		agent.config.ACKPrivateJWKSecret,
 	)
 	if err != nil || !found {
 		return errors.New("read restore ACK private key")
@@ -290,9 +290,9 @@ func (agent *Agent) VerifyStartup(
 func (agent *Agent) getDirective(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.GetRestoreDirectiveResponse, string, error) {
-	roleMaterial, found, err := agent.config.Delivery.ReadKV2(
+	roleMaterial, found, err := agent.config.Delivery.ReadVersioned(
 		ctx,
-		agent.config.RoleCredentialVaultPath,
+		agent.config.RoleCredentialSecret,
 	)
 	if err != nil {
 		return nil, "", errors.New("read restore role credential")

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "artifacts": [
+    {
+      "name": "k3s",
+      "version": "v1.36.3+k3s1",
+      "url": "https://github.com/k3s-io/k3s/releases/download/v1.36.3%2Bk3s1/k3s",
+      "sha256": "2f98a9f8fe5782479ee2d54e70a1b10a7f6fd4cae8d38ed3098452dc6eed76b5"
+    },
+    {
+      "name": "go",
+      "version": "1.26.6",
+      "url": "https://go.dev/dl/go1.26.6.linux-amd64.tar.gz",
+      "sha256": "708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
+    },
+    {
+      "name": "helm",
+      "version": "v4.2.4",
+      "url": "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz",
+      "sha256": "c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3"
+    },
+    {
+      "name": "yq",
+      "version": "v4.53.6",
+      "url": "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64",
+      "sha256": "c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385"
+    },
+    {
+      "name": "cosign",
+      "version": "v3.1.3",
+      "url": "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64",
+      "sha256": "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
+    },
+    {
+      "name": "nsc",
+      "version": "v2.15.0",
+      "url": "https://github.com/nats-io/nsc/releases/download/v2.15.0/nsc-linux-amd64.zip",
+      "sha256": "7d55eda757dc9f233675a3038fcf8779bcda99753b1603f7009fc8537e126b7e"
+    }
+  ],
+  "charts": [
+    {
+      "name": "cert-manager",
+      "version": "v1.21.1",
+      "repository": "oci://quay.io/jetstack/charts/cert-manager",
+      "sha256": "c27101f3f3e2349fb4a9e704316105bf7b52ad73b8c8257d3498ef7f2f6a4adc"
+    }
+  ]
+}

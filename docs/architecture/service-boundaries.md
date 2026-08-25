@@ -105,14 +105,14 @@ immutable claim snapshot и не попадает в status/log/audit/provenance
 `image-admission-controller` автоматически материализует только одну
 последовательную цепочку `claim → scan → sign → admit` и отдельную
 `promote`-задачу. Он читает immutable policy и состояние собственных Job/PVC
-через Kubernetes API, но не получает registry, signing, Vault либо
+через Kubernetes API, но не получает registry, signing, secret publisher либо
 control-plane credentials. Fail-closed `ValidatingAdmissionPolicy` связывает
 его identity с точными образами, командами, ServiceAccount, env и volume
 sources каждой фазы; одного RBAC `create jobs` недостаточно. Скрипт
 `render-image-admission-job.sh` является встроенным deterministic renderer и
 read-only диагностикой, а не ручным production trigger. Созданные фазы сначала
 получают server-owned artifact claim, затем разделяют scanner, signer,
-admission owner и promotion по разным Pod/ServiceAccount/Vault/mTLS границам.
+admission owner и promotion по разным Pod/ServiceAccount/Kubernetes Secret/mTLS границам.
 Admission фиксирует exact SBOM,
 vulnerability, native BuildKit provenance, signature и receipt через protected
 RPC; durable evidence OCI manifest проходит readback до verdict. Только server-selected

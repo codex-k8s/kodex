@@ -61,13 +61,13 @@ type ControllerIdentity struct {
 	Generation uint64
 }
 
-// Publisher доставляет назначенные ключи и удостоверения через Vault.
+// Publisher доставляет назначенные ключи и удостоверения через Kubernetes Secret.
 type Publisher struct {
 	registry       model.DeliveryTargetRegistry
 	signer         RestoreCredentialSigner
 	readbackSigner ReadbackCredentialSigner
 	store          repository.PublisherStore
-	vault          repository.SecretDelivery
+	delivery       repository.SecretDelivery
 	graph          repository.AuthorityGraphLifecycle
 	graphMu        sync.RWMutex
 	graphState     model.AuthoritySnapshotPublication
@@ -127,7 +127,7 @@ func NewPublisher(
 	signer RestoreCredentialSigner,
 	readbackSigner ReadbackCredentialSigner,
 	store repository.PublisherStore,
-	vault repository.SecretDelivery,
+	delivery repository.SecretDelivery,
 ) (*Publisher, error) {
 	if registry.Version != model.ContractVersion ||
 		registry.SourceRevision == 0 ||
@@ -145,7 +145,7 @@ func NewPublisher(
 		readbackSigner.Generation == 0 ||
 		readbackSigner.Key.KeyID == signer.Key.KeyID ||
 		store == nil ||
-		vault == nil {
+		delivery == nil {
 		return nil, errors.New("invalid publisher configuration")
 	}
 	return &Publisher{
@@ -153,7 +153,7 @@ func NewPublisher(
 		signer:         signer,
 		readbackSigner: readbackSigner,
 		store:          store,
-		vault:          vault,
+		delivery:       delivery,
 		now:            time.Now,
 	}, nil
 }
@@ -342,7 +342,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 		"intent_digest_sha256":              intentDigest,
 		"expires_at":                        strconv.FormatInt(claims.ExpiresAt, 10),
 	}
-	existing, found, err := publisher.vault.ReadKV2(
+	existing, found, err := publisher.delivery.ReadVersioned(
 		ctx,
 		target.ReadbackCredentialPath,
 	)
@@ -355,7 +355,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 	}
 	var credentialMaterial repository.SecretMaterial
 	if !found {
-		credentialMaterial, err = publisher.vault.CreateKV2(
+		credentialMaterial, err = publisher.delivery.CreateVersioned(
 			ctx,
 			target.ReadbackCredentialPath,
 			credentialData,
@@ -363,7 +363,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 	} else if existing.Data["intent_digest_sha256"] == intentDigest {
 		credentialMaterial = existing
 	} else {
-		credentialMaterial, err = publisher.vault.WriteKV2CAS(
+		credentialMaterial, err = publisher.delivery.WriteVersionedCAS(
 			ctx,
 			target.ReadbackCredentialPath,
 			existing.Version,
@@ -371,7 +371,7 @@ func (publisher *Publisher) publishReadbackMaterial(
 		)
 	}
 	if err != nil {
-		credentialMaterial, found, err = publisher.vault.ReadKV2(
+		credentialMaterial, found, err = publisher.delivery.ReadVersioned(
 			ctx,
 			target.ReadbackCredentialPath,
 		)
@@ -412,9 +412,9 @@ func (publisher *Publisher) publishReadbackMaterial(
 	}
 	return model.PublishedReadbackMaterial{
 		Intent: pinned, ReadbackCredentialJWS: servedCompact,
-		PossessionPrivateJWK:   possession.Data["possession_private_jwk"],
-		CredentialVaultVersion: credentialMaterial.Version,
-		PossessionVaultVersion: possession.Version,
+		PossessionPrivateJWK:       possession.Data["possession_private_jwk"],
+		CredentialSecretGeneration: credentialMaterial.Version,
+		PossessionSecretGeneration: possession.Version,
 	}, nil
 }
 
@@ -431,7 +431,7 @@ func (publisher *Publisher) ensureReadbackPossession(
 	ctx context.Context,
 	target model.DeliveryTarget,
 ) (repository.SecretMaterial, error) {
-	existing, found, err := publisher.vault.ReadKV2(
+	existing, found, err := publisher.delivery.ReadVersioned(
 		ctx,
 		target.ReadbackPossessionKeyPath,
 	)
@@ -502,21 +502,21 @@ func (publisher *Publisher) ensureReadbackPossession(
 	}
 	var delivered repository.SecretMaterial
 	if found {
-		delivered, err = publisher.vault.WriteKV2CAS(
+		delivered, err = publisher.delivery.WriteVersionedCAS(
 			ctx,
 			target.ReadbackPossessionKeyPath,
 			existing.Version,
 			data,
 		)
 	} else {
-		delivered, err = publisher.vault.CreateKV2(
+		delivered, err = publisher.delivery.CreateVersioned(
 			ctx,
 			target.ReadbackPossessionKeyPath,
 			data,
 		)
 	}
 	if err != nil {
-		delivered, found, err = publisher.vault.ReadKV2(
+		delivered, found, err = publisher.delivery.ReadVersioned(
 			ctx,
 			target.ReadbackPossessionKeyPath,
 		)
@@ -718,7 +718,7 @@ func (publisher *Publisher) Publish(
 	}
 	roleDigestRaw := sha256.Sum256([]byte(roleCompact))
 	roleDigest := hex.EncodeToString(roleDigestRaw[:])
-	roleMaterial, err := publisher.vault.CreateKV2(
+	roleMaterial, err := publisher.delivery.CreateVersioned(
 		ctx,
 		target.RestoreCredentialPath,
 		map[string]string{
@@ -747,9 +747,9 @@ func (publisher *Publisher) Publish(
 		)
 	}
 	readbackDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
-		ACKVersion  uint64 `json:"ack_vault_metadata_version"`
+		ACKVersion  uint64 `json:"ack_secret_generation"`
 		ACKDigest   string `json:"ack_material_digest_sha256"`
-		RoleVersion uint64 `json:"role_vault_metadata_version"`
+		RoleVersion uint64 `json:"role_secret_generation"`
 		RoleDigest  string `json:"role_material_digest_sha256"`
 	}{
 		ACKVersion: ackMaterial.Version, ACKDigest: ackMaterial.Digest,
@@ -775,7 +775,7 @@ func (publisher *Publisher) Publish(
 		RoleCredentialDigestSHA256: roleDigest,
 		ACKKeyID:                   ackPrivate.KeyID, ACKKeyGeneration: directive.ACKKeyGeneration,
 		ACKKeyThumbprintSHA256: ackThumbprint,
-		VaultMetadataVersion:   roleMaterial.Version,
+		SecretGeneration:       roleMaterial.Version,
 		DeliveryReadbackDigest: readbackDigest,
 		IssuedAt:               issuedAt, NotBefore: issuedAt,
 		ExpiresAt: time.Unix(issuedAt, 0).Add(restoreRoleCredentialTTL).Unix(),
@@ -822,7 +822,7 @@ func (publisher *Publisher) Publish(
 	return saved, nil
 }
 
-// Ready сверяет хранилище, Vault и фактически опубликованные материалы.
+// Ready сверяет хранилище и фактически опубликованные материалы Secret.
 func (publisher *Publisher) Ready(ctx context.Context) error {
 	if err := publisher.ensureWritable(ctx); err != nil {
 		return err
@@ -937,7 +937,7 @@ func (publisher *Publisher) ensureACKMaterial(
 	directive model.CredentialIssuanceDirective,
 	directiveDigest string,
 ) (repository.SecretMaterial, error) {
-	if existing, found, err := publisher.vault.ReadKV2(
+	if existing, found, err := publisher.delivery.ReadVersioned(
 		ctx,
 		target.RestoreACKKeyPath,
 	); err != nil {
@@ -993,7 +993,7 @@ func (publisher *Publisher) ensureACKMaterial(
 		return repository.SecretMaterial{}, failure.Wrap(failure.Internal, "create delivery receipt jti", err)
 	}
 	issuedAt := publisher.now().UTC().Truncate(time.Second)
-	material, err := publisher.vault.CreateKV2(
+	material, err := publisher.delivery.CreateVersioned(
 		ctx,
 		target.RestoreACKKeyPath,
 		map[string]string{

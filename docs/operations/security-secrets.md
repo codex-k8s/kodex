@@ -4,8 +4,8 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 1.1.0
-updated: 2026-08-24
+version: 2.0.0
+updated: 2026-08-25
 ---
 
 # Безопасность и секреты
@@ -54,18 +54,20 @@ signature, конфликт revision, expiry или истечение grace н�
 
 ## Identity и recovery
 
-- GitHub Environment хранит только начальные человеческие пароли; OAuth client,
-  cookie, database и service secrets генерируются на exact SHA и передаются
-  владельцу только в `age`-encrypted artifact с коротким retention;
-- приватный `age` identity не хранится в GitHub, Kubernetes, Vault этой же
-  установки или Git и имеет минимум две offline owner-controlled копии;
-- Vault использует Shamir `5/3`; plaintext root token и shares существуют
-  только внутри ограниченной bootstrap/unseal ceremony и сразу повторно
-  шифруются;
+- `.kodex-env` хранится только у владельца с mode `0600`, не коммитится и не
+  передаётся через artifact;
+- OAuth client, cookie, database, NATS, registry и service secrets генерируются
+  локально в `.kodex-material`, материализуются в Kubernetes Secrets и не
+  печатаются;
+- k3s включает encryption at rest для Kubernetes Secrets;
+- `.kodex-material` имеет минимум две зашифрованные offline owner-controlled
+  копии, отделённые от PostgreSQL/PVC backup;
+- потеря installation roots при существующих данных считается инцидентом;
+  молчаливая генерация новой identity поверх работающей установки запрещена;
 - `master/admin` Keycloak является явной cluster-admin authority для Headlamp.
   Назначение и отзыв этой роли рассматриваются как изменение Kubernetes
   cluster-admin доступа и проверяются readback;
-- Control Center, Grafana и Vault UI требуют `kodex-owner`, но не выдают
+- Control Center и Grafana требуют `kodex-owner`, но не выдают
   Kubernetes authority. Прямой публичный backend path в обход OAuth2 Proxy
   запрещён.
 

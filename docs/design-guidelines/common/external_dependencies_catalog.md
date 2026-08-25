@@ -87,7 +87,7 @@ promoted system role image и always-hot runtime contract.
 | `syft` | `v1.51.0` | формирование SBOM при admission role image |
 | `grype` | `v0.117.0` | проверка уязвимостей SBOM при admission role image |
 | `regctl` | `v0.11.5` | OCI readback, evidence artifacts и promotion role image |
-| Vault + Secrets Store CSI | pinned manifests/charts | workload-bound secret delivery без значений в manifests |
+| Kubernetes Secrets | Kubernetes API + encryption at rest | exact RBAC и workload-bound delivery без значений в manifests |
 | Keycloak/OIDC provider | environment contract | browser identity; конкретный public domain задаёт deploy owner |
 | OpenTelemetry/Prometheus/Grafana | pinned manifests/release lock | telemetry и diagnostics |
 | Actions Runner Controller | pinned Helm chart | release image build через owner-configured registry namespace |

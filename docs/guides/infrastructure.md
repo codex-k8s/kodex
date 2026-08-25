@@ -4,351 +4,100 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.2.4
+version: 2.0.0
 updated: 2026-08-25
 ---
 
 # Infrastructure Guide
 
-## Правило code-first
+## Code-first
 
-Инфраструктура изменяется только через код, PR, review и повторяемый запуск
-того же кода.
+Инфраструктура изменяется только через script/manifest/workflow в репозитории,
+PR, review, owner gate и запуск того же кода. Ручная production-настройка без
+последующего точного закрепления в репозитории запрещена.
 
-Порядок:
+Каждая операция имеет `preflight|apply|readback` либо эквивалентный явный
+контракт. Readback проверяет фактически обслуживаемое состояние, а не только
+успех `kubectl apply`.
 
-1. Read-only preflight.
-2. Script/code или workflow в репозитории.
-3. PR с ручной проверкой.
-4. Review.
-5. Запуск того же кода.
-6. Отчет в Issue.
+## Профили установки
 
-## Требования к scripts/code
+- `bare-metal`: ОС, firewall, k3s и полный infrastructure profile;
+- `existing-kubernetes`: exact kubeconfig/context и выбранные компоненты без
+  изменения хоста.
 
-- Preflight или dry-run mode.
-- Безопасный повторный запуск.
-- Проверка результата.
-- Rollback/repair notes.
-- Список env/secret keys без значений.
-- Отсутствие production-действий в staging-контексте.
+Приложение принадлежит namespace `kodex-system`. Служебные компоненты разделены:
+`identity`, `observability`, `platform-admin`, `kodex-infra`, `kodex-ci`,
+`kodex-ci-deploy`, `cert-manager` и `kodex-trust`.
 
-## Размещение Kubernetes-ресурсов
+## Secret delivery
 
-- Ресурс, устанавливаемый один раз на кластер или эксплуатационный контур,
-  размещается в `deploy/k8s/base/<capability>`.
-- Deployment, Service, ServiceAccount, policy, service-specific
-  `ServiceMonitor`, alert rules и бизнесовый dashboard размещаются в
-  `deploy/k8s/base/<component>`.
-- Data plane и migration Job выносятся в отдельные base-каталоги, если имеют
-  независимый lifecycle, права, порядок rollout или rollback.
-- Environment overlay или bootstrap собирает capability и component bases, но
-  не копирует их YAML и не создает второй источник правды.
-- Общие Grafana dashboards находятся в
-  `deploy/k8s/base/observability/dashboards`, устанавливаются один раз и
-  выбирают сервис через переменную `service`.
-- UID dashboard глобально уникален. Дублирование общего dashboard в другом
-  namespace запрещено, даже если Kubernetes допускает одинаковые имена
-  ConfigMap.
+Источником входных installation values является `.kodex-env` mode `0600`.
+Сгенерированные private keys/passwords хранятся в `.kodex-material` mode `0700`
+и Kubernetes Secrets. ConfigMap, render и GitHub artifact не содержат secret
+values.
 
-PR с Kubernetes-ресурсами проверяет каждый затронутый base и environment
-overlay через `kustomize build`, а для общих ресурсов дополнительно доказывает
-отсутствие дублей и способ однократной установки в bootstrap.
+Static Secret обновляет installer. Runtime key-delivery Secret обновляет только
+`internal-rpc-authority-publisher` через exact RBAC `resourceNames`, generation
+annotation и compare/readback. Workload получает только exact keys выбранного
+Secret как read-only volume или `secretKeyRef`.
 
-## Полный граф зависимостей deployable
+PostgreSQL bootstrap создаёт `NOLOGIN` group roles. Одноразовая Job задаёт
+SCRAM passwords для закрытого списка LOGIN roles из Secret, после чего migrations
+и runtime используют разные principals. Caller-set GUC не считается identity.
 
-Каждый runtime dependency должен иметь реального владельца и code-first путь.
-Ссылка из `Deployment` или `VaultStaticSecret` не создает зависимость сама.
+## Build и release
 
-Для sidecar, init container, verifier, issuer, publisher, migration job,
-database, broker, egress proxy и secret operator фиксируются:
+- GitHub ARC использует отдельные build/deploy scale sets;
+- BuildKit запускается rootless sidecar в ephemeral build runner;
+- release registry хранится на целевом сервере и доступен по HTTPS;
+- build публикует immutable digest и формирует release lock;
+- render привязан к exact source SHA, build run и lock SHA-256;
+- target installer скачивает render и применяет фазы в согласованном context;
+- deploy runner не получает read access к Kubernetes Secrets.
 
-- исходный код или закрепленный поддерживаемый artifact;
-- namespace, ServiceAccount и минимальный RBAC;
-- Service/endpoint и exact network path;
-- volumes, access modes и источник config/trust/secret material;
-- startup/readiness/failure policy;
-- bounded shutdown и порядок закрытия;
-- environment apply order, readback и repair/rollback runbook.
+Host containerd получает registry credentials через k3s `registries.yaml` с
+TLS verification. `insecure_skip_verify`, plaintext registry и token в command
+line запрещены.
 
-Для Deployment/Job дополнительно явно задаются утверждённые владельцем
-`replicas`, `revisionHistoryLimit`, стратегия rollout,
-`activeDeadlineSeconds`, retry/backoff, история cleanup, disruption policy и
-поведение при отказе readiness. Значения не наследуются из случайного default
-и сверяются в итоговом render окружения. Число реплик и глубина истории
-относятся к контракту конкретного component, а не являются одной глобальной
-константой проекта.
+## Identity и management
 
-Ручное заполнение `emptyDir`/ConfigMap, selector несуществующего workload,
-ссылка на отсутствующий namespace-local auth resource и фиктивно успешный
-provider path запрещены. Обязательная зависимость проверяется до открытия
-готовности и до запуска workers.
+Control Center, Grafana и Headlamp доступны только через OAuth2 Proxy/Keycloak.
+Keycloak `admin` означает `cluster-admin` только для Headlamp. Доступ к
+Prometheus/Alertmanager извне отсутствует.
 
-Immutable ConfigMap с постоянным именем нельзя обновлять in-place. Изменяемый
-через rollout configuration snapshot получает content-addressed/versioned имя,
-а Deployment reference переключается renderer/Kustomize автоматически.
-Rollback выбирает ранее review-approved объект и render; delete/recreate либо
-runtime mutation не являются штатным путём.
+## Network policy
 
-## Итоговый render и NetworkPolicy
+Policy строится по итоговому render. Для PostgreSQL, NATS, telemetry,
+Kubernetes API и registry задаются exact destination и port. Правило только по
+порту, wildcard egress и обход proxy запрещены.
 
-Security review проверяет итоговый environment render, а не только base и
-patch по отдельности. Kustomize/Helm lists могут заменяться целиком, поэтому
-overlay способен незаметно удалить обязательный egress либо вернуть широкий.
+## Stateful dependencies
 
-- Default deny дополняется exact rules для фактических destinations.
-- Правило только с портом, но без `to`, запрещено для PostgreSQL, broker,
-  Vault, telemetry и Kubernetes API.
-- Selector указывает на реально развертываемый pod за достижимым Service.
-- Runtime и migration получают отдельные rules и credentials.
-- Для внешнего endpoint применяется exact `ipBlock` только при устойчивом
-  адресном контракте либо namespace-local egress gateway.
-- SaaS с изменяемыми адресами доступен через allowlisted proxy, а не wildcard
-  HTTPS egress.
-- Сам allowlisted egress gateway может иметь destination-less `TCP/443` только
-  как явно зарегистрированное L3/L4-исключение: его application Pods не имеют
-  такого правила, immutable exact-FQDN policy сверяется с CONNECT authority и
-  фактическим ClientHello SNI, DNS принадлежит gateway, весь A/AAAA snapshot
-  отклоняется при любом special-purpose address, а dial получает только
-  повторно проверенный literal IP. Gateway не монтирует application secrets и
-  ServiceAccount token.
+Web-first профиль включает PostgreSQL и NATS. Redis добавляется только unit,
+которому он действительно нужен. S3 не является обязательным для MVP;
+production backup подключает внешний S3 отдельным capability и Secret.
 
-После render сверяются полный набор разрешенных портов/destinations и
-отсутствие destination-less правил вне утверждённого egress gateway exception.
-Успешный YAML parse не доказывает семантику сети.
+## Ресурсы и устойчивость
 
-## Каркас нового Go-компонента
+- requests задают schedulability; memory limits защищают node от runaway
+  process, но не должны быть ниже измеренного working set;
+- stateful workloads имеют PVC, readiness и bounded shutdown;
+- singleton Job имеет timeout/backoff и точный readback;
+- controller/worker не начинает внешние действия до startup barrier;
+- alert содержит абсолютный HTTPS `runbook_url`.
 
-Технический каркас создается типизированным генератором:
+## Версии
 
-```bash
-go -C tools/go-service-template run . \
-  -config /path/to/service-config.json \
-  -output /tmp/catalog-runtime
-```
+CLI/binary/chart pins и SHA-256 хранятся в `tools/install/components.lock.json`,
+`infra/**/charts.lock.json` и ARC chart lock. Обновление версии выполняется
+отдельным PR с проверкой официальной документации и checksum.
 
-JSON-дескриптор содержит wiring, имена Kubernetes/Vault-ресурсов, точные
-digest образов, probes, resource policy и явные ingress/egress. Значения
-секретов в дескрипторе запрещены.
+## Запрещённые подходы
 
-Генератор:
-
-- отказывается перезаписывать существующий каталог;
-- принимает итоговый, builder и runtime image только как точные
-  `@sha256:<64 hex>` ссылки;
-- формирует pinned multi-stage Dockerfile и distroless runtime;
-- закрепляет BuildKit syntax frontend полным digest, не используя mutable tag;
-- задает restricted security context, rolling update, probes, HPA и PDB;
-- создает deny-by-default NetworkPolicy с явными разрешениями;
-- при пустом `grpcCallers` не создает gRPC ingress rule;
-- создает VaultStaticSecret только по ссылкам на Vault;
-- не выполняет apply и не меняет cluster state.
-
-Результат проходит review, переносится в `services/**` и
-`deploy/k8s/base/<component>`, дополняется service-specific конфигурацией.
-Сервис с
-PostgreSQL/Redis или migration Job дополнительно получает самостоятельные
-data/migration bases, если их lifecycle или права различаются.
-
-Multi-stage Dockerfile включает полный local-module closure: manifests всех
-локальных replaced Go modules копируются до download, их исходники и
-Dockerfile ignore rules — до build. Runtime и migration OCI targets проверяются
-как самостоятельные artifacts; локальная host-сборка их не заменяет.
-
-Канонический renderer принимает отдельные неизменяемые дайджесты для builder,
-runtime service, migration/job, agent runtime и инструментов допуска. Он также
-принимает точные source/commit или дайджест архива исходников, revision policy
-и все обязательные входы конфигурации. Один дайджест по умолчанию не
-используется для разных artifacts. Нулевой, изменяемый или отсутствующий вход
-останавливает render до apply; каждый вход материализуется в типизированных
-config, annotation/manifest и readback.
-
-## Поставка и допуск образов
-
-Локальная цепочка образов считается исполнимой только как полный путь
-потребителя:
-
-```text
-immutable source + Dockerfile/module graph
--> bounded build Job/controller
--> exact mTLS BuildKit identity
--> staging push identity/storage
--> provenance + SBOM + vulnerability verdict + signature
--> server-owned admission receipt
--> isolated promotion identity/storage
--> node-reachable pull endpoint
--> pull/readback exact digest на каждой node boundary
-```
-
-Объявленный listener BuildKit без Job/CLI-владельца, secret mounts,
-`NetworkPolicy`, failure policy и readback дайджеста не считается путём сборки.
-BuildKit TCP требует точный серверный TLS и отдельные клиентские identities для
-probe и builder; UDS допустим только тогда, когда шаг сборки физически может к
-нему обратиться. Label selector остаётся сетевым слоем и не заменяет mTLS.
-Для BuildKit `v0.24` серверные `ca`, `cert` и `key` задаются только в
-`[grpc.tls]`; одноимённые ключи непосредственно в `[grpc]` не включают TLS и
-запрещены проверкой render. Неиспользуемый CDI watcher отключается явно, а
-process sandbox сохраняется.
-
-Registry pull, staging push, admin/retention и promotion разделяются физически:
-
-- разные Pods/Deployments, ServiceAccounts, Services, Vault roles/SPC,
-  application credentials и `NetworkPolicy`;
-- pull видит только собственные TLS/auth materials и доступное только для
-  чтения promoted storage, не имеет localhost/admin path и writable volume;
-- push пишет только staging и не имеет delete/promotion identity;
-- admin/retention ограничен staging cleanup policy;
-- promotion является единственной стороной записи в promoted storage и не
-  совмещается с builder либо публичным pull.
-
-Если registry backend намеренно слушает только loopback внутри multi-container
-Pod, его probe выполняется из того же container через `exec` к
-`127.0.0.1`. Kubelet `tcpSocket` обращается к Pod IP и для loopback listener
-недействителен. Внешний authorizer/mTLS endpoint проверяется отдельно.
-
-Fresh rollout сначала поднимает destination promotion endpoint, затем
-материализует все exact release artifacts из immutable source и только после
-этого требует pull/readback их дайджестов. Readback до materialization создаёт
-циклическую зависимость и запрещён. CLI materializer читает credentials только
-из смонтированного Docker config; password не передаётся в аргументах процесса
-и не выводится в диагностике.
-
-Kubelet/container runtime должен достичь endpoint pull до запуска Pod.
-ClusterIP/pod DNS и том CA будущего Pod этого не доказывают. Окружение
-материализует доступные с узла точные FQDN/route, DNS и доверие CA/runtime,
-доступный только для чтения credential pull и code-first readback точного
-дайджеста с границы каждого узла. Небезопасный registry, незашифрованный
-запасной путь и скрытая ручная настройка runtime узла запрещены. Rollback
-выбирает ранее допущенный дайджест тем же путём.
-
-Сборка публикует только staging digest и неизменяемые metadata происхождения.
-Отдельный владелец допуска связывает точные дайджесты source/build/image/tools,
-identity/digest SPDX SBOM, revision/verdict policy уязвимостей и проверенную
-identity подписи. Ограниченный подписанный claim/receipt содержит expiry,
-idempotency и аудит; promotion сверяет его до copy и затем читает обратно
-точные дайджест образа и OCI receipt допуска. Отсутствующее, устаревшее,
-отклонённое или несовпадающее evidence закрыто блокирует promotion.
-
-Vault CSI PKI выдаёт identities BuildKit/registry операцией записи с точными
-`common_name`, SAN, TTL и server/client EKU по `GUIDE-DOC-003`. CA имеет
-отдельный путь чтения; render/startup/readiness проверяют фактический mTLS, а не
-только наличие `SecretProviderClass`.
-
-Сам Vault CSI provider использует единый provider-level transport contract:
-точный HTTPS address, read-only installation CA и exact TLS server name из
-pinned Helm values. Workload-specific `SecretProviderClass` задаёт только auth
-role и объекты Vault и не вправе переопределять address, CA, SNI или TLS verify.
-Неиспользуемый Vault Agent cache sidecar в этом профиле отключён, чтобы не было
-двух альтернативных путей доверия к Vault.
-
-Secrets Store CSI Provider создаёт credential files с exact mode `0444`, потому
-что текущий driver/provider не назначает UID/GID non-root workload, а изменение
-`CSIDriver.fsGroupPolicy` не является доказательством фактического ownership.
-CSI volume и соответствующий container mount всегда `readOnly: true` и
-подключаются только к целевому контейнеру. Приложения читают такие файлы через
-`libs/go/securefile`, принимают только `0400`, `0440` или `0444` и закрыто
-отклоняют write/execute permissions и выход symlink за mount boundary.
-
-Root init container, копия credential в writable volume, supplemental group `0`
-и ручной `chown` не являются поддерживаемым путём доставки secret.
-
-## PostgreSQL в Kubernetes и за его пределами
-
-Environment выбирает один явный data path:
-
-- принадлежащий проекту staging PostgreSQL имеет Service, workload,
-  persistent storage, bootstrap/reconciler ролей, backup и readiness;
-- внешний HA PostgreSQL доступен через exact egress gateway или другой
-  утвержденный маршрут с сохранением end-to-end TLS.
-
-Runtime, migration Job, DSN ownership, `NetworkPolicy` и runbook указывают на
-один достижимый Service. Предполагаемый selector без data deployable и
-destination-less TCP/5432 запрещены. Runtime, migration и bootstrap roles
-разделяются по permissions; schema credential не монтируется в application
-container.
-
-Service DNS alias разделяет базы и TLS identities логически, но не меняет labels
-одного PostgreSQL workload. Поэтому egress и ingress `NetworkPolicy` выбирают
-канонический label фактического StatefulSet, а не имя `*-postgresql-rw` Service.
-Итоговый render проверяет обе стороны пути для каждого migration/runtime client.
-
-## Vault, TLS и namespace-local secret graph
-
-До применения `VaultStaticSecret` или `VaultDynamicSecret` environment
-materializes Namespace, ServiceAccount, `VaultConnection`, `VaultAuth`,
-namespace-bound Vault role, доверенную CA и exact egress. Порядок закрыто
-проверяет:
-
-```text
-Namespace -> CA/egress -> VaultConnection -> VaultAuth
--> VaultStaticSecret|VaultDynamicSecret -> generated Secret -> workload
-```
-
-Database credential для issuer/verifier sidecar материализуется только из
-закрытого registry целевых workload. Bootstrap создаёт exact Vault static role
-для зарегистрированного PostgreSQL principal и выполняет немедленную ротацию;
-`VaultDynamicSecret` с `allowStaticCreds: true` создаёт namespace-local Secret
-с закрытым набором `dsn` и `username`. Имя роли, principal, VaultAuth,
-ServiceAccount, destination Secret и workload restart target обязаны быть
-однозначно связаны в итоговом render. Secret нельзя создавать вручную,
-расширять raw password-полями или использовать до bounded readiness/readback.
-
-Vault API использует HTTPS с exact SNI/hostname, `skipTLSVerify: false` и
-публичной CA. Server-side TLS включается до перевода clients. Переключение
-listener учитывает все существующие `VaultConnection`, а не только новый
-component.
-
-Обновление certificate Secret требует runtime reload/rollout и exact readback
-фактически обслуживаемого leaf. CA меняется через заранее доставленный overlap
-bundle. Полный protocol задан `GUIDE-DOC-003`.
-
-Нормативный общий capability namespace-local Vault CA delivery находится в
-`deploy/k8s/base/vault-ca-delivery`. Он не хранит CA value: trust-manager
-`Bundle` читает только именованный Secret в настроенном trust namespace и
-доставляет target Secret/ConfigMap в точный namespace selector. Источник CA и
-overlap принадлежат PKI/Vault owner, component base владеет только
-`VaultConnection`, `VaultAuth`, secret CR и workload ordering. Повторять Bundle
-или копировать CA в base компонента запрещено; новый unit переиспользует общий
-capability отдельным target manifest и доказывает status/digest readback.
-`Bundle` остаётся cluster-scoped в итоговом render: namespace назначается
-namespaced ресурсам во внутреннем base, после чего штатный `PatchTransformer`
-удаляет `metadata.namespace` только у CRD `Bundle`. Overlay не вводит второй
-namespace transformer поверх уже собранного base.
-Сам Namespace `kodex-system` принадлежит environment bootstrap, а не
-component PR; CA target создаётся только после появления его стандартного
-label `kubernetes.io/metadata.name`. Отсутствующий Namespace закрыто оставляет
-CA/Vault resources неготовыми и не разрешает запуск workload.
-
-## Доступ workload к Kubernetes API
-
-В K3s API server не является pod с переносимым label. Статический
-`podSelector` на `component=kube-apiserver` запрещён. Единственный Service
-ClusterIP также недостаточен: CNI может применять `NetworkPolicy` до или после
-Service DNAT.
-
-`tools/deploy/kubernetes-api-egress.sh` read-only получает фактические
-`Service/default/kubernetes` и его ready IPv4 `EndpointSlice`, проверяет exact
-kube context и материализует отдельные additive `NetworkPolicy` одновременно
-для Service IP/port и каждого control-plane endpoint/port. Base policy не
-содержит широкого либо фиктивного API egress, поэтому пропуск шага
-материализации закрыто блокирует workload. `apply` требует отдельный owner OK;
-значения из одного контура нельзя переносить в другой.
-
-Каждый workload, которому нужен Kubernetes API, получает отдельную additive
-policy для своего namespace и ServiceAccount до запуска. Широкий
-namespace/CIDR egress вместо readback `EndpointSlice` запрещен.
-
-Обязательные lint, render, server-side dry-run, OCI build и smoke-проверки
-определяются профилем `GOV-DOC-003`. Результат environment render проверяется
-целиком, а не выводится из корректности отдельных base-файлов.
-
-## Доступы
-
-SRE использует только согласованные project credentials для внешнего staging.
-
-QA не получает SRE SSH/root credentials.
-
-Связанные документы: `OPS-DOC-001`, `RUN-DOC-001`, `DEPLOY-DOC-001`,
-`GO-DOC-001`, `GUIDE-DOC-003`.
-Для контура deploy защищённого графа выполнения дополнительно применяется
-`GUIDE-DOC-006`.
+- secret values в Git, GitHub variables, ConfigMap или manifest;
+- скрытая установка обязательного object storage;
+- ручной untracked deployment;
+- direct push в `main`;
+- применение render без exact digest/provenance;
+- запуск application workloads до migrations и authority Secret projections.

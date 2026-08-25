@@ -12,15 +12,9 @@ resources:
   - registry-ingress-route.yaml
   - staging-read-registry.yaml
   - evidence-registry.yaml
-  - registry-tls-secret-provider-class.yaml
   - buildkit.yaml
-  - buildkit-tls-secret-provider-class.yaml
-  - admission-secret-provider-classes.yaml
-  - admission-authority-secret-provider-classes.yaml
   - cleanup.yaml
-  - node-pull-readback.yaml
   - release-artifact-materializer.yaml
-  - release-artifact-materializer-secrets.yaml
   - networkpolicy.yaml
 configMapGenerator:
   - name: kodex-buildkit-config

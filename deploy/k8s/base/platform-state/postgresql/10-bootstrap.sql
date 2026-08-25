@@ -24,18 +24,12 @@ CREATE ROLE internal_rpc_authority_owner
 CREATE ROLE internal_rpc_authority_migrator
     LOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
-CREATE ROLE internal_rpc_authority_credential_lifecycle_definer
-    NOLOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT
-    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE internal_rpc_authority_readback_owner
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 GRANT internal_rpc_authority_owner TO internal_rpc_authority_migrator
     WITH INHERIT FALSE, SET TRUE, ADMIN TRUE;
 GRANT pg_signal_backend TO internal_rpc_authority_migrator
-    WITH INHERIT FALSE, SET TRUE, ADMIN TRUE;
-GRANT internal_rpc_authority_credential_lifecycle_definer
-    TO internal_rpc_authority_migrator
     WITH INHERIT FALSE, SET TRUE, ADMIN TRUE;
 GRANT internal_rpc_authority_readback_owner
     TO internal_rpc_authority_migrator

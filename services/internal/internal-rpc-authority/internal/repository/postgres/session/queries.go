@@ -15,9 +15,6 @@ var issuerAssumeSQL string
 //go:embed sql/verifier__assume.sql
 var verifierAssumeSQL string
 
-//go:embed sql/database_credential_reconciler__assume.sql
-var databaseCredentialReconcilerAssumeSQL string
-
 //go:embed sql/publisher__assume.sql
 var publisherAssumeSQL string
 
@@ -28,24 +25,22 @@ var readbackAttestorAssumeSQL string
 var restoreControllerAssumeSQL string
 
 type querySet struct {
-	sessionIdentity                    string
-	issuerAssume                       string
-	verifierAssume                     string
-	databaseCredentialReconcilerAssume string
-	publisherAssume                    string
-	readbackAttestorAssume             string
-	restoreControllerAssume            string
+	sessionIdentity         string
+	issuerAssume            string
+	verifierAssume          string
+	publisherAssume         string
+	readbackAttestorAssume  string
+	restoreControllerAssume string
 }
 
 func loadQueries() (querySet, error) {
 	queries := querySet{
-		sessionIdentity:                    sessionIdentitySQL,
-		issuerAssume:                       issuerAssumeSQL,
-		verifierAssume:                     verifierAssumeSQL,
-		databaseCredentialReconcilerAssume: databaseCredentialReconcilerAssumeSQL,
-		publisherAssume:                    publisherAssumeSQL,
-		readbackAttestorAssume:             readbackAttestorAssumeSQL,
-		restoreControllerAssume:            restoreControllerAssumeSQL,
+		sessionIdentity:         sessionIdentitySQL,
+		issuerAssume:            issuerAssumeSQL,
+		verifierAssume:          verifierAssumeSQL,
+		publisherAssume:         publisherAssumeSQL,
+		readbackAttestorAssume:  readbackAttestorAssumeSQL,
+		restoreControllerAssume: restoreControllerAssumeSQL,
 	}
 	for _, definition := range []struct {
 		name        string
@@ -55,11 +50,6 @@ func loadQueries() (querySet, error) {
 		{"session__identity", "one", queries.sessionIdentity},
 		{"issuer__assume", "exec", queries.issuerAssume},
 		{"verifier__assume", "exec", queries.verifierAssume},
-		{
-			"database_credential_reconciler__assume",
-			"exec",
-			queries.databaseCredentialReconcilerAssume,
-		},
 		{"publisher__assume", "exec", queries.publisherAssume},
 		{"readback_attestor__assume", "exec", queries.readbackAttestorAssume},
 		{"restore_controller__assume", "exec", queries.restoreControllerAssume},

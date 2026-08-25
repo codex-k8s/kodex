@@ -9,7 +9,6 @@ resources:
   - migration-job.yaml
   - broker-bootstrap-job.yaml
   - networkpolicy.yaml
-  - vault-secret-provider-classes.yaml
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
@@ -22,3 +21,4 @@ configMapGenerator:
       - CONTROL_PLANE_NATS_MAX_BYTES=34359738368
 generatorOptions:
   disableNameSuffixHash: true
+patches: null

@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  printf 'Kodex platform deployment failed: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  printf '%s\n' \
+    "Usage: $0 --context <exact-context> --mode preflight|apply|readback" \
+    '  --render <exact-release.yaml>' >&2
+}
+
+context=""
+mode=""
+render_file=""
+while (($# > 0)); do
+  case "$1" in
+    --context) context="${2:-}"; shift 2 ;;
+    --mode) mode="${2:-}"; shift 2 ;;
+    --render) render_file="${2:-}"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    *) usage; fail "unsupported argument: $1" ;;
+  esac
+done
+
+[[ -n "$context" ]] || fail 'exact Kubernetes context is required'
+case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
+[[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
+  fail 'release render is invalid'
+for command_name in jq kubectl rg sha256sum sort yq; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
+done
+[[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
+
+namespace=kodex-system
+repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+projection_registry="$repository_root/tools/install/secret-projections.json"
+jq -e '
+  .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
+  ([.secrets[].name] | length == (unique | length)) and
+  all(.secrets[]; (.items | type == "array" and length > 0) and
+    ([.items[].key] | length == (unique | length)))
+' "$projection_registry" >/dev/null || fail 'secret projection registry is invalid'
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+
+rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|sha256:0{64}|kind: (Vault|SecretProviderClass)' \
+  "$render_file" >/dev/null && fail 'release render contains unresolved or retired resources'
+yq -e 'select(.kind == "Namespace" and .metadata.name == "kodex-system")' \
+  "$render_file" >/dev/null || fail 'Kodex namespace is absent from the release render'
+yq -o=json -I=0 '.' "$render_file" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  ($resources | length) > 0 and
+  ($resources | group_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name]) |
+    all(.[]; length == 1))
+' >/dev/null || fail 'release render has duplicate resource identities'
+
+required_secret_names=$(jq -r '.secrets[].name' "$projection_registry" | sort -u)
+while IFS= read -r secret_name; do
+  [[ -n "$secret_name" ]] || continue
+  kubectl --context "$context" -n "$namespace" get secret "$secret_name" >/dev/null 2>&1 ||
+    fail "required Kubernetes Secret is absent: $secret_name"
+done <<<"$required_secret_names"
+for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
+  kodex-postgresql-runtime-credentials kodex-nats-credentials \
+  runtime-provider-openai-default-r1 internal-rpc-authority-bootstrap-roots; do
+  kubectl --context "$context" -n "$namespace" get secret "$secret_name" >/dev/null 2>&1 ||
+    fail "installation Secret is absent: $secret_name"
+done
+
+render_filter() {
+  local name=$1 expression=$2 output="$temporary_directory/$name.yaml"
+  yq "$expression" "$render_file" >"$output"
+  [[ -s "$output" ]] || fail "release phase is empty: $name"
+  printf '%s' "$output"
+}
+
+apply_render() {
+  local name=$1 expression=$2 output
+  output=$(render_filter "$name" "$expression")
+  kubectl --context "$context" apply --server-side --field-manager=kodex-install \
+    -f "$output" >/dev/null
+}
+
+wait_statefulset() {
+  kubectl --context "$context" -n "$namespace" rollout status "statefulset/$1" \
+    --timeout=15m >/dev/null || fail "StatefulSet rollout failed: $1"
+}
+
+apply_job() {
+  local name=$1 job_file="$temporary_directory/job-$1.yaml"
+  JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
+    "$render_file" >"$job_file"
+  [[ -s "$job_file" ]] || fail "release Job is absent: $name"
+  kubectl --context "$context" -n "$namespace" delete "job/$name" \
+    --ignore-not-found --wait=true --timeout=5m >/dev/null
+  kubectl --context "$context" apply --server-side --field-manager=kodex-install \
+    -f "$job_file" >/dev/null
+  kubectl --context "$context" -n "$namespace" wait --for=condition=Complete \
+    "job/$name" --timeout=20m >/dev/null || {
+      kubectl --context "$context" -n "$namespace" logs "job/$name" --all-containers \
+        --tail=200 >&2 || true
+      fail "release Job failed: $name"
+    }
+}
+
+ensure_seed_secret() {
+  local name=$1 seed="$temporary_directory/seed-$1.yaml"
+  if kubectl --context "$context" -n "$namespace" get "secret/$name" >/dev/null 2>&1; then
+    return
+  fi
+  SECRET_NAME="$name" yq '
+    select(.kind == "Secret" and .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(SECRET_NAME))
+  ' "$render_file" >"$seed"
+  [[ -s "$seed" ]] || fail "release seed Secret is absent: $name"
+  kubectl --context "$context" create --field-manager=kodex-install -f "$seed" >/dev/null
+}
+
+wait_trust_material() {
+  local resource_name
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
+    kubectl --context "$context" -n "$namespace" wait --for=condition=Ready \
+      "certificate/$resource_name" --timeout=10m >/dev/null ||
+      fail "Certificate is not ready: $resource_name"
+  done < <(yq -N -r 'select(.kind == "Certificate") | .metadata.name' "$render_file" | sort -u)
+  while IFS= read -r resource_name; do
+    [[ -n "$resource_name" ]] || continue
+    kubectl --context "$context" wait --for=condition=Synced \
+      "bundle/$resource_name" --timeout=10m >/dev/null ||
+      fail "trust Bundle is not synced: $resource_name"
+  done < <(yq -N -r 'select(.kind == "Bundle") | .metadata.name' "$render_file" | sort -u)
+}
+
+wait_authority_projections() {
+  local name expected_keys deadline actual
+  while IFS=$'\t' read -r name expected_keys; do
+    [[ -n "$name" ]] || continue
+    deadline=$((SECONDS + 600))
+    while ((SECONDS < deadline)); do
+      actual=$(kubectl --context "$context" -n "$namespace" get secret "$name" -o json \
+        2>/dev/null | jq -c '[.data | keys[]] | sort' || true)
+      if [[ "$actual" == "$expected_keys" ]] && kubectl --context "$context" -n "$namespace" \
+        get secret "$name" -o json | jq -e '
+          (.metadata.annotations["kodex.dev/secret-generation"] | tonumber) > 0 and
+          (.data | length > 0) and all(.data[]; type == "string" and length > 0)
+        ' >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+    ((SECONDS < deadline)) || fail "authority Secret projection is not ready: $name"
+  done < <(jq -r '.secrets[] | select(.dynamic == true) |
+    [.name,([.items[].key] | sort | @json)] | @tsv' "$projection_registry")
+}
+
+wait_workloads() {
+  local kind name resource
+  while IFS=$'\t' read -r kind name; do
+    [[ -n "$kind" && -n "$name" ]] || continue
+    resource=${kind,,}
+    kubectl --context "$context" -n "$namespace" rollout status "$resource/$name" \
+      --timeout=15m >/dev/null || fail "workload rollout failed: $kind/$name"
+  done < <(yq -N -r '
+    select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet") |
+    [.kind,.metadata.name] | @tsv
+  ' "$render_file" | sort -u)
+}
+
+if [[ "$mode" == preflight ]]; then
+  kubectl --context "$context" apply --dry-run=client --validate=false -f "$render_file" >/dev/null
+  printf 'Kodex platform deployment preflight completed\n'
+  exit 0
+fi
+
+if [[ "$mode" == apply ]]; then
+  apply_render custom-resource-definitions 'select(.kind == "CustomResourceDefinition")'
+  while IFS= read -r resource_name; do
+    kubectl --context "$context" wait --for=condition=Established \
+      "customresourcedefinition/$resource_name" --timeout=3m >/dev/null ||
+      fail "CustomResourceDefinition was not established: $resource_name"
+  done < <(yq -N -r 'select(.kind == "CustomResourceDefinition") | .metadata.name' "$render_file")
+
+  ensure_seed_secret internal-rpc-authority-restore-evidence
+  ensure_seed_secret internal-rpc-authority-snapshot
+  apply_render foundation '
+    select(.kind != "CustomResourceDefinition" and .kind != "Deployment" and
+      .kind != "StatefulSet" and .kind != "DaemonSet" and .kind != "Job" and
+      .kind != "CronJob" and .kind != "Secret")
+  '
+  wait_trust_material
+  apply_render statefulsets 'select(.kind == "StatefulSet")'
+  wait_statefulset kodex-postgresql
+  wait_statefulset kodex-nats
+
+  apply_job internal-rpc-authority-migrate
+  apply_job control-plane-migrate
+  apply_job kodex-postgresql-runtime-credentials
+  apply_job control-plane-broker-bootstrap
+
+  apply_render authority-publisher '
+    select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
+  '
+  kubectl --context "$context" -n "$namespace" rollout status \
+    deployment/internal-rpc-authority-publisher --timeout=15m >/dev/null ||
+    fail 'internal RPC authority publisher rollout failed'
+  wait_authority_projections
+
+  apply_render workloads '
+    select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "CronJob")
+  '
+  for dependency in egress-gateway kodex-image-registry-promotion; do
+    kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
+      --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"
+  done
+  apply_job release-artifact-materializer
+  wait_workloads
+fi
+
+wait_trust_material
+wait_authority_projections
+wait_workloads
+for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  [[ "$(kubectl --context "$context" -n "$namespace" get "job/$job_name" \
+    -o jsonpath='{.status.succeeded}')" == 1 ]] || fail "Job readback failed: $job_name"
+done
+failing_pods=$(kubectl --context "$context" -n "$namespace" get pods -o json | jq -r '
+  [.items[] | select(any(.status.containerStatuses[]?;
+    .state.waiting.reason == "CrashLoopBackOff" or .state.waiting.reason == "ImagePullBackOff" or
+    .state.waiting.reason == "ErrImagePull" or .state.waiting.reason == "CreateContainerConfigError")) |
+    .metadata.name] | join(",")
+')
+[[ -z "$failing_pods" ]] || fail "failing Pods remain: $failing_pods"
+printf 'Kodex platform deployment completed: %s render_sha256=%s\n' \
+  "$mode" "$(sha256sum "$render_file" | awk '{print $1}')"

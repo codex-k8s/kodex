@@ -106,10 +106,9 @@ spec:
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: kodex-image-registry-evidence}}
         - name: identity
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: kodex-image-registry-evidence}
+          secret:
+            secretName: kodex-image-registry-evidence
+            defaultMode: 292
         - {name: tmp, emptyDir: {sizeLimit: 32Mi}}
         - {name: readiness-script, configMap: {name: kodex-registry-readiness, defaultMode: 0555}}
 ---

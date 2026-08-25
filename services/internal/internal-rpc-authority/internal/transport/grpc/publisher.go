@@ -78,7 +78,7 @@ func (server *RestoreRoleCredentialPublisherServer) PublishRoleCredential(
 	}, nil
 }
 
-// CheckReadiness сверяет реестр, хранилище и Vault.
+// CheckReadiness сверяет реестр и exact Kubernetes Secret delivery.
 func (server *RestoreRoleCredentialPublisherServer) CheckReadiness(
 	ctx context.Context,
 	request *internalrpcauthorityv1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest,
@@ -99,12 +99,12 @@ func (server *RestoreRoleCredentialPublisherServer) CheckReadiness(
 	}
 	registry := server.application.Registry()
 	return &internalrpcauthorityv1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse{
-		Ready:                         true,
-		TargetRegistryRevision:        registry.SourceRevision,
-		TargetRegistryDigestSha256:    registry.SourceDigest,
-		ControllerTrustGeneration:     server.expectedControllerGeneration,
-		CredentialSignerGeneration:    server.application.SignerGeneration(),
-		VaultExactTargetReadbackReady: true,
+		Ready:                          true,
+		TargetRegistryRevision:         registry.SourceRevision,
+		TargetRegistryDigestSha256:     registry.SourceDigest,
+		ControllerTrustGeneration:      server.expectedControllerGeneration,
+		CredentialSignerGeneration:     server.application.SignerGeneration(),
+		SecretExactTargetReadbackReady: true,
 	}, nil
 }
 

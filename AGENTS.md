@@ -33,7 +33,7 @@ updated: 2026-07-31
   runtime-примитива прочитать `GO-DOC-006`.
 - Перед изменением Proto/gRPC прочитать `CONTRACT-DOC-002`, а перед изменением
   AsyncAPI, domain event или NATS subject - `CONTRACT-DOC-003`.
-- Перед изменением межсервисной авторизации, mTLS, JWS/JWKS, Vault, TLS
+- Перед изменением межсервисной авторизации, mTLS, JWS/JWKS, Kubernetes Secrets, TLS
   lifecycle, security sidecar или `NetworkPolicy` прочитать `GUIDE-DOC-003`.
 - Перед изменением защищённого вида, control plane, планировщика, фоновой
   задачи, owner gate, lease/claim/retry либо межсессионного делегирования
@@ -42,7 +42,7 @@ updated: 2026-07-31
 - Перед заявлением результата проверки прочитать `GOV-DOC-003`.
 - Production-действия выполняются только после отдельного подтверждения владельца.
 - Если есть противоречие между договором, ТЗ, окружением, Issue или запросом владельца, остановиться и дать владельцу варианты решения.
-- Не раскрывать секреты, token values, kubeconfig, SSH passwords, OAuth secrets, Vault root/unseal data, cookies, DSN, private keys и персональные данные.
+- Не раскрывать секреты, token values, kubeconfig, SSH passwords, OAuth secrets, Kubernetes Secret values, cookies, DSN, private keys и персональные данные.
 - В документации, Issue и PR можно указывать только имена env/secret keys и факт настройки, без значений.
 - Не давать developer/reviewer owner-level доступ.
 
@@ -162,7 +162,7 @@ Mattermost-first реализации доступна через Git и не я
 - Secret transport использует TLS с exact SNI/hostname и доверенной CA.
   `skipTLSVerify`, plaintext fallback и wildcard egress запрещены.
 - `NetworkPolicy` проверяется по итоговому environment render. Для database,
-  broker, Vault, telemetry и Kubernetes API правило только по порту без
+  broker, secret publisher, telemetry и Kubernetes API правило только по порту без
   exact destination запрещено.
 - PostgreSQL RLS связывает scope с неизменяемым `session_user` и устойчивым
   поколением credential; caller-set GUC не является identity. Retire является
@@ -379,7 +379,7 @@ Production-действия выполняются только после от�
 
 ### SRE
 
-- Ведет staging, Kubernetes dev/staging, Vault, SSO, мониторинг, логи, трассировку, backups и runbooks.
+- Ведет staging, Kubernetes dev/staging, Kubernetes Secrets, SSO, мониторинг, логи, трассировку, backups и runbooks.
 - Работает только code-first.
 - Не раскрывает секреты и не передает SSH/root credentials другим ролям.
 - Не делает production-действия без отдельного owner OK.
@@ -504,9 +504,9 @@ Production-действия выполняются только после от�
 ## Базовый стек
 
 Базовый стек: Go, Vue, TypeScript, gRPC/Protobuf, OpenAPI/REST, AsyncAPI,
-WebSockets, PostgreSQL, Redis, S3-compatible storage, NATS JetStream,
-Kubernetes, Prometheus/Grafana, OpenTelemetry/Jaeger, Sentry, Vault, Keycloak,
-Teleport, GitHub, Mattermost и Wiki.js.
+WebSockets, PostgreSQL, optional Redis, optional S3-compatible storage,
+NATS JetStream, Kubernetes, Prometheus/Grafana, OpenTelemetry/Jaeger, Sentry,
+Kubernetes Secrets, Keycloak, GitHub и optional Mattermost.
 
 Стек может уточняться при проектировании без изменения функциональных границ MVP и по согласованию с заказчиком, если это требуется ТЗ.
 

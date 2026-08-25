@@ -8,3 +8,4 @@ labels:
       kodex.dev/environment: production
     includeSelectors: false
     includeTemplates: true
+patches: null

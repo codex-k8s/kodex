@@ -45,9 +45,9 @@ type SecretMaterial struct {
 
 // SecretDelivery доставляет versioned KV-материал с CAS.
 type SecretDelivery interface {
-	ReadKV2(context.Context, string) (SecretMaterial, bool, error)
-	CreateKV2(context.Context, string, map[string]string) (SecretMaterial, error)
-	WriteKV2CAS(
+	ReadVersioned(context.Context, string) (SecretMaterial, bool, error)
+	CreateVersioned(context.Context, string, map[string]string) (SecretMaterial, error)
+	WriteVersionedCAS(
 		context.Context,
 		string,
 		uint64,

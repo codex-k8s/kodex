@@ -1,4 +1,5 @@
 name: Render exact Kodex release
+run-name: Render Kodex ${{ inputs.source_sha }} from ${{ inputs.build_run_id }}
 
 on:
   workflow_dispatch:

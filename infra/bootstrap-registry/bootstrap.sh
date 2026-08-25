@@ -48,7 +48,7 @@ for command_name in base64 curl htpasswd jq kubectl yq; do
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
 
-namespace=matter-kodex-prod
+namespace=kodex-infra
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 
 kubectl get namespace "$namespace" >/dev/null 2>&1 || fail 'registry namespace is absent'

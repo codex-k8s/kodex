@@ -41,7 +41,7 @@ Git history является архивом прежней Mattermost-first ре
 - runtime MCP: `architecture/integration-map.md`;
 - профили развертывания: `operations/deployment-profiles.md`;
 - чистая установка: `runbooks/fresh-install.md`;
-- identity, OAuth2 Proxy, Grafana, Vault UI и Headlamp:
+- identity, OAuth2 Proxy, Grafana и Headlamp:
   `runbooks/identity-and-management-surfaces.md`.
 
 Все предлагаемые к слиянию документы имеют `status: approved`. Нормативный

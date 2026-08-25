@@ -1,5 +1,0 @@
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
-metadata: {name: control-api-gateway-public-tls-material}
-spec:
-  path: kodex/control-api-gateway/staging/public-tls-material

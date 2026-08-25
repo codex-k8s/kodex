@@ -85,7 +85,6 @@ create_secret identity keycloak-database-ca \
 for binding in \
   control-center:kodex-system \
   grafana:observability \
-  vault:kodex-system \
   headlamp:platform-admin; do
   surface=${binding%%:*}
   namespace=${binding#*:}
@@ -95,9 +94,6 @@ for binding in \
     --from-file=client-secret="$directory/client-secret" \
     --from-file=cookie-secret="$directory/cookie-secret"
 done
-create_secret platform-admin vault-oidc \
-  --from-file=client-id="$material_directory/management/vault-oidc/client-id" \
-  --from-file=client-secret="$material_directory/management/vault-oidc/client-secret"
 create_secret observability grafana-admin \
   --from-file=admin-user="$material_directory/management/grafana-admin/admin-user" \
   --from-file=admin-password="$material_directory/management/grafana-admin/admin-password"
@@ -114,7 +110,6 @@ kubectl -n identity get secret keycloak-initial-passwords -o json | jq -e '
 for binding in \
   oauth2-control-center:kodex-system \
   oauth2-grafana:observability \
-  oauth2-vault:kodex-system \
   oauth2-headlamp:platform-admin; do
   secret=${binding%%:*}
   namespace=${binding#*:}
@@ -123,10 +118,6 @@ for binding in \
     all(.data[]; type == "string" and length > 0)
   ' >/dev/null || fail "OAuth2 Proxy Secret readback failed: $secret"
 done
-kubectl -n platform-admin get secret vault-oidc -o json | jq -e '
-  (.data | keys | sort) == ["client-id", "client-secret"] and
-  all(.data[]; type == "string" and length > 0)
-' >/dev/null || fail 'Vault OIDC Secret readback failed'
 kubectl -n observability get secret grafana-admin -o json | jq -e '
   (.data | keys | sort) == ["admin-password", "admin-user"] and
   all(.data[]; type == "string" and length > 0)

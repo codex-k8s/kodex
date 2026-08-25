@@ -157,7 +157,7 @@ grep -Fq 'kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__' \
 grep -Fq 'app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__' \
   "$temporary_directory/supply.yaml"
 [[ $(grep -F -c "$render_tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
-for binary in registry-pull-authorizer registry-write-authorizer node-pull-bootstrap; do
+for binary in registry-pull-authorizer registry-write-authorizer; do
   binary_images=$(MC195_BINARY="/usr/local/bin/$binary" yq eval-all '
     select(.kind == "Deployment" or .kind == "DaemonSet") |
     .spec.template.spec.containers[] | select(.command[]? == strenv(MC195_BINARY)) | .image' \
@@ -177,17 +177,7 @@ push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.nam
 [[ $push_relative_urls == "true" ]] || { echo "staging registry does not return relative upload locations" >&2; exit 1; }
 grep -Fq 'kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission' \
   "$temporary_directory/supply.yaml"
-if grep -Fq 'hostNetwork: true' "$temporary_directory/supply.yaml" ||
-  ! grep -Fq 'name: kodex-node-pull-bootstrap-exact-paths' "$temporary_directory/supply.yaml"; then
-  echo "node pull bootstrap network boundary is incomplete" >&2
-  exit 1
-fi
-node_egress_ports=$(yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-node-pull-bootstrap-exact-paths") |
-  [.spec.egress[].ports[].port] | sort | join(",")' "$temporary_directory/supply.yaml")
-[[ $node_egress_ports == "53,53,8200" ]] || { echo "node bootstrap received non-DNS/Vault egress" >&2; exit 1; }
 grep -Fq 'REGISTRY_AUTHORIZATION_PROFILE' "$temporary_directory/supply.yaml"
-grep -Fq 'kodex/image-registry/evidence-admission' \
-  "$repository_root/tools/configure-image-supply-chain-pki.sh"
 if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-image-registry-evidence") |
   .spec.ingress[].from[].podSelector.matchExpressions[]?.values[]' "$temporary_directory/supply.yaml" |
   grep -Fqx sign; then

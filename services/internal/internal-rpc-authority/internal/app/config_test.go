@@ -2,191 +2,60 @@ package app
 
 import "testing"
 
-func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
-	config := Config{
-		Mode:             ModeIssuer,
-		SecretBackend:    string(secretBackendVault),
-		WorkloadID:       "integration-gateway",
-		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
-		VaultAuthRole:    "internal-rpc-authority-control-api-gateway",
-	}
-	if err := applyWorkloadProfile(&config); err == nil {
-		t.Fatal("foreign Vault role was accepted")
-	}
-}
-
-func TestApplyWorkloadProfileBindsInteractionGatewayPaths(t *testing.T) {
-	config := Config{
-		Mode:             ModeIssuer,
-		SecretBackend:    string(secretBackendVault),
-		WorkloadID:       "interaction-gateway",
-		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
-		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
-	}
-	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply interaction gateway profile: %v", err)
-	}
-	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential" ||
-		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack" {
-		t.Fatal("interaction gateway Vault paths are not pinned")
-	}
-}
-
-func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
-	config := Config{
-		Mode:             ModeIssuer,
-		SecretBackend:    string(secretBackendVault),
-		WorkloadID:       "integration-gateway",
-		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
-		VaultAuthRole:    "internal-rpc-authority-integration-gateway",
-	}
-	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply integration gateway profile: %v", err)
-	}
-	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/readback-credential" ||
-		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/restore-ack" {
-		t.Fatal("integration gateway Vault paths are not pinned")
-	}
-}
-
-func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
-	config := Config{
-		Mode:             ModeIssuer,
-		SecretBackend:    string(secretBackendVault),
-		WorkloadID:       "automation-scheduler",
-		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
-		VaultAuthRole:    "internal-rpc-authority-automation-scheduler",
-	}
-	if err := applyWorkloadProfile(&config); err != nil {
-		t.Fatalf("apply automation scheduler profile: %v", err)
-	}
-	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential" ||
-		config.ReadbackPossessionVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession" ||
-		config.RestoreRoleCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential" ||
-		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack" {
-		t.Fatal("automation scheduler Vault paths are not pinned")
-	}
-}
-
-func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
+func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name                      string
-		mode                      Mode
-		workloadID                string
-		spiffeID                  string
-		vaultRole                 string
-		readbackCredentialPath    string
-		readbackPossessionPath    string
-		restoreRoleCredentialPath string
-		restoreACKPath            string
+		name       string
+		mode       Mode
+		workloadID string
+		spiffeID   string
+		prefix     string
+		resolver   bool
 	}{
 		{
-			name:                      "runtime controller issuer",
-			mode:                      ModeIssuer,
-			workloadID:                "runtime-controller",
-			spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
-			vaultRole:                 "internal-rpc-authority-runtime-controller",
-			readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
-			readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
-			restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
-			restoreACKPath:            "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
+			name: "runtime controller issuer", mode: ModeIssuer,
+			workloadID: "runtime-controller",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+			prefix:     "internal-rpc-authority-runtime-controller-issuer",
+		},
+		{
+			name: "control plane verifier", mode: ModeVerifier,
+			workloadID: "control-plane",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+			prefix:     "internal-rpc-authority-control-plane-verifier",
+			resolver:   true,
 		},
 	}
-
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			config := Config{
-				Mode:             test.mode,
-				SecretBackend:    string(secretBackendVault),
-				WorkloadID:       test.workloadID,
-				WorkloadSPIFFEID: test.spiffeID,
-				VaultAuthRole:    test.vaultRole,
-				ResolverEnabled:  true,
+				Mode: test.mode, SecretBackend: string(secretBackendKubernetes),
+				WorkloadID: test.workloadID, WorkloadSPIFFEID: test.spiffeID,
 			}
 			if err := applyWorkloadProfile(&config); err != nil {
 				t.Fatalf("apply workload profile: %v", err)
 			}
-			if config.Mode != test.mode ||
-				config.WorkloadID != test.workloadID ||
-				config.WorkloadSPIFFEID != test.spiffeID ||
-				config.VaultAuthRole != test.vaultRole ||
-				config.ReadbackCredentialVaultPath != test.readbackCredentialPath ||
-				config.ReadbackPossessionVaultPath != test.readbackPossessionPath ||
-				config.RestoreRoleCredentialVaultPath != test.restoreRoleCredentialPath ||
-				config.RestoreACKVaultPath != test.restoreACKPath ||
-				config.ResolverEnabled {
-				t.Fatal("release workload profile is not pinned")
+			if config.ReadbackCredentialSecret != test.prefix+"-readback-credential" ||
+				config.ReadbackPossessionSecret != test.prefix+"-readback-possession" ||
+				config.RestoreRoleCredentialSecret != test.prefix+"-restore-credential" ||
+				config.RestoreACKSecret != test.prefix+"-restore-ack" ||
+				config.ResolverEnabled != test.resolver {
+				t.Fatal("workload Secret profile is not pinned")
 			}
 		})
 	}
 }
 
-func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
-	tests := []struct {
-		name   string
-		config Config
-	}{
-		{
-			name: "removed integration verifier",
-			config: Config{
-				Mode:             ModeVerifier,
-				WorkloadID:       "integration-gateway",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
-				VaultAuthRole:    "internal-rpc-authority-integration-gateway",
-			},
-		},
-		{
-			name: "removed legacy migration issuer",
-			config: Config{
-				Mode:             ModeIssuer,
-				WorkloadID:       "legacy-data-migration",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/legacy-data-migration",
-				VaultAuthRole:    "internal-rpc-authority-legacy-data-migration",
-			},
-		},
-		{
-			name: "removed runtime S3 exchanger",
-			config: Config{
-				Mode:             ModeIssuer,
-				WorkloadID:       "runtime-s3-restore-exchanger",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-s3-restore-exchanger",
-				VaultAuthRole:    "internal-rpc-authority-runtime-s3-restore-exchanger",
-			},
-		},
-		{
-			name: "wrong Vault role",
-			config: Config{
-				Mode:             ModeIssuer,
-				WorkloadID:       "runtime-controller",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
-				VaultAuthRole:    "internal-rpc-authority-runtime-restore-effect",
-			},
-		},
-		{
-			name: "wrong mode",
-			config: Config{
-				Mode:             ModeVerifier,
-				WorkloadID:       "runtime-controller",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
-				VaultAuthRole:    "internal-rpc-authority-runtime-controller",
-			},
-		},
-		{
-			name: "unknown workload",
-			config: Config{
-				Mode:             ModeIssuer,
-				WorkloadID:       "runtime-unknown",
-				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-unknown",
-				VaultAuthRole:    "internal-rpc-authority-runtime-unknown",
-			},
-		},
+func TestApplyWorkloadProfileRejectsUnknownBinding(t *testing.T) {
+	t.Parallel()
+	config := Config{
+		Mode: ModeIssuer, SecretBackend: string(secretBackendKubernetes),
+		WorkloadID:       "runtime-unknown",
+		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-unknown",
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if err := applyWorkloadProfile(&test.config); err == nil {
-				t.Fatal("unregistered release binding was accepted")
-			}
-		})
+	if err := applyWorkloadProfile(&config); err == nil {
+		t.Fatal("unregistered workload binding was accepted")
 	}
 }

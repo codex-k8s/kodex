@@ -54,6 +54,7 @@ spec:
             - name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: publicOrigin}}
             - {name: CONTROL_API_GATEWAY_SESSION_TTL, value: 15m}
+            - {name: CONTROL_API_GATEWAY_SESSION_CURRENT_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/session/current.hex}
             - {name: CONTROL_API_GATEWAY_SESSION_PREVIOUS_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/session/previous.hex}
             - {name: CONTROL_API_GATEWAY_REQUEST_TIMEOUT, value: 15s}
             - {name: CONTROL_API_GATEWAY_RPC_TIMEOUT, value: 5s}

@@ -16,8 +16,6 @@ spec:
               readOnly: true
       volumes:
         - name: interaction-grant-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-interaction-grant-trust
+          secret:
+            secretName: control-plane-interaction-grant-trust
+            defaultMode: 292

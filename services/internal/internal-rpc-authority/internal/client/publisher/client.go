@@ -137,7 +137,7 @@ func (client *Client) PublisherReady(ctx context.Context) error {
 	if !response.GetReady() ||
 		response.GetTargetRegistryRevision() == 0 ||
 		strings.TrimSpace(response.GetTargetRegistryDigestSha256()) == "" ||
-		!response.GetVaultExactTargetReadbackReady() {
+		!response.GetSecretExactTargetReadbackReady() {
 		return errors.New("restore publisher is not ready")
 	}
 	return nil

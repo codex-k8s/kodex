@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode preflight|apply-controllers|apply-vault|readback" >&2
+    "Usage: $0 --context <exact-context> --mode preflight|apply-controllers|readback" >&2
 }
 
 expected_context=""
@@ -23,7 +23,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$expected_context" ]] || fail 'exact context is required'
-[[ "$mode" == preflight || "$mode" == apply-controllers || "$mode" == apply-vault || "$mode" == readback ]] ||
+[[ "$mode" == preflight || "$mode" == apply-controllers || "$mode" == readback ]] ||
   fail 'mode is invalid'
 
 for command_name in helm jq kubectl sha256sum; do
@@ -34,8 +34,8 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 lock_file="$script_directory/charts.lock.json"
 jq -e '
-  .schemaVersion == 1 and (.charts | length) == 4 and
-  ([.charts[].name] | unique | length) == 4 and
+  .schemaVersion == 1 and (.charts | length) == 1 and
+  ([.charts[].name] | unique | length) == 1 and
   all(.charts[];
     (.name | test("^[a-z0-9-]+$")) and
     (.chart | test("^[a-z0-9-]+$")) and
@@ -104,90 +104,23 @@ require_ready_deployment_by_selector() {
   ' >/dev/null || fail "$description deployment is not fully ready"
 }
 
-require_vault_csi_provider() {
-  local daemonset_json
-
-  kubectl -n kodex-system rollout status daemonset/vault-csi-provider --timeout=180s >/dev/null ||
-    fail 'Vault CSI provider rollout is incomplete'
-  daemonset_json=$(kubectl -n kodex-system get daemonset vault-csi-provider -o json) ||
-    fail 'Vault CSI provider readback failed'
-  jq -e '
-    .status.observedGeneration == .metadata.generation and
-    (.status.desiredNumberScheduled // 0) > 0 and
-    .status.updatedNumberScheduled == .status.desiredNumberScheduled and
-    .status.numberReady == .status.desiredNumberScheduled and
-    (.spec.template.spec.containers | length) == 1 and
-    .spec.template.spec.containers[0].name == "vault-csi-provider" and
-    (.spec.template.spec.containers[0].args | index("--vault-addr=https://vault.kodex-system.svc:8200")) != null and
-    (.spec.template.spec.containers[0].args | index("--vault-tls-ca-cert=/vault/tls/ca.crt")) != null and
-    (.spec.template.spec.containers[0].args | index("--vault-tls-server-name=vault.kodex-system.svc.cluster.local")) != null and
-    ([.spec.template.spec.containers[0].args[] | select(test("vault-tls-skip-verify"))] | length) == 0 and
-    any(.spec.template.spec.containers[0].volumeMounts[];
-      .name == "vault-server-ca" and
-      .mountPath == "/vault/tls" and
-      .readOnly == true) and
-    any(.spec.template.spec.volumes[];
-      .name == "vault-server-ca" and
-      .secret.secretName == "kodex-vault-server-tls" and
-      .secret.items == [{"key":"ca.crt","path":"ca.crt"}])
-  ' <<<"$daemonset_json" >/dev/null || fail 'Vault CSI provider TLS contract mismatch'
-}
-
 if [[ "$mode" == apply-controllers ]]; then
   kubectl create namespace kodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-
-  csi_chart=$(download_chart secrets-store-csi-driver)
-  helm upgrade --install kodex-secrets-store-csi "$csi_chart" \
-    --namespace kube-system --values "$script_directory/secrets-store-csi-values.yaml" \
-    --atomic --wait --timeout 10m
 
   trust_chart=$(download_chart trust-manager)
   helm upgrade --install kodex-trust-manager "$trust_chart" \
     --namespace cert-manager --values "$script_directory/trust-manager-values.yaml" \
     --atomic --wait --timeout 10m
-
-  vso_chart=$(download_chart vault-secrets-operator)
-  helm upgrade --install kodex-vault-secrets-operator "$vso_chart" \
-    --namespace vault-secrets-operator-system --create-namespace \
-    --values "$script_directory/vault-secrets-operator-values.yaml" \
-    --atomic --wait --timeout 10m
-fi
-
-if [[ "$mode" == apply-vault ]]; then
-  kubectl get namespace kodex-system >/dev/null 2>&1 || fail 'Kodex namespace is absent'
-  kubectl -n kodex-system get secret kodex-vault-server-tls >/dev/null 2>&1 ||
-    fail 'Vault server TLS secret is absent'
-  vault_chart=$(download_chart vault)
-  helm upgrade --install kodex-vault "$vault_chart" \
-    --namespace kodex-system --values "$script_directory/vault-values.yaml" \
-    --atomic --wait --timeout 10m
-  require_vault_csi_provider
 fi
 
 if [[ "$mode" == readback ]]; then
-  for resource in \
-    secretproviderclasses.secrets-store.csi.x-k8s.io \
-    bundles.trust.cert-manager.io \
-    vaultauths.secrets.hashicorp.com \
-    vaultconnections.secrets.hashicorp.com \
-    vaultstaticsecrets.secrets.hashicorp.com; do
+  for resource in bundles.trust.cert-manager.io; do
     kubectl get customresourcedefinition "$resource" >/dev/null 2>&1 ||
       fail "required CRD is absent: $resource"
   done
-  kubectl -n kube-system rollout status \
-    daemonset/kodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s >/dev/null ||
-    fail 'Secrets Store CSI Driver rollout is incomplete'
   require_ready_deployment_by_selector cert-manager \
     'app.kubernetes.io/instance=kodex-trust-manager,app.kubernetes.io/name=trust-manager' \
     'trust-manager'
-  require_ready_deployment_by_selector vault-secrets-operator-system \
-    'app.kubernetes.io/instance=kodex-vault-secrets-operator,app.kubernetes.io/name=vault-secrets-operator,app.kubernetes.io/component=controller-manager' \
-    'Vault Secrets Operator'
-  if kubectl get namespace kodex-system >/dev/null 2>&1; then
-    kubectl -n kodex-system get statefulset vault >/dev/null
-    kubectl -n kodex-system get service vault >/dev/null
-    require_vault_csi_provider
-  fi
 fi
 
 printf 'Service infrastructure bootstrap completed: %s\n' "$mode"

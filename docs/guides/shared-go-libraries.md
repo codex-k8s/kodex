@@ -265,7 +265,7 @@ Kubernetes render по `GUIDE-DOC-003`.
 - provider-neutral reconciliation interfaces.
 
 Managed PostgreSQL может отключить in-cluster reconcilers и передать готовый
-DSN/Vault secret. Runtime service от этого не меняется.
+DSN/Kubernetes Secret. Runtime service от этого не меняется.
 
 ## Допустимые зависимости
 
@@ -315,7 +315,7 @@ Service config:
 4. для production вызывает отдельную security validation, если локальный
    профиль допускает ослабленные настройки.
 
-Пути к Vault-mounted credentials и TLS files передаются как абсолютные
+Пути к Kubernetes Secret-mounted credentials и TLS files передаются как абсолютные
 очищенные пути. Значения секретов не копируются в публичную конфигурацию.
 
 ## Compatibility
@@ -334,7 +334,7 @@ Service config:
 - общий module со всеми библиотеками и транзитивными SDK;
 - бизнесовый enum или repository port конкретного сервиса в `libs/go`;
 - глобальный logger/metrics registry/client singleton;
-- чтение env или Vault внутри domain/shared operation;
+- чтение env или Kubernetes Secret внутри domain/shared operation;
 - скрытый retry неидемпотентной команды;
 - логирование одной ошибки на каждом слое;
 - локальная копия outbox, inbox, gRPC interceptors или NATS publisher внутри

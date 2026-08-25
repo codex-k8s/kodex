@@ -25,7 +25,7 @@ updated: 2026-07-28
 | Broker          | NATS JetStream         | broker-neutral relay/inbox API                                   |
 | Artifact store  | PostgreSQL bounded content port | fresh MVP; S3 adapter допускается позже                 |
 | Runtime         | Kubernetes             | Kustomize base + environment overlays                            |
-| Secrets         | Vault                  | namespace/workload-bound delivery                                |
+| Secrets         | Kubernetes Secrets     | encryption at rest, exact RBAC и workload-bound delivery         |
 | Identity        | Keycloak/OIDC          | внешняя identity не заменяет доменную authorization              |
 | Metrics         | Prometheus + Grafana   | закрытая кардинальность labels                                   |
 | Traces          | OpenTelemetry + Jaeger | OTLP/gRPC                                                        |

@@ -91,16 +91,14 @@ fi
 printf '%s' kodex-sso-bootstrap >"$identity_directory/admin-client-id"
 openssl rand -base64 48 | tr -d '\n' >"$identity_directory/admin-client-secret"
 
-for surface in control-center grafana vault headlamp; do
+for surface in control-center grafana headlamp; do
   surface_directory="$management_directory/oauth2-$surface"
   mkdir -p "$surface_directory"
   printf 'kodex-%s-proxy' "$surface" >"$surface_directory/client-id"
   openssl rand -base64 48 | tr -d '\n' >"$surface_directory/client-secret"
   openssl rand -base64 32 | tr -d '\n' >"$surface_directory/cookie-secret"
 done
-mkdir -p "$management_directory/vault-oidc" "$management_directory/grafana-admin"
-printf '%s' kodex-vault-ui >"$management_directory/vault-oidc/client-id"
-openssl rand -base64 48 | tr -d '\n' >"$management_directory/vault-oidc/client-secret"
+mkdir -p "$management_directory/grafana-admin"
 printf '%s' kodex-owner >"$management_directory/grafana-admin/admin-user"
 openssl rand -base64 48 | tr -d '\n' >"$management_directory/grafana-admin/admin-password"
 

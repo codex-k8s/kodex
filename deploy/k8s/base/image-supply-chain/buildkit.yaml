@@ -131,11 +131,9 @@ spec:
               - {key: trustedRoleBaseDigest, path: trustedRoleBaseDigest}
               - {key: frontendSHA256, path: frontendSHA256}
         - name: buildkit-tls
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: kodex-buildkit-tls
+          secret:
+            secretName: kodex-buildkit-tls
+            defaultMode: 292
 ---
 apiVersion: v1
 kind: Service

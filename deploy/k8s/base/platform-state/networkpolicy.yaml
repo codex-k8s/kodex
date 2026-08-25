@@ -16,58 +16,8 @@ spec:
                 values:
                   - control-plane
                   - internal-rpc-authority
-                  - vault
+                  - kodex-postgresql-runtime-credentials
       ports:
         - protocol: TCP
           port: 5432
   egress: []
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: platform-nats-exact-clients
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: kodex-nats
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - control-plane
-                  - control-api-gateway
-      ports:
-        - protocol: TCP
-          port: 4222
-  egress: []
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: platform-vault-from-csi-provider
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: vault
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: vault-csi-provider
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: vault-secrets-operator-system
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: vault-secrets-operator
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: kodex-registry-node-pull-readback
-      ports:
-        - protocol: TCP
-          port: 8200

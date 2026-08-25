@@ -70,11 +70,9 @@ spec:
                 name: kodex-registry-cleanup
                 defaultMode: 0550
             - name: registry-identity
-              csi:
-                driver: secrets-store.csi.k8s.io
-                readOnly: true
-                volumeAttributes:
-                  secretProviderClass: kodex-registry-cleanup-client
+              secret:
+                secretName: kodex-registry-cleanup-client
+                defaultMode: 292
             - name: tmp
               emptyDir:
                 sizeLimit: 16Mi

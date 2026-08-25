@@ -1,4 +1,5 @@
 name: Build exact Kodex release
+run-name: Build Kodex ${{ inputs.source_sha }}
 
 on:
   workflow_dispatch:

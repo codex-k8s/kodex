@@ -23,7 +23,7 @@ Job/PVC — устойчивый reconcile cursor, но не источник bu
 защищённой фазе.
 
 Controller имеет только Kubernetes API token с коротким TTL. Он не монтирует
-application grant, registry, signing, Vault либо control-plane credentials.
+application grant, registry, signing, installation Secret либо control-plane credentials.
 Каждая phase Job запускается под собственной identity, а fail-closed
 `ValidatingAdmissionPolicy` разрешает controller создать только точные images,
 commands, env, volumes и ServiceAccount из immutable typed parameter resource.
@@ -41,15 +41,10 @@ Runtime читает отдельную immutable `ConfigMap`-проекцию; 
 4. Сверить Role: exact get immutable typed parameters и runtime `ConfigMap`;
    get/list/create Job; get/list/create/delete PVC. Secret, Pod, Deployment,
    RoleBinding, list/watch parameters и update/patch полномочия отсутствуют.
-   Проверить общий Vault ingress только на TCP/8200 и ровно от трёх источников:
-   exact `vault-csi-provider`, exact `vault-secrets-operator` из его namespace
-   и прямого workload-исключения
-   `kodex-registry-node-pull-readback`. Последний получает node-bound
-   client certificate под exact ServiceAccount
-   `kodex-image-pull-readback`, `audience: vault` и минимальной Vault
-   policy. Его CN обязан иметь вид
-   `<16-hex-node-hash>.g<generation>.kodex-node-pull`; другие workload не
-   должны иметь прямого Vault ingress.
+   Проверить, что installer materializes registry identities через exact
+   Kubernetes Secrets, а k3s `registries.yaml` содержит только pull-only
+   credential для exact HTTPS host. Node runtime readback не должен
+   использовать anonymous или plaintext fallback.
 5. Сверить обе admission policy и binding: `failurePolicy: Fail`, действие
    `Deny`, exact controller username, namespace, typed `paramKind` и
    `parameterNotFoundAction: Deny`.

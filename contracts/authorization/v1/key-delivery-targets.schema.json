@@ -53,12 +53,6 @@
       "maxLength": 63,
       "pattern": "^ira_[a-z0-9_]+_(issuer|verifier|resolver)_g[1-9][0-9]*$"
     },
-    "vaultPath": {
-      "type": "string",
-      "minLength": 16,
-      "maxLength": 512,
-      "pattern": "^kv/data/kodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$"
-    },
     "absolutePath": {
       "type": "string",
       "minLength": 2,
@@ -69,14 +63,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "vault_path",
         "secret_name",
         "mount_path"
       ],
       "properties": {
-        "vault_path": {
-          "$ref": "#/$defs/vaultPath"
-        },
         "secret_name": {
           "$ref": "#/$defs/kubernetesName"
         },
@@ -106,16 +96,13 @@
       "additionalProperties": false,
       "required": [
         "login_principal",
-        "vault_database_role",
+        "credential_secret_name",
         "dsn_mount_path",
         "credential_generation"
       ],
       "properties": {
         "login_principal": {
           "$ref": "#/$defs/databasePrincipal"
-        },
-        "vault_database_role": {
-          "$ref": "#/$defs/kubernetesName"
         },
         "dsn_mount_path": {
           "$ref": "#/$defs/absolutePath"
@@ -124,6 +111,9 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "credential_secret_name": {
+          "$ref": "#/$defs/kubernetesName"
         }
       }
     },
@@ -133,7 +123,7 @@
       "required": [
         "readback_id",
         "credential_id",
-        "credential_vault_path",
+        "credential_secret_name",
         "credential_mount_path",
         "credential_protected_type",
         "credential_schema",
@@ -141,7 +131,7 @@
         "possession_key_generation",
         "intent_revision",
         "material_generation",
-        "possession_key_vault_path",
+        "possession_key_secret_name",
         "possession_key_mount_path",
         "possession_public_jwk_source",
         "attestor_address",
@@ -160,9 +150,6 @@
         },
         "credential_id": {
           "$ref": "#/$defs/workloadId"
-        },
-        "credential_vault_path": {
-          "$ref": "#/$defs/vaultPath"
         },
         "credential_mount_path": {
           "$ref": "#/$defs/absolutePath"
@@ -190,9 +177,6 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
-        },
-        "possession_key_vault_path": {
-          "$ref": "#/$defs/vaultPath"
         },
         "possession_key_mount_path": {
           "$ref": "#/$defs/absolutePath"
@@ -230,6 +214,12 @@
         },
         "network_policy": {
           "$ref": "#/$defs/kubernetesName"
+        },
+        "credential_secret_name": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "possession_key_secret_name": {
+          "$ref": "#/$defs/kubernetesName"
         }
       }
     },
@@ -238,11 +228,11 @@
       "additionalProperties": false,
       "required": [
         "role_credential_id",
-        "role_credential_vault_path",
+        "role_credential_secret_name",
         "role_credential_mount_path",
         "ack_key_id",
         "ack_key_generation",
-        "ack_key_vault_path",
+        "ack_key_secret_name",
         "ack_key_mount_path",
         "ack_public_jwk_source",
         "controller_address",
@@ -257,9 +247,6 @@
         "role_credential_id": {
           "$ref": "#/$defs/workloadId"
         },
-        "role_credential_vault_path": {
-          "$ref": "#/$defs/vaultPath"
-        },
         "role_credential_mount_path": {
           "$ref": "#/$defs/absolutePath"
         },
@@ -270,9 +257,6 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
-        },
-        "ack_key_vault_path": {
-          "$ref": "#/$defs/vaultPath"
         },
         "ack_key_mount_path": {
           "$ref": "#/$defs/absolutePath"
@@ -299,6 +283,12 @@
           "const": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective"
         },
         "network_policy": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "role_credential_secret_name": {
+          "$ref": "#/$defs/kubernetesName"
+        },
+        "ack_key_secret_name": {
           "$ref": "#/$defs/kubernetesName"
         }
       }

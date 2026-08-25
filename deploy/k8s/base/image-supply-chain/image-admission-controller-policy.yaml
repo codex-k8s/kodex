@@ -66,11 +66,6 @@ spec:
     - name: grantEnvironmentNames
       expression: >-
         variables.protected ? variables.grantAgent.env.map(item, item.name).join(',') : ''
-    - name: csiVolumes
-      expression: >-
-        variables.pod.volumes.filter(volume,
-          volume.name in ['identity', 'authority-manifest-trust',
-            'authority-proof-trust', 'authority-issuer-key', 'platform-worker-grant-signer'])
   validations:
     - expression: >-
         object.metadata.namespace == 'kodex-system' &&
@@ -222,7 +217,6 @@ spec:
           'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,OTEL_EXPORTER_OTLP_CA_FILE,' +
           'OTEL_TRACES_SAMPLER_ARG,SENTRY_DSN_FILE,SENTRY_EXPECTED_HOST,' +
           'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID,INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID,' +
-          'INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE,' +
           'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS,' +
           'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME,' +
           'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE,' +
@@ -258,8 +252,6 @@ spec:
                 item.value == variables.workload :
               item.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID' ?
                 item.value == 'spiffe://kodex.local/ns/kodex-system/sa/' + variables.workload :
-              item.name == 'INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE' ?
-                item.value == 'internal-rpc-authority-' + variables.workload :
               item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS' ?
                 item.value == 'internal-rpc-authority-readback-attestor.kodex-system.svc:8443' :
               item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME' ?
@@ -295,9 +287,11 @@ spec:
             'authority-manifest-trust,authority-proof-trust,authority-issuer-key,' +
             'authority-workload-tls,control-plane-ca,application-grant,' +
             'platform-worker-grant-signer,' +
-            'authority-readback-ca,authority-vault-ca,authority-vault-token,' +
+            'authority-readback-ca,authority-readback-credential,' +
+            'authority-readback-possession,' +
             'authority-restore-ca,authority-restore-certificate,' +
-            'authority-restore-role-trust,authority-postgresql,' +
+            'authority-restore-role-trust,authority-restore-credential,' +
+            'authority-restore-ack,authority-postgresql,' +
             'authority-postgresql-ca,authority-observability,authority-sentry-dsn' :
             'work,tmp,script,identity') &&
         variables.mainMountNames ==
@@ -305,13 +299,6 @@ spec:
             'work,script,identity,tmp,authority-sockets,authority-workload-tls,' +
             'control-plane-ca,application-grant' : 'work,script,identity,tmp')
       message: Image admission volume set differs from the owner contract.
-    - expression: >-
-        variables.csiVolumes.all(volume,
-          has(volume.csi) &&
-          volume.csi.driver == 'secrets-store.csi.k8s.io' &&
-          volume.csi.readOnly == true &&
-          volume.csi.volumeAttributes.size() == 1)
-      message: Image admission CSI source differs from the exact driver contract.
     - expression: >-
         variables.pod.volumes.all(volume,
           volume.name == 'work' ?
@@ -328,9 +315,7 @@ spec:
             volume.configMap.name == 'kodex-image-admission' &&
             volume.configMap.defaultMode == 365 :
           volume.name == 'identity' ?
-            has(volume.csi) && volume.csi.driver == 'secrets-store.csi.k8s.io' &&
-            volume.csi.readOnly == true &&
-            volume.csi.volumeAttributes['secretProviderClass'] == variables.expectedIdentity :
+            has(volume.secret) && volume.secret.secretName == variables.expectedIdentity :
           volume.name == 'authority-sockets' ?
             variables.protected && has(volume.emptyDir) &&
             string(volume.emptyDir.sizeLimit) == '8Mi' :
@@ -338,16 +323,16 @@ spec:
             variables.protected && has(volume.secret) &&
             volume.secret.secretName == 'internal-rpc-authority-snapshot' :
           volume.name == 'authority-manifest-trust' ?
-            variables.protected && has(volume.csi) &&
-            volume.csi.volumeAttributes['secretProviderClass'] ==
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
               'internal-rpc-authority-' + variables.workload + '-manifest-trust' :
           volume.name == 'authority-proof-trust' ?
-            variables.protected && has(volume.csi) &&
-            volume.csi.volumeAttributes['secretProviderClass'] ==
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
               'internal-rpc-authority-' + variables.workload + '-proof-trust' :
           volume.name == 'authority-issuer-key' ?
-            variables.protected && has(volume.csi) &&
-            volume.csi.volumeAttributes['secretProviderClass'] ==
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
               'internal-rpc-authority-' + variables.workload + '-issuer-key' :
           volume.name == 'authority-workload-tls' ?
             variables.protected && has(volume.secret) &&
@@ -360,22 +345,20 @@ spec:
             variables.protected && has(volume.emptyDir) &&
             string(volume.emptyDir.sizeLimit) == '1Mi' :
           volume.name == 'platform-worker-grant-signer' ?
-            variables.protected && has(volume.csi) &&
-            volume.csi.volumeAttributes['secretProviderClass'] ==
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName ==
               variables.workload + '-platform-worker-grant-signer' :
           volume.name == 'authority-readback-ca' ?
             variables.protected && has(volume.configMap) &&
             volume.configMap.name == 'internal-rpc-authority-readback-attestor-ca' :
-          volume.name == 'authority-vault-ca' ?
-            variables.protected && has(volume.configMap) &&
-            volume.configMap.name == 'internal-rpc-authority-vault-ca' :
-          volume.name == 'authority-vault-token' ?
-            variables.protected && has(volume.projected) &&
-            volume.projected.sources.size() == 1 &&
-            has(volume.projected.sources[0].serviceAccountToken) &&
-            volume.projected.sources[0].serviceAccountToken.audience == 'vault' &&
-            volume.projected.sources[0].serviceAccountToken.expirationSeconds == 600 &&
-            volume.projected.sources[0].serviceAccountToken.path == 'token' :
+          volume.name == 'authority-readback-credential' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-' + variables.workload +
+              '-issuer-readback-credential' :
+          volume.name == 'authority-readback-possession' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-' + variables.workload +
+              '-issuer-readback-possession' :
           volume.name == 'authority-restore-ca' ?
             variables.protected && has(volume.configMap) &&
             volume.configMap.name == 'internal-rpc-authority-restore-controller-ca' :
@@ -385,6 +368,14 @@ spec:
           volume.name == 'authority-restore-role-trust' ?
             variables.protected && has(volume.secret) &&
             volume.secret.secretName == 'internal-rpc-authority-restore-role-trust' :
+          volume.name == 'authority-restore-credential' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-' + variables.workload +
+              '-issuer-restore-credential' :
+          volume.name == 'authority-restore-ack' ?
+            variables.protected && has(volume.secret) &&
+            volume.secret.secretName == 'internal-rpc-authority-' + variables.workload +
+              '-issuer-restore-ack' :
           volume.name == 'authority-postgresql' ?
             variables.protected && has(volume.secret) &&
             volume.secret.secretName ==

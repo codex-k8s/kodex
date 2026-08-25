@@ -3,7 +3,7 @@ set -euo pipefail
 
 fail() { printf 'GitHub owner gate verification failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --workflow <path> --environment <name> --workflow-sha <40-hex> --owner-actor-id <numeric-id> --source-sha <40-hex> --mode build|render|prepare-identity --output <path>\n' "$0" >&2
+  printf 'Usage: %s --workflow <path> --environment <name> --workflow-sha <40-hex> --owner-actor-id <numeric-id> --source-sha <40-hex> --mode build|render --output <path>\n' "$0" >&2
 }
 
 workflow=""
@@ -28,16 +28,14 @@ while (($# > 0)); do
 done
 
 [[ "$workflow" == .github/workflows/build-release.yml ||
-  "$workflow" == .github/workflows/deploy-production.yml ||
-  "$workflow" == .github/workflows/prepare-installation-identity.yml ]] ||
+  "$workflow" == .github/workflows/deploy-production.yml ]] ||
   fail "workflow path is not allowlisted"
 [[ "$workflow_sha" =~ ^[a-f0-9]{40}$ ]] || fail "workflow SHA must be exact lowercase 40-hex"
 [[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail "owner actor ID is invalid"
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
 case "$workflow:$environment:$mode" in
   .github/workflows/build-release.yml:production-build:build | \
-    .github/workflows/deploy-production.yml:production:render | \
-    .github/workflows/prepare-installation-identity.yml:production:prepare-identity) ;;
+    .github/workflows/deploy-production.yml:production:render) ;;
   *) fail "workflow, environment and mode combination is not allowlisted" ;;
 esac
 [[ -n "$output" ]] || fail "output path is required"

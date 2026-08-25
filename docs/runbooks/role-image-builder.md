@@ -32,7 +32,7 @@ values.
    являются доказательством полномочий.
 5. Проверить `image-admission-controller`: `/healthz` отвечает за процесс,
    `/readyz` читает локальный readiness snapshot, ServiceAccount имеет только
-   get/list/create Job/PVC и get immutable policy. Registry, Vault и
+   get/list/create Job/PVC и get immutable policy. Registry, Secret publisher и
    control-plane credentials в Pod отсутствуют.
 6. Сверить обе `ValidatingAdmissionPolicy`: exact controller caller, Deny,
    immutable ConfigMap parameter и закрытые image/command/env/volume/

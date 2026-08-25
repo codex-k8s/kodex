@@ -192,10 +192,9 @@ spec:
                   name: internal-rpc-authority-publisher-ca
                   items: [{key: ca.pem, path: publisher-ca.pem}]
         - name: restore-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: internal-rpc-authority-restore-role-trust}
+          secret:
+            secretName: internal-rpc-authority-restore-role-trust
+            defaultMode: 292
         - name: authority-bootstrap-roots
           secret:
             secretName: internal-rpc-authority-bootstrap-roots
@@ -409,10 +408,9 @@ spec:
                 - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
           volumes:
             - name: evidence-signer
-              csi:
-                driver: secrets-store.csi.k8s.io
-                readOnly: true
-                volumeAttributes: {secretProviderClass: internal-rpc-authority-restore-pitr-evidence-signer}
+              secret:
+                secretName: internal-rpc-authority-restore-pitr-evidence-signer
+                defaultMode: 292
             - name: kubernetes-token
               projected:
                 defaultMode: 0400

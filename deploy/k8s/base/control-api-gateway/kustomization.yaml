@@ -7,7 +7,6 @@ resources:
   - service.yaml
   - poddisruptionbudget.yaml
   - networkpolicy.yaml
-  - vault-resources.yaml
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml

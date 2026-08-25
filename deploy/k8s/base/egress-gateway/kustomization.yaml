@@ -16,3 +16,4 @@ configMapGenerator:
       - policy.json=policy.json
     options:
       immutable: true
+patches: null
