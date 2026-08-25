@@ -72,6 +72,18 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    # В K3s обращение к публичному hostname ingress того же узла после
+    # LoadBalancer DNAT приходит на websecure port Traefik. SNI и exact
+    # destination по-прежнему проверяет сам egress-gateway до dial.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - {protocol: TCP, port: 8443}
     # Destination-less TCP/443 — осознанное исключение на L3/L4 boundary:
     # application Pod его не получает, а gateway до dial проверяет CONNECT,
     # ClientHello SNI, immutable policy и полный DNS snapshot.

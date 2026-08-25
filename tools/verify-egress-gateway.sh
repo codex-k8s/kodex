@@ -88,7 +88,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     ([.spec.ports[] | select(.name == "metrics" and .port == 9090)] | length == 1)' "$gateway_render" >/dev/null
 
   yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths") |
-    (.spec.ingress | length == 2) and (.spec.egress | length == 2) and
+    (.spec.ingress | length == 2) and (.spec.egress | length == 3) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "integration-gateway" and
@@ -112,6 +112,9 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     ([.spec.egress[] | select(.ports[].port == 53) | .to[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kube-system" and
         .podSelector.matchLabels."k8s-app" == "kube-dns")] | length == 1) and
+    ([.spec.egress[] | select(.ports[].protocol == "TCP" and .ports[].port == 8443) | .to[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kube-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "traefik")] | length == 1) and
     ([.spec.egress[] | select(.to == null and .ports[].protocol == "TCP" and .ports[].port == 443)] | length == 1)' \
     "$gateway_render" >/dev/null
 
