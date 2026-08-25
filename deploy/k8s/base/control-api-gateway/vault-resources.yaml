@@ -43,6 +43,7 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         tls.crt: {text: '{{ get .Secrets "tls-crt" }}'}
         tls.key: {text: '{{ get .Secrets "tls-key" }}'}
@@ -70,6 +71,7 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         current.hex: {text: '{{ get .Secrets "current-hex" }}'}
         previous.hex: {text: '{{ get .Secrets "previous-hex" }}'}
@@ -93,5 +95,6 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         user.creds: {text: '{{ get .Secrets "credentials" }}'}

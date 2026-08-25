@@ -82,6 +82,19 @@ verify_authority_root_mounts() {
     ' >/dev/null || fail 'issuer or verifier does not mount the installation manifest root'
 }
 
+verify_vso_template_projections() {
+  local render_file=$1
+
+  yq -o=json -I=0 '
+    select((.kind == "VaultStaticSecret" or .kind == "VaultDynamicSecret") and
+      ((.spec.destination.transformation.templates // {}) | length) > 0)
+  ' "$render_file" | jq -s -e '
+    length > 0 and all(.[];
+      .spec.destination.transformation.excludeRaw == true and
+      .spec.destination.transformation.excludes == [".*"])
+  ' >/dev/null || fail 'VSO template projection can retain source Vault fields'
+}
+
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
@@ -442,6 +455,7 @@ fi
 
 verify_csi_secret_mounts "$render_file"
 verify_authority_root_mounts "$render_file"
+verify_vso_template_projections "$render_file"
 
 grep -Fq '{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"}' \
   "$repository_root/services/internal/internal-rpc-authority/cmd/fresh-install-key-material/main.go" ||
@@ -1129,6 +1143,7 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
 
 verify_csi_secret_mounts "$mattermost_render"
 verify_authority_root_mounts "$mattermost_render"
+verify_vso_template_projections "$mattermost_render"
 
 yq -e '
   select(.kind == "ConfigMap" and
