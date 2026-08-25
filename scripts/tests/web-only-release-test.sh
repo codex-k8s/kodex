@@ -291,6 +291,21 @@ target_registry=$(yq -o=json -I=0 '
 dynamic_secrets=$(yq -o=json -I=0 '
   select(.kind == "VaultDynamicSecret")
 ' "$render_file" | jq -s '.')
+spc_policy_objects=$(yq -o=json -I=0 '
+  select(.kind == "SecretProviderClass") |
+  .metadata.name as $spc |
+  .spec.parameters.roleName as $role |
+  (.spec.parameters.objects | from_yaml)[] |
+  {"spc": $spc, "role": $role, "path": .secretPath,
+    "method": (.method // "GET"), "service_account": ""}
+' "$render_file" | jq -s '[.[] | select(.role != null)]')
+jq -en --argjson objects "$spc_policy_objects" '
+  ($objects | length) > 0 and all($objects[];
+    (.spc | type) == "string" and (.spc | length) > 0 and
+    (.role | type) == "string" and (.role | length) > 0 and
+    (.path | type) == "string" and (.path | length) > 0 and
+    (.method == "GET" or .method == "PUT"))
+' >/dev/null || fail 'SecretProviderClass policy parser retains empty multi-document results'
 jq -en --argjson registry "$target_registry" --argjson secrets "$dynamic_secrets" '
   ($registry.targets | map(.database_identity.vault_database_role)) as $roles |
   ($secrets | length) == 8 and

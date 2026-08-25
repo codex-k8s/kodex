@@ -323,8 +323,27 @@ if [[ "$mode" == configure-policies ]]; then
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   yq -o=json -I=0 '.' "$render_file" | jq -s '.' >"$temporary_directory/render.json"
+  jq -e '
+    all(.[] | select(.kind == "SecretProviderClass");
+      (.metadata.name | type) == "string" and (.metadata.name | length) > 0 and
+      (.spec.parameters.roleName | type) == "string" and
+      (.spec.parameters.roleName | length) > 0 and
+      (.spec.parameters.objects | type) == "string" and
+      (.spec.parameters.objects | length) > 0)
+  ' "$temporary_directory/render.json" >/dev/null ||
+    fail 'SecretProviderClass registry is malformed'
   yq -o=json -I=0 'select(.kind == "SecretProviderClass") | .metadata.name as $spc | .spec.parameters.roleName as $role | (.spec.parameters.objects | from_yaml)[] | {"spc": $spc, "role": $role, "path": .secretPath, "method": (.method // "GET"), "service_account": ""}' \
-    "$render_file" | jq -s '.' >"$temporary_directory/spc-objects.json"
+    "$render_file" | jq -s -e '
+      [.[] | select(.role != null)] |
+      if length > 0 and all(.[];
+        (.spc | type) == "string" and (.spc | length) > 0 and
+        (.role | type) == "string" and (.role | length) > 0 and
+        (.path | type) == "string" and (.path | length) > 0 and
+        (.method == "GET" or .method == "PUT"))
+      then .
+      else error("SecretProviderClass policy objects are invalid")
+      end
+    ' >"$temporary_directory/spc-objects.json"
   jq --slurpfile spc "$temporary_directory/spc-objects.json" -e '
     ([.[] | select(.kind == "VaultAuth") |
       {key: .metadata.name, value: {
