@@ -7,18 +7,20 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --owner-pat-file <path> [--profile web-only] [--public-tls-mode deferred|enabled]\n' \
+  printf 'Usage: %s --context <exact-context> --owner-pat-file <path> --workflow-sha-file <path> [--profile web-only] [--public-tls-mode deferred|enabled]\n' \
     "$0" >&2
 }
 
 context=""
 owner_pat_file=""
+workflow_sha_file=""
 profile=web-only
 public_tls_mode=enabled
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --owner-pat-file) owner_pat_file="${2:-}"; shift 2 ;;
+    --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -32,8 +34,12 @@ done
   fail 'public TLS mode is invalid'
 [[ -f "$owner_pat_file" && -s "$owner_pat_file" && ! -L "$owner_pat_file" ]] ||
   fail 'owner PAT file is invalid'
+[[ -f "$workflow_sha_file" && ! -L "$workflow_sha_file" ]] ||
+  fail 'workflow SHA file is invalid'
 owner_pat_mode=$(stat -c '%a' "$owner_pat_file")
 (((8#$owner_pat_mode & 0077) == 0)) || fail 'owner PAT file permissions are too broad'
+workflow_sha_mode=$(stat -c '%a' "$workflow_sha_file")
+(((8#$workflow_sha_mode & 0077) == 0)) || fail 'workflow SHA file permissions are too broad'
 for command_name in gh git jq kubectl sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -49,6 +55,80 @@ export GH_TOKEN
 GH_TOKEN=$(<"$owner_pat_file")
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
+
+owner_actor_id=$(gh api user --jq '.id | tostring')
+[[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail 'owner actor identity is invalid'
+
+authorize_runner_gate() {
+  local namespace=$1 expected_job=$2 expected_workflow=$3 gate_json resource_version
+  local hook_sha mounted_sha pod deadline patch
+  gate_json=$(kubectl --context "$context" -n "$namespace" \
+    get configmap kodex-runner-owner-gate -o json)
+  resource_version=$(jq -er '.metadata.resourceVersion | select(test("^[1-9][0-9]*$"))' \
+    <<<"$gate_json") || fail "runner owner gate resourceVersion is invalid: $namespace"
+  jq -e \
+    --arg owner_actor_id "$owner_actor_id" \
+    --arg expected_job "$expected_job" \
+    --arg expected_workflow "$expected_workflow" '
+      .data["expected-owner-actor-id"] == $owner_actor_id and
+      .data["expected-job"] == $expected_job and
+      .data["expected-workflow-ref"] == $expected_workflow and
+      (.data["expected-workflow-sha"] | test("^[a-f0-9]{40}$")) and
+      (.data["job-started.sh"] | type == "string" and length > 0)
+    ' <<<"$gate_json" >/dev/null || fail "runner owner gate contract mismatch: $namespace"
+  hook_sha=$(jq -j '.data["job-started.sh"]' <<<"$gate_json" | sha256sum | awk '{print $1}')
+  [[ "$hook_sha" == "$(sha256sum "$repository_root/infra/arc/job-started-owner-gate.sh" | awk '{print $1}')" ]] ||
+    fail "runner owner gate hook mismatch: $namespace"
+  patch=$(jq -cn \
+    --arg resource_version "$resource_version" \
+    --arg owner_actor_id "$owner_actor_id" \
+    --arg expected_job "$expected_job" \
+    --arg expected_workflow "$expected_workflow" \
+    --arg source_sha "$source_sha" '[
+      {op:"test",path:"/metadata/resourceVersion",value:$resource_version},
+      {op:"test",path:"/data/expected-owner-actor-id",value:$owner_actor_id},
+      {op:"test",path:"/data/expected-job",value:$expected_job},
+      {op:"test",path:"/data/expected-workflow-ref",value:$expected_workflow},
+      {op:"replace",path:"/data/expected-workflow-sha",value:$source_sha}
+    ]')
+  kubectl --context "$context" -n "$namespace" patch configmap kodex-runner-owner-gate \
+    --type=json --patch "$patch" >/dev/null || fail "update runner owner gate: $namespace"
+  kubectl --context "$context" -n "$namespace" get configmap kodex-runner-owner-gate -o json |
+    jq -e --arg source_sha "$source_sha" \
+      '.data["expected-workflow-sha"] == $source_sha' >/dev/null ||
+    fail "runner owner gate readback mismatch: $namespace"
+
+  deadline=$((SECONDS + 180))
+  while IFS= read -r pod; do
+    mounted_sha=""
+    while ((SECONDS < deadline)); do
+      if ! kubectl --context "$context" -n "$namespace" get pod "$pod" >/dev/null 2>&1; then
+        break
+      fi
+      mounted_sha=$(kubectl --context "$context" -n "$namespace" exec "$pod" -c runner -- \
+        cat /var/run/kodex-owner-gate/expected-workflow-sha 2>/dev/null || true)
+      [[ "$mounted_sha" == "$source_sha" ]] && break
+      sleep 2
+    done
+    if kubectl --context "$context" -n "$namespace" get pod "$pod" >/dev/null 2>&1 &&
+      [[ "$mounted_sha" != "$source_sha" ]]; then
+      fail "runner owner gate projection did not refresh: $namespace/$pod"
+    fi
+  done < <(kubectl --context "$context" -n "$namespace" get pods -o json | jq -r '
+    .items[] |
+    select(any(.spec.volumes[]?; .configMap.name == "kodex-runner-owner-gate")) |
+    .metadata.name
+  ')
+}
+
+authorize_runner_gate kodex-ci build \
+  'codex-k8s/kodex/.github/workflows/build-release.yml@refs/heads/main'
+authorize_runner_gate kodex-ci-deploy render \
+  'codex-k8s/kodex/.github/workflows/deploy-production.yml@refs/heads/main'
+workflow_sha_temporary=$(mktemp "$(dirname -- "$workflow_sha_file")/.workflow-sha.XXXXXX")
+printf '%s' "$source_sha" >"$workflow_sha_temporary"
+chmod 0600 "$workflow_sha_temporary"
+mv -- "$workflow_sha_temporary" "$workflow_sha_file"
 
 find_run() {
   local workflow=$1 title=$2 started_at=$3 deadline=$((SECONDS + 180)) run_id

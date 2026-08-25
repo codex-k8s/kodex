@@ -98,6 +98,15 @@ for preflight_contract in \
     "$repository_root/install.sh" "$repository_root/docs/runbooks/fresh-install.md" ||
     fail "platform release contract is absent: $preflight_contract"
 done
+for owner_gate_contract in \
+  '--workflow-sha-file "$workflow_sha_file"' \
+  'authorize_runner_gate kodex-ci build' \
+  'authorize_runner_gate kodex-ci-deploy render' \
+  'runner owner gate projection did not refresh'; do
+  rg -Fq -- "$owner_gate_contract" \
+    "$repository_root/install.sh" "$repository_root/tools/install/release-platform.sh" ||
+    fail "release owner gate refresh contract is absent: $owner_gate_contract"
+done
 rg -Fq 'reconcile_image_admission_policy_parameters' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'immutable image admission parameters do not have a release reconciliation path'
