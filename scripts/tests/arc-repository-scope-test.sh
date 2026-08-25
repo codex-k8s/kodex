@@ -25,6 +25,14 @@ kubectl kustomize "$repository_root/infra/bootstrap-registry" |
 
 bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate" \
   "$network_policy_renderer" "$helm_values_renderer"
+grep -Fq 'while ((attempt <= 15))' "$policy_bootstrap" || {
+  printf 'GitHub Actions policy variable readback has no bounded retry budget\n' >&2
+  exit 1
+}
+grep -Fq '.name == $name and .value == $value' "$policy_bootstrap" || {
+  printf 'GitHub Actions policy variable retry does not verify the exact value\n' >&2
+  exit 1
+}
 grep -Fq 'certificate/kodex-release-registry-tls --timeout=5m' \
   "$repository_root/infra/bootstrap-registry/bootstrap.sh" || {
   printf 'Bootstrap registry does not wait for the public certificate\n' >&2
