@@ -87,6 +87,20 @@ grep -Fq 'preflight-custom-resource-definitions' \
 grep -Fq '.apiVersion != \"$api_version\"' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'platform preflight does not exclude exact API versions introduced by the render'
+for preflight_contract in \
+  'apply --server-side --dry-run=server' \
+  '--field-manager=kodex-install' \
+  '--public-tls-mode "$KODEX_PUBLIC_TLS_MODE"' \
+  'KODEX_PUBLIC_TLS_MODE=deferred|enabled'; do
+  rg -Fq -- "$preflight_contract" \
+    "$repository_root/tools/install/deploy-platform.sh" \
+    "$repository_root/tools/install/release-platform.sh" \
+    "$repository_root/install.sh" "$repository_root/docs/runbooks/fresh-install.md" ||
+    fail "platform release contract is absent: $preflight_contract"
+done
+rg -Fq 'reconcile_image_admission_policy_parameters' \
+  "$repository_root/tools/install/deploy-platform.sh" ||
+  fail 'immutable image admission parameters do not have a release reconciliation path'
 (
   runtime_directory="$temporary_directory/render-filter-runtime"
   render_file="$runtime_directory/release.yaml"

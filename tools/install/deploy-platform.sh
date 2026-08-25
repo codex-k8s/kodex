@@ -8,25 +8,28 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode preflight|apply|readback" \
-    '  --render <exact-release.yaml>' >&2
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|preflight|apply|readback" \
+    '  --render <exact-release.yaml> --public-tls-mode deferred|enabled' >&2
 }
 
 context=""
 mode=""
 render_file=""
+public_tls_mode=enabled
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --render) render_file="${2:-}"; shift 2 ;;
+    --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
-case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in defer-public-tls|preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$public_tls_mode" in deferred|enabled) ;; *) fail 'public TLS mode is invalid' ;; esac
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
 for command_name in jq kubectl rg sha256sum sort yq; do
@@ -35,6 +38,9 @@ done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
 
 namespace=kodex-system
+public_certificate_name=staff-control-center-public
+export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
+export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 projection_registry="$repository_root/tools/install/secret-projections.json"
 jq -e '
@@ -120,6 +126,92 @@ ensure_seed_secret() {
   kubectl --context "$context" create --field-manager=kodex-install -f "$seed" >/dev/null
 }
 
+preflight_seed_secret() {
+  local name=$1 seed="$temporary_directory/preflight-seed-$1.yaml"
+  if kubectl --context "$context" -n "$namespace" get "secret/$name" >/dev/null 2>&1; then
+    return
+  fi
+  SECRET_NAME="$name" yq '
+    select(.kind == "Secret" and .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(SECRET_NAME))
+  ' "$render_file" >"$seed"
+  [[ -s "$seed" ]] || fail "release seed Secret is absent: $name"
+  kubectl --context "$context" create --dry-run=server \
+    --field-manager=kodex-install -f "$seed" >/dev/null
+}
+
+preflight_recreated_resources() {
+  local name=$1 expression=$2 source output
+  source=$(render_filter "preflight-$name-source" "$expression")
+  output="$temporary_directory/preflight-$name.yaml"
+  yq '
+    .metadata.generateName = "kodex-preflight-" |
+    del(.metadata.name)
+  ' "$source" >"$output"
+  kubectl --context "$context" create --dry-run=server \
+    --field-manager=kodex-install -f "$output" >/dev/null
+}
+
+reconcile_immutable_configmaps() {
+  local name current expected current_content expected_content
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if ! current=$(kubectl --context "$context" -n "$namespace" get \
+      "configmap/$name" -o json 2>/dev/null); then
+      continue
+    fi
+    expected=$(CONFIGMAP_NAME="$name" yq -o=json -I=0 '
+      select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+        .metadata.name == strenv(CONFIGMAP_NAME))
+    ' "$render_file")
+    [[ -n "$expected" ]] || fail "immutable ConfigMap is absent from render: $name"
+    current_content=$(jq -S -c \
+      '{immutable:.immutable,data:.data,binaryData:.binaryData}' <<<"$current")
+    expected_content=$(jq -S -c \
+      '{immutable:.immutable,data:.data,binaryData:.binaryData}' <<<"$expected")
+    if [[ "$current_content" == "$expected_content" ]]; then
+      continue
+    fi
+    jq -e '
+      .immutable == true and
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/owner-intent"] == "true"
+    ' <<<"$current" >/dev/null ||
+      fail "immutable ConfigMap is not owned by Kodex: $name"
+    kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
+      --wait=true --timeout=3m >/dev/null
+  done < <(yq -N -r '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .immutable == true) | .metadata.name
+  ' "$render_file" | sort -u)
+}
+
+reconcile_image_admission_policy_parameters() {
+  local name=kodex-image-admission-policy current expected current_spec expected_spec
+  if ! current=$(kubectl --context "$context" -n "$namespace" get \
+    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" -o json 2>/dev/null); then
+    return
+  fi
+  expected=$(PARAMETERS_NAME="$name" yq -o=json -I=0 '
+    select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
+      .kind == "ImageAdmissionPolicyParameters" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(PARAMETERS_NAME))
+  ' "$render_file")
+  [[ -n "$expected" ]] || fail 'image admission policy parameters are absent from render'
+  current_spec=$(jq -S -c '.spec' <<<"$current")
+  expected_spec=$(jq -S -c '.spec' <<<"$expected")
+  [[ "$current_spec" != "$expected_spec" ]] || return
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/owner-intent"] == "true"
+  ' <<<"$current" >/dev/null ||
+    fail 'image admission policy parameters are not owned by Kodex'
+  kubectl --context "$context" -n "$namespace" delete \
+    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
+    --wait=true --timeout=3m >/dev/null
+}
+
 wait_trust_material() {
   local resource_name
   while IFS= read -r resource_name; do
@@ -127,7 +219,12 @@ wait_trust_material() {
     kubectl --context "$context" -n "$namespace" wait --for=condition=Ready \
       "certificate/$resource_name" --timeout=10m >/dev/null ||
       fail "Certificate is not ready: $resource_name"
-  done < <(yq -N -r 'select(.kind == "Certificate") | .metadata.name' "$render_file" | sort -u)
+  done < <(yq -N -r '
+    select(.kind == "Certificate" and
+      (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
+       .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME))) |
+    .metadata.name
+  ' "$render_file" | sort -u)
   while IFS= read -r resource_name; do
     [[ -n "$resource_name" ]] || continue
     kubectl --context "$context" wait --for=condition=Synced \
@@ -135,6 +232,45 @@ wait_trust_material() {
       fail "trust Bundle is not synced: $resource_name"
   done < <(yq -N -r 'select(.kind == "Bundle") | .metadata.name' "$render_file" | sort -u)
 }
+
+public_tls_descendant_count() {
+  kubectl --context "$context" -n "$namespace" get \
+    certificaterequests.cert-manager.io,orders.acme.cert-manager.io,challenges.acme.cert-manager.io \
+    -o json | jq --arg prefix "$public_certificate_name-" '
+      [.items[] | select(.metadata.name | startswith($prefix))] | length
+    '
+}
+
+verify_public_tls_deferred() {
+  if kubectl --context "$context" -n "$namespace" get \
+    "certificate/$public_certificate_name" >/dev/null 2>&1; then
+    fail 'deferred public TLS Certificate remains active'
+  fi
+  [[ "$(public_tls_descendant_count)" == 0 ]] ||
+    fail 'deferred public TLS ACME descendants remain active'
+}
+
+defer_public_tls() {
+  local deadline
+  kubectl --context "$context" -n "$namespace" delete \
+    "certificate/$public_certificate_name" --ignore-not-found --wait=true \
+    --timeout=3m >/dev/null
+  deadline=$((SECONDS + 180))
+  while ((SECONDS < deadline)); do
+    [[ "$(public_tls_descendant_count)" == 0 ]] && return
+    sleep 2
+  done
+  fail 'public TLS ACME descendants were not garbage-collected'
+}
+
+if [[ "$mode" == defer-public-tls ]]; then
+  [[ "$public_tls_mode" == deferred ]] ||
+    fail 'defer-public-tls requires deferred public TLS mode'
+  defer_public_tls
+  verify_public_tls_deferred
+  printf 'Kodex public TLS issuance deferred\n'
+  exit 0
+fi
 
 wait_authority_projections() {
   local name expected_keys deadline actual
@@ -174,10 +310,16 @@ wait_workloads() {
 if [[ "$mode" == preflight ]]; then
   crd_file=$(render_filter preflight-custom-resource-definitions \
     'select(.kind == "CustomResourceDefinition")')
-  kubectl --context "$context" apply --dry-run=client --validate=false \
+  kubectl --context "$context" apply --server-side --dry-run=server \
+    --field-manager=kodex-install \
     -f "$crd_file" >/dev/null
 
-  preflight_expression='select(.kind != "CustomResourceDefinition"'
+  preflight_expression='select(
+    (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
+     .kind != "Certificate" or
+     .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)) and
+    .kind != "CustomResourceDefinition" and .kind != "Secret" and
+    .kind != "Job" and (.kind != "ConfigMap" or .immutable != true)'
   while IFS= read -r api_version; do
     [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
       fail "rendered CustomResourceDefinition API version is invalid: $api_version"
@@ -189,13 +331,22 @@ if [[ "$mode" == preflight ]]; then
   ' "$render_file" | sort -u)
   preflight_expression+=')'
   known_resources_file=$(render_filter preflight-known-resources "$preflight_expression")
-  kubectl --context "$context" apply --dry-run=client --validate=false \
+  kubectl --context "$context" apply --server-side --dry-run=server \
+    --field-manager=kodex-install \
     -f "$known_resources_file" >/dev/null
+  preflight_recreated_resources immutable-configmaps \
+    'select(.kind == "ConfigMap" and .immutable == true)'
+  preflight_recreated_resources jobs 'select(.kind == "Job")'
+  preflight_seed_secret internal-rpc-authority-restore-evidence
+  preflight_seed_secret internal-rpc-authority-snapshot
   printf 'Kodex platform deployment preflight completed\n'
   exit 0
 fi
 
 if [[ "$mode" == apply ]]; then
+  if [[ "$public_tls_mode" == deferred ]]; then
+    defer_public_tls
+  fi
   apply_render custom-resource-definitions 'select(.kind == "CustomResourceDefinition")'
   while IFS= read -r resource_name; do
     kubectl --context "$context" wait --for=condition=Established \
@@ -203,12 +354,17 @@ if [[ "$mode" == apply ]]; then
       fail "CustomResourceDefinition was not established: $resource_name"
   done < <(yq -N -r 'select(.kind == "CustomResourceDefinition") | .metadata.name' "$render_file")
 
+  reconcile_image_admission_policy_parameters
   ensure_seed_secret internal-rpc-authority-restore-evidence
   ensure_seed_secret internal-rpc-authority-snapshot
+  reconcile_immutable_configmaps
   apply_render foundation '
     select(.kind != "CustomResourceDefinition" and .kind != "Deployment" and
       .kind != "StatefulSet" and .kind != "DaemonSet" and .kind != "Job" and
-      .kind != "CronJob" and .kind != "Secret")
+      .kind != "CronJob" and .kind != "Secret" and
+      (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
+       .kind != "Certificate" or
+       .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)))
   '
   wait_trust_material
   apply_render statefulsets 'select(.kind == "StatefulSet")'
@@ -239,6 +395,9 @@ if [[ "$mode" == apply ]]; then
   wait_workloads
 fi
 
+if [[ "$public_tls_mode" == deferred ]]; then
+  verify_public_tls_deferred
+fi
 wait_trust_material
 wait_authority_projections
 wait_workloads

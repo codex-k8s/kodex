@@ -7,18 +7,20 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --owner-pat-file <path> [--profile web-only]\n' \
+  printf 'Usage: %s --context <exact-context> --owner-pat-file <path> [--profile web-only] [--public-tls-mode deferred|enabled]\n' \
     "$0" >&2
 }
 
 context=""
 owner_pat_file=""
 profile=web-only
+public_tls_mode=enabled
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --owner-pat-file) owner_pat_file="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
+    --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -26,6 +28,8 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 [[ "$profile" == web-only || "$profile" == web-with-mattermost ]] || fail 'profile is invalid'
+[[ "$public_tls_mode" == deferred || "$public_tls_mode" == enabled ]] ||
+  fail 'public TLS mode is invalid'
 [[ -f "$owner_pat_file" && -s "$owner_pat_file" && ! -L "$owner_pat_file" ]] ||
   fail 'owner PAT file is invalid'
 owner_pat_mode=$(stat -c '%a' "$owner_pat_file")
@@ -98,11 +102,15 @@ render_sha_file="$temporary_directory/render/release.sha256"
 [[ "$(sha256sum "$render_file" | awk '{print $1}')" == "$(<"$render_sha_file")" ]] ||
   fail 'release render digest mismatch'
 
+if [[ "$public_tls_mode" == deferred ]]; then
+  "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
+    --mode defer-public-tls --render "$render_file" --public-tls-mode deferred
+fi
 "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
-  --mode preflight --render "$render_file"
+  --mode preflight --render "$render_file" --public-tls-mode "$public_tls_mode"
 "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
-  --mode apply --render "$render_file"
+  --mode apply --render "$render_file" --public-tls-mode "$public_tls_mode"
 "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
-  --mode readback --render "$render_file"
+  --mode readback --render "$render_file" --public-tls-mode "$public_tls_mode"
 printf 'Kodex exact release completed: source_sha=%s build_run_id=%s render_run_id=%s\n' \
   "$source_sha" "$build_run_id" "$render_run_id"

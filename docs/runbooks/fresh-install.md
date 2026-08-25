@@ -80,6 +80,7 @@ chmod 0600 .kodex-env
 - DNS Control Center, SSO, Grafana, Headlamp и registry;
 - необязательный отдельный DNS SAN для восстановления Control Center TLS после
   внешнего ACME duplicate-certificate rate limit;
+- режим публичного TLS `KODEX_PUBLIC_TLS_MODE=deferred|enabled`;
 - exact connect address, TLS server name и Kubernetes selector OIDC workload;
 - ACME email, ingress workload selector и имя ingress Service;
 - постоянного Keycloak administrator и первого owner;
@@ -113,6 +114,18 @@ GitHub Variables/Secrets, предварительно передав их в en
 После успешной выдачи значение нельзя удалять до согласованной плановой ротации,
 поскольку изменение `dnsNames` само инициирует reissuance. Удаление TLS Secret
 для ручной ротации запрещено; используется штатный lifecycle cert-manager.
+
+`KODEX_PUBLIC_TLS_MODE=enabled` является каноническим режимом и применяется по
+умолчанию. Режим `deferred` нужен только для явно согласованного окна ACME: он
+удаляет принадлежащий платформе публичный `Certificate` Control Center и его
+незавершенные ACME-потомки, исключает этот Certificate из preflight/apply и не
+ослабляет внутренние mTLS/JWS, OIDC или TLS-проверки. До переключения обратно в
+`enabled` публичный endpoint не считается готовым и browser E2E с доверенным TLS
+имеет результат `NOT RUN`. HTTP fallback и `skipTLSVerify` запрещены.
+
+Перед переключением в `enabled` владелец отдельно подтверждает допустимое окно
+выдачи. После переключения выполняется повторный exact render deployment,
+ожидание `Certificate/Ready` и trusted HTTPS/OIDC/browser readback.
 
 ## 3. Secret model
 
@@ -194,20 +207,30 @@ Actions; установщик скачивает digest-bound render и прим
 
 `tools/install/deploy-platform.sh` соблюдает порядок:
 
-1. CRD и foundation;
-2. Certificate/Bundle readback;
-3. PostgreSQL и NATS;
-4. authority и control-plane migrations;
-5. static PostgreSQL role reconciliation;
-6. broker bootstrap;
-7. `internal-rpc-authority-publisher`;
-8. readback всех dynamic Secret projections;
-9. остальные Deployments/CronJobs;
-10. release artifact materialization;
-11. rollout, Job и failing Pod readback.
+1. phase-aware server-side dry-run CRD и уже известных API без persistence;
+2. CRD и foundation; в режиме `deferred` публичный Certificate исключается;
+3. Certificate/Bundle readback;
+4. PostgreSQL и NATS;
+5. authority и control-plane migrations;
+6. static PostgreSQL role reconciliation;
+7. broker bootstrap;
+8. `internal-rpc-authority-publisher`;
+9. readback всех dynamic Secret projections;
+10. остальные Deployments/CronJobs;
+11. release artifact materialization;
+12. rollout, Job и failing Pod readback.
 
 Нельзя запускать workloads до готовности authority projections или считать
 GitHub render фактическим deployment.
+
+Preflight повторяет семантику actual apply: mutable ресурсы проверяются через
+server-side apply с тем же field manager, а удаляемые перед заменой immutable
+ConfigMap и Job проверяются отдельным server-side create с временным именем.
+Существующий seed Secret не переотправляется через admission policy. При apply
+изменившийся immutable ConfigMap удаляется только после проверки platform-owned
+labels и затем воссоздаётся из exact render. Такой же owner-checked replacement
+выполняется для immutable `ImageAdmissionPolicyParameters` после установления
+его CRD и до применения foundation.
 
 ## 7. Восстановление и rollback
 
