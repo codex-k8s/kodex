@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -423,31 +422,8 @@ func verifySignerTrust(path string, signer internalrpcauth.ES256Key, now time.Ti
 	if err != nil {
 		return 0, errors.New("read authority proof signer trust")
 	}
-	var jwks struct {
-		Keys []json.RawMessage `json:"keys"`
-	}
-	if json.Unmarshal(raw, &jwks) == nil && len(jwks.Keys) > 0 {
-		for _, encoded := range jwks.Keys {
-			key, parseErr := internalrpcauth.ParsePublicJWK(encoded)
-			if parseErr == nil && sameKey(key, signer) {
-				return 1, nil
-			}
-		}
-	}
-	var document struct {
-		Version int    `json:"v"`
-		Purpose string `json:"purpose"`
-		Keys    []struct {
-			Issuer          string `json:"issuer"`
-			Generation      uint64 `json:"generation"`
-			Status, Purpose string
-			Audiences       []string        `json:"audiences"`
-			NotBefore       int64           `json:"not_before"`
-			NotAfter        int64           `json:"not_after"`
-			JWK             json.RawMessage `json:"jwk"`
-		} `json:"keys"`
-	}
-	if internalrpcauth.DecodeCanonicalJSON(raw, &document) == nil && document.Version == 1 && document.Purpose == "AUTHORITY_PROOF_VERIFICATION" {
+	document, decodeErr := internalrpcauth.DecodeAuthorityProofTrustDocument(raw)
+	if decodeErr == nil {
 		for _, record := range document.Keys {
 			key, parseErr := internalrpcauth.ParsePublicJWK(record.JWK)
 			if parseErr == nil && record.Issuer == controlPlaneSPIFFE && record.Generation > 0 && record.Status == "CURRENT" && record.Purpose == "AUTHORITY_PROOF" && contains(record.Audiences, "urn:kodex:internal-rpc-authority-issuer:control-api-gateway") && !now.Before(time.Unix(record.NotBefore, 0)) && now.Before(time.Unix(record.NotAfter, 0)) && sameKey(key, signer) {

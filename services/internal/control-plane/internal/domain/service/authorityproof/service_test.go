@@ -1,12 +1,86 @@
 package authorityproof
 
 import (
+	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/google/uuid"
 )
+
+func TestVerifySignerTrustAcceptsCompletePublisherDocument(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	key, err := internalrpcauth.GenerateES256Key("control-plane-authority-proof-g7")
+	if err != nil {
+		t.Fatalf("создать тестовый ключ: %v", err)
+	}
+	publicJWK, err := internalrpcauth.MarshalPublicJWK(key.PublicOnly())
+	if err != nil {
+		t.Fatalf("закодировать открытый JWK: %v", err)
+	}
+	document := internalrpcauth.AuthorityProofTrustDocument{
+		Version:        internalrpcauth.ContractVersion,
+		Purpose:        internalrpcauth.AuthorityProofTrustPurpose,
+		SourceRevision: 1, SourceDigest: strings.Repeat("a", 64),
+		Predecessor: internalrpcauth.TrustRevisionDigest{
+			DigestSHA256: strings.Repeat("0", 64),
+		},
+		History: []internalrpcauth.TrustRevisionDigest{},
+		Keys: []internalrpcauth.AuthorityProofTrustKey{{
+			Issuer: controlPlaneSPIFFE, Generation: 7, Status: "CURRENT",
+			Purpose:   "AUTHORITY_PROOF",
+			Audiences: []string{"urn:kodex:internal-rpc-authority-issuer:control-api-gateway"},
+			NotBefore: now.Add(-time.Minute).Unix(), NotAfter: now.Add(time.Hour).Unix(),
+			JWK: json.RawMessage(publicJWK),
+		}},
+	}
+	raw, err := internalrpcauth.CanonicalJSON(document)
+	if err != nil {
+		t.Fatalf("создать canonical trust document: %v", err)
+	}
+	path := t.TempDir() + "/authority-proof-trust.json"
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("записать trust document: %v", err)
+	}
+	generation, err := verifySignerTrust(path, key, now)
+	if err != nil {
+		t.Fatalf("полный publisher trust document отклонён: %v", err)
+	}
+	if generation != 7 {
+		t.Fatalf("получено поколение %d, ожидалось 7", generation)
+	}
+}
+
+func TestVerifySignerTrustRejectsLegacyJWKS(t *testing.T) {
+	t.Parallel()
+
+	key, err := internalrpcauth.GenerateES256Key("legacy-control-plane-proof")
+	if err != nil {
+		t.Fatalf("создать тестовый ключ: %v", err)
+	}
+	publicJWK, err := internalrpcauth.MarshalPublicJWK(key.PublicOnly())
+	if err != nil {
+		t.Fatalf("закодировать открытый JWK: %v", err)
+	}
+	raw, err := internalrpcauth.CanonicalJSON(struct {
+		Keys []json.RawMessage `json:"keys"`
+	}{Keys: []json.RawMessage{publicJWK}})
+	if err != nil {
+		t.Fatalf("создать legacy JWKS: %v", err)
+	}
+	path := t.TempDir() + "/legacy-jwks.json"
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("записать legacy JWKS: %v", err)
+	}
+	if _, err := verifySignerTrust(path, key, time.Now().UTC()); err == nil {
+		t.Fatal("legacy JWKS без provenance был принят")
+	}
+}
 
 func TestIndexPolicyBindsOIDCProducerToInstallationConfiguration(t *testing.T) {
 	t.Parallel()

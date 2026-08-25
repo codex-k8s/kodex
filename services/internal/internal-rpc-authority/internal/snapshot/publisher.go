@@ -365,6 +365,9 @@ func publisherProofTrust(
 	now time.Time,
 	sourceDigest string,
 ) ([]byte, error) {
+	if !snapshotDigestPattern.MatchString(sourceDigest) {
+		return nil, errors.New("authority proof trust source digest is invalid")
+	}
 	_, history, err := publisherHistory(options.SourceRevision, options.History)
 	if err != nil {
 		return nil, err
@@ -413,7 +416,14 @@ func publisherProofTrust(
 		}
 		return documentValue.Keys[left].Status < documentValue.Keys[right].Status
 	})
-	return internalrpcauth.CanonicalJSON(documentValue)
+	canonical, err := internalrpcauth.CanonicalJSON(documentValue)
+	if err != nil {
+		return nil, errors.New("encode authority proof trust")
+	}
+	if _, err := internalrpcauth.DecodeAuthorityProofTrustDocument(canonical); err != nil {
+		return nil, errors.New("read back authority proof trust")
+	}
+	return canonical, nil
 }
 
 func publisherHistory(

@@ -71,10 +71,7 @@ type document struct {
 	Policy           policy           `json:"policy"`
 }
 
-type revisionDigest struct {
-	Revision     uint64 `json:"revision"`
-	DigestSHA256 string `json:"digest_sha256"`
-}
+type revisionDigest = internalrpcauth.TrustRevisionDigest
 
 type issuerKeySet struct {
 	Issuer     string     `json:"issuer"`
@@ -131,26 +128,8 @@ type manifestSignerKey struct {
 	NotAfter   int64           `json:"not_after"`
 }
 
-type proofTrustDocument struct {
-	Version        int              `json:"v"`
-	Purpose        string           `json:"purpose"`
-	SourceRevision uint64           `json:"source_revision"`
-	SourceDigest   string           `json:"source_digest_sha256"`
-	Predecessor    revisionDigest   `json:"predecessor"`
-	History        []revisionDigest `json:"history"`
-	Keys           []proofTrustKey  `json:"keys"`
-}
-
-type proofTrustKey struct {
-	Issuer     string          `json:"issuer"`
-	Generation uint64          `json:"generation"`
-	Status     string          `json:"status"`
-	Purpose    string          `json:"purpose"`
-	Audiences  []string        `json:"audiences"`
-	NotBefore  int64           `json:"not_before"`
-	NotAfter   int64           `json:"not_after"`
-	JWK        json.RawMessage `json:"jwk"`
-}
+type proofTrustDocument = internalrpcauth.AuthorityProofTrustDocument
+type proofTrustKey = internalrpcauth.AuthorityProofTrustKey
 
 type policy struct {
 	TrustDomain             string                   `json:"trust_domain"`
@@ -690,10 +669,8 @@ func loadProofTrust(
 	if err != nil {
 		return nil, err
 	}
-	var document proofTrustDocument
-	if err := internalrpcauth.DecodeCanonicalJSON(raw, &document); err != nil ||
-		document.Version != model.ContractVersion ||
-		document.Purpose != "AUTHORITY_PROOF_VERIFICATION" ||
+	document, err := internalrpcauth.DecodeAuthorityProofTrustDocument(raw)
+	if err != nil ||
 		document.SourceRevision == 0 ||
 		!snapshotDigestPattern.MatchString(document.SourceDigest) ||
 		document.SourceRevision != expectedSourceRevision ||
@@ -701,13 +678,6 @@ func loadProofTrust(
 		len(document.Keys) == 0 ||
 		len(document.Keys) > 32 {
 		return nil, errors.New("authority proof trust document is invalid")
-	}
-	if err := validateHistory(
-		document.SourceRevision,
-		document.Predecessor,
-		document.History,
-	); err != nil {
-		return nil, fmt.Errorf("authority proof trust history rejected: %w", err)
 	}
 	result := make(map[string]service.VerificationKeyRecord, len(document.Keys))
 	currentByIssuer := make(map[string]int)

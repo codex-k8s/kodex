@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 // VerifyProofSigner связывает обслуживаемый private key с exact CURRENT
@@ -39,10 +38,8 @@ func VerifyProofSigner(
 	if err != nil {
 		return errors.New("read authority proof signer trust")
 	}
-	var document proofTrustDocument
-	if err := internalrpcauth.DecodeCanonicalJSON(trustRaw, &document); err != nil ||
-		document.Version != model.ContractVersion ||
-		document.Purpose != "AUTHORITY_PROOF_VERIFICATION" ||
+	document, err := internalrpcauth.DecodeAuthorityProofTrustDocument(trustRaw)
+	if err != nil ||
 		document.SourceRevision != expectedSourceRevision ||
 		document.SourceDigest != expectedSourceDigest {
 		return errors.New("authority proof signer trust source rejected")
