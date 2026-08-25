@@ -161,7 +161,7 @@ LOGIN principal, устойчивыми поколением/состояние�
 закрытые `CURRENT|NEXT|PREVIOUS|RETIRED`. Любое впервые встреченное generation
 должно
 быть выше watermark; меньшее поколение допустимо только как уже сохранённый
-predecessor. `RETIRED` не воскресает после отката ConfigMap/Vault intent.
+predecessor. `RETIRED` не воскресает после отката ConfigMap/Secret revision.
 Promotion разрешён только для сохранённого `NEXT` после независимого readback
 точного LOGIN. Retirement согласованно выполняет `NOLOGIN`, отзыв членства,
 ограниченные termination/readback и устойчивый статус.

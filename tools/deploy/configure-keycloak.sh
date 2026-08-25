@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode apply|readback|retire-initial-passwords" \
     '  --public-origin <https-origin> --grafana-origin <https-origin>' \
-    '  --vault-origin <https-origin> --headlamp-origin <https-origin>' \
+    '  --headlamp-origin <https-origin>' \
     '  [--namespace identity] [--deployment sso]' \
     '  [--realm kodex] [--admin-secret keycloak-admin-client]' \
     '  [--bootstrap-secret keycloak-bootstrap]' \
@@ -22,7 +22,6 @@ expected_context=""
 mode=""
 public_origin=""
 grafana_origin=""
-vault_origin=""
 headlamp_origin=""
 namespace=identity
 deployment=sso
@@ -37,7 +36,6 @@ while (($# > 0)); do
     --mode) mode="${2:-}"; shift 2 ;;
     --public-origin) public_origin="${2:-}"; shift 2 ;;
     --grafana-origin) grafana_origin="${2:-}"; shift 2 ;;
-    --vault-origin) vault_origin="${2:-}"; shift 2 ;;
     --headlamp-origin) headlamp_origin="${2:-}"; shift 2 ;;
     --namespace) namespace="${2:-}"; shift 2 ;;
     --deployment) deployment="${2:-}"; shift 2 ;;
@@ -54,12 +52,11 @@ done
 [[ -n "$expected_context" ]] || fail 'exact context is required'
 case "$mode" in apply|readback|retire-initial-passwords) ;; *) fail 'mode is invalid' ;; esac
 [[ "$public_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'public origin is invalid'
-for management_origin in "$grafana_origin" "$vault_origin" "$headlamp_origin"; do
+for management_origin in "$grafana_origin" "$headlamp_origin"; do
   [[ "$management_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'management origin is invalid'
 done
-[[ "$public_origin" != "$grafana_origin" && "$public_origin" != "$vault_origin" &&
-  "$public_origin" != "$headlamp_origin" && "$grafana_origin" != "$vault_origin" &&
-  "$grafana_origin" != "$headlamp_origin" && "$vault_origin" != "$headlamp_origin" ]] ||
+[[ "$public_origin" != "$grafana_origin" && "$public_origin" != "$headlamp_origin" &&
+  "$grafana_origin" != "$headlamp_origin" ]] ||
   fail 'management origins must be unique'
 for resource_name in "$namespace" "$deployment" "$realm" "$admin_secret" "$bootstrap_secret" \
   "$identities_configmap" "$initial_password_secret"; do
@@ -279,35 +276,6 @@ reconcile_confidential_client() {
     "$client_realm"
 }
 
-reconcile_vault_client() {
-  local client_id=kodex-vault-ui client_uuid client_secret attributes mapper_id
-  client_secret=$(read_management_client_secret "$client_id" platform-admin vault-oidc)
-  if ! find_client_id "$client_id" >/dev/null 2>&1; then
-    keycloak_request create clients -r "$realm" -s "clientId=$client_id" >/dev/null
-  fi
-  client_uuid=$(find_client_id "$client_id")
-  attributes=$(jq -cn --arg logout "$vault_origin/*" '{
-    "pkce.code.challenge.method":"S256",
-    "post.logout.redirect.uris":$logout
-  }')
-  keycloak_request update "clients/$client_uuid" -r "$realm" \
-    -s enabled=true -s publicClient=false -s bearerOnly=false -s protocol=openid-connect \
-    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
-    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
-    -s "redirectUris=[\"$vault_origin/ui/vault/auth/oidc/oidc/callback\"]" \
-    -s "webOrigins=[\"$vault_origin\"]" -s "attributes=$attributes" -s "secret=$client_secret" >/dev/null
-  unset client_secret
-  while IFS= read -r mapper_id; do
-    [[ -n "$mapper_id" ]] || continue
-    keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$realm" >/dev/null
-  done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$realm" |
-    jq -r '.[] | select(.name == "kodex-client-audience" or .name == "kodex-realm-roles") | .id')
-  replace_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
-    '{"included.client.audience":"kodex-vault-ui","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"}'
-  replace_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
-    '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-}
-
 readback_confidential_client() {
   local client_id=$1 origin=$2 redirect=$3 client_realm=${4:-$realm} client_uuid client_json mapper_json
   client_uuid=$(find_client_id "$client_id" "$client_realm")
@@ -470,11 +438,8 @@ if [[ "$mode" == apply ]]; then
     kodex-system oauth2-control-center
   reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
     observability oauth2-grafana
-  reconcile_confidential_client kodex-vault-proxy "$vault_origin" \
-    kodex-system oauth2-vault
   reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
     platform-admin oauth2-headlamp master
-  reconcile_vault_client
 fi
 
 realm_json=$(keycloak_request get "realms/$realm")
@@ -509,9 +474,7 @@ keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
 
 readback_confidential_client kodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
 readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
-readback_confidential_client kodex-vault-proxy "$vault_origin" "$vault_origin/oauth2/callback"
 readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
-readback_confidential_client kodex-vault-ui "$vault_origin" "$vault_origin/ui/vault/auth/oidc/oidc/callback"
 
 administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |
   jq -er --arg username "$admin_username" '

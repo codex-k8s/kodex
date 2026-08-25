@@ -1,0 +1,63 @@
+# Режим: bare-metal устанавливает инфраструктуру и Kodex; existing-kubernetes
+# не меняет хост и устанавливает Kodex в отдельный namespace.
+KODEX_INSTALL_MODE=bare-metal
+KODEX_NAMESPACE=kodex-system
+KODEX_KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+KODEX_KUBE_CONTEXT=default
+
+# Bare-metal host и публичные DNS. Все DNS должны заранее указывать на сервер.
+KODEX_SERVER_PUBLIC_IP=203.0.113.10
+KODEX_PUBLIC_IPV4_CIDR=203.0.113.10/32
+KODEX_CONTROL_HOST=control.kodex.example.com
+KODEX_OIDC_HOST=sso.kodex.example.com
+KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:8443
+KODEX_OIDC_TLS_SERVER_NAME=sso.kodex.example.com
+KODEX_OIDC_NAMESPACE=identity
+KODEX_OIDC_POD_NAME=sso
+KODEX_OIDC_POD_COMPONENT=keycloak
+KODEX_OIDC_TARGET_PORT=8443
+KODEX_GRAFANA_HOST=grafana.kodex.example.com
+KODEX_HEADLAMP_HOST=headlamp.kodex.example.com
+KODEX_REGISTRY_HOST=registry.kodex.example.com
+KODEX_PROMOTED_PULL_HOST=images.kodex.example.com
+
+# Kubernetes и TLS.
+KODEX_INGRESS_CLASS=traefik
+KODEX_CLUSTER_ISSUER=letsencrypt-production
+KODEX_ACME_EMAIL=owner@example.com
+KODEX_ACME_SERVER=https://acme-v02.api.letsencrypt.org/directory
+KODEX_INGRESS_NAMESPACE=kube-system
+KODEX_INGRESS_POD_NAME=traefik
+
+# Постоянный Keycloak administrator и первый владелец Kodex.
+KODEX_KEYCLOAK_ADMIN_USERNAME=kodex-admin
+KODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD=replace-with-at-least-20-characters
+KODEX_OWNER_USERNAME=owner
+KODEX_OWNER_EMAIL=owner@example.com
+KODEX_OWNER_INITIAL_PASSWORD=replace-with-another-20-character-password
+
+# GitHub PAT с repository administration и Actions runner scopes.
+KODEX_GITHUB_ARC_TOKEN=github_pat_replace_me
+KODEX_GITHUB_OWNER_PAT=github_pat_replace_me
+
+# Только для existing-kubernetes без bundled registry: точная write identity
+# уже существующего HTTPS OCI registry. Значения не нужны при компоненте registry.
+KODEX_RELEASE_REGISTRY_USERNAME=
+KODEX_RELEASE_REGISTRY_PASSWORD=
+
+# Codex auth.json в base64 без переносов либо путь к локальному файлу.
+KODEX_OPENAI_AUTH_JSON_B64=eyJyZXBsYWNlIjoibWUifQ==
+# KODEX_OPENAI_AUTH_JSON_FILE=/absolute/path/to/auth.json
+
+# Необязательная наблюдаемость приложения.
+KODEX_SENTRY_DSN=
+KODEX_DISABLE_OBSERVABILITY=false
+
+# S3 не требуется web-first MVP. При true установщик проверяет параметры
+# внешнего S3; встроенный object storage намеренно не связывается с данными Kodex.
+KODEX_ENABLE_EXTERNAL_S3=false
+KODEX_S3_ENDPOINT=https://s3.example.com
+KODEX_S3_REGION=us-east-1
+KODEX_S3_BUCKET=kodex-backups
+KODEX_S3_ACCESS_KEY=
+KODEX_S3_SECRET_KEY=

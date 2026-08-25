@@ -1,122 +1,83 @@
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-errors, namespace: kodex-system }
+metadata: {name: oauth2-control-center-errors, namespace: kodex-system}
 spec:
   errors:
     status: ["401-403"]
-    service: { name: oauth2-control-center, port: 80 }
+    service: {name: oauth2-control-center, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-auth, namespace: kodex-system }
+metadata: {name: oauth2-control-center-auth, namespace: kodex-system}
 spec:
   forwardAuth:
     address: http://oauth2-control-center.kodex-system.svc.cluster.local/oauth2/auth
     trustForwardHeader: true
-    authResponseHeaders:
-      [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
+    authResponseHeaders: [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-chain, namespace: kodex-system }
+metadata: {name: oauth2-control-center-chain, namespace: kodex-system}
 spec:
   chain:
     middlewares:
-      - { name: oauth2-control-center-errors }
-      - { name: oauth2-control-center-auth }
+      - {name: oauth2-control-center-errors}
+      - {name: oauth2-control-center-auth}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-grafana-errors, namespace: observability }
+metadata: {name: oauth2-grafana-errors, namespace: observability}
 spec:
   errors:
     status: ["401-403"]
-    service: { name: oauth2-grafana, port: 80 }
+    service: {name: oauth2-grafana, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-grafana-auth, namespace: observability }
+metadata: {name: oauth2-grafana-auth, namespace: observability}
 spec:
   forwardAuth:
     address: http://oauth2-grafana.observability.svc.cluster.local/oauth2/auth
     trustForwardHeader: true
-    authResponseHeaders:
-      [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
+    authResponseHeaders: [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-grafana-chain, namespace: observability }
+metadata: {name: oauth2-grafana-chain, namespace: observability}
 spec:
   chain:
     middlewares:
-      - { name: oauth2-grafana-errors }
-      - { name: oauth2-grafana-auth }
+      - {name: oauth2-grafana-errors}
+      - {name: oauth2-grafana-auth}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-vault-errors, namespace: kodex-system }
+metadata: {name: oauth2-headlamp-errors, namespace: platform-admin}
 spec:
   errors:
     status: ["401-403"]
-    service: { name: oauth2-vault, port: 80 }
+    service: {name: oauth2-headlamp, port: 80}
     query: /oauth2/sign_in?rd={url}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-vault-auth, namespace: kodex-system }
-spec:
-  forwardAuth:
-    address: http://oauth2-vault.kodex-system.svc.cluster.local/oauth2/auth
-    trustForwardHeader: true
-    authResponseHeaders:
-      [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata: { name: oauth2-vault-chain, namespace: kodex-system }
-spec:
-  chain:
-    middlewares:
-      - { name: oauth2-vault-errors }
-      - { name: oauth2-vault-auth }
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata: { name: oauth2-headlamp-errors, namespace: platform-admin }
-spec:
-  errors:
-    status: ["401-403"]
-    service: { name: oauth2-headlamp, port: 80 }
-    query: /oauth2/sign_in?rd={url}
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata: { name: oauth2-headlamp-auth, namespace: platform-admin }
+metadata: {name: oauth2-headlamp-auth, namespace: platform-admin}
 spec:
   forwardAuth:
     address: http://oauth2-headlamp.platform-admin.svc.cluster.local/oauth2/auth
     trustForwardHeader: true
-    authResponseHeaders:
-      [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
+    authResponseHeaders: [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-headlamp-chain, namespace: platform-admin }
+metadata: {name: oauth2-headlamp-chain, namespace: platform-admin}
 spec:
   chain:
     middlewares:
-      - { name: oauth2-headlamp-errors }
-      - { name: oauth2-headlamp-auth }
----
-apiVersion: traefik.io/v1alpha1
-kind: ServersTransport
-metadata: { name: vault-ui, namespace: kodex-system }
-spec:
-  serverName: vault.kodex-system.svc.cluster.local
-  insecureSkipVerify: false
-  rootCAsSecrets: [kodex-vault-server-tls]
+      - {name: oauth2-headlamp-errors}
+      - {name: oauth2-headlamp-auth}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -141,37 +102,7 @@ spec:
           - path: /
             pathType: Prefix
             backend:
-              service:
-                {
-                  name: kodex-monitoring-grafana,
-                  port: { name: http-web },
-                }
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: kodex-vault-ui
-  namespace: kodex-system
-  annotations:
-    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: kodex-system-oauth2-vault-chain@kubernetescrd
-    traefik.ingress.kubernetes.io/service.serverstransport: kodex-system-vault-ui@kubernetescrd
-spec:
-  ingressClassName: __KODEX_INGRESS_CLASS__
-  tls:
-    - hosts: [__KODEX_VAULT_HOST__]
-      secretName: kodex-vault-ui-public-tls
-  rules:
-    - host: __KODEX_VAULT_HOST__
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service: { name: vault, port: { name: https } }
+              service: {name: kodex-monitoring-grafana, port: {name: http-web}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -196,222 +127,92 @@ spec:
           - path: /
             pathType: Prefix
             backend:
-              service: { name: kodex-headlamp, port: { name: http } }
+              service: {name: kodex-headlamp, port: {name: http}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata:
-  { name: oauth2-control-center-exact-paths, namespace: kodex-system }
+metadata: {name: oauth2-control-center-exact-paths, namespace: kodex-system}
 spec:
-  podSelector:
-    { matchLabels: { app.kubernetes.io/instance: oauth2-control-center } }
+  podSelector: {matchLabels: {app.kubernetes.io/instance: oauth2-control-center}}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 4180 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__}}
+      ports: [{protocol: TCP, port: 4180}]
   egress:
     - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: __KODEX_PUBLIC_IPV4_CIDR__}}]
+      ports: [{protocol: TCP, port: 443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: oauth2-vault-exact-paths, namespace: kodex-system }
+metadata: {name: oauth2-grafana-exact-paths, namespace: observability}
 spec:
-  podSelector: { matchLabels: { app.kubernetes.io/instance: oauth2-vault } }
+  podSelector: {matchLabels: {app.kubernetes.io/instance: oauth2-grafana}}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 4180 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__}}
+      ports: [{protocol: TCP, port: 4180}]
   egress:
     - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: __KODEX_PUBLIC_IPV4_CIDR__}}]
+      ports: [{protocol: TCP, port: 443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: oauth2-grafana-exact-paths, namespace: observability }
+metadata: {name: oauth2-headlamp-exact-paths, namespace: platform-admin}
 spec:
-  podSelector: { matchLabels: { app.kubernetes.io/instance: oauth2-grafana } }
+  podSelector: {matchLabels: {app.kubernetes.io/instance: oauth2-headlamp}}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 4180 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__}}
+      ports: [{protocol: TCP, port: 4180}]
   egress:
     - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: __KODEX_PUBLIC_IPV4_CIDR__}}]
+      ports: [{protocol: TCP, port: 443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: oauth2-headlamp-exact-paths, namespace: platform-admin }
+metadata: {name: grafana-exact-ingress, namespace: observability}
 spec:
-  podSelector: { matchLabels: { app.kubernetes.io/instance: oauth2-headlamp } }
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 4180 }]
-  egress:
-    - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: { name: grafana-exact-ingress, namespace: observability }
-spec:
-  podSelector: { matchLabels: { app.kubernetes.io/name: grafana } }
+  podSelector: {matchLabels: {app.kubernetes.io/name: grafana}}
   policyTypes: [Ingress]
   ingress:
     - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 3000 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__}}
+      ports: [{protocol: TCP, port: 3000}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: headlamp-exact-paths, namespace: platform-admin }
+metadata: {name: headlamp-exact-paths, namespace: platform-admin}
 spec:
-  podSelector:
-    { matchLabels: { app.kubernetes.io/instance: kodex-headlamp } }
+  podSelector: {matchLabels: {app.kubernetes.io/instance: kodex-headlamp}}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 4466 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__}}
+      ports: [{protocol: TCP, port: 4466}]
   egress:
     - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: { name: vault-ui-from-public-ingress, namespace: kodex-system }
-spec:
-  podSelector: { matchLabels: { app.kubernetes.io/name: vault } }
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector:
-            {
-              matchLabels:
-                {
-                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
-                },
-            }
-          podSelector:
-            {
-              matchLabels:
-                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
-            }
-      ports: [{ protocol: TCP, port: 8200 }]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: { name: vault-exact-egress, namespace: kodex-system }
-spec:
-  podSelector: { matchLabels: { app.kubernetes.io/name: vault } }
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
-    - to:
-        - podSelector:
-            { matchLabels: { app.kubernetes.io/name: kodex-postgresql } }
-      ports: [{ protocol: TCP, port: 5432 }]
-    - to: [{ ipBlock: { cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
-      ports: [{ protocol: TCP, port: 443 }]
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}}]
+      ports: [{protocol: TCP, port: 443}]

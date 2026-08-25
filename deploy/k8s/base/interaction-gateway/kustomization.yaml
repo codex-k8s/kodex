@@ -11,6 +11,6 @@ resources:
   - networkpolicy.yaml
   - issuer-networkpolicy.yaml
   - prometheusrule.yaml
-  - vault-secret-provider-classes.yaml
 components:
   - ../../components/internal-rpc-authority-interaction-gateway-issuer
+patches: null

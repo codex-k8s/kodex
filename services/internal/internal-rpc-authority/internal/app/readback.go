@@ -38,7 +38,6 @@ type ReadbackConfig struct {
 	PostgresDSNFile        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName  string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedUser   string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
-	PodUID                 string        `env:"POD_UID"`
 	RootPublicJWKFile      string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_PUBLIC_JWK_FILE"`
 	RootMetadataFile       string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_ROOT_METADATA_FILE"`
 	ManifestBundleJWSFile  string        `env:"INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_BUNDLE_JWS_FILE"`
@@ -72,8 +71,7 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return ReadbackConfig{}, errors.New("readback technical listen address is invalid")
 	}
-	if !runtimeUUIDPattern.MatchString(config.PodUID) ||
-		config.PostgresTLSServerName == "" ||
+	if config.PostgresExpectedUser == "" || config.PostgresTLSServerName == "" ||
 		config.VerifierGeneration == 0 {
 		return ReadbackConfig{}, errors.New("readback PostgreSQL identity is invalid")
 	}
@@ -338,17 +336,10 @@ func openReadbackPostgres(
 	ctx context.Context,
 	config ReadbackConfig,
 ) (*pgxpool.Pool, error) {
-	return openRotatingPostgres(ctx, rotatingPostgresConfig{
-		DSNTemplateFile: config.PostgresDSNFile,
-		TLSServerName:   config.PostgresTLSServerName,
-		Capability:      sessionrepository.CapabilityReadbackAttestor,
-		ApplicationName: "internal_rpc_authority_readback_attestor",
-		PodUID:          config.PodUID,
-		Candidates: []databaseCredentialCandidate{
-			{Role: "internal-rpc-authority-readback-attestor-g3", Principal: "ira_readback_attestor_g3", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g3"},
-			{Role: "internal-rpc-authority-readback-attestor-g4", Principal: "ira_readback_attestor_g4", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g4"},
-			{Role: "internal-rpc-authority-readback-attestor-g5", Principal: "ira_readback_attestor_g5", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g5"},
-		},
+	return openCapabilityPostgres(ctx, postgresConnectionConfig{
+		DSNFile: config.PostgresDSNFile, TLSServerName: config.PostgresTLSServerName,
+		ExpectedUser: config.PostgresExpectedUser, Capability: sessionrepository.CapabilityReadbackAttestor,
+		ApplicationName: "internal_rpc_authority_readback_attestor", MaxConnections: 8,
 	})
 }
 

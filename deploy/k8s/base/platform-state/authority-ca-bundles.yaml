@@ -1,17 +1,6 @@
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: internal-rpc-authority-database-credential-reconciler-client-ca
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  sources: [{secret: {name: kodex-installation-ca, key: tls.crt}}]
-  target:
-    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kodex-system}}
-    configMap: {key: client-ca.pem}
----
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
   name: internal-rpc-authority-publisher-client-ca
   annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
@@ -68,28 +57,6 @@ apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
   name: internal-rpc-authority-restore-controller-ca
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  sources: [{secret: {name: kodex-installation-ca, key: tls.crt}}]
-  target:
-    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kodex-system}}
-    configMap: {key: ca.pem}
----
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
-  name: internal-rpc-authority-vault-ca
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  sources: [{secret: {name: kodex-installation-ca, key: tls.crt}}]
-  target:
-    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kodex-system}}
-    configMap: {key: ca.pem}
----
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
-  name: kodex-vault-ca
   annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:
   sources: [{secret: {name: kodex-installation-ca, key: tls.crt}}]

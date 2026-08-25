@@ -54,7 +54,7 @@ insecure fallback запрещены. Readiness выполняет тот же D
 Сборщик не получает промышленные учетные данные среды выполнения. Токен реестра пакетов, если нужен, выдается как краткоживущий секрет с ограниченной областью и не попадает в слои образа или логи.
 
 Канонический локальный контур разделяет staging push, staging admin,
-promotion writer и node pull по Pod, ServiceAccount, mTLS/Vault identity,
+promotion writer и node pull по Pod, ServiceAccount, mTLS/Kubernetes Secret identity,
 NetworkPolicy и хранилищу. Pull монтирует promoted storage только read-only и
 не имеет пути к внутренним endpoints. Отдельный deployable
 `services/jobs/role-image-builder` получает server-owned claim. Его trusted
@@ -142,7 +142,7 @@ rollback или retry не зависит от прежнего `emptyDir` и н
 `image-admission-controller`. Его единственные полномочия — exact-чтение
 immutable typed policy parameters и их runtime `ConfigMap`-проекции, а также
 ограниченные операции над собственными Job/PVC. Controller не имеет
-control-plane, registry, signing или Vault identity фаз. Kubernetes
+control-plane, registry, signing или installation Secret identity фаз. Kubernetes
 `ValidatingAdmissionPolicy` проверяет caller ServiceAccount и точный phase
 contract: закреплённые образы, команды, env, тома, ServiceAccount и отсутствие
 host authority. Поэтому компрометация controller не позволяет использовать его
@@ -150,15 +150,13 @@ host authority. Поэтому компрометация controller не поз
 admission либо promotion identity. Состояние Job/PVC служит только устойчивым
 reconcile cursor; owner lifecycle остаётся в `control-plane`.
 
-Node pull bootstrap запускается из version-pinned admission runtime, а как
-readback target использует уже обязательный trusted `agent-runner` exact digest
-до protected role pull,
-выпускает в Vault короткую per-node certificate identity с exact node IP и
-generation, атомарно обновляет containerd `hosts.toml`, затем проверяет реальный
-CRI `PullImage` exact digest. Bootstrap Pod обращается только к DNS/Vault через
-явную `NetworkPolicy`; registry трафик выполняет host containerd после Unix
-socket call. Общий node password, anonymous fallback, `hostNetwork` и ручная
-host-настройка не используются.
+Node pull на single-node k3s получает отдельный pull-only credential из
+owner-controlled installation material. Code-first installer атомарно создаёт
+`/etc/rancher/k3s/registries.yaml`, включает только exact HTTPS registry host,
+перезапускает k3s и проверяет фактическую конфигурацию и готовность API. Общий
+push/admin credential, anonymous fallback, plaintext registry и ручная
+незакреплённая настройка host запрещены. Для multi-node/existing-Kubernetes
+оператор обязан применить эквивалентный node runtime contract на каждом node.
 
 ## Сквозная карта authority и lifecycle
 

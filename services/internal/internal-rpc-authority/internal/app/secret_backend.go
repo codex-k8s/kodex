@@ -2,32 +2,25 @@ package app
 
 import (
 	"errors"
-	"time"
 
-	vaultclient "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/vault"
+	secretclient "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/kubernetessecret"
+	projectedsecret "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/projectedsecret"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 type secretBackend string
 
-const (
-	secretBackendVault secretBackend = "vault"
-)
+const secretBackendKubernetes secretBackend = "kubernetes"
 
 type secretDeliveryCloser interface {
 	repository.SecretDelivery
 	Close()
 }
 
-type staticRoleManagerCloser interface {
-	repository.VaultStaticRoleManager
-	Close()
-}
-
 func selectSecretBackend(value string) (secretBackend, error) {
 	backend := secretBackend(value)
-	if backend != secretBackendVault {
+	if backend != secretBackendKubernetes {
 		return "", errors.New("secret backend is not registered")
 	}
 	return backend, nil
@@ -37,13 +30,14 @@ func newRuntimeSecretDelivery(config Config) (secretDeliveryCloser, error) {
 	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return nil, err
 	}
-	return vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
-		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultAuthFile,
-		Timeout:                 5 * time.Second,
-	})
+	return projectedsecret.NewRuntimeDelivery(
+		config.ReadbackCredentialSecret,
+		config.ReadbackPossessionSecret,
+		config.RestoreRoleCredentialSecret,
+		config.RestoreACKSecret,
+		config.ResolverReadbackCredentialSecret,
+		config.ResolverReadbackPossessionSecret,
+	)
 }
 
 func newPublisherSecretDelivery(
@@ -53,26 +47,5 @@ func newPublisherSecretDelivery(
 	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
 		return nil, err
 	}
-	_ = registry
-	return vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName,
-		CAFile: config.VaultCAFile, AuthMount: "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultAuthFile,
-		Timeout:                 5 * time.Second,
-	})
-}
-
-func newStaticRoleManager(config ReconcilerConfig) (staticRoleManagerCloser, error) {
-	if _, err := selectSecretBackend(config.SecretBackend); err != nil {
-		return nil, err
-	}
-	return vaultclient.NewStaticRoleClient(vaultclient.Config{
-		Address:       config.VaultAddress,
-		TLSServerName: config.VaultTLSServerName,
-		CAFile:        config.VaultCAFile, AuthMount: "kubernetes",
-		AuthRole:                config.VaultAuthRole,
-		ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
-		Timeout:                 5 * time.Second,
-	})
+	return secretclient.NewPublisherDelivery(registry)
 }

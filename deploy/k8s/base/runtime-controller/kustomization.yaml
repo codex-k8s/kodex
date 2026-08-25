@@ -13,3 +13,4 @@ resources:
   - dashboard.yaml
 components:
   - ../../components/internal-rpc-authority-runtime-controller-issuer
+patches: null

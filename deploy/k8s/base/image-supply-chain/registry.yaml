@@ -171,11 +171,9 @@ spec:
             claimName: kodex-image-registry-promoted
             readOnly: true
         - name: credentials
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: kodex-image-registry-pull
+          secret:
+            secretName: kodex-image-registry-pull
+            defaultMode: 292
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
@@ -297,11 +295,9 @@ spec:
           persistentVolumeClaim:
             claimName: kodex-image-registry-staging
         - name: credentials
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: kodex-image-registry-push
+          secret:
+            secretName: kodex-image-registry-push
+            defaultMode: 292
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
@@ -439,11 +435,9 @@ spec:
           persistentVolumeClaim:
             claimName: kodex-image-registry-staging
         - name: credentials
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: kodex-image-registry-admin
+          secret:
+            secretName: kodex-image-registry-admin
+            defaultMode: 292
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
@@ -581,11 +575,9 @@ spec:
           persistentVolumeClaim:
             claimName: kodex-image-registry-promoted
         - name: credentials
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: kodex-image-registry-promotion
+          secret:
+            secretName: kodex-image-registry-promotion
+            defaultMode: 292
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi

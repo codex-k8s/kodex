@@ -2,7 +2,7 @@ package app
 
 import "testing"
 
-func TestSelectSecretBackendAcceptsOnlyVault(t *testing.T) {
+func TestSelectSecretBackendAcceptsOnlyKubernetes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -11,9 +11,9 @@ func TestSelectSecretBackendAcceptsOnlyVault(t *testing.T) {
 		want    secretBackend
 		ok      bool
 	}{
-		{name: "Vault", backend: "vault", want: secretBackendVault, ok: true},
+		{name: "Kubernetes", backend: "kubernetes", want: secretBackendKubernetes, ok: true},
 		{name: "удалённый prototype", backend: "direct-production-kubernetes-file"},
-		{name: "неизвестный backend", backend: "kubernetes"},
+		{name: "удалённый Vault", backend: "vault"},
 	}
 
 	for _, test := range tests {

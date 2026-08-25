@@ -24,3 +24,4 @@ labels:
       kodex.dev/profile: web-only
     includeSelectors: false
     includeTemplates: true
+patches: null

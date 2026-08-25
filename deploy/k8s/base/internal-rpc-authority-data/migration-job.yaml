@@ -71,11 +71,9 @@ spec:
               mountPath: /tmp
       volumes:
         - name: postgresql-credentials
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: internal-rpc-authority-postgres-migration
+          secret:
+            secretName: internal-rpc-authority-postgres-migration
+            defaultMode: 292
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi

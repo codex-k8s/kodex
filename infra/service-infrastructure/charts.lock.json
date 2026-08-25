@@ -2,32 +2,11 @@
   "schemaVersion": 1,
   "charts": [
     {
-      "name": "secrets-store-csi-driver",
-      "repository": "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts",
-      "chart": "secrets-store-csi-driver",
-      "version": "1.6.0",
-      "sha256": "63a35e803d78a07df990411fc2df66d1f9426ed4508cc5794b5b4f125bb50744"
-    },
-    {
       "name": "trust-manager",
       "repository": "oci://quay.io/jetstack/charts/trust-manager",
       "chart": "trust-manager",
       "version": "v0.24.0",
       "sha256": "0de4bbef2d1a013bd4a91c6f59a9cb0273dda9a785e018a9a16e8f2b096af823"
-    },
-    {
-      "name": "vault",
-      "repository": "https://helm.releases.hashicorp.com",
-      "chart": "vault",
-      "version": "0.34.1",
-      "sha256": "df4c37fac32496892ff1e1d6fd7954d3a402cc7b1b2b4c2226af11b8a57564c4"
-    },
-    {
-      "name": "vault-secrets-operator",
-      "repository": "https://helm.releases.hashicorp.com",
-      "chart": "vault-secrets-operator",
-      "version": "1.5.1",
-      "sha256": "192f45009f340eb2633e344798fa3a33b39ef5e71acb8f46c52bb7bbd59cc30b"
     }
   ]
 }

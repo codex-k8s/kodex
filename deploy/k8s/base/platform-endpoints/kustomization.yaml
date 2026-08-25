@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: kodex-system
 resources:
   - runtime.yaml
+patches: null

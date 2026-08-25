@@ -234,11 +234,9 @@ spec:
               - key: ca.pem
                 path: ca.pem
         - name: postgres-runtime
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-runtime
+          secret:
+            secretName: control-plane-postgres-runtime
+            defaultMode: 292
         - name: postgres-ca
           configMap:
             name: control-plane-postgresql-ca
@@ -247,11 +245,9 @@ spec:
               - key: ca.pem
                 path: ca.pem
         - name: nats-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-nats
+          secret:
+            secretName: control-plane-nats
+            defaultMode: 292
         - name: nats-client-tls
           secret:
             secretName: control-plane-nats-client-tls
@@ -269,11 +265,9 @@ spec:
               - key: ca.pem
                 path: ca.pem
         - name: lease-signing
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-lease-signing
+          secret:
+            secretName: control-plane-lease-signing
+            defaultMode: 292
         - name: authority-policy
           configMap:
             name: internal-rpc-authority-publisher-target-registry
@@ -289,11 +283,9 @@ spec:
               - key: ca.pem
                 path: ca.pem
         - name: application-grants
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-application-grants
+          secret:
+            secretName: control-plane-application-grants
+            defaultMode: 292
         - name: role-environments
           configMap:
             name: kodex-role-environments

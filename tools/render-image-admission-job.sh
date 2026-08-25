@@ -103,14 +103,14 @@ EOF
 }
 
 emit_job() {
-  local phase=$1 service_account=$2 identity_spc=$3 protected=${4:-false}
-  local workload="" grant_signer_spc=""
+  local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
+  local workload="" grant_signer_secret=""
   if [[ $phase == claim || $phase == admit ]]; then
     workload=image-admission
-    grant_signer_spc=image-admission-platform-worker-grant-signer
+    grant_signer_secret=image-admission-platform-worker-grant-signer
   elif [[ $phase == promote ]]; then
     workload=image-promotion
-    grant_signer_spc=image-promotion-platform-worker-grant-signer
+    grant_signer_secret=image-promotion-platform-worker-grant-signer
   fi
   cat <<EOF
 ---
@@ -180,7 +180,6 @@ EOF
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
             - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: "${workload}"}
             - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://kodex.local/ns/kodex-system/sa/${workload}"}
-            - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: "internal-rpc-authority-${workload}"}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.kodex-system.svc}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem}
@@ -204,11 +203,13 @@ EOF
             - {name: authority-issuer-key, mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer, readOnly: true}
             - {name: authority-workload-tls, mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls, readOnly: true}
             - {name: authority-readback-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/readback, readOnly: true}
-            - {name: authority-vault-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/vault, readOnly: true}
-            - {name: authority-vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
+            - {name: authority-readback-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential, readOnly: true}
+            - {name: authority-readback-possession, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession, readOnly: true}
             - {name: authority-restore-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/restore, readOnly: true}
             - {name: authority-restore-certificate, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
             - {name: authority-restore-role-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust, readOnly: true}
+            - {name: authority-restore-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential, readOnly: true}
+            - {name: authority-restore-ack, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack, readOnly: true}
             - {name: authority-postgresql, mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres, readOnly: true}
             - {name: authority-postgresql-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql, readOnly: true}
             - {name: authority-observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
@@ -301,30 +302,27 @@ EOF
   cat <<EOF
         - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
         - {name: script, configMap: {name: kodex-image-admission, defaultMode: 0555}}
-        - name: identity
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: ${identity_spc}}
+        - {name: identity, secret: {secretName: ${identity_secret}, defaultMode: 0440}}
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
         - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}
-        - {name: authority-manifest-trust, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-manifest-trust}}}
-        - {name: authority-proof-trust, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-proof-trust}}}
-        - {name: authority-issuer-key, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-issuer-key}}}
+        - {name: authority-manifest-trust, secret: {secretName: internal-rpc-authority-${workload}-manifest-trust, defaultMode: 0440}}
+        - {name: authority-proof-trust, secret: {secretName: internal-rpc-authority-${workload}-proof-trust, defaultMode: 0440}}
+        - {name: authority-issuer-key, secret: {secretName: internal-rpc-authority-${workload}-issuer-key, defaultMode: 0440}}
         - {name: authority-workload-tls, secret: {secretName: internal-rpc-authority-${workload}-workload-tls, defaultMode: 0440}}
         - {name: control-plane-ca, configMap: {name: kodex-internal-ca, defaultMode: 0440}}
         - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
-        - {name: platform-worker-grant-signer, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_signer_spc}}}}
+        - {name: platform-worker-grant-signer, secret: {secretName: ${grant_signer_secret}, defaultMode: 0440}}
         - {name: authority-readback-ca, configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}}
-        - {name: authority-vault-ca, configMap: {name: internal-rpc-authority-vault-ca, defaultMode: 0440}}
-        - name: authority-vault-token
-          projected: {defaultMode: 0400, sources: [{serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}}]}
+        - {name: authority-readback-credential, secret: {secretName: internal-rpc-authority-${workload}-issuer-readback-credential, defaultMode: 0440}}
+        - {name: authority-readback-possession, secret: {secretName: internal-rpc-authority-${workload}-issuer-readback-possession, defaultMode: 0440}}
         - {name: authority-restore-ca, configMap: {name: internal-rpc-authority-restore-controller-ca, defaultMode: 0440}}
         - {name: authority-restore-certificate, secret: {secretName: internal-rpc-authority-restore-controller-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}]}}
         - {name: authority-restore-role-trust, secret: {secretName: internal-rpc-authority-restore-role-trust, defaultMode: 0440, items: [{key: restore-role-trust.jws, path: restore-role-trust.jws}]}}
+        - {name: authority-restore-credential, secret: {secretName: internal-rpc-authority-${workload}-issuer-restore-credential, defaultMode: 0440}}
+        - {name: authority-restore-ack, secret: {secretName: internal-rpc-authority-${workload}-issuer-restore-ack, defaultMode: 0440}}
         - {name: authority-postgresql, secret: {secretName: internal-rpc-authority-${workload}-issuer-postgresql, defaultMode: 0440, items: [{key: dsn, path: dsn}, {key: username, path: username}]}}
         - {name: authority-postgresql-ca, configMap: {name: internal-rpc-authority-postgresql-ca, defaultMode: 0440}}
         - {name: authority-observability, configMap: {name: internal-rpc-authority-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}}

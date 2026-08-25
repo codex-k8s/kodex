@@ -1,25 +1,6 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: internal-rpc-authority-database-credential-reconciler
-  annotations: {argocd.argoproj.io/sync-wave: "-9"}
-spec:
-  secretName: internal-rpc-authority-database-credential-reconciler-tls
-  duration: 720h
-  renewBefore: 120h
-  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
-  dnsNames:
-    - internal-rpc-authority-database-credential-reconciler
-    - internal-rpc-authority-database-credential-reconciler.kodex-system.svc
-    - internal-rpc-authority-database-credential-reconciler.kodex-system.svc.cluster.local
-  uris:
-    - spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-database-credential-reconciler
-  usages: [server auth, client auth]
-  issuerRef: {name: kodex-installation-ca, kind: Issuer}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
   name: internal-rpc-authority-publisher
   annotations: {argocd.argoproj.io/sync-wave: "-9"}
 spec:

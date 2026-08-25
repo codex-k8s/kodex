@@ -15,7 +15,7 @@ import (
 
 var (
 	registryWorkloadPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$`)
-	registryVaultPathPattern = regexp.MustCompile(`^kv/data/kodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$`)
+	registrySecretPattern    = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 	registryDigestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	registryPrincipalPattern = regexp.MustCompile(`^ira_[a-z0-9_]+_g[1-9][0-9]*$`)
 )
@@ -38,38 +38,34 @@ type registryTarget struct {
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"authority_snapshot"`
 	AuthPrivateKey struct {
-		VaultPath  string `yaml:"vault_path"`
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"auth_private_key"`
 	ManifestTrust struct {
-		VaultPath  string `yaml:"vault_path"`
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"manifest_trust"`
 	AuthorityProofTrust struct {
-		VaultPath  string `yaml:"vault_path"`
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"authority_proof_trust"`
 	AuthorityProofPrivateKey struct {
-		VaultPath  string `yaml:"vault_path"`
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"authority_proof_private_key"`
 	DatabaseIdentity struct {
 		LoginPrincipal       string `yaml:"login_principal"`
-		VaultDatabaseRole    string `yaml:"vault_database_role"`
+		CredentialSecret     string `yaml:"credential_secret_name"`
 		DSNMountPath         string `yaml:"dsn_mount_path"`
 		CredentialGeneration uint64 `yaml:"credential_generation"`
 	} `yaml:"database_identity"`
 	RestoreCoordination struct {
 		RoleCredentialID        string `yaml:"role_credential_id"`
-		RoleCredentialVaultPath string `yaml:"role_credential_vault_path"`
+		RoleCredentialSecret    string `yaml:"role_credential_secret_name"`
 		RoleCredentialMountPath string `yaml:"role_credential_mount_path"`
 		ACKKeyID                string `yaml:"ack_key_id"`
 		ACKKeyGeneration        uint64 `yaml:"ack_key_generation"`
-		ACKKeyVaultPath         string `yaml:"ack_key_vault_path"`
+		ACKKeySecret            string `yaml:"ack_key_secret_name"`
 		ACKKeyMountPath         string `yaml:"ack_key_mount_path"`
 		ACKPublicJWKSource      string `yaml:"ack_public_jwk_source"`
 		ControllerAddress       string `yaml:"controller_address"`
@@ -82,14 +78,14 @@ type registryTarget struct {
 	} `yaml:"restore_coordination"`
 	Readback struct {
 		ReadbackID              string `yaml:"readback_id"`
-		CredentialVaultPath     string `yaml:"credential_vault_path"`
+		CredentialSecret        string `yaml:"credential_secret_name"`
 		CredentialID            string `yaml:"credential_id"`
 		CredentialMountPath     string `yaml:"credential_mount_path"`
 		CredentialProtectedType string `yaml:"credential_protected_type"`
 		CredentialSchema        string `yaml:"credential_schema"`
 		PossessionKeyID         string `yaml:"possession_key_id"`
 		PossessionKeyGeneration uint64 `yaml:"possession_key_generation"`
-		PossessionKeyVaultPath  string `yaml:"possession_key_vault_path"`
+		PossessionKeySecret     string `yaml:"possession_key_secret_name"`
 		PossessionKeyMountPath  string `yaml:"possession_key_mount_path"`
 		PossessionJWKSource     string `yaml:"possession_public_jwk_source"`
 		AttestorAddress         string `yaml:"attestor_address"`
@@ -128,7 +124,6 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 		Targets:      make(map[string]model.DeliveryTarget, len(document.Targets)),
 	}
 	seenTuple := make(map[string]struct{}, len(document.Targets))
-	seenPath := make(map[string]struct{}, len(document.Targets)*2)
 	for _, entry := range document.Targets {
 		targetID := targetID(entry.WorkloadID, entry.Role)
 		tuple := entry.WorkloadID + "\x00" + entry.Role
@@ -146,22 +141,21 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.AuthoritySnapshot.MountPath !=
 				"/var/run/config/kodex/internal-rpc-authority/snapshot" ||
 			!validOptionalAuthKey(entry) ||
-			!registryVaultPathPattern.MatchString(entry.ManifestTrust.VaultPath) ||
-			entry.ManifestTrust.SecretName != "internal-rpc-authority-manifest-trust" ||
+			!registrySecretPattern.MatchString(entry.ManifestTrust.SecretName) ||
 			entry.ManifestTrust.MountPath !=
 				"/var/run/config/kodex/internal-rpc-authority/manifest-trust" ||
 			!validOptionalProofTrust(entry) ||
 			!validOptionalProofPrivateKey(entry) ||
 			!registryPrincipalPattern.MatchString(entry.DatabaseIdentity.LoginPrincipal) ||
-			entry.DatabaseIdentity.VaultDatabaseRole == "" ||
+			!registrySecretPattern.MatchString(entry.DatabaseIdentity.CredentialSecret) ||
 			entry.DatabaseIdentity.DSNMountPath !=
 				"/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn" ||
 			entry.DatabaseIdentity.CredentialGeneration == 0 ||
 			entry.RestoreCoordination.ACKKeyGeneration == 0 ||
-			!registryVaultPathPattern.MatchString(entry.RestoreCoordination.RoleCredentialVaultPath) ||
-			!registryVaultPathPattern.MatchString(entry.RestoreCoordination.ACKKeyVaultPath) ||
-			entry.RestoreCoordination.RoleCredentialVaultPath ==
-				entry.RestoreCoordination.ACKKeyVaultPath ||
+			!registrySecretPattern.MatchString(entry.RestoreCoordination.RoleCredentialSecret) ||
+			!registrySecretPattern.MatchString(entry.RestoreCoordination.ACKKeySecret) ||
+			entry.RestoreCoordination.RoleCredentialSecret ==
+				entry.RestoreCoordination.ACKKeySecret ||
 			entry.RestoreCoordination.RoleCredentialID == "" ||
 			entry.RestoreCoordination.ACKKeyID == "" ||
 			entry.RestoreCoordination.RoleCredentialMountPath !=
@@ -223,26 +217,22 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			return model.DeliveryTargetRegistry{}, errors.New("duplicate publisher target tuple")
 		}
 		seenTuple[tuple] = struct{}{}
-		for _, pathValue := range []string{
-			entry.RestoreCoordination.RoleCredentialVaultPath,
-			entry.RestoreCoordination.ACKKeyVaultPath,
-			entry.Readback.CredentialVaultPath,
-			entry.Readback.PossessionKeyVaultPath,
-			entry.ManifestTrust.VaultPath,
-			entry.AuthPrivateKey.VaultPath,
-			entry.AuthorityProofTrust.VaultPath,
-			entry.AuthorityProofPrivateKey.VaultPath,
+		for _, secretName := range []string{
+			entry.RestoreCoordination.RoleCredentialSecret,
+			entry.RestoreCoordination.ACKKeySecret,
+			entry.Readback.CredentialSecret,
+			entry.Readback.PossessionKeySecret,
+			entry.ManifestTrust.SecretName,
+			entry.AuthPrivateKey.SecretName,
+			entry.AuthorityProofTrust.SecretName,
+			entry.AuthorityProofPrivateKey.SecretName,
 		} {
-			if pathValue == "" {
+			if secretName == "" {
 				continue
 			}
-			if !registryVaultPathPattern.MatchString(pathValue) {
-				return model.DeliveryTargetRegistry{}, errors.New("publisher target Vault path is invalid")
+			if !registrySecretPattern.MatchString(secretName) {
+				return model.DeliveryTargetRegistry{}, errors.New("publisher target Secret name is invalid")
 			}
-			if _, duplicate := seenPath[pathValue]; duplicate {
-				return model.DeliveryTargetRegistry{}, errors.New("publisher target Vault path is reused")
-			}
-			seenPath[pathValue] = struct{}{}
 		}
 		registry.Targets[targetID] = model.DeliveryTarget{
 			TargetID:                   targetID,
@@ -255,27 +245,23 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			CredentialGeneration:       entry.DatabaseIdentity.CredentialGeneration,
 			AuthoritySnapshotSecret:    entry.AuthoritySnapshot.SecretName,
 			AuthoritySnapshotMountPath: entry.AuthoritySnapshot.MountPath,
-			AuthPrivateKeyVaultPath:    entry.AuthPrivateKey.VaultPath,
 			AuthPrivateKeySecret:       entry.AuthPrivateKey.SecretName,
 			AuthPrivateKeyMountPath:    entry.AuthPrivateKey.MountPath,
-			ManifestTrustVaultPath:     entry.ManifestTrust.VaultPath,
 			ManifestTrustSecret:        entry.ManifestTrust.SecretName,
 			ManifestTrustMountPath:     entry.ManifestTrust.MountPath,
-			ProofTrustVaultPath:        entry.AuthorityProofTrust.VaultPath,
 			ProofTrustSecret:           entry.AuthorityProofTrust.SecretName,
 			ProofTrustMountPath:        entry.AuthorityProofTrust.MountPath,
-			ProofPrivateKeyVaultPath:   entry.AuthorityProofPrivateKey.VaultPath,
 			ProofPrivateKeySecret:      entry.AuthorityProofPrivateKey.SecretName,
 			ProofPrivateKeyMountPath:   entry.AuthorityProofPrivateKey.MountPath,
 			DatabaseLoginPrincipal:     entry.DatabaseIdentity.LoginPrincipal,
-			DatabaseVaultRole:          entry.DatabaseIdentity.VaultDatabaseRole,
+			DatabaseCredentialSecret:   entry.DatabaseIdentity.CredentialSecret,
 			DatabaseDSNMountPath:       entry.DatabaseIdentity.DSNMountPath,
 			RestoreCredentialID:        entry.RestoreCoordination.RoleCredentialID,
-			RestoreCredentialPath:      entry.RestoreCoordination.RoleCredentialVaultPath,
+			RestoreCredentialPath:      entry.RestoreCoordination.RoleCredentialSecret,
 			RestoreCredentialMountPath: entry.RestoreCoordination.RoleCredentialMountPath,
 			RestoreACKKeyID:            entry.RestoreCoordination.ACKKeyID,
 			RestoreACKKeyGeneration:    entry.RestoreCoordination.ACKKeyGeneration,
-			RestoreACKKeyPath:          entry.RestoreCoordination.ACKKeyVaultPath,
+			RestoreACKKeyPath:          entry.RestoreCoordination.ACKKeySecret,
 			RestoreACKKeyMountPath:     entry.RestoreCoordination.ACKKeyMountPath,
 			RestoreControllerAddress:   entry.RestoreCoordination.ControllerAddress,
 			RestoreControllerSNI:       entry.RestoreCoordination.ControllerTLSServerName,
@@ -285,10 +271,10 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			RestoreNetworkPolicy:       entry.RestoreCoordination.NetworkPolicy,
 			ReadbackID:                 entry.Readback.ReadbackID,
 			ReadbackCredentialID:       entry.Readback.CredentialID,
-			ReadbackCredentialPath:     entry.Readback.CredentialVaultPath,
+			ReadbackCredentialPath:     entry.Readback.CredentialSecret,
 			ReadbackCredentialMount:    entry.Readback.CredentialMountPath,
 			ReadbackPossessionKeyID:    entry.Readback.PossessionKeyID,
-			ReadbackPossessionKeyPath:  entry.Readback.PossessionKeyVaultPath,
+			ReadbackPossessionKeyPath:  entry.Readback.PossessionKeySecret,
 			ReadbackPossessionKeyMount: entry.Readback.PossessionKeyMountPath,
 			ReadbackIntentRevision:     entry.Readback.IntentRevision,
 			ReadbackMaterialGeneration: entry.Readback.MaterialGeneration,
@@ -306,39 +292,30 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 
 func validOptionalAuthKey(entry registryTarget) bool {
 	if entry.Role != "AUTHORIZATION_ISSUER" {
-		return entry.AuthPrivateKey.VaultPath == "" &&
-			entry.AuthPrivateKey.SecretName == "" &&
+		return entry.AuthPrivateKey.SecretName == "" &&
 			entry.AuthPrivateKey.MountPath == ""
 	}
-	return registryVaultPathPattern.MatchString(entry.AuthPrivateKey.VaultPath) &&
-		entry.AuthPrivateKey.SecretName == "internal-rpc-authority-issuer-key" &&
+	return registrySecretPattern.MatchString(entry.AuthPrivateKey.SecretName) &&
 		entry.AuthPrivateKey.MountPath ==
 			"/var/run/secrets/kodex/internal-rpc-authority/issuer"
 }
 
 func validOptionalProofTrust(entry registryTarget) bool {
 	if entry.Role == "AUTHORIZATION_VERIFIER" {
-		return entry.AuthorityProofTrust.VaultPath == "" &&
-			entry.AuthorityProofTrust.SecretName == "" &&
+		return entry.AuthorityProofTrust.SecretName == "" &&
 			entry.AuthorityProofTrust.MountPath == ""
 	}
-	return registryVaultPathPattern.MatchString(entry.AuthorityProofTrust.VaultPath) &&
-		entry.AuthorityProofTrust.SecretName == "internal-rpc-authority-proof-trust" &&
+	return registrySecretPattern.MatchString(entry.AuthorityProofTrust.SecretName) &&
 		entry.AuthorityProofTrust.MountPath ==
 			"/var/run/config/kodex/internal-rpc-authority/authority-proof-trust"
 }
 
 func validOptionalProofPrivateKey(entry registryTarget) bool {
 	if entry.Role != "AUTHORITY_PROOF_RESOLVER" {
-		return entry.AuthorityProofPrivateKey.VaultPath == "" &&
-			entry.AuthorityProofPrivateKey.SecretName == "" &&
+		return entry.AuthorityProofPrivateKey.SecretName == "" &&
 			entry.AuthorityProofPrivateKey.MountPath == ""
 	}
-	return registryVaultPathPattern.MatchString(
-		entry.AuthorityProofPrivateKey.VaultPath,
-	) &&
-		entry.AuthorityProofPrivateKey.SecretName ==
-			"internal-rpc-authority-proof-signer-key" &&
+	return registrySecretPattern.MatchString(entry.AuthorityProofPrivateKey.SecretName) &&
 		entry.AuthorityProofPrivateKey.MountPath ==
 			"/var/run/secrets/kodex/internal-rpc-authority/proof-signer"
 }

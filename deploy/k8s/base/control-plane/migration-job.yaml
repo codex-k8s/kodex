@@ -72,11 +72,9 @@ spec:
               readOnly: true
       volumes:
         - name: postgres-migration
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-postgres-migration
+          secret:
+            secretName: control-plane-postgres-migration
+            defaultMode: 292
         - name: postgres-ca
           configMap:
             name: control-plane-postgresql-ca

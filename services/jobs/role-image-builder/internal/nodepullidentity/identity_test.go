@@ -2,7 +2,7 @@ package nodepullidentity
 
 import "testing"
 
-func TestCommonNameMatchesVaultSubdomainRole(t *testing.T) {
+func TestCommonNameMatchesNodePullIdentity(t *testing.T) {
 	t.Parallel()
 
 	commonName := CommonName("node-production-1", 7)

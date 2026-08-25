@@ -4,8 +4,8 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 1.3.0
-updated: 2026-08-23
+version: 2.0.0
+updated: 2026-08-25
 ---
 
 # Внутренний сервис internal-rpc-authority
@@ -59,9 +59,6 @@ proof от домена-владельца и связывается с зара
   source `Cluster`; PITR executor независимо повторяет readback, указывает
   exact `backupID`/timeline и подписывает completion только при полном
   совпадении;
-- `internal-rpc-authority-database-credential-reconciler` поддерживает
-  выведенные сервером `CURRENT`/`NEXT` principal PostgreSQL для publisher и
-  readback attestor через аутентификацию Vault Kubernetes;
 - `internal-rpc-authority-cli up|status` применяет единственную fresh baseline
   goose без штатного отката. Legacy `expand|contract|deploy`, backfill и
   compatibility path отсутствуют; повторный `up` выполняет идемпотентный
@@ -88,7 +85,7 @@ Issuer и verifier загружают подписанный каноничес�
 | `INTERNAL_RPC_AUTHORITY_SNAPSHOT_JWS_FILE` | Подписанный снимок authority |
 | `INTERNAL_RPC_AUTHORITY_MANIFEST_ROOT_PUBLIC_JWK_FILE` | Неизменяемый начальный публичный ключ независимого корня манифеста |
 | `INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_JWS_FILE` | Однонаправленно подписанный пакет доверия ключа манифеста |
-| `INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE` | Проецируемый токен Vault с закреплённой аудиторией; значение читается только из файла |
+| `INTERNAL_RPC_AUTHORITY_SECRET_BACKEND` | Только `kubernetes`; иной backend закрыто отклоняется |
 | `INTERNAL_RPC_AUTHORITY_WORKLOAD_CERTIFICATE_FILE` | Точный mTLS-сертификат workload для attestor/controller |
 
 Issuer дополнительно требует
@@ -100,17 +97,16 @@ Issuer дополнительно требует
 
 Verifier того же workload `control-plane` дополнительно подтверждает роль
 `AUTHORITY_PROOF_RESOLVER`: перед отдельным readback receipt он связывает
-доставленный через CSI proof private key с exact `CURRENT` JWK, issuer,
+доставленный через Kubernetes Secret proof private key с exact `CURRENT` JWK, issuer,
 аудиторией, поколением и source revision/digest proof trust. Receipt verifier
 не заменяет resolver receipt, а publisher остаётся неготовым до полного набора.
 
 Обычные readback credential, ключ владения, restore role credential и restore
-ACK key issuer/verifier читают непосредственно из точных путей Vault KV,
-разрешённых только их роли workload. Вызывающая сторона не передаёт путь,
-workload, роль, поколение, аудиторию или TTL. Материал ключа publisher и снимки
-доверия attestor/controller доставляются через Vault `SecretProviderClass` в
-пространстве имён с аудиторией `vault`, точным TLS SNI и
-`vaultSkipTLSVerify=false`. Snapshot создаётся заранее пустым ресурсом без
+ACK key issuer/verifier читают из точных Kubernetes Secret projections,
+разрешённых только их роли workload. Вызывающая сторона не передаёт имя Secret,
+workload, роль, поколение, аудиторию или TTL. Publisher обновляет только
+закрытый набор Secrets через exact `resourceNames` RBAC и монотонную generation.
+Snapshot создаётся заранее пустым ресурсом без
 секретного материала; publisher имеет только `get/update/patch`, выполняет
 `resourceVersion` CAS через exact Kubernetes API destination и после каждого
 изменения читает фактически обслуживаемый JWS. Один snapshot действует не
@@ -136,19 +132,17 @@ Timeout, cancel, отсутствующее/устаревшее/откачен�
 `QUIESCING`/`PREPARED`/`RESTORING` оставляют admission закрытым и завершают
 startup ошибкой.
 
-Reconciler дополнительно использует точные mTLS-сертификат/client CA,
-идентичность PostgreSQL, Vault HTTPS/SNI/CA, проецируемый токен Vault с
-закреплённой аудиторией и неизменяемые исходные ревизию/хэш реестра
-возможностей. Имена Kubernetes и пути
-зафиксированы в `deploy/k8s/base/internal-rpc-authority`. PostgreSQL DSN каждого
+Static PostgreSQL principals создаёт installation bootstrap, а одноразовая Job
+сверяет закрытый реестр ролей и задаёт SCRAM passwords из Kubernetes Secret до
+миграций. Runtime не получает `CREATEROLE` и не поддерживает параллельный
+credential lifecycle. Имена Kubernetes и пути зафиксированы в deploy profile.
+PostgreSQL DSN каждого
 процесса обязан ссылаться на CA-файл из отдельного ConfigMap, подключённого
 только для чтения, и
 использовать `sslmode=verify-full`.
-State-changing credential lifecycle проходит
-`transport/grpc → domain/service → domain/repository ports →
-PostgreSQL/Vault/Kubernetes adapters`; composition root только проверяет
-конфигурацию и связывает зависимости. Параллельного orchestration/source of
-truth в `internal/application` для этого lifecycle нет.
+State-changing key publication проходит `domain/service → domain/repository
+ports → PostgreSQL/Kubernetes adapters`; composition root только проверяет
+конфигурацию и связывает зависимости.
 
 ## Поддерживаемая локальная проверка
 

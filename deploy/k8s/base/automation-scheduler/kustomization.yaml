@@ -12,6 +12,6 @@ resources:
   - issuer-networkpolicy.yaml
   - prometheusrule.yaml
   - dashboard.yaml
-  - vault-secret-provider-classes.yaml
 components:
   - ../../components/internal-rpc-authority-automation-scheduler-issuer
+patches: null

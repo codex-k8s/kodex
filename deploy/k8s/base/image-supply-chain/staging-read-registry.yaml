@@ -60,10 +60,9 @@ spec:
         - name: data
           persistentVolumeClaim: {claimName: kodex-image-registry-staging, readOnly: true}
         - name: identity
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: kodex-image-registry-staging-read}
+          secret:
+            secretName: kodex-image-registry-staging-read
+            defaultMode: 292
         - name: tmp
           emptyDir: {sizeLimit: 32Mi}
 ---

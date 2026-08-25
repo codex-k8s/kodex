@@ -4,8 +4,8 @@ title: Доверенный контекст внутренних RPC
 type: contract
 status: approved
 owner: architect
-version: 1.3.2
-updated: 2026-07-30
+version: 1.4.0
+updated: 2026-08-25
 ---
 
 # Доверенный контекст внутренних RPC
@@ -256,9 +256,9 @@ RPC всегда получает новый context/JTI. Бизнесовая c
 | Этап | Владелец и переход |
 | --- | --- |
 | Intent | Publisher под PostgreSQL lease CAS-фиксирует один immutable rotation intent с точным generation, digest и union обязательных `(workload,role)` targets из всех operation bindings и producer profiles |
-| Подготовка | Publisher генерирует auth/proof key как `NEXT`; private parts и trust overlap пишет через Vault KV v2 CAS только в точный role paths зарегистрированных targets; wildcard/list/delete запрещены |
+| Подготовка | Publisher генерирует auth/proof key как `NEXT`; private parts и trust overlap пишет через `resourceVersion` CAS только в заранее созданные Kubernetes Secret из закрытого реестра targets; wildcard, list, create и delete запрещены |
 | Доставка | Caller `AUTHORIZATION_ISSUER` получает auth private key, manifest trust и proof trust; target `AUTHORIZATION_VERIFIER` получает только snapshot/manifest trust; `AUTHORITY_PROOF_RESOLVER` получает proof private key и trust. Target-only workload допустим и auth private key не получает |
-| Normal-readback credential | Для каждого pinned intent publisher отдельно выпускает credential `kodex-internal-rpc-readback-credential+jws` только с audience attestor и purpose `KEY_DELIVERY_READBACK` либо `SNAPSHOT_READBACK`, генерирует distinct possession key и доставляет credential/private key по точному normal-readback Vault paths, не совпадающим с restore role credential/ACK paths |
+| Normal-readback credential | Для каждого pinned intent publisher отдельно выпускает credential `kodex-internal-rpc-readback-credential+jws` только с audience attestor и purpose `KEY_DELIVERY_READBACK` либо `SNAPSHOT_READBACK`, генерирует distinct possession key и доставляет credential/private key в разные заранее созданные Secret, не совпадающие с restore role credential/ACK Secret |
 | Readback trust | Attestor независимо проверяет отдельный `readback-credential-trust.schema.json`, собственный persistent high-watermark и cryptographic served readback; restore controller credential/trust/audience на этом пути не принимаются |
 | Cryptographic readback | Каждая обязательная `(workload,role)` identity проверяет только свой private→public/trust material; точный readback фиксируется отдельным workload/role-bound PostgreSQL login principal, publisher требует ровно одну строку на каждую требуемую роль |
 | Публикация | Только после всех delivery readbacks publisher строит следующий подписанный снимок с `source_revision + 1`, применимым key/policy/signer counter, predecessor и ограниченный history |
@@ -280,8 +280,8 @@ readback functions; неполный set откатывает всю transaction
 Окно 40 секунд равно TTL 30 секунд плюс двум допустимым clock-skew окнам по
 5 секунд. Сокращать его runtime-настройкой запрещено.
 
-Crash recovery всегда продолжает тот же intent/generation/digest после Vault
-metadata CAS, consumer cryptographic readbacks, Kubernetes snapshot CAS и
+Crash recovery всегда продолжает тот же intent/generation/digest после
+Kubernetes Secret CAS, consumer cryptographic readbacks, snapshot CAS и
 publisher readback. До однозначного завершения либо repair текущего intent
 publisher не создает новую generation. Порядок
 `prepare → deliver → cryptographic readback → publish → promote` одинаков для
@@ -859,7 +859,7 @@ readback-attestor — точные
 Normal-readback credential имеет audience
 `urn:kodex:internal-rpc-authority-readback-attestor`, точный purpose,
 workload SPIFFE, role, поколения и отдельный possession JWK. Credential и
-private key доставляются по разным Vault paths из target registry и не
+private key доставляются по разным Secret из target registry и не
 совпадают с restore credential/ACK. Attestor проверяет independently rooted
 manifest bundle, forward-only credential trust и persistent high-watermark.
 Повреждение, rollback, gap, conflict, истечение material или неподтверждённый
@@ -876,13 +876,14 @@ Fresh schema и все grants/RLS/functions заданы единственно�
 Disposable PostgreSQL contour повторно проверяет fresh install, capability
 roles, точные функции, отсутствие устаревших overload и runtime права.
 
-Publisher и readback-attestor имеют отдельный
-`CURRENT/NEXT/PREVIOUS/RETIRED` lifecycle в
-`authority_runtime_database_identities`. Reconciler сначала фиксирует
-server-owned retirement fence, затем выполняет `NOLOGIN`, отзыв membership,
-rotation credential и bounded drain. Уже открытая retired session теряет право
-на следующий statement, потому что рабочие functions и RLS повторно проверяют
-неизменяемый `session_user`.
+Установщик создаёт отдельный статический PostgreSQL `LOGIN` principal для
+каждой зарегистрированной workload/role identity и помещает её DSN только в
+одноимённый Kubernetes Secret. Principal не является владельцем schema и
+получает только соответствующую `NOLOGIN` capability role. Смена credential
+выполняется code-first установщиком: новый Secret материализуется до рестарта
+потребителя, прежнему principal назначается `NOLOGIN`, memberships отзываются,
+активные sessions завершаются, после чего выполняется точный readback нового
+`session_user`. Runtime publisher не создаёт и не ротирует PostgreSQL roles.
 
 Readiness workload проверяет локально обслуживаемый snapshot, persistent
 watermark/replay store, точный `session_user`, capability role и тот же
@@ -915,7 +916,7 @@ SPIFFE получают разные key pairs.
 `urn:kodex:internal-rpc-authority-restore-controller`, точный restore
 purpose/ID/epoch/coordination revision и restore-only ACK key. Его нельзя
 передать readback attestor. Normal-readback credential имеет другой typ,
-audience, trust snapshot, Vault paths и possession key и не принимается
+audience, trust snapshot, Secret и possession key и не принимается
 controller. Cross-audience replay, массив audience и fallback по совпавшему
 SPIFFE всегда отклоняются до семантического использования claims.
 
@@ -927,20 +928,21 @@ Issuance достижим через точный mTLS
 `internal-rpc-authority-publisher-ca`. Controller передаёт только собственный
 signed issuance directive, связанный с restore epoch/revision, immutable
 target registry revision/digest и точный role tuple. Publisher проверяет
-controller SPIFFE/signature/generation, на стороне сервера разрешает Vault paths,
-генерирует distinct ACK key, доставляет private part только точный role, а
-public JWK включает в signed role credential. После Vault metadata и
+controller SPIFFE/signature/generation, на стороне сервера разрешает только
+точные заранее созданные Secret, генерирует distinct ACK key, доставляет private
+part только точный role, а public JWK включает в signed role credential. После
+Kubernetes `resourceVersion` CAS и
 private→public readback publisher возвращает signed delivery receipt;
 controller сохраняет receipt во внешнем coordination state до публикации
-QUIESCING directive. Private key, Vault path или target tuple из request/
+QUIESCING directive. Private key, Secret name или target tuple из request/
 response не принимаются как authority и не попадают в diagnostics.
 
 Publisher публикует signer trust как manifest-signed
 `restore-role-trust.schema.json`: ровно `CURRENT`+`NEXT` и optional ограниченный
 `PREVIOUS`, source revision, key-set revision, full canonical payload digest, immediate
 predecessor/history, manifest signer generation, key generation/kid/JWK/
-thumbprint/validity. Controller независимо получает manifest trust из Vault и
-точный trust Secret через TLS Kubernetes API, проверяет signature, validity,
+thumbprint/validity. Controller независимо получает manifest trust из точного
+Secret через TLS Kubernetes API, проверяет signature, validity,
 predecessor и persistent high-watermark, затем CAS-сохраняет собственный
 served readback во внешнем coordination state. Missing trust/config/readback,
 unknown/expired/wrong-generation signer, rollback, без увеличения ревизии mutation или
@@ -999,9 +1001,10 @@ signer/admission/readback либо recovery step, восстановленная
 authority PostgreSQL и потому не откатывается вместе с PITR.
 
 Controller использует отдельные ServiceAccount, ограниченный config, точный
-Kubernetes Secret/Lease RBAC и egress только к точный Kubernetes API/Vault.
+Kubernetes Secret/Lease RBAC и egress только к точному Kubernetes API.
 Restore operator не имеет Kubernetes write RBAC; его PostgreSQL restore
-credential доставляется Job через Vault и ограничен точный cluster. Controller
+credential доставляется Job из заранее созданного Secret и ограничен точным
+cluster. Controller
 signer и trust ротируются `CURRENT/NEXT/PREVIOUS`, проходят
 private→public/served-evidence readback, а готовность требует фактически
 наблюдаемую admission policy/binding и semantic anchor. Lower/same anchor,
@@ -1032,8 +1035,9 @@ Verifier отклоняет snapshot с другой длительностью,
 ### Auth key rotation
 
 1. Publisher фиксирует immutable rotation intent и генерирует новый key pair.
-2. Через Vault KV v2 CAS пишет private key только в точный path каждого
-   зарегистрированного `AUTHORIZATION_ISSUER`; wildcard/list/delete запрещены.
+2. Через `resourceVersion` CAS пишет private key только в заранее созданный
+   Secret каждого зарегистрированного `AUTHORIZATION_ISSUER`; wildcard, list,
+   create и delete запрещены.
 3. Каждый issuer проверяет mounted private key против intended `NEXT` public
    JWK и фиксирует cryptographic readback; publisher требует полный
    per-workload/role fan-out.
@@ -1054,8 +1058,9 @@ revision до readback неопределенного предыдущего CAS
 
 Manifest signer certificate имеет отдельный generation. Ротация:
 
-1. Publisher через точный Vault targets и CAS добавляет новый signer public
-   certificate в независимые manifest trust bundles всех требуемых ролей;
+1. Publisher через точные Kubernetes Secret targets и CAS добавляет новый
+   signer public certificate в независимые manifest trust bundles всех
+   требуемых ролей;
    старый остается.
 2. Каждая issuer/verifier/resolver role криптографически подтверждает overlap,
    certificate validity/generation и записывает readback.
@@ -1164,14 +1169,16 @@ Capability registry фиксирует:
   PostgreSQL restore credential и recovery step того же Job;
 - внешний монотонный restore evidence anchor, который не восстанавливается
   вместе с PostgreSQL;
-- PostgreSQL единый источник истины, `NOLOGIN` capability groups, отдельные login
-  principals на каждую `(workload,role,generation)` и точный
-  `ira_publisher_g1/g2` runtime principals с Vault-rotated credentials;
-- publisher ownership генерации и Vault KV v2 CAS-write auth private keys и
-  manifest/proof trust overlap по точному per-workload/role target registry;
-- Vault CSI delivery private keys/trust без secret values и cryptographic
-  role-bound issuer/verifier/resolver readback;
-- точный pre-created Kubernetes Secret и resourceNames-limited RBAC publisher;
+- PostgreSQL единый источник истины, `NOLOGIN` capability groups и отдельные
+  статические login principals на каждую `(workload,role,generation)`, которые
+  создаёт code-first установщик и доставляет через точные Secret;
+- publisher ownership генерации и Kubernetes `resourceVersion` CAS-write auth
+  private keys и manifest/proof trust overlap по точному per-workload/role
+  target registry;
+- Kubernetes Secret projection private keys/trust без secret values в PodSpec и
+  cryptographic role-bound issuer/verifier/resolver readback;
+- только заранее созданные Kubernetes Secret и `resourceNames`-limited RBAC
+  publisher;
 - UDS-only ingress sidecars;
 - точный PostgreSQL/Kubernetes API destinations без wildcard egress;
 - application-owned готовность через оба реальных UDS;
@@ -1265,7 +1272,7 @@ Context7 повторно вызван для gRPC-Go, go-jose и pgx. Все т
 29 июля 2026 года вернули `Monthly quota exceeded`; документация через
 Context7 недоступна. В fix-cycle раунда 1 отдельно повторен resolve Buf CLI с
 тем же результатом `Monthly quota exceeded`. В fix-cycle раунда 2 отдельно
-повторены resolve PostgreSQL, Kubernetes, HashiCorp Vault, Buf CLI и Protocol
+повторены resolve PostgreSQL, Kubernetes, Buf CLI и Protocol
 Buffers; каждый запрос вернул тот же `Monthly quota exceeded`.
 В fix-cycle раунда 3 повторены resolve PostgreSQL, Kubernetes и объединённый
 gRPC/Protocol Buffers; все три вернули `Monthly quota exceeded`.
@@ -1274,8 +1281,8 @@ gRPC/Protocol Buffers и go-jose; каждый запрос снова верн�
 `Monthly quota exceeded`, поэтому Context7 docs получить не удалось.
 В fix-cycle раунда 6 разрешённые resolve PostgreSQL, Kubernetes и объединённый
 gRPC/Protocol Buffers/JOSE снова вернули `Monthly quota exceeded`; официальный
-fallback повторно проверен для role membership/runtime login, Vault database
-credential rotation, точный NetworkPolicy, versioned RPC/descriptor и строгого
+fallback повторно проверен для role membership/runtime login, Kubernetes Secret
+CAS, точный NetworkPolicy, versioned RPC/descriptor и строгого
 JOSE audience/type separation.
 В recovery fix-cycle раунда 7 resolve PostgreSQL, Kubernetes и go-jose также
 вернули `Monthly quota exceeded`; официальный fallback повторно проверен для
@@ -1304,20 +1311,15 @@ JOSE audience/type separation.
 - Go Protobuf reflection:
   `https://pkg.go.dev/google.golang.org/protobuf` — generated descriptors,
   `protoreflect` и `protodesc` для анализа сгенерированного контракта;
-- Vault KV v2:
-  `https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2` — точный
-  data paths, `create/read/update`, version metadata и CAS;
-- Vault database secrets:
-  `https://developer.hashicorp.com/vault/docs/secrets/databases` — уникальные
-  auditable credentials, static-role one-to-one username и rotation;
-- Vault PostgreSQL database plugin:
-  `https://developer.hashicorp.com/vault/docs/secrets/databases/postgresql` —
-  PostgreSQL credential mapping, rotation, TLS и минимальные privileges;
-- Vault Kubernetes/CSI:
-  `https://developer.hashicorp.com/vault/docs/auth`,
-  `https://developer.hashicorp.com/vault/docs/deploy/kubernetes` и
-  `https://developer.hashicorp.com/vault/docs/deploy/kubernetes/csi/configurations`
-  — workload authentication и file delivery;
+- Kubernetes Secret:
+  `https://kubernetes.io/docs/concepts/configuration/secret/` — типы Secret,
+  projection в Pod и ограничения на хранение чувствительных данных;
+- Kubernetes API concurrency control:
+  `https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions`
+  — optimistic concurrency и exact `resourceVersion` CAS;
+- Kubernetes RBAC:
+  `https://kubernetes.io/docs/reference/access-authn-authz/rbac/` — точные
+  `resourceNames`, verbs и service-account boundary;
 - PostgreSQL row security:
   `https://www.postgresql.org/docs/current/ddl-rowsecurity.html` — default
   deny, policy по database role, `ENABLE`/`FORCE ROW LEVEL SECURITY`;

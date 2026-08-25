@@ -3,6 +3,6 @@ kind: Kustomization
 namespace: kodex-system
 resources:
   - serviceaccount.yaml
-  - vault-secret-provider-class.yaml
   - migration-job.yaml
   - networkpolicy.yaml
+patches: null

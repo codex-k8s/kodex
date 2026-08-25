@@ -4,4 +4,4 @@ namespace: kodex-system
 resources:
   - runtime.yaml
   - networkpolicy.yaml
-  - vault-secret-provider-class.yaml
+patches: null

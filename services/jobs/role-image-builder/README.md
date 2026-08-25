@@ -68,7 +68,7 @@ workload владеют evidence, verdict и переносом exact digest.
 
 Admission и promotion не требуют ручного запуска. Отдельный
 `image-admission-controller` автоматически создаёт одну последовательную
-цепочку phase Job/PVC. Он не получает owner, registry, signing или Vault
+цепочку phase Job/PVC. Он не получает owner, registry, signing или installation Secret
 credentials; каждая фаза сохраняет собственный ServiceAccount и secret
 boundary. RBAC дополняется `ValidatingAdmissionPolicy`, которая по exact caller
 identity отклоняет чужой image, command, env, volume либо ServiceAccount.

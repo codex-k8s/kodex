@@ -9,12 +9,11 @@ import (
 
 // Зарегистрированные capability-роли PostgreSQL.
 const (
-	CapabilityIssuer                       = "internal_rpc_authority_issuer"
-	CapabilityVerifier                     = "internal_rpc_authority_verifier"
-	CapabilityDatabaseCredentialReconciler = "internal_rpc_authority_database_credential_reconciler"
-	CapabilityPublisher                    = "internal_rpc_authority_publisher"
-	CapabilityReadbackAttestor             = "internal_rpc_authority_readback_attestor"
-	CapabilityRestoreController            = "internal_rpc_authority_restore_controller"
+	CapabilityIssuer            = "internal_rpc_authority_issuer"
+	CapabilityVerifier          = "internal_rpc_authority_verifier"
+	CapabilityPublisher         = "internal_rpc_authority_publisher"
+	CapabilityReadbackAttestor  = "internal_rpc_authority_readback_attestor"
+	CapabilityRestoreController = "internal_rpc_authority_restore_controller"
 )
 
 // Configure проверяет LOGIN principal и активирует точную NOLOGIN-роль.
@@ -117,8 +116,6 @@ func assumeQuery(queries querySet, capability string) (string, error) {
 		return queries.issuerAssume, nil
 	case CapabilityVerifier:
 		return queries.verifierAssume, nil
-	case CapabilityDatabaseCredentialReconciler:
-		return queries.databaseCredentialReconcilerAssume, nil
 	case CapabilityPublisher:
 		return queries.publisherAssume, nil
 	case CapabilityReadbackAttestor:

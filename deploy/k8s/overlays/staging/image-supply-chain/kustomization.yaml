@@ -8,3 +8,4 @@ labels:
       kodex.dev/environment: staging
     includeSelectors: false
     includeTemplates: true
+patches: null

@@ -228,18 +228,16 @@ api_client_policy_count=$(yq -o=json '
   select(.kind == "NetworkPolicy" and (
     .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
-    .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
-    .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
+    .metadata.name == "internal-rpc-authority-publisher-exact-paths"
   )) | .metadata.name
 ' "$rendered" | jq -s 'length')
-[[ "$api_client_policy_count" == "4" ]] ||
-  fail 'release profile must contain exactly four Kubernetes API client policies'
+[[ "$api_client_policy_count" == "3" ]] ||
+  fail 'release profile must contain exactly three Kubernetes API client policies'
 KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
   with(select(.kind == "NetworkPolicy" and (
     .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
-    .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
-    .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
+    .metadata.name == "internal-rpc-authority-publisher-exact-paths"
   ));
     .spec.egress += [(strenv(KUBERNETES_API_ENDPOINT_RULE) | from_json)]
   )

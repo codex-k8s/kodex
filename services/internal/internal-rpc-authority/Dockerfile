@@ -47,10 +47,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     ./cmd/internal-rpc-authority-verifier \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /out/internal-rpc-authority-database-credential-reconciler \
-    ./cmd/internal-rpc-authority-database-credential-reconciler \
- && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
-    -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/internal-rpc-authority-publisher \
     ./cmd/internal-rpc-authority-publisher \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \

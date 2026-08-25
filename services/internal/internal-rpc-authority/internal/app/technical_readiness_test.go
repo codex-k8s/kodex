@@ -20,11 +20,10 @@ func TestTechnicalReadinessUsesOnlyCachedSnapshot(t *testing.T) {
 	readiness := serviceruntime.NewReadiness()
 	metrics := observability.NewMetrics("authority_readiness_test", "test", nil)
 	servers := map[string]*http.Server{
-		"authority":  newTechnicalServer(Config{}, readiness, metrics, nil),
-		"credential": newCredentialTechnicalServer(readiness, metrics, nil),
-		"publisher":  newPublisherTechnicalServer(readiness, metrics, nil),
-		"readback":   newReadbackTechnicalServer(readiness, metrics, nil),
-		"restore":    newRestoreTechnicalServer(readiness, metrics, nil),
+		"authority": newTechnicalServer(Config{}, readiness, metrics, nil),
+		"publisher": newPublisherTechnicalServer(readiness, metrics, nil),
+		"readback":  newReadbackTechnicalServer(readiness, metrics, nil),
+		"restore":   newRestoreTechnicalServer(readiness, metrics, nil),
 	}
 
 	for name, server := range servers {

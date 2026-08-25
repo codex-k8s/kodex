@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,10 +22,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 	authorityrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/authority"
-	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -178,10 +175,10 @@ func Run(
 		store.Close()
 		return fmt.Errorf("load readback attestor mTLS client: %w", err)
 	}
-	snapshotAttestor, err := readbackclient.NewVaultAttestor(readbackclient.VaultConfig{
+	snapshotAttestor, err := readbackclient.NewSecretAttestor(readbackclient.SecretConfig{
 		Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
-		CredentialPath:          config.ReadbackCredentialVaultPath,
-		PossessionPath:          config.ReadbackPossessionVaultPath,
+		CredentialPath:          config.ReadbackCredentialSecret,
+		PossessionPath:          config.ReadbackPossessionSecret,
 		Delivery:                delivery,
 		WorkloadID:              config.WorkloadID,
 		WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
@@ -201,11 +198,11 @@ func Run(
 	}
 	var activationAttestor repository.SnapshotAttestor = snapshotAttestor
 	if config.Mode == ModeVerifier && config.ResolverEnabled {
-		resolverAttestor, resolverErr := readbackclient.NewVaultAttestor(
-			readbackclient.VaultConfig{
+		resolverAttestor, resolverErr := readbackclient.NewSecretAttestor(
+			readbackclient.SecretConfig{
 				Address: config.ReadbackAttestorAddress, TLS: readbackTLS,
-				CredentialPath:          config.ResolverReadbackCredentialPath,
-				PossessionPath:          config.ResolverReadbackPossessionPath,
+				CredentialPath:          config.ResolverReadbackCredentialSecret,
+				PossessionPath:          config.ResolverReadbackPossessionSecret,
 				Delivery:                delivery,
 				WorkloadID:              config.WorkloadID,
 				WorkloadSPIFFEID:        config.WorkloadSPIFFEID,
@@ -259,8 +256,8 @@ func Run(
 	}
 	restoreWorkloadAgent, err := restoreagent.New(restoreagent.Config{
 		Address: config.RestoreControllerAddress, TLS: restoreTLS,
-		RoleCredentialVaultPath:    config.RestoreRoleCredentialVaultPath,
-		ACKPrivateJWKVaultPath:     config.RestoreACKVaultPath,
+		RoleCredentialSecret:       config.RestoreRoleCredentialSecret,
+		ACKPrivateJWKSecret:        config.RestoreACKSecret,
 		Delivery:                   delivery,
 		ControllerCertificateFile:  config.RestoreControllerCertificateFile,
 		ManifestRootPublicJWKFile:  config.ManifestRootPublicJWKFile,
@@ -715,50 +712,11 @@ func allowsReadbackLastKnownGood(err error) bool {
 }
 
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
-	raw, err := readPrivateFile(config.PostgresDSNFile, maxDSNFileBytes)
-	if err != nil {
-		return nil, fmt.Errorf("read PostgreSQL DSN file: %w", err)
-	}
-	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(raw)))
-	if err != nil {
-		return nil, errors.New("parse PostgreSQL DSN")
-	}
-	instrumentPGX(poolConfig, config.ServiceName)
-	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
-		poolConfig.ConnConfig.Host != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig == nil ||
-		poolConfig.ConnConfig.TLSConfig.RootCAs == nil ||
-		poolConfig.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
-		poolConfig.ConnConfig.TLSConfig.InsecureSkipVerify {
-		return nil, errors.New("PostgreSQL DSN must use verify-full TLS with exact server name")
-	}
-	poolConfig.MaxConns = config.PostgresMaxConnections
-	poolConfig.ConnConfig.RuntimeParams["application_name"] = config.ServiceName
-	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
-		return sessionrepository.Configure(
-			ctx,
-			connection,
-			config.PostgresExpectedSessionUser,
-			config.DatabaseCapabilityRole,
-		)
-	}
-	poolConfig.BeforeAcquire = func(ctx context.Context, connection *pgx.Conn) bool {
-		return sessionrepository.Ensure(
-			ctx,
-			connection,
-			config.PostgresExpectedSessionUser,
-			config.DatabaseCapabilityRole,
-		) == nil
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, errors.New("open PostgreSQL pool")
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, errors.New("verify PostgreSQL connectivity")
-	}
-	return pool, nil
+	return openCapabilityPostgres(ctx, postgresConnectionConfig{
+		DSNFile: config.PostgresDSNFile, TLSServerName: config.PostgresTLSServerName,
+		ExpectedUser: config.PostgresExpectedSessionUser, Capability: config.DatabaseCapabilityRole,
+		ApplicationName: config.ServiceName, MaxConnections: config.PostgresMaxConnections,
+	})
 }
 
 func newTechnicalServer(

@@ -44,13 +44,6 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: vault
-      ports:
-        - protocol: TCP
-          port: 8200
-    - to:
-        - podSelector:
-            matchLabels:
               app.kubernetes.io/name: internal-rpc-authority-readback-attestor
       ports:
         - protocol: TCP

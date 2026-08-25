@@ -87,11 +87,9 @@ spec:
             secretName: control-plane-nats-bootstrap-client-tls
             defaultMode: 0440
         - name: nats-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: control-plane-nats-bootstrap
+          secret:
+            secretName: control-plane-nats-bootstrap
+            defaultMode: 292
         - name: nats-ca
           configMap:
             name: kodex-nats-ca

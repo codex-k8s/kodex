@@ -18,10 +18,10 @@ updated: 2026-08-23
 | `ADR-MC-006` | Bounded artifact storage boundary без обязательного S3 | approved |
 | `ADR-MC-007` | Долговечные расписания и очередь запусков в PostgreSQL | approved |
 | `ADR-MC-008` | BuildKit и неизменяемые образы ролей | approved |
-| `ADR-MC-009` | Публичная редакция AGPL и коммерческая лицензия | approved/legal-review-required |
+| `ADR-MC-009` | Публичная лицензия MIT | approved |
 | `ADR-MC-010` | Терминальная обработка блокировок политики поставщика | approved |
 | `ADR-MC-011` | Настраиваемые политики координации и внимания инициатора | approved |
 | `ADR-DOC-004` | Transactional outbox, broker-neutral relay, NATS и durable inbox | approved |
 | `ARCH-MC-011` | Owner-approved web-first reset и fresh baseline | approved |
 
-Статус `approved` фиксирует принятое владельцем направление. Для `ADR-MC-009` юридическая проверка текстов лицензий и CLA остается обязательным условием выпуска, но повторный выбор модели не требуется.
+Статус `approved` фиксирует принятое владельцем направление.

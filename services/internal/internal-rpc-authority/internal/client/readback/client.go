@@ -72,8 +72,8 @@ type FileAttestor struct {
 	config FileConfig
 }
 
-// VaultConfig задаёт материал проверки, доставленный через Vault.
-type VaultConfig struct {
+// SecretConfig задаёт материал проверки, доставленный через Kubernetes Secret.
+type SecretConfig struct {
 	Address                 string
 	TLS                     *tls.Config
 	CredentialPath          string
@@ -88,18 +88,18 @@ type VaultConfig struct {
 	UnaryInterceptor        grpc.UnaryClientInterceptor
 }
 
-// SecretReader читает версионированный материал из Vault KV v2.
+// SecretReader читает версионированный материал из Kubernetes Secret.
 type SecretReader interface {
-	ReadKV2(context.Context, string) (repository.SecretMaterial, bool, error)
+	ReadVersioned(context.Context, string) (repository.SecretMaterial, bool, error)
 }
 
-// VaultAttestor получает материал из Vault перед каждой проверкой.
-type VaultAttestor struct {
-	config VaultConfig
+// SecretAttestor получает материал из Kubernetes Secret перед каждой проверкой.
+type SecretAttestor struct {
+	config SecretConfig
 }
 
-// NewVaultAttestor создаёт клиент только из полной конфигурации доверия.
-func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
+// NewSecretAttestor создаёт клиент только из полной конфигурации доверия.
+func NewSecretAttestor(config SecretConfig) (*SecretAttestor, error) {
 	if config.Address == "" ||
 		config.TLS == nil ||
 		config.CredentialPath == "" ||
@@ -112,17 +112,17 @@ func NewVaultAttestor(config VaultConfig) (*VaultAttestor, error) {
 		config.CredentialGeneration == 0 ||
 		config.PossessionKeyGeneration == 0 ||
 		config.UnaryInterceptor == nil {
-		return nil, errors.New("invalid readback Vault client configuration")
+		return nil, errors.New("invalid readback Secret client configuration")
 	}
-	return &VaultAttestor{config: config}, nil
+	return &SecretAttestor{config: config}, nil
 }
 
 // Attest читает актуальный материал и выполняет независимую проверку.
-func (attestor *VaultAttestor) Attest(
+func (attestor *SecretAttestor) Attest(
 	ctx context.Context,
 	state repository.SnapshotState,
 ) (string, error) {
-	credentialMaterial, found, err := attestor.config.Delivery.ReadKV2(
+	credentialMaterial, found, err := attestor.config.Delivery.ReadVersioned(
 		ctx,
 		attestor.config.CredentialPath,
 	)
@@ -130,9 +130,9 @@ func (attestor *VaultAttestor) Attest(
 		return "", fmt.Errorf("read normal readback credential: %w", err)
 	}
 	if !found {
-		return "", errors.New("read normal readback credential from Vault")
+		return "", errors.New("read normal readback credential from Kubernetes Secret")
 	}
-	possessionMaterial, found, err := attestor.config.Delivery.ReadKV2(
+	possessionMaterial, found, err := attestor.config.Delivery.ReadVersioned(
 		ctx,
 		attestor.config.PossessionPath,
 	)
@@ -140,7 +140,7 @@ func (attestor *VaultAttestor) Attest(
 		return "", fmt.Errorf("read readback possession key: %w", err)
 	}
 	if !found {
-		return "", errors.New("read readback possession key from Vault")
+		return "", errors.New("read readback possession key from Kubernetes Secret")
 	}
 	key, err := internalrpcauth.ParsePrivateJWK(
 		[]byte(possessionMaterial.Data["possession_private_jwk"]),

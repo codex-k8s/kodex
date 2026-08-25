@@ -61,12 +61,12 @@ spec:
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: ROLE_IMAGE_BUILDER_EXPECTED_FRONTEND_SHA256
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: frontendSHA256}}
-            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: 'otel-collector.observability.svc:4317'}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/role-image-builder/observability/otel-ca.pem}
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
             - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/role-image-builder/observability/sentry-dsn}
-            - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
+            - {name: SENTRY_EXPECTED_HOST, value: 'sentry-relay.observability.svc:8443'}
           ports: [{name: metrics, containerPort: 9090, protocol: TCP}]
           startupProbe: &technicalProbe
             httpGet: {path: /healthz, port: metrics}
@@ -74,7 +74,7 @@ spec:
             periodSeconds: 2
             failureThreshold: 30
           readinessProbe:
-            <<: *technicalProbe
+            !!merge <<: *technicalProbe
             httpGet: {path: /readyz, port: metrics}
             periodSeconds: 5
             failureThreshold: 2
@@ -108,20 +108,17 @@ spec:
         - name: work
           emptyDir: {sizeLimit: 2Gi}
         - name: buildkit-client
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: role-image-builder-buildkit-client}
+          secret:
+            secretName: role-image-builder-buildkit-client
+            defaultMode: 292
         - name: input-read
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: role-image-builder-input-read}
+          secret:
+            secretName: role-image-builder-input-read
+            defaultMode: 292
         - name: base-pull
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: role-image-builder-base-pull}
+          secret:
+            secretName: role-image-builder-base-pull
+            defaultMode: 292
         - name: workload-tls
           secret: {secretName: internal-rpc-authority-role-image-builder-workload-tls, defaultMode: 0440}
         - name: control-plane-ca

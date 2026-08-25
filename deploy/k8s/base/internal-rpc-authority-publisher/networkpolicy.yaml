@@ -9,6 +9,7 @@ spec:
   policyTypes:
     - Ingress
     - Egress
+  egress: []
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -59,13 +60,13 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    # Installer заменяет default k3s service IP для existing Kubernetes.
     - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: vault
+        - ipBlock:
+            cidr: 10.43.0.1/32
       ports:
         - protocol: TCP
-          port: 8200
+          port: 443
     - to:
         - namespaceSelector:
             matchLabels:

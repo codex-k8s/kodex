@@ -38,17 +38,17 @@ spec:
           imagePullPolicy: IfNotPresent
           command: [/bin/sh, /opt/kodex/release-artifact-materializer.sh]
           env:
-            - {name: HTTPS_PROXY, value: http://egress-gateway.kodex-system.svc.cluster.local:8080}
-            - {name: HTTP_PROXY, value: http://egress-gateway.kodex-system.svc.cluster.local:8080}
+            - {name: HTTPS_PROXY, value: 'http://egress-gateway.kodex-system.svc.cluster.local:8080'}
+            - {name: HTTP_PROXY, value: 'http://egress-gateway.kodex-system.svc.cluster.local:8080'}
             - {name: NO_PROXY, value: kodex-image-registry-promotion.kodex-system.svc.cluster.local}
             - {name: RELEASE_SOURCE_REGISTRY, value: __KODEX_RELEASE_SOURCE_REGISTRY__}
             - {name: RELEASE_SOURCE_SHA, value: "0000000000000000000000000000000000000000"}
             - {name: AGENT_RUNNER_SOURCE_REF, value: __KODEX_AGENT_RUNNER_SOURCE_REF__}
-            - {name: AGENT_RUNNER_DIGEST, value: sha256:0000000000000000000000000000000000000000000000000000000000000000}
+            - {name: AGENT_RUNNER_DIGEST, value: 'sha256:0000000000000000000000000000000000000000000000000000000000000000'}
             - {name: ROLE_BASE_DOCUMENTS_SOURCE_REF, value: __KODEX_ROLE_BASE_DOCUMENTS_SOURCE_REF__}
-            - {name: ROLE_BASE_DOCUMENTS_DIGEST, value: sha256:0000000000000000000000000000000000000000000000000000000000000000}
+            - {name: ROLE_BASE_DOCUMENTS_DIGEST, value: 'sha256:0000000000000000000000000000000000000000000000000000000000000000'}
             - {name: ROLE_IMAGE_INPUT_SOURCE_REF, value: __KODEX_ROLE_IMAGE_INPUT_SOURCE_REF__}
-            - {name: ROLE_IMAGE_INPUT_MANIFEST_DIGEST, value: sha256:0000000000000000000000000000000000000000000000000000000000000000}
+            - {name: ROLE_IMAGE_INPUT_MANIFEST_DIGEST, value: 'sha256:0000000000000000000000000000000000000000000000000000000000000000'}
           resources:
             requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: "1", memory: 512Mi}
@@ -68,14 +68,12 @@ spec:
         - name: script
           configMap: {name: kodex-release-artifact-materializer, defaultMode: 0555}
         - name: source-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: release-artifact-materializer-source}
+          secret:
+            secretName: release-artifact-materializer-source
+            defaultMode: 292
         - name: destination-credential
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: release-artifact-materializer-destination}
+          secret:
+            secretName: release-artifact-materializer-destination
+            defaultMode: 292
         - name: work
           emptyDir: {sizeLimit: 32Mi}

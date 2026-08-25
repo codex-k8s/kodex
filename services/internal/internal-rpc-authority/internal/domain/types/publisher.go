@@ -17,20 +17,16 @@ type DeliveryTarget struct {
 	CredentialGeneration       uint64
 	AuthoritySnapshotSecret    string
 	AuthoritySnapshotMountPath string
-	AuthPrivateKeyVaultPath    string
 	AuthPrivateKeySecret       string
 	AuthPrivateKeyMountPath    string
-	ManifestTrustVaultPath     string
 	ManifestTrustSecret        string
 	ManifestTrustMountPath     string
-	ProofTrustVaultPath        string
 	ProofTrustSecret           string
 	ProofTrustMountPath        string
-	ProofPrivateKeyVaultPath   string
 	ProofPrivateKeySecret      string
 	ProofPrivateKeyMountPath   string
 	DatabaseLoginPrincipal     string
-	DatabaseVaultRole          string
+	DatabaseCredentialSecret   string
 	DatabaseDSNMountPath       string
 	RestoreCredentialID        string
 	RestoreCredentialPath      string
@@ -146,7 +142,7 @@ type CredentialDeliveryReceiptClaims struct {
 	ACKKeyID                   string `json:"ack_key_kid"`
 	ACKKeyGeneration           uint64 `json:"ack_key_generation"`
 	ACKKeyThumbprintSHA256     string `json:"ack_key_thumbprint_sha256"`
-	VaultMetadataVersion       uint64 `json:"vault_metadata_version"`
+	SecretGeneration           uint64 `json:"secret_generation"`
 	DeliveryReadbackDigest     string `json:"delivery_readback_digest_sha256"`
 	IssuedAt                   int64  `json:"iat"`
 	NotBefore                  int64  `json:"nbf"`
@@ -167,11 +163,11 @@ type PublishedCredential struct {
 
 // PublishedReadbackMaterial содержит credential и possession key проверки.
 type PublishedReadbackMaterial struct {
-	Intent                 ReadbackIntent
-	ReadbackCredentialJWS  string
-	PossessionPrivateJWK   string
-	CredentialVaultVersion uint64
-	PossessionVaultVersion uint64
+	Intent                     ReadbackIntent
+	ReadbackCredentialJWS      string
+	PossessionPrivateJWK       string
+	CredentialSecretGeneration uint64
+	PossessionSecretGeneration uint64
 }
 
 // AuthoritySnapshotPublication описывает атомарно опубликованный полный граф.

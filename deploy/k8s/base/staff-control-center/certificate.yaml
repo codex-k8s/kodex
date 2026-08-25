@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staff-control-center-public
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  secretName: staff-control-center-public-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - __KODEX_PUBLIC_HOST__
+  usages:
+    - server auth
+  issuerRef:
+    name: __KODEX_CLUSTER_ISSUER__
+    kind: ClusterIssuer

@@ -5,7 +5,6 @@ resources:
   - runtime.yaml
   - networkpolicy.yaml
   - rbac.yaml
-  - vault-secret-provider-classes.yaml
   - snapshot-secret.yaml
 configMapGenerator:
   - name: internal-rpc-authority-publisher-target-registry
@@ -14,3 +13,4 @@ configMapGenerator:
       - authority-policy.json
 generatorOptions:
   disableNameSuffixHash: true
+patches: null

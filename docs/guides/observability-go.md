@@ -105,7 +105,7 @@ fallback-значение, а не создают новую серию.
 
 Sentry используется только для неожиданных ошибок и panic:
 
-- DSN хранится в Vault и передается только через Kubernetes Secret;
+- DSN хранится в Kubernetes Secret с encryption at rest и exact RBAC;
 - client создается без глобального Hub и без default PII;
 - event содержит synthetic exception, method/code/correlation/trace tags;
 - request, metadata, исходная ошибка и значение panic не отправляются;

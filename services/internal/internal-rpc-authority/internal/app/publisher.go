@@ -36,13 +36,7 @@ type PublisherConfig struct {
 	PostgresDSNFile              string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE"`
 	PostgresTLSServerName        string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME"`
 	PostgresExpectedUser         string        `env:"INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER"`
-	PodUID                       string        `env:"POD_UID"`
 	SecretBackend                string        `env:"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND"`
-	VaultAddress                 string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_ADDRESS"`
-	VaultTLSServerName           string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_TLS_SERVER_NAME"`
-	VaultCAFile                  string        `env:"INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE"`
-	VaultAuthRole                string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_ROLE"`
-	VaultAuthFile                string        `env:"INTERNAL_RPC_AUTHORITY_PUBLISHER_VAULT_AUTH_FILE"`
 	TargetRegistryFile           string        `env:"INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE"`
 	SignerPrivateJWKFile         string        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_PRIVATE_JWK_FILE"`
 	SignerSourceRevision         uint64        `env:"INTERNAL_RPC_AUTHORITY_RESTORE_SIGNER_SOURCE_REVISION"`
@@ -78,12 +72,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 		ClientCAFile:                 "/var/run/config/kodex/internal-rpc-authority/publisher/client-ca.pem",
 		PostgresDSNFile:              "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/dsn",
 		PostgresTLSServerName:        "internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local",
-		SecretBackend:                string(secretBackendVault),
-		VaultAddress:                 "https://vault.kodex-system.svc:8200",
-		VaultTLSServerName:           "vault.kodex-system.svc.cluster.local",
-		VaultCAFile:                  "/var/run/config/kodex/internal-rpc-authority/publisher/vault-ca.pem",
-		VaultAuthRole:                "internal-rpc-authority-publisher",
-		VaultAuthFile:                "/var/run/secrets/tokens/vault/token",
+		SecretBackend:                string(secretBackendKubernetes),
 		TargetRegistryFile:           "/usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml",
 		SignerPrivateJWKFile:         "/var/run/secrets/kodex/internal-rpc-authority/publisher/restore-signer/private.jwk",
 		ReadbackSignerPrivateJWKFile: "/var/run/secrets/kodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
@@ -110,8 +99,7 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return PublisherConfig{}, errors.New("publisher technical listen address is invalid")
 	}
-	if !runtimeUUIDPattern.MatchString(config.PodUID) ||
-		config.SignerSourceRevision == 0 ||
+	if config.PostgresExpectedUser == "" || config.SignerSourceRevision == 0 ||
 		config.SignerKeySetRevision == 0 ||
 		config.SignerGeneration == 0 ||
 		config.ReadbackSignerSourceRevision == 0 ||
@@ -248,7 +236,7 @@ func RunPublisher(
 	graph, err := publisher.NewGraph(publisher.GraphConfig{
 		Registry:                   targetRegistry,
 		Store:                      store,
-		Vault:                      delivery,
+		Secrets:                    delivery,
 		Snapshot:                   snapshotDelivery,
 		ManifestSigner:             manifestSignerKey,
 		ManifestSignerGeneration:   config.ManifestSignerGeneration,
@@ -478,17 +466,10 @@ func openPublisherPostgres(
 	ctx context.Context,
 	config PublisherConfig,
 ) (*pgxpool.Pool, error) {
-	return openRotatingPostgres(ctx, rotatingPostgresConfig{
-		DSNTemplateFile: config.PostgresDSNFile,
-		TLSServerName:   config.PostgresTLSServerName,
-		Capability:      sessionrepository.CapabilityPublisher,
-		ApplicationName: "internal_rpc_authority_publisher",
-		PodUID:          config.PodUID,
-		Candidates: []databaseCredentialCandidate{
-			{Role: "internal-rpc-authority-publisher-g3", Principal: "ira_publisher_g3", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g3"},
-			{Role: "internal-rpc-authority-publisher-g4", Principal: "ira_publisher_g4", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g4"},
-			{Role: "internal-rpc-authority-publisher-g5", Principal: "ira_publisher_g5", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g5"},
-		},
+	return openCapabilityPostgres(ctx, postgresConnectionConfig{
+		DSNFile: config.PostgresDSNFile, TLSServerName: config.PostgresTLSServerName,
+		ExpectedUser: config.PostgresExpectedUser, Capability: sessionrepository.CapabilityPublisher,
+		ApplicationName: "internal_rpc_authority_publisher", MaxConnections: 8,
 	})
 }
 

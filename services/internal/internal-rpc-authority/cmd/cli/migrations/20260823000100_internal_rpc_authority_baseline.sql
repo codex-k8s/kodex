@@ -2,9 +2,6 @@
 
 RESET ROLE;
 
-CREATE ROLE internal_rpc_authority_database_credential_reconciler
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE internal_rpc_authority_issuer
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
@@ -24,57 +21,15 @@ CREATE ROLE internal_rpc_authority_verifier
     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 
-CREATE ROLE ira_database_credential_reconciler
-    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_restore_controller_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
-
-CREATE ROLE ira_publisher_g1
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_publisher_g2
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_publisher_g3
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_publisher_g4
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_publisher_g5
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_readback_attestor_g1
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_readback_attestor_g2
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_readback_attestor_g3
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_readback_attestor_g4
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
-CREATE ROLE ira_readback_attestor_g5
-    NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
-    NOREPLICATION NOBYPASSRLS;
-
-GRANT ira_publisher_g1,
-      ira_publisher_g2,
-      ira_publisher_g3,
-      ira_publisher_g4,
-      ira_publisher_g5,
-      ira_readback_attestor_g1,
-      ira_readback_attestor_g2,
-      ira_readback_attestor_g3,
-      ira_readback_attestor_g4,
-      ira_readback_attestor_g5
-    TO internal_rpc_authority_credential_lifecycle_definer
-    WITH INHERIT FALSE, SET FALSE, ADMIN TRUE;
-
 CREATE ROLE ira_role_image_builder_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
@@ -106,19 +61,11 @@ CREATE ROLE ira_runtime_controller_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
 
-GRANT internal_rpc_authority_publisher,
-      internal_rpc_authority_readback_attestor
-    TO internal_rpc_authority_credential_lifecycle_definer
-    WITH ADMIN OPTION, INHERIT FALSE, SET FALSE;
-GRANT internal_rpc_authority_readback_owner
-    TO internal_rpc_authority_owner
-    WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
-
-GRANT internal_rpc_authority_database_credential_reconciler
-    TO ira_database_credential_reconciler
+GRANT internal_rpc_authority_publisher TO ira_publisher_g4
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
-GRANT internal_rpc_authority_restore_controller
-    TO ira_restore_controller_g1
+GRANT internal_rpc_authority_readback_attestor TO ira_readback_attestor_g4
+    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
+GRANT internal_rpc_authority_restore_controller TO ira_restore_controller_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 GRANT internal_rpc_authority_issuer
     TO ira_role_image_builder_issuer_g1,
@@ -130,24 +77,16 @@ GRANT internal_rpc_authority_issuer
        ira_interaction_gateway_issuer_g1,
        ira_runtime_controller_issuer_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
-GRANT internal_rpc_authority_verifier
-    TO ira_control_plane_verifier_g1
+GRANT internal_rpc_authority_verifier TO ira_control_plane_verifier_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
+GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner
+    WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
 
 SET ROLE internal_rpc_authority_owner;
 GRANT CONNECT ON DATABASE internal_rpc_authority
-    TO ira_database_credential_reconciler,
-       ira_restore_controller_g1,
-       ira_publisher_g1,
-       ira_publisher_g2,
-       ira_publisher_g3,
+    TO ira_restore_controller_g1,
        ira_publisher_g4,
-       ira_publisher_g5,
-       ira_readback_attestor_g1,
-       ira_readback_attestor_g2,
-       ira_readback_attestor_g3,
        ira_readback_attestor_g4,
-       ira_readback_attestor_g5,
        ira_role_image_builder_issuer_g1,
        ira_image_admission_issuer_g1,
        ira_image_promotion_issuer_g1,
@@ -159,26 +98,13 @@ GRANT CONNECT ON DATABASE internal_rpc_authority
        ira_interaction_gateway_issuer_g1,
        ira_runtime_controller_issuer_g1;
 RESET ROLE;
+--
+-- PostgreSQL database dump
+--
 
-SET ROLE internal_rpc_authority_owner;
-CREATE SCHEMA internal_rpc_authority
-    AUTHORIZATION internal_rpc_authority_readback_owner;
-RESET ROLE;
-SET ROLE internal_rpc_authority_readback_owner;
-GRANT USAGE ON SCHEMA internal_rpc_authority
-    TO internal_rpc_authority_issuer,
-       internal_rpc_authority_verifier,
-       internal_rpc_authority_publisher,
-       internal_rpc_authority_readback_attestor,
-       internal_rpc_authority_database_credential_reconciler,
-       internal_rpc_authority_recovery,
-       internal_rpc_authority_restore_controller,
-       internal_rpc_authority_credential_lifecycle_definer;
-GRANT USAGE, CREATE ON SCHEMA internal_rpc_authority
-    TO internal_rpc_authority_migrator;
-GRANT CREATE ON SCHEMA internal_rpc_authority
-    TO internal_rpc_authority_credential_lifecycle_definer;
-RESET ROLE;
+
+-- Dumped from database version 18.3
+-- Dumped by pg_dump version 18.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -192,6 +118,16 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+--
+-- Name: internal_rpc_authority; Type: SCHEMA; Schema: -; Owner: internal_rpc_authority_readback_owner
+--
+
+CREATE SCHEMA "internal_rpc_authority";
+
+
+ALTER SCHEMA "internal_rpc_authority" OWNER TO "internal_rpc_authority_readback_owner";
+
+SET ROLE internal_rpc_authority_readback_owner;
 
 --
 -- Name: activate_readback_trust("text", "text", bigint, "text", bigint, "text", bigint, bigint, "text", "text", timestamp with time zone); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -303,6 +239,7 @@ $_$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."activate_readback_trust"("p_root_id" "text", "p_root_fingerprint_sha256" "text", "p_manifest_bundle_revision" bigint, "p_manifest_bundle_digest_sha256" "text", "p_trust_source_revision" bigint, "p_trust_set_digest_sha256" "text", "p_trust_key_set_revision" bigint, "p_signer_generation" bigint, "p_predecessor_state_digest_sha256" "text", "p_served_state_digest_sha256" "text", "p_served_at" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: apply_restore_fence("text", bigint, "text", "text", timestamp with time zone); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -374,6 +311,7 @@ $_$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."apply_restore_fence"("p_database_cluster_id" "text", "p_restore_epoch" bigint, "p_phase" "text", "p_evidence_digest_sha256" "text", "p_safe_window_not_before" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: consume_authority_readback_attestation_challenge("uuid", "uuid", "uuid", "text", bigint, "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -526,6 +464,7 @@ $_$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."consume_authority_readback_attestation_challenge"("p_challenge_id" "uuid", "p_receipt_id" "uuid", "p_evidence_jti" "uuid", "p_evidence_digest_sha256" "text", "p_verifier_generation" bigint, "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: issue_authority_readback_attestation_challenge("uuid", "uuid", "uuid", "text", "text", "uuid", "text", "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -608,7 +547,11 @@ $_$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."issue_authority_readback_attestation_challenge"("p_intent_id" "uuid", "p_challenge_id" "uuid", "p_challenge_jti" "uuid", "p_challenge_nonce" "text", "p_challenge_digest_sha256" "text", "p_readback_credential_jti" "uuid", "p_readback_credential_digest_sha256" "text", "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
 
+--
+-- Name: publisher_append_snapshot_history(bigint, "text", bigint, bigint, bigint, bigint, "text", "text", "uuid", "text", integer, timestamp with time zone); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
+--
 
 -- +goose StatementBegin
 CREATE FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"("p_source_revision" bigint, "p_source_digest_sha256" "text", "p_key_set_revision" bigint, "p_policy_revision" bigint, "p_signer_generation" bigint, "p_predecessor_revision" bigint, "p_predecessor_digest_sha256" "text", "p_snapshot_compact_jws" "text", "p_publication_intent_id" "uuid", "p_publication_input_digest_sha256" "text", "p_expected_readback_count" integer, "p_published_at" timestamp with time zone) RETURNS boolean
@@ -747,6 +690,7 @@ $_$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"("p_source_revision" bigint, "p_source_digest_sha256" "text", "p_key_set_revision" bigint, "p_policy_revision" bigint, "p_signer_generation" bigint, "p_predecessor_revision" bigint, "p_predecessor_digest_sha256" "text", "p_snapshot_compact_jws" "text", "p_publication_intent_id" "uuid", "p_publication_input_digest_sha256" "text", "p_expected_readback_count" integer, "p_published_at" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: publisher_promote_snapshot("uuid", bigint, "text", integer); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -804,108 +748,7 @@ $_$;
 -- +goose StatementEnd
 
 
-
---
--- Name: reconcile_runtime_database_identity("text", "text", bigint, "text", "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
---
-
--- +goose StatementBegin
-CREATE FUNCTION "internal_rpc_authority"."reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
-    AS $_$
-DECLARE
-    capability_role text;
-    accepted boolean;
-BEGIN
-    IF NOT pg_has_role(
-        session_user,
-        'internal_rpc_authority_database_credential_reconciler',
-        'MEMBER'
-    ) THEN
-        RAISE EXCEPTION 'database credential reconciler identity rejected';
-    END IF;
-    IF requested_status NOT IN ('CURRENT', 'NEXT', 'PREVIOUS')
-       OR requested_registered_set_digest_sha256 !~ '^[a-f0-9]{64}$'
-       OR NOT (
-           (
-               requested_capability = 'PUBLISHER'
-               AND requested_principal =
-                   'ira_publisher_g' || requested_generation::text
-               AND requested_generation BETWEEN 1 AND 5
-           )
-           OR (
-               requested_capability = 'READBACK_ATTESTOR'
-               AND requested_principal =
-                   'ira_readback_attestor_g' || requested_generation::text
-               AND requested_generation BETWEEN 1 AND 5
-           )
-       )
-    THEN
-        RAISE EXCEPTION 'database credential registry tuple rejected';
-    END IF;
-
-    capability_role := CASE requested_capability
-        WHEN 'PUBLISHER' THEN 'internal_rpc_authority_publisher'
-        WHEN 'READBACK_ATTESTOR' THEN 'internal_rpc_authority_readback_attestor'
-    END;
-    EXECUTE format('GRANT %I TO %I', capability_role, requested_principal);
-    IF requested_status IN ('CURRENT', 'NEXT') THEN
-        EXECUTE format('ALTER ROLE %I LOGIN', requested_principal);
-    ELSE
-        EXECUTE format('ALTER ROLE %I NOLOGIN', requested_principal);
-    END IF;
-
-    INSERT INTO internal_rpc_authority.database_credential_reconciliation_receipts (
-        request_id, canonical_request_digest_sha256
-    )
-    VALUES (requested_request_id, requested_registered_set_digest_sha256)
-    ON CONFLICT (request_id) DO UPDATE
-    SET canonical_request_digest_sha256 =
-        internal_rpc_authority.database_credential_reconciliation_receipts
-            .canonical_request_digest_sha256
-    WHERE internal_rpc_authority.database_credential_reconciliation_receipts
-            .canonical_request_digest_sha256 =
-        EXCLUDED.canonical_request_digest_sha256;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'database credential idempotency conflict';
-    END IF;
-
-    INSERT INTO internal_rpc_authority.authority_runtime_database_identities (
-        capability, principal, generation, lifecycle_status,
-        registered_set_digest_sha256, reconciled_at, retired_at
-    )
-    VALUES (
-        requested_capability, requested_principal, requested_generation,
-        requested_status, requested_registered_set_digest_sha256,
-        clock_timestamp(), NULL
-    )
-    ON CONFLICT (capability, generation) DO UPDATE
-    SET lifecycle_status = EXCLUDED.lifecycle_status,
-        registered_set_digest_sha256 = EXCLUDED.registered_set_digest_sha256,
-        reconciled_at = EXCLUDED.reconciled_at,
-        retired_at = NULL
-    WHERE internal_rpc_authority.authority_runtime_database_identities.principal =
-            EXCLUDED.principal
-      AND CASE
-          internal_rpc_authority.authority_runtime_database_identities
-              .lifecycle_status
-          WHEN 'NEXT' THEN EXCLUDED.lifecycle_status IN (
-              'NEXT', 'CURRENT', 'PREVIOUS'
-          )
-          WHEN 'CURRENT' THEN EXCLUDED.lifecycle_status IN (
-              'CURRENT', 'PREVIOUS'
-          )
-          WHEN 'PREVIOUS' THEN EXCLUDED.lifecycle_status = 'PREVIOUS'
-          ELSE false
-      END
-    RETURNING true INTO accepted;
-    RETURN coalesce(accepted, false);
-END
-$_$;
--- +goose StatementEnd
-
-
+ALTER FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: record_database_credential_session_readback("text", "uuid"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -978,95 +821,7 @@ $_$;
 -- +goose StatementEnd
 
 
-
---
--- Name: retire_runtime_database_identity("text", "text", bigint, "uuid", "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
---
-
--- +goose StatementBegin
-CREATE FUNCTION "internal_rpc_authority"."retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'internal_rpc_authority', 'pg_temp'
-    AS $_$
-DECLARE
-    capability_role text;
-    accepted boolean;
-BEGIN
-    IF NOT pg_has_role(
-        session_user,
-        'internal_rpc_authority_database_credential_reconciler',
-        'MEMBER'
-    ) THEN
-        RAISE EXCEPTION 'database credential reconciler identity rejected';
-    END IF;
-    IF requested_registered_set_digest_sha256 !~ '^[a-f0-9]{64}$'
-       OR NOT (
-           (
-               requested_capability = 'PUBLISHER'
-               AND requested_principal =
-                   'ira_publisher_g' || requested_generation::text
-               AND requested_generation BETWEEN 1 AND 5
-           )
-           OR (
-               requested_capability = 'READBACK_ATTESTOR'
-               AND requested_principal =
-                   'ira_readback_attestor_g' || requested_generation::text
-               AND requested_generation BETWEEN 1 AND 5
-           )
-       )
-    THEN
-        RAISE EXCEPTION 'database credential retirement tuple rejected';
-    END IF;
-    capability_role := CASE requested_capability
-        WHEN 'PUBLISHER' THEN 'internal_rpc_authority_publisher'
-        WHEN 'READBACK_ATTESTOR' THEN 'internal_rpc_authority_readback_attestor'
-    END;
-    EXECUTE format('ALTER ROLE %I NOLOGIN', requested_principal);
-    EXECUTE format('REVOKE %I FROM %I', capability_role, requested_principal);
-    PERFORM pg_terminate_backend(activity.pid)
-    FROM pg_stat_activity AS activity
-    WHERE activity.usename = requested_principal
-      AND activity.pid <> pg_backend_pid();
-
-    INSERT INTO internal_rpc_authority.database_credential_reconciliation_receipts (
-        request_id, canonical_request_digest_sha256
-    )
-    VALUES (requested_request_id, requested_registered_set_digest_sha256)
-    ON CONFLICT (request_id) DO UPDATE
-    SET canonical_request_digest_sha256 =
-        internal_rpc_authority.database_credential_reconciliation_receipts
-            .canonical_request_digest_sha256
-    WHERE internal_rpc_authority.database_credential_reconciliation_receipts
-            .canonical_request_digest_sha256 =
-        EXCLUDED.canonical_request_digest_sha256;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'database credential idempotency conflict';
-    END IF;
-    INSERT INTO internal_rpc_authority.authority_runtime_database_identities (
-        capability, principal, generation, lifecycle_status,
-        registered_set_digest_sha256, reconciled_at, retired_at
-    )
-    VALUES (
-        requested_capability, requested_principal, requested_generation,
-        'RETIRED', requested_registered_set_digest_sha256,
-        clock_timestamp(), clock_timestamp()
-    )
-    ON CONFLICT (capability, generation) DO UPDATE
-    SET lifecycle_status = 'RETIRED',
-        registered_set_digest_sha256 = EXCLUDED.registered_set_digest_sha256,
-        reconciled_at = EXCLUDED.reconciled_at,
-        retired_at = EXCLUDED.retired_at
-    WHERE internal_rpc_authority.authority_runtime_database_identities.principal =
-            EXCLUDED.principal
-      AND internal_rpc_authority.authority_runtime_database_identities
-            .lifecycle_status IN ('CURRENT', 'NEXT', 'PREVIOUS', 'RETIRED')
-    RETURNING true INTO accepted;
-    RETURN coalesce(accepted, false);
-END
-$_$;
--- +goose StatementEnd
-
-
+ALTER FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: runtime_restore_fence_allows_work(); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1091,6 +846,7 @@ $$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."runtime_restore_fence_allows_work"() OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: validate_snapshot_attestation_receipt("uuid", "text", bigint, "text"); Type: FUNCTION; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1135,6 +891,7 @@ $$;
 -- +goose StatementEnd
 
 
+ALTER FUNCTION "internal_rpc_authority"."validate_snapshot_attestation_receipt"("p_receipt_id" "uuid", "p_workload_id" "text", "p_source_revision" bigint, "p_source_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
 
 SET default_tablespace = '';
 
@@ -1156,6 +913,7 @@ CREATE TABLE "internal_rpc_authority"."authority_key_delivery_readbacks" (
 );
 
 
+ALTER TABLE "internal_rpc_authority"."authority_key_delivery_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_proof_reservations; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1173,6 +931,7 @@ CREATE TABLE "internal_rpc_authority"."authority_proof_reservations" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_proof_reservations" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_proof_reservations" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_proof_watermarks; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1192,6 +951,7 @@ CREATE TABLE "internal_rpc_authority"."authority_proof_watermarks" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_proof_watermarks" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_proof_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_publisher_delivery_receipts; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1216,6 +976,7 @@ CREATE TABLE "internal_rpc_authority"."authority_publisher_delivery_receipts" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_publisher_delivery_receipts" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_publisher_delivery_receipts" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_readback_attestation_challenges; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1246,6 +1007,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_attestation_challenges
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_attestation_challenges" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_readback_attestation_challenges" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_readback_attestation_receipts; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1270,6 +1032,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_attestation_receipts" 
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_attestation_receipts" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_readback_attestation_receipts" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_readback_intents; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1310,6 +1073,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_intents" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_intents" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_readback_intents" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_readback_trust_watermarks; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1342,6 +1106,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_trust_watermarks" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_trust_watermarks" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_readback_trust_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_replay_reservations; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1359,6 +1124,7 @@ CREATE TABLE "internal_rpc_authority"."authority_replay_reservations" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_replay_reservations" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_replay_reservations" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_restore_fences; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1376,6 +1142,7 @@ CREATE TABLE "internal_rpc_authority"."authority_restore_fences" (
 );
 
 
+ALTER TABLE "internal_rpc_authority"."authority_restore_fences" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_rotation_intents; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1395,6 +1162,7 @@ CREATE TABLE "internal_rpc_authority"."authority_rotation_intents" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_rotation_intents" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_rotation_intents" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_runtime_database_identities; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1417,6 +1185,7 @@ CREATE TABLE "internal_rpc_authority"."authority_runtime_database_identities" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_runtime_database_identities" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_runtime_database_identities" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_snapshot_history; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1446,6 +1215,7 @@ CREATE TABLE "internal_rpc_authority"."authority_snapshot_history" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_snapshot_history" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_snapshot_history" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_snapshot_readbacks; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1465,6 +1235,7 @@ CREATE TABLE "internal_rpc_authority"."authority_snapshot_readbacks" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_snapshot_readbacks" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."authority_snapshot_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: authority_snapshot_watermarks; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1490,61 +1261,7 @@ CREATE TABLE "internal_rpc_authority"."authority_snapshot_watermarks" (
 ALTER TABLE ONLY "internal_rpc_authority"."authority_snapshot_watermarks" FORCE ROW LEVEL SECURITY;
 
 
-
---
--- Name: database_credential_reconciler_leases; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE TABLE "internal_rpc_authority"."database_credential_reconciler_leases" (
-    "lease_name" "text" NOT NULL,
-    "holder_id" "uuid" NOT NULL,
-    "fencing_token" bigint NOT NULL,
-    "lease_until" timestamp with time zone NOT NULL,
-    "updated_at" timestamp with time zone NOT NULL,
-    CONSTRAINT "database_credential_reconciler_leases_fencing_token_check" CHECK (("fencing_token" > 0)),
-    CONSTRAINT "database_credential_reconciler_leases_lease_name_check" CHECK (("lease_name" = 'database-credential-reconciler'::"text"))
-);
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_reconciler_leases" FORCE ROW LEVEL SECURITY;
-
-
-
---
--- Name: database_credential_reconciliation_receipts; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE TABLE "internal_rpc_authority"."database_credential_reconciliation_receipts" (
-    "request_id" "uuid" NOT NULL,
-    "canonical_request_digest_sha256" "text" CONSTRAINT "database_credential_reconci_canonical_request_digest_s_not_null" NOT NULL,
-    "reconciled_at" timestamp with time zone DEFAULT "clock_timestamp"() CONSTRAINT "database_credential_reconciliation_recei_reconciled_at_not_null" NOT NULL,
-    CONSTRAINT "database_credential_reconcil_canonical_request_digest_sha_check" CHECK (("canonical_request_digest_sha256" ~ '^[a-f0-9]{64}$'::"text"))
-);
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_reconciliation_receipts" FORCE ROW LEVEL SECURITY;
-
-
-
---
--- Name: database_credential_rotation_intents; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE TABLE "internal_rpc_authority"."database_credential_rotation_intents" (
-    "request_id" "uuid" NOT NULL,
-    "canonical_digest_sha256" "text" CONSTRAINT "database_credential_rotation_i_canonical_digest_sha256_not_null" NOT NULL,
-    "phase" "text" NOT NULL,
-    "pre_rotation_digests" "jsonb" DEFAULT '{}'::"jsonb" CONSTRAINT "database_credential_rotation_inte_pre_rotation_digests_not_null" NOT NULL,
-    "staged_digests" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "clock_timestamp"() NOT NULL,
-    CONSTRAINT "database_credential_rotation_inte_canonical_digest_sha256_check" CHECK (("canonical_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
-    CONSTRAINT "database_credential_rotation_intents_phase_check" CHECK (("phase" = ANY (ARRAY['CREATED'::"text", 'PRE_ROTATE_CHECKPOINTED'::"text", 'NEXT_STAGED'::"text", 'NEXT_READ_BACK'::"text", 'PROMOTED'::"text", 'CURRENT_ROLLED_OUT'::"text", 'COMPLETED'::"text"]))),
-    CONSTRAINT "database_credential_rotation_intents_pre_rotation_digests_check" CHECK (("jsonb_typeof"("pre_rotation_digests") = 'object'::"text")),
-    CONSTRAINT "database_credential_rotation_intents_staged_digests_check" CHECK (("jsonb_typeof"("staged_digests") = 'object'::"text"))
-);
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_rotation_intents" FORCE ROW LEVEL SECURITY;
-
-
+ALTER TABLE "internal_rpc_authority"."authority_snapshot_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
 
 --
 -- Name: database_credential_session_readbacks; Type: TABLE; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -1567,7 +1284,9 @@ CREATE TABLE "internal_rpc_authority"."database_credential_session_readbacks" (
 ALTER TABLE ONLY "internal_rpc_authority"."database_credential_session_readbacks" FORCE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "internal_rpc_authority"."database_credential_session_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
 
+--
 -- Name: authority_key_delivery_readbacks authority_key_delivery_readbacks_pkey; Type: CONSTRAINT; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
@@ -1733,30 +1452,6 @@ ALTER TABLE ONLY "internal_rpc_authority"."authority_snapshot_readbacks"
 
 ALTER TABLE ONLY "internal_rpc_authority"."authority_snapshot_watermarks"
     ADD CONSTRAINT "authority_snapshot_watermarks_pkey" PRIMARY KEY ("target_workload_id");
-
-
---
--- Name: database_credential_reconciler_leases database_credential_reconciler_leases_pkey; Type: CONSTRAINT; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_reconciler_leases"
-    ADD CONSTRAINT "database_credential_reconciler_leases_pkey" PRIMARY KEY ("lease_name");
-
-
---
--- Name: database_credential_reconciliation_receipts database_credential_reconciliation_receipts_pkey; Type: CONSTRAINT; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_reconciliation_receipts"
-    ADD CONSTRAINT "database_credential_reconciliation_receipts_pkey" PRIMARY KEY ("request_id");
-
-
---
--- Name: database_credential_rotation_intents database_credential_rotation_intents_pkey; Type: CONSTRAINT; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE ONLY "internal_rpc_authority"."database_credential_rotation_intents"
-    ADD CONSTRAINT "database_credential_rotation_intents_pkey" PRIMARY KEY ("request_id");
 
 
 --
@@ -2034,13 +1729,6 @@ CREATE POLICY "authority_rotation_intents_publisher_read" ON "internal_rpc_autho
 ALTER TABLE "internal_rpc_authority"."authority_runtime_database_identities" ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: authority_runtime_database_identities authority_runtime_database_identities_lifecycle_definer; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "authority_runtime_database_identities_lifecycle_definer" ON "internal_rpc_authority"."authority_runtime_database_identities" TO "internal_rpc_authority_credential_lifecycle_definer" USING (true) WITH CHECK (true);
-
-
---
 -- Name: authority_runtime_database_identities authority_runtime_database_identities_owner; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
@@ -2052,13 +1740,6 @@ CREATE POLICY "authority_runtime_database_identities_owner" ON "internal_rpc_aut
 --
 
 CREATE POLICY "authority_runtime_database_identities_publisher_read" ON "internal_rpc_authority"."authority_runtime_database_identities" FOR SELECT TO "internal_rpc_authority_publisher" USING ((("capability" = 'PUBLISHER'::"text") AND ("principal" = SESSION_USER) AND ("lifecycle_status" = ANY (ARRAY['CURRENT'::"text", 'NEXT'::"text", 'PREVIOUS'::"text"]))));
-
-
---
--- Name: authority_runtime_database_identities authority_runtime_database_identities_reconciler_read; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "authority_runtime_database_identities_reconciler_read" ON "internal_rpc_authority"."authority_runtime_database_identities" FOR SELECT TO "internal_rpc_authority_database_credential_reconciler" USING (true);
 
 
 --
@@ -2115,59 +1796,6 @@ CREATE POLICY "authority_snapshot_watermarks_runtime" ON "internal_rpc_authority
 
 
 --
--- Name: database_credential_reconciliation_receipts database_credential_receipts_lifecycle_definer; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "database_credential_receipts_lifecycle_definer" ON "internal_rpc_authority"."database_credential_reconciliation_receipts" TO "internal_rpc_authority_credential_lifecycle_definer" USING (true) WITH CHECK (true);
-
-
---
--- Name: database_credential_reconciler_leases; Type: ROW SECURITY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE "internal_rpc_authority"."database_credential_reconciler_leases" ENABLE ROW LEVEL SECURITY;
-
---
--- Name: database_credential_reconciler_leases database_credential_reconciler_leases_runtime; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "database_credential_reconciler_leases_runtime" ON "internal_rpc_authority"."database_credential_reconciler_leases" TO "internal_rpc_authority_database_credential_reconciler" USING (true) WITH CHECK (true);
-
-
---
--- Name: database_credential_reconciliation_receipts; Type: ROW SECURITY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE "internal_rpc_authority"."database_credential_reconciliation_receipts" ENABLE ROW LEVEL SECURITY;
-
---
--- Name: database_credential_reconciliation_receipts database_credential_reconciliation_receipts_owner; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "database_credential_reconciliation_receipts_owner" ON "internal_rpc_authority"."database_credential_reconciliation_receipts" TO "internal_rpc_authority_readback_owner" USING (true) WITH CHECK (true);
-
-
---
--- Name: database_credential_rotation_intents; Type: ROW SECURITY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-ALTER TABLE "internal_rpc_authority"."database_credential_rotation_intents" ENABLE ROW LEVEL SECURITY;
-
---
--- Name: database_credential_rotation_intents database_credential_rotation_intents_owner; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "database_credential_rotation_intents_owner" ON "internal_rpc_authority"."database_credential_rotation_intents" TO "internal_rpc_authority_readback_owner" USING (true) WITH CHECK (true);
-
-
---
--- Name: database_credential_rotation_intents database_credential_rotation_intents_reconciler; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-CREATE POLICY "database_credential_rotation_intents_reconciler" ON "internal_rpc_authority"."database_credential_rotation_intents" TO "internal_rpc_authority_database_credential_reconciler" USING (true) WITH CHECK (true);
-
-
---
 -- Name: database_credential_session_readbacks; Type: ROW SECURITY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
@@ -2181,10 +1809,16 @@ CREATE POLICY "database_credential_session_readbacks_owner" ON "internal_rpc_aut
 
 
 --
--- Name: database_credential_session_readbacks database_credential_session_readbacks_reconciler_read; Type: POLICY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
+-- Name: SCHEMA "internal_rpc_authority"; Type: ACL; Schema: -; Owner: internal_rpc_authority_readback_owner
 --
 
-CREATE POLICY "database_credential_session_readbacks_reconciler_read" ON "internal_rpc_authority"."database_credential_session_readbacks" FOR SELECT TO "internal_rpc_authority_database_credential_reconciler" USING (true);
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_issuer";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_verifier";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_publisher";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_readback_attestor";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_recovery";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_restore_controller";
+GRANT USAGE ON SCHEMA "internal_rpc_authority" TO "internal_rpc_authority_migrator";
 
 
 --
@@ -2236,28 +1870,12 @@ GRANT ALL ON FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_p
 
 
 --
--- Name: FUNCTION "reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text"); Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
---
-
-REVOKE ALL ON FUNCTION "internal_rpc_authority"."reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "internal_rpc_authority"."reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") TO "internal_rpc_authority_database_credential_reconciler";
-
-
---
 -- Name: FUNCTION "record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid"); Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
 REVOKE ALL ON FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") TO "internal_rpc_authority_publisher";
 GRANT ALL ON FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") TO "internal_rpc_authority_readback_attestor";
-
-
---
--- Name: FUNCTION "retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text"); Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_credential_lifecycle_definer
---
-
-REVOKE ALL ON FUNCTION "internal_rpc_authority"."retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "internal_rpc_authority"."retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") TO "internal_rpc_authority_database_credential_reconciler";
 
 
 --
@@ -2355,8 +1973,6 @@ GRANT SELECT ON TABLE "internal_rpc_authority"."authority_rotation_intents" TO "
 -- Name: TABLE "authority_runtime_database_identities"; Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
 --
 
-GRANT SELECT ON TABLE "internal_rpc_authority"."authority_runtime_database_identities" TO "internal_rpc_authority_database_credential_reconciler";
-GRANT SELECT,INSERT,UPDATE ON TABLE "internal_rpc_authority"."authority_runtime_database_identities" TO "internal_rpc_authority_credential_lifecycle_definer";
 GRANT SELECT ON TABLE "internal_rpc_authority"."authority_runtime_database_identities" TO "internal_rpc_authority_publisher";
 
 
@@ -2383,65 +1999,42 @@ GRANT SELECT,INSERT,UPDATE ON TABLE "internal_rpc_authority"."authority_snapshot
 
 
 --
--- Name: TABLE "database_credential_reconciler_leases"; Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
+-- PostgreSQL database dump complete
 --
 
-GRANT SELECT,INSERT,UPDATE ON TABLE "internal_rpc_authority"."database_credential_reconciler_leases" TO "internal_rpc_authority_database_credential_reconciler";
 
-
---
--- Name: TABLE "database_credential_reconciliation_receipts"; Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-GRANT SELECT,INSERT,UPDATE ON TABLE "internal_rpc_authority"."database_credential_reconciliation_receipts" TO "internal_rpc_authority_credential_lifecycle_definer";
-
-
---
--- Name: TABLE "database_credential_rotation_intents"; Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-GRANT SELECT,INSERT,UPDATE ON TABLE "internal_rpc_authority"."database_credential_rotation_intents" TO "internal_rpc_authority_database_credential_reconciler";
-
-
---
--- Name: TABLE "database_credential_session_readbacks"; Type: ACL; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
---
-
-GRANT SELECT ON TABLE "internal_rpc_authority"."database_credential_session_readbacks" TO "internal_rpc_authority_database_credential_reconciler";
-
-ALTER FUNCTION "internal_rpc_authority"."activate_readback_trust"("p_root_id" "text", "p_root_fingerprint_sha256" "text", "p_manifest_bundle_revision" bigint, "p_manifest_bundle_digest_sha256" "text", "p_trust_source_revision" bigint, "p_trust_set_digest_sha256" "text", "p_trust_key_set_revision" bigint, "p_signer_generation" bigint, "p_predecessor_state_digest_sha256" "text", "p_served_state_digest_sha256" "text", "p_served_at" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."apply_restore_fence"("p_database_cluster_id" "text", "p_restore_epoch" bigint, "p_phase" "text", "p_evidence_digest_sha256" "text", "p_safe_window_not_before" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."consume_authority_readback_attestation_challenge"("p_challenge_id" "uuid", "p_receipt_id" "uuid", "p_evidence_jti" "uuid", "p_evidence_digest_sha256" "text", "p_verifier_generation" bigint, "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."issue_authority_readback_attestation_challenge"("p_intent_id" "uuid", "p_challenge_id" "uuid", "p_challenge_jti" "uuid", "p_challenge_nonce" "text", "p_challenge_digest_sha256" "text", "p_readback_credential_jti" "uuid", "p_readback_credential_digest_sha256" "text", "p_idempotency_key" "uuid", "p_semantic_request_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."publisher_append_snapshot_history"("p_source_revision" bigint, "p_source_digest_sha256" "text", "p_key_set_revision" bigint, "p_policy_revision" bigint, "p_signer_generation" bigint, "p_predecessor_revision" bigint, "p_predecessor_digest_sha256" "text", "p_snapshot_compact_jws" "text", "p_publication_intent_id" "uuid", "p_publication_input_digest_sha256" "text", "p_expected_readback_count" integer, "p_published_at" timestamp with time zone) OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."publisher_promote_snapshot"("p_publication_intent_id" "uuid", "p_source_revision" bigint, "p_source_digest_sha256" "text", "p_expected_readback_count" integer) OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."reconcile_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_status" "text", "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") OWNER TO "internal_rpc_authority_credential_lifecycle_definer";
-ALTER FUNCTION "internal_rpc_authority"."record_database_credential_session_readback"("p_credential_digest_sha256" "text", "p_pod_uid" "uuid") OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."retire_runtime_database_identity"("requested_capability" "text", "requested_principal" "text", "requested_generation" bigint, "requested_request_id" "uuid", "requested_registered_set_digest_sha256" "text") OWNER TO "internal_rpc_authority_credential_lifecycle_definer";
-ALTER FUNCTION "internal_rpc_authority"."runtime_restore_fence_allows_work"() OWNER TO "internal_rpc_authority_readback_owner";
-ALTER FUNCTION "internal_rpc_authority"."validate_snapshot_attestation_receipt"("p_receipt_id" "uuid", "p_workload_id" "text", "p_source_revision" bigint, "p_source_digest_sha256" "text") OWNER TO "internal_rpc_authority_readback_owner";
-
-ALTER TABLE "internal_rpc_authority"."authority_key_delivery_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_proof_reservations" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_proof_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_publisher_delivery_receipts" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_readback_attestation_challenges" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_readback_attestation_receipts" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_readback_intents" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_readback_trust_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_replay_reservations" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_restore_fences" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_rotation_intents" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_runtime_database_identities" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_snapshot_history" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_snapshot_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."authority_snapshot_watermarks" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."database_credential_reconciler_leases" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."database_credential_reconciliation_receipts" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."database_credential_rotation_intents" OWNER TO "internal_rpc_authority_readback_owner";
-ALTER TABLE "internal_rpc_authority"."database_credential_session_readbacks" OWNER TO "internal_rpc_authority_readback_owner";
 
 SET ROLE internal_rpc_authority_readback_owner;
+SET row_security = on;
+
+INSERT INTO internal_rpc_authority.authority_runtime_database_identities (
+    capability,
+    principal,
+    generation,
+    lifecycle_status,
+    registered_set_digest_sha256,
+    reconciled_at,
+    retired_at
+)
+VALUES
+    (
+        'PUBLISHER',
+        'ira_publisher_g4',
+        4,
+        'CURRENT',
+        'ed499a5c2dfdd8365c567ccdaeddaf78fd878e0c73c78db30748506625b70986',
+        pg_catalog.clock_timestamp(),
+        NULL
+    ),
+    (
+        'READBACK_ATTESTOR',
+        'ira_readback_attestor_g4',
+        4,
+        'CURRENT',
+        'ed499a5c2dfdd8365c567ccdaeddaf78fd878e0c73c78db30748506625b70986',
+        pg_catalog.clock_timestamp(),
+        NULL
+    );
 
 INSERT INTO internal_rpc_authority.authority_restore_fences (
     database_cluster_id,
@@ -2461,7 +2054,6 @@ VALUES (
 );
 
 REVOKE CREATE ON SCHEMA internal_rpc_authority
-    FROM internal_rpc_authority_migrator,
-         internal_rpc_authority_credential_lifecycle_definer;
+    FROM internal_rpc_authority_migrator;
 
 RESET ROLE;

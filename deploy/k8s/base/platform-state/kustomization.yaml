@@ -7,16 +7,22 @@ resources:
   - ca-bundles.yaml
   - authority-ca-bundles.yaml
   - postgresql.yaml
+  - postgresql-runtime-credentials.yaml
   - nats.yaml
   - networkpolicy.yaml
 configMapGenerator:
   - name: kodex-postgresql-init
     files:
       - 10-bootstrap.sql=postgresql/10-bootstrap.sql
+      - 20-bootstrap-passwords.sh=postgresql/20-bootstrap-passwords.sh
       - pg_hba.conf=postgresql/pg_hba.conf
+  - name: kodex-postgresql-runtime-credentials
+    files:
+      - reconcile.sh=postgresql/reconcile-runtime-credentials.sh
   - name: kodex-nats-config
     files:
       - nats.conf=nats/nats.conf
       - render-config.sh=nats/render-config.sh
 generatorOptions:
   disableNameSuffixHash: true
+patches: null

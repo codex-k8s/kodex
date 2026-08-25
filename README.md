@@ -56,6 +56,33 @@ Kodex — web-first платформа управления ИИ-сотрудн�
 Public domain, Origin, OIDC, registry и external hosts передаются параметрами
 развертывания; репозиторий не фиксирует домен конкретного владельца.
 
+## Установка
+
+Единая точка входа использует локальный файл `.kodex-env` с правами `0600`:
+
+```bash
+cp .kodex-env.example .kodex-env
+chmod 0600 .kodex-env
+```
+
+Для пустого Linux x86_64 сервера установщик поднимает k3s, TLS/OIDC,
+наблюдаемость, registry, ARC/BuildKit и платформу:
+
+```bash
+sudo ./install.sh --non-interactive --components all
+```
+
+В готовом Kubernetes можно установить только данные и deployable Kodex:
+
+```bash
+./install.sh --components secrets,platform
+```
+
+Во втором сценарии `.kodex-env` указывает существующие HTTPS OIDC/registry и
+self-hosted runner contracts. Полный перечень параметров, порядок reset,
+secret model и readback приведены в
+[runbook чистой установки](docs/runbooks/fresh-install.md).
+
 ## Лицензия
 
-MIT и коммерческая лицензия.
+Код распространяется по [лицензии MIT](LICENSE).

@@ -67,8 +67,6 @@ spec:
               value: internal-rpc-authority-readback-attestor.kodex-system.svc
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
               value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem
-            - name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE
-              value: internal-rpc-authority-integration-gateway
             - name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
               value: /var/run/config/kodex/internal-rpc-authority/restore/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
@@ -145,12 +143,6 @@ spec:
             - name: internal-rpc-authority-readback-attestor-ca
               mountPath: /var/run/config/kodex/internal-rpc-authority/readback
               readOnly: true
-            - name: internal-rpc-authority-vault-ca
-              mountPath: /var/run/config/kodex/internal-rpc-authority/vault
-              readOnly: true
-            - name: internal-rpc-authority-vault-token
-              mountPath: /var/run/secrets/tokens/vault
-              readOnly: true
             - name: internal-rpc-authority-restore-controller-ca
               mountPath: /var/run/config/kodex/internal-rpc-authority/restore
               readOnly: true
@@ -174,6 +166,18 @@ spec:
               readOnly: true
             - name: authority-bootstrap-roots
               mountPath: /usr/local/share/internal-rpc-authority/manifest-root
+              readOnly: true
+            - name: authority-readback-credential
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+              readOnly: true
+            - name: authority-readback-possession
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+              readOnly: true
+            - name: authority-restore-credential
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+              readOnly: true
+            - name: authority-restore-ack
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
               readOnly: true
         - name: platform-worker-grant-agent
           image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -207,7 +211,9 @@ spec:
               - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
               - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - name: platform-worker-grant-signer
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-platform-worker-grant-signer}}
+          secret:
+            secretName: integration-gateway-platform-worker-grant-signer
+            defaultMode: 292
         - name: internal-rpc-authority-sockets
           emptyDir:
             sizeLimit: 32Mi
@@ -216,23 +222,17 @@ spec:
             secretName: internal-rpc-authority-snapshot
             defaultMode: 0440
         - name: internal-rpc-authority-manifest-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: internal-rpc-authority-integration-gateway-manifest-trust
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-manifest-trust
+            defaultMode: 292
         - name: internal-rpc-authority-proof-trust
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: internal-rpc-authority-integration-gateway-proof-trust
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-proof-trust
+            defaultMode: 292
         - name: internal-rpc-authority-issuer-key
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: internal-rpc-authority-integration-gateway-issuer-key
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-issuer-key
+            defaultMode: 292
         - name: internal-rpc-authority-workload-tls
           secret:
             secretName: internal-rpc-authority-integration-gateway-workload-tls
@@ -241,18 +241,6 @@ spec:
           configMap:
             name: internal-rpc-authority-readback-attestor-ca
             defaultMode: 0440
-        - name: internal-rpc-authority-vault-ca
-          configMap:
-            name: internal-rpc-authority-vault-ca
-            defaultMode: 0440
-        - name: internal-rpc-authority-vault-token
-          projected:
-            defaultMode: 0400
-            sources:
-              - serviceAccountToken:
-                  path: token
-                  audience: vault
-                  expirationSeconds: 600
         - name: internal-rpc-authority-restore-controller-ca
           configMap:
             name: internal-rpc-authority-restore-controller-ca
@@ -296,3 +284,19 @@ spec:
             items:
               - key: dsn
                 path: sentry-dsn
+        - name: authority-readback-credential
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-issuer-readback-credential
+            defaultMode: 292
+        - name: authority-readback-possession
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-issuer-readback-possession
+            defaultMode: 292
+        - name: authority-restore-credential
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-issuer-restore-credential
+            defaultMode: 292
+        - name: authority-restore-ack
+          secret:
+            secretName: internal-rpc-authority-integration-gateway-issuer-restore-ack
+            defaultMode: 292
