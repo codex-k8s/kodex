@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.6
+version: 2.0.7
 updated: 2026-08-25
 ---
 
@@ -215,18 +215,20 @@ Actions; установщик скачивает digest-bound render и прим
 
 `tools/install/deploy-platform.sh` соблюдает порядок:
 
-1. phase-aware server-side dry-run CRD и уже известных API без persistence;
-2. CRD и foundation; в режиме `deferred` публичный Certificate исключается;
-3. Certificate/Bundle readback;
-4. PostgreSQL и NATS;
-5. authority и control-plane migrations;
-6. static PostgreSQL role reconciliation;
-7. broker bootstrap;
-8. `internal-rpc-authority-publisher`;
-9. readback всех dynamic Secret projections;
-10. остальные Deployments/CronJobs;
-11. release artifact materialization;
-12. rollout, Job и failing Pod readback.
+1. owner-checked retirement stale image-admission binding после fresh namespace
+   reset, если её namespaced parameters отсутствуют;
+2. phase-aware server-side dry-run CRD и уже известных API без persistence;
+3. CRD и foundation; в режиме `deferred` публичный Certificate исключается;
+4. Certificate/Bundle readback;
+5. PostgreSQL и NATS;
+6. authority и control-plane migrations;
+7. static PostgreSQL role reconciliation;
+8. broker bootstrap;
+9. `internal-rpc-authority-publisher`;
+10. readback всех dynamic Secret projections;
+11. остальные Deployments/CronJobs;
+12. release artifact materialization;
+13. rollout, Job и failing Pod readback.
 
 Нельзя запускать workloads до готовности authority projections или считать
 GitHub render фактическим deployment.
@@ -234,6 +236,11 @@ GitHub render фактическим deployment.
 Preflight повторяет семантику actual apply: mutable ресурсы проверяются через
 server-side apply с тем же field manager, а удаляемые перед заменой immutable
 ConfigMap и Job проверяются отдельным server-side create с временным именем.
+Сам preflight остаётся read-only. Предшествующая фаза `prepare-preflight`
+удаляет только cluster-scoped image-admission binding, для которой одновременно
+отсутствуют namespaced parameters и labels/spec в точности совпадают с exact
+render; неизвестное расхождение закрыто останавливает выпуск. Apply в той же
+операции восстанавливает parameters и fail-closed binding из exact render.
 Существующий seed Secret не переотправляется через admission policy. При apply
 изменившийся immutable ConfigMap удаляется только после проверки platform-owned
 labels и затем воссоздаётся из exact render. Такой же owner-checked replacement

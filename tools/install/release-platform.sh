@@ -197,6 +197,8 @@ if [[ "$public_tls_mode" == deferred ]]; then
     --mode defer-public-tls --render "$render_file" --public-tls-mode deferred
 fi
 "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
+  --mode prepare-preflight --render "$render_file" --public-tls-mode "$public_tls_mode"
+"$repository_root/tools/install/deploy-platform.sh" --context "$context" \
   --mode preflight --render "$render_file" --public-tls-mode "$public_tls_mode"
 "$repository_root/tools/install/deploy-platform.sh" --context "$context" \
   --mode apply --render "$render_file" --public-tls-mode "$public_tls_mode"

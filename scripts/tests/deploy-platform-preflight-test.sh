@@ -79,6 +79,34 @@ metadata:
   namespace: kodex-system
 spec:
   secretName: staff-control-center-public-tls
+---
+apiVersion: supplychain.kodex.dev/v1alpha1
+kind: ImageAdmissionPolicyParameters
+metadata:
+  name: kodex-image-admission-policy
+  namespace: kodex-system
+spec:
+  revision: exact
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kodex-image-admission-controller-jobs
+  labels:
+    app.kubernetes.io/part-of: kodex
+    kodex.dev/environment: production
+    kodex.dev/profile: web-only
+spec:
+  policyName: kodex-image-admission-controller-jobs
+  validationActions: [Deny]
+  paramRef:
+    name: kodex-image-admission-policy
+    namespace: kodex-system
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-system
 YAML
 
 cat >"$fake_bin/kubectl" <<'BASH'
@@ -91,6 +119,36 @@ printf '\n' >>"$KUBECTL_LOG"
 
 if [[ "$*" == "config current-context" ]]; then
   printf 'kodex-test\n'
+  exit 0
+fi
+if [[ " $* " == *' get imageadmissionpolicyparameters.supplychain.kodex.dev/kodex-image-admission-policy '* ]]; then
+  [[ "${KODEX_TEST_PARAMETER_PRESENT:-false}" == true ]]
+  exit
+fi
+if [[ " $* " == *' get validatingadmissionpolicybinding.admissionregistration.k8s.io/kodex-image-admission-controller-jobs '* ]]; then
+  [[ ! -e "$KODEX_TEST_BINDING_REMOVED" && "${KODEX_TEST_BINDING_PRESENT:-false}" == true ]] || exit 1
+  policy_name=kodex-image-admission-controller-jobs
+  [[ "${KODEX_TEST_BINDING_MISMATCH:-false}" != true ]] || policy_name=unexpected-policy
+  jq -n --arg policy_name "$policy_name" '{
+    metadata:{labels:{
+      "app.kubernetes.io/part-of":"kodex",
+      "kodex.dev/environment":"production",
+      "kodex.dev/profile":"web-only"
+    }},
+    spec:{
+      policyName:$policy_name,
+      validationActions:["Deny"],
+      paramRef:{name:"kodex-image-admission-policy",namespace:"kodex-system",
+        parameterNotFoundAction:"Deny"},
+      matchResources:{namespaceSelector:{matchLabels:{
+        "kubernetes.io/metadata.name":"kodex-system"
+      }}}
+    }
+  }'
+  exit 0
+fi
+if [[ " $* " == *' delete validatingadmissionpolicybinding.admissionregistration.k8s.io/kodex-image-admission-controller-jobs '* ]]; then
+  : >"$KODEX_TEST_BINDING_REMOVED"
   exit 0
 fi
 if [[ " $* " == *' get certificate/staff-control-center-public '* ]]; then
@@ -145,6 +203,7 @@ chmod +x "$fake_bin/kubectl"
 
 export PATH="$fake_bin:$PATH"
 export KUBECTL_LOG=$kubectl_log
+export KODEX_TEST_BINDING_REMOVED="$temporary_directory/binding-removed"
 
 for tls_mode in enabled deferred; do
   for _ in 1 2; do
@@ -176,6 +235,40 @@ done
   fail 'Jobs were not validated independently'
 ! grep -q ' args=.* delete ' "$kubectl_log" ||
   fail 'preflight mutated the Kubernetes API'
+
+: >"$kubectl_log"
+rm -f "$KODEX_TEST_BINDING_REMOVED"
+KODEX_TEST_PARAMETER_PRESENT=true KODEX_TEST_BINDING_PRESENT=true \
+  "$repository_root/tools/install/deploy-platform.sh" \
+    --context kodex-test --mode prepare-preflight --render "$render_file" \
+    --public-tls-mode deferred >/dev/null
+! grep -q ' args=.* delete ' "$kubectl_log" ||
+  fail 'preflight preparation removed an active binding'
+
+: >"$kubectl_log"
+rm -f "$KODEX_TEST_BINDING_REMOVED"
+if KODEX_TEST_PARAMETER_PRESENT=false KODEX_TEST_BINDING_PRESENT=true \
+  KODEX_TEST_BINDING_MISMATCH=true \
+  "$repository_root/tools/install/deploy-platform.sh" \
+    --context kodex-test --mode prepare-preflight --render "$render_file" \
+    --public-tls-mode deferred >/dev/null 2>&1; then
+  fail 'preflight preparation accepted an unknown binding'
+fi
+! grep -q ' args=.* delete ' "$kubectl_log" ||
+  fail 'preflight preparation removed an unknown binding'
+
+: >"$kubectl_log"
+rm -f "$KODEX_TEST_BINDING_REMOVED"
+KODEX_TEST_PARAMETER_PRESENT=false KODEX_TEST_BINDING_PRESENT=true \
+  KODEX_TEST_BINDING_MISMATCH=false \
+  "$repository_root/tools/install/deploy-platform.sh" \
+    --context kodex-test --mode prepare-preflight --render "$render_file" \
+    --public-tls-mode deferred >/dev/null
+[[ "$(grep -c ' delete validatingadmissionpolicybinding.admissionregistration.k8s.io/kodex-image-admission-controller-jobs ' \
+  "$kubectl_log")" == 1 ]] ||
+  fail 'preflight preparation did not retire the exact stale binding'
+[[ -e "$KODEX_TEST_BINDING_REMOVED" ]] ||
+  fail 'stale binding deletion did not complete'
 
 : >"$kubectl_log"
 "$repository_root/tools/install/deploy-platform.sh" \
