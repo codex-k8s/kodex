@@ -51,6 +51,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/node-pull-bootstrap ./cmd/node-pull-bootstrap
 
 FROM moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe AS runtime
+USER 0:0
+RUN mkdir -p /var/run/mattercodex/work \
+    && chown 1000:1000 /var/run/mattercodex/work \
+    && chmod 0700 /var/run/mattercodex/work
 COPY --from=build --chmod=0555 /out/role-image-builder /usr/local/bin/role-image-builder
 USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/role-image-builder"]

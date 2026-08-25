@@ -141,8 +141,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    image PKI и static material, создаёт bootstrap restore evidence anchor и
    нулевой authority snapshot только при их отсутствии, материализует четыре
    публичных per-install authority root
-   файла в immutable Secret с exact digest и монтирует только соответствующую
-   пару в publisher, readback attestor и restore controller, отдельно применяет
+   файла в immutable Secret с exact digest. Manifest-root pair монтируется в
+   publisher, restore controller и каждый issuer/verifier sidecar, а независимая
+   readback-root pair - только в readback attestor. Все mounts read-only и
+   содержат закрытый набор публичных файлов. Фаза отдельно применяет
    release-owned CRD и ждёт состояния
    `Established`, затем применяет typed admission parameters, остальные
    non-workload resources, PostgreSQL и NATS и материализует database
@@ -193,6 +195,14 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    Однострочные credentials передаются между host и Pod как ровно одна запись;
    уже завершённый LF secret-файла не дополняется вторым delimiter. Следующий
    произвольный Vault KV payload сохраняется байт-в-байт без ведущего LF.
+   VSO для `control-api-gateway` использует отдельную Kubernetes auth role
+   `control-api-gateway-vso`, которая не разделяет token policies с workload/CSI.
+   Через три `VaultStaticSecret` она материализует public TLS, session keys и
+   NATS credential. Готовность каждого static secret принимается только для
+   текущей generation и подтверждается bounded readback непустого destination
+   Secret. Профиль `web-with-mattermost` дополнительно требует отдельную пару
+   platform-worker JWK для `interaction-gateway`; generator, Vault KV bootstrap,
+   signer mount и control-plane trust mount образуют один обязательный граф.
 10. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, назначает
    отдельный пароль `ira_restore_controller_g1`, сохраняет DSN только в Vault и

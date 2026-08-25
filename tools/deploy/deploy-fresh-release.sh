@@ -433,16 +433,36 @@ wait_vault_secret_ready() {
 
 wait_vault_static_secrets() {
   local allow_deferred_restore_secret=${1:-false}
-  local resource_name
+  local resource_name destination_name destination_file deadline destination_ready
 
-  while IFS= read -r resource_name; do
-    [[ -n "$resource_name" ]] || continue
+  while IFS=$'\t' read -r resource_name destination_name; do
+    [[ -n "$resource_name" && -n "$destination_name" ]] || continue
     if [[ "$allow_deferred_restore_secret" == true &&
       "$resource_name" == internal-rpc-authority-restore-controller-postgresql ]]; then
       continue
     fi
     wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com "$resource_name" 300
-  done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
+    destination_file="$temporary_directory/vault-static-destination-$destination_name.json"
+    deadline=$((SECONDS + 30))
+    destination_ready=false
+    while ((SECONDS < deadline)); do
+      if kubectl -n "$namespace" get secret "$destination_name" -o json >"$destination_file" 2>/dev/null &&
+        jq -e '
+          .type == "Opaque" and
+          (.data | type == "object" and length > 0) and
+          all(.data[]; type == "string" and length > 0)
+        ' "$destination_file" >/dev/null; then
+        destination_ready=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "$destination_ready" == true ]] ||
+      fail "VaultStaticSecret destination readback failed: $destination_name"
+  done < <(yq -N -r '
+    select(.kind == "VaultStaticSecret" and .spec.destination.create == true) |
+    [.metadata.name,.spec.destination.name] | @tsv
+  ' "$render_file" | sort -u)
 }
 
 wait_vault_dynamic_secrets() {
