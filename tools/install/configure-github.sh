@@ -86,12 +86,19 @@ get_variable_value() {
 }
 
 set_variable() {
-  local name=$1 value=$2
+  local name=$1 value=$2 attempt=1 actual_value
   if [[ "$mode" == apply ]]; then
     gh variable set "$name" --repo "$repository" --body "$value"
   fi
-  [[ "$(get_variable_value "$name")" == "$value" ]] ||
-    fail "GitHub variable readback mismatch: $name"
+  while ((attempt <= 15)); do
+    if actual_value=$(get_variable_value "$name" 2>/dev/null) &&
+      [[ "$actual_value" == "$value" ]]; then
+      return 0
+    fi
+    sleep 2
+    ((attempt++))
+  done
+  fail "GitHub variable readback mismatch: $name"
 }
 
 set_variable KODEX_REGISTRY_PUSH "$KODEX_REGISTRY_HOST"
