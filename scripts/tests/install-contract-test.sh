@@ -68,6 +68,12 @@ grep -Fq 'repos/$repository/actions/variables/$name' \
   fail 'GitHub variable readback does not use the repository REST endpoint'
 grep -Fq 'while ((attempt <= 15))' "$repository_root/tools/install/configure-github.sh" ||
   fail 'GitHub variable readback does not have a bounded retry budget'
+grep -Fq 'preflight-custom-resource-definitions' \
+  "$repository_root/tools/install/deploy-platform.sh" ||
+  fail 'platform preflight does not validate CustomResourceDefinitions separately'
+grep -Fq '.apiVersion != \"$api_version\"' \
+  "$repository_root/tools/install/deploy-platform.sh" ||
+  fail 'platform preflight does not exclude exact API versions introduced by the render'
 
 for firewall_contract in \
   'systemctl disable --now nftables' \

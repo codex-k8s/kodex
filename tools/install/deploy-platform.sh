@@ -171,7 +171,25 @@ wait_workloads() {
 }
 
 if [[ "$mode" == preflight ]]; then
-  kubectl --context "$context" apply --dry-run=client --validate=false -f "$render_file" >/dev/null
+  crd_file=$(render_filter preflight-custom-resource-definitions \
+    'select(.kind == "CustomResourceDefinition")')
+  kubectl --context "$context" apply --dry-run=client --validate=false \
+    -f "$crd_file" >/dev/null
+
+  preflight_expression='select(.kind != "CustomResourceDefinition"'
+  while IFS= read -r api_version; do
+    [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
+      fail "rendered CustomResourceDefinition API version is invalid: $api_version"
+    preflight_expression+=" and .apiVersion != \"$api_version\""
+  done < <(yq -N -r '
+    select(.kind == "CustomResourceDefinition") |
+    .spec.group as $group | .spec.versions[] | select(.served == true) |
+    $group + "/" + .name
+  ' "$render_file" | sort -u)
+  preflight_expression+=')'
+  known_resources_file=$(render_filter preflight-known-resources "$preflight_expression")
+  kubectl --context "$context" apply --dry-run=client --validate=false \
+    -f "$known_resources_file" >/dev/null
   printf 'Kodex platform deployment preflight completed\n'
   exit 0
 fi
