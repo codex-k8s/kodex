@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.4
+version: 2.0.5
 updated: 2026-08-25
 ---
 
@@ -37,6 +37,10 @@ S3 не является обязательной зависимостью web-f
 Secret `kodex-external-s3`. Пока deployable adapter не выбран продуктовым
 профилем, этот Secret не монтируется в Pod и сам по себе не включает хранение
 artifact или backup.
+
+Служебный bootstrap registry принадлежит namespace `kodex-infra`; application
+registry и workloads Kodex принадлежат `kodex-system`. Смешивать эти границы
+или возвращать исторические release namespaces запрещено.
 
 ### Готовый Kubernetes
 

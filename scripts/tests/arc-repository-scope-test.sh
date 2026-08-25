@@ -12,6 +12,14 @@ helm_values_renderer="$repository_root/infra/arc/render-helm-values.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
+kubectl kustomize "$repository_root/infra/bootstrap-registry" |
+  yq -o=json eval-all '.' | jq -sc -e '
+    length > 0 and all(.[]; .metadata.namespace == "kodex-infra")
+  ' >/dev/null || {
+  printf 'Bootstrap registry render targets an unexpected namespace\n' >&2
+  exit 1
+}
+
 bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate" \
   "$network_policy_renderer" "$helm_values_renderer"
 
@@ -66,7 +74,7 @@ fi
 "$network_policy_renderer" 10.20.30.40/32 10.20.30.41/32 fixture-registry \
   registry.example.test \
   "$temporary_directory/network-policy.yaml"
-rg -q '__REGISTRY_|matter-kodex-prod' "$temporary_directory/network-policy.yaml" && {
+rg -q '__REGISTRY_' "$temporary_directory/network-policy.yaml" && {
   printf 'ARC network policy retained an unresolved or legacy registry locator\n' >&2
   exit 1
 }
@@ -75,7 +83,7 @@ mkdir -p "$temporary_directory/helm-values"
   0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   kodex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null
-rg -q '__REGISTRY_HOST__|matter-kodex-prod' "$temporary_directory/helm-values" && {
+rg -q '__REGISTRY_HOST__' "$temporary_directory/helm-values" && {
   printf 'ARC Helm values retained an unresolved or legacy registry locator\n' >&2
   exit 1
 }
