@@ -107,6 +107,14 @@ for owner_gate_contract in \
     "$repository_root/install.sh" "$repository_root/tools/install/release-platform.sh" ||
     fail "release owner gate refresh contract is absent: $owner_gate_contract"
 done
+jq -n -e '
+  def exact_line($actual; $expected):
+    $actual == $expected or $actual == ($expected + "\n");
+  exact_line("build\n"; "build") and
+  exact_line("codex-k8s/kodex/.github/workflows/build-release.yml@refs/heads/main\n";
+    "codex-k8s/kodex/.github/workflows/build-release.yml@refs/heads/main") and
+  (exact_line("build\nextra"; "build") | not)
+' >/dev/null || fail 'runner owner gate exact-line normalization contract is invalid'
 rg -Fq 'reconcile_image_admission_policy_parameters' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'immutable image admission parameters do not have a release reconciliation path'
