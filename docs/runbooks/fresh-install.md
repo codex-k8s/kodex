@@ -247,10 +247,11 @@ labels и затем воссоздаётся из exact render. Такой же
 - Application rollback выполняется новым exact release старого Git SHA.
 - Перед dispatch каждого exact release `release-platform.sh` сверяет
   неизменяемые owner actor, workflow ref, job и runner hook, затем разрешает в
-  обоих ARC gate ровно текущий clean `main` SHA. Обновление защищено
-  `resourceVersion`, проходит exact ConfigMap readback и ожидание projected
-  volume уже существующих runner Pod. Ручное редактирование
-  `kodex-runner-owner-gate` запрещено.
+  GitHub Variable `KODEX_WORKFLOW_SHA` и обоих ARC gate ровно текущий clean
+  `main` SHA. Обновление Kubernetes защищено `resourceVersion`; оба слоя
+  проходят exact readback, включая ожидание projected volume уже существующих
+  runner Pod. Ручное редактирование variable или `kodex-runner-owner-gate`
+  запрещено.
 - Потеря `.kodex-material` при существующих данных является инцидентом, а не
   поводом генерировать новые roots поверх работающей установки.
 - PostgreSQL/PVC backup и внешняя копия `.kodex-material` хранятся раздельно и
