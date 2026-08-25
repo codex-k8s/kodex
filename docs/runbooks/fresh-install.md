@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.3
+version: 2.0.4
 updated: 2026-08-25
 ---
 
@@ -104,6 +104,10 @@ GitHub Variables/Secrets, предварительно передав их в en
 `.kodex-material/` не коммитится, имеет mode `0700` и является частью
 зашифрованного owner backup. Повторный запуск переиспользует material и не
 ротирует identity молча.
+
+Cookie secrets трёх OAuth2 Proxy содержат ровно 32 случайных ASCII-байта.
+Materialization проверяет длину до изменения Kubernetes и закрыто отклоняет
+старый либо повреждённый material вместо запуска CrashLooping proxy.
 
 `tools/install/materialize-secrets.sh` создаёт Kubernetes Secrets. Static
 Secrets принадлежат installer field manager. Динамические key-delivery Secrets

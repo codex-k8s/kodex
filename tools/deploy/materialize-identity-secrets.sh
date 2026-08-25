@@ -89,6 +89,8 @@ for binding in \
   surface=${binding%%:*}
   namespace=${binding#*:}
   directory="$material_directory/management/oauth2-$surface"
+  [[ "$(wc -c <"$directory/cookie-secret")" -eq 32 ]] ||
+    fail "OAuth2 Proxy cookie Secret must contain exactly 32 bytes: $surface"
   create_secret "$namespace" "oauth2-$surface" \
     --from-file=client-id="$directory/client-id" \
     --from-file=client-secret="$directory/client-secret" \
@@ -115,7 +117,8 @@ for binding in \
   namespace=${binding#*:}
   kubectl -n "$namespace" get secret "$secret" -o json | jq -e '
     (.data | keys | sort) == ["client-id", "client-secret", "cookie-secret"] and
-    all(.data[]; type == "string" and length > 0)
+    all(.data[]; type == "string" and length > 0) and
+    (.data["cookie-secret"] | @base64d | length) == 32
   ' >/dev/null || fail "OAuth2 Proxy Secret readback failed: $secret"
 done
 kubectl -n observability get secret grafana-admin -o json | jq -e '
