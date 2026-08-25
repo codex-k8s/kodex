@@ -43,6 +43,7 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         dsn: {text: '{{ get .Secrets "dsn" }}'}
 ---
@@ -63,5 +64,6 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         restore-role-trust.jws: {text: '{{ get .Secrets "restore-role-trust.jws" }}'}

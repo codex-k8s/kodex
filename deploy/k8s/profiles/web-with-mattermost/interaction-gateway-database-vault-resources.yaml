@@ -41,6 +41,7 @@ spec:
     overwrite: false
     transformation:
       excludeRaw: true
+      excludes: [".*"]
       templates:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:

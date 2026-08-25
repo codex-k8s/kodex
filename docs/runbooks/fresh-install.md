@@ -210,7 +210,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    Для каждого issuer/verifier target из закрытого publisher registry эта же
    фаза создаёт и ротирует exact Vault static database role, а
    `VaultDynamicSecret` проецирует только `dsn` и `username` в отдельный
-   Kubernetes Secret целевого sidecar. Фаза дожидается готовности каждого
+   Kubernetes Secret целевого sidecar. Для закрытой проекции одного
+   `excludeRaw: true` недостаточно: он исключает только служебный `_raw`,
+   поэтому каждый такой resource также задаёт `excludes: [".*"]` и возвращает
+   source fields только через именованные templates. Фаза дожидается готовности каждого
    dynamic secret только для текущей `metadata.generation`: `lastGeneration`,
    `Ready.observedGeneration` и `Healthy.observedGeneration` должны совпасть,
    после чего bounded readback сверяет закрытый набор ключей destination Secret.
