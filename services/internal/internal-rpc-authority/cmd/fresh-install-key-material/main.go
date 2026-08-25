@@ -24,6 +24,7 @@ func main() {
 		{"restore/pitr-evidence", "ira-restore-pitr-evidence-g1"},
 		{"platform-worker/automation-scheduler", "automation-scheduler-platform-worker-g1"},
 		{"platform-worker/integration-gateway", "integration-gateway-platform-worker-g1"},
+		{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"},
 		{"platform-worker/runtime-controller", "runtime-controller-platform-worker-g1"},
 		{"platform-worker/role-image-builder", "role-image-builder-platform-worker-g1"},
 		{"platform-worker/image-admission", "image-admission-platform-worker-g1"},

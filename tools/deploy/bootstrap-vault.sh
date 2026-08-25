@@ -290,7 +290,7 @@ if [[ "$mode" == configure-core ]]; then
     vault_kv_patch_file mattercodex/control-api-gateway/public-tls-material "${entry%%:*}" "${entry#*:}"
   done
 
-  for worker in automation-scheduler integration-gateway runtime-controller role-image-builder image-admission image-promotion; do
+  for worker in automation-scheduler integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion; do
     vault_kv_put_file "mattercodex/platform-worker-grants/$worker" private.jwk \
       "$material_directory/crypto/platform-worker/$worker/private.jwk"
     vault_kv_patch_file "mattercodex/platform-worker-grants/$worker" public-jwk \
@@ -467,13 +467,14 @@ HCL
   cat >"$temporary_directory/control-api-gateway-vso.hcl" <<'HCL'
 path "kv/data/mattercodex/control-api-gateway/public-tls-material" { capabilities = ["read"] }
 path "kv/data/mattercodex/control-api-gateway/session" { capabilities = ["read"] }
+path "kv/data/mattercodex/control-api-gateway/nats" { capabilities = ["read"] }
 HCL
   vault_input "$temporary_directory/control-api-gateway-vso.hcl" policy write control-api-gateway-vso - >/dev/null
-  vault_cli write auth/kubernetes/role/control-api-gateway \
+  vault_cli write auth/kubernetes/role/control-api-gateway-vso \
     bound_service_account_names=control-api-gateway \
     bound_service_account_namespaces=mattercodex-system \
     audience=vault \
-    token_policies=spc-control-api-gateway,control-api-gateway-vso \
+    token_policies=control-api-gateway-vso \
     token_ttl=30m token_max_ttl=1h >/dev/null
 
   cat >"$temporary_directory/internal-rpc-authority-restore-controller-vso.hcl" <<'HCL'

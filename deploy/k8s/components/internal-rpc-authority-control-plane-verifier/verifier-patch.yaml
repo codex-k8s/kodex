@@ -182,7 +182,17 @@ spec:
             - name: internal-rpc-authority-sentry-dsn
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
               readOnly: true
+            - name: authority-bootstrap-roots
+              mountPath: /usr/local/share/internal-rpc-authority/manifest-root
+              readOnly: true
       volumes:
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - name: internal-rpc-authority-sockets
           emptyDir:
             medium: ""

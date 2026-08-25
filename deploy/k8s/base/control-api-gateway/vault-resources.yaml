@@ -19,7 +19,7 @@ spec:
   method: kubernetes
   mount: kubernetes
   kubernetes:
-    role: control-api-gateway
+    role: control-api-gateway-vso
     serviceAccount: control-api-gateway
     audiences: [vault]
     tokenExpirationSeconds: 600
@@ -73,3 +73,25 @@ spec:
       templates:
         current.hex: {text: '{{ get .Secrets "current-hex" }}'}
         previous.hex: {text: '{{ get .Secrets "previous-hex" }}'}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-nats
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-api-gateway/nats
+  refreshAfter: 5m
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-nats
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        user.creds: {text: '{{ get .Secrets "credentials" }}'}

@@ -54,6 +54,34 @@ verify_csi_secret_mounts() {
     ' >/dev/null || fail 'CSI secret volume or container mount is not read-only'
 }
 
+verify_authority_root_mounts() {
+  local render_file=$1
+
+  yq -o=json -I=0 'select(.kind == "Deployment")' "$render_file" |
+    jq -s -e '
+      map(select(any(.spec.template.spec.containers[]?;
+        .name == "internal-rpc-authority-issuer" or
+        .name == "internal-rpc-authority-verifier"))) as $workloads |
+      ($workloads | length) > 0 and
+      all($workloads[];
+        any(.spec.template.spec.containers[];
+          (.name == "internal-rpc-authority-issuer" or
+           .name == "internal-rpc-authority-verifier") and
+          any(.volumeMounts[]?;
+            .name == "authority-bootstrap-roots" and
+            .mountPath == "/usr/local/share/internal-rpc-authority/manifest-root" and
+            .readOnly == true)) and
+        any(.spec.template.spec.volumes[]?;
+          .name == "authority-bootstrap-roots" and
+          .secret.secretName == "internal-rpc-authority-bootstrap-roots" and
+          .secret.defaultMode == 292 and
+          (.secret.items | sort_by(.key)) == [
+            {"key":"manifest-root-metadata.json","path":"bootstrap-metadata.json"},
+            {"key":"manifest-root-public.jwk","path":"bootstrap-public.jwk"}
+          ]))
+    ' >/dev/null || fail 'issuer or verifier does not mount the installation manifest root'
+}
+
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 fresh_deployer="$repository_root/tools/deploy/deploy-fresh-release.sh"
@@ -76,6 +104,8 @@ for bootstrap_entry in \
   'Vault publisher runtime policy readback failed' \
   'database/static-creds/internal-rpc-authority-publisher-g4' \
   'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
+  'kv/data/mattercodex/control-api-gateway/nats' \
+  'auth/kubernetes/role/control-api-gateway-vso' \
   'audience=vault'; do
   grep -Fq "$bootstrap_entry" "$vault_bootstrap" ||
     fail "Vault bootstrap omits required fresh-install boundary: $bootstrap_entry"
@@ -367,6 +397,38 @@ if grep -Fq 'vaultdynamicsecrets.secrets.hashicorp.com/$resource_name" --timeout
 fi
 grep -Fq '(.data | keys | sort) == ["dsn", "username"]' "$fresh_deployer" ||
   fail 'fresh deploy does not reject extra dynamic database credential fields'
+grep -Fq 'VaultStaticSecret destination readback failed' "$fresh_deployer" ||
+  fail 'fresh deploy does not read back synchronized static secret destinations'
+
+yq -o=json -I=0 '
+  select(.kind == "VaultAuth" and .metadata.name == "control-api-gateway")
+' "$render_file" | jq -e '
+  .spec.kubernetes.role == "control-api-gateway-vso" and
+  .spec.kubernetes.serviceAccount == "control-api-gateway" and
+  .spec.kubernetes.audiences == ["vault"]
+' >/dev/null || fail 'control API VSO authentication is not isolated from the workload role'
+
+yq -o=json -I=0 '
+  select(.kind == "VaultStaticSecret" and
+    (.metadata.name | test("^control-api-gateway-")))
+' "$render_file" | jq -s -e '
+  (map({key:.metadata.name,value:.}) | from_entries) as $secrets |
+  ($secrets | keys | sort) == [
+    "control-api-gateway-nats",
+    "control-api-gateway-public-tls-material",
+    "control-api-gateway-session-keys"
+  ] and
+  $secrets["control-api-gateway-nats"].spec.path ==
+    "mattercodex/control-api-gateway/nats" and
+  $secrets["control-api-gateway-nats"].spec.destination.name ==
+    "control-api-gateway-nats" and
+  ($secrets["control-api-gateway-nats"].spec.destination.transformation.templates |
+    keys) == ["user.creds"] and
+  all($secrets[];
+    .spec.destination.create == true and
+    .spec.destination.overwrite == false and
+    .spec.destination.transformation.excludeRaw == true)
+' >/dev/null || fail 'control API static secret materialization graph is incomplete'
 
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
@@ -376,6 +438,16 @@ if rg -ni 'bot-service|legacy-data-migration|mattermostMode' "$render_file" >/de
 fi
 
 verify_csi_secret_mounts "$render_file"
+verify_authority_root_mounts "$render_file"
+
+grep -Fq '{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"}' \
+  "$repository_root/services/internal/internal-rpc-authority/cmd/fresh-install-key-material/main.go" ||
+  fail 'fresh key generator omits the optional interaction worker'
+grep -Fq 'integration-gateway interaction-gateway runtime-controller' "$vault_bootstrap" ||
+  fail 'Vault bootstrap omits the optional interaction worker grant'
+grep -Fq 'mkdir -p /var/run/mattercodex/work' \
+  "$repository_root/services/jobs/role-image-builder/Dockerfile" ||
+  fail 'role image builder image omits its read-only-rootfs workspace mountpoint'
 
 buildkit_deployment=$(yq -o=json -I=0 '
   select(.kind == "Deployment" and .metadata.name == "mattercodex-buildkit")
@@ -1053,6 +1125,7 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --oidc-pod-component identity-provider --oidc-target-port 8443 >/dev/null
 
 verify_csi_secret_mounts "$mattermost_render"
+verify_authority_root_mounts "$mattermost_render"
 
 yq -e '
   select(.kind == "ConfigMap" and

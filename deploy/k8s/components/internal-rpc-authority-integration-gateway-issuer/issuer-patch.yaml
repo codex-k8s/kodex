@@ -172,6 +172,9 @@ spec:
             - name: internal-rpc-authority-sentry-dsn
               mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
               readOnly: true
+            - name: authority-bootstrap-roots
+              mountPath: /usr/local/share/internal-rpc-authority/manifest-root
+              readOnly: true
         - name: platform-worker-grant-agent
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
@@ -196,6 +199,13 @@ spec:
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant}
             - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
       volumes:
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
         - name: platform-worker-grant-signer
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-platform-worker-grant-signer}}
         - name: internal-rpc-authority-sockets
