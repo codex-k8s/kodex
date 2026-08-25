@@ -30,10 +30,21 @@ spec:
               - key: app.kubernetes.io/name
                 operator: In
                 values:
+                  - automation-scheduler
                   - control-api-gateway
                   - integration-gateway
+                  - interaction-gateway
                   - control-plane
                   - internal-rpc-authority-restore-operator
+                  - role-image-builder
+                  - runtime-controller
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kodex-image-admission
+            matchExpressions:
+              - key: kodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
       ports: [{protocol: TCP, port: 8443}]
     - from:
         - namespaceSelector:

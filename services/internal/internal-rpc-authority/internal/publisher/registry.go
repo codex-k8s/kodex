@@ -27,13 +27,14 @@ type registryDocument struct {
 }
 
 type registryTarget struct {
-	WorkloadID         string `yaml:"workload_id"`
-	Role               string `yaml:"role"`
-	SPIFFEID           string `yaml:"spiffe_id"`
-	Namespace          string `yaml:"namespace"`
-	ServiceAccount     string `yaml:"service_account"`
-	WorkloadGeneration uint64 `yaml:"workload_generation"`
-	AuthoritySnapshot  struct {
+	WorkloadID              string `yaml:"workload_id"`
+	Role                    string `yaml:"role"`
+	SPIFFEID                string `yaml:"spiffe_id"`
+	Namespace               string `yaml:"namespace"`
+	ServiceAccount          string `yaml:"service_account"`
+	WorkloadGeneration      uint64 `yaml:"workload_generation"`
+	StartupReadbackRequired *bool  `yaml:"startup_readback_required"`
+	AuthoritySnapshot       struct {
 		SecretName string `yaml:"secret_name"`
 		MountPath  string `yaml:"mount_path"`
 	} `yaml:"authority_snapshot"`
@@ -137,6 +138,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 				entry.Role != "AUTHORIZATION_VERIFIER" &&
 				entry.Role != "AUTHORITY_PROOF_RESOLVER") ||
 			entry.WorkloadGeneration == 0 ||
+			entry.StartupReadbackRequired == nil ||
 			entry.AuthoritySnapshot.SecretName != "internal-rpc-authority-snapshot" ||
 			entry.AuthoritySnapshot.MountPath !=
 				"/var/run/config/kodex/internal-rpc-authority/snapshot" ||
@@ -242,6 +244,7 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			Namespace:                  entry.Namespace,
 			ServiceAccount:             entry.ServiceAccount,
 			WorkloadGeneration:         entry.WorkloadGeneration,
+			StartupReadbackRequired:    *entry.StartupReadbackRequired,
 			CredentialGeneration:       entry.DatabaseIdentity.CredentialGeneration,
 			AuthoritySnapshotSecret:    entry.AuthoritySnapshot.SecretName,
 			AuthoritySnapshotMountPath: entry.AuthoritySnapshot.MountPath,
