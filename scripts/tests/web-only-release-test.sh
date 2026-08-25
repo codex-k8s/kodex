@@ -387,10 +387,13 @@ yq -o=json -I=0 '
 for generation_contract in \
   '.status.lastGeneration == $generation' \
   '.observedGeneration == $generation' \
-  '["Ready", "SecretSynced"]'; do
+  '["Ready", "Healthy"]'; do
   grep -Fq "$generation_contract" "$fresh_deployer" ||
     fail "Vault secret readiness can accept a stale generation: $generation_contract"
 done
+if grep -Fq '["Ready", "SecretSynced"]' "$fresh_deployer"; then
+  fail 'Vault secret readiness can block on a stale SecretSynced condition after recovery'
+fi
 if grep -Fq 'vaultdynamicsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m' \
   "$fresh_deployer"; then
   fail 'VaultDynamicSecret readiness still relies on stale kubectl condition wait'
