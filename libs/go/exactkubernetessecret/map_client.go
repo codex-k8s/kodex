@@ -246,7 +246,7 @@ func mapGeneration(raw json.RawMessage) (uint64, error) {
 		return 0, nil
 	}
 	generation, err := strconv.ParseUint(value, 10, 64)
-	if err != nil || generation == 0 {
+	if err != nil {
 		return 0, errors.New("parse exact Kubernetes Secret generation")
 	}
 	return generation, nil

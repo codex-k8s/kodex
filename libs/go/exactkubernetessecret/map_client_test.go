@@ -8,19 +8,31 @@ import (
 func TestMapGeneration(t *testing.T) {
 	t.Parallel()
 
-	raw := json.RawMessage(`{"kodex.dev/secret-generation":"7"}`)
-	generation, err := mapGeneration(raw)
-	if err != nil || generation != 7 {
-		t.Fatalf("mapGeneration() = %d, %v; want 7, nil", generation, err)
+	for raw, expected := range map[string]uint64{
+		`{"kodex.dev/secret-generation":"0"}`: 0,
+		`{"kodex.dev/secret-generation":"7"}`: 7,
+	} {
+		generation, err := mapGeneration(json.RawMessage(raw))
+		if err != nil || generation != expected {
+			t.Fatalf("mapGeneration(%s) = %d, %v; want %d, nil", raw, generation, err, expected)
+		}
 	}
 	for _, invalid := range []json.RawMessage{
-		json.RawMessage(`{"kodex.dev/secret-generation":"0"}`),
 		json.RawMessage(`{"kodex.dev/secret-generation":"invalid"}`),
+		json.RawMessage(`{"kodex.dev/secret-generation":"-1"}`),
 		json.RawMessage(`[]`),
 	} {
 		if _, err := mapGeneration(invalid); err == nil {
 			t.Fatalf("mapGeneration() accepted %s", invalid)
 		}
+	}
+}
+
+func TestDataGenerationRejectsBootstrapMarkerInsideData(t *testing.T) {
+	t.Parallel()
+
+	if _, err := dataGeneration(map[string][]byte{generationDataKey: []byte("0")}); err == nil {
+		t.Fatal("dataGeneration() accepted bootstrap generation inside non-empty data")
 	}
 }
 
