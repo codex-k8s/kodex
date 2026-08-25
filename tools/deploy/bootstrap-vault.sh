@@ -468,6 +468,7 @@ HCL
 path "kv/data/mattercodex/control-api-gateway/public-tls-material" { capabilities = ["read"] }
 path "kv/data/mattercodex/control-api-gateway/session" { capabilities = ["read"] }
 path "kv/data/mattercodex/control-api-gateway/nats" { capabilities = ["read"] }
+path "database/static-creds/control-api-gateway-issuer-g1" { capabilities = ["read"] }
 HCL
   vault_input "$temporary_directory/control-api-gateway-vso.hcl" policy write control-api-gateway-vso - >/dev/null
   vault_cli write auth/kubernetes/role/control-api-gateway-vso \
