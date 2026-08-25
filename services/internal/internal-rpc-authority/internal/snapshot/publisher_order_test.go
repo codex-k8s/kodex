@@ -68,12 +68,12 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 		publisherTestKey("spiffe://kodex.local/alpha", "alpha", "AUTHORITY_PROOF", 1, alpha),
 	}
 	options := PublisherBuildOptions{SourceRevision: 1, AuthorityProofKeys: proof}
-	firstProof, err := publisherProofTrust(options, now, string(make([]byte, 64)))
+	firstProof, err := publisherProofTrust(options, now, strings.Repeat("0", 64))
 	if err != nil {
 		t.Fatalf("build first proof trust: %v", err)
 	}
 	options.AuthorityProofKeys = []PublisherKey{proof[1], proof[0]}
-	secondProof, err := publisherProofTrust(options, now, string(make([]byte, 64)))
+	secondProof, err := publisherProofTrust(options, now, strings.Repeat("0", 64))
 	if err != nil {
 		t.Fatalf("build reordered proof trust: %v", err)
 	}
