@@ -8,7 +8,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --context <exact-context> --mode defer-public-tls|preflight|apply|readback" \
+    "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|readback" \
     '  --render <exact-release.yaml> --public-tls-mode deferred|enabled' >&2
 }
 
@@ -28,7 +28,10 @@ while (($# > 0)); do
 done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
-case "$mode" in defer-public-tls|preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in
+  defer-public-tls|prepare-preflight|preflight|apply|readback) ;;
+  *) fail 'mode is invalid' ;;
+esac
 case "$public_tls_mode" in deferred|enabled) ;; *) fail 'public TLS mode is invalid' ;; esac
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
@@ -215,6 +218,39 @@ reconcile_image_admission_policy_parameters() {
     --wait=true --timeout=3m >/dev/null
 }
 
+prepare_image_admission_preflight() {
+  local parameters=kodex-image-admission-policy
+  local binding=kodex-image-admission-controller-jobs
+  local current expected current_identity expected_identity
+  if kubectl --context "$context" -n "$namespace" get \
+    "imageadmissionpolicyparameters.supplychain.kodex.dev/$parameters" >/dev/null 2>&1; then
+    return
+  fi
+  if ! current=$(kubectl --context "$context" get \
+    "validatingadmissionpolicybinding.admissionregistration.k8s.io/$binding" \
+    -o json 2>/dev/null); then
+    return
+  fi
+  expected=$(BINDING_NAME="$binding" yq -o=json -I=0 '
+    select(.apiVersion == "admissionregistration.k8s.io/v1" and
+      .kind == "ValidatingAdmissionPolicyBinding" and
+      .metadata.name == strenv(BINDING_NAME))
+  ' "$render_file")
+  [[ -n "$expected" ]] || fail 'image admission policy binding is absent from render'
+  current_identity=$(jq -S -c '{labels:(.metadata.labels // {}),spec:.spec}' <<<"$current")
+  expected_identity=$(jq -S -c '{labels:(.metadata.labels // {}),spec:.spec}' <<<"$expected")
+  [[ "$current_identity" == "$expected_identity" ]] ||
+    fail 'stale image admission policy binding differs from exact render'
+  kubectl --context "$context" delete \
+    "validatingadmissionpolicybinding.admissionregistration.k8s.io/$binding" \
+    --wait=true --timeout=3m >/dev/null
+  if kubectl --context "$context" get \
+    "validatingadmissionpolicybinding.admissionregistration.k8s.io/$binding" >/dev/null 2>&1; then
+    fail 'stale image admission policy binding remains after deletion'
+  fi
+  printf 'Stale image admission policy binding retired before preflight\n'
+}
+
 wait_trust_material() {
   local resource_name
   while IFS= read -r resource_name; do
@@ -322,6 +358,12 @@ wait_workloads() {
     [.kind,.metadata.name] | @tsv
   ' "$render_file" | sort -u)
 }
+
+if [[ "$mode" == prepare-preflight ]]; then
+  prepare_image_admission_preflight
+  printf 'Kodex platform preflight preparation completed\n'
+  exit 0
+fi
 
 if [[ "$mode" == preflight ]]; then
   crd_file=$(render_filter preflight-custom-resource-definitions \

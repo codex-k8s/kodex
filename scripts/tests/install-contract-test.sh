@@ -130,6 +130,7 @@ grep -Fq '.apiVersion != \"$api_version\"' \
 for preflight_contract in \
   'apply --server-side --dry-run=server' \
   '--field-manager=kodex-install' \
+  '--mode prepare-preflight' \
   '--public-tls-mode "$KODEX_PUBLIC_TLS_MODE"' \
   'KODEX_PUBLIC_TLS_MODE=deferred|enabled'; do
   rg -Fq -- "$preflight_contract" \
