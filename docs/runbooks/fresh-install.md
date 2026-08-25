@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
+version: 2.0.1
 updated: 2026-08-25
 ---
 
@@ -122,10 +122,15 @@ sudo ./tools/install/reset-host.sh \
 
 Reset применяется только для согласованного пустого узла. Он запускает штатный
 k3s kill-all, снимает mounts, удаляет Kubernetes state и проверяет отсутствие
-старых firewall chains.
+старых firewall chains. Таблица `inet kodex_fw` удаляется отдельно, а
+`nftables.service` отключается: её прежняя `FORWARD policy drop` выполнялась до
+Kubernetes/UFW и могла блокировать DNAT до ingress pod после переустановки.
 
 Перед установкой DNS всех публичных hosts должен указывать на сервер, а порты
-22, 80 и 443 быть доступны. Другие входящие порты firewall закрывает.
+22, 80 и 443 быть доступны. Другие входящие порты firewall закрывает. UFW
+каждый раз строится с нуля: incoming и routed по умолчанию запрещены, pod
+forwarding ограничен CIDR `10.42.0.0/16`, служебный трафик -
+`10.43.0.0/16`, а внешний DNAT до pod разрешён только для HTTP/HTTPS.
 
 ## 5. Установка
 

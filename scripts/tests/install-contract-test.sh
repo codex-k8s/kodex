@@ -59,4 +59,19 @@ jq -e '
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'dynamic Secret readback does not use the projection item registry'
 
+for firewall_contract in \
+  'systemctl disable --now nftables' \
+  'nft delete table inet kodex_fw' \
+  'ufw --force reset' \
+  'ufw default deny routed' \
+  'ufw route allow from "$pod_cidr"' \
+  'ufw route allow proto tcp to "$pod_cidr" port 80' \
+  'ufw route allow proto tcp to "$pod_cidr" port 443'; do
+  rg -Fq "$firewall_contract" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal firewall contract is absent: $firewall_contract"
+done
+rg -Fq 'legacy kodex_fw nftables policy remains active' \
+  "$repository_root/tools/install/reset-host.sh" ||
+  fail 'host reset does not reject the legacy nftables policy'
+
 printf 'Kodex install contract tests passed\n'
