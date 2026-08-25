@@ -8,6 +8,7 @@ ARG VERSION=dev
 
 WORKDIR /workspace
 
+COPY libs/go/exactkubernetessecret/ libs/go/exactkubernetessecret/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
