@@ -186,6 +186,9 @@ ensure_core_material() {
     (.auths | keys) == [$host] and (.auths[$host].auth | type == "string" and length > 0)
   ' "$material_directory/registry/release-source/dockerconfig.json" >/dev/null ||
     fail 'installation material targets another release registry'
+  "$repository_root/tools/install/reconcile-pull-docker-config.sh" \
+    --material-directory "$material_directory" \
+    --promoted-pull-host "$KODEX_PROMOTED_PULL_HOST"
   chmod 0700 "$material_directory"
   install -d -m 0700 "$material_directory/inputs" "$material_directory/github"
 }
