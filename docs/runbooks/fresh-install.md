@@ -228,7 +228,9 @@ server-side apply с тем же field manager, а удаляемые перед
 ConfigMap и Job проверяются отдельным server-side create с временным именем.
 Существующий seed Secret не переотправляется через admission policy. При apply
 изменившийся immutable ConfigMap удаляется только после проверки platform-owned
-labels и затем воссоздаётся из exact render.
+labels и затем воссоздаётся из exact render. Такой же owner-checked replacement
+выполняется для immutable `ImageAdmissionPolicyParameters` после установления
+его CRD и до применения foundation.
 
 ## 7. Восстановление и rollback
 

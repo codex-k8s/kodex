@@ -98,6 +98,9 @@ for preflight_contract in \
     "$repository_root/install.sh" "$repository_root/docs/runbooks/fresh-install.md" ||
     fail "platform release contract is absent: $preflight_contract"
 done
+rg -Fq 'reconcile_image_admission_policy_parameters' \
+  "$repository_root/tools/install/deploy-platform.sh" ||
+  fail 'immutable image admission parameters do not have a release reconciliation path'
 (
   runtime_directory="$temporary_directory/render-filter-runtime"
   render_file="$runtime_directory/release.yaml"

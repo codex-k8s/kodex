@@ -186,6 +186,32 @@ reconcile_immutable_configmaps() {
   ' "$render_file" | sort -u)
 }
 
+reconcile_image_admission_policy_parameters() {
+  local name=kodex-image-admission-policy current expected current_spec expected_spec
+  if ! current=$(kubectl --context "$context" -n "$namespace" get \
+    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" -o json 2>/dev/null); then
+    return
+  fi
+  expected=$(PARAMETERS_NAME="$name" yq -o=json -I=0 '
+    select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
+      .kind == "ImageAdmissionPolicyParameters" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(PARAMETERS_NAME))
+  ' "$render_file")
+  [[ -n "$expected" ]] || fail 'image admission policy parameters are absent from render'
+  current_spec=$(jq -S -c '.spec' <<<"$current")
+  expected_spec=$(jq -S -c '.spec' <<<"$expected")
+  [[ "$current_spec" != "$expected_spec" ]] || return
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/owner-intent"] == "true"
+  ' <<<"$current" >/dev/null ||
+    fail 'image admission policy parameters are not owned by Kodex'
+  kubectl --context "$context" -n "$namespace" delete \
+    "imageadmissionpolicyparameters.supplychain.kodex.dev/$name" \
+    --wait=true --timeout=3m >/dev/null
+}
+
 wait_trust_material() {
   local resource_name
   while IFS= read -r resource_name; do
@@ -328,6 +354,7 @@ if [[ "$mode" == apply ]]; then
       fail "CustomResourceDefinition was not established: $resource_name"
   done < <(yq -N -r 'select(.kind == "CustomResourceDefinition") | .metadata.name' "$render_file")
 
+  reconcile_image_admission_policy_parameters
   ensure_seed_secret internal-rpc-authority-restore-evidence
   ensure_seed_secret internal-rpc-authority-snapshot
   reconcile_immutable_configmaps
