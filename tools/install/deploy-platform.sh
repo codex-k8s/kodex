@@ -71,7 +71,8 @@ for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
 done
 
 render_filter() {
-  local name=$1 expression=$2 output="$temporary_directory/$name.yaml"
+  local name=$1 expression=$2 output
+  output="$temporary_directory/$name.yaml"
   yq "$expression" "$render_file" >"$output"
   [[ -s "$output" ]] || fail "release phase is empty: $name"
   printf '%s' "$output"

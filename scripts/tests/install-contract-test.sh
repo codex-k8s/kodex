@@ -74,6 +74,24 @@ grep -Fq 'preflight-custom-resource-definitions' \
 grep -Fq '.apiVersion != \"$api_version\"' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'platform preflight does not exclude exact API versions introduced by the render'
+(
+  runtime_directory="$temporary_directory/render-filter-runtime"
+  render_file="$runtime_directory/release.yaml"
+  temporary_directory="$runtime_directory/output"
+  mkdir -p "$temporary_directory"
+  printf '%s\n' 'apiVersion: v1' 'kind: Namespace' >"$render_file"
+  yq() {
+    command cat -- "$2"
+  }
+  # Execute the production helper under set -u instead of checking syntax only.
+  source <(sed -n '/^render_filter() {$/,/^}$/p' \
+    "$repository_root/tools/install/deploy-platform.sh")
+  render_filter_output=$(render_filter known '.')
+  [[ "$render_filter_output" == "$temporary_directory/known.yaml" ]] ||
+    fail 'release render helper returned an unexpected path'
+  cmp -s "$render_file" "$render_filter_output" ||
+    fail 'release render helper did not materialize the filtered manifest'
+)
 
 for firewall_contract in \
   'systemctl disable --now nftables' \
