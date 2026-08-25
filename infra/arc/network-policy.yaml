@@ -65,7 +65,7 @@ data:
                                   - name: ":authority"
                                     string_match: {exact: "__RELEASE_REGISTRY_HOST__:443"}
                               route:
-                                cluster: dynamic_forward_proxy
+                                cluster: registry_ingress
                                 upgrade_configs:
                                   - upgrade_type: CONNECT
                                     connect_config: {}
@@ -272,6 +272,19 @@ data:
                     upgrade_configs:
                       - upgrade_type: CONNECT
       clusters:
+        - name: registry_ingress
+          connect_timeout: 10s
+          type: STRICT_DNS
+          lb_policy: ROUND_ROBIN
+          load_assignment:
+            cluster_name: registry_ingress
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: __INGRESS_SERVICE_HOST__
+                          port_value: 443
         - name: dynamic_forward_proxy
           connect_timeout: 10s
           lb_policy: CLUSTER_PROVIDED
@@ -399,6 +412,15 @@ spec:
   egress:
     - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]
       ports: [{ protocol: TCP, port: 443 }]
+    - to:
+        - namespaceSelector:
+            { matchLabels: { kubernetes.io/metadata.name: __INGRESS_NAMESPACE__ } }
+          podSelector:
+            { matchLabels: { app.kubernetes.io/name: __INGRESS_POD_NAME__ } }
+        - { ipBlock: { cidr: "__INGRESS_SERVICE_CIDR__" } }
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: __INGRESS_ENDPOINT_PORT__ }
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

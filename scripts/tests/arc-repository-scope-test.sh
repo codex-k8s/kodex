@@ -11,6 +11,9 @@ network_policy_renderer="$repository_root/infra/arc/render-network-policy.sh"
 helm_values_renderer="$repository_root/infra/arc/render-helm-values.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
+network_policy_ingress_arguments=(
+  10.43.157.207/32 8443 kube-system traefik traefik.kube-system.svc.cluster.local
+)
 
 kubectl kustomize "$repository_root/infra/bootstrap-registry" |
   yq -o=json eval-all '.' | jq -sc -e '
@@ -43,6 +46,9 @@ common_arguments=(
   --mode preflight
   --registry-namespace fixture-registry
   --release-registry-host registry.example.test
+  --ingress-namespace kube-system
+  --ingress-pod-name traefik
+  --ingress-service-name traefik
   --workflow-sha-file "$temporary_directory/workflow-sha"
   --build-owner-actor-id-file "$temporary_directory/build-owner"
   --deploy-owner-actor-id-file "$temporary_directory/deploy-owner"
@@ -77,9 +83,9 @@ if "$bootstrap" "${common_arguments[@]}" \
 fi
 
 "$network_policy_renderer" 10.20.30.40/32 10.20.30.41/32 fixture-registry \
-  registry.example.test \
+  registry.example.test "${network_policy_ingress_arguments[@]}" \
   "$temporary_directory/network-policy.yaml"
-rg -q '__REGISTRY_' "$temporary_directory/network-policy.yaml" && {
+rg -q '__REGISTRY_|__INGRESS_' "$temporary_directory/network-policy.yaml" && {
   printf 'ARC network policy retained an unresolved or legacy registry locator\n' >&2
   exit 1
 }
@@ -197,7 +203,10 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
     .match.connect_matcher == {} and
     (.match.headers | length == 1) and .match.headers[0].name == ":authority" and
     ((.match.headers[0].string_match.safe_regex.regex? // "") | length < 80) and
-    .route.cluster == "dynamic_forward_proxy" and
+    (if .match.headers[0].string_match.exact? == "registry.example.test:443"
+      then .route.cluster == "registry_ingress"
+      else .route.cluster == "dynamic_forward_proxy"
+      end) and
     (.route.upgrade_configs | length == 1) and
     .route.upgrade_configs[0].upgrade_type == "CONNECT" and
     .route.upgrade_configs[0].connect_config == {})) and
@@ -222,6 +231,13 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
       (authority_allowed($routes; .) | not))) and
   ($hcm_upgrade.upgrade_type == "CONNECT") and
   ($hcm_upgrade | has("connect_config") | not) and
+  ([.static_resources.clusters[] | select(.name == "registry_ingress" and
+    .type == "STRICT_DNS" and .lb_policy == "ROUND_ROBIN" and
+    .load_assignment.cluster_name == "registry_ingress" and
+    .load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.address ==
+      "traefik.kube-system.svc.cluster.local" and
+    .load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.port_value ==
+      443)] | length == 1) and
   ([.. | objects | select(has("connect_config"))] | length == ($routes | length))
 ' >/dev/null || {
   printf 'Envoy CONNECT termination is not configured on the exact route\n' >&2
@@ -229,40 +245,51 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
 }
 
 "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
-  fixture-registry registry.example.test "$temporary_directory/rendered-network-policy.yaml"
+  fixture-registry registry.example.test "${network_policy_ingress_arguments[@]}" \
+  "$temporary_directory/rendered-network-policy.yaml"
 yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq -sc -e '
-  map(select(.kind == "NetworkPolicy" and .metadata.namespace == "kodex-ci" and
-    .metadata.name == "build-registry")) |
-  length == 1 and
-  .[0].spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
+  (map(select(.kind == "NetworkPolicy" and .metadata.namespace == "kodex-ci" and
+    .metadata.name == "build-registry"))) as $registry_policies |
+  (map(select(.kind == "NetworkPolicy" and .metadata.namespace == "kodex-ci" and
+    .metadata.name == "github-proxy-egress"))) as $proxy_policies |
+  ($registry_policies | length) == 1 and
+  $registry_policies[0].spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
     "fixture-registry" and
-  ([.[0].spec.egress[0].to[] | select(.ipBlock != null) | .ipBlock.cidr] | sort) ==
+  ([$registry_policies[0].spec.egress[0].to[] |
+    select(.ipBlock != null) | .ipBlock.cidr] | sort) ==
     ["10.43.198.224/32","192.0.2.10/32"] and
-  ([.[0].spec.egress[0].ports[].port] | sort) == [5000,5001]
+  ([$registry_policies[0].spec.egress[0].ports[].port] | sort) == [5000,5001] and
+  ($proxy_policies | length) == 1 and
+  $proxy_policies[0].spec.egress[1].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
+    "kube-system" and
+  $proxy_policies[0].spec.egress[1].to[0].podSelector.matchLabels."app.kubernetes.io/name" ==
+    "traefik" and
+  $proxy_policies[0].spec.egress[1].to[1].ipBlock.cidr == "10.43.157.207/32" and
+  ([$proxy_policies[0].spec.egress[1].ports[].port] | sort) == [443,8443]
 ' >/dev/null || {
   printf 'Rendered build registry hostNetwork destination is not exact\n' >&2
   exit 1
 }
 if "$network_policy_renderer" 0.0.0.0/0 192.0.2.10/32 \
-  fixture-registry registry.example.test \
+  fixture-registry registry.example.test "${network_policy_ingress_arguments[@]}" \
   "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted a non-/32 destination\n' >&2
   exit 1
 fi
 if "$network_policy_renderer" 999.0.0.1/32 192.0.2.10/32 \
-  fixture-registry registry.example.test \
+  fixture-registry registry.example.test "${network_policy_ingress_arguments[@]}" \
   "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted an invalid IPv4 destination\n' >&2
   exit 1
 fi
 if "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
-  fixture-registry https://registry.example.test \
+  fixture-registry https://registry.example.test "${network_policy_ingress_arguments[@]}" \
   "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted a registry URL instead of an exact DNS host\n' >&2
   exit 1
 fi
 if "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
-  fixture-registry registry.example.test:443 \
+  fixture-registry registry.example.test:443 "${network_policy_ingress_arguments[@]}" \
   "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
   printf 'Registry network policy renderer accepted a registry host with a port\n' >&2
   exit 1
