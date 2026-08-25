@@ -48,6 +48,20 @@ authenticated_owner_actor_id=$(gh api user --jq '.id')
   fail "owner actor ID files differ from the authenticated GitHub API actor"
 workflow_sha=$(<"$workflow_sha_file")
 
+wait_variable_readback() {
+  local endpoint=$1 variable_name=$2 expected_value=$3 output_file=$4 attempt=1
+  while ((attempt <= 15)); do
+    if gh api "$endpoint" >"$output_file" 2>/dev/null &&
+      jq -e --arg name "$variable_name" --arg value "$expected_value" \
+        '.name == $name and .value == $value' "$output_file" >/dev/null; then
+      return 0
+    fi
+    sleep 2
+    ((attempt++))
+  done
+  return 1
+}
+
 configure_environment() {
   local environment=$1 body branch_body
   body="$temporary_directory/environment-$environment.json"
@@ -98,9 +112,9 @@ configure_repository_variable() {
       gh api --method POST "repos/$repository/actions/variables" --input "$body" >/dev/null
     fi
   fi
-  gh api "repos/$repository/actions/variables/$variable_name" >"$temporary_directory/variable-readback-$variable_name.json"
-  jq -e --arg name "$variable_name" --arg value "$value" '.name == $name and .value == $value' \
-    "$temporary_directory/variable-readback-$variable_name.json" >/dev/null ||
+  wait_variable_readback \
+    "repos/$repository/actions/variables/$variable_name" "$variable_name" "$value" \
+    "$temporary_directory/variable-readback-$variable_name.json" ||
     fail "repository variable readback mismatch: $variable_name"
 }
 
@@ -120,12 +134,11 @@ configure_environment_variable() {
         --input "$body" >/dev/null
     fi
   fi
-  gh api "repos/$repository/environments/$environment/variables/$variable_name" \
-    >"$temporary_directory/environment-variable-readback-$environment-$variable_name.json"
-  jq -e --arg name "$variable_name" --arg value "$value" \
-    '.name == $name and .value == $value' \
-    "$temporary_directory/environment-variable-readback-$environment-$variable_name.json" \
-    >/dev/null || fail "environment variable readback mismatch: $environment/$variable_name"
+  wait_variable_readback \
+    "repos/$repository/environments/$environment/variables/$variable_name" \
+    "$variable_name" "$value" \
+    "$temporary_directory/environment-variable-readback-$environment-$variable_name.json" ||
+    fail "environment variable readback mismatch: $environment/$variable_name"
 }
 
 if [[ "$mode" == preflight ]]; then
