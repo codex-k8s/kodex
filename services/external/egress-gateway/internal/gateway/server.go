@@ -233,21 +233,65 @@ func (server *Server) dial(snapshot dnsresolver.Snapshot, port int, timeout time
 	}
 	dialContext, cancel := context.WithTimeout(server.context, timeout)
 	defer cancel()
+	addressFamilies := make([][]netip.Addr, 0, 2)
+	var ipv4, ipv6 []netip.Addr
 	for _, address := range snapshot.Addresses {
-		if dnsresolver.ValidateAddresses([]netip.Addr{address}) != nil {
-			return nil, errors.New("DNS address is not valid for dial")
+		if address.Is4() {
+			ipv4 = append(ipv4, address)
+		} else {
+			ipv6 = append(ipv6, address)
 		}
-		connection, err := server.dialer.DialContext(dialContext, netip.AddrPortFrom(address, uint16(port)))
-		if err == nil {
-			server.metrics.Dial("success", "none")
-			return connection, nil
-		}
-		server.metrics.Dial("failure", "dial_failure")
-		if dialContext.Err() != nil {
-			break
+	}
+	if len(ipv4) > 0 {
+		addressFamilies = append(addressFamilies, ipv4)
+	}
+	if len(ipv6) > 0 {
+		addressFamilies = append(addressFamilies, ipv6)
+	}
+	results := make(chan dialResult)
+	for _, addresses := range addressFamilies {
+		go server.dialFamily(dialContext, addresses, port, results)
+	}
+	for range addressFamilies {
+		select {
+		case result := <-results:
+			if result.connection != nil {
+				cancel()
+				return result.connection, nil
+			}
+		case <-dialContext.Done():
+			return nil, errors.New("all literal dial attempts failed")
 		}
 	}
 	return nil, errors.New("all literal dial attempts failed")
+}
+
+type dialResult struct {
+	connection net.Conn
+}
+
+func (server *Server) dialFamily(ctx context.Context, addresses []netip.Addr, port int, results chan<- dialResult) {
+	for _, address := range addresses {
+		connection, err := server.dialer.DialContext(ctx, netip.AddrPortFrom(address, uint16(port)))
+		if err != nil {
+			server.metrics.Dial("failure", "dial_failure")
+			if ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+		server.metrics.Dial("success", "none")
+		select {
+		case results <- dialResult{connection: connection}:
+		case <-ctx.Done():
+			_ = connection.Close()
+		}
+		return
+	}
+	select {
+	case results <- dialResult{}:
+	case <-ctx.Done():
+	}
 }
 
 func (server *Server) tunnel(left, right net.Conn, idleTimeout, writeTimeout time.Duration) {

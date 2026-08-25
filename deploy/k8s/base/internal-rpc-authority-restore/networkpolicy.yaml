@@ -43,6 +43,9 @@ spec:
       ports: [{protocol: TCP, port: 9090}]
   egress:
     - to:
+        - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-publisher}
       ports: [{protocol: TCP, port: 8444}]
@@ -86,6 +89,9 @@ spec:
   policyTypes: [Egress]
   egress:
     - to:
+        - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
+    - to:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
       ports: [{protocol: TCP, port: 8443}]
@@ -124,6 +130,9 @@ spec:
       app.kubernetes.io/name: internal-rpc-authority-restore-pitr
   policyTypes: [Egress]
   egress:
+    - to:
+        - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
+      ports: [{protocol: TCP, port: 443}]
     - to:
         - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: kube-system}

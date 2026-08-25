@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/netip"
@@ -76,6 +77,37 @@ func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 	if resolver.calls != 0 || len(dialer.targets) != 0 {
 		t.Fatalf("SNI rejection crossed zero-dial boundary: resolver=%d dial=%d", resolver.calls, len(dialer.targets))
 	}
+}
+
+func TestDialFallsBackAcrossAddressFamiliesWithinOneBudget(t *testing.T) {
+	dialer := newDualStackDialer()
+	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := dnsresolver.Snapshot{
+		Addresses: []netip.Addr{
+			netip.MustParseAddr("2606:4700:4700::1111"),
+			netip.MustParseAddr("1.1.1.1"),
+		},
+		ExpiresAt: time.Now().Add(time.Minute),
+	}
+	startedAt := time.Now()
+	connection, err := server.dial(snapshot, 443, 500*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if elapsed := time.Since(startedAt); elapsed >= 250*time.Millisecond {
+		t.Fatalf("IPv4 fallback consumed the shared dial budget: %s", elapsed)
+	}
+	select {
+	case <-dialer.ipv6Done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("losing IPv6 dial was not cancelled")
+	}
+	peer := <-dialer.peers
+	defer peer.Close()
 }
 
 func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
@@ -246,6 +278,39 @@ type fakeDialer struct {
 	mu      sync.Mutex
 	targets []netip.AddrPort
 	peers   chan net.Conn
+}
+
+type dualStackDialer struct {
+	ipv6Started chan struct{}
+	ipv6Done    chan struct{}
+	peers       chan net.Conn
+	startedOnce sync.Once
+	doneOnce    sync.Once
+}
+
+func newDualStackDialer() *dualStackDialer {
+	return &dualStackDialer{
+		ipv6Started: make(chan struct{}),
+		ipv6Done:    make(chan struct{}),
+		peers:       make(chan net.Conn, 1),
+	}
+}
+
+func (dialer *dualStackDialer) DialContext(ctx context.Context, target netip.AddrPort) (net.Conn, error) {
+	if target.Addr().Is6() {
+		dialer.startedOnce.Do(func() { close(dialer.ipv6Started) })
+		<-ctx.Done()
+		dialer.doneOnce.Do(func() { close(dialer.ipv6Done) })
+		return nil, ctx.Err()
+	}
+	select {
+	case <-dialer.ipv6Started:
+		server, peer := net.Pipe()
+		dialer.peers <- peer
+		return server, nil
+	case <-ctx.Done():
+		return nil, errors.New("IPv4 fallback was not attempted in time")
+	}
 }
 
 func (dialer *fakeDialer) DialContext(_ context.Context, target netip.AddrPort) (net.Conn, error) {

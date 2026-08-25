@@ -163,9 +163,19 @@ rg -Fq 'reconcile_image_admission_policy_parameters' \
 ) || fail 'unchanged image admission parameters make an idempotent apply fail'
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY=true' "$repository_root/.kodex-env.example" ||
   fail 'bundled install does not disable unavailable external telemetry exporters by default'
+grep -Fq 'KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:443' \
+  "$repository_root/.kodex-env.example" ||
+  fail 'bundled install does not use the OIDC Service port'
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY:-true' \
   "$repository_root/install.sh" "$repository_root/tools/install/configure-github.sh" ||
   fail 'installer and GitHub configuration disagree on the external telemetry default'
+for registry_pull_contract in \
+  'pull_auth=$(jq -er --arg host "$internal_pull_host"' \
+  '.auths[$host] = {auth:$auth}' \
+  '"$output_directory/registry/pull/dockerconfig.json.next"'; do
+  rg -Fq -- "$registry_pull_contract" "$repository_root/tools/install/generate-material.sh" ||
+    fail "pull Docker config alias contract is absent: $registry_pull_contract"
+done
 if rg -Fq 'select(.kind != "PodMonitor" and .kind != "ServiceMonitor" and .kind != "PrometheusRule")' \
   "$repository_root/tools/release/render-web-only.sh"; then
   fail 'external exporter disablement removes Prometheus discovery resources'

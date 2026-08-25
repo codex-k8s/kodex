@@ -107,7 +107,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
         .podSelector.matchLabels."app.kubernetes.io/name" == "release-artifact-materializer" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "release-bootstrap")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 9090) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "monitoring" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "observability" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "prometheus")] | length == 1) and
     ([.spec.egress[] | select(.ports[].port == 53) | .to[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kube-system" and

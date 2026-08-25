@@ -88,6 +88,30 @@ missing_postgres_clients=$(comm -23 "$postgres_clients" "$postgres_allowed_clien
 grep -Fxq kodex-postgresql-runtime-credentials "$postgres_allowed_clients" ||
   fail 'PostgreSQL credential reconciler is denied by NetworkPolicy'
 
+for policy in internal-rpc-authority-restore-controller-exact-paths \
+  internal-rpc-authority-restore-jobs-exact-paths \
+  internal-rpc-authority-restore-pitr-telemetry; do
+  yq -o=json -I=0 '.' "$render" | jq -s -e --arg policy "$policy" '
+    any(.[];
+      .kind == "NetworkPolicy" and .metadata.name == $policy and
+      any(.spec.egress[];
+        any(.to[]?; .ipBlock.cidr == "__KODEX_KUBERNETES_API_SERVICE_CIDR__") and
+        any(.ports[]?; .protocol == "TCP" and .port == 443)))
+  ' >/dev/null ||
+    fail "restore workload is denied access to the Kubernetes API: $policy"
+done
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "role-image-builder" and
+    any(.spec.template.spec.containers[]?.volumeMounts[]?;
+      .name == "work" and .mountPath == "/work"))
+' >/dev/null || fail 'role image builder workspace mount is not materializable'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime" and
+    .data.ROLE_IMAGE_BUILDER_WORKSPACE_ROOT == "/work")
+' >/dev/null || fail 'role image builder workspace configuration disagrees with its mount'
+
 for script in "$repository_root/install.sh" "$repository_root/tools/install"/*.sh; do
   bash -n "$script"
 done
