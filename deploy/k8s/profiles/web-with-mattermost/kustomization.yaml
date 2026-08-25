@@ -17,6 +17,7 @@ resources:
   - ../../overlays/production/staff-control-center
   - ../../overlays/production/interaction-gateway
   - control-plane-interaction-grant-trust.yaml
+  - interaction-gateway-database-vault-resources.yaml
 patches:
   - path: control-plane-patch.yaml
   - target:

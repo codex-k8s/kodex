@@ -184,8 +184,19 @@ grep -Fq "internal_rpc_authority_postgresql_host=$internal_rpc_authority_postgre
   fail 'internal-rpc-authority migration, reconciler and restore DSN do not share the exact authority'
 grep -Fq 'policy write internal-rpc-authority-restore-controller-vso' "$vault_initializer" ||
   fail 'restore controller VaultStaticSecret policy is absent'
+grep -Fq 'path "kv/data/internal-rpc-authority/restore/trust" { capabilities = ["read"] }' \
+  "$vault_initializer" || fail 'restore controller Vault policy omits exact trust path'
 grep -Fq 'bound_service_account_names=internal-rpc-authority-restore-controller' \
   "$vault_initializer" || fail 'restore controller Vault auth is not bound to its exact ServiceAccount'
+grep -Fq 'write_target_database_registry()' "$vault_initializer" ||
+  fail 'Vault bootstrap does not derive target database roles from the release registry'
+[[ $(grep -Fc 'write_target_database_registry "$temporary_directory/target-database-registry.json"' \
+  "$vault_initializer") -eq 2 ]] ||
+  fail 'Vault database configuration and runtime rotation do not share the target registry'
+grep -Fq 'allowed_roles:("control-plane-migrator' "$vault_initializer" ||
+  fail 'Vault database connection does not include registry-derived static roles'
+grep -Fq 'target database static credential readback failed' "$vault_initializer" ||
+  fail 'target database static credentials have no immediate exact readback'
 grep -Fq 'policy write mattercodex-node-pull-bootstrap' "$vault_initializer" ||
   fail 'node pull bootstrap Vault policy is absent'
 grep -Fq 'path "pki-node-pull/issue/mattercodex-node-pull"' "$vault_initializer" ||

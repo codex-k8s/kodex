@@ -283,6 +283,46 @@ yq -e '
 ' "$render_file" >/dev/null ||
   fail 'web-only fresh install does not start authority history at revision one'
 
+target_registry=$(yq -o=json -I=0 '
+  select(.kind == "ConfigMap" and
+    .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+  (.data."key-delivery-targets.yaml" | from_yaml)
+' "$render_file")
+dynamic_secrets=$(yq -o=json -I=0 '
+  select(.kind == "VaultDynamicSecret")
+' "$render_file" | jq -s '.')
+jq -en --argjson registry "$target_registry" --argjson secrets "$dynamic_secrets" '
+  ($registry.targets | map(.database_identity.vault_database_role)) as $roles |
+  ($secrets | length) == 8 and
+  all($secrets[];
+    .spec.mount == "database" and
+    .spec.allowStaticCreds == true and
+    .spec.refreshAfter == "1m" and
+    .spec.revoke == false and
+    .spec.destination.create == true and
+    .spec.destination.overwrite == false and
+    .spec.destination.transformation.excludeRaw == true and
+    (.spec.destination.transformation.templates | keys | sort) == ["dsn", "username"] and
+    (.spec.path | startswith("static-creds/")) and
+    ((.spec.path | sub("^static-creds/"; "")) as $role | $roles | index($role) != null))
+' >/dev/null || fail 'registry-derived runtime database credentials are incomplete or unsafe'
+
+yq -o=json -I=0 '
+  select(.kind == "VaultStaticSecret" and
+    .metadata.name == "internal-rpc-authority-restore-role-trust")
+' "$render_file" | jq -e '
+  .spec.path == "internal-rpc-authority/restore/trust" and
+  .spec.destination.name == "internal-rpc-authority-restore-role-trust" and
+  .spec.destination.overwrite == false and
+  .spec.destination.transformation.excludeRaw == true and
+  (.spec.destination.transformation.templates | keys) == ["restore-role-trust.jws"]
+' >/dev/null || fail 'restore role trust is not synchronized through Vault'
+
+[[ $(grep -c '^[[:space:]]*wait_vault_dynamic_secrets$' "$fresh_deployer") -eq 3 ]] ||
+  fail 'fresh deploy does not gate migrations, workloads and readback on dynamic database credentials'
+grep -Fq '(.data | keys | sort) == ["dsn", "username"]' "$fresh_deployer" ||
+  fail 'fresh deploy does not reject extra dynamic database credential fields'
+
 if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
 fi
@@ -975,6 +1015,19 @@ yq -e '
   (.data."key-delivery-targets.yaml" | from_yaml | .source_revision) == 1
 ' "$mattermost_render" >/dev/null ||
   fail 'Mattermost fresh install does not start authority history at revision one'
+
+[[ $(yq -o=json -I=0 'select(.kind == "VaultDynamicSecret")' \
+  "$mattermost_render" | jq -s 'length') -eq 9 ]] ||
+  fail 'Mattermost profile does not materialize all runtime database credentials'
+yq -o=json -I=0 '
+  select(.kind == "VaultDynamicSecret" and
+    .metadata.name == "internal-rpc-authority-interaction-gateway-issuer-postgresql")
+' "$mattermost_render" | jq -e '
+  .spec.vaultAuthRef == "internal-rpc-authority-interaction-gateway-database" and
+  .spec.path == "static-creds/interaction-gateway-issuer-g1" and
+  .spec.destination.name == "internal-rpc-authority-interaction-gateway-issuer-postgresql" and
+  (.spec.rolloutRestartTargets == [{"kind":"Deployment","name":"interaction-gateway"}])
+' >/dev/null || fail 'Mattermost adapter database credential graph is incomplete'
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "interaction-gateway")' "$mattermost_render" |
   jq -e '

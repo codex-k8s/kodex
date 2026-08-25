@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.2.3
-updated: 2026-08-24
+version: 1.2.4
+updated: 2026-08-25
 ---
 
 # Infrastructure Guide
@@ -274,14 +274,24 @@ Service DNS alias разделяет базы и TLS identities логическ
 
 ## Vault, TLS и namespace-local secret graph
 
-До применения `VaultStaticSecret` environment materializes Namespace,
-ServiceAccount, `VaultConnection`, `VaultAuth`, namespace-bound Vault role,
-доверенную CA и exact egress. Порядок закрыто проверяет:
+До применения `VaultStaticSecret` или `VaultDynamicSecret` environment
+materializes Namespace, ServiceAccount, `VaultConnection`, `VaultAuth`,
+namespace-bound Vault role, доверенную CA и exact egress. Порядок закрыто
+проверяет:
 
 ```text
 Namespace -> CA/egress -> VaultConnection -> VaultAuth
--> VaultStaticSecret -> generated Secret -> workload
+-> VaultStaticSecret|VaultDynamicSecret -> generated Secret -> workload
 ```
+
+Database credential для issuer/verifier sidecar материализуется только из
+закрытого registry целевых workload. Bootstrap создаёт exact Vault static role
+для зарегистрированного PostgreSQL principal и выполняет немедленную ротацию;
+`VaultDynamicSecret` с `allowStaticCreds: true` создаёт namespace-local Secret
+с закрытым набором `dsn` и `username`. Имя роли, principal, VaultAuth,
+ServiceAccount, destination Secret и workload restart target обязаны быть
+однозначно связаны в итоговом render. Secret нельзя создавать вручную,
+расширять raw password-полями или использовать до bounded readiness/readback.
 
 Vault API использует HTTPS с exact SNI/hostname, `skipTLSVerify: false` и
 публичной CA. Server-side TLS включается до перевода clients. Переключение

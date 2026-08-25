@@ -4,8 +4,8 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.6
-updated: 2026-08-24
+version: 1.3.7
+updated: 2026-08-25
 ---
 
 # Чистое развертывание web-first MatterCodex
@@ -192,10 +192,16 @@ workflow; bootstrap identity удаляется после reconciliation, а п
 10. Выполнить фазу `apply-migrations`. Она последовательно запускает
    `internal-rpc-authority-migrate`, создаёт runtime database roles, назначает
    отдельный пароль `ira_restore_controller_g1`, сохраняет DSN только в Vault и
-   через `VaultStaticSecret` материализует exact runtime Secret, затем запускает
+   через `VaultStaticSecret` материализует exact restore-controller Secret.
+   Для каждого issuer/verifier target из закрытого publisher registry эта же
+   фаза создаёт и ротирует exact Vault static database role, а
+   `VaultDynamicSecret` проецирует только `dsn` и `username` в отдельный
+   Kubernetes Secret целевого sidecar. Фаза дожидается готовности каждого
+   dynamic secret и сверяет его закрытый набор ключей до запуска
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 11. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
+    повторно проверяет готовность всех registry-derived database Secret,
     применяет workload-ресурсы за исключением этого create-once ресурса и всех
     `Job`, дожидается image supply chain, отдельно выполняет
     `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
@@ -212,8 +218,9 @@ workflow; bootstrap identity удаляется после reconciliation, а п
     этот список неизвестный ресурс без отдельного lifecycle запрещено.
 12. Выполнить фазу `readback`. Она повторно проверяет Vault, включая точное
     совпадение publisher runtime policy с target registry этого release render,
-    StatefulSet, Deployment, DaemonSet, Job, форму фактически обслуживаемого
-    restore evidence anchor и отсутствие terminal container waiting states.
+    готовность и закрытую форму target database Secret, StatefulSet, Deployment,
+    DaemonSet, Job, форму фактически обслуживаемого restore evidence anchor и
+    отсутствие terminal container waiting states.
 13. Настроить Vault OIDC, немедленно зашифровать Shamir 5/3 recovery material и
     установить OAuth2 Proxy/Headlamp по `RUN-MC-023`, затем выполнить полный
     management-surfaces `readback`. Monitoring chart уже установлен на шаге 7;

@@ -45,3 +45,23 @@ spec:
       excludeRaw: true
       templates:
         dsn: {text: '{{ get .Secrets "dsn" }}'}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: internal-rpc-authority-restore-role-trust
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: internal-rpc-authority-restore-controller
+  mount: kv
+  type: kv-v2
+  path: internal-rpc-authority/restore/trust
+  refreshAfter: 1m
+  destination:
+    create: true
+    name: internal-rpc-authority-restore-role-trust
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        restore-role-trust.jws: {text: '{{ get .Secrets "restore-role-trust.jws" }}'}
