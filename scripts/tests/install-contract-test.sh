@@ -101,6 +101,21 @@ done
 rg -Fq 'reconcile_image_admission_policy_parameters' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'immutable image admission parameters do not have a release reconciliation path'
+grep -Fq 'KODEX_DISABLE_OBSERVABILITY=true' "$repository_root/.kodex-env.example" ||
+  fail 'bundled install does not disable unavailable external telemetry exporters by default'
+grep -Fq 'KODEX_DISABLE_OBSERVABILITY:-true' \
+  "$repository_root/install.sh" "$repository_root/tools/install/configure-github.sh" ||
+  fail 'installer and GitHub configuration disagree on the external telemetry default'
+if rg -Fq 'select(.kind != "PodMonitor" and .kind != "ServiceMonitor" and .kind != "PrometheusRule")' \
+  "$repository_root/tools/release/render-web-only.sh"; then
+  fail 'external exporter disablement removes Prometheus discovery resources'
+fi
+for monitoring_kind in PodMonitor ServiceMonitor PrometheusRule; do
+  MONITORING_KIND="$monitoring_kind" yq -e \
+    'select(.kind == strenv(MONITORING_KIND))' \
+    < <(kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only") >/dev/null ||
+    fail "web-only profile does not contain $monitoring_kind resources"
+done
 (
   runtime_directory="$temporary_directory/render-filter-runtime"
   render_file="$runtime_directory/release.yaml"

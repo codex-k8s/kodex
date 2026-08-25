@@ -57,9 +57,10 @@ KODEX_RELEASE_REGISTRY_PASSWORD=
 KODEX_OPENAI_AUTH_JSON_B64=eyJyZXBsYWNlIjoibWUifQ==
 # KODEX_OPENAI_AUTH_JSON_FILE=/absolute/path/to/auth.json
 
-# Необязательная наблюдаемость приложения.
+# В bundled MVP Prometheus-метрики остаются включены, а внешние tracing/Sentry
+# exporters отключены до установки совместимых OTel Collector и Sentry Relay.
 KODEX_SENTRY_DSN=
-KODEX_DISABLE_OBSERVABILITY=false
+KODEX_DISABLE_OBSERVABILITY=true
 
 # S3 не требуется web-first MVP. При true установщик проверяет параметры
 # внешнего S3; встроенный object storage намеренно не связывается с данными Kodex.

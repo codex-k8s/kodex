@@ -87,7 +87,8 @@ chmod 0600 .kodex-env
 - owner PAT и ARC PAT GitHub;
 - registry write identity для existing-Kubernetes без bundled registry;
 - Codex `auth.json` как base64 либо путь к файлу;
-- необязательные Sentry и external S3 параметры.
+- режим внешних tracing/Sentry exporters и необязательные Sentry/external S3
+  параметры.
 
 На доверенном admin host или self-hosted runner файл можно собрать напрямую из
 GitHub Variables/Secrets, предварительно передав их в environment шага:
@@ -102,6 +103,13 @@ GitHub Variables/Secrets, предварительно передав их в en
 - Secrets: Keycloak/owner initial passwords, GitHub PAT, registry password,
   OpenAI auth, Sentry DSN и S3 credentials;
 - локальный material: `.kodex-material`, CA/private keys и recovery state.
+
+Bundled MVP по умолчанию использует `KODEX_DISABLE_OBSERVABILITY=true`. Это
+отключает только внешние OTel tracing и Sentry exporters: Prometheus endpoints,
+`PodMonitor`, `ServiceMonitor`, `PrometheusRule`, Grafana и Alertmanager остаются
+рабочими. Значение `false` допустимо только после отдельной установки совместимых
+`otel-collector.observability.svc` и `sentry-relay.observability.svc` и требует
+непустой `KODEX_SENTRY_DSN`; эти telemetry-компоненты не входят в bundled MVP.
 
 Установщик принимает только `KODEX_*` assignments, запрещает shell evaluation
 и требует mode `0600`. Значения никогда не печатаются.
