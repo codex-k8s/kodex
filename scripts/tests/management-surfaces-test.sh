@@ -7,6 +7,7 @@ bootstrap="$repository_root/infra/management-surfaces/bootstrap.sh"
 routes="$repository_root/infra/management-surfaces/routes.yaml"
 values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yaml"
 lock="$repository_root/infra/management-surfaces/charts.lock.json"
+identity="$repository_root/infra/identity/keycloak.yaml"
 
 bash -n "$bootstrap"
 jq -e '
@@ -27,6 +28,15 @@ kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e \
   fail 'Control Center Ingress is absent from the platform release'
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
+yq -e '
+  select(.kind == "Service" and .metadata.name == "sso") |
+  .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+    "identity-sso-public@kubernetescrd"
+' "$identity" >/dev/null || fail 'SSO Service does not select its TLS ServersTransport'
+yq -e '
+  select(.kind == "ServersTransport" and .metadata.name == "sso-public") |
+  .spec.serverName == "__KODEX_OIDC_HOST__" and .spec.insecureSkipVerify == false
+' "$identity" >/dev/null || fail 'SSO ServersTransport does not enforce exact TLS identity'
 if rg -qi 'vault' "$repository_root/infra/management-surfaces"; then
   fail 'retired Vault management surface remains active'
 fi

@@ -112,8 +112,13 @@ kubectl -n identity get deployment sso -o json | jq -e \
 kubectl -n identity get service sso -o json | jq -e '
   . as $service |
   ([$service.spec.ports[] | .name] | sort) == ["https", "management"] and
-  all($service.spec.ports[]; .port != 8080 and .targetPort != 8080 and .targetPort != "http")
-' >/dev/null || fail 'Keycloak Service exposes the reconciliation HTTP listener'
+  all($service.spec.ports[]; .port != 8080 and .targetPort != 8080 and .targetPort != "http") and
+  $service.metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+    "identity-sso-public@kubernetescrd"
+' >/dev/null || fail 'Keycloak Service transport contract mismatch'
+kubectl -n identity get serverstransport sso-public -o json | jq -e --arg host "$oidc_host" '
+  .spec.serverName == $host and .spec.insecureSkipVerify == false
+' >/dev/null || fail 'Keycloak ServersTransport TLS identity mismatch'
 kubectl -n identity get networkpolicy sso-exact-paths -o json | jq -e '
   all(.spec.ingress[]?.ports[]?; .port != 8080 and .port != "http")
 ' >/dev/null || fail 'Keycloak NetworkPolicy exposes the reconciliation HTTP listener'

@@ -2,6 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: sso
+  annotations:
+    traefik.ingress.kubernetes.io/service.serverstransport: identity-sso-public@kubernetescrd
   labels:
     app.kubernetes.io/name: sso
     app.kubernetes.io/component: identity-provider
@@ -179,7 +181,6 @@ metadata:
     kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/service.serverstransport: identity-sso-public@kubernetescrd
 spec:
   ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
