@@ -407,6 +407,30 @@ wait_statefulset() {
     fail "StatefulSet rollout failed: $name"
 }
 
+wait_vault_secret_ready() {
+  local resource=$1 resource_name=$2 timeout_seconds=$3
+  local status_file="$temporary_directory/vault-secret-status-$resource_name.json"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while ((SECONDS < deadline)); do
+    if kubectl -n "$namespace" get "$resource/$resource_name" -o json >"$status_file" 2>/dev/null &&
+      jq -e '
+        . as $resource |
+        .metadata.generation as $generation |
+        .status.lastGeneration == $generation and
+        all(["Ready", "SecretSynced"][];
+          . as $condition_type |
+          any($resource.status.conditions[]?;
+            .type == $condition_type and .status == "True" and
+            .observedGeneration == $generation))
+      ' "$status_file" >/dev/null; then
+      return
+    fi
+    sleep 2
+  done
+  fail "Vault secret status did not reach the current generation: $resource_name"
+}
+
 wait_vault_static_secrets() {
   local allow_deferred_restore_secret=${1:-false}
   local resource_name
@@ -417,25 +441,33 @@ wait_vault_static_secrets() {
       "$resource_name" == internal-rpc-authority-restore-controller-postgresql ]]; then
       continue
     fi
-    kubectl -n "$namespace" wait --for=condition=Ready \
-      "vaultstaticsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
-      fail "VaultStaticSecret is not ready: $resource_name"
+    wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com "$resource_name" 300
   done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
 }
 
 wait_vault_dynamic_secrets() {
-  local resource_name destination_name
+  local resource_name destination_name destination_file deadline destination_ready
   while IFS=$'\t' read -r resource_name destination_name; do
     [[ -n "$resource_name" && -n "$destination_name" ]] || continue
-    kubectl -n "$namespace" wait --for=condition=Ready \
-      "vaultdynamicsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
-      fail "VaultDynamicSecret is not ready: $resource_name"
-    kubectl -n "$namespace" get secret "$destination_name" -o json | jq -e '
-      .type == "Opaque" and
-      (.data | keys | sort) == ["dsn", "username"] and
-      (.data.dsn | type == "string" and length > 0) and
-      (.data.username | type == "string" and length > 0)
-    ' >/dev/null || fail "VaultDynamicSecret destination readback failed: $destination_name"
+    wait_vault_secret_ready vaultdynamicsecrets.secrets.hashicorp.com "$resource_name" 300
+    destination_file="$temporary_directory/vault-dynamic-destination-$destination_name.json"
+    deadline=$((SECONDS + 30))
+    destination_ready=false
+    while ((SECONDS < deadline)); do
+      if kubectl -n "$namespace" get secret "$destination_name" -o json >"$destination_file" 2>/dev/null &&
+        jq -e '
+          .type == "Opaque" and
+          (.data | keys | sort) == ["dsn", "username"] and
+          (.data.dsn | type == "string" and length > 0) and
+          (.data.username | type == "string" and length > 0)
+        ' "$destination_file" >/dev/null; then
+        destination_ready=true
+        break
+      fi
+      sleep 1
+    done
+    [[ "$destination_ready" == true ]] ||
+      fail "VaultDynamicSecret destination readback failed: $destination_name"
   done < <(yq -N -r '
     select(.kind == "VaultDynamicSecret") |
     [.metadata.name,.spec.destination.name] | @tsv
@@ -473,9 +505,8 @@ apply_restore_controller_database_secret() {
   [[ -s "$output_file" ]] || fail 'restore controller VaultStaticSecret is absent'
   kubectl apply --server-side --field-manager=mattercodex-fresh-install \
     -f "$output_file" >/dev/null
-  kubectl -n "$namespace" wait --for=condition=Ready \
-    vaultstaticsecret.secrets.hashicorp.com/internal-rpc-authority-restore-controller-postgresql \
-    --timeout=2m >/dev/null || fail 'restore controller PostgreSQL credential was not synchronized'
+  wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com \
+    internal-rpc-authority-restore-controller-postgresql 120
   kubectl -n "$namespace" get secret internal-rpc-authority-restore-controller-postgresql \
     -o json | jq -e '
       .type == "Opaque" and
