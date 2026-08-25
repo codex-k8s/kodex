@@ -9,6 +9,10 @@ KODEX_KUBE_CONTEXT=default
 KODEX_SERVER_PUBLIC_IP=203.0.113.10
 KODEX_PUBLIC_IPV4_CIDR=203.0.113.10/32
 KODEX_CONTROL_HOST=control.kodex.example.com
+# Необязательный отдельный DNS для восстановления после ACME duplicate-certificate
+# rate limit. Он должен указывать на тот же ingress и оставаться стабильным до
+# следующей плановой ротации сертификата.
+KODEX_CONTROL_TLS_RECOVERY_HOST=
 KODEX_OIDC_HOST=sso.kodex.example.com
 KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:8443
 KODEX_OIDC_TLS_SERVER_NAME=sso.kodex.example.com
