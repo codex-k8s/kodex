@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/admissioncontroller"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/admissioncontroller"
 )
 
 type admissionControllerConfig struct {
@@ -23,8 +23,8 @@ type admissionControllerConfig struct {
 
 func loadAdmissionControllerConfig() (admissionControllerConfig, error) {
 	config := admissionControllerConfig{
-		Namespace: "mattercodex-system", PolicyConfigMap: "mattercodex-image-admission-policy",
-		RendererPath: "/opt/mattercodex/render-image-admission-job.sh", TechnicalListen: ":9090",
+		Namespace: "kodex-system", PolicyConfigMap: "kodex-image-admission-policy",
+		RendererPath: "/opt/kodex/render-image-admission-job.sh", TechnicalListen: ":9090",
 		ReconcileInterval: 5 * time.Second, RetryInterval: 30 * time.Second,
 		InfrastructureCheck: 10 * time.Second, RequestTimeout: 5 * time.Second, ShutdownTimeout: 20 * time.Second,
 	}

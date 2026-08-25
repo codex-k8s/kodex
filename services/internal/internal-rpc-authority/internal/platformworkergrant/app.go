@@ -16,13 +16,13 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/google/uuid"
 )
 
 const (
-	grantType       = "mattercodex-application-grant+jws"
+	grantType       = "kodex-application-grant+jws"
 	grantTTL        = 4 * time.Minute
 	maximumKeyBytes = 16 << 10
 )
@@ -93,8 +93,8 @@ func Run(lifecycle, shutdownBase context.Context) error {
 
 func loadConfig() (config, error) {
 	configuration := config{
-		PrivateJWKFile:  "/var/run/secrets/mattercodex/platform-worker-grant-signer/private.jwk",
-		OutputFile:      "/var/run/secrets/mattercodex/platform-worker-grant/application-grant.jws",
+		PrivateJWKFile:  "/var/run/secrets/kodex/platform-worker-grant-signer/private.jwk",
+		OutputFile:      "/var/run/secrets/kodex/platform-worker-grant/application-grant.jws",
 		TechnicalListen: ":9093", RefreshInterval: time.Minute, ShutdownTimeout: 5 * time.Second,
 	}
 	if err := env.Parse(&configuration); err != nil {
@@ -134,13 +134,13 @@ func rotate(configuration config, key internalrpcauth.ES256Key, now func() time.
 	if issuedAt.Unix() <= 0 {
 		return errors.New("platform worker grant issue time is invalid")
 	}
-	workloadSPIFFE := "spiffe://mattercodex.local/ns/mattercodex-system/sa/" + configuration.WorkloadID
+	workloadSPIFFE := "spiffe://kodex.local/ns/kodex-system/sa/" + configuration.WorkloadID
 	value := claims{
 		Version:  1,
-		Issuer:   "https://control-plane.mattercodex-system.svc.cluster.local/authority/platform-worker/" + configuration.WorkloadID,
-		Audience: "urn:mattercodex:platform-worker:" + configuration.WorkloadID,
-		Subject:  "mattercodex-system-subject", CallerSPIFFEID: workloadSPIFFE,
-		WorkloadID: configuration.WorkloadID, OrganizationID: "mattercodex-installation",
+		Issuer:   "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/" + configuration.WorkloadID,
+		Audience: "urn:kodex:platform-worker:" + configuration.WorkloadID,
+		Subject:  "kodex-system-subject", CallerSPIFFEID: workloadSPIFFE,
+		WorkloadID: configuration.WorkloadID, OrganizationID: "kodex-installation",
 		Revision: uint64(issuedAt.Unix()), JTI: uuid.NewString(),
 		IssuedAt: issuedAt.Unix(), NotBefore: issuedAt.Unix(), ExpiresAt: issuedAt.Add(grantTTL).Unix(),
 	}

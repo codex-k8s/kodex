@@ -12,7 +12,7 @@ usage() {
     '  --public-origin <https-origin> --grafana-origin <https-origin>' \
     '  --vault-origin <https-origin> --headlamp-origin <https-origin>' \
     '  [--namespace identity] [--deployment sso]' \
-    '  [--realm mattercodex] [--admin-secret keycloak-admin-client]' \
+    '  [--realm kodex] [--admin-secret keycloak-admin-client]' \
     '  [--bootstrap-secret keycloak-bootstrap]' \
     '  [--identities-configmap keycloak-identities]' \
     '  [--initial-password-secret keycloak-initial-passwords]' >&2
@@ -26,7 +26,7 @@ vault_origin=""
 headlamp_origin=""
 namespace=identity
 deployment=sso
-realm=mattercodex
+realm=kodex
 admin_secret=keycloak-admin-client
 bootstrap_secret=keycloak-bootstrap
 identities_configmap=keycloak-identities
@@ -78,7 +78,7 @@ chmod 0700 "$temporary_directory"
 cleanup() {
   rm -rf -- "$temporary_directory"
   kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec \
-    'rm -f /tmp/mattercodex-kcadm.config /tmp/mattercodex-kcadm-bootstrap.config' \
+    'rm -f /tmp/kodex-kcadm.config /tmp/kodex-kcadm-bootstrap.config' \
     >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -150,7 +150,7 @@ keycloak_request() {
     kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
       IFS= read -r client_id
       IFS= read -r client_secret
-      config=/tmp/mattercodex-kcadm.config
+      config=/tmp/kodex-kcadm.config
       command=/opt/keycloak/bin/kcadm.sh
       "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
         --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
@@ -166,7 +166,7 @@ keycloak_bootstrap_request() {
     kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
       IFS= read -r username
       IFS= read -r password
-      config=/tmp/mattercodex-kcadm-bootstrap.config
+      config=/tmp/kodex-kcadm-bootstrap.config
       command=/opt/keycloak/bin/kcadm.sh
       "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
         --realm master --user "$username" --password "$password" >/dev/null 2>&1
@@ -200,7 +200,7 @@ ensure_admin_client() {
     -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=true -s "secret=$admin_client_secret" >/dev/null
   service_account_id=$(keycloak_bootstrap_request get "clients/$client_uuid/service-account-user" -r master | jq -er '.id')
   kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec '
-    exec /opt/keycloak/bin/kcadm.sh add-roles --config /tmp/mattercodex-kcadm-bootstrap.config \
+    exec /opt/keycloak/bin/kcadm.sh add-roles --config /tmp/kodex-kcadm-bootstrap.config \
       -r master --uid "$1" --rolename admin
   ' sh "$service_account_id" >/dev/null
   keycloak_request get realms >/dev/null 2>&1 || fail 'Keycloak admin service client activation failed'
@@ -268,19 +268,19 @@ reconcile_confidential_client() {
     [[ -n "$mapper_id" ]] || continue
     keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$client_realm" >/dev/null
   done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm" |
-    jq -r '.[] | select(.name == "mattercodex-client-audience" or .name == "mattercodex-realm-roles") | .id')
-  replace_mapper "$client_uuid" mattercodex-client-audience oidc-audience-mapper \
+    jq -r '.[] | select(.name == "kodex-client-audience" or .name == "kodex-realm-roles") | .id')
+  replace_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
     "$(jq -cn --arg audience "$client_id" '{
       "included.client.audience":$audience,"access.token.claim":"true",
       "id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"
     }')" "$client_realm"
-  replace_mapper "$client_uuid" mattercodex-realm-roles oidc-usermodel-realm-role-mapper \
+  replace_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}' \
     "$client_realm"
 }
 
 reconcile_vault_client() {
-  local client_id=mattercodex-vault-ui client_uuid client_secret attributes mapper_id
+  local client_id=kodex-vault-ui client_uuid client_secret attributes mapper_id
   client_secret=$(read_management_client_secret "$client_id" platform-admin vault-oidc)
   if ! find_client_id "$client_id" >/dev/null 2>&1; then
     keycloak_request create clients -r "$realm" -s "clientId=$client_id" >/dev/null
@@ -301,10 +301,10 @@ reconcile_vault_client() {
     [[ -n "$mapper_id" ]] || continue
     keycloak_request delete "clients/$client_uuid/protocol-mappers/models/$mapper_id" -r "$realm" >/dev/null
   done < <(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$realm" |
-    jq -r '.[] | select(.name == "mattercodex-client-audience" or .name == "mattercodex-realm-roles") | .id')
-  replace_mapper "$client_uuid" mattercodex-client-audience oidc-audience-mapper \
-    '{"included.client.audience":"mattercodex-vault-ui","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"}'
-  replace_mapper "$client_uuid" mattercodex-realm-roles oidc-usermodel-realm-role-mapper \
+    jq -r '.[] | select(.name == "kodex-client-audience" or .name == "kodex-realm-roles") | .id')
+  replace_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
+    '{"included.client.audience":"kodex-vault-ui","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+  replace_mapper "$client_uuid" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 }
 
@@ -319,8 +319,8 @@ readback_confidential_client() {
   ' <<<"$client_json" >/dev/null || fail "management OIDC client readback failed: $client_id"
   mapper_json=$(keycloak_request get "clients/$client_uuid/protocol-mappers/models" -r "$client_realm")
   jq -e --arg client_id "$client_id" '
-    ([.[] | select(.name == "mattercodex-client-audience" and .config."included.client.audience" == $client_id)] | length == 1) and
-    ([.[] | select(.name == "mattercodex-realm-roles" and .config."claim.name" == "realm_access.roles")] | length == 1)
+    ([.[] | select(.name == "kodex-client-audience" and .config."included.client.audience" == $client_id)] | length == 1) and
+    ([.[] | select(.name == "kodex-realm-roles" and .config."claim.name" == "realm_access.roles")] | length == 1)
   ' <<<"$mapper_json" >/dev/null || fail "management OIDC mapper readback failed: $client_id"
 }
 
@@ -337,7 +337,7 @@ if [[ "$mode" == apply ]]; then
         IFS= read -r client_id
         IFS= read -r client_secret
         IFS= read -r administrator_password
-        config=/tmp/mattercodex-kcadm.config
+        config=/tmp/kodex-kcadm.config
         command=/opt/keycloak/bin/kcadm.sh
         "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
           --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
@@ -373,23 +373,23 @@ if [[ "$mode" == apply ]]; then
     -s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300 \
     -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200 >/dev/null
 
-  if ! keycloak_request get "roles/mattercodex-owner" -r "$realm" >/dev/null 2>&1; then
-    keycloak_request create roles -r "$realm" -s name=mattercodex-owner \
-      -s 'description=MatterCodex platform owner' >/dev/null
+  if ! keycloak_request get "roles/kodex-owner" -r "$realm" >/dev/null 2>&1; then
+    keycloak_request create roles -r "$realm" -s name=kodex-owner \
+      -s 'description=Kodex platform owner' >/dev/null
   fi
-  if ! find_client_id mattercodex-control-api >/dev/null 2>&1; then
-    keycloak_request create clients -r "$realm" -s clientId=mattercodex-control-api >/dev/null
+  if ! find_client_id kodex-control-api >/dev/null 2>&1; then
+    keycloak_request create clients -r "$realm" -s clientId=kodex-control-api >/dev/null
   fi
-  control_api_id=$(find_client_id mattercodex-control-api)
+  control_api_id=$(find_client_id kodex-control-api)
   keycloak_request update "clients/$control_api_id" -r "$realm" \
     -s enabled=true -s publicClient=false -s bearerOnly=true -s protocol=openid-connect \
     -s standardFlowEnabled=false -s implicitFlowEnabled=false \
     -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false >/dev/null
 
-  if ! find_client_id mattercodex-control-center >/dev/null 2>&1; then
-    keycloak_request create clients -r "$realm" -s clientId=mattercodex-control-center >/dev/null
+  if ! find_client_id kodex-control-center >/dev/null 2>&1; then
+    keycloak_request create clients -r "$realm" -s clientId=kodex-control-center >/dev/null
   fi
-  control_center_id=$(find_client_id mattercodex-control-center)
+  control_center_id=$(find_client_id kodex-control-center)
   client_attributes=$(jq -cn --arg logout "$public_origin/*" '{
     "pkce.code.challenge.method":"S256",
     "post.logout.redirect.uris":$logout
@@ -401,14 +401,14 @@ if [[ "$mode" == apply ]]; then
     -s "redirectUris=[\"$public_origin/auth/callback\"]" \
     -s "webOrigins=[\"$public_origin\"]" -s "attributes=$client_attributes" >/dev/null
 
-  if ! find_scope_id mattercodex.owner >/dev/null 2>&1; then
-    keycloak_request create client-scopes -r "$realm" -s name=mattercodex.owner \
+  if ! find_scope_id kodex.owner >/dev/null 2>&1; then
+    keycloak_request create client-scopes -r "$realm" -s name=kodex.owner \
       -s protocol=openid-connect \
       -s 'attributes={"include.in.token.scope":"true","display.on.consent.screen":"false"}' >/dev/null
   fi
-  owner_scope_id=$(find_scope_id mattercodex.owner)
+  owner_scope_id=$(find_scope_id kodex.owner)
   keycloak_request update "client-scopes/$owner_scope_id" -r "$realm" \
-    -s name=mattercodex.owner -s protocol=openid-connect \
+    -s name=kodex.owner -s protocol=openid-connect \
     -s 'attributes={"include.in.token.scope":"true","display.on.consent.screen":"false"}' >/dev/null
   keycloak_request update "clients/$control_center_id/optional-client-scopes/$owner_scope_id" \
     -r "$realm" -n >/dev/null
@@ -421,21 +421,21 @@ if [[ "$mode" == apply ]]; then
     jq -r '
       .[] | select(.name == "organization-id" or .name == "session-revision" or
         .name == "control-api-audience" or .name == "realm roles" or
-        .name == "mattercodex-organization-id" or .name == "mattercodex-session-revision" or
-        .name == "mattercodex-control-api-audience" or .name == "mattercodex-realm-roles") |
+        .name == "kodex-organization-id" or .name == "kodex-session-revision" or
+        .name == "kodex-control-api-audience" or .name == "kodex-realm-roles") |
       .id
     ')
-  replace_mapper "$control_center_id" mattercodex-organization-id oidc-hardcoded-claim-mapper \
+  replace_mapper "$control_center_id" kodex-organization-id oidc-hardcoded-claim-mapper \
     "$(jq -cn --arg value "$organization_id" '{
       "claim.name":"organization_id","claim.value":$value,"jsonType.label":"String",
       "access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true",
       "introspection.token.claim":"true"
     }')"
-  replace_mapper "$control_center_id" mattercodex-session-revision oidc-hardcoded-claim-mapper \
+  replace_mapper "$control_center_id" kodex-session-revision oidc-hardcoded-claim-mapper \
     '{"claim.name":"session_revision","claim.value":"1","jsonType.label":"long","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
-  replace_mapper "$control_center_id" mattercodex-control-api-audience oidc-audience-mapper \
-    '{"included.client.audience":"mattercodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
-  replace_mapper "$control_center_id" mattercodex-realm-roles oidc-usermodel-realm-role-mapper \
+  replace_mapper "$control_center_id" kodex-control-api-audience oidc-audience-mapper \
+    '{"included.client.audience":"kodex-control-api","access.token.claim":"true","id.token.claim":"false","userinfo.token.claim":"false","introspection.token.claim":"true"}'
+  replace_mapper "$control_center_id" kodex-realm-roles oidc-usermodel-realm-role-mapper \
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
 
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
@@ -449,7 +449,7 @@ if [[ "$mode" == apply ]]; then
         IFS= read -r client_id
         IFS= read -r client_secret
         IFS= read -r owner_password
-        config=/tmp/mattercodex-kcadm.config
+        config=/tmp/kodex-kcadm.config
         command=/opt/keycloak/bin/kcadm.sh
         "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
           --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
@@ -464,15 +464,15 @@ if [[ "$mode" == apply ]]; then
     jq -er --arg username "$owner_username" '.[] | select(.username == $username) | .id')" \
     -r "$realm" -s enabled=true -s "email=$owner_email" -s emailVerified=true >/dev/null
   keycloak_request add-roles -r "$realm" --uusername "$owner_username" \
-    --rolename mattercodex-owner >/dev/null
+    --rolename kodex-owner >/dev/null
 
-  reconcile_confidential_client mattercodex-control-center-proxy "$public_origin" \
-    mattercodex-system oauth2-control-center
-  reconcile_confidential_client mattercodex-grafana-proxy "$grafana_origin" \
+  reconcile_confidential_client kodex-control-center-proxy "$public_origin" \
+    kodex-system oauth2-control-center
+  reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
     observability oauth2-grafana
-  reconcile_confidential_client mattercodex-vault-proxy "$vault_origin" \
-    mattercodex-system oauth2-vault
-  reconcile_confidential_client mattercodex-headlamp-proxy "$headlamp_origin" \
+  reconcile_confidential_client kodex-vault-proxy "$vault_origin" \
+    kodex-system oauth2-vault
+  reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
     platform-admin oauth2-headlamp master
   reconcile_vault_client
 fi
@@ -480,23 +480,23 @@ fi
 realm_json=$(keycloak_request get "realms/$realm")
 jq -e '.enabled == true and .registrationAllowed == false and .accessTokenLifespan == 300' \
   <<<"$realm_json" >/dev/null || fail 'realm readback failed'
-control_center_id=$(find_client_id mattercodex-control-center)
+control_center_id=$(find_client_id kodex-control-center)
 client_json=$(keycloak_request get "clients/$control_center_id" -r "$realm")
 jq -e --arg origin "$public_origin" '
   .enabled == true and .publicClient == true and .standardFlowEnabled == true and
   .implicitFlowEnabled == false and .directAccessGrantsEnabled == false and
   .attributes."pkce.code.challenge.method" == "S256" and
   .redirectUris == [($origin + "/auth/callback")] and .webOrigins == [$origin] and
-  (.optionalClientScopes | index("mattercodex.owner") != null)
+  (.optionalClientScopes | index("kodex.owner") != null)
 ' <<<"$client_json" >/dev/null || fail 'Control Center OIDC client readback failed'
 
 mapper_json=$(keycloak_request get "clients/$control_center_id/protocol-mappers/models" -r "$realm")
 jq -e --arg organization_id "$organization_id" '
   def mapper($name): [.[] | select(.name == $name)] | if length == 1 then .[0] else null end;
-  mapper("mattercodex-organization-id").config."claim.value" == $organization_id and
-  mapper("mattercodex-session-revision").config."claim.value" == "1" and
-  mapper("mattercodex-control-api-audience").config."included.client.audience" == "mattercodex-control-api" and
-  mapper("mattercodex-realm-roles").config."claim.name" == "realm_access.roles"
+  mapper("kodex-organization-id").config."claim.value" == $organization_id and
+  mapper("kodex-session-revision").config."claim.value" == "1" and
+  mapper("kodex-control-api-audience").config."included.client.audience" == "kodex-control-api" and
+  mapper("kodex-realm-roles").config."claim.name" == "realm_access.roles"
 ' <<<"$mapper_json" >/dev/null || fail 'OIDC claim mapper readback failed'
 
 owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
@@ -505,13 +505,13 @@ owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" 
     if length == 1 then .[0].id else error("owner identity readback failed") end
   ')
 keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
-  jq -e 'any(.[]; .name == "mattercodex-owner")' >/dev/null || fail 'owner role readback failed'
+  jq -e 'any(.[]; .name == "kodex-owner")' >/dev/null || fail 'owner role readback failed'
 
-readback_confidential_client mattercodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
-readback_confidential_client mattercodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
-readback_confidential_client mattercodex-vault-proxy "$vault_origin" "$vault_origin/oauth2/callback"
-readback_confidential_client mattercodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
-readback_confidential_client mattercodex-vault-ui "$vault_origin" "$vault_origin/ui/vault/auth/oidc/oidc/callback"
+readback_confidential_client kodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
+readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
+readback_confidential_client kodex-vault-proxy "$vault_origin" "$vault_origin/oauth2/callback"
+readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
+readback_confidential_client kodex-vault-ui "$vault_origin" "$vault_origin/ui/vault/auth/oidc/oidc/callback"
 
 administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |
   jq -er --arg username "$admin_username" '

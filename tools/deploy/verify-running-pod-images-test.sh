@@ -15,10 +15,10 @@ fixture() {
     --arg running_digest "$running_digest" '
       {
         metadata:{name:"current"},
-        spec:{containers:[{name:"application",image:("localhost:5001/mattercodex/control-plane@" + $requested_digest)}]},
+        spec:{containers:[{name:"application",image:("localhost:5001/kodex/control-plane@" + $requested_digest)}]},
         status:{phase:$phase,containerStatuses:[{
           name:"application",ready:$ready,
-          imageID:("localhost:5001/mattercodex/control-plane@" + $running_digest)
+          imageID:("localhost:5001/kodex/control-plane@" + $running_digest)
         }]}
       }
     '

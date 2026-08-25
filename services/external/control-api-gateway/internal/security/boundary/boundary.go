@@ -11,17 +11,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
-	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/ratelimit"
-	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/session"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	"github.com/google/uuid"
 )
 
 const (
-	SessionCookieName      = "__Host-mattercodex-session"
-	CSRFCookieName         = "__Host-mattercodex-csrf"
-	ProjectReferenceHeader = "X-MatterCodex-Project-ID"
+	SessionCookieName      = "__Host-kodex-session"
+	CSRFCookieName         = "__Host-kodex-csrf"
+	ProjectReferenceHeader = "X-Kodex-Project-ID"
 )
 
 var (
@@ -105,7 +105,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
+			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
 			writer.Header().Add("Vary", "Access-Control-Request-Method")
 			writer.Header().Add("Vary", "Access-Control-Request-Headers")
 			writer.Header().Set("Access-Control-Max-Age", "300")
@@ -208,7 +208,7 @@ func allowedPreflight(request *http.Request) bool {
 	default:
 		return false
 	}
-	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}, "x-mattercodex-project-id": {}}
+	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}, "x-kodex-project-id": {}}
 	rawHeaders := request.Header.Get("Access-Control-Request-Headers")
 	if rawHeaders == "" {
 		return true
@@ -399,7 +399,7 @@ func writeProblem(writer http.ResponseWriter, statusCode int, code string, retry
 		title = localizer.Localize(code)
 	}
 	_ = json.NewEncoder(writer).Encode(map[string]any{
-		"type": "urn:mattercodex:problem:" + strings.ToLower(code), "title": title,
+		"type": "urn:kodex:problem:" + strings.ToLower(code), "title": title,
 		"status": statusCode, "code": code, "correlationId": uuid.NewString(), "retryable": retryable,
 	})
 }

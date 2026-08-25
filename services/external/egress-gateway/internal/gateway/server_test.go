@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/dnsresolver"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -125,7 +125,7 @@ func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
 			_ = serverSide.Close()
 			close(done)
 		}()
-		_, _ = io.WriteString(clientSide, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\nConnection: close\r\n\r\n")
+		_, _ = io.WriteString(clientSide, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\nConnection: close\r\n\r\n")
 		response, readErr := io.ReadAll(clientSide)
 		_ = clientSide.Close()
 		<-done
@@ -152,7 +152,7 @@ func TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT(t *testing
 		_ = serverSide.Close()
 		close(done)
 	}()
-	_, _ = io.WriteString(clientSide, "GET /readyz?details=1 HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n")
+	_, _ = io.WriteString(clientSide, "GET /readyz?details=1 HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\n\r\n")
 	response, _ := io.ReadAll(clientSide)
 	_ = clientSide.Close()
 	<-done
@@ -170,7 +170,7 @@ func TestReadinessOnlyListenerReturns503AndRejectsCONNECT(t *testing.T) {
 		request  string
 		response string
 	}{
-		{"GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n", readinessNotReady},
+		{"GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\n\r\n", readinessNotReady},
 		{"CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n", ""},
 	} {
 		serverSide, clientSide := net.Pipe()

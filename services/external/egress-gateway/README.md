@@ -21,11 +21,11 @@ updated: 2026-08-23
 
 | Параметр | Значение |
 |---|---|
-| Namespace | `mattercodex-system` |
+| Namespace | `kodex-system` |
 | Service | `egress-gateway` |
-| Полный Service DNS | `egress-gateway.mattercodex-system.svc.cluster.local` |
+| Полный Service DNS | `egress-gateway.kodex-system.svc.cluster.local` |
 | CONNECT port | `8080/TCP`, имя `connect`; bodyless `CONNECT` и compatibility `GET /readyz` |
-| Technical Service | `egress-gateway-technical.mattercodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
+| Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
 | Liveness | `GET /healthz` на technical port; проверяет только жизнь процесса |
@@ -34,7 +34,7 @@ updated: 2026-08-23
 | Policy readback | `GET /policy` на technical port; только process/policy/resolver state, revision и SHA-256 digest |
 
 Consumer задаёт
-`HTTPS_PROXY=http://egress-gateway.mattercodex-system.svc.cluster.local:8080`.
+`HTTPS_PROXY=http://egress-gateway.kodex-system.svc.cluster.local:8080`.
 В `NO_PROXY` должны остаться `localhost`, loopback и внутренние зоны `.svc` и
 `.svc.cluster.local`, чтобы внутренние service calls не направлялись наружу.
 `NetworkPolicy` разрешает CONNECT не к объекту Service, а к указанным устойчивым

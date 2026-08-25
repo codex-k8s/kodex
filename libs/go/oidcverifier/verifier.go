@@ -15,7 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/codex-k8s/matter-codex/libs/go/oidcidentity"
+	"github.com/codex-k8s/kodex/libs/go/oidcidentity"
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
 )
@@ -24,8 +24,8 @@ const (
 	maximumBearerBytes  = 2300
 	maximumDisplayRunes = 160
 	maximumEmailBytes   = 254
-	ownerScope          = "mattercodex.owner"
-	ownerRealmRole      = "mattercodex-owner"
+	ownerScope          = "kodex.owner"
+	ownerRealmRole      = "kodex-owner"
 	unknownUserName     = "i18n:OIDC_USER_NAME"
 )
 

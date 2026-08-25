@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-root-rotation.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/readback-root-rotation.schema.json",
   "title": "Взаимно подписанный переход корня normal-readback",
   "type": "object",
   "additionalProperties": false,
@@ -30,7 +30,7 @@
       "const": "NORMAL_READBACK_ROOT_ROTATION"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:root-rotation"
+      "const": "urn:kodex:internal-rpc-authority-readback-attestor:root-rotation"
     },
     "source_revision": {
       "type": "integer",

@@ -1,15 +1,15 @@
 MATTERMOST_RUN_NOTIFICATION:
   other: |-
-    MatterCodex: “{{.title}}”
+    Kodex: “{{.title}}”
     State: {{.state}}
 MATTERMOST_RUN_RESULT:
   other: |-
-    MatterCodex: result for “{{.title}}”
+    Kodex: result for “{{.title}}”
     {{.result}}
     Files: {{.artifactCount}}
 MATTERMOST_GATE_REQUEST:
   other: |-
-    MatterCodex: {{.title}}
+    Kodex: {{.title}}
     {{.context}}
 
     Reply in this thread with “approve”, “reject”, “changes: comment”, or “cancel”.

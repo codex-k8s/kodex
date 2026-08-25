@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 func TestCatalogResolveKeepsSupplyChainValuesServerOwned(t *testing.T) {
@@ -82,7 +82,7 @@ func validEnvironmentWithKey(key string, recommended, available bool) Environmen
 		Input: entity.RoleImageRecipeInput{
 			BaseImageReference: "registry.internal/role-base-documents",
 			BaseImageDigest:    "sha256:" + digestA,
-			SourceRef:          "https://source.invalid/mattercodex",
+			SourceRef:          "https://source.invalid/kodex",
 			SourceRevision:     "revision-1",
 			SourceSHA256:       digestA,
 			ContextRef:         "oci://registry.internal/role-input@sha256:" + digestB,

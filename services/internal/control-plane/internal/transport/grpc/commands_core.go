@@ -3,8 +3,8 @@ package grpc
 import (
 	"context"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
 func (server *Server) CompleteOnboarding(ctx context.Context, request *controlplanev1.CompleteOnboardingRequest) (*controlplanev1.CompleteOnboardingResponse, error) {

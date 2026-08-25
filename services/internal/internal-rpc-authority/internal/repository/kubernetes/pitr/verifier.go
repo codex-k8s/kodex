@@ -18,16 +18,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	evidenceType       = "mattercodex-internal-rpc-restore-evidence+jws"
-	evidenceIssuer     = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-pitr"
-	evidenceAudience   = "urn:mattercodex:internal-rpc-authority-recovery:internal-rpc-authority-primary"
+	evidenceType       = "kodex-internal-rpc-restore-evidence+jws"
+	evidenceIssuer     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-pitr"
+	evidenceAudience   = "urn:kodex:internal-rpc-authority-recovery:internal-rpc-authority-primary"
 	evidenceDataKey    = "evidence.jws"
 	maxResponseBytes   = 64 << 10
 	maxCredentialBytes = 16 << 10
@@ -72,7 +72,7 @@ type secretEnvelope struct {
 func NewVerifier(config Config) (*Verifier, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		config.EvidenceSecretName != "internal-rpc-authority-restore-evidence" ||
 		config.Timeout <= 0 ||
 		config.Timeout > 10*time.Second {
@@ -340,18 +340,18 @@ func verifyAnnotations(
 	digest string,
 ) error {
 	expected := map[string]string{
-		"mattercodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
-		"mattercodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
-		"mattercodex.dev/restore-evidence-digest-sha256":       digest,
-		"mattercodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"mattercodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
-		"mattercodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
-		"mattercodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
-		"mattercodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
-		"mattercodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
-		"mattercodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
-		"mattercodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
-		"mattercodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
+		"kodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
+		"kodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
+		"kodex.dev/restore-evidence-digest-sha256":       digest,
+		"kodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
+		"kodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
+		"kodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
+		"kodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"kodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
+		"kodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
+		"kodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
+		"kodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
+		"kodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
 	}
 	for name, value := range expected {
 		if annotations[name] != value {

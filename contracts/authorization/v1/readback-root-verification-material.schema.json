@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-root-verification-material.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/readback-root-verification-material.schema.json",
   "title": "Независимо доставляемый открытый корень normal-readback",
   "type": "object",
   "additionalProperties": false,
@@ -32,7 +32,7 @@
       "const": "NORMAL_READBACK_ROOT_VERIFICATION"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:root-verification"
+      "const": "urn:kodex:internal-rpc-authority-readback-attestor:root-verification"
     },
     "kid": {
       "$ref": "#/$defs/kid"

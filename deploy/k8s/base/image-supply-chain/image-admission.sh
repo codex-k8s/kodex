@@ -35,15 +35,15 @@ require_policy() {
     fail "admission image is not immutable"
   echo "$PROMOTION_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "promotion repository is invalid"
-  [ "$EVIDENCE_REPOSITORY" = "mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission" ] ||
+  [ "$EVIDENCE_REPOSITORY" = "kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission" ] ||
     fail "evidence repository is invalid"
-  [ "$PROMOTION_EVIDENCE_REPOSITORY" = "mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence" ] ||
+  [ "$PROMOTION_EVIDENCE_REPOSITORY" = "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence" ] ||
     fail "promotion evidence repository is invalid"
   echo "$PROMOTED_PULL_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "promoted pull repository is invalid"
   [ "${PROMOTION_REPOSITORY#*/}" = "${PROMOTED_PULL_REPOSITORY#*/}" ] ||
     fail "promotion and pull repository paths differ"
-  [ "$EXPECTED_BUILDER_ID" = "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder" ] ||
+  [ "$EXPECTED_BUILDER_ID" = "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder" ] ||
     fail "untrusted builder identity"
   [ "$EXPECTED_BUILD_TYPE" = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md" ] ||
     fail "untrusted build type"
@@ -61,7 +61,7 @@ verify_runtime_config() {
   config_file=$1
   jq -e '
     .User == "10001:10001" and
-    .Entrypoint == ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"] and
+    .Entrypoint == ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"] and
     .Cmd == ["runtime-session"]
   ' "$config_file" >/dev/null || fail "role runtime ABI mismatch"
 }
@@ -119,9 +119,9 @@ load_owner_claim() {
   [ "$base_image_digest" = "$TRUSTED_ROLE_BASE_DIGEST" ] || fail "trusted role base digest mismatch"
   jq -r '.platforms[]' /work/owner-claim.json | sort -u >/work/expected-platforms
   staging_write_host=${source_ref%%/*}
-  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+  [ "$staging_write_host" = "kodex-image-registry-push.kodex-system.svc.cluster.local:5001" ] ||
     fail "unexpected staging write host"
-  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
+  source_ref="kodex-image-registry-staging-read.kodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
 }
@@ -149,9 +149,9 @@ load_promotion_claim() {
   promotion_receipt=$(jq -er .admissionReceiptSHA256 /work/owner-promotion.json)
   staging_receipt_manifest_digest=$(jq -er .admissionReceiptOCIManifestDigest /work/owner-promotion.json)
   staging_write_host=${source_ref%%/*}
-  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+  [ "$staging_write_host" = "kodex-image-registry-push.kodex-system.svc.cluster.local:5001" ] ||
     fail "unexpected staging write host"
-  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
+  source_ref="kodex-image-registry-staging-read.kodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
 }
@@ -182,18 +182,18 @@ claim_admission() {
 
 evidence_entries() {
   cat <<'EOF'
-image-digest.subject|application/vnd.mattercodex.image-digest.v1+text
+image-digest.subject|application/vnd.kodex.image-digest.v1+text
 image-digest.sig|application/vnd.dev.cosign.signature.v1+text
-provenance.json|application/vnd.mattercodex.provenance-binding.v1+json
+provenance.json|application/vnd.kodex.provenance-binding.v1+json
 provenance.sig|application/vnd.dev.cosign.signature.v1+text
-native-provenance.json|application/vnd.mattercodex.native-provenance.v1+json
+native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
 sbom.json|application/spdx+json
 sbom.sig|application/vnd.dev.cosign.signature.v1+text
-vulnerability.json|application/vnd.mattercodex.vulnerability-report.v1+json
+vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
 vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
-signature.binding.json|application/vnd.mattercodex.signature-binding.v1+json
-admission.receipt.json|application/vnd.mattercodex.admission-receipt.v1+json
+signature.binding.json|application/vnd.kodex.signature-binding.v1+json
+admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
 }
@@ -214,16 +214,16 @@ verify_evidence_manifest() {
     --argjson expected "$expected_entries" '
     (. | keys | sort) == (["annotations","artifactType","config","layers","mediaType","schemaVersion"] | sort) and
     .schemaVersion == 2 and .mediaType == "application/vnd.oci.image.manifest.v1+json" and
-    .artifactType == "application/vnd.mattercodex.image-admission-evidence.v2" and
-    .config == {mediaType:"application/vnd.mattercodex.image-admission-evidence.config.v2+json",
+    .artifactType == "application/vnd.kodex.image-admission-evidence.v2" and
+    .config == {mediaType:"application/vnd.kodex.image-admission-evidence.config.v2+json",
       digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2} and
-    (.annotations | keys | sort) == (["mattercodex.dev/artifact-id","mattercodex.dev/evidence-schema",
-      "mattercodex.dev/image-digest","mattercodex.dev/policy-revision","mattercodex.dev/policy-sha256"] | sort) and
-    .annotations["mattercodex.dev/evidence-schema"] == "mattercodex.dev/image-admission-evidence/v2" and
-    .annotations["mattercodex.dev/artifact-id"] == $artifact and
-    .annotations["mattercodex.dev/image-digest"] == $image and
-    .annotations["mattercodex.dev/policy-revision"] == $policy and
-    .annotations["mattercodex.dev/policy-sha256"] == $policy_sha and
+    (.annotations | keys | sort) == (["kodex.dev/artifact-id","kodex.dev/evidence-schema",
+      "kodex.dev/image-digest","kodex.dev/policy-revision","kodex.dev/policy-sha256"] | sort) and
+    .annotations["kodex.dev/evidence-schema"] == "kodex.dev/image-admission-evidence/v2" and
+    .annotations["kodex.dev/artifact-id"] == $artifact and
+    .annotations["kodex.dev/image-digest"] == $image and
+    .annotations["kodex.dev/policy-revision"] == $policy and
+    .annotations["kodex.dev/policy-sha256"] == $policy_sha and
     (.layers | type == "array" and length == ($expected | length)) and
     ([.layers[].annotations["org.opencontainers.image.title"]] | sort) == ($expected | keys | sort) and
     ([.layers[].annotations["org.opencontainers.image.title"]] | unique | length) == ($expected | length) and
@@ -317,7 +317,7 @@ verify_recovered_evidence() {
     fail "durable admission evidence hash mismatch"
   jq -e --arg image "$expected_image" --argjson policy "$expected_policy_revision" \
     --arg policy_sha "$expected_policy_sha256" '
-    .schema == "mattercodex.dev/image-provenance-binding/v1" and .manifestDigest == $image and
+    .schema == "kodex.dev/image-provenance-binding/v1" and .manifestDigest == $image and
     .policyRevision == $policy and .policySHA256 == $policy_sha
   ' "$evidence_directory/provenance.json" >/dev/null || fail "durable provenance binding mismatch"
   jq -e 'type == "array" and length > 0' "$evidence_directory/native-provenance.json" >/dev/null ||
@@ -352,17 +352,17 @@ verify_recovered_evidence() {
 publish_or_verify_evidence() {
   evidence_tag=$1
   evidence_manifest=$2
-  evidence_type=application/vnd.mattercodex.image-admission-evidence.v2
-  config_type=application/vnd.mattercodex.image-admission-evidence.config.v2+json
+  evidence_type=application/vnd.kodex.image-admission-evidence.v2
+  config_type=application/vnd.kodex.image-admission-evidence.config.v2+json
   printf '{}' >/work/evidence.config.json
   if ! regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest" 2>/dev/null; then
     set -- --artifact-type "$evidence_type" --config-type "$config_type" \
       --config-file /work/evidence.config.json --file-title --strip-dirs \
-      --annotation "mattercodex.dev/evidence-schema=mattercodex.dev/image-admission-evidence/v2" \
-      --annotation "mattercodex.dev/artifact-id=$artifact_id" \
-      --annotation "mattercodex.dev/image-digest=$image_digest" \
-      --annotation "mattercodex.dev/policy-revision=$POLICY_REVISION" \
-      --annotation "mattercodex.dev/policy-sha256=$POLICY_SHA256"
+      --annotation "kodex.dev/evidence-schema=kodex.dev/image-admission-evidence/v2" \
+      --annotation "kodex.dev/artifact-id=$artifact_id" \
+      --annotation "kodex.dev/image-digest=$image_digest" \
+      --annotation "kodex.dev/policy-revision=$POLICY_REVISION" \
+      --annotation "kodex.dev/policy-sha256=$POLICY_SHA256"
     while IFS='|' read -r evidence_name evidence_media_type; do
       set -- "$@" --file-media-type "$evidence_media_type" --file "/work/$evidence_name"
     done <<EOF
@@ -430,17 +430,17 @@ verify_image_and_provenance() {
       --arg source "$source_sha256" --arg context "$context_sha256" --arg base "$base_image_digest" \
       --arg builder "$builder_sha256" --arg frontend "$frontend_sha256" --arg toolchain "$toolchain_sha256" \
       --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" --arg runtime "$runtime_contract_sha256" '
-      ."mattercodex.dev/spec-sha256" == $spec and
-      ."mattercodex.dev/immutable-build-sha256" == $immutable and
-      ."mattercodex.dev/source-sha256" == $source and
-      ."mattercodex.dev/context-sha256" == $context and
-      ."mattercodex.dev/base-image-digest" == $base and
-      ."mattercodex.dev/builder-sha256" == $builder and
-      ."mattercodex.dev/frontend-sha256" == $frontend and
-      ."mattercodex.dev/toolchain-sha256" == $toolchain and
-      ."mattercodex.dev/policy-revision" == $policy and
-      ."mattercodex.dev/policy-sha256" == $policy_sha and
-      ."mattercodex.dev/runtime-contract-sha256" == $runtime
+      ."kodex.dev/spec-sha256" == $spec and
+      ."kodex.dev/immutable-build-sha256" == $immutable and
+      ."kodex.dev/source-sha256" == $source and
+      ."kodex.dev/context-sha256" == $context and
+      ."kodex.dev/base-image-digest" == $base and
+      ."kodex.dev/builder-sha256" == $builder and
+      ."kodex.dev/frontend-sha256" == $frontend and
+      ."kodex.dev/toolchain-sha256" == $toolchain and
+      ."kodex.dev/policy-revision" == $policy and
+      ."kodex.dev/policy-sha256" == $policy_sha and
+      ."kodex.dev/runtime-contract-sha256" == $runtime
     ' /work/labels.json >/dev/null || fail "build labels mismatch"
     verify_runtime_config /work/image-config.json
     [ "$(jq --arg image "$platform_digest" '[.manifests[] |
@@ -458,7 +458,7 @@ verify_image_and_provenance() {
     regctl blob get "$source_ref" "$provenance_layer" >/work/provenance.statement.json
     jq -e --arg image "${platform_digest#sha256:}" --arg base "${base_image_digest#sha256:}" \
       --arg frontend "$frontend_sha256" --arg builder_id "$EXPECTED_BUILDER_ID" \
-      --arg build_type "$EXPECTED_BUILD_TYPE" -f /opt/mattercodex/provenance-policy.jq \
+      --arg build_type "$EXPECTED_BUILD_TYPE" -f /opt/kodex/provenance-policy.jq \
       /work/provenance.statement.json >/dev/null || fail "native provenance binding mismatch"
     jq -c . /work/provenance.statement.json >>/work/native-provenance.jsonl
   done </work/platform-manifests
@@ -466,7 +466,7 @@ verify_image_and_provenance() {
   jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
     --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
     --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
-    --arg schema "mattercodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
+    --arg schema "kodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
     '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
       manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
       schema:$schema,specSHA256:$spec}' >/work/provenance.binding.json

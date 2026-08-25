@@ -23,22 +23,22 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: integration-gateway
               app.kubernetes.io/component: integration-worker
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: agent-runner
               app.kubernetes.io/component: role-runtime
-              runtime.mattercodex.dev/managed: "true"
+              runtime.kodex.dev/managed: "true"
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: release-artifact-materializer

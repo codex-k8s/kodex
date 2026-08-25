@@ -1,5 +1,5 @@
 replicaCount: 2
-fullnameOverride: mattercodex-headlamp
+fullnameOverride: kodex-headlamp
 image:
   registry: ghcr.io
   repository: headlamp-k8s/headlamp
@@ -7,7 +7,7 @@ image:
   pullPolicy: IfNotPresent
 config:
   inCluster: true
-  inClusterContextName: mattercodex-production
+  inClusterContextName: kodex-production
   unsafeUseServiceAccountToken: true
   enableHelm: false
   watchPlugins: false
@@ -16,7 +16,7 @@ config:
     secret: { create: false, name: unused }
 serviceAccount:
   create: true
-  name: mattercodex-headlamp
+  name: kodex-headlamp
 clusterRoleBinding:
   create: true
   clusterRoleName: cluster-admin

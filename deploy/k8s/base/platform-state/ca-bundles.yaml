@@ -7,12 +7,12 @@ metadata:
 spec:
   sources:
     - secret:
-        name: mattercodex-installation-ca
+        name: kodex-installation-ca
         key: tls.crt
   target:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system
     configMap:
       key: ca.pem
 ---
@@ -25,29 +25,29 @@ metadata:
 spec:
   sources:
     - secret:
-        name: mattercodex-installation-ca
+        name: kodex-installation-ca
         key: tls.crt
   target:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system
     configMap:
       key: ca.pem
 ---
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: mattercodex-nats-ca
+  name: kodex-nats-ca
   annotations:
     argocd.argoproj.io/sync-wave: "-9"
 spec:
   sources:
     - secret:
-        name: mattercodex-installation-ca
+        name: kodex-installation-ca
         key: tls.crt
   target:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system
     configMap:
       key: ca.pem

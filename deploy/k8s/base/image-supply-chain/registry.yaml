@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mattercodex-image-registry-staging
+  name: kodex-image-registry-staging
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-storage: staging
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-storage: staging
 spec:
   accessModes:
     - ReadWriteOnce
@@ -15,10 +15,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mattercodex-image-registry-promoted
+  name: kodex-image-registry-promoted
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-storage: promoted
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-storage: promoted
 spec:
   accessModes:
     - ReadWriteOnce
@@ -29,28 +29,28 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-image-registry-pull
+  name: kodex-image-registry-pull
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/name: kodex-image-registry
     app.kubernetes.io/component: image-registry
-    mattercodex.dev/registry-scope: pull
+    kodex.dev/registry-scope: pull
 spec:
   replicas: 2
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-image-registry
-      mattercodex.dev/registry-scope: pull
+      app.kubernetes.io/name: kodex-image-registry
+      kodex.dev/registry-scope: pull
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/name: kodex-image-registry
         app.kubernetes.io/component: image-registry
-        mattercodex.dev/registry-scope: pull
+        kodex.dev/registry-scope: pull
       annotations:
-        mattercodex.dev/pull-credential-generation: "0"
+        kodex.dev/pull-credential-generation: "0"
     spec:
-      serviceAccountName: mattercodex-image-registry-pull
+      serviceAccountName: kodex-image-registry-pull
       shareProcessNamespace: true
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -108,16 +108,16 @@ spec:
               mountPath: /var/lib/registry
               readOnly: true
             - name: credentials
-              mountPath: /var/run/secrets/mattercodex/registry
+              mountPath: /var/run/secrets/kodex/registry
               readOnly: true
             - name: tmp
               mountPath: /tmp
         - name: pull-authorizer
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/registry-pull-authorizer]
           env:
             - name: REGISTRY_PULL_HOST
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullRegistryHost}}
           ports: [{name: registry, containerPort: 5000, protocol: TCP}]
           readinessProbe: {tcpSocket: {port: registry}, periodSeconds: 5, timeoutSeconds: 2}
           resources:
@@ -134,18 +134,18 @@ spec:
             - {name: credentials, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
         - name: certificate-guard
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/registry-readiness.sh]
+          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5000"}
             - {name: SERVER_NAME, value: registry-pull.invalid}
             - {name: RELOAD_PROCESS_PATTERN, value: ^/usr/local/bin/registry-pull-authorizer$}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: DOCKER_CONFIG_FILE, value: /identity/pull-dockerconfigjson}
-            - {name: READBACK_IMAGE, value: "registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+            - {name: READBACK_IMAGE, value: "registry-pull.invalid/kodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
             - name: PULL_CREDENTIAL_GENERATION
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullCredentialGeneration}}
           readinessProbe:
             exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
             periodSeconds: 5
@@ -163,35 +163,35 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/mattercodex, readOnly: true}
+            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mattercodex-image-registry-promoted
+            claimName: kodex-image-registry-promoted
             readOnly: true
         - name: credentials
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-image-registry-pull
+              secretProviderClass: kodex-image-registry-pull
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
         - name: readiness-script
           configMap:
-            name: mattercodex-registry-readiness
+            name: kodex-registry-readiness
             defaultMode: 0555
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-image-registry-push
+  name: kodex-image-registry-push
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/name: kodex-image-registry
     app.kubernetes.io/component: image-registry
-    mattercodex.dev/registry-scope: push
+    kodex.dev/registry-scope: push
 spec:
   replicas: 1
   revisionHistoryLimit: 2
@@ -199,16 +199,16 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-image-registry
-      mattercodex.dev/registry-scope: push
+      app.kubernetes.io/name: kodex-image-registry
+      kodex.dev/registry-scope: push
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/name: kodex-image-registry
         app.kubernetes.io/component: image-registry
-        mattercodex.dev/registry-scope: push
+        kodex.dev/registry-scope: push
     spec:
-      serviceAccountName: mattercodex-image-registry-push
+      serviceAccountName: kodex-image-registry-push
       shareProcessNamespace: true
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -265,12 +265,12 @@ spec:
             - name: data
               mountPath: /var/lib/registry
             - name: credentials
-              mountPath: /var/run/secrets/mattercodex/registry
+              mountPath: /var/run/secrets/kodex/registry
               readOnly: true
             - name: tmp
               mountPath: /tmp
         - name: write-authorizer
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/registry-write-authorizer]
           ports: [{name: write, containerPort: 5001, protocol: TCP}]
@@ -295,29 +295,29 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mattercodex-image-registry-staging
+            claimName: kodex-image-registry-staging
         - name: credentials
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-image-registry-push
+              secretProviderClass: kodex-image-registry-push
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
         - name: readiness-script
           configMap:
-            name: mattercodex-registry-readiness
+            name: kodex-registry-readiness
             defaultMode: 0555
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-image-registry-admin
+  name: kodex-image-registry-admin
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/name: kodex-image-registry
     app.kubernetes.io/component: image-registry
-    mattercodex.dev/registry-scope: admin
+    kodex.dev/registry-scope: admin
 spec:
   replicas: 1
   revisionHistoryLimit: 2
@@ -325,16 +325,16 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-image-registry
-      mattercodex.dev/registry-scope: admin
+      app.kubernetes.io/name: kodex-image-registry
+      kodex.dev/registry-scope: admin
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/name: kodex-image-registry
         app.kubernetes.io/component: image-registry
-        mattercodex.dev/registry-scope: admin
+        kodex.dev/registry-scope: admin
     spec:
-      serviceAccountName: mattercodex-image-registry-admin
+      serviceAccountName: kodex-image-registry-admin
       shareProcessNamespace: true
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -353,17 +353,17 @@ spec:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5002
             - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/registry/tls.crt
+              value: /var/run/secrets/kodex/registry/tls.crt
             - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/registry/tls.key
+              value: /var/run/secrets/kodex/registry/tls.key
             - name: REGISTRY_HTTP_TLS_CLIENTCAS_0
-              value: /var/run/secrets/mattercodex/registry/client-ca.pem
+              value: /var/run/secrets/kodex/registry/client-ca.pem
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
-              value: mattercodex-image-admin
+              value: kodex-image-admin
             - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
+              value: /var/run/secrets/kodex/registry/auth.htpasswd
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "true"
           ports:
@@ -401,17 +401,17 @@ spec:
             - name: data
               mountPath: /var/lib/registry
             - name: credentials
-              mountPath: /var/run/secrets/mattercodex/registry
+              mountPath: /var/run/secrets/kodex/registry
               readOnly: true
             - name: tmp
               mountPath: /tmp
         - name: certificate-guard
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/registry-readiness.sh]
+          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5002"}
-            - {name: SERVER_NAME, value: mattercodex-image-registry-admin.mattercodex-system.svc.cluster.local}
+            - {name: SERVER_NAME, value: kodex-image-registry-admin.kodex-system.svc.cluster.local}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: USERNAME_FILE, value: /identity/admin.username}
             - {name: PASSWORD_FILE, value: /identity/admin.password}
@@ -432,34 +432,34 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/mattercodex, readOnly: true}
+            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mattercodex-image-registry-staging
+            claimName: kodex-image-registry-staging
         - name: credentials
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-image-registry-admin
+              secretProviderClass: kodex-image-registry-admin
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
         - name: readiness-script
           configMap:
-            name: mattercodex-registry-readiness
+            name: kodex-registry-readiness
             defaultMode: 0555
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-image-registry-promotion
+  name: kodex-image-registry-promotion
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/name: kodex-image-registry
     app.kubernetes.io/component: image-registry
-    mattercodex.dev/registry-scope: promotion
+    kodex.dev/registry-scope: promotion
 spec:
   replicas: 1
   revisionHistoryLimit: 2
@@ -467,16 +467,16 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-image-registry
-      mattercodex.dev/registry-scope: promotion
+      app.kubernetes.io/name: kodex-image-registry
+      kodex.dev/registry-scope: promotion
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/name: kodex-image-registry
         app.kubernetes.io/component: image-registry
-        mattercodex.dev/registry-scope: promotion
+        kodex.dev/registry-scope: promotion
     spec:
-      serviceAccountName: mattercodex-image-registry-promotion
+      serviceAccountName: kodex-image-registry-promotion
       shareProcessNamespace: true
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -495,17 +495,17 @@ spec:
             - name: REGISTRY_HTTP_ADDR
               value: 0.0.0.0:5003
             - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/registry/tls.crt
+              value: /var/run/secrets/kodex/registry/tls.crt
             - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/registry/tls.key
+              value: /var/run/secrets/kodex/registry/tls.key
             - name: REGISTRY_HTTP_TLS_CLIENTCAS_0
-              value: /var/run/secrets/mattercodex/registry/client-ca.pem
+              value: /var/run/secrets/kodex/registry/client-ca.pem
             - name: REGISTRY_AUTH
               value: htpasswd
             - name: REGISTRY_AUTH_HTPASSWD_REALM
-              value: mattercodex-image-promotion
+              value: kodex-image-promotion
             - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
+              value: /var/run/secrets/kodex/registry/auth.htpasswd
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
@@ -543,17 +543,17 @@ spec:
             - name: data
               mountPath: /var/lib/registry
             - name: credentials
-              mountPath: /var/run/secrets/mattercodex/registry
+              mountPath: /var/run/secrets/kodex/registry
               readOnly: true
             - name: tmp
               mountPath: /tmp
         - name: certificate-guard
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/registry-readiness.sh]
+          command: [/bin/sh, /opt/kodex/registry-readiness.sh]
           env:
             - {name: TARGET_PORT, value: "5003"}
-            - {name: SERVER_NAME, value: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local}
+            - {name: SERVER_NAME, value: kodex-image-registry-promotion.kodex-system.svc.cluster.local}
             - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: USERNAME_FILE, value: /identity/promotion.username}
             - {name: PASSWORD_FILE, value: /identity/promotion.password}
@@ -574,38 +574,38 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/mattercodex, readOnly: true}
+            - {name: readiness-script, mountPath: /opt/kodex, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: mattercodex-image-registry-promoted
+            claimName: kodex-image-registry-promoted
         - name: credentials
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-image-registry-promotion
+              secretProviderClass: kodex-image-registry-promotion
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
         - name: readiness-script
           configMap:
-            name: mattercodex-registry-readiness
+            name: kodex-registry-readiness
             defaultMode: 0555
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-image-registry-pull
+  name: kodex-image-registry-pull
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: pull
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: pull
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: pull
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: pull
   ports:
     - name: https
       port: 5000
@@ -614,14 +614,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-image-registry
+  name: kodex-image-registry
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: pull
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: pull
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: pull
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: pull
   ports:
     - name: https
       port: 5000
@@ -630,14 +630,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-image-registry-push
+  name: kodex-image-registry-push
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: push
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: push
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: push
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: push
   ports:
     - name: https
       port: 5001
@@ -646,14 +646,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-image-registry-admin
+  name: kodex-image-registry-admin
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: admin
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: admin
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: admin
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: admin
   ports:
     - name: https
       port: 5002
@@ -662,14 +662,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-image-registry-promotion
+  name: kodex-image-registry-promotion
   labels:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: promotion
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: promotion
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-image-registry
-    mattercodex.dev/registry-scope: promotion
+    app.kubernetes.io/name: kodex-image-registry
+    kodex.dev/registry-scope: promotion
   ports:
     - name: https
       port: 5003

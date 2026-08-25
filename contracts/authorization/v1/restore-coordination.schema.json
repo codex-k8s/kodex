@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/restore-coordination.schema.json",
-  "title": "Claims координации PITR MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/restore-coordination.schema.json",
+  "title": "Claims координации PITR Kodex",
   "oneOf": [
     {
       "$ref": "#/$defs/roleCredential"
@@ -46,7 +46,7 @@
       "type": "string",
       "minLength": 16,
       "maxLength": 512,
-      "pattern": "^spiffe://mattercodex[.]local/"
+      "pattern": "^spiffe://kodex[.]local/"
     },
     "publicAckJwk": {
       "type": "object",
@@ -122,10 +122,10 @@
           "const": 1
         },
         "iss": {
-          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
+          "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
         },
         "aud": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-role-credential-publisher"
+          "const": "urn:kodex:internal-rpc-authority-restore-role-credential-publisher"
         },
         "sub": {
           "$ref": "#/$defs/boundedIdentity"
@@ -215,10 +215,10 @@
           "const": 1
         },
         "iss": {
-          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+          "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
         },
         "aud": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+          "const": "urn:kodex:internal-rpc-authority-restore-controller"
         },
         "sub": {
           "$ref": "#/$defs/boundedIdentity"
@@ -320,10 +320,10 @@
           "const": 1
         },
         "iss": {
-          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+          "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
         },
         "aud": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+          "const": "urn:kodex:internal-rpc-authority-restore-controller"
         },
         "sub": {
           "$ref": "#/$defs/boundedIdentity"
@@ -425,10 +425,10 @@
           "const": 1
         },
         "iss": {
-          "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
+          "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
         },
         "aud": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+          "const": "urn:kodex:internal-rpc-authority-restore-controller"
         },
         "sub": {
           "$ref": "#/$defs/boundedIdentity"
@@ -523,7 +523,7 @@
           "$ref": "#/$defs/spiffeId"
         },
         "aud": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+          "const": "urn:kodex:internal-rpc-authority-restore-controller"
         },
         "sub": {
           "$ref": "#/$defs/boundedIdentity"

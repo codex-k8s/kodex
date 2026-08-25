@@ -8,7 +8,7 @@ import type {
 
 vi.mock("@/shared/config/runtime", () => ({
   runtimeConfig: () => ({
-    realtimeUrl: "wss://mattercodex.example/api/v1",
+    realtimeUrl: "wss://kodex.example/api/v1",
   }),
 }));
 vi.mock("@/shared/api/mutation", () => ({

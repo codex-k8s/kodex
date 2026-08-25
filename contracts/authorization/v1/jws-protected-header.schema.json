@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/jws-protected-header.schema.json",
-  "title": "Защищенный JWS header внутреннего RPC MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/jws-protected-header.schema.json",
+  "title": "Защищенный JWS header внутреннего RPC Kodex",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -37,20 +37,20 @@
     },
     "typ": {
       "enum": [
-        "mattercodex-internal-rpc-auth+jws",
-        "mattercodex-internal-rpc-authority-proof+jws",
-        "mattercodex-internal-rpc-readback-attestation+jws",
-        "mattercodex-internal-rpc-readback-credential+jws",
-        "mattercodex-internal-rpc-readback-credential-trust+jws",
-        "mattercodex-internal-rpc-readback-manifest-root+jws",
-        "mattercodex-internal-rpc-restore-ack+jws",
-        "mattercodex-internal-rpc-restore-role-delivery-receipt+jws",
-        "mattercodex-internal-rpc-restore-directive+jws",
-        "mattercodex-internal-rpc-restore-evidence+jws",
-        "mattercodex-internal-rpc-restore-role-issuance+jws",
-        "mattercodex-internal-rpc-restore-role-credential+jws",
-        "mattercodex-internal-rpc-restore-role-trust+jws",
-        "mattercodex-internal-rpc-snapshot+jws"
+        "kodex-internal-rpc-auth+jws",
+        "kodex-internal-rpc-authority-proof+jws",
+        "kodex-internal-rpc-readback-attestation+jws",
+        "kodex-internal-rpc-readback-credential+jws",
+        "kodex-internal-rpc-readback-credential-trust+jws",
+        "kodex-internal-rpc-readback-manifest-root+jws",
+        "kodex-internal-rpc-restore-ack+jws",
+        "kodex-internal-rpc-restore-role-delivery-receipt+jws",
+        "kodex-internal-rpc-restore-directive+jws",
+        "kodex-internal-rpc-restore-evidence+jws",
+        "kodex-internal-rpc-restore-role-issuance+jws",
+        "kodex-internal-rpc-restore-role-credential+jws",
+        "kodex-internal-rpc-restore-role-trust+jws",
+        "kodex-internal-rpc-snapshot+jws"
       ]
     }
   }

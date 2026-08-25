@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	authoritysnapshot "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	authoritysnapshot "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
 const maxResponseBytes = 2 << 20
@@ -58,7 +58,7 @@ type secretEnvelope struct {
 func New(config Config) (*Delivery, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		config.SecretName != "internal-rpc-authority-snapshot" ||
 		config.Timeout < time.Second ||
 		config.Timeout > 10*time.Second {
@@ -119,11 +119,11 @@ func (delivery *Delivery) Publish(
 			return model.AuthoritySnapshotPublication{}, err
 		}
 		currentRevision, _ := strconv.ParseUint(
-			current.Metadata.Annotations["mattercodex.dev/source-revision"],
+			current.Metadata.Annotations["kodex.dev/source-revision"],
 			10,
 			64,
 		)
-		currentDigest := current.Metadata.Annotations["mattercodex.dev/source-digest-sha256"]
+		currentDigest := current.Metadata.Annotations["kodex.dev/source-digest-sha256"]
 		if currentRevision > publication.SourceRevision ||
 			currentRevision == publication.SourceRevision &&
 				currentDigest != "" &&
@@ -137,12 +137,12 @@ func (delivery *Delivery) Publish(
 			return delivery.publication(current, publication)
 		}
 		current.Metadata.Annotations = map[string]string{
-			"mattercodex.dev/source-revision": strconv.FormatUint(
+			"kodex.dev/source-revision": strconv.FormatUint(
 				publication.SourceRevision,
 				10,
 			),
-			"mattercodex.dev/source-digest-sha256": publication.SourceDigestSHA256,
-			"mattercodex.dev/signer-generation": strconv.FormatUint(
+			"kodex.dev/source-digest-sha256": publication.SourceDigestSHA256,
+			"kodex.dev/signer-generation": strconv.FormatUint(
 				publication.SignerGeneration,
 				10,
 			),
@@ -193,7 +193,7 @@ func (delivery *Delivery) Read(
 		return model.AuthoritySnapshotPublication{}, err
 	}
 	revision, err := strconv.ParseUint(
-		envelope.Metadata.Annotations["mattercodex.dev/source-revision"],
+		envelope.Metadata.Annotations["kodex.dev/source-revision"],
 		10,
 		64,
 	)
@@ -202,7 +202,7 @@ func (delivery *Delivery) Read(
 			"served authority snapshot revision rejected",
 		)
 	}
-	digest := envelope.Metadata.Annotations["mattercodex.dev/source-digest-sha256"]
+	digest := envelope.Metadata.Annotations["kodex.dev/source-digest-sha256"]
 	encoded, ok := envelope.Data["snapshot.jws"]
 	if !ok || len(envelope.Data) != 1 || !validDigest(digest) {
 		return model.AuthoritySnapshotPublication{}, errors.New(
@@ -253,11 +253,11 @@ func (delivery *Delivery) publication(
 	envelope secretEnvelope,
 	expected model.AuthoritySnapshotPublication,
 ) (model.AuthoritySnapshotPublication, error) {
-	if envelope.Metadata.Annotations["mattercodex.dev/source-revision"] !=
+	if envelope.Metadata.Annotations["kodex.dev/source-revision"] !=
 		strconv.FormatUint(expected.SourceRevision, 10) ||
-		envelope.Metadata.Annotations["mattercodex.dev/source-digest-sha256"] !=
+		envelope.Metadata.Annotations["kodex.dev/source-digest-sha256"] !=
 			expected.SourceDigestSHA256 ||
-		envelope.Metadata.Annotations["mattercodex.dev/signer-generation"] !=
+		envelope.Metadata.Annotations["kodex.dev/signer-generation"] !=
 			strconv.FormatUint(expected.SignerGeneration, 10) {
 		return model.AuthoritySnapshotPublication{}, errors.New(
 			"authority snapshot Secret annotations rejected",

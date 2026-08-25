@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
+	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"

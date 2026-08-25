@@ -10,15 +10,15 @@ import (
 	"os"
 	"sort"
 
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
 const (
 	resolverMethod   = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
 	controlPlaneID   = "control-plane"
-	controlPlanePeer = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
-	controlPlaneTLS  = "control-plane.mattercodex-system.svc.cluster.local"
-	internalAudience = "urn:mattercodex:internal-rpc:control-plane"
+	controlPlanePeer = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	controlPlaneTLS  = "control-plane.kodex-system.svc.cluster.local"
+	internalAudience = "urn:kodex:internal-rpc:control-plane"
 )
 
 type document struct {
@@ -99,7 +99,7 @@ type profile struct {
 func main() {
 	output := flag.String("output", "", "path to the resulting authority-policy.json")
 	oidcIssuer := flag.String("oidc-issuer", "", "exact OIDC issuer for this installation")
-	oidcAudience := flag.String("oidc-audience", "mattercodex-control-api", "exact Control Center OIDC audience")
+	oidcAudience := flag.String("oidc-audience", "kodex-control-api", "exact Control Center OIDC audience")
 	flag.Parse()
 	if *output == "" || *oidcIssuer == "" || *oidcAudience == "" {
 		fatal("output path, OIDC issuer and audience are required")
@@ -108,7 +108,7 @@ func main() {
 		{
 			ProducerID: "control-plane.oidc", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
 			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience,
-			CredentialTrust: "mattercodex-oidc-signers-g1", Operations: controlplaneclient.ControlAPIGatewayOperations(),
+			CredentialTrust: "kodex-oidc-signers-g1", Operations: controlplaneclient.ControlAPIGatewayOperations(),
 			ProjectRequired: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		},
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
@@ -120,7 +120,7 @@ func main() {
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 	}
 	value := document{Version: 1, PolicyRevision: 36, Policy: policy{
-		TrustDomain: "mattercodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
+		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
 	for _, item := range profiles {
@@ -129,12 +129,12 @@ func main() {
 		value.Policy.ProofProducers = append(value.Policy.ProofProducers, producer{
 			ProducerID: item.ProducerID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer,
 			OwnerWorkloadID: controlPlaneID, OwnerSPIFFEID: controlPlanePeer, FullMethod: resolverMethod,
-			TLSServerName: controlPlaneTLS, TransportTrustBundleID: "mattercodex-internal-ca-g1",
+			TLSServerName: controlPlaneTLS, TransportTrustBundleID: "kodex-internal-ca-g1",
 			ApplicationCredential: item.Credential, ApplicationCredentialMetadata: "authorization",
 			ApplicationCredentialIssuer: item.CredentialIssuer, ApplicationCredentialAudience: item.CredentialAudience,
 			ApplicationCredentialTrustBundleID: item.CredentialTrust,
 			AuthorityProofIssuer:               controlPlanePeer,
-			AuthorityProofAudience:             "urn:mattercodex:internal-rpc-authority-issuer:" + item.WorkloadID,
+			AuthorityProofAudience:             "urn:kodex:internal-rpc-authority-issuer:" + item.WorkloadID,
 			AuthorityProofTrustBundleID:        "control-plane-authority-proof-g1", AuthorityProofMaxAgeSeconds: 15,
 			DeadlineMilliseconds: 2000, MaxAttempts: 2, RetryableGRPCCodes: []string{"UNAVAILABLE", "DEADLINE_EXCEEDED"},
 			IdempotencyScope: "credential-subject-digest+caller-workload+operation+idempotency-key",
@@ -147,7 +147,7 @@ func main() {
 				OperationID: operationID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer, Issuer: peer,
 				TargetWorkloadID: controlPlaneID, TargetSPIFFEID: controlPlanePeer, Audience: internalAudience,
 				FullMethod: item.Operations[operationID], TargetTLSServerName: controlPlaneTLS,
-				TargetTrustBundleID: "mattercodex-internal-ca-g1", Permission: operationID,
+				TargetTrustBundleID: "kodex-internal-ca-g1", Permission: operationID,
 				ProofProducerID: item.ProducerID, AuthoritySources: item.AuthoritySources, ProjectRequired: projectRequired,
 				LocalCaller: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
 				LocalTarget: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
@@ -173,15 +173,15 @@ func main() {
 func worker(workloadID, producerID string, operations map[string]string) profile {
 	return profile{
 		ProducerID: producerID, WorkloadID: workloadID, Credential: "PLATFORM_WORKER_GRANT",
-		CredentialIssuer:   "https://control-plane.mattercodex-system.svc.cluster.local/authority/platform-worker/" + workloadID,
-		CredentialAudience: "urn:mattercodex:platform-worker:" + workloadID,
+		CredentialIssuer:   "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/" + workloadID,
+		CredentialAudience: "urn:kodex:platform-worker:" + workloadID,
 		CredentialTrust:    workloadID + "-platform-worker-grants-g1", Operations: operations,
 		ProjectRequired: map[string]struct{}{}, AuthoritySources: []string{"DOMAIN_STATE"},
 	}
 }
 
 func workloadSPIFFE(workloadID string) string {
-	return "spiffe://mattercodex.local/ns/mattercodex-system/sa/" + workloadID
+	return "spiffe://kodex.local/ns/kodex-system/sa/" + workloadID
 }
 
 func sortedKeys(values map[string]string) []string {

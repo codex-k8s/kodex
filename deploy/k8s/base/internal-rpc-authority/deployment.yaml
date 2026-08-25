@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: reconciler
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/internal-rpc-authority-database-credential-reconciler
@@ -51,29 +51,29 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
+                  fieldPath: metadata.labels['kodex.dev/environment']
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
               value: otel-collector.observability.svc.cluster.local
             - name: OTEL_EXPORTER_OTLP_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
             - name: SENTRY_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.crt
+              value: /var/run/secrets/kodex/internal-rpc-authority/tls/tls.crt
             - name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/tls/tls.key
+              value: /var/run/secrets/kodex/internal-rpc-authority/tls/tls.key
             - name: INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/tls/client-ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/tls/client-ca.pem
             - name: INTERNAL_RPC_AUTHORITY_VAULT_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/vault/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE
               value: /var/run/secrets/tokens/vault/token
           ports:
@@ -112,19 +112,19 @@ spec:
                 - ALL
           volumeMounts:
             - name: postgresql-credentials
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres
               readOnly: true
             - name: postgresql-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql
               readOnly: true
             - name: server-tls
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/tls
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/tls
               readOnly: true
             - name: client-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/tls
+              mountPath: /var/run/config/kodex/internal-rpc-authority/tls
               readOnly: true
             - name: vault-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault
+              mountPath: /var/run/config/kodex/internal-rpc-authority/vault
               readOnly: true
             - name: vault-token
               mountPath: /var/run/secrets/tokens/vault
@@ -136,10 +136,10 @@ spec:
               mountPath: /var/run/config/kubernetes.io/serviceaccount
               readOnly: true
             - name: observability
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
+              mountPath: /var/run/config/kodex/internal-rpc-authority/observability
               readOnly: true
             - name: sentry-dsn
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability
               readOnly: true
             - name: tmp
               mountPath: /tmp

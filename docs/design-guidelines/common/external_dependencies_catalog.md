@@ -1,7 +1,7 @@
 # Каталог внешних зависимостей
 
 Назначение: единая точка, где фиксируются внешние библиотеки и инструменты,
-которые используются активным web-first профилем MatterCodex. Точная версия
+которые используются активным web-first профилем Kodex. Точная версия
 Go- или npm-зависимости определяется соответствующим `go.mod`, `package.json` и
 lock-файлом; точный image — Dockerfile либо release lock.
 
@@ -63,7 +63,7 @@ lock-файлом; точный image — Dockerfile либо release lock.
 | Tool | Active version/source | Scope |
 |---|---:|---|
 | `@openai/codex` | `0.144.1` | первый provider adapter через typed app-server contract |
-| `matter-codex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
+| `kodex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
 | Node.js | `24.x` | Codex/provider process и role tooling |
 | Go | `1.26.6` | runtime/toolchain для ролей, которым это разрешено recipe |
 | `git`, `gh`, browser, office/analysis CLI | только по role recipe | инструменты конкретной роли, не обязательный core набор |
@@ -110,4 +110,4 @@ direct-production prototype registry и hardcoded installation domain не вх�
 
 Версии developer tools для role images закрепляются в Dockerfile и release
 lock. Их наличие в образе конкретной роли не превращает соответствующую внешнюю
-систему в core dependency MatterCodex.
+систему в core dependency Kodex.

@@ -24,7 +24,7 @@ SELECT @audit_ref,
 FROM control_plane.assistant_runtime runtime
 JOIN control_plane.subjects subject
   ON subject.organization_id = runtime.organization_id
- AND subject.issuer = 'mattercodex-system'
+ AND subject.issuer = 'kodex-system'
  AND subject.active
 WHERE runtime.organization_id = @organization_id::uuid
   AND runtime.agent_id = @agent_id::uuid;

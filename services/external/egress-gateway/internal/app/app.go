@@ -10,13 +10,13 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/httpserver"
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/dnsresolver"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/gateway"
-	internalobservability "github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/gateway"
+	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 const (

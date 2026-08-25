@@ -8,14 +8,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 	"go.yaml.in/yaml/v2"
 )
 
 var (
 	registryWorkloadPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$`)
-	registryVaultPathPattern = regexp.MustCompile(`^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$`)
+	registryVaultPathPattern = regexp.MustCompile(`^kv/data/kodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$`)
 	registryDigestPattern    = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	registryPrincipalPattern = regexp.MustCompile(`^ira_[a-z0-9_]+_g[1-9][0-9]*$`)
 )
@@ -132,10 +132,10 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 	for _, entry := range document.Targets {
 		targetID := targetID(entry.WorkloadID, entry.Role)
 		tuple := entry.WorkloadID + "\x00" + entry.Role
-		expectedSPIFFE := "spiffe://mattercodex.local/ns/" +
+		expectedSPIFFE := "spiffe://kodex.local/ns/" +
 			entry.Namespace + "/sa/" + entry.ServiceAccount
 		if !registryWorkloadPattern.MatchString(entry.WorkloadID) ||
-			entry.Namespace != "mattercodex-system" ||
+			entry.Namespace != "kodex-system" ||
 			entry.ServiceAccount != entry.WorkloadID ||
 			entry.SPIFFEID != expectedSPIFFE ||
 			(entry.Role != "AUTHORIZATION_ISSUER" &&
@@ -144,18 +144,18 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.WorkloadGeneration == 0 ||
 			entry.AuthoritySnapshot.SecretName != "internal-rpc-authority-snapshot" ||
 			entry.AuthoritySnapshot.MountPath !=
-				"/var/run/config/mattercodex/internal-rpc-authority/snapshot" ||
+				"/var/run/config/kodex/internal-rpc-authority/snapshot" ||
 			!validOptionalAuthKey(entry) ||
 			!registryVaultPathPattern.MatchString(entry.ManifestTrust.VaultPath) ||
 			entry.ManifestTrust.SecretName != "internal-rpc-authority-manifest-trust" ||
 			entry.ManifestTrust.MountPath !=
-				"/var/run/config/mattercodex/internal-rpc-authority/manifest-trust" ||
+				"/var/run/config/kodex/internal-rpc-authority/manifest-trust" ||
 			!validOptionalProofTrust(entry) ||
 			!validOptionalProofPrivateKey(entry) ||
 			!registryPrincipalPattern.MatchString(entry.DatabaseIdentity.LoginPrincipal) ||
 			entry.DatabaseIdentity.VaultDatabaseRole == "" ||
 			entry.DatabaseIdentity.DSNMountPath !=
-				"/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn" ||
+				"/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn" ||
 			entry.DatabaseIdentity.CredentialGeneration == 0 ||
 			entry.RestoreCoordination.ACKKeyGeneration == 0 ||
 			!registryVaultPathPattern.MatchString(entry.RestoreCoordination.RoleCredentialVaultPath) ||
@@ -165,20 +165,20 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.RestoreCoordination.RoleCredentialID == "" ||
 			entry.RestoreCoordination.ACKKeyID == "" ||
 			entry.RestoreCoordination.RoleCredentialMountPath !=
-				"/var/run/secrets/mattercodex/internal-rpc-authority/restore/credential" ||
+				"/var/run/secrets/kodex/internal-rpc-authority/restore/credential" ||
 			entry.RestoreCoordination.ACKKeyMountPath !=
-				"/var/run/secrets/mattercodex/internal-rpc-authority/restore/ack" ||
+				"/var/run/secrets/kodex/internal-rpc-authority/restore/ack" ||
 			entry.RestoreCoordination.ACKPublicJWKSource != "SIGNED_ROLE_CREDENTIAL" ||
 			entry.RestoreCoordination.ControllerAddress !=
-				"internal-rpc-authority-restore-controller.mattercodex-system.svc:8443" ||
+				"internal-rpc-authority-restore-controller.kodex-system.svc:8443" ||
 			entry.RestoreCoordination.ControllerTLSServerName !=
-				"internal-rpc-authority-restore-controller.mattercodex-system.svc" ||
+				"internal-rpc-authority-restore-controller.kodex-system.svc" ||
 			entry.RestoreCoordination.ControllerTrustBundleID !=
 				"internal-rpc-authority-restore-controller-ca" ||
 			entry.RestoreCoordination.ControllerCAMountPath !=
-				"/var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem" ||
+				"/var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem" ||
 			entry.RestoreCoordination.ControllerAudience !=
-				"urn:mattercodex:internal-rpc-authority-restore-controller" ||
+				"urn:kodex:internal-rpc-authority-restore-controller" ||
 			entry.RestoreCoordination.ControllerFullMethod !=
 				"/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective" ||
 			entry.RestoreCoordination.NetworkPolicy == "" ||
@@ -189,25 +189,25 @@ func LoadRegistry(path string) (model.DeliveryTargetRegistry, error) {
 			entry.Readback.CredentialID == "" ||
 			entry.Readback.PossessionKeyID == "" ||
 			entry.Readback.CredentialMountPath !=
-				"/var/run/secrets/mattercodex/internal-rpc-authority/readback/credential" ||
+				"/var/run/secrets/kodex/internal-rpc-authority/readback/credential" ||
 			entry.Readback.PossessionKeyMountPath !=
-				"/var/run/secrets/mattercodex/internal-rpc-authority/readback/possession" ||
+				"/var/run/secrets/kodex/internal-rpc-authority/readback/possession" ||
 			entry.Readback.CredentialProtectedType !=
-				"mattercodex-internal-rpc-readback-credential+jws" ||
+				"kodex-internal-rpc-readback-credential+jws" ||
 			entry.Readback.CredentialSchema !=
 				"contracts/authorization/v1/readback-credential.schema.json" ||
 			entry.Readback.PossessionJWKSource !=
 				"SIGNED_NORMAL_READBACK_CREDENTIAL" ||
 			entry.Readback.AttestorAddress !=
-				"internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443" ||
+				"internal-rpc-authority-readback-attestor.kodex-system.svc:8443" ||
 			entry.Readback.AttestorTLSServerName !=
-				"internal-rpc-authority-readback-attestor.mattercodex-system.svc" ||
+				"internal-rpc-authority-readback-attestor.kodex-system.svc" ||
 			entry.Readback.AttestorTrustBundleID !=
 				"internal-rpc-authority-readback-attestor-ca" ||
 			entry.Readback.AttestorCAMountPath !=
-				"/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem" ||
+				"/var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem" ||
 			entry.Readback.AttestorAudience !=
-				"urn:mattercodex:internal-rpc-authority-readback-attestor" ||
+				"urn:kodex:internal-rpc-authority-readback-attestor" ||
 			entry.Readback.AttestorChallengeMethod !=
 				"/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge" ||
 			entry.Readback.AttestorFullMethod !=
@@ -313,7 +313,7 @@ func validOptionalAuthKey(entry registryTarget) bool {
 	return registryVaultPathPattern.MatchString(entry.AuthPrivateKey.VaultPath) &&
 		entry.AuthPrivateKey.SecretName == "internal-rpc-authority-issuer-key" &&
 		entry.AuthPrivateKey.MountPath ==
-			"/var/run/secrets/mattercodex/internal-rpc-authority/issuer"
+			"/var/run/secrets/kodex/internal-rpc-authority/issuer"
 }
 
 func validOptionalProofTrust(entry registryTarget) bool {
@@ -325,7 +325,7 @@ func validOptionalProofTrust(entry registryTarget) bool {
 	return registryVaultPathPattern.MatchString(entry.AuthorityProofTrust.VaultPath) &&
 		entry.AuthorityProofTrust.SecretName == "internal-rpc-authority-proof-trust" &&
 		entry.AuthorityProofTrust.MountPath ==
-			"/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust"
+			"/var/run/config/kodex/internal-rpc-authority/authority-proof-trust"
 }
 
 func validOptionalProofPrivateKey(entry registryTarget) bool {
@@ -340,7 +340,7 @@ func validOptionalProofPrivateKey(entry registryTarget) bool {
 		entry.AuthorityProofPrivateKey.SecretName ==
 			"internal-rpc-authority-proof-signer-key" &&
 		entry.AuthorityProofPrivateKey.MountPath ==
-			"/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer"
+			"/var/run/secrets/kodex/internal-rpc-authority/proof-signer"
 }
 
 func targetID(workloadID, role string) string {

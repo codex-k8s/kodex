@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mattercodex-platform-endpoints
+  name: kodex-platform-endpoints
 data:
-  publicOrigin: __MATTERCODEX_PUBLIC_ORIGIN__
-  oidcIssuer: __MATTERCODEX_OIDC_ISSUER__
-  oidcJwksUrl: __MATTERCODEX_OIDC_JWKS_URL__
-  oidcConnectAddress: __MATTERCODEX_OIDC_CONNECT_ADDRESS__
-  oidcTlsServerName: __MATTERCODEX_OIDC_TLS_SERVER_NAME__
+  publicOrigin: __KODEX_PUBLIC_ORIGIN__
+  oidcIssuer: __KODEX_OIDC_ISSUER__
+  oidcJwksUrl: __KODEX_OIDC_JWKS_URL__
+  oidcConnectAddress: __KODEX_OIDC_CONNECT_ADDRESS__
+  oidcTlsServerName: __KODEX_OIDC_TLS_SERVER_NAME__

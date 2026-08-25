@@ -23,7 +23,7 @@ DEADLINE_EXCEEDED:
 CSRF_REJECTED:
   other: Не удалось проверить сессию; перезагрузите страницу и повторите действие
 ORIGIN_REJECTED:
-  other: Этому сайту запрещён доступ к MatterCodex
+  other: Этому сайту запрещён доступ к Kodex
 STOPPING:
   other: Сервис перезапускается; подключитесь снова через несколько секунд
 PAYLOAD_TOO_LARGE:

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/codex-k8s/kodex/libs/go/eventing"
 )
 
 // Processor координирует durable receive/claim/effect и явный lifecycle.

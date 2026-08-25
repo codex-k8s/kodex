@@ -12,8 +12,8 @@ base_hex=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 frontend_hex=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 source_digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 build_tag=v20260801000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-subject=registry.example.test/mattercodex/control-plane
-builder_identity=spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
+subject=registry.example.test/kodex/control-plane
+builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
 build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
@@ -31,7 +31,7 @@ jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_
         uri: "docker-image://docker.io/library/alpine@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         digest: {sha256: $base}
       }, {
-        uri: "docker-image://registry.example.test/mattercodex/dockerfile@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        uri: "docker-image://registry.example.test/kodex/dockerfile@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         digest: {sha256: $frontend}
       }]
     },
@@ -77,8 +77,8 @@ fi
 
 control_digest=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 authority_digest=sha256:abababababababababababababababababababababababababababababababab
-tools_image="registry.example.test/mattercodex/admission-tools@$tools_digest"
-admission_image="registry.example.test/mattercodex/image-admission@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+tools_image="registry.example.test/kodex/admission-tools@$tools_digest"
+admission_image="registry.example.test/kodex/image-admission@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 policy_sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 trusted_base_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 frontend_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -86,8 +86,8 @@ runtime_contract_sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 pull_host=registry.nodes.example.test
 kubectl kustomize "$repository_root/deploy/k8s/overlays/staging/image-supply-chain" \
   >"$temporary_directory/supply.yaml"
-for policy_name in mattercodex-image-admission-controller-jobs \
-  mattercodex-image-admission-controller-workspaces; do
+for policy_name in kodex-image-admission-controller-jobs \
+  kodex-image-admission-controller-workspaces; do
   POLICY_NAME="$policy_name" yq -e '
     select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == strenv(POLICY_NAME)) |
     .spec.failurePolicy == "Fail"
@@ -102,9 +102,9 @@ yq -o=json '
   ([.rules[].resources[]] | sort | join(",")) ==
     "configmaps,imageadmissionpolicyparameters,jobs,persistentvolumeclaims" and
   any(.rules[];
-    .apiGroups == ["supplychain.mattercodex.dev"] and
+    .apiGroups == ["supplychain.kodex.dev"] and
     .resources == ["imageadmissionpolicyparameters"] and
-    .resourceNames == ["mattercodex-image-admission-policy"] and
+    .resourceNames == ["kodex-image-admission-policy"] and
     .verbs == ["get"])
 ' >/dev/null || {
   echo "image admission controller RBAC expanded beyond bounded resources" >&2
@@ -112,9 +112,9 @@ yq -o=json '
 }
 yq -o=json '
   select(.kind == "ValidatingAdmissionPolicy" and
-    .metadata.name == "mattercodex-image-admission-controller-jobs")
+    .metadata.name == "kodex-image-admission-controller-jobs")
 ' "$temporary_directory/supply.yaml" | jq -e '
-  .spec.paramKind.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+  .spec.paramKind.apiVersion == "supplychain.kodex.dev/v1alpha1" and
   .spec.paramKind.kind == "ImageAdmissionPolicyParameters" and
   all(.spec.validations[]; (.expression | contains("params.data.")) | not) and
   any(.spec.validations[]; .expression | contains("params.spec.policyRevision"))
@@ -123,12 +123,12 @@ yq -o=json '
   exit 1
 }
 fixture_policy_config_map=$(yq -o=json -I=0 '
-  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data
 ' "$temporary_directory/supply.yaml" | jq -Sc .)
 fixture_policy_parameters=$(yq -o=json -I=0 '
   select(.kind == "ImageAdmissionPolicyParameters" and
-    .metadata.name == "mattercodex-image-admission-policy") |
+    .metadata.name == "kodex-image-admission-policy") |
   .spec
 ' "$temporary_directory/supply.yaml" | jq -Sc .)
 [[ -n "$fixture_policy_parameters" &&
@@ -137,13 +137,13 @@ fixture_policy_parameters=$(yq -o=json -I=0 '
   exit 1
 }
 if grep -Fq 'component: kube-apiserver' "$temporary_directory/supply.yaml" ||
-  ! grep -Fq 'cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__' "$temporary_directory/supply.yaml"; then
+  ! grep -Fq 'cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__' "$temporary_directory/supply.yaml"; then
   echo "image admission controller Kubernetes API destination is not render-bound" >&2
   exit 1
 fi
 render_pull_host=registry-pull.invalid
-render_tools_image=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-render_admission_image=mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+render_tools_image=admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+render_admission_image=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
 [[ $(grep -F -c "common_name: $render_pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'name: REGISTRY_HTTP_TLS_CLIENTCAS_0' "$temporary_directory/supply.yaml") -eq 3 ]]
 [[ $(yq '
@@ -152,9 +152,9 @@ render_admission_image=mattercodex-image-registry.mattercodex-system.svc.cluster
   select(.name == "CLIENT_AUTH_REQUIRED" and .value == "true") |
   .name
 ' "$temporary_directory/supply.yaml" | grep -F -c CLIENT_AUTH_REQUIRED) -eq 4 ]]
-grep -Fq 'kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__' \
+grep -Fq 'kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__' \
   "$temporary_directory/supply.yaml"
-grep -Fq 'app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__' \
+grep -Fq 'app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__' \
   "$temporary_directory/supply.yaml"
 [[ $(grep -F -c "$render_tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
 for binary in registry-pull-authorizer registry-write-authorizer node-pull-bootstrap; do
@@ -169,36 +169,36 @@ for binary in registry-pull-authorizer registry-write-authorizer node-pull-boots
 done
 grep -Fq 'openssl x509 -in /identity/tls.crt -checkend 900' "$temporary_directory/supply.yaml"
 grep -Fq 'DOCKER_CONFIG_FILE' "$temporary_directory/supply.yaml"
-grep -Fq 'registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
-grep -Fq 'registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
-push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-push") |
+grep -Fq 'registry-pull.invalid/kodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
+grep -Fq 'registry-pull.invalid/kodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$temporary_directory/supply.yaml"
+push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-push") |
   .spec.template.spec.containers[] | select(.name == "registry") | .env[] |
   select(.name == "REGISTRY_HTTP_RELATIVEURLS") | .value' "$temporary_directory/supply.yaml")
 [[ $push_relative_urls == "true" ]] || { echo "staging registry does not return relative upload locations" >&2; exit 1; }
-grep -Fq 'mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission' \
+grep -Fq 'kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission' \
   "$temporary_directory/supply.yaml"
 if grep -Fq 'hostNetwork: true' "$temporary_directory/supply.yaml" ||
-  ! grep -Fq 'name: mattercodex-node-pull-bootstrap-exact-paths' "$temporary_directory/supply.yaml"; then
+  ! grep -Fq 'name: kodex-node-pull-bootstrap-exact-paths' "$temporary_directory/supply.yaml"; then
   echo "node pull bootstrap network boundary is incomplete" >&2
   exit 1
 fi
-node_egress_ports=$(yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "mattercodex-node-pull-bootstrap-exact-paths") |
+node_egress_ports=$(yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-node-pull-bootstrap-exact-paths") |
   [.spec.egress[].ports[].port] | sort | join(",")' "$temporary_directory/supply.yaml")
 [[ $node_egress_ports == "53,53,8200" ]] || { echo "node bootstrap received non-DNS/Vault egress" >&2; exit 1; }
 grep -Fq 'REGISTRY_AUTHORIZATION_PROFILE' "$temporary_directory/supply.yaml"
-grep -Fq 'mattercodex/image-registry/evidence-admission' \
+grep -Fq 'kodex/image-registry/evidence-admission' \
   "$repository_root/tools/configure-image-supply-chain-pki.sh"
-if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "mattercodex-image-registry-evidence") |
+if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-image-registry-evidence") |
   .spec.ingress[].from[].podSelector.matchExpressions[]?.values[]' "$temporary_directory/supply.yaml" |
   grep -Fqx sign; then
   echo "signer received evidence registry network authority" >&2
   exit 1
 fi
-[[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' \
+[[ $(grep -F -c 'kodex.dev/pull-credential-generation: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'pullCredentialGeneration: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
-grep -Fq 'valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}' \
+grep -Fq 'valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullCredentialGeneration}}' \
   "$repository_root/deploy/k8s/base/image-supply-chain/registry.yaml"
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq '/tmp/registry-applied.der' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
@@ -213,7 +213,7 @@ grep -A1 -F '[cdi]' "$repository_root/deploy/k8s/base/image-supply-chain/buildki
 grep -Fq 'staging/readiness:userns-probe,push=true' \
   "$repository_root/deploy/k8s/base/image-supply-chain/buildkit.yaml"
 buildkit_deployment=$(yq -o=json -I=0 '
-  select(.kind == "Deployment" and .metadata.name == "mattercodex-buildkit")
+  select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
 ' "$temporary_directory/supply.yaml")
 jq -e '
   .spec.template.spec.hostUsers == false and
@@ -276,7 +276,7 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotionEvidenceRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence","evidenceRepository":"mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/mattercodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc"}}
+{"immutable":true,"metadata":{"labels":{"kodex.dev/owner-intent":"true"},"annotations":{"kodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/kodex/internal-rpc-authority@$authority_digest","promotionRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles","promotionEvidenceRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence","evidenceRepository":"kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/kodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/kodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
@@ -293,7 +293,7 @@ for phase in claim scan sign admit promote; do
   IMAGE_ADMISSION_POLICY_JSON="$policy_json" \
     "$repository_root/tools/render-image-admission-job.sh" staging "$build_tag" "$phase" \
     >"$temporary_directory/admission-$phase.yaml"
-  [[ $(yq eval-all 'select(.kind == "Job") | .metadata.labels."mattercodex.dev/image-admission-phase"' \
+  [[ $(yq eval-all 'select(.kind == "Job") | .metadata.labels."kodex.dev/image-admission-phase"' \
     "$temporary_directory/admission-$phase.yaml" | grep -Fxc "$phase") -eq 1 ]]
 done
 [[ $(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
@@ -306,7 +306,7 @@ done
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 5 ]]
-for service_account in mattercodex-image-scanner mattercodex-image-signer \
+for service_account in kodex-image-scanner kodex-image-signer \
   image-admission image-promotion; do
   grep -Fq "serviceAccountName: $service_account" "$temporary_directory/admission.yaml"
 done
@@ -348,7 +348,7 @@ if grep -Fq 'issuedAt' \
 fi
 grep -Fq 'load_promotion_claim' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
-promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."mattercodex.dev/image-admission-phase" == "promote") |
+promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "promote") |
   .spec.template.spec.volumes[] | select(.name == "work") | .emptyDir != null' "$temporary_directory/admission.yaml")
 [[ $promotion_uses_emptydir == "true" ]] || {
   echo "promotion still shares admission PVC" >&2
@@ -410,18 +410,18 @@ chmod 0555 "$temporary_directory/bin/regctl"
 
 evidence_entries_fixture() {
   cat <<'EOF'
-image-digest.subject|application/vnd.mattercodex.image-digest.v1+text
+image-digest.subject|application/vnd.kodex.image-digest.v1+text
 image-digest.sig|application/vnd.dev.cosign.signature.v1+text
-provenance.json|application/vnd.mattercodex.provenance-binding.v1+json
+provenance.json|application/vnd.kodex.provenance-binding.v1+json
 provenance.sig|application/vnd.dev.cosign.signature.v1+text
-native-provenance.json|application/vnd.mattercodex.native-provenance.v1+json
+native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
 sbom.json|application/spdx+json
 sbom.sig|application/vnd.dev.cosign.signature.v1+text
-vulnerability.json|application/vnd.mattercodex.vulnerability-report.v1+json
+vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
 vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
-signature.binding.json|application/vnd.mattercodex.signature-binding.v1+json
-admission.receipt.json|application/vnd.mattercodex.admission-receipt.v1+json
+signature.binding.json|application/vnd.kodex.signature-binding.v1+json
+admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
 }
@@ -445,15 +445,15 @@ EOF
   jq -Ssc --arg artifact artifact-1 --arg image "$image_digest" \
     --arg policy "$policy_revision" --arg policy_sha "$policy_sha256" \
     '{schemaVersion:2,mediaType:"application/vnd.oci.image.manifest.v1+json",
-      artifactType:"application/vnd.mattercodex.image-admission-evidence.v2",
-      config:{mediaType:"application/vnd.mattercodex.image-admission-evidence.config.v2+json",
+      artifactType:"application/vnd.kodex.image-admission-evidence.v2",
+      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v2+json",
         digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2},
       layers:.,annotations:{
-        "mattercodex.dev/artifact-id":$artifact,
-        "mattercodex.dev/evidence-schema":"mattercodex.dev/image-admission-evidence/v2",
-        "mattercodex.dev/image-digest":$image,
-        "mattercodex.dev/policy-revision":$policy,
-        "mattercodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
+        "kodex.dev/artifact-id":$artifact,
+        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v2",
+        "kodex.dev/image-digest":$image,
+        "kodex.dev/policy-revision":$policy,
+        "kodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
 }
 
 sign_evidence_fixture() {
@@ -491,7 +491,7 @@ printf '%s\n' "$image_digest" >"$evidence_source/image-digest.subject"
 cat >"$evidence_source/provenance.json" <<EOF
 {
   "specSHA256": "1111111111111111111111111111111111111111111111111111111111111111",
-  "schema": "mattercodex.dev/image-provenance-binding/v1",
+  "schema": "kodex.dev/image-provenance-binding/v1",
   "policySHA256": "$policy_sha256",
   "manifestDigest": "$image_digest",
   "immutableBuildSHA256": "2222222222222222222222222222222222222222222222222222222222222222",
@@ -632,7 +632,7 @@ if PATH="$temporary_directory/bin:$PATH" \
 fi
 
 jq -n '{User:"10001:10001",
-  Entrypoint:["/usr/local/bin/mattercodex-init","entrypoint","/usr/local/bin/matter-codex-agent-runner"],
+  Entrypoint:["/usr/local/bin/kodex-init","entrypoint","/usr/local/bin/kodex-agent-runner"],
   Cmd:["runtime-session"]}' >"$temporary_directory/runtime-config.json"
 sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
   validate-runtime-config "$temporary_directory/runtime-config.json"

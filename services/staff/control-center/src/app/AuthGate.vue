@@ -8,7 +8,9 @@ const session = useSessionStore();
 <template>
   <main class="auth-gate">
     <section class="auth-card">
-      <div class="brand-mark" aria-hidden="true">M</div>
+      <div class="brand-mark" aria-hidden="true">
+        <img src="/logo.png" alt="" />
+      </div>
       <h1>{{ $t("auth.title") }}</h1>
       <p>{{ $t("auth.description") }}</p>
       <p v-if="session.phase === 'checking'" role="status">

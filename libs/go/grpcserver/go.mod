@@ -1,4 +1,4 @@
-module github.com/codex-k8s/matter-codex/libs/go/grpcserver
+module github.com/codex-k8s/kodex/libs/go/grpcserver
 
 go 1.26.6
 

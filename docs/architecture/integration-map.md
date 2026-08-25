@@ -42,7 +42,7 @@ External token, kubeconfig, provider credential, registry credential и
 - изменение сделки CRM;
 - финансовая операция;
 - изменение промышленного кластера Kubernetes;
-- изменение настроек MatterCodex.
+- изменение настроек Kodex.
 
 ## Материализация MCP в runtime
 
@@ -69,7 +69,7 @@ MCP, версии capabilities/grants и bounded policy. Provider adapter обя
 Версионируемый пакет YAML содержит:
 
 ```yaml
-apiVersion: mattercodex.io/v1alpha1
+apiVersion: kodex.io/v1alpha1
 kind: IntegrationDefinition
 metadata:
   name: example-crm
@@ -105,7 +105,7 @@ Control Center независимо от interaction adapters.
 
 Provider clients role runtime и typed adapters `integration-gateway`, которым
 нужен изменяемый SaaS address set, используют
-`egress-gateway.mattercodex-system.svc.cluster.local:8080` как HTTP proxy.
+`egress-gateway.kodex-system.svc.cluster.local:8080` как HTTP proxy.
 Этот же exact URL поддерживает только bodyless `GET /readyz` без query для
 совместимости management readiness: `204` требует фактически ACTIVE policy и
 validated resolver; `503` означает закрытый отказ. Technical readback остаётся

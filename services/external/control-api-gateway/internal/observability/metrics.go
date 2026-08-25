@@ -67,19 +67,19 @@ func Route(path string) string {
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 	metrics := &Metrics{
 		httpRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "mattercodex", Subsystem: "control_api_gateway", Name: "http_requests_total",
+			Namespace: "kodex", Subsystem: "control_api_gateway", Name: "http_requests_total",
 			Help: "Total number of completed control API HTTP requests.",
 		}, []string{"route", "status"}),
 		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "mattercodex", Subsystem: "control_api_gateway", Name: "http_request_duration_seconds",
+			Namespace: "kodex", Subsystem: "control_api_gateway", Name: "http_request_duration_seconds",
 			Help: "Duration of completed control API HTTP requests in seconds.", Buckets: prometheus.DefBuckets,
 		}, []string{"route"}),
 		websockets: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: "mattercodex", Subsystem: "control_api_gateway", Name: "websocket_connections",
+			Namespace: "kodex", Subsystem: "control_api_gateway", Name: "websocket_connections",
 			Help: "Current bounded control API WebSocket connections.",
 		}, []string{"state"}),
 		snapshots: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "mattercodex", Subsystem: "control_api_gateway", Name: "websocket_snapshots_total",
+			Namespace: "kodex", Subsystem: "control_api_gateway", Name: "websocket_snapshots_total",
 			Help: "Total number of control API WebSocket snapshot outcomes.",
 		}, []string{"channel", "outcome"}),
 	}

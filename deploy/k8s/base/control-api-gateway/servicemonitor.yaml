@@ -5,6 +5,6 @@ metadata:
   labels: {app.kubernetes.io/name: control-api-gateway}
 spec:
   selector: {matchLabels: {app.kubernetes.io/name: control-api-gateway}}
-  namespaceSelector: {matchNames: [mattercodex-system]}
+  namespaceSelector: {matchNames: [kodex-system]}
   endpoints:
     - {port: metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}

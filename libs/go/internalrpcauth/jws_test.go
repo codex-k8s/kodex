@@ -16,7 +16,7 @@ import (
 func TestSignAndVerifyCanonicalJSON(t *testing.T) {
 	key := testJWK(t, "signer-g1")
 	expect := ProtectedHeaderExpectation{
-		Type:  "mattercodex-internal-rpc-authorization-context+jws",
+		Type:  "kodex-internal-rpc-authorization-context+jws",
 		KeyID: key.KeyID,
 	}
 	compact, err := SignCanonicalJSON(

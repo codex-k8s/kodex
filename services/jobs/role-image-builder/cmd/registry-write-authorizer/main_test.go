@@ -50,7 +50,7 @@ func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T
 		}
 	}
 	for _, request := range []struct{ commonName, method, path string }{
-		{"mattercodex-image-signer", http.MethodPut, "/v2/evidence/role-image-admission/manifests/latest"},
+		{"kodex-image-signer", http.MethodPut, "/v2/evidence/role-image-admission/manifests/latest"},
 		{"image-promotion", http.MethodPut, "/v2/evidence/role-image-admission/manifests/latest"},
 		{"image-admission", http.MethodDelete, "/v2/evidence/role-image-admission/manifests/sha256:abc"},
 		{"image-admission", http.MethodPut, "/v2/staging/role-images/manifests/latest"},
@@ -81,7 +81,7 @@ func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 		[]byte("probe-user:probe-password"),
 	)
 	if !authorizedEvidenceCredentialWithReader(
-		"mattercodex-image-registry-evidence-probe",
+		"kodex-image-registry-evidence-probe",
 		authorization,
 		reader,
 	) {
@@ -91,7 +91,7 @@ func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 		"", "basic " + strings.TrimPrefix(authorization, "Basic "), authorization + "x",
 	} {
 		if authorizedEvidenceCredentialWithReader(
-			"mattercodex-image-registry-evidence-probe",
+			"kodex-image-registry-evidence-probe",
 			invalid,
 			reader,
 		) {

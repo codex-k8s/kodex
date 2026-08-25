@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-manifest-trust-bundle.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authority-manifest-trust-bundle.schema.json",
   "title": "Подписанный набор authority snapshot manifest signers",
   "type": "object",
   "additionalProperties": false,
@@ -32,7 +32,7 @@
       "const": "AUTHORITY_SNAPSHOT_MANIFEST_VERIFICATION"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority:manifest-bundle"
+      "const": "urn:kodex:internal-rpc-authority:manifest-bundle"
     },
     "bundle_revision": {
       "$ref": "#/$defs/revision"

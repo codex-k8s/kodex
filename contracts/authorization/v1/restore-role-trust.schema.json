@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/restore-role-trust.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/restore-role-trust.schema.json",
   "title": "Проверяемый trust snapshot signer ключей restore role credential",
   "type": "object",
   "additionalProperties": false,
@@ -23,10 +23,10 @@
       "const": 1
     },
     "iss": {
-      "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+      "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+      "const": "urn:kodex:internal-rpc-authority-restore-controller"
     },
     "source_revision": {
       "$ref": "#/$defs/positiveRevision"

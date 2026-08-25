@@ -56,16 +56,16 @@ final_render="$temporary_directory/final.yaml"
 
 kubectl kustomize "$overlay" >"$raw_render"
 
-registry_host='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000'
-scheduler_placeholder="$registry_host/mattercodex/automation-scheduler@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-scheduler_replacement="$registry_pull_host/mattercodex/automation-scheduler@$scheduler_digest"
+registry_host='kodex-image-registry.kodex-system.svc.cluster.local:5000'
+scheduler_placeholder="$registry_host/kodex/automation-scheduler@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+scheduler_replacement="$registry_pull_host/kodex/automation-scheduler@$scheduler_digest"
 if [[ $(grep -F -c "$scheduler_placeholder" "$raw_render" || true) -ne 1 ]]; then
   echo "canonical render does not contain exactly one automation-scheduler image input" >&2
   exit 1
 fi
 
-authority_placeholder='ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-authority_replacement="$registry_pull_host/mattercodex/internal-rpc-authority@$authority_digest"
+authority_placeholder='ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+authority_replacement="$registry_pull_host/kodex/internal-rpc-authority@$authority_digest"
 if [[ $(grep -F -c "$authority_placeholder" "$raw_render" || true) -ne 2 ]]; then
   echo "canonical render does not contain exactly two authority image inputs" >&2
   exit 1

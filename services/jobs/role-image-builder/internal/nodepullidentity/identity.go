@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const dnsRoot = "mattercodex-node-pull"
+const dnsRoot = "kodex-node-pull"
 
 func CommonName(nodeName string, generation uint64) string {
 	nodeHash := sha256.Sum256([]byte(nodeName))

@@ -22,7 +22,7 @@ COPY --from=regctl --chmod=0555 /regctl /usr/local/bin/regctl
 RUN for tool in base64 cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
-LABEL org.opencontainers.image.title="MatterCodex image admission tools" \
-      org.opencontainers.image.source="https://github.com/codex-k8s/matter-codex" \
+LABEL org.opencontainers.image.title="Kodex image admission tools" \
+      org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
       org.opencontainers.image.revision="$SOURCE_SHA"
 USER 10001:10001

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-proof-trust.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authority-proof-trust.schema.json",
   "title": "Доверие к issuer authority proof",
   "type": "object",
   "additionalProperties": false,
@@ -164,7 +164,7 @@
             "type": "string",
             "minLength": 32,
             "maxLength": 160,
-            "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+            "pattern": "^urn:kodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
           }
         },
         "not_before": {

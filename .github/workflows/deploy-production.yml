@@ -1,4 +1,4 @@
-name: Render exact MatterCodex release
+name: Render exact Kodex release
 
 on:
   workflow_dispatch:
@@ -30,12 +30,12 @@ permissions:
   deployments: read
 
 concurrency:
-  group: mattercodex-production-render
+  group: kodex-production-render
   cancel-in-progress: false
 
 jobs:
   render:
-    runs-on: mattercodex-deploy
+    runs-on: kodex-deploy
     timeout-minutes: 20
     environment: production
     steps:
@@ -52,7 +52,7 @@ jobs:
       - name: Checkout exact owner-authorized source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
+          ref: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
       - name: Verify release provenance
@@ -61,8 +61,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           BUILD_RUN_ID: ${{ inputs.build_run_id }}
-          WORKFLOW_SHA: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
-          OWNER_ACTOR_ID: ${{ vars.MATTERCODEX_DEPLOY_OWNER_ACTOR_ID }}
+          WORKFLOW_SHA: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
+          OWNER_ACTOR_ID: ${{ vars.KODEX_DEPLOY_OWNER_ACTOR_ID }}
         run: |
           test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
           tools/release/verify-github-owner-gate.sh \
@@ -93,26 +93,26 @@ jobs:
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
-          PUBLIC_HOST: ${{ vars.MATTERCODEX_PUBLIC_HOST }}
-          PUBLIC_ORIGIN: ${{ vars.MATTERCODEX_PUBLIC_ORIGIN }}
-          OIDC_ISSUER: ${{ vars.MATTERCODEX_OIDC_ISSUER }}
-          OIDC_JWKS_URL: ${{ vars.MATTERCODEX_OIDC_JWKS_URL }}
-          OIDC_CONNECT_ADDRESS: ${{ vars.MATTERCODEX_OIDC_CONNECT_ADDRESS }}
-          OIDC_TLS_SERVER_NAME: ${{ vars.MATTERCODEX_OIDC_TLS_SERVER_NAME }}
-          PROMOTED_PULL_HOST: ${{ vars.MATTERCODEX_PROMOTED_PULL_HOST }}
-          KUBERNETES_API_SERVICE_CIDR: ${{ vars.MATTERCODEX_KUBERNETES_API_SERVICE_CIDR }}
-          KUBERNETES_API_ENDPOINT_CIDRS: ${{ vars.MATTERCODEX_KUBERNETES_API_ENDPOINT_CIDRS }}
-          KUBERNETES_API_ENDPOINT_PORTS: ${{ vars.MATTERCODEX_KUBERNETES_API_ENDPOINT_PORTS }}
-          INGRESS_CLASS: ${{ vars.MATTERCODEX_INGRESS_CLASS }}
-          CLUSTER_ISSUER: ${{ vars.MATTERCODEX_CLUSTER_ISSUER }}
-          INGRESS_NAMESPACE: ${{ vars.MATTERCODEX_INGRESS_NAMESPACE }}
-          INGRESS_POD_NAME: ${{ vars.MATTERCODEX_INGRESS_POD_NAME }}
-          OIDC_NAMESPACE: ${{ vars.MATTERCODEX_OIDC_NAMESPACE }}
-          OIDC_POD_NAME: ${{ vars.MATTERCODEX_OIDC_POD_NAME }}
-          OIDC_POD_COMPONENT: ${{ vars.MATTERCODEX_OIDC_POD_COMPONENT }}
-          OIDC_TARGET_PORT: ${{ vars.MATTERCODEX_OIDC_TARGET_PORT }}
-          DISABLE_OBSERVABILITY: ${{ vars.MATTERCODEX_DISABLE_OBSERVABILITY }}
-          MATTERMOST_HOST: ${{ vars.MATTERCODEX_MATTERMOST_HOST }}
+          PUBLIC_HOST: ${{ vars.KODEX_PUBLIC_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.KODEX_PUBLIC_ORIGIN }}
+          OIDC_ISSUER: ${{ vars.KODEX_OIDC_ISSUER }}
+          OIDC_JWKS_URL: ${{ vars.KODEX_OIDC_JWKS_URL }}
+          OIDC_CONNECT_ADDRESS: ${{ vars.KODEX_OIDC_CONNECT_ADDRESS }}
+          OIDC_TLS_SERVER_NAME: ${{ vars.KODEX_OIDC_TLS_SERVER_NAME }}
+          PROMOTED_PULL_HOST: ${{ vars.KODEX_PROMOTED_PULL_HOST }}
+          KUBERNETES_API_SERVICE_CIDR: ${{ vars.KODEX_KUBERNETES_API_SERVICE_CIDR }}
+          KUBERNETES_API_ENDPOINT_CIDRS: ${{ vars.KODEX_KUBERNETES_API_ENDPOINT_CIDRS }}
+          KUBERNETES_API_ENDPOINT_PORTS: ${{ vars.KODEX_KUBERNETES_API_ENDPOINT_PORTS }}
+          INGRESS_CLASS: ${{ vars.KODEX_INGRESS_CLASS }}
+          CLUSTER_ISSUER: ${{ vars.KODEX_CLUSTER_ISSUER }}
+          INGRESS_NAMESPACE: ${{ vars.KODEX_INGRESS_NAMESPACE }}
+          INGRESS_POD_NAME: ${{ vars.KODEX_INGRESS_POD_NAME }}
+          OIDC_NAMESPACE: ${{ vars.KODEX_OIDC_NAMESPACE }}
+          OIDC_POD_NAME: ${{ vars.KODEX_OIDC_POD_NAME }}
+          OIDC_POD_COMPONENT: ${{ vars.KODEX_OIDC_POD_COMPONENT }}
+          OIDC_TARGET_PORT: ${{ vars.KODEX_OIDC_TARGET_PORT }}
+          DISABLE_OBSERVABILITY: ${{ vars.KODEX_DISABLE_OBSERVABILITY }}
+          MATTERMOST_HOST: ${{ vars.KODEX_MATTERMOST_HOST }}
           DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
         run: |
           test "$(<release-artifact/release-lock.sha256)" = "$LOCK_SHA256"

@@ -43,7 +43,7 @@ updated: 2026-08-23
 - затронутые документы: `AGENT-DOC-001`, `GUIDE-DOC-004`, #179;
 - статус: `закрыто`;
 - выбранный вариант: корневой manager и не более двух дочерних manager unit;
-  director не участвует в активной policy MatterCodex;
+  director не участвует в активной policy Kodex;
 - что синхронизировано: delivery guide, prompts и policy migration.
 
 Owner-approved web-first reset заменил прежние Mattermost-first и cutover

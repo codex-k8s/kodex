@@ -1,7 +1,7 @@
 {
-  "name": "MatterCodex Control Center",
-  "short_name": "MatterCodex",
-  "description": "Служебный интерфейс владельца MatterCodex",
+  "name": "Kodex Control Center",
+  "short_name": "Kodex",
+  "description": "Служебный интерфейс владельца Kodex",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f6f6",

@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
-	platformservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/platform"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/systemassistant"
+	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -55,9 +55,9 @@ var (
 )
 
 func TestBootstrapComponent(t *testing.T) {
-	dsn := os.Getenv("MATTERCODEX_CONTROL_PLANE_TEST_DSN")
+	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
 	if dsn == "" {
-		t.Skip("MATTERCODEX_CONTROL_PLANE_TEST_DSN is not configured")
+		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -82,8 +82,8 @@ func TestBootstrapComponent(t *testing.T) {
 		PolicyRevision: 1, RoleRuntimeContractRevision: 1,
 		PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
 		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/mattercodex/staging", PromotedRepository: "registry.invalid/mattercodex/roles",
-		DefaultImageReference: "registry.invalid/mattercodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
+		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
+		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
 	}); err != nil {
 		t.Fatalf("configure role images: %v", err)
 	}
@@ -189,11 +189,11 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
 	}, "control-api-gateway")
 	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
 	interactionWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.deliveries.claim",
 	}, "interaction-gateway")
 	service, err := platformservice.New(repository)
@@ -691,7 +691,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("make schedule due: %v", err)
 	}
 	schedulerClaim := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "automation-scheduler", Operation: "platform.runtime.schedules.claim",
 	}, "automation-scheduler")
 	claims, err := service.ClaimDueSchedules(ctx, schedulerClaim, "scheduler-component", 1)
@@ -710,7 +710,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("change schedule after claim: %v", err)
 	}
 	schedulerMaterialize := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "automation-scheduler", Operation: "platform.runtime.schedules.materialize",
 	}, "automation-scheduler")
 	_, err = service.Execute(ctx, command.Command{
@@ -932,7 +932,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		CallerWorkload: "control-api-gateway", Operation: "platform.owner_gates.resolve",
 	}, "control-api-gateway")
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
 	service, err := platformservice.New(repository)
@@ -1055,7 +1055,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
 	}, "control-api-gateway")
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
 	service, err := platformservice.New(repository)
@@ -1272,11 +1272,11 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
 	}, "control-api-gateway")
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
 	}, "runtime-controller")
 	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
 	}, "runtime-controller")
 	service, err := platformservice.New(repository)
@@ -1497,11 +1497,11 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add",
 	}, "control-api-gateway")
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.plan.propose",
 	}, "runtime-controller")
 	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "mattercodex-system-subject", ExternalTenantID: "mattercodex-installation",
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
 	}, "runtime-controller")
 	service, err := platformservice.New(repository)

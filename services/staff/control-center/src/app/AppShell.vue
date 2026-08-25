@@ -244,9 +244,11 @@ onBeforeUnmount(() => {
       >
         ☰
       </button>
-      <RouterLink class="brand" to="/" aria-label="MatterCodex">
-        <span class="brand-mark" aria-hidden="true">M</span
-        ><span>MatterCodex</span>
+      <RouterLink class="brand" to="/" aria-label="Kodex">
+        <span class="brand-mark" aria-hidden="true">
+          <img src="/logo.png" alt="" />
+        </span
+        ><span>Kodex</span>
       </RouterLink>
       <form
         class="global-search"

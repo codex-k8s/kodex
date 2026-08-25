@@ -7,7 +7,7 @@ func TestApplyWorkloadProfileRejectsForeignVaultRole(t *testing.T) {
 		Mode:             ModeIssuer,
 		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
-		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-control-api-gateway",
 	}
 	if err := applyWorkloadProfile(&config); err == nil {
@@ -20,14 +20,14 @@ func TestApplyWorkloadProfileBindsInteractionGatewayPaths(t *testing.T) {
 		Mode:             ModeIssuer,
 		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "interaction-gateway",
-		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
 		VaultAuthRole:    "internal-rpc-authority-interaction-gateway",
 	}
 	if err := applyWorkloadProfile(&config); err != nil {
 		t.Fatalf("apply interaction gateway profile: %v", err)
 	}
-	if config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential" ||
-		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack" {
+	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential" ||
+		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack" {
 		t.Fatal("interaction gateway Vault paths are not pinned")
 	}
 }
@@ -37,14 +37,14 @@ func TestApplyWorkloadProfileBindsIntegrationGatewayPaths(t *testing.T) {
 		Mode:             ModeIssuer,
 		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "integration-gateway",
-		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
 		VaultAuthRole:    "internal-rpc-authority-integration-gateway",
 	}
 	if err := applyWorkloadProfile(&config); err != nil {
 		t.Fatalf("apply integration gateway profile: %v", err)
 	}
-	if config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/readback-credential" ||
-		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-ack" {
+	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/readback-credential" ||
+		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/restore-ack" {
 		t.Fatal("integration gateway Vault paths are not pinned")
 	}
 }
@@ -54,16 +54,16 @@ func TestApplyWorkloadProfileBindsAutomationSchedulerPaths(t *testing.T) {
 		Mode:             ModeIssuer,
 		SecretBackend:    string(secretBackendVault),
 		WorkloadID:       "automation-scheduler",
-		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
 		VaultAuthRole:    "internal-rpc-authority-automation-scheduler",
 	}
 	if err := applyWorkloadProfile(&config); err != nil {
 		t.Fatalf("apply automation scheduler profile: %v", err)
 	}
-	if config.ReadbackCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential" ||
-		config.ReadbackPossessionVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession" ||
-		config.RestoreRoleCredentialVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential" ||
-		config.RestoreACKVaultPath != "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack" {
+	if config.ReadbackCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential" ||
+		config.ReadbackPossessionVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession" ||
+		config.RestoreRoleCredentialVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential" ||
+		config.RestoreACKVaultPath != "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack" {
 		t.Fatal("automation scheduler Vault paths are not pinned")
 	}
 }
@@ -84,12 +84,12 @@ func TestApplyWorkloadProfileBindsReleaseWorkloads(t *testing.T) {
 			name:                      "runtime controller issuer",
 			mode:                      ModeIssuer,
 			workloadID:                "runtime-controller",
-			spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+			spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
 			vaultRole:                 "internal-rpc-authority-runtime-controller",
-			readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
-			readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
-			restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
-			restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
+			readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
+			readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
+			restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
+			restoreACKPath:            "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
 		},
 	}
 
@@ -131,7 +131,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeVerifier,
 				WorkloadID:       "integration-gateway",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
 				VaultAuthRole:    "internal-rpc-authority-integration-gateway",
 			},
 		},
@@ -140,7 +140,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeIssuer,
 				WorkloadID:       "legacy-data-migration",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/legacy-data-migration",
 				VaultAuthRole:    "internal-rpc-authority-legacy-data-migration",
 			},
 		},
@@ -149,7 +149,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeIssuer,
 				WorkloadID:       "runtime-s3-restore-exchanger",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-s3-restore-exchanger",
 				VaultAuthRole:    "internal-rpc-authority-runtime-s3-restore-exchanger",
 			},
 		},
@@ -158,7 +158,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeIssuer,
 				WorkloadID:       "runtime-controller",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
 				VaultAuthRole:    "internal-rpc-authority-runtime-restore-effect",
 			},
 		},
@@ -167,7 +167,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeVerifier,
 				WorkloadID:       "runtime-controller",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
 				VaultAuthRole:    "internal-rpc-authority-runtime-controller",
 			},
 		},
@@ -176,7 +176,7 @@ func TestApplyWorkloadProfileRejectsUnknownReleaseBindings(t *testing.T) {
 			config: Config{
 				Mode:             ModeIssuer,
 				WorkloadID:       "runtime-unknown",
-				WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-unknown",
+				WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/runtime-unknown",
 				VaultAuthRole:    "internal-rpc-authority-runtime-unknown",
 			},
 		},

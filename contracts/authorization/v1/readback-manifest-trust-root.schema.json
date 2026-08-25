@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-manifest-trust-root.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/readback-manifest-trust-root.schema.json",
   "title": "Независимый корень доверия manifest signer normal-readback",
   "type": "object",
   "additionalProperties": false,
@@ -29,10 +29,10 @@
       "const": "NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION"
     },
     "iss": {
-      "const": "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-readback-trust-root-controller"
+      "const": "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-readback-trust-root-controller"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root"
+      "const": "urn:kodex:internal-rpc-authority-readback-attestor:manifest-root"
     },
     "bundle_revision": {
       "$ref": "#/$defs/positiveRevision"

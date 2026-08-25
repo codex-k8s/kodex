@@ -73,7 +73,7 @@ environment или build context.
 Builder обращается к BuildKit через client-only mTLS и публикует только в
 staging. Installation block исполняется в удалённом worker без credential
 files, secret mounts и builder Pod filesystem. После недоверенного `RUN`
-защищённые `mattercodex-init` и `matter-codex-agent-runner` копируются из exact
+защищённые `kodex-init` и `kodex-agent-runner` копируются из exact
 trusted base. Output фиксирует exact `USER`, entrypoint/commands, runtime ABI
 revision/digest и labels. Отдельный admission owner связывает exact
 source/build/image digest с BuildKit provenance, SBOM digest, версией и

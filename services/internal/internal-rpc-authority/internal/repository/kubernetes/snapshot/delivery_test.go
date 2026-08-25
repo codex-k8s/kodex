@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	model "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	authoritysnapshot "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
+	model "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	authoritysnapshot "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -30,7 +30,7 @@ func TestPublishAcceptsFullPublisherSnapshot(t *testing.T) {
 	tokenFile := writeTokenFile(t)
 	delivery := &Delivery{
 		config: Config{
-			Namespace:  "mattercodex-system",
+			Namespace:  "kodex-system",
 			SecretName: "internal-rpc-authority-snapshot",
 			TokenFile:  tokenFile,
 		},
@@ -76,8 +76,8 @@ func TestReadAcceptsFullPublisherSnapshot(t *testing.T) {
 	compact := strings.Repeat("a", 9<<10)
 	envelope := validEnvelope()
 	envelope.Metadata.Annotations = map[string]string{
-		"mattercodex.dev/source-revision":      "1",
-		"mattercodex.dev/source-digest-sha256": strings.Repeat("b", 64),
+		"kodex.dev/source-revision":      "1",
+		"kodex.dev/source-digest-sha256": strings.Repeat("b", 64),
 	}
 	envelope.Data = map[string]string{
 		"snapshot.jws": base64.StdEncoding.EncodeToString([]byte(compact)),
@@ -85,7 +85,7 @@ func TestReadAcceptsFullPublisherSnapshot(t *testing.T) {
 	tokenFile := writeTokenFile(t)
 	delivery := &Delivery{
 		config: Config{
-			Namespace:  "mattercodex-system",
+			Namespace:  "kodex-system",
 			SecretName: "internal-rpc-authority-snapshot",
 			TokenFile:  tokenFile,
 		},
@@ -128,7 +128,7 @@ func validEnvelope() secretEnvelope {
 		Data:       map[string]string{},
 	}
 	envelope.Metadata.Name = "internal-rpc-authority-snapshot"
-	envelope.Metadata.Namespace = "mattercodex-system"
+	envelope.Metadata.Namespace = "kodex-system"
 	envelope.Metadata.UID = "snapshot-uid"
 	envelope.Metadata.ResourceVersion = "1"
 	envelope.Metadata.Annotations = map[string]string{}

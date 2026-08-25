@@ -44,7 +44,7 @@ type Rollout struct {
 func New(config Config) (*Rollout, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		len(config.Deployments) != 2 ||
 		config.Deployments[0] != "internal-rpc-authority-publisher" ||
 		config.Deployments[1] != "internal-rpc-authority-readback-attestor" ||
@@ -122,16 +122,16 @@ func (rollout *Rollout) apply(
 		body, err := json.Marshal(map[string]any{
 			"metadata": map[string]any{
 				"annotations": map[string]string{
-					"mattercodex.dev/credential-rollout-request-id": requestID,
+					"kodex.dev/credential-rollout-request-id": requestID,
 				},
 			},
 			"spec": map[string]any{
 				"template": map[string]any{
 					"metadata": map[string]any{
 						"annotations": map[string]string{
-							"mattercodex.dev/credential-rollout-request-id":    requestID,
-							"mattercodex.dev/credential-rollout-digest-sha256": canonicalDigest,
-							"mattercodex.dev/credential-rollout-phase":         phase,
+							"kodex.dev/credential-rollout-request-id":    requestID,
+							"kodex.dev/credential-rollout-digest-sha256": canonicalDigest,
+							"kodex.dev/credential-rollout-phase":         phase,
 						},
 					},
 				},

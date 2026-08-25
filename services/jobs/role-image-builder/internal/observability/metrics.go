@@ -7,7 +7,7 @@ type Metrics struct{ operations *prometheus.CounterVec }
 
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 	operations := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "mattercodex", Subsystem: "role_image_builder", Name: "operations_total",
+		Namespace: "kodex", Subsystem: "role_image_builder", Name: "operations_total",
 		Help: "Total number of bounded role image build lifecycle operations.",
 	}, []string{"operation", "outcome"})
 	if err := register(operations); err != nil {

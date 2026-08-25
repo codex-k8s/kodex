@@ -65,7 +65,7 @@ signature, конфликт revision, expiry или истечение grace н�
 - `master/admin` Keycloak является явной cluster-admin authority для Headlamp.
   Назначение и отзыв этой роли рассматриваются как изменение Kubernetes
   cluster-admin доступа и проверяются readback;
-- Control Center, Grafana и Vault UI требуют `mattercodex-owner`, но не выдают
+- Control Center, Grafana и Vault UI требуют `kodex-owner`, но не выдают
   Kubernetes authority. Прямой публичный backend path в обход OAuth2 Proxy
   запрещён.
 

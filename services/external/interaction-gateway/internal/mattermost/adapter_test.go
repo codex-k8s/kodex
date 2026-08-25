@@ -6,16 +6,16 @@ import (
 	"testing/fstest"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestEmptyMattermostCatalogKeepsAdapterConstructible(t *testing.T) {
 	t.Parallel()
 	adapter, err := New(Config{
-		CredentialDirectory: "/var/run/secrets/mattercodex/integration-connections",
-		ProxyURL:            "http://egress-gateway.mattercodex-system.svc.cluster.local:8080",
+		CredentialDirectory: "/var/run/secrets/kodex/integration-connections",
+		ProxyURL:            "http://egress-gateway.kodex-system.svc.cluster.local:8080",
 		Timeout:             10 * time.Second,
 	}, localizerForTest(t))
 	if err != nil || adapter == nil {

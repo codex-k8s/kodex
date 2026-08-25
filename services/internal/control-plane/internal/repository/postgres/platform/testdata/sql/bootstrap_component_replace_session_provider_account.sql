@@ -6,7 +6,7 @@ WITH candidate AS (
            'affinity-test', 'Affinity test', 'PENDING_AUTHORIZATION', false, subject.id
     FROM control_plane.organizations organization
     JOIN control_plane.subjects subject ON subject.organization_id = organization.id
-    WHERE subject.issuer = 'mattercodex-system'
+    WHERE subject.issuer = 'kodex-system'
     RETURNING id
 )
 UPDATE control_plane.sessions

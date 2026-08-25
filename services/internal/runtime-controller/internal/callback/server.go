@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
-	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/workload"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -257,13 +257,13 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 	}
 	writer.Header().Set("Content-Type", expected.MediaType)
 	writer.Header().Set("Content-Length", strconv.FormatInt(expected.SizeBytes, 10))
-	writer.Header().Set("X-MatterCodex-Artifact-Digest", expected.Digest)
+	writer.Header().Set("X-Kodex-Artifact-Digest", expected.Digest)
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(content)
 }
 
 func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request) {
-	revisionRef := request.Header.Get("X-MatterCodex-Runtime-Revision")
+	revisionRef := request.Header.Get("X-Kodex-Runtime-Revision")
 	token, ok := bearer(request)
 	if !ok {
 		http.NotFound(writer, request)
@@ -360,7 +360,7 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 	}
 	switch rpc.Method {
 	case "initialize":
-		server.writeMCPResult(writer, rpc.ID, map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "mattercodex-runtime-tools", "version": "1"}})
+		server.writeMCPResult(writer, rpc.ID, map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "kodex-runtime-tools", "version": "1"}})
 	case "tools/list":
 		server.writeMCPResult(writer, rpc.ID, map[string]any{"tools": tools(input)})
 	case "tools/call":

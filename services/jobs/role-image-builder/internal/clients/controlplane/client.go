@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	sharedclient "github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	sharedclient "github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

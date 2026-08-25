@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	readbackManifestRootType    = "mattercodex-internal-rpc-readback-manifest-root+jws"
-	readbackCredentialTrustType = "mattercodex-internal-rpc-readback-credential-trust+jws"
+	readbackManifestRootType    = "kodex-internal-rpc-readback-manifest-root+jws"
+	readbackCredentialTrustType = "kodex-internal-rpc-readback-credential-trust+jws"
 )
 
 // ReadbackTrustOptions задаёт независимую цепочку доверия проверки выдачи.
@@ -149,7 +149,7 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if root.Version != model.ContractVersion ||
 		root.RootID != "internal-rpc-authority-readback-manifest-root-v1" ||
 		root.Purpose != "NORMAL_READBACK_ROOT_VERIFICATION" ||
-		root.Audience != "urn:mattercodex:internal-rpc-authority-readback-attestor:root-verification" ||
+		root.Audience != "urn:kodex:internal-rpc-authority-readback-attestor:root-verification" ||
 		root.RootGeneration == 0 ||
 		root.SourceRevision == 0 ||
 		root.KeyID != rootKey.KeyID ||
@@ -183,8 +183,8 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 	if bundle.Version != model.ContractVersion ||
 		bundle.RootID != root.RootID ||
 		bundle.Purpose != "NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION" ||
-		bundle.Issuer != "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-readback-trust-root-controller" ||
-		bundle.Audience != "urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root" ||
+		bundle.Issuer != "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-readback-trust-root-controller" ||
+		bundle.Audience != "urn:kodex:internal-rpc-authority-readback-attestor:manifest-root" ||
 		bundle.BundleRevision == 0 ||
 		!snapshotDigestPattern.MatchString(bundle.BundleDigest) ||
 		!now.Before(time.Unix(bundle.ValidUntil, 0)) ||
@@ -255,8 +255,8 @@ func LoadReadbackTrust(options ReadbackTrustOptions) (
 		return nil, ReadbackTrustMetadata{}, fmt.Errorf("decode readback credential trust snapshot: %w", err)
 	}
 	if trust.Version != model.ContractVersion ||
-		trust.Issuer != "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher" ||
-		trust.Audience != "urn:mattercodex:internal-rpc-authority-readback-attestor" ||
+		trust.Issuer != "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher" ||
+		trust.Audience != "urn:kodex:internal-rpc-authority-readback-attestor" ||
 		trust.RootID != root.RootID ||
 		trust.RootFingerprint != rootThumbprint ||
 		trust.BundleRevision != bundle.BundleRevision ||

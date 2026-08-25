@@ -4,15 +4,15 @@ metadata:
   name: role-image-builder-runtime
 data:
   ROLE_IMAGE_BUILDER_TECHNICAL_LISTEN: ":9090"
-  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TARGET: control-plane.mattercodex-system.svc:8443
-  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.mattercodex-system.svc.cluster.local
+  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TARGET: control-plane.kodex-system.svc:8443
+  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.kodex-system.svc.cluster.local
   ROLE_IMAGE_BUILDER_BUILDKIT_BINARY: /usr/bin/buildctl
-  ROLE_IMAGE_BUILDER_BUILDKIT_ADDRESS: tcp://mattercodex-buildkit.mattercodex-system.svc.cluster.local:1234
-  ROLE_IMAGE_BUILDER_BUILDKIT_TLS_SERVER_NAME: mattercodex-buildkit.mattercodex-system.svc.cluster.local
-  ROLE_IMAGE_BUILDER_WORKSPACE_ROOT: /var/run/mattercodex/work
-  ROLE_IMAGE_BUILDER_INPUT_DOCKER_CONFIG: /var/run/secrets/mattercodex/role-image-builder/input-read/config.json
-  ROLE_IMAGE_BUILDER_FRONTEND_REPOSITORY: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile
-  ROLE_IMAGE_BUILDER_STAGING_REPOSITORY: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
+  ROLE_IMAGE_BUILDER_BUILDKIT_ADDRESS: tcp://kodex-buildkit.kodex-system.svc.cluster.local:1234
+  ROLE_IMAGE_BUILDER_BUILDKIT_TLS_SERVER_NAME: kodex-buildkit.kodex-system.svc.cluster.local
+  ROLE_IMAGE_BUILDER_WORKSPACE_ROOT: /var/run/kodex/work
+  ROLE_IMAGE_BUILDER_INPUT_DOCKER_CONFIG: /var/run/secrets/kodex/role-image-builder/input-read/config.json
+  ROLE_IMAGE_BUILDER_FRONTEND_REPOSITORY: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile
+  ROLE_IMAGE_BUILDER_STAGING_REPOSITORY: kodex-image-registry-push.kodex-system.svc.cluster.local:5001/staging/role-images
   ROLE_IMAGE_BUILDER_EXPECTED_BUILDER_SHA256: 8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4
   ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   ROLE_IMAGE_BUILDER_STARTUP_TIMEOUT: 30s

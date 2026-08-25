@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: mattercodex-nats
+  name: kodex-nats
   labels:
-    app.kubernetes.io/name: mattercodex-nats
+    app.kubernetes.io/name: kodex-nats
     app.kubernetes.io/component: broker
   annotations:
     argocd.argoproj.io/sync-wave: "-8"
 spec:
-  serviceName: mattercodex-nats
+  serviceName: kodex-nats
   replicas: 1
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-nats
+      app.kubernetes.io/name: kodex-nats
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-nats
+        app.kubernetes.io/name: kodex-nats
         app.kubernetes.io/component: broker
     spec:
       automountServiceAccountToken: false
@@ -110,18 +110,18 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: mattercodex-nats-config
+            name: kodex-nats-config
             defaultMode: 0550
         - name: credentials
           secret:
-            secretName: mattercodex-nats-credentials
+            secretName: kodex-nats-credentials
             defaultMode: 0440
         - name: runtime
           emptyDir:
             sizeLimit: 1Mi
         - name: tls
           secret:
-            secretName: mattercodex-nats-tls
+            secretName: kodex-nats-tls
             defaultMode: 0440
   volumeClaimTemplates:
     - metadata:
@@ -135,12 +135,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-nats
+  name: kodex-nats
 spec:
   clusterIP: None
   publishNotReadyAddresses: true
   selector:
-    app.kubernetes.io/name: mattercodex-nats
+    app.kubernetes.io/name: kodex-nats
   ports:
     - name: client-tls
       port: 4222
@@ -157,7 +157,7 @@ metadata:
   name: nats
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-nats
+    app.kubernetes.io/name: kodex-nats
   ports:
     - name: client-tls
       port: 4222

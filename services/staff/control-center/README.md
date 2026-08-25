@@ -1,6 +1,6 @@
 ---
 id: FE-MC-CC-001
-title: Staff Control Center MatterCodex
+title: Staff Control Center Kodex
 type: frontend-guide
 status: approved
 owner: manager
@@ -11,7 +11,7 @@ updated: 2026-08-23
 # Staff Control Center
 
 `services/staff/control-center` — основной production web-интерфейс
-MatterCodex. Через него владелец и участники работают с Проектами,
+Kodex. Через него владелец и участники работают с Проектами,
 ИИ-сотрудниками, Процессами, запусками, решениями человека, файлами,
 автоматизациями, интеграциями, доступом и аудитом. Mattermost, GitHub,
 Kubernetes и другие внешние системы не требуются для core-сценариев.
@@ -111,11 +111,11 @@ npx playwright install chromium
 Создать защищённый owner session state через фактический OIDC login:
 
 ```bash
-export MATTERCODEX_E2E_BASE_URL='https://<disposable-origin>'
-export MATTERCODEX_E2E_OWNER_USERNAME='<disposable-owner-login>'
-export MATTERCODEX_E2E_OWNER_PASSWORD='<read-without-printing>'
-export MATTERCODEX_E2E_STORAGE_STATE="$PWD/.auth/owner.json"
-export MATTERCODEX_E2E_CONFIRM_DISPOSABLE='I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION'
+export KODEX_E2E_BASE_URL='https://<disposable-origin>'
+export KODEX_E2E_OWNER_USERNAME='<disposable-owner-login>'
+export KODEX_E2E_OWNER_PASSWORD='<read-without-printing>'
+export KODEX_E2E_STORAGE_STATE="$PWD/.auth/owner.json"
+export KODEX_E2E_CONFIRM_DISPOSABLE='I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION'
 npm run test:e2e:auth
 ```
 
@@ -126,8 +126,8 @@ npm run test:e2e:auth
 Запустить web-only сценарии на fresh installation без connections:
 
 ```bash
-export MATTERCODEX_E2E_PROFILE='web-only'
-export MATTERCODEX_E2E_RESOURCE_PREFIX='<unique-lowercase-slug>'
+export KODEX_E2E_PROFILE='web-only'
+export KODEX_E2E_RESOURCE_PREFIX='<unique-lowercase-slug>'
 npm run test:e2e
 ```
 
@@ -151,14 +151,14 @@ readback публикации используется отдельный ток
 mode `0600`, не передаётся через env и не выводится в reporter:
 
 ```bash
-export MATTERCODEX_E2E_PROFILE='mattermost'
-export MATTERCODEX_E2E_RESOURCE_PREFIX='<unique-lowercase-slug>'
-export MATTERCODEX_E2E_MATTERMOST_ORIGIN='https://<disposable-mattermost-origin>'
-export MATTERCODEX_E2E_MATTERMOST_TOKEN_FILE='<owner-only-token-file>'
-export MATTERCODEX_E2E_MATTERMOST_TEAM_NAME='<test-team-name>'
-export MATTERCODEX_E2E_MATTERMOST_CHANNEL_NAME='<test-channel-name>'
-export MATTERCODEX_E2E_MATTERMOST_HEALTHY_CONNECTION='<exact-control-center-name>'
-export MATTERCODEX_E2E_MATTERMOST_OUTAGE_CONNECTION='<exact-control-center-name>'
+export KODEX_E2E_PROFILE='mattermost'
+export KODEX_E2E_RESOURCE_PREFIX='<unique-lowercase-slug>'
+export KODEX_E2E_MATTERMOST_ORIGIN='https://<disposable-mattermost-origin>'
+export KODEX_E2E_MATTERMOST_TOKEN_FILE='<owner-only-token-file>'
+export KODEX_E2E_MATTERMOST_TEAM_NAME='<test-team-name>'
+export KODEX_E2E_MATTERMOST_CHANNEL_NAME='<test-channel-name>'
+export KODEX_E2E_MATTERMOST_HEALTHY_CONNECTION='<exact-control-center-name>'
+export KODEX_E2E_MATTERMOST_OUTAGE_CONNECTION='<exact-control-center-name>'
 npm run test:e2e
 ```
 

@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	RunnerInputSchemaV4       = "mattercodex.agent-runner-input.v4"
+	RunnerInputSchemaV4       = "kodex.agent-runner-input.v4"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -149,7 +149,7 @@ func (input RunnerInput) Validate() error {
 		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
-		input.OutboxRoot != "/workspace/.matter-codex/outbox" || input.CodexHome != "/tmp/codex-home" ||
+		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/tmp/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 ||
 		len(input.InputArtifacts) > MaximumInputArtifacts ||
 		len(input.Capabilities) > 256 {

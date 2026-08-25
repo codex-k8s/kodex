@@ -3,7 +3,7 @@ package callback
 func assistantPlanTool() map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose a bounded MatterCodex configuration plan for explicit user approval. This tool never applies the plan.",
+		"description": "Propose a bounded Kodex configuration plan for explicit user approval. This tool never applies the plan.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,

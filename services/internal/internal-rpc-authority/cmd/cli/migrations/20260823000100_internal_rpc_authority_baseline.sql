@@ -1240,7 +1240,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_attestation_challenges
     CONSTRAINT "authority_readback_attestati_semantic_request_digest_sha_check1" CHECK (("semantic_request_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
     CONSTRAINT "authority_readback_attestation_ch_challenge_digest_sha256_check" CHECK (("challenge_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
     CONSTRAINT "authority_readback_attestation_chal_request_digest_sha256_check" CHECK (("request_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
-    CONSTRAINT "authority_readback_attestation_challenges_peer_spiffe_id_check" CHECK (("peer_spiffe_id" ~ '^spiffe://mattercodex[.]local/'::"text"))
+    CONSTRAINT "authority_readback_attestation_challenges_peer_spiffe_id_check" CHECK (("peer_spiffe_id" ~ '^spiffe://kodex[.]local/'::"text"))
 );
 
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_attestation_challenges" FORCE ROW LEVEL SECURITY;
@@ -1264,7 +1264,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_attestation_receipts" 
     "peer_spiffe_id" "text" NOT NULL,
     CONSTRAINT "authority_readback_attestati_semantic_request_digest_sha2_check" CHECK (("semantic_request_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
     CONSTRAINT "authority_readback_attestation_rec_evidence_digest_sha256_check" CHECK (("evidence_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
-    CONSTRAINT "authority_readback_attestation_receipts_peer_spiffe_id_check" CHECK (("peer_spiffe_id" ~ '^spiffe://mattercodex[.]local/'::"text"))
+    CONSTRAINT "authority_readback_attestation_receipts_peer_spiffe_id_check" CHECK (("peer_spiffe_id" ~ '^spiffe://kodex[.]local/'::"text"))
 );
 
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_attestation_receipts" FORCE ROW LEVEL SECURITY;
@@ -1304,7 +1304,7 @@ CREATE TABLE "internal_rpc_authority"."authority_readback_intents" (
     CONSTRAINT "authority_readback_intents_served_state_digest_sha256_check" CHECK (("served_state_digest_sha256" ~ '^[a-f0-9]{64}$'::"text")),
     CONSTRAINT "authority_readback_intents_source_revision_check" CHECK ((("source_revision" >= 1) AND ("source_revision" <= '9007199254740991'::bigint))),
     CONSTRAINT "authority_readback_intents_status_check" CHECK (("status" = ANY (ARRAY['PINNED'::"text", 'ATTESTED'::"text", 'PROMOTED'::"text", 'EXPIRED'::"text"]))),
-    CONSTRAINT "authority_readback_intents_workload_spiffe_id_check" CHECK (("workload_spiffe_id" ~ '^spiffe://mattercodex[.]local/'::"text"))
+    CONSTRAINT "authority_readback_intents_workload_spiffe_id_check" CHECK (("workload_spiffe_id" ~ '^spiffe://kodex[.]local/'::"text"))
 );
 
 ALTER TABLE ONLY "internal_rpc_authority"."authority_readback_intents" FORCE ROW LEVEL SECURITY;

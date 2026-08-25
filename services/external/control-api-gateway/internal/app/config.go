@@ -13,8 +13,8 @@ import (
 
 const (
 	serviceName               = "control-api-gateway"
-	controlPlaneTarget        = "dns:///control-plane.mattercodex-system.svc:8443"
-	controlPlaneTLSServerName = "control-plane.mattercodex-system.svc.cluster.local"
+	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
+	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
 )
 
 type Config struct {
@@ -60,11 +60,11 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		HTTPListen: ":8443", TechnicalListen: ":9090", TLSCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.crt", TLSPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.key",
-		OIDCAudience: "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
-		SessionCurrentKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/session/current.hex", SessionPreviousKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/session/previous.hex", SessionTTL: 15 * time.Minute,
-		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName, ControlPlaneCAFile: "/var/run/config/mattercodex/control-api-gateway/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.key",
-		NATSURL: "tls://nats.mattercodex-system.svc:4222", NATSTLSServerName: "nats.mattercodex-system.svc.cluster.local", NATSCAFile: "/var/run/config/mattercodex/control-api-gateway/nats/ca.pem", NATSCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/nats-client/tls.crt", NATSPrivateKeyFile: "/var/run/secrets/mattercodex/control-api-gateway/nats-client/tls.key", NATSCredentialsFile: "/var/run/secrets/mattercodex/control-api-gateway/nats/user.creds",
+		HTTPListen: ":8443", TechnicalListen: ":9090", TLSCertificateFile: "/var/run/secrets/kodex/control-api-gateway/public-tls/tls.crt", TLSPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/public-tls/tls.key",
+		OIDCAudience: "kodex-control-api", OIDCCAFile: "/var/run/config/kodex/control-api-gateway/oidc/ca.pem",
+		SessionCurrentKeyFile: "/var/run/secrets/kodex/control-api-gateway/session/current.hex", SessionPreviousKeyFile: "/var/run/secrets/kodex/control-api-gateway/session/previous.hex", SessionTTL: 15 * time.Minute,
+		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName, ControlPlaneCAFile: "/var/run/config/kodex/control-api-gateway/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.key",
+		NATSURL: "tls://nats.kodex-system.svc:4222", NATSTLSServerName: "nats.kodex-system.svc.cluster.local", NATSCAFile: "/var/run/config/kodex/control-api-gateway/nats/ca.pem", NATSCertificateFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.crt", NATSPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.key", NATSCredentialsFile: "/var/run/secrets/kodex/control-api-gateway/nats/user.creds",
 		RequestTimeout: 15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second, ShutdownTimeout: 20 * time.Second, ReadinessInterval: 10 * time.Second, RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000, PreAuthConcurrency: 32, MaximumHTTPConcurrency: 256, PerSubjectHTTPConcurrency: 16, MaximumWebSocketConcurrency: 128, PerSubjectWebSocketConcurrency: 4,
 	}
 	if err := env.Parse(&config); err != nil {

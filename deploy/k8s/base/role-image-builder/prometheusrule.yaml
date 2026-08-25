@@ -8,16 +8,16 @@ spec:
     - name: role-image-builder
       rules:
         - alert: RoleImageBuilderUnavailable
-          expr: absent(mattercodex_role_image_builder_readiness{ready="true"}) or sum(mattercodex_role_image_builder_readiness{ready="true"}) < 1
+          expr: absent(kodex_role_image_builder_readiness{ready="true"}) or sum(kodex_role_image_builder_readiness{ready="true"}) < 1
           for: 10m
           labels: {severity: warning}
           annotations:
             summary: Role image builder is unavailable
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/role-image-builder.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/role-image-builder.md
         - alert: RoleImageBuildFailures
-          expr: sum(increase(mattercodex_role_image_builder_operations_total{operation=~"materialize|build",outcome=~"rejected|error"}[15m])) > 2
+          expr: sum(increase(kodex_role_image_builder_operations_total{operation=~"materialize|build",outcome=~"rejected|error"}[15m])) > 2
           for: 5m
           labels: {severity: warning}
           annotations:
             summary: Role image builds are failing
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/role-image-builder.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/role-image-builder.md

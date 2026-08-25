@@ -1,16 +1,16 @@
-module github.com/codex-k8s/matter-codex/services/external/interaction-gateway
+module github.com/codex-k8s/kodex/services/external/interaction-gateway
 
 go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/credentialfs v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/httpserver v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/kodex/libs/go/credentialfs v0.0.0
+	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/mattermost/mattermost/server/public v0.4.3
@@ -21,9 +21,9 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dyatlov/go-opengraph/opengraph v0.0.0-20220524092352-606d7b1e5f8a // indirect
 	github.com/fatih/color v1.19.0 // indirect
@@ -87,22 +87,22 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
+replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 
-replace github.com/codex-k8s/matter-codex/libs/go/credentialfs => ../../../libs/go/credentialfs
+replace github.com/codex-k8s/kodex/libs/go/credentialfs => ../../../libs/go/credentialfs
 
-replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
+replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/httpserver => ../../../libs/go/httpserver
+replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/i18n => ../../../libs/go/i18n
+replace github.com/codex-k8s/kodex/libs/go/i18n => ../../../libs/go/i18n
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
+replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 
-replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile

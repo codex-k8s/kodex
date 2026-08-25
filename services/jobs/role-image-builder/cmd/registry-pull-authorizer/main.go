@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/nodepullidentity"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
 const pullServerError = "registry pull authorizer failed"
@@ -84,16 +84,16 @@ func authorizedPull(request *http.Request, registryHost string) bool {
 	certificate := request.TLS.PeerCertificates[0]
 	cn := certificate.Subject.CommonName
 	profiles := map[string]pullProfile{
-		"mattercodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"mattercodex/control-plane"}},
-		"mattercodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"mattercodex/dockerfile", "mattercodex/agent-runner", "mattercodex/role-base-documents"}},
-		"role-image-builder-input-read":         {"/identity/input-dockerconfig.json", []string{"mattercodex/role-image-inputs"}},
+		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
+		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
+		"role-image-builder-input-read":         {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
 	}
 	if profile, ok := profiles[cn]; ok {
 		username, password, supplied := request.BasicAuth()
 		return supplied && dockerCredentialMatches(profile.configFile, username, password, registryHost) && pathInRepositories(request.URL.Path, profile.repositories)
 	}
 	return authorizedNodePull(request, certificate, registryHost) &&
-		pathInRepositories(request.URL.Path, []string{"mattercodex/agent-runner", "mattercodex/roles"})
+		pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles"})
 }
 
 func authorizedNodePull(request *http.Request, certificate *x509.Certificate, registryHost string) bool {
@@ -143,7 +143,7 @@ func dockerCredentialMatches(path, username, password, registryHost string) bool
 	if json.Unmarshal(value, &document) != nil || len(document.Auths) != 1 {
 		return false
 	}
-	entry, ok := document.Auths["mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000"]
+	entry, ok := document.Auths["kodex-image-registry.kodex-system.svc.cluster.local:5000"]
 	if !ok {
 		entry, ok = document.Auths[registryHost]
 	}

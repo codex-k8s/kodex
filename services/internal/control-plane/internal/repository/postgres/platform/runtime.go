@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/artifactpolicy"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 

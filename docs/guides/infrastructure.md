@@ -314,7 +314,7 @@ capability отдельным target manifest и доказывает status/dig
 namespaced ресурсам во внутреннем base, после чего штатный `PatchTransformer`
 удаляет `metadata.namespace` только у CRD `Bundle`. Overlay не вводит второй
 namespace transformer поверх уже собранного base.
-Сам Namespace `mattercodex-system` принадлежит environment bootstrap, а не
+Сам Namespace `kodex-system` принадлежит environment bootstrap, а не
 component PR; CA target создаётся только после появления его стандартного
 label `kubernetes.io/metadata.name`. Отсутствующий Namespace закрыто оставляет
 CA/Vault resources неготовыми и не разрешает запуск workload.

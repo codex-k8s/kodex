@@ -1,4 +1,4 @@
-apiVersion: mattercodex.dev/v1alpha1
+apiVersion: kodex.dev/v1alpha1
 kind: InternalRPCAuthorityCapabilityRegistry
 metadata:
   name: internal-rpc-authority
@@ -11,7 +11,7 @@ spec:
       fallbackAllowed: false
       semantics: VAULT_KV_V2_AND_DATABASE_STATIC_ROLES
   artifact:
-    repository: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority
+    repository: ghcr.io/codex-k8s/kodex/internal-rpc-authority
     imageReferencePolicy: DIGEST_ONLY
     binaries:
       socketInit: /usr/local/bin/internal-rpc-authority-socket-init
@@ -31,7 +31,7 @@ spec:
       type: emptyDir
       medium: Filesystem
       sizeLimit: 32Mi
-      mountPath: /run/mattercodex
+      mountPath: /run/kodex
     identity:
       applicationUid: 10001
       applicationPrimaryGid: 10001
@@ -41,20 +41,20 @@ spec:
       sharedFsGid: 29000
       fsGroupChangePolicy: OnRootMismatch
     rootDirectory:
-      path: /run/mattercodex/internal-rpc-authority
+      path: /run/kodex/internal-rpc-authority
       mode: "1770"
       ownerUid: 29000
       ownerGid: 29000
       sticky: true
     issuer:
-      path: /run/mattercodex/internal-rpc-authority/issuer.sock
+      path: /run/kodex/internal-rpc-authority/issuer.sock
       mode: "0660"
       ownerUid: 29001
       ownerGid: 29000
       listener: internal-rpc-authority-issuer
       client: application
     verifier:
-      path: /run/mattercodex/internal-rpc-authority/verifier.sock
+      path: /run/kodex/internal-rpc-authority/verifier.sock
       mode: "0660"
       ownerUid: 29002
       ownerGid: 29000
@@ -82,20 +82,20 @@ spec:
       serviceAccount: consuming-workload
       privateKeyDelivery: vault-csi
       privateKeySecretName: internal-rpc-authority-issuer-key
-      privateKeyMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+      privateKeyMountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer
       authoritySnapshotSecretName: internal-rpc-authority-snapshot
-      authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+      authoritySnapshotMountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
       manifestTrustDelivery: vault-csi
       manifestTrustSecretName: internal-rpc-authority-manifest-trust
       manifestTrustBundleId: internal-rpc-authority-manifest-signers
-      manifestTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+      manifestTrustMountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
       authorityProofTrustDelivery: vault-csi
       authorityProofTrustSecretName: internal-rpc-authority-proof-trust
-      authorityProofTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+      authorityProofTrustMountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
       restoreEvidenceSecretName: internal-rpc-authority-restore-evidence
-      restoreEvidenceMountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-evidence
+      restoreEvidenceMountPath: /var/run/config/kodex/internal-rpc-authority/restore-evidence
       restoreEvidenceTrustSecretName: internal-rpc-authority-restore-evidence-trust
-      restoreEvidenceTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-evidence-trust
+      restoreEvidenceTrustMountPath: /var/run/config/kodex/internal-rpc-authority/restore-evidence-trust
       databaseLoginPrincipal: FROM_EXACT_WORKLOAD_ROLE_REGISTRY
       databaseGroupRole: internal_rpc_authority_issuer
       cryptographicReadbackTable: authority_key_delivery_readbacks
@@ -120,15 +120,15 @@ spec:
       callerTransport:
         protocol: MTLS
         exactCallerWorkload: control-api-gateway
-        exactCallerSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway
-        exactTlsServerName: control-plane.mattercodex-system.svc.cluster.local
-        exactTrustBundleId: mattercodex-internal-ca-g1
+        exactCallerSpiffeId: spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway
+        exactTlsServerName: control-plane.kodex-system.svc.cluster.local
+        exactTrustBundleId: kodex-internal-ca-g1
       applicationCredential:
         type: OIDC_BEARER
         metadataKey: authorization
-        exactIssuer: __MATTERCODEX_OIDC_ISSUER__
-        exactAudience: mattercodex-control-api
-        exactTrustBundleId: mattercodex-oidc-signers-g1
+        exactIssuer: __KODEX_OIDC_ISSUER__
+        exactAudience: kodex-control-api
+        exactTrustBundleId: kodex-oidc-signers-g1
         actorSource: VERIFIED_OIDC_SUBJECT
         requestIdentityFieldsAllowed: false
       resolution:
@@ -154,9 +154,9 @@ spec:
       proofSignerSecretName: internal-rpc-authority-proof-signer-key
       proofTrustSecretName: internal-rpc-authority-proof-trust
       authoritySnapshotSecretName: internal-rpc-authority-snapshot
-      authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+      authoritySnapshotMountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
       manifestTrustSecretName: internal-rpc-authority-manifest-trust
-      manifestTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+      manifestTrustMountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
       cryptographicReadbackTable: authority_key_delivery_readbacks
       readiness:
         requireDomainReadPath: true
@@ -170,14 +170,14 @@ spec:
       serviceAccount: consuming-workload
       secretDeliveryProfile: CLOSED_ENUM_FROM_VERIFIED_ENVIRONMENT
       authoritySnapshotSecretName: internal-rpc-authority-snapshot
-      authoritySnapshotMountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+      authoritySnapshotMountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
       manifestTrustSecretName: internal-rpc-authority-manifest-trust
       manifestTrustBundleId: internal-rpc-authority-manifest-signers
-      manifestTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+      manifestTrustMountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
       restoreEvidenceSecretName: internal-rpc-authority-restore-evidence
-      restoreEvidenceMountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-evidence
+      restoreEvidenceMountPath: /var/run/config/kodex/internal-rpc-authority/restore-evidence
       restoreEvidenceTrustSecretName: internal-rpc-authority-restore-evidence-trust
-      restoreEvidenceTrustMountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-evidence-trust
+      restoreEvidenceTrustMountPath: /var/run/config/kodex/internal-rpc-authority/restore-evidence-trust
       databaseLoginPrincipal: FROM_EXACT_WORKLOAD_ROLE_REGISTRY
       databaseGroupRole: internal_rpc_authority_verifier
       cryptographicReadbackTable: authority_key_delivery_readbacks
@@ -227,13 +227,13 @@ spec:
         vaultDatabaseCredentials:
           engine: database
           plugin: postgresql-database-plugin
-          databaseConnectionName: mattercodex-postgresql
+          databaseConnectionName: kodex-postgresql
           rotationPeriodSeconds: 3600
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
           owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-publisher
-          boundNamespace: mattercodex-system
+          boundNamespace: kodex-system
           currentVaultRole: internal-rpc-authority-publisher-g4
           nextVaultRole: internal-rpc-authority-publisher-g5
           previousVaultRole: internal-rpc-authority-publisher-g3
@@ -260,11 +260,11 @@ spec:
           vaultAuthFileEnv: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_FILE
           usernameFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_USERNAME_FILE
           passwordFileEnv: INTERNAL_RPC_AUTHORITY_PUBLISHER_DATABASE_PASSWORD_FILE
-          credentialMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/publisher/database
-          vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem
-          postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/publisher/postgresql-ca.pem
-          vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
-          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          credentialMountPath: /var/run/secrets/kodex/internal-rpc-authority/publisher/database
+          vaultCaMountPath: /var/run/config/kodex/internal-rpc-authority/publisher/vault-ca.pem
+          postgresqlCaMountPath: /var/run/config/kodex/internal-rpc-authority/publisher/postgresql-ca.pem
+          vaultTlsServerName: vault.kodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           postgresqlSslMode: verify-full
           workloadTokenRenewalRequired: true
           credentialRefreshBeforeRotationRequired: true
@@ -274,11 +274,11 @@ spec:
           secretValueInEnvOrLogAllowed: false
         databaseCredentialNetwork:
           egress:
-            - destination: vault.mattercodex-system.svc
+            - destination: vault.kodex-system.svc
               port: 8200
               protocol: TCP
               policy: internal-rpc-authority-publisher-to-vault
-            - destination: internal-rpc-authority-postgresql-rw.mattercodex-system.svc
+            - destination: internal-rpc-authority-postgresql-rw.kodex-system.svc
               port: 5432
               protocol: TCP
               policy: internal-rpc-authority-publisher-to-postgresql
@@ -324,13 +324,13 @@ spec:
         protoService: internalrpcauthority.v1.RestoreRoleCredentialPublisherService
         publishMethod: /internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential
         readinessMethod: /internalrpcauthority.v1.RestoreRoleCredentialPublisherService/CheckReadiness
-        listenAddress: internal-rpc-authority-publisher.mattercodex-system.svc:8444
-        tlsServerName: internal-rpc-authority-publisher.mattercodex-system.svc
+        listenAddress: internal-rpc-authority-publisher.kodex-system.svc:8444
+        tlsServerName: internal-rpc-authority-publisher.kodex-system.svc
         clientTrustBundleId: internal-rpc-authority-publisher-ca
-        exactCallerSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller
+        exactCallerSpiffeId: spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller
         requestAuthority: CONTROLLER_SIGNED_ISSUANCE_DIRECTIVE_ONLY
         issuanceDirective:
-          protectedType: mattercodex-internal-rpc-restore-role-issuance+jws
+          protectedType: kodex-internal-rpc-restore-role-issuance+jws
           schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/credentialIssuanceDirective
           verifyControllerSignatureGenerationAndCurrentCoordinationRevision: true
           resolveExactTupleFromTargetRegistry: true
@@ -339,11 +339,11 @@ spec:
           generateDistinctEs256AckKeyPerExactRole: true
           privateAckKeyDestination: EXACT_VAULT_PATH_FROM_TARGET_REGISTRY
           publicAckJwkDestination: SIGNED_ROLE_CREDENTIAL
-          roleCredentialProtectedType: mattercodex-internal-rpc-restore-role-credential+jws
+          roleCredentialProtectedType: kodex-internal-rpc-restore-role-credential+jws
           requireVaultMetadataAndPrivateToPublicReadback: true
           privateKeyInResponseOrLog: FORBIDDEN
         deliveryReceipt:
-          protectedType: mattercodex-internal-rpc-restore-role-delivery-receipt+jws
+          protectedType: kodex-internal-rpc-restore-role-delivery-receipt+jws
           schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/credentialDeliveryReceipt
           bindsIssuanceDirectiveAndVaultMetadataReadback: true
         idempotency:
@@ -357,8 +357,8 @@ spec:
         pitrCoordinationScope: OUTSIDE_RESTORE_COORDINATION
         restoreUseAllowed: false
         credentialSchema: contracts/authorization/v1/readback-credential.schema.json
-        credentialProtectedType: mattercodex-internal-rpc-readback-credential+jws
-        credentialAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+        credentialProtectedType: kodex-internal-rpc-readback-credential+jws
+        credentialAudience: urn:kodex:internal-rpc-authority-readback-attestor
         credentialMaxTtlSeconds: 300
         possessionKeyAlgorithm: ES256
         possessionKeyPurpose: NORMAL_READBACK_ATTESTATION_ONLY
@@ -405,9 +405,9 @@ spec:
           challengeBeforeDeliveryReadbackAllowed: false
         trustSnapshot:
           schema: contracts/authorization/v1/readback-credential-trust.schema.json
-          protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+          protectedType: kodex-internal-rpc-readback-credential-trust+jws
           exactSecretName: internal-rpc-authority-readback-credential-trust
-          exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust
+          exactMountPath: /var/run/config/kodex/internal-rpc-authority/readback/credential-trust
           statuses:
             - CURRENT
             - NEXT
@@ -459,7 +459,7 @@ spec:
         normalReadbackCredentialSignerOwner: internal-rpc-authority-publisher
         restoreRoleCredentialTrustSnapshot:
           schema: contracts/authorization/v1/restore-role-trust.schema.json
-          protectedType: mattercodex-internal-rpc-restore-role-trust+jws
+          protectedType: kodex-internal-rpc-restore-role-trust+jws
           exactSecretName: internal-rpc-authority-restore-role-trust
           statuses:
             - CURRENT
@@ -597,7 +597,7 @@ spec:
           - PREVIOUS
           - RETIRED
       postgres:
-        tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+        tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
         sslMode: verify-full
         migratorMembershipAllowed: false
         tableOwnerMembershipAllowed: false
@@ -611,8 +611,8 @@ spec:
       vault:
         authMethod: kubernetes
         authRole: internal-rpc-authority-database-credential-reconciler
-        tlsServerName: vault.mattercodex-system.svc.cluster.local
-        databaseConnectionName: mattercodex-postgresql
+        tlsServerName: vault.kodex-system.svc.cluster.local
+        databaseConnectionName: kodex-postgresql
         rotationPeriodSeconds: 3600
         exactPaths:
           - database/static-roles/internal-rpc-authority-publisher-g1
@@ -663,8 +663,8 @@ spec:
       network:
         exactDestinations:
           - kubernetes.default.svc:443
-          - vault.mattercodex-system.svc:8200
-          - internal-rpc-authority-postgresql-rw.mattercodex-system.svc:5432
+          - vault.kodex-system.svc:8200
+          - internal-rpc-authority-postgresql-rw.kodex-system.svc:5432
           - otel-collector.observability.svc:4317
           - sentry-relay.observability.svc:8443
         kubernetesApiEnvironmentRenderMustPinServiceAndReadyEndpoints: true
@@ -713,13 +713,13 @@ spec:
         vaultDatabaseCredentials:
           engine: database
           plugin: postgresql-database-plugin
-          databaseConnectionName: mattercodex-postgresql
+          databaseConnectionName: kodex-postgresql
           rotationPeriodSeconds: 3600
           mode: STATIC_ROLE_CURRENT_NEXT_PASSWORD_ROTATION
           owner: internal-rpc-authority-database-credential-reconciler
           authMethod: kubernetes
           boundServiceAccount: internal-rpc-authority-readback-attestor
-          boundNamespace: mattercodex-system
+          boundNamespace: kodex-system
           currentVaultRole: internal-rpc-authority-readback-attestor-g4
           nextVaultRole: internal-rpc-authority-readback-attestor-g5
           previousVaultRole: internal-rpc-authority-readback-attestor-g3
@@ -746,11 +746,11 @@ spec:
           vaultAuthFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_VAULT_AUTH_FILE
           usernameFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_USERNAME_FILE
           passwordFileEnv: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_DATABASE_PASSWORD_FILE
-          credentialMountPath: /var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database
-          vaultCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/vault-ca.pem
-          postgresqlCaMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback-attestor/postgresql-ca.pem
-          vaultTlsServerName: vault.mattercodex-system.svc.cluster.local
-          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          credentialMountPath: /var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database
+          vaultCaMountPath: /var/run/config/kodex/internal-rpc-authority/readback-attestor/vault-ca.pem
+          postgresqlCaMountPath: /var/run/config/kodex/internal-rpc-authority/readback-attestor/postgresql-ca.pem
+          vaultTlsServerName: vault.kodex-system.svc.cluster.local
+          postgresqlTlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           postgresqlSslMode: verify-full
           workloadTokenRenewalRequired: true
           credentialRefreshBeforeRotationRequired: true
@@ -778,11 +778,11 @@ spec:
             actionCrashBeforeCommit: ROW_LOCK_RELEASED_RETIREMENT_PROCEEDS_RETRY_REJECTED
         databaseCredentialNetwork:
           egress:
-            - destination: vault.mattercodex-system.svc
+            - destination: vault.kodex-system.svc
               port: 8200
               protocol: TCP
               policy: internal-rpc-authority-readback-attestor-to-vault
-            - destination: internal-rpc-authority-postgresql-rw.mattercodex-system.svc
+            - destination: internal-rpc-authority-postgresql-rw.kodex-system.svc
               port: 5432
               protocol: TCP
               policy: internal-rpc-authority-readback-attestor-to-postgresql
@@ -800,15 +800,15 @@ spec:
         challengeMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
         attestMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
         readinessMethod: /internalrpcauthority.v1.AuthorityReadbackAttestorService/CheckReadiness
-        listenAddress: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
-        tlsServerName: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+        listenAddress: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+        tlsServerName: internal-rpc-authority-readback-attestor.kodex-system.svc
         clientTrustBundleId: internal-rpc-authority-readback-attestor-ca
         actualWorkloadIdentity: MTLS_SPIFFE
         applicationCredential: PUBLISHER_SIGNED_NORMAL_READBACK_CREDENTIAL
         applicationCredentialContract:
           schema: contracts/authorization/v1/readback-credential.schema.json
-          protectedType: mattercodex-internal-rpc-readback-credential+jws
-          exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+          protectedType: kodex-internal-rpc-readback-credential+jws
+          exactAudience: urn:kodex:internal-rpc-authority-readback-attestor
           exactPurposeByIntentKind:
             KEY_DELIVERY: KEY_DELIVERY_READBACK
             SNAPSHOT: SNAPSHOT_READBACK
@@ -895,7 +895,7 @@ spec:
             crashAfterCommitBeforeResponse: RETRY_RETURNS_PERSISTED_RECEIPT
           replayRetention: RECEIPT_EXPIRY_PLUS_10_MINUTES
         evidence:
-          protectedType: mattercodex-internal-rpc-readback-attestation+jws
+          protectedType: kodex-internal-rpc-readback-attestation+jws
           schema: contracts/authorization/v1/readback-attestation.schema.json
           signatureKey: NORMAL_READBACK_CREDENTIAL_EMBEDDED_POSSESSION_PUBLIC_JWK
           verifyPossessionJwkKidGenerationAndRfc7638Thumbprint: true
@@ -929,15 +929,15 @@ spec:
         bootstrapRootId: internal-rpc-authority-readback-manifest-root-v1
         bootstrapFingerprintConfig: INTERNAL_RPC_AUTHORITY_READBACK_MANIFEST_ROOT_FINGERPRINT_SHA256
         signedBundleSchema: contracts/authorization/v1/readback-manifest-trust-root.schema.json
-        protectedType: mattercodex-internal-rpc-readback-manifest-root+jws
-        exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root
+        protectedType: kodex-internal-rpc-readback-manifest-root+jws
+        exactAudience: urn:kodex:internal-rpc-authority-readback-attestor:manifest-root
         secretName: internal-rpc-authority-readback-manifest-trust-root
         bundleResourceName: internal-rpc-authority-readback-manifest-signers
         csiDriver: secrets-store.csi.k8s.io
         csiProvider: vault
         vaultRole: internal-rpc-authority-readback-trust-reader
         vaultPath: pki/internal-rpc-authority/readback-manifest-root/bundle
-        exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws
+        exactMountPath: /var/run/config/kodex/internal-rpc-authority/readback/manifest-root/root.jws
         serviceAccount: internal-rpc-authority-readback-attestor
         publisherReadOrWriteAllowed: false
         restoreTrustAccepted: false
@@ -969,8 +969,8 @@ spec:
       readbackCredentialTrust:
         source: internal-rpc-authority-readback-credential-trust
         schema: contracts/authorization/v1/readback-credential-trust.schema.json
-        protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
-        exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust
+        protectedType: kodex-internal-rpc-readback-credential-trust+jws
+        exactMountPath: /var/run/config/kodex/internal-rpc-authority/readback/credential-trust
         requiredManifestRootId: internal-rpc-authority-readback-manifest-root-v1
         requiredManifestRootFingerprintField: readback_manifest_root_fingerprint_sha256
         requiredManifestBundleRevisionField: readback_manifest_bundle_revision
@@ -1184,7 +1184,7 @@ spec:
     restore-evidence-anchor:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-restore-pitr
-      namespace: mattercodex-system
+      namespace: kodex-system
       resourceName: internal-rpc-authority-restore-evidence
       outsideRestoredPostgreSQL: true
       updateProtocol: SEMANTIC_REVISION_PREDECESSOR_CAS
@@ -1194,11 +1194,11 @@ spec:
         - restore_epoch
         - predecessor.digest_sha256
       admissionProjectionAnnotations:
-        anchorRevision: mattercodex.dev/restore-anchor-revision
-        restoreEpoch: mattercodex.dev/restore-epoch
-        evidenceDigest: mattercodex.dev/restore-evidence-digest-sha256
-        predecessorRevision: mattercodex.dev/restore-predecessor-revision
-        predecessorDigest: mattercodex.dev/restore-predecessor-digest-sha256
+        anchorRevision: kodex.dev/restore-anchor-revision
+        restoreEpoch: kodex.dev/restore-epoch
+        evidenceDigest: kodex.dev/restore-evidence-digest-sha256
+        predecessorRevision: kodex.dev/restore-predecessor-revision
+        predecessorDigest: kodex.dev/restore-predecessor-digest-sha256
       servedReadback:
         requireSignedClaimsEqualProjectionAnnotations: true
         requireCompactJwsDigestEqualsEvidenceDigestAnnotation: true
@@ -1211,7 +1211,7 @@ spec:
         failurePolicy: Fail
         validationActions:
           - Deny
-        exactNamespace: mattercodex-system
+        exactNamespace: kodex-system
         exactResourceName: internal-rpc-authority-restore-evidence
         transitionRules:
           - new-anchor-revision-equals-old-plus-one
@@ -1223,7 +1223,7 @@ spec:
         createOwner: cluster-bootstrap
         deleteAllowed: false
       signedPayloadSchema: contracts/authorization/v1/restore-fence-evidence.schema.json
-      protectedType: mattercodex-internal-rpc-restore-evidence+jws
+      protectedType: kodex-internal-rpc-restore-evidence+jws
       phases:
         - PREPARED
         - COMPLETED
@@ -1235,11 +1235,11 @@ spec:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-publisher
       consumerOwner: internal-rpc-authority-restore-controller
-      namespace: mattercodex-system
+      namespace: kodex-system
       resourceName: internal-rpc-authority-restore-role-trust
       createOwner: cluster-bootstrap
       signedPayloadSchema: contracts/authorization/v1/restore-role-trust.schema.json
-      protectedType: mattercodex-internal-rpc-restore-role-trust+jws
+      protectedType: kodex-internal-rpc-restore-role-trust+jws
       updateProtocol: SIGNED_SOURCE_REVISION_KEY_SET_REVISION_PREDECESSOR_CAS
       resourceVersionUse: LOST_UPDATE_GUARD_ONLY
       keyStatuses:
@@ -1271,7 +1271,7 @@ spec:
     readback-manifest-trust-root:
       kind: OfflineRootManagedExternalMonotonicSecret
       owner: internal-rpc-authority-readback-trust-root-controller
-      namespace: mattercodex-system
+      namespace: kodex-system
       serviceAccount: internal-rpc-authority-readback-trust-root-controller
       bootstrapRootId: internal-rpc-authority-readback-manifest-root-v1
       bootstrapVerificationMaterialSchema: contracts/authorization/v1/readback-root-verification-material.schema.json
@@ -1287,8 +1287,8 @@ spec:
       bundleResourceName: internal-rpc-authority-readback-manifest-signers
       immutableBootstrapSecret: true
       signedPayloadSchema: contracts/authorization/v1/readback-manifest-trust-root.schema.json
-      protectedType: mattercodex-internal-rpc-readback-manifest-root+jws
-      exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root
+      protectedType: kodex-internal-rpc-readback-manifest-root+jws
+      exactAudience: urn:kodex:internal-rpc-authority-readback-attestor:manifest-root
       exactPurpose: NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION
       updateProtocol: OFFLINE_ROOT_SIGNED_BUNDLE_REVISION_PREDECESSOR_CAS
       keyStatuses:
@@ -1298,9 +1298,9 @@ spec:
       rootRotationCeremony:
         approval: SEPARATE_OWNER_GATE
         requireOldAndNewRootCrossSignedOverlap: true
-        currentSignsNextProtectedType: mattercodex-internal-rpc-readback-root-transition-current+jws
-        nextSignsCurrentProtectedType: mattercodex-internal-rpc-readback-root-transition-next+jws
-        exactRotationAudience: urn:mattercodex:internal-rpc-authority-readback-attestor:root-rotation
+        currentSignsNextProtectedType: kodex-internal-rpc-readback-root-transition-current+jws
+        nextSignsCurrentProtectedType: kodex-internal-rpc-readback-root-transition-next+jws
+        exactRotationAudience: urn:kodex:internal-rpc-authority-readback-attestor:root-rotation
         verifyCurrentSignatureWithPersistedTrustedRoot: true
         verifyNextSignatureWithCandidateRoot: true
         sourceRevisionAndPredecessorCas: true
@@ -1325,16 +1325,16 @@ spec:
         provider: vault
         vaultKubernetesAuthRole: internal-rpc-authority-readback-trust-reader
         vaultPath: pki/internal-rpc-authority/readback-manifest-root/bundle
-        tlsServerName: vault.mattercodex-system.svc.cluster.local
-        trustBundleMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/vault-ca.pem
-        destinationMountPath: /var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws
+        tlsServerName: vault.kodex-system.svc.cluster.local
+        trustBundleMountPath: /var/run/config/kodex/internal-rpc-authority/readback/vault-ca.pem
+        destinationMountPath: /var/run/config/kodex/internal-rpc-authority/readback/manifest-root/root.jws
         publicVerificationMaterialSource: READ_ONLY_IMAGE_LAYER_FROM_OWNER_APPROVED_BUILD_INPUT
         publicVerificationMaterialMountPath: /usr/local/share/internal-rpc-authority/readback-root
         vaultMayOverridePublicVerificationMaterial: false
         serviceAccount: internal-rpc-authority-readback-attestor
         networkPolicy:
           name: internal-rpc-authority-readback-attestor-to-vault
-          destination: vault.mattercodex-system.svc
+          destination: vault.kodex-system.svc
           port: 8200
           protocol: TCP
           wildcardDestinationAllowed: false
@@ -1364,16 +1364,16 @@ spec:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-publisher
       consumerOwner: internal-rpc-authority-readback-attestor
-      namespace: mattercodex-system
+      namespace: kodex-system
       resourceName: internal-rpc-authority-readback-credential-trust
       createOwner: cluster-bootstrap
       signedPayloadSchema: contracts/authorization/v1/readback-credential-trust.schema.json
-      protectedType: mattercodex-internal-rpc-readback-credential-trust+jws
+      protectedType: kodex-internal-rpc-readback-credential-trust+jws
       manifestTrustRootResource: internal-rpc-authority-readback-manifest-trust-root
       manifestTrustBundleResource: internal-rpc-authority-readback-manifest-signers
       requirePinnedRootFingerprintBeforeSnapshotSignature: true
       coDeliveredPublisherSignerAccepted: false
-      exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+      exactAudience: urn:kodex:internal-rpc-authority-readback-attestor
       restoreControllerAudienceAllowed: false
       updateProtocol: SIGNED_SOURCE_REVISION_KEY_SET_REVISION_PREDECESSOR_CAS
       resourceVersionUse: LOST_UPDATE_GUARD_ONLY
@@ -1410,7 +1410,7 @@ spec:
     restore-coordination-state:
       kind: ExternalMonotonicKubernetesSecret
       owner: internal-rpc-authority-restore-controller
-      namespace: mattercodex-system
+      namespace: kodex-system
       resourceName: internal-rpc-authority-restore-coordination
       outsideRestoredPostgreSQL: true
       updateProtocol: SEMANTIC_REVISION_CAS
@@ -1496,30 +1496,30 @@ spec:
         completeMethod: /internalrpcauthority.v1.RestoreControllerService/CompleteRestore
         readinessMethod: /internalrpcauthority.v1.RestoreControllerService/CheckReadiness
         operatorTransport: MTLS_SPIFFE_PLUS_PROJECTED_SERVICE_ACCOUNT_TOKEN
-        operatorSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator
-        projectedTokenAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+        operatorSpiffeId: spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-operator
+        projectedTokenAudience: urn:kodex:internal-rpc-authority-restore-controller
         workloadAckIdentity: MTLS_SPIFFE_PLUS_ROLE_CREDENTIAL_PLUS_ACK_PROOF
         roleCredentialIssuance:
-          publisherAddress: internal-rpc-authority-publisher.mattercodex-system.svc:8444
-          publisherTlsServerName: internal-rpc-authority-publisher.mattercodex-system.svc
+          publisherAddress: internal-rpc-authority-publisher.kodex-system.svc:8444
+          publisherTlsServerName: internal-rpc-authority-publisher.kodex-system.svc
           publisherTrustBundleId: internal-rpc-authority-publisher-ca
           method: /internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential
           request: CONTROLLER_SIGNED_EXACT_ROLE_ISSUANCE_DIRECTIVE
-          directiveProtectedType: mattercodex-internal-rpc-restore-role-issuance+jws
-          responseProtectedType: mattercodex-internal-rpc-restore-role-delivery-receipt+jws
+          directiveProtectedType: kodex-internal-rpc-restore-role-issuance+jws
+          responseProtectedType: kodex-internal-rpc-restore-role-delivery-receipt+jws
           requireDeliveryReceiptSignatureAndVaultMetadataReadback: true
           persistDeliveryReceiptBeforeDirectivePublication: true
           publisherPrivateKeyOrCallerPathAccepted: false
         workloadRoleCredential:
-          protectedType: mattercodex-internal-rpc-restore-role-credential+jws
+          protectedType: kodex-internal-rpc-restore-role-credential+jws
           schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/roleCredential
           signer: internal-rpc-authority-publisher
           signerTrust:
             source: restore-role-credential-trust-snapshot
             schema: contracts/authorization/v1/restore-role-trust.schema.json
-            protectedType: mattercodex-internal-rpc-restore-role-trust+jws
+            protectedType: kodex-internal-rpc-restore-role-trust+jws
             independentRoot: internal-rpc-authority-manifest-trust
-            exactMountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-credential-trust
+            exactMountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-credential-trust
             statuses:
               - CURRENT
               - NEXT
@@ -1529,7 +1529,7 @@ spec:
             persistentHighWatermark: restore-coordination-state
             controllerOwnedServedReadback: true
             sameRevisionMutationOrRollback: REJECT
-          controllerAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+          controllerAudience: urn:kodex:internal-rpc-authority-restore-controller
           readbackAttestorAudienceAccepted: false
           normalReadbackCredentialProtectedTypeAccepted: false
           multiAudienceAccepted: false
@@ -1564,14 +1564,14 @@ spec:
           noChangeIsSuccessful: true
           directiveBeforePreparedRequired: true
         directive:
-          protectedType: mattercodex-internal-rpc-restore-directive+jws
+          protectedType: kodex-internal-rpc-restore-directive+jws
           schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/directive
           phase: QUIESCING
           maxTtlSeconds: 30
           bindsExactRoleCredentialDigest: true
           bindsRestoreIdEpochAndCoordinationRevision: true
         acknowledgement:
-          protectedType: mattercodex-internal-rpc-restore-ack+jws
+          protectedType: kodex-internal-rpc-restore-ack+jws
           schema: contracts/authorization/v1/restore-coordination.schema.json#/$defs/quiescenceAck
           signatureKey: ROLE_CREDENTIAL_BOUND_ACK_KEY
           publicKeySource: SIGNED_ROLE_CREDENTIAL_ONLY
@@ -1668,7 +1668,7 @@ spec:
       artifactBinary: /usr/local/bin/internal-rpc-authority-restore-operator
       serviceAccount: internal-rpc-authority-restore-operator
       trigger: MANUAL_CODE_FIRST_PITR
-      projectedServiceAccountTokenAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+      projectedServiceAccountTokenAudience: urn:kodex:internal-rpc-authority-restore-controller
       interface:
         controllerService: internalrpcauthority.v1.RestoreControllerService
         requirePreparedReadbackBeforeRestore: true
@@ -1757,7 +1757,7 @@ spec:
         signerOwner: internal-rpc-authority-restore-pitr
         publicVerificationKeyDelivery: vault-csi-distinct-controller-read-only
         privateKeyDeliveredToControllerOrOperator: false
-        protectedType: mattercodex-internal-rpc-restore-evidence+jws
+        protectedType: kodex-internal-rpc-restore-evidence+jws
         exactSecret: internal-rpc-authority-restore-evidence
         updateProtocol: RESOURCE_VERSION_AND_SEMANTIC_PREDECESSOR_CAS
         servedReadbackRequired: true
@@ -1993,70 +1993,70 @@ spec:
       egress:
         - vault-csi-files
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-restore-controller
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-restore-controller
           port: 8443
-          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-restore-controller.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-restore-controller-ca
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-readback-attestor
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-readback-attestor
           port: 8443
-          tlsServerName: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-readback-attestor.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-readback-attestor-ca
           environmentRenderMustPinClusterIP: true
     verifier:
       ingress: UDS_ONLY
       egress:
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: vault
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: vault
           port: 8200
-          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          tlsServerName: vault.kodex-system.svc.cluster.local
           exactPublicCaFileRequired: true
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-restore-controller
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-restore-controller
           port: 8443
-          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-restore-controller.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-restore-controller-ca
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-readback-attestor
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-readback-attestor
           port: 8443
-          tlsServerName: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-readback-attestor.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-readback-attestor-ca
           environmentRenderMustPinClusterIP: true
     authorityProofResolver:
       ingress: APPLICATION_OWNED
       egress:
         - destination: internal-rpc-authority-restore-controller
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-restore-controller
           port: 8443
-          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-restore-controller.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-restore-controller-ca
           environmentRenderMustPinClusterIP: true
         - destination: internal-rpc-authority-readback-attestor
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-readback-attestor
           port: 8443
-          tlsServerName: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-readback-attestor.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-readback-attestor-ca
           environmentRenderMustPinClusterIP: true
     readbackAttestor:
@@ -2064,7 +2064,7 @@ spec:
         - source: registered-workload-role-generations
           protocol: MTLS
           applicationCredential: PUBLISHER_SIGNED_NORMAL_READBACK_CREDENTIAL
-          exactAudience: urn:mattercodex:internal-rpc-authority-readback-attestor
+          exactAudience: urn:kodex:internal-rpc-authority-readback-attestor
           allowedFullMethods:
             - /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
             - /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
@@ -2073,23 +2073,23 @@ spec:
           exactTargetRegistry: contracts/authorization/v1/bootstrap-key-delivery-targets.yaml
       egress:
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
     publisher:
       ingress:
         - sourceServiceAccount: internal-rpc-authority-restore-controller
-          exactSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller
+          exactSpiffeId: spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller
           protocol: MTLS
           port: 8444
       egress:
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
           namespace: default
@@ -2099,15 +2099,15 @@ spec:
           environmentRenderMustPinServiceAndReadyEndpoints: true
           environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: vault
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: vault
           port: 8200
-          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          tlsServerName: vault.kodex-system.svc.cluster.local
           exactPublicCaFileRequired: true
     restoreController:
       ingress:
         - sourceServiceAccount: internal-rpc-authority-restore-operator
-          exactSpiffeId: spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-operator
+          exactSpiffeId: spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-operator
           protocol: MTLS
         - source: registered-workload-role-generations
           protocol: MTLS
@@ -2116,10 +2116,10 @@ spec:
           port: 8443
       egress:
         - destination: internal-rpc-authority-publisher
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-publisher
           port: 8444
-          tlsServerName: internal-rpc-authority-publisher.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-publisher.kodex-system.svc
           exactTrustBundleId: internal-rpc-authority-publisher-ca
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
@@ -2130,10 +2130,10 @@ spec:
           environmentRenderMustPinServiceAndReadyEndpoints: true
           environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: vault
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: vault
           port: 8200
-          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          tlsServerName: vault.kodex-system.svc.cluster.local
           exactPublicCaFileRequired: true
     restoreCoordinationNetworkPolicies:
       controllerIngressPolicy: internal-rpc-authority-restore-controller-ingress
@@ -2142,7 +2142,7 @@ spec:
           app.kubernetes.io/name: internal-rpc-authority-restore-controller
       controllerPort: 8443
       protocol: TCP
-      sourceNamespace: mattercodex-system
+      sourceNamespace: kodex-system
       exactClients:
         - workloadId: control-api-gateway
           roles:
@@ -2198,15 +2198,15 @@ spec:
         postgresql: internal-rpc-authority-postgresql-from-publisher
       exactDestinations:
         vault:
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: vault
           port: 8200
-          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          tlsServerName: vault.kodex-system.svc.cluster.local
         postgresql:
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
       sourceEgressPolicyRequired: true
       destinationIngressPolicyRequired: true
       environmentRenderMustPinServiceClusterIp: true
@@ -2222,15 +2222,15 @@ spec:
         postgresql: internal-rpc-authority-postgresql-from-readback-attestor
       exactDestinations:
         vault:
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: vault
           port: 8200
-          tlsServerName: vault.mattercodex-system.svc.cluster.local
+          tlsServerName: vault.kodex-system.svc.cluster.local
         postgresql:
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
       sourceEgressPolicyRequired: true
       destinationIngressPolicyRequired: true
       environmentRenderMustPinServiceClusterIp: true
@@ -2255,10 +2255,10 @@ spec:
       ingress: NONE
       egress:
         - destination: internal-rpc-authority-restore-controller
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-restore-controller
           port: 8443
-          tlsServerName: internal-rpc-authority-restore-controller.mattercodex-system.svc
+          tlsServerName: internal-rpc-authority-restore-controller.kodex-system.svc
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
           namespace: default
@@ -2268,19 +2268,19 @@ spec:
           environmentRenderMustPinServiceAndReadyEndpoints: true
           environmentRenderMustPinServiceAndReadyEndpointPorts: true
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
     recovery:
       ingress: NONE
       egress:
         - destination: postgresql
-          namespace: mattercodex-system
+          namespace: kodex-system
           service: internal-rpc-authority-postgresql
           port: 5432
-          tlsServerName: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+          tlsServerName: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           environmentRenderMustPinClusterIP: true
         - destination: kubernetes-api
           namespace: default
@@ -2328,7 +2328,7 @@ spec:
     operations:
       dashboard: internal-rpc-authority-dashboard
       prometheusRule: internal-rpc-authority
-      runbookUrl: https://docs.mattercodex.dev/runbooks/internal-rpc-authority
+      runbookUrl: https://docs.kodex.dev/runbooks/internal-rpc-authority
       tracingShutdownBudgetIndependent: true
       sentryFlushBudgetIndependent: true
   shutdown:
@@ -2368,7 +2368,7 @@ spec:
       discoveryMethod: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
       discoveryVersion: coordination_revision
       directivePhase: QUIESCING
-      roleCredentialAudience: urn:mattercodex:internal-rpc-authority-restore-controller
+      roleCredentialAudience: urn:kodex:internal-rpc-authority-restore-controller
       roleCredentialSignerTrust: CONTROLLER_OWNED_CURRENT_NEXT_PREVIOUS_SNAPSHOT_WITH_READBACK
       ackPublicKeySource: SIGNED_ROLE_CREDENTIAL
       requireAckJwkKidGenerationAndThumbprintMatch: true

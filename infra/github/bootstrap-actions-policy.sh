@@ -33,7 +33,7 @@ command -v gh >/dev/null 2>&1 || fail "gh is required"
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 [[ -n "${GH_TOKEN:-}" ]] || fail "GH_TOKEN is required"
 
-repository=codex-k8s/matter-codex
+repository=codex-k8s/kodex
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 gh api "repos/$repository" >"$temporary_directory/repository.json"
@@ -140,12 +140,12 @@ fi
 
 configure_environment production-build
 configure_environment production
-configure_repository_variable MATTERCODEX_PRODUCTION_WORKFLOW_SHA "$workflow_sha_file"
-configure_repository_variable MATTERCODEX_BUILD_OWNER_ACTOR_ID "$build_owner_actor_file"
-configure_repository_variable MATTERCODEX_DEPLOY_OWNER_ACTOR_ID "$deploy_owner_actor_file"
-configure_environment_variable production-build MATTERCODEX_PRODUCTION_WORKFLOW_SHA \
+configure_repository_variable KODEX_PRODUCTION_WORKFLOW_SHA "$workflow_sha_file"
+configure_repository_variable KODEX_BUILD_OWNER_ACTOR_ID "$build_owner_actor_file"
+configure_repository_variable KODEX_DEPLOY_OWNER_ACTOR_ID "$deploy_owner_actor_file"
+configure_environment_variable production-build KODEX_PRODUCTION_WORKFLOW_SHA \
   "$workflow_sha_file"
-configure_environment_variable production MATTERCODEX_PRODUCTION_WORKFLOW_SHA \
+configure_environment_variable production KODEX_PRODUCTION_WORKFLOW_SHA \
   "$workflow_sha_file"
 if [[ "$mode" == retire-invalid-registration-variable ]]; then
   if gh api "repos/$repository/actions/variables/GH_ARC_TOKEN" \

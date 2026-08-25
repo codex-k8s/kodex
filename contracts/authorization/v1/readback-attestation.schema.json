@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/readback-attestation.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/readback-attestation.schema.json",
   "title": "Role-bound evidence фактически обслуживаемого authority state",
   "type": "object",
   "additionalProperties": false,
@@ -42,10 +42,10 @@
       "type": "string",
       "minLength": 16,
       "maxLength": 512,
-      "pattern": "^spiffe://mattercodex[.]local/"
+      "pattern": "^spiffe://kodex[.]local/"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
+      "const": "urn:kodex:internal-rpc-authority-readback-attestor"
     },
     "sub": {
       "$ref": "#/$defs/boundedIdentity"
@@ -80,7 +80,7 @@
       "type": "string",
       "minLength": 16,
       "maxLength": 512,
-      "pattern": "^spiffe://mattercodex[.]local/"
+      "pattern": "^spiffe://kodex[.]local/"
     },
     "role": {
       "enum": [

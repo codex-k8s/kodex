@@ -12,11 +12,11 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
-	httptransport "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http"
-	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/websocket/generated"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
+	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
+	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"github.com/nats-io/nats.go"
 )
 
@@ -81,7 +81,7 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 		httptransport.WriteLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		return
 	}
-	protocols, csrfOK := requestedProtocols(request, "mattercodex.run.v1")
+	protocols, csrfOK := requestedProtocols(request, "kodex.run.v1")
 	if !csrfOK || !boundary.VerifyCSRFToken(identity, protocols.csrf) {
 		httptransport.WriteLocalProblem(writer, http.StatusForbidden, "CSRF_REJECTED", false)
 		return
@@ -90,7 +90,7 @@ func (server *Server) ServeRunHTTP(writer http.ResponseWriter, request *http.Req
 	for _, origin := range server.origins {
 		originPatterns = append(originPatterns, strings.TrimPrefix(origin, "https://"))
 	}
-	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{"mattercodex.run.v1"}, OriginPatterns: originPatterns})
+	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{"kodex.run.v1"}, OriginPatterns: originPatterns})
 	if err != nil {
 		return
 	}

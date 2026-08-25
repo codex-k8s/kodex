@@ -1,4 +1,4 @@
-module github.com/codex-k8s/matter-codex/libs/go/oidcidentity
+module github.com/codex-k8s/kodex/libs/go/oidcidentity
 
 go 1.26.6
 

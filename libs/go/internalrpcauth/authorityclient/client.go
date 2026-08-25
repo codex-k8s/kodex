@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/udscred"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/udscred"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -24,9 +24,9 @@ import (
 
 // Канонические UDS-пути и имя метаданных контекста авторизации.
 const (
-	IssuerSocketPath      = "/run/mattercodex/internal-rpc-authority/issuer.sock"
-	VerifierSocketPath    = "/run/mattercodex/internal-rpc-authority/verifier.sock"
-	AuthorizationMetadata = "x-mattercodex-authorization"
+	IssuerSocketPath      = "/run/kodex/internal-rpc-authority/issuer.sock"
+	VerifierSocketPath    = "/run/kodex/internal-rpc-authority/verifier.sock"
+	AuthorizationMetadata = "x-kodex-authorization"
 )
 
 // LocalConfig задаёт проверяемую идентичность локального authority-сервера.

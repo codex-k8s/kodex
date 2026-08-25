@@ -44,14 +44,14 @@ kubectl kustomize "$repository_root/infra/identity" >"$identity_render"
 OIDC_HOST=identity.example.test INGRESS_CLASS=public CLUSTER_ISSUER=public-production \
 INGRESS_NAMESPACE=ingress-system INGRESS_POD_NAME=public-ingress yq -i '
   (.. | select(tag == "!!str")) |= (
-    sub("__MATTERCODEX_OIDC_HOST__"; strenv(OIDC_HOST)) |
-    sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
-    sub("__MATTERCODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
-    sub("__MATTERCODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
-    sub("__MATTERCODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME))
+    sub("__KODEX_OIDC_HOST__"; strenv(OIDC_HOST)) |
+    sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
+    sub("__KODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
+    sub("__KODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME))
   )
 ' "$identity_render"
-! rg -q '__MATTERCODEX_[A-Z0-9_]+__|sha256:0{64}' "$identity_render" ||
+! rg -q '__KODEX_[A-Z0-9_]+__|sha256:0{64}' "$identity_render" ||
   fail 'identity render contains an unresolved placeholder'
 yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.name == "sso")' "$identity_render" |
   jq -e '
@@ -79,7 +79,7 @@ yq -o=json -I=0 'select(.kind == "StatefulSet" and .metadata.name == "keycloak-p
       .name == "postgresql" and
       (.args | index("ssl=on")) != null and
       (.args | index("ssl_min_protocol_version=TLSv1.3")) != null and
-      (.args | index("hba_file=/var/run/secrets/mattercodex/postgresql/pg_hba.conf")) != null and
+      (.args | index("hba_file=/var/run/secrets/kodex/postgresql/pg_hba.conf")) != null and
       (.args | index("password_encryption=scram-sha-256")) != null) and
     any(.spec.template.spec.initContainers[];
       .name == "materialize-postgresql-tls" and
@@ -104,7 +104,7 @@ oauth_values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yam
 yq -e '
   .extraArgs.provider == "keycloak-oidc" and
   .extraArgs."code-challenge-method" == "S256" and
-  .extraArgs."allowed-role" == "__MATTERCODEX_ALLOWED_ROLE__" and
+  .extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__" and
   .extraArgs."pass-access-token" == "false" and
   .extraArgs."pass-authorization-header" == "false" and
   .ingress.path == "/oauth2"
@@ -114,15 +114,15 @@ if yq -e '.ingress.annotations | has("cert-manager.io/cluster-issuer")' "$oauth_
 fi
 for tls_binding in \
   'control-center) tls_secret=staff-control-center-public-tls' \
-  'grafana) tls_secret=mattercodex-grafana-public-tls' \
-  'vault) tls_secret=mattercodex-vault-ui-public-tls' \
-  'headlamp) tls_secret=mattercodex-headlamp-public-tls'; do
+  'grafana) tls_secret=kodex-grafana-public-tls' \
+  'vault) tls_secret=kodex-vault-ui-public-tls' \
+  'headlamp) tls_secret=kodex-headlamp-public-tls'; do
   grep -Fq "$tls_binding" "$management_bootstrap" ||
     fail "OAuth2 Proxy does not reuse the backend TLS Secret: $tls_binding"
 done
 
 routes="$repository_root/infra/management-surfaces/routes.yaml"
-for ingress in mattercodex-grafana mattercodex-vault-ui mattercodex-headlamp; do
+for ingress in kodex-grafana kodex-vault-ui kodex-headlamp; do
   yq -o=json -I=0 'select(.kind == "Ingress")' "$routes" |
     jq -s -e --arg ingress "$ingress" '
       any(.[];
@@ -140,7 +140,7 @@ yq -o=json -I=0 'select(.kind == "NetworkPolicy")' "$routes" |
 
 grep -Fq '"headlamp|platform-admin|$headlamp_host|admin|$oidc_origin/realms/master"' \
   "$management_bootstrap" || fail 'Headlamp does not use the Keycloak master realm admin role'
-grep -Fq 'reconcile_confidential_client mattercodex-headlamp-proxy "$headlamp_origin"' \
+grep -Fq 'reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin"' \
   "$keycloak_bootstrap" || fail 'Headlamp confidential client reconciliation is absent'
 grep -Fq 'platform-admin oauth2-headlamp master' "$keycloak_bootstrap" ||
   fail 'Headlamp confidential client is outside the Keycloak master realm'
@@ -154,7 +154,7 @@ grep -Fq 'vault operator init -format=json -key-shares=5 -key-threshold=3' "$vau
   fail 'Vault does not use the approved Shamir 5/3 ceremony'
 
 [[ -d /dev/shm && -w /dev/shm ]] || fail '/dev/shm is required for identity plaintext cleanup verification'
-plaintext_test_directory=$(mktemp -d /dev/shm/mattercodex-identity-cleanup.XXXXXX)
+plaintext_test_directory=$(mktemp -d /dev/shm/kodex-identity-cleanup.XXXXXX)
 input_directory="$plaintext_test_directory/inputs"
 material_directory="$plaintext_test_directory/material"
 mkdir -p "$input_directory" "$material_directory"
@@ -192,21 +192,21 @@ yq -o=json -I=0 '.' "$repository_root/.github/workflows/prepare-installation-ide
     .jobs.prepare.environment == "production" and
     any(.jobs.prepare.steps[]; .uses == "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803") and
     any(.jobs.prepare.steps[];
-      .env.WORKFLOW_SHA == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}") and
+      .env.WORKFLOW_SHA == "${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}") and
     any(.jobs.prepare.steps[]; .uses == "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a")
   ' >/dev/null ||
   fail 'identity workflow is not pinned or owner-gated'
-grep -Fq 'MATTERCODEX_KEYCLOAK_ADMIN_USERNAME' \
+grep -Fq 'KODEX_KEYCLOAK_ADMIN_USERNAME' \
   "$repository_root/.github/workflows/prepare-installation-identity.yml" ||
   fail 'permanent Keycloak administrator variable is absent'
-! grep -Fq 'MATTERCODEX_KEYCLOAK_BOOTSTRAP_ADMIN_' \
+! grep -Fq 'KODEX_KEYCLOAK_BOOTSTRAP_ADMIN_' \
   "$repository_root/.github/workflows/prepare-installation-identity.yml" ||
   fail 'temporary Keycloak bootstrap identity is externally supplied'
 
 if rg -q 'kubernetes\.io/metadata\.name: monitoring' "$repository_root/deploy/k8s"; then
   fail 'workload scrape policy still references the retired monitoring namespace'
 fi
-grep -Fq 'mattercodex-system-oauth2-control-center-chain@kubernetescrd' \
+grep -Fq 'kodex-system-oauth2-control-center-chain@kubernetescrd' \
   "$repository_root/deploy/k8s/base/staff-control-center/ingress.yaml" ||
   fail 'Control Center ingress bypasses OAuth2 Proxy'
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/key-delivery-targets.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/key-delivery-targets.schema.json",
   "title": "Точные workload/role targets internal-rpc-authority",
   "type": "object",
   "additionalProperties": false,
@@ -57,7 +57,7 @@
       "type": "string",
       "minLength": 16,
       "maxLength": 512,
-      "pattern": "^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$"
+      "pattern": "^kv/data/kodex/[a-z0-9][a-z0-9./_-]*[a-z0-9]$"
     },
     "absolutePath": {
       "type": "string",
@@ -168,7 +168,7 @@
           "$ref": "#/$defs/absolutePath"
         },
         "credential_protected_type": {
-          "const": "mattercodex-internal-rpc-readback-credential+jws"
+          "const": "kodex-internal-rpc-readback-credential+jws"
         },
         "credential_schema": {
           "const": "contracts/authorization/v1/readback-credential.schema.json"
@@ -201,10 +201,10 @@
           "const": "SIGNED_NORMAL_READBACK_CREDENTIAL"
         },
         "attestor_address": {
-          "const": "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"
+          "const": "internal-rpc-authority-readback-attestor.kodex-system.svc:8443"
         },
         "attestor_tls_server_name": {
-          "const": "internal-rpc-authority-readback-attestor.mattercodex-system.svc"
+          "const": "internal-rpc-authority-readback-attestor.kodex-system.svc"
         },
         "attestor_trust_bundle_id": {
           "const": "internal-rpc-authority-readback-attestor-ca"
@@ -213,7 +213,7 @@
           "$ref": "#/$defs/absolutePath"
         },
         "attestor_audience": {
-          "const": "urn:mattercodex:internal-rpc-authority-readback-attestor"
+          "const": "urn:kodex:internal-rpc-authority-readback-attestor"
         },
         "attestor_challenge_full_method": {
           "const": "/internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge"
@@ -281,10 +281,10 @@
           "const": "SIGNED_ROLE_CREDENTIAL"
         },
         "controller_address": {
-          "const": "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443"
+          "const": "internal-rpc-authority-restore-controller.kodex-system.svc:8443"
         },
         "controller_tls_server_name": {
-          "const": "internal-rpc-authority-restore-controller.mattercodex-system.svc"
+          "const": "internal-rpc-authority-restore-controller.kodex-system.svc"
         },
         "controller_trust_bundle_id": {
           "const": "internal-rpc-authority-restore-controller-ca"
@@ -293,7 +293,7 @@
           "$ref": "#/$defs/absolutePath"
         },
         "controller_audience": {
-          "const": "urn:mattercodex:internal-rpc-authority-restore-controller"
+          "const": "urn:kodex:internal-rpc-authority-restore-controller"
         },
         "controller_full_method": {
           "const": "/internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective"

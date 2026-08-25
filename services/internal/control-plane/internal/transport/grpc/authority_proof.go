@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strings"
 
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authorityproof"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -88,7 +88,7 @@ func exactSPIFFEURI(certificate *x509.Certificate) (string, error) {
 		return "", status.Error(codes.PermissionDenied, "mTLS SPIFFE identity is rejected")
 	}
 	identity := certificate.URIs[0]
-	if identity.Scheme != "spiffe" || identity.Host != "mattercodex.local" || identity.RawQuery != "" || identity.Fragment != "" || identity.User != nil {
+	if identity.Scheme != "spiffe" || identity.Host != "kodex.local" || identity.RawQuery != "" || identity.Fragment != "" || identity.User != nil {
 		return "", status.Error(codes.PermissionDenied, "mTLS SPIFFE identity is rejected")
 	}
 	return identity.String(), nil

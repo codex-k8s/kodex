@@ -5,7 +5,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-postgresql
+      app.kubernetes.io/name: kodex-postgresql
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
@@ -29,7 +29,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-nats
+      app.kubernetes.io/name: kodex-nats
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
@@ -67,7 +67,7 @@ spec:
               app.kubernetes.io/name: vault-secrets-operator
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-registry-node-pull-readback
+              app.kubernetes.io/name: kodex-registry-node-pull-readback
       ports:
         - protocol: TCP
           port: 8200

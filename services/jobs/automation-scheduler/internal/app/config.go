@@ -36,12 +36,12 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen:             ":9090",
-		ControlPlaneTarget:          "control-plane.mattercodex-system.svc:8443",
-		ControlPlaneTLSServerName:   "control-plane.mattercodex-system.svc.cluster.local",
-		ControlPlaneCAFile:          "/var/run/config/mattercodex/automation-scheduler/control-plane/ca.pem",
-		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.crt",
-		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key",
-		ApplicationGrantFile:        "/var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws",
+		ControlPlaneTarget:          "control-plane.kodex-system.svc:8443",
+		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
+		ControlPlaneCAFile:          "/var/run/config/kodex/automation-scheduler/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/kodex/automation-scheduler/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/kodex/automation-scheduler/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/kodex/automation-scheduler/application-grant/application-grant.jws",
 		InstanceID:                  "automation-scheduler-0",
 		StartupTimeout:              30 * time.Second,
 		ShutdownTimeout:             20 * time.Second,

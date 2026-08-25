@@ -3,7 +3,7 @@ package usertext
 import (
 	"embed"
 
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
+	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
 )
 
 //go:embed messages/*.yaml

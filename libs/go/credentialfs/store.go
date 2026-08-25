@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
 const maximumCredentialBytes = 1 << 20

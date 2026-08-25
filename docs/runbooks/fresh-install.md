@@ -1,6 +1,6 @@
 ---
 id: RUN-MC-002
-title: Чистое развертывание web-first MatterCodex
+title: Чистое развертывание web-first Kodex
 type: runbook
 status: approved
 owner: sre
@@ -8,7 +8,7 @@ version: 1.3.7
 updated: 2026-08-25
 ---
 
-# Чистое развертывание web-first MatterCodex
+# Чистое развертывание web-first Kodex
 
 Эта инструкция предназначена только для новой установки без данных, которые
 нужно сохранить. Она разрушительна. Исполнитель сначала подтверждает точный
@@ -28,7 +28,7 @@ cluster context и получает отдельное решение владе
 
 ## 2. Удаляемый scope reset
 
-Целевой application namespace — `mattercodex-system`. При полном reset удаляется
+Целевой application namespace — `kodex-system`. При полном reset удаляется
 именно этот namespace и принадлежащие установке cluster-scoped resources,
 перечисленные в отрендеренном release manifest. Нельзя использовать wildcard,
 `$HOME`, корень workspace или удалять namespace, не совпавший с preflight.
@@ -52,10 +52,10 @@ generation/revision.
 
 | Namespace                     | Resource                           | Обязательные keys                                                                              | Назначение                                          |
 | ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| trust-manager trust namespace | `mattercodex-installation-ca`      | `tls.crt`                                                                                      | публичный installation CA source для `Bundle`       |
-| `mattercodex-system`          | `mattercodex-installation-ca`      | `tls.crt`, `tls.key`                                                                           | cert-manager `Issuer`; доступен только cert-manager |
-| `mattercodex-system`          | `mattercodex-postgresql-bootstrap` | `password`                                                                                     | одноразовый bootstrap PostgreSQL superuser          |
-| `mattercodex-system`          | `mattercodex-nats-credentials`     | `operator.jwt`, `system-account.public`, `system-account.jwt`, `account.public`, `account.jwt` | NATS operator и два bounded accounts                |
+| trust-manager trust namespace | `kodex-installation-ca`      | `tls.crt`                                                                                      | публичный installation CA source для `Bundle`       |
+| `kodex-system`          | `kodex-installation-ca`      | `tls.crt`, `tls.key`                                                                           | cert-manager `Issuer`; доступен только cert-manager |
+| `kodex-system`          | `kodex-postgresql-bootstrap` | `password`                                                                                     | одноразовый bootstrap PostgreSQL superuser          |
+| `kodex-system`          | `kodex-nats-credentials`     | `operator.jwt`, `system-account.public`, `system-account.jwt`, `account.public`, `account.jwt` | NATS operator и два bounded accounts                |
 
 Значения создаются криптографически стойкими средствами владельца и никогда не
 передаются как CLI argument. PostgreSQL application DSN, NATS user credentials,
@@ -155,13 +155,13 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    перезапускать API server. Общий Vault ingress разрешает по TCP/8200 только
    инфраструктурные `vault-csi-provider` и `vault-secrets-operator`, а также
    одно прямое workload-исключение
-   `mattercodex-registry-node-pull-readback` в том же namespace. Исключение
+   `kodex-registry-node-pull-readback` в том же namespace. Исключение
    требуется для получения краткоживущего node-bound client certificate и
-   ограничено exact ServiceAccount `mattercodex-image-pull-readback`, projected
+   ограничено exact ServiceAccount `kodex-image-pull-readback`, projected
    token с `audience: vault` и Vault policy, которая разрешает только issue по
-   `pki-node-pull/issue/mattercodex-node-pull` и revoke собственного token.
+   `pki-node-pull/issue/kodex-node-pull` и revoke собственного token.
    Client certificate использует закрытый CN
-   `<16-hex-node-hash>.g<generation>.mattercodex-node-pull`; Vault role
+   `<16-hex-node-hash>.g<generation>.kodex-node-pull`; Vault role
    разрешает только поддомены этого DNS root без glob и arbitrary names.
    Базовая Vault ingress policy не разрешает другие workload. Отдельные exact
    policies добавляют только зарегистрированные publisher/issuer paths, причём
@@ -171,7 +171,7 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    wildcard, `delete` и произвольный create запрещены. CSI provider
    подключается к Vault по HTTPS с адресом, installation CA path и exact SNI из
    pinned Helm values. Публичный `ca.crt` монтируется read-only из
-   `mattercodex-vault-server-tls`;
+   `kodex-vault-server-tls`;
    `SecretProviderClass` не переопределяет transport trust, а Vault Agent
    sidecar не участвует в этом пути. Каждый SPC обязан запрашивать projected
    token через точный `audience: vault`; source- и release-render проверки
@@ -188,7 +188,7 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    `verify_connection` не отключается. PostgreSQL ingress разрешает TCP/5432
    только точным внутренним workload и Vault database engine в этом же
    namespace. Все egress/ingress pod selectors указывают на фактический
-   StatefulSet label `app.kubernetes.io/name=mattercodex-postgresql`; DNS aliases
+   StatefulSet label `app.kubernetes.io/name=kodex-postgresql`; DNS aliases
    `control-plane-postgresql-rw` и `internal-rpc-authority-postgresql-rw` не
    являются pod labels. Отсутствие пути от `app.kubernetes.io/name=vault` является
    ошибкой render, а не основанием расширять CIDR или отключать policy/TLS.
@@ -238,7 +238,7 @@ workflow; bootstrap identity удаляется после reconciliation, а п
     `apply-migrations`: generic apply не обновляет их immutable template при
     переходе на новый release digest. Перед generic apply state/workload-фаза
     сравнивает semantic payload закрытого списка release-owned immutable
-    ресурсов (`mattercodex-role-environments`, image admission ConfigMap и
+    ресурсов (`kodex-role-environments`, image admission ConfigMap и
     `ImageAdmissionPolicyParameters`). Совпадающий ресурс не изменяется; drift
     устраняется bounded delete/create с немедленным exact readback. Добавлять в
     этот список неизвестный ресурс без отдельного lifecycle запрещено.

@@ -18,7 +18,7 @@ fence/generation, image `repository@sha256`, runtime ABI, ServiceAccount,
 resources, PVC и callback ticket. Display role name, prompt или caller-supplied
 Kubernetes locator не являются authority.
 
-`mattercodex.agent-runner-input.v4` должен пройти schema validation. Mutable
+`kodex.agent-runner-input.v4` должен пройти schema validation. Mutable
 tag, image вне promoted repository, ABI mismatch, stale fence, extra container,
 broad ServiceAccount или host access закрыто отклоняются admission.
 

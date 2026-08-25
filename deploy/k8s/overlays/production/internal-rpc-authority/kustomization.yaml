@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: mattercodex-system
+namespace: kodex-system
 resources:
   - ../../../base/internal-rpc-authority
   - ../../../base/internal-rpc-authority-publisher
@@ -14,6 +14,6 @@ patches:
   - path: poddisruptionbudget-patch.yaml
 labels:
   - pairs:
-      mattercodex.dev/environment: production
+      kodex.dev/environment: production
     includeSelectors: false
     includeTemplates: true

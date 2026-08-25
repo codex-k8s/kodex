@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mattercodex-buildkit
+  name: kodex-buildkit
   labels:
-    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/name: kodex-buildkit
     app.kubernetes.io/component: image-builder
 spec:
   replicas: 2
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-buildkit
+      app.kubernetes.io/name: kodex-buildkit
       app.kubernetes.io/component: image-builder
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-buildkit
+        app.kubernetes.io/name: kodex-buildkit
         app.kubernetes.io/component: image-builder
     spec:
       # BuildKit работает от namespace-root внутри обязательного Kubernetes
@@ -24,7 +24,7 @@ spec:
       # обязан отклонить Pod; переход в host user namespace или
       # noProcessSandbox запрещён.
       hostUsers: false
-      serviceAccountName: mattercodex-buildkit
+      serviceAccountName: kodex-buildkit
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 60
@@ -33,7 +33,7 @@ spec:
           image: moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4
           imagePullPolicy: IfNotPresent
           args:
-            - --config=/var/run/config/mattercodex/buildkit/buildkitd.toml
+            - --config=/var/run/config/kodex/buildkit/buildkitd.toml
           ports:
             - name: buildkit
               containerPort: 1234
@@ -46,21 +46,21 @@ spec:
                 - |
                   work=$(mktemp -d)
                   trap 'rm -rf "$work"' EXIT
-                  export DOCKER_CONFIG=/var/run/secrets/mattercodex/buildkit/tls
-                  base=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseRepository)
-                  base_digest=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseDigest)
-                  frontend=$(cat /var/run/config/mattercodex/image-policy/frontendSHA256)
-                  printf '# syntax=%s@sha256:%s\nFROM %s@%s\nRUN ["/bin/sh","-c","test -x /usr/local/bin/mattercodex-init && test -x /usr/local/bin/matter-codex-agent-runner"]\n' \
-                    'mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile' \
+                  export DOCKER_CONFIG=/var/run/secrets/kodex/buildkit/tls
+                  base=$(cat /var/run/config/kodex/image-policy/trustedRoleBaseRepository)
+                  base_digest=$(cat /var/run/config/kodex/image-policy/trustedRoleBaseDigest)
+                  frontend=$(cat /var/run/config/kodex/image-policy/frontendSHA256)
+                  printf '# syntax=%s@sha256:%s\nFROM %s@%s\nRUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner"]\n' \
+                    'kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile' \
                     "$frontend" "$base" "$base_digest" >"$work/Dockerfile"
                   buildctl --addr tcp://127.0.0.1:1234 \
-                    --tlscacert /var/run/secrets/mattercodex/buildkit/tls/ca.pem \
-                    --tlscert /var/run/secrets/mattercodex/buildkit/tls/probe.crt \
-                    --tlskey /var/run/secrets/mattercodex/buildkit/tls/probe.key \
-                    --tlsservername mattercodex-buildkit.mattercodex-system.svc.cluster.local \
+                    --tlscacert /var/run/secrets/kodex/buildkit/tls/ca.pem \
+                    --tlscert /var/run/secrets/kodex/buildkit/tls/probe.crt \
+                    --tlskey /var/run/secrets/kodex/buildkit/tls/probe.key \
+                    --tlsservername kodex-buildkit.kodex-system.svc.cluster.local \
                     build --frontend dockerfile.v0 --local context="$work" --local dockerfile="$work" \
                     --opt filename=Dockerfile --opt platform=linux/amd64 \
-                    --output type=image,name=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/readiness:userns-probe,push=true \
+                    --output type=image,name=kodex-image-registry-push.kodex-system.svc.cluster.local:5001/staging/readiness:userns-probe,push=true \
                     --no-cache >/dev/null
             periodSeconds: 60
             timeoutSeconds: 30
@@ -72,13 +72,13 @@ spec:
                 - --addr
                 - tcp://127.0.0.1:1234
                 - --tlscacert
-                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
+                - /var/run/secrets/kodex/buildkit/tls/ca.pem
                 - --tlscert
-                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
+                - /var/run/secrets/kodex/buildkit/tls/probe.crt
                 - --tlskey
-                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
+                - /var/run/secrets/kodex/buildkit/tls/probe.key
                 - --tlsservername
-                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
+                - kodex-buildkit.kodex-system.svc.cluster.local
                 - debug
                 - workers
             periodSeconds: 15
@@ -99,16 +99,16 @@ spec:
             - name: state
               mountPath: /var/lib/buildkit
             - name: config
-              mountPath: /var/run/config/mattercodex/buildkit
+              mountPath: /var/run/config/kodex/buildkit
               readOnly: true
             - name: registry-ca
-              mountPath: /var/run/config/mattercodex/image-registry
+              mountPath: /var/run/config/kodex/image-registry
               readOnly: true
             - name: image-policy
-              mountPath: /var/run/config/mattercodex/image-policy
+              mountPath: /var/run/config/kodex/image-policy
               readOnly: true
             - name: buildkit-tls
-              mountPath: /var/run/secrets/mattercodex/buildkit/tls
+              mountPath: /var/run/secrets/kodex/buildkit/tls
               readOnly: true
       volumes:
         - name: state
@@ -116,15 +116,15 @@ spec:
             sizeLimit: 20Gi
         - name: config
           configMap:
-            name: mattercodex-buildkit-config
+            name: kodex-buildkit-config
             defaultMode: 0440
         - name: registry-ca
           secret:
-            secretName: mattercodex-image-registry-ca
+            secretName: kodex-image-registry-ca
             defaultMode: 0440
         - name: image-policy
           configMap:
-            name: mattercodex-image-admission-policy
+            name: kodex-image-admission-policy
             defaultMode: 0440
             items:
               - {key: trustedRoleBaseRepository, path: trustedRoleBaseRepository}
@@ -135,18 +135,18 @@ spec:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: mattercodex-buildkit-tls
+              secretProviderClass: kodex-buildkit-tls
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-buildkit
+  name: kodex-buildkit
   labels:
-    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/name: kodex-buildkit
     app.kubernetes.io/component: image-builder
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-buildkit
+    app.kubernetes.io/name: kodex-buildkit
     app.kubernetes.io/component: image-builder
   ports:
     - name: buildkit

@@ -69,7 +69,7 @@ case "$environment_name" in
     ;;
 esac
 
-expected_repository="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority"
+expected_repository="ghcr.io/codex-k8s/kodex/internal-rpc-authority"
 case "$image_ref" in
   "${expected_repository}@sha256:"????????????????????????????????????????????????????????????????) ;;
   *) fail "image reference must use the registered repository and exact sha256 digest" ;;
@@ -122,7 +122,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: internal-rpc-authority-kubernetes-api-exact-endpoints
-  namespace: mattercodex-system
+  namespace: kodex-system
 spec:
   podSelector:
     matchExpressions:
@@ -153,7 +153,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: internal-rpc-authority-database-credential-kubernetes-api
-  namespace: mattercodex-system
+  namespace: kodex-system
 spec:
   podSelector:
     matchLabels:

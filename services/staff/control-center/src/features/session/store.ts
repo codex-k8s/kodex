@@ -32,7 +32,7 @@ export type SessionPhase =
   | "forbidden"
   | "error";
 
-const sessionRevisionKey = "mattercodex.session.revision";
+const sessionRevisionKey = "kodex.session.revision";
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;

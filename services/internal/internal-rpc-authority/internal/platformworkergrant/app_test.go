@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 func TestRotateWritesExactBoundedGrant(t *testing.T) {

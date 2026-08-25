@@ -26,7 +26,7 @@ integration effects/grants, optional deliveries, artifacts и schedules.
 Prometheus, Alertmanager и Grafana устанавливаются pinned chart profile в
 namespace `observability`. Prometheus и Alertmanager не получают публичный
 Ingress. Grafana принимает auth-proxy headers только от публичного ingress,
-который перед этим проверяет Keycloak role `mattercodex-owner` через отдельный
+который перед этим проверяет Keycloak role `kodex-owner` через отдельный
 OAuth2 Proxy client. NetworkPolicy всех scrape targets разрешает namespace
 `observability`, а не историческое имя `monitoring`.
 

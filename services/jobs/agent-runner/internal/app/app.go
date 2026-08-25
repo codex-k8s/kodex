@@ -21,16 +21,16 @@ import (
 	"time"
 	"unicode/utf8"
 
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/callback"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/codex"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/readiness"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/security"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 )
 
-const inputPath = "/var/run/config/mattercodex/runtime/runtime.json"
+const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 
 type health struct{ live, ready atomic.Bool }
 
@@ -197,7 +197,7 @@ func safeFailureCode(code string) string {
 }
 
 func materializeWorkspace(input model.Input) error {
-	for _, relative := range []string{".matter-codex", ".matter-codex/inbox", ".matter-codex/outbox", ".matter-codex/state", "input"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", "input"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func materializeWorkspace(input model.Input) error {
 	if err != nil {
 		return err
 	}
-	return writeWorkspaceFile(input.WorkspaceRoot, ".matter-codex/inbox/prompt.md", prompt)
+	return writeWorkspaceFile(input.WorkspaceRoot, ".kodex/inbox/prompt.md", prompt)
 }
 
 func buildPrompt(input model.Input) ([]byte, error) {

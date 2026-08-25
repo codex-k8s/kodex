@@ -23,7 +23,7 @@ spec:
         app.kubernetes.io/component: internal-service
       annotations:
         kubectl.kubernetes.io/default-container: control-plane
-        mattercodex.dev/agent-runtime-image-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+        kodex.dev/agent-runtime-image-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
     spec:
       serviceAccountName: control-plane
       automountServiceAccountToken: false
@@ -35,7 +35,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: control-plane
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           args: []
           envFrom:
@@ -49,17 +49,17 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
+                  fieldPath: metadata.labels['kodex.dev/environment']
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
               value: otel-collector.observability.svc.cluster.local
             - name: OTEL_EXPORTER_OTLP_CA_FILE
-              value: /var/run/config/mattercodex/control-plane/observability/otel-ca.pem
+              value: /var/run/config/kodex/control-plane/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
             - name: SENTRY_DSN_FILE
-              value: /var/run/secrets/mattercodex/control-plane/observability/sentry-dsn
+              value: /var/run/secrets/kodex/control-plane/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
             - name: CONTROL_PLANE_NATS_REPLICAS
@@ -73,26 +73,26 @@ spec:
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256
               valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256}}
             - name: CONTROL_PLANE_OIDC_ISSUER
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcIssuer}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
             - name: CONTROL_PLANE_OIDC_AUDIENCE
-              value: mattercodex-control-api
+              value: kodex-control-api
             - name: CONTROL_PLANE_OIDC_JWKS_URL
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcJwksUrl}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcJwksUrl}}
             - name: CONTROL_PLANE_OIDC_CONNECT_ADDRESS
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcConnectAddress}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcConnectAddress}}
             - name: CONTROL_PLANE_OIDC_TLS_SERVER_NAME
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcTlsServerName}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcTlsServerName}}
             - name: CONTROL_PLANE_OIDC_CA_FILE
-              value: /var/run/config/mattercodex/control-plane/oidc/ca.pem
+              value: /var/run/config/kodex/control-plane/oidc/ca.pem
             - name: CONTROL_PLANE_IMAGE_POLICY_REVISION
               valueFrom:
                 configMapKeyRef:
-                  name: mattercodex-image-admission-policy
+                  name: kodex-image-admission-policy
                   key: policyRevision
             - name: CONTROL_PLANE_IMAGE_POLICY_SHA256
               valueFrom:
                 configMapKeyRef:
-                  name: mattercodex-image-admission-policy
+                  name: kodex-image-admission-policy
                   key: policySHA256
             - name: CONTROL_PLANE_IMAGE_BUILD_LEASE_DURATION
               value: 5m
@@ -103,35 +103,35 @@ spec:
             - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
               value: "3"
             - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
-              value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
+              value: kodex-image-registry-push.kodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
-              value: registry-pull.invalid/mattercodex/roles
+              value: registry-pull.invalid/kodex/roles
             - name: CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleImageInputRepository}}
             - name: CONTROL_PLANE_ROLE_ENVIRONMENT_CATALOG_FILE
-              value: /var/run/config/mattercodex/control-plane/role-environments/catalog.json
+              value: /var/run/config/kodex/control-plane/role-environments/catalog.json
             - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_SHA256
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: builderSHA256}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: builderSHA256}}
             - name: CONTROL_PLANE_ROLE_IMAGE_FRONTEND_SHA256
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: frontendSHA256}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: frontendSHA256}}
             - name: CONTROL_PLANE_ROLE_IMAGE_TOOLCHAIN_SHA256
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: toolchainSHA256}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: toolchainSHA256}}
             - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: trustedRoleBaseRepository}}
             - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: trustedRoleBaseDigest}}
             - name: CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: nodeReadbackImage}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE
-              value: /var/run/config/mattercodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
+              value: /var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE
-              value: /var/run/config/mattercodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
+              value: /var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk
             - name: CONTROL_PLANE_IMAGE_PROMOTION_GRANT_TRUST_FILE
-              value: /var/run/config/mattercodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
+              value: /var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk
           ports:
             - name: grpc
               containerPort: 8443
@@ -178,46 +178,46 @@ spec:
                 - ALL
           volumeMounts:
             - name: workload-tls
-              mountPath: /var/run/secrets/mattercodex/control-plane/workload-tls
+              mountPath: /var/run/secrets/kodex/control-plane/workload-tls
               readOnly: true
             - name: internal-ca
-              mountPath: /var/run/config/mattercodex/control-plane/internal-ca
+              mountPath: /var/run/config/kodex/control-plane/internal-ca
               readOnly: true
             - name: postgres-runtime
-              mountPath: /var/run/secrets/mattercodex/control-plane/postgres-runtime
+              mountPath: /var/run/secrets/kodex/control-plane/postgres-runtime
               readOnly: true
             - name: postgres-ca
-              mountPath: /var/run/config/mattercodex/control-plane/postgres
+              mountPath: /var/run/config/kodex/control-plane/postgres
               readOnly: true
             - name: nats-credential
-              mountPath: /var/run/secrets/mattercodex/control-plane/nats
+              mountPath: /var/run/secrets/kodex/control-plane/nats
               readOnly: true
             - name: nats-client-tls
-              mountPath: /var/run/secrets/mattercodex/control-plane/nats-client
+              mountPath: /var/run/secrets/kodex/control-plane/nats-client
               readOnly: true
             - name: nats-ca
-              mountPath: /var/run/config/mattercodex/control-plane/nats
+              mountPath: /var/run/config/kodex/control-plane/nats
               readOnly: true
             - name: lease-signing
-              mountPath: /var/run/secrets/mattercodex/control-plane/lease-signing
+              mountPath: /var/run/secrets/kodex/control-plane/lease-signing
               readOnly: true
             - name: authority-policy
-              mountPath: /var/run/config/mattercodex/control-plane/authority
+              mountPath: /var/run/config/kodex/control-plane/authority
               readOnly: true
             - name: oidc-ca
-              mountPath: /var/run/config/mattercodex/control-plane/oidc
+              mountPath: /var/run/config/kodex/control-plane/oidc
               readOnly: true
             - name: application-grants
-              mountPath: /var/run/config/mattercodex/control-plane/application-grants
+              mountPath: /var/run/config/kodex/control-plane/application-grants
               readOnly: true
             - name: role-environments
-              mountPath: /var/run/config/mattercodex/control-plane/role-environments
+              mountPath: /var/run/config/kodex/control-plane/role-environments
               readOnly: true
             - name: otel-ca
-              mountPath: /var/run/config/mattercodex/control-plane/observability
+              mountPath: /var/run/config/kodex/control-plane/observability
               readOnly: true
             - name: sentry-dsn
-              mountPath: /var/run/secrets/mattercodex/control-plane/observability
+              mountPath: /var/run/secrets/kodex/control-plane/observability
               readOnly: true
             - name: tmp
               mountPath: /tmp
@@ -228,7 +228,7 @@ spec:
             defaultMode: 0440
         - name: internal-ca
           configMap:
-            name: mattercodex-internal-ca
+            name: kodex-internal-ca
             defaultMode: 0440
             items:
               - key: ca.pem
@@ -263,7 +263,7 @@ spec:
                 path: tls.key
         - name: nats-ca
           configMap:
-            name: mattercodex-nats-ca
+            name: kodex-nats-ca
             defaultMode: 0440
             items:
               - key: ca.pem
@@ -283,7 +283,7 @@ spec:
                 path: policy.json
         - name: oidc-ca
           configMap:
-            name: mattercodex-oidc-ca
+            name: kodex-oidc-ca
             defaultMode: 0440
             items:
               - key: ca.pem
@@ -296,21 +296,21 @@ spec:
               secretProviderClass: control-plane-application-grants
         - name: role-environments
           configMap:
-            name: mattercodex-role-environments
+            name: kodex-role-environments
             defaultMode: 0440
             items:
               - key: catalog.json
                 path: catalog.json
         - name: otel-ca
           configMap:
-            name: mattercodex-otel-ca
+            name: kodex-otel-ca
             defaultMode: 0440
             items:
               - key: ca.pem
                 path: otel-ca.pem
         - name: sentry-dsn
           secret:
-            secretName: mattercodex-sentry
+            secretName: kodex-sentry
             defaultMode: 0440
             items:
               - key: dsn

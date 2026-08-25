@@ -1,6 +1,6 @@
 ---
 id: ARCH-MC-001
-title: Архитектурная основа MatterCodex
+title: Архитектурная основа Kodex
 type: architecture-index
 status: approved
 owner: architect
@@ -8,9 +8,9 @@ version: 1.0.0
 updated: 2026-07-29
 ---
 
-# Архитектурная основа MatterCodex
+# Архитектурная основа Kodex
 
-MatterCodex строится как независимая от поставщика моделей web-платформа
+Kodex строится как независимая от поставщика моделей web-платформа
 управления ИИ-сотрудниками. Control Center предоставляет полный пользовательский
 интерфейс, а Kubernetes исполняет изолированные ролевые окружения агентов.
 

@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
@@ -110,7 +110,7 @@ func New(config Config) (*Store, error) {
 		address.RawQuery != "" ||
 		address.Fragment != "" ||
 		config.TLSServerName == "" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		config.ResourceName != "internal-rpc-authority-restore-coordination" ||
 		config.Timeout < time.Second ||
 		config.Timeout > 10*time.Second {
@@ -230,8 +230,8 @@ func (store *Store) VerifyOperatorCredential(
 	audience string,
 ) (model.RestoreOperatorCredential, error) {
 	const (
-		expectedAudience = "urn:mattercodex:internal-rpc-authority-restore-controller"
-		expectedSubject  = "system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator"
+		expectedAudience = "urn:kodex:internal-rpc-authority-restore-controller"
+		expectedSubject  = "system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator"
 		podNameExtraKey  = "authentication.kubernetes.io/pod-name"
 		podUIDExtraKey   = "authentication.kubernetes.io/pod-uid"
 	)
@@ -304,7 +304,7 @@ func (store *Store) VerifyOperatorCredential(
 	digest := sha256.Sum256([]byte(token))
 	return model.RestoreOperatorCredential{
 		Subject:           expectedSubject,
-		Namespace:         "mattercodex-system",
+		Namespace:         "kodex-system",
 		ServiceAccount:    "internal-rpc-authority-restore-operator",
 		Audience:          audience,
 		TokenDigestSHA256: hex.EncodeToString(digest[:]),

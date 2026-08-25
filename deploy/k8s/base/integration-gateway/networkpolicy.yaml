@@ -43,7 +43,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: control-plane
@@ -52,7 +52,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: egress-gateway

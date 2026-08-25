@@ -1,10 +1,10 @@
-module github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth
+module github.com/codex-k8s/kodex/libs/go/integrationgatewayauth
 
 go 1.26.6
 
 require (
-	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 )
 
 require (
@@ -23,6 +23,6 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../internalrpcauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../securefile

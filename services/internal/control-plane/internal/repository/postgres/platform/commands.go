@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

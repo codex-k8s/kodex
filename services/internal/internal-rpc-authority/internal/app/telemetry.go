@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

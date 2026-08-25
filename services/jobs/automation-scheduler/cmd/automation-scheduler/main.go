@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/automation-scheduler/internal/app"
+	"github.com/codex-k8s/kodex/services/jobs/automation-scheduler/internal/app"
 )
 
 var version = "dev"

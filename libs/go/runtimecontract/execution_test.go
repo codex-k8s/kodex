@@ -41,14 +41,14 @@ func validRunnerInputFixture() RunnerInput {
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("e", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
-			ServerName:      "runtime-controller-callback.mattercodex-system.svc.cluster.local",
-			CAFile:          "/var/run/config/mattercodex/runtime/callback/ca.crt",
-			CertificateFile: "/var/run/secrets/mattercodex/runtime/callback-client/tls.crt",
-			PrivateKeyFile:  "/var/run/secrets/mattercodex/runtime/callback-client/tls.key",
+			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",
+			CAFile:          "/var/run/config/kodex/runtime/callback/ca.crt",
+			CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt",
+			PrivateKeyFile:  "/var/run/secrets/kodex/runtime/callback-client/tls.key",
 		},
-		ExecutionTicketFile:    "/var/run/secrets/mattercodex/runtime/ticket/token",
-		ProviderAuthFile:       "/var/run/secrets/mattercodex/runtime/provider/auth.json",
-		ProviderAuthSHA256File: "/var/run/secrets/mattercodex/runtime/provider/auth.sha256",
-		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.matter-codex/outbox", CodexHome: "/tmp/codex-home",
+		ExecutionTicketFile:    "/var/run/secrets/kodex/runtime/ticket/token",
+		ProviderAuthFile:       "/var/run/secrets/kodex/runtime/provider/auth.json",
+		ProviderAuthSHA256File: "/var/run/secrets/kodex/runtime/provider/auth.sha256",
+		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/tmp/codex-home",
 	}
 }

@@ -4,8 +4,8 @@ metadata:
   name: internal-rpc-authority-restore-controller
   annotations: {argocd.argoproj.io/sync-wave: "-8"}
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-restore-controller-vault-ca
 ---

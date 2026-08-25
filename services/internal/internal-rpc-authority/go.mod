@@ -1,14 +1,14 @@
-module github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority
+module github.com/codex-k8s/kodex/services/internal/internal-rpc-authority
 
 go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
+	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/exaring/otelpgx v0.11.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -65,12 +65,12 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
+replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
+replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 
-replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile

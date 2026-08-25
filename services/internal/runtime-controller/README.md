@@ -31,7 +31,7 @@ policy, signature, promotion и runtime ABI. Controller допускает то�
 
 ## Runtime contract
 
-Канонический input — `mattercodex.agent-runner-input.v4`, схема находится в
+Канонический input — `kodex.agent-runner-input.v4`, схема находится в
 `contracts/runtime-controller/v4/agent-runner-input.schema.json`, типы — в
 `libs/go/runtimecontract`. Input связывает organization/project/agent/session/
 turn/run/node/attempt, revision digest, role image digest, bounded input,

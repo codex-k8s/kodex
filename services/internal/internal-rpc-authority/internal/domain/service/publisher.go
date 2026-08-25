@@ -11,20 +11,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	restoreIssuanceType        = "mattercodex-internal-rpc-restore-role-issuance+jws"
-	restoreRoleCredentialType  = "mattercodex-internal-rpc-restore-role-credential+jws"
-	restoreDeliveryReceiptType = "mattercodex-internal-rpc-restore-role-delivery-receipt+jws"
-	restoreControllerSPIFFE    = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
-	restorePublisherSPIFFE     = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
-	restorePublisherAudience   = "urn:mattercodex:internal-rpc-authority-restore-role-credential-publisher"
-	restoreControllerAudience  = "urn:mattercodex:internal-rpc-authority-restore-controller"
+	restoreIssuanceType        = "kodex-internal-rpc-restore-role-issuance+jws"
+	restoreRoleCredentialType  = "kodex-internal-rpc-restore-role-credential+jws"
+	restoreDeliveryReceiptType = "kodex-internal-rpc-restore-role-delivery-receipt+jws"
+	restoreControllerSPIFFE    = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
+	restorePublisherSPIFFE     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
+	restorePublisherAudience   = "urn:kodex:internal-rpc-authority-restore-role-credential-publisher"
+	restoreControllerAudience  = "urn:kodex:internal-rpc-authority-restore-controller"
 	restoreIssuanceTTL         = 30 * time.Second
 	restoreRoleCredentialTTL   = 5 * time.Minute
 	// Projected Kubernetes Secret updates can lag behind the publisher by up to

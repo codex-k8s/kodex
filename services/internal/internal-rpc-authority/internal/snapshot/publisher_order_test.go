@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 func TestVerifyPublisherSnapshotCompactUsesSnapshotLimit(t *testing.T) {
@@ -40,8 +40,8 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	alpha := mustPublisherTestKey(t, "alpha")
 	beta := mustPublisherTestKey(t, "beta")
 	authorization := []PublisherKey{
-		publisherTestKey("spiffe://mattercodex.local/beta", "beta", "AUTHORIZATION_CONTEXT", 2, beta),
-		publisherTestKey("spiffe://mattercodex.local/alpha", "alpha", "AUTHORIZATION_CONTEXT", 1, alpha),
+		publisherTestKey("spiffe://kodex.local/beta", "beta", "AUTHORIZATION_CONTEXT", 2, beta),
+		publisherTestKey("spiffe://kodex.local/alpha", "alpha", "AUTHORIZATION_CONTEXT", 1, alpha),
 	}
 	left, err := publisherIssuerSets(authorization, now)
 	if err != nil {
@@ -64,8 +64,8 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 	}
 
 	proof := []PublisherKey{
-		publisherTestKey("spiffe://mattercodex.local/beta", "beta", "AUTHORITY_PROOF", 2, beta),
-		publisherTestKey("spiffe://mattercodex.local/alpha", "alpha", "AUTHORITY_PROOF", 1, alpha),
+		publisherTestKey("spiffe://kodex.local/beta", "beta", "AUTHORITY_PROOF", 2, beta),
+		publisherTestKey("spiffe://kodex.local/alpha", "alpha", "AUTHORITY_PROOF", 1, alpha),
 	}
 	options := PublisherBuildOptions{SourceRevision: 1, AuthorityProofKeys: proof}
 	firstProof, err := publisherProofTrust(options, now, string(make([]byte, 64)))
@@ -84,29 +84,29 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 
 func TestBindPublisherKeyAudiencesUsesSignedPolicy(t *testing.T) {
 	t.Parallel()
-	issuer := "spiffe://mattercodex.local/ns/mattercodex-system/sa/caller"
-	proofIssuer := "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+	issuer := "spiffe://kodex.local/ns/kodex-system/sa/caller"
+	proofIssuer := "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	key := mustPublisherTestKey(t, "bound-audiences")
 	authorization, proof, err := bindPublisherKeyAudiences(
 		[]PublisherKey{{Issuer: issuer, Key: key}},
 		[]PublisherKey{{Issuer: proofIssuer, Key: key}},
 		policy{
 			OperationBindings: []operationBinding{
-				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:mattercodex:beta"},
-				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:mattercodex:alpha"},
+				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:kodex:beta"},
+				{CallerSPIFFEID: issuer, Issuer: issuer, Audience: "urn:kodex:alpha"},
 			},
 			ProofProducers: []authorityProofProducer{
-				{AuthorityProofIssuer: proofIssuer, AuthorityProofAudience: "urn:mattercodex:proof"},
+				{AuthorityProofIssuer: proofIssuer, AuthorityProofAudience: "urn:kodex:proof"},
 			},
 		},
 	)
 	if err != nil {
 		t.Fatalf("bind publisher audiences: %v", err)
 	}
-	if strings.Join(authorization[0].Audiences, ",") != "urn:mattercodex:alpha,urn:mattercodex:beta" {
+	if strings.Join(authorization[0].Audiences, ",") != "urn:kodex:alpha,urn:kodex:beta" {
 		t.Fatalf("unexpected authorization audiences: %v", authorization[0].Audiences)
 	}
-	if strings.Join(proof[0].Audiences, ",") != "urn:mattercodex:proof" {
+	if strings.Join(proof[0].Audiences, ",") != "urn:kodex:proof" {
 		t.Fatalf("unexpected proof audiences: %v", proof[0].Audiences)
 	}
 }
@@ -115,9 +115,9 @@ func TestBindPublisherKeyAudiencesRejectsDelegatedIssuer(t *testing.T) {
 	t.Parallel()
 	_, _, err := bindPublisherKeyAudiences(nil, nil, policy{
 		OperationBindings: []operationBinding{{
-			CallerSPIFFEID: "spiffe://mattercodex.local/caller",
-			Issuer:         "spiffe://mattercodex.local/other",
-			Audience:       "urn:mattercodex:target",
+			CallerSPIFFEID: "spiffe://kodex.local/caller",
+			Issuer:         "spiffe://kodex.local/other",
+			Audience:       "urn:kodex:target",
 		}},
 	})
 	if err == nil {
@@ -135,7 +135,7 @@ func publisherTestKey(
 	return PublisherKey{
 		Issuer: issuer, WorkloadID: workloadID, Status: "CURRENT",
 		Generation: generation, Purpose: purpose,
-		Audiences: []string{"urn:mattercodex:test"}, Key: key,
+		Audiences: []string{"urn:kodex:test"}, Key: key,
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 )
 
 const validPolicy = `{
-  "apiVersion":"mattercodex.io/v1alpha1",
+  "apiVersion":"kodex.io/v1alpha1",
   "kind":"EgressGatewayPolicy",
   "metadata":{"name":"egress-gateway","revision":"2026-08-07.1"},
   "spec":{

@@ -25,7 +25,7 @@ if [[ -n ${IMAGE_ADMISSION_POLICY_JSON:-} ]]; then
   intent=$IMAGE_ADMISSION_POLICY_JSON
 else
   command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
-  intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
+  intent=$(kubectl --namespace kodex-system get configmap kodex-image-admission-policy -o json)
 fi
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
@@ -36,7 +36,7 @@ evidence_repository=$(jq -er '.data.evidenceRepository' <<<"$intent")
 promoted_pull_repository=$(jq -er '.data.promotedPullRepository' <<<"$intent")
 policy_revision=$(jq -er '.data.policyRevision' <<<"$intent")
 policy_sha256=$(jq -er '.data.policySHA256' <<<"$intent")
-tools_digest=$(jq -er '.metadata.annotations["mattercodex.dev/admission-tools-sha256"]' <<<"$intent")
+tools_digest=$(jq -er '.metadata.annotations["kodex.dev/admission-tools-sha256"]' <<<"$intent")
 required_tools=$(jq -er '.data.requiredTools' <<<"$intent")
 builder_identity=$(jq -er '.data.builderIdentity' <<<"$intent")
 build_type=$(jq -er '.data.buildType' <<<"$intent")
@@ -44,7 +44,7 @@ trusted_role_base_repository=$(jq -er '.data.trustedRoleBaseRepository' <<<"$int
 trusted_role_base_digest=$(jq -er '.data.trustedRoleBaseDigest' <<<"$intent")
 role_runtime_contract_revision=$(jq -er '.data.roleRuntimeContractRevision' <<<"$intent")
 role_runtime_contract_sha256=$(jq -er '.data.roleRuntimeContractSHA256' <<<"$intent")
-jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
+jq -e '.immutable == true and .metadata.labels["kodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
 for image in "$tools_image" "$admission_image" "$authority_image"; do
   [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
@@ -57,15 +57,15 @@ for repository in "$promotion_repository" "$promotion_evidence_repository" "$evi
 done
 [[ ${promotion_repository#*/} == "${promoted_pull_repository#*/}" ]] ||
   { echo "promotion and pull repository paths differ" >&2; exit 78; }
-[[ $evidence_repository == mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission ]] ||
+[[ $evidence_repository == kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission ]] ||
   { echo "evidence repository binding is invalid" >&2; exit 78; }
-[[ $promotion_evidence_repository == mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence ]] ||
+[[ $promotion_evidence_repository == kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence ]] ||
   { echo "promotion evidence repository binding is invalid" >&2; exit 78; }
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy revision is invalid" >&2; exit 78; }
 [[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "policy digest is invalid" >&2; exit 78; }
 [[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc ]] ||
   { echo "admission tools contract is invalid" >&2; exit 78; }
-[[ $builder_identity == spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder ]] ||
+[[ $builder_identity == spiffe://kodex.local/ns/kodex-system/sa/role-image-builder ]] ||
   { echo "builder identity is invalid" >&2; exit 78; }
 [[ $build_type == https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md ]] ||
   { echo "build type is invalid" >&2; exit 78; }
@@ -89,12 +89,12 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: ${claim_name}
-  namespace: mattercodex-system
+  namespace: kodex-system
   labels:
-    app.kubernetes.io/name: mattercodex-image-admission
-    mattercodex.dev/image-admission-id: ${suffix}
+    app.kubernetes.io/name: kodex-image-admission
+    kodex.dev/image-admission-id: ${suffix}
   annotations:
-    mattercodex.dev/admission-run-sha256: ${run_sha256}
+    kodex.dev/admission-run-sha256: ${run_sha256}
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -118,15 +118,15 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: ${claim_name}-${phase}
-  namespace: mattercodex-system
+  namespace: kodex-system
   labels:
-    app.kubernetes.io/name: mattercodex-image-admission
+    app.kubernetes.io/name: kodex-image-admission
     app.kubernetes.io/component: image-admission
-    mattercodex.dev/image-admission-phase: ${phase}
-    mattercodex.dev/image-admission-id: ${suffix}
+    kodex.dev/image-admission-phase: ${phase}
+    kodex.dev/image-admission-id: ${suffix}
   annotations:
-    mattercodex.dev/admission-run-sha256: ${run_sha256}
-    mattercodex.dev/admission-policy-revision: "${policy_revision}"
+    kodex.dev/admission-run-sha256: ${run_sha256}
+    kodex.dev/admission-policy-revision: "${policy_revision}"
 spec:
   backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
@@ -134,15 +134,15 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-image-admission
+        app.kubernetes.io/name: kodex-image-admission
         app.kubernetes.io/component: image-admission
-        mattercodex.dev/image-admission-phase: ${phase}
-        mattercodex.dev/image-admission-id: ${suffix}
-        mattercodex.dev/environment: ${environment_name}
+        kodex.dev/image-admission-phase: ${phase}
+        kodex.dev/image-admission-id: ${suffix}
+        kodex.dev/environment: ${environment_name}
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-        mattercodex.dev/internal-rpc-authority-issuer: enabled
+        kodex.dev/internal-rpc-authority-issuer: enabled
 EOF
   fi
   cat <<EOF
@@ -165,7 +165,7 @@ EOF
           image: ${authority_image}
           command: [/usr/local/bin/internal-rpc-authority-socket-init]
           securityContext: {runAsNonRoot: true, runAsUser: 29000, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
-          volumeMounts: [{name: authority-sockets, mountPath: /run/mattercodex}]
+          volumeMounts: [{name: authority-sockets, mountPath: /run/kodex}]
         - name: internal-rpc-authority-issuer
           restartPolicy: Always
           image: ${authority_image}
@@ -174,20 +174,20 @@ EOF
             - {name: DEPLOYMENT_ENVIRONMENT, value: "${environment_name}"}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem}
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
             - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: "${workload}"}
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://mattercodex.local/ns/mattercodex-system/sa/${workload}"}
+            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://kodex.local/ns/kodex-system/sa/${workload}"}
             - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: "internal-rpc-authority-${workload}"}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc}
-            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem}
-            - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.kodex-system.svc}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem}
+            - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/restore/ca.pem}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
-            - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
+            - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn}
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
               valueFrom: {secretKeyRef: {name: internal-rpc-authority-${workload}-issuer-postgresql, key: username}}
             - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
@@ -197,22 +197,22 @@ EOF
           resources: {requests: {cpu: 25m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
           securityContext: {runAsNonRoot: true, runAsUser: 29001, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
-            - {name: authority-sockets, mountPath: /run/mattercodex}
-            - {name: authority-snapshot, mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot, readOnly: true}
-            - {name: authority-manifest-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust, readOnly: true}
-            - {name: authority-proof-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
-            - {name: authority-issuer-key, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer, readOnly: true}
-            - {name: authority-workload-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls, readOnly: true}
-            - {name: authority-readback-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback, readOnly: true}
-            - {name: authority-vault-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/kodex}
+            - {name: authority-snapshot, mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot, readOnly: true}
+            - {name: authority-manifest-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust, readOnly: true}
+            - {name: authority-proof-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
+            - {name: authority-issuer-key, mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer, readOnly: true}
+            - {name: authority-workload-tls, mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls, readOnly: true}
+            - {name: authority-readback-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/readback, readOnly: true}
+            - {name: authority-vault-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/vault, readOnly: true}
             - {name: authority-vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
-            - {name: authority-restore-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore, readOnly: true}
-            - {name: authority-restore-certificate, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
-            - {name: authority-restore-role-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust, readOnly: true}
-            - {name: authority-postgresql, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres, readOnly: true}
-            - {name: authority-postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
-            - {name: authority-observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-            - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: authority-restore-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/restore, readOnly: true}
+            - {name: authority-restore-certificate, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
+            - {name: authority-restore-role-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust, readOnly: true}
+            - {name: authority-postgresql, mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres, readOnly: true}
+            - {name: authority-postgresql-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql, readOnly: true}
+            - {name: authority-observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: authority-sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
         - name: platform-worker-grant-agent
           restartPolicy: Always
           image: ${authority_image}
@@ -227,7 +227,7 @@ EOF
           securityContext: {runAsNonRoot: true, runAsUser: 29004, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts:
             - {name: application-grant, mountPath: /application-grant}
-            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/kodex/platform-worker-grant-signer, readOnly: true}
 EOF
   fi
   cat <<EOF
@@ -235,7 +235,7 @@ EOF
         - name: ${phase}
           image: ${admission_image}
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/image-admission.sh, ${phase}]
+          command: [/bin/sh, /opt/kodex/image-admission.sh, ${phase}]
           env:
             - {name: ADMISSION_RUN_ID, value: "${run_id}"}
             - {name: POLICY_REVISION, value: "${policy_revision}"}
@@ -256,10 +256,10 @@ EOF
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-            - {name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET, value: /run/mattercodex/internal-rpc-authority/issuer.sock}
+            - {name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET, value: /run/kodex/internal-rpc-authority/issuer.sock}
             - {name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE, value: issuer}
-            - {name: IMAGE_OWNER_CONTROL_PLANE_TARGET, value: control-plane.mattercodex-system.svc:8443}
-            - {name: IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_TARGET, value: control-plane.kodex-system.svc:8443}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
             - {name: IMAGE_OWNER_CONTROL_PLANE_CA_FILE, value: /control-plane/ca.pem}
             - {name: IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE, value: /workload-tls/tls.crt}
             - {name: IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE, value: /workload-tls/tls.key}
@@ -271,13 +271,13 @@ EOF
   cat <<EOF
           volumeMounts:
             - {name: work, mountPath: /work}
-            - {name: script, mountPath: /opt/mattercodex, readOnly: true}
+            - {name: script, mountPath: /opt/kodex, readOnly: true}
             - {name: identity, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
 EOF
   if [[ $protected == true ]]; then
     cat <<EOF
-            - {name: authority-sockets, mountPath: /run/mattercodex, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/kodex, readOnly: true}
             - {name: authority-workload-tls, mountPath: /workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /control-plane, readOnly: true}
             - {name: application-grant, mountPath: /application-grant, readOnly: true}
@@ -300,7 +300,7 @@ EOF
   fi
   cat <<EOF
         - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
-        - {name: script, configMap: {name: mattercodex-image-admission, defaultMode: 0555}}
+        - {name: script, configMap: {name: kodex-image-admission, defaultMode: 0555}}
         - name: identity
           csi:
             driver: secrets-store.csi.k8s.io
@@ -315,7 +315,7 @@ EOF
         - {name: authority-proof-trust, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-proof-trust}}}
         - {name: authority-issuer-key, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-issuer-key}}}
         - {name: authority-workload-tls, secret: {secretName: internal-rpc-authority-${workload}-workload-tls, defaultMode: 0440}}
-        - {name: control-plane-ca, configMap: {name: mattercodex-internal-ca, defaultMode: 0440}}
+        - {name: control-plane-ca, configMap: {name: kodex-internal-ca, defaultMode: 0440}}
         - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
         - {name: platform-worker-grant-signer, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_signer_spc}}}}
         - {name: authority-readback-ca, configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}}
@@ -335,9 +335,9 @@ EOF
 
 if [[ $requested_phase == all || $requested_phase == claim ]]; then
   emit_pvc
-  emit_job claim image-admission mattercodex-image-admission-owner true
+  emit_job claim image-admission kodex-image-admission-owner true
 fi
-[[ $requested_phase != all && $requested_phase != scan ]] || emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
-[[ $requested_phase != all && $requested_phase != sign ]] || emit_job sign mattercodex-image-signer mattercodex-image-signer false
-[[ $requested_phase != all && $requested_phase != admit ]] || emit_job admit image-admission mattercodex-image-admission-owner true
-[[ $requested_phase != all && $requested_phase != promote ]] || emit_job promote image-promotion mattercodex-image-promotion-writer true
+[[ $requested_phase != all && $requested_phase != scan ]] || emit_job scan kodex-image-scanner kodex-image-scanner false
+[[ $requested_phase != all && $requested_phase != sign ]] || emit_job sign kodex-image-signer kodex-image-signer false
+[[ $requested_phase != all && $requested_phase != admit ]] || emit_job admit image-admission kodex-image-admission-owner true
+[[ $requested_phase != all && $requested_phase != promote ]] || emit_job promote image-promotion kodex-image-promotion-writer true

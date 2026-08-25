@@ -27,13 +27,13 @@ kind: Secret
 metadata:
   name: internal-rpc-authority-restore-evidence
   annotations:
-    mattercodex.dev/restore-anchor-revision: "1"
-    mattercodex.dev/restore-epoch: "1"
-    mattercodex.dev/restore-evidence-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-    mattercodex.dev/restore-predecessor-revision: "0"
-    mattercodex.dev/restore-predecessor-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-    mattercodex.dev/restored-cluster-uid: bootstrap
-    mattercodex.dev/restored-timeline-id: "0"
+    kodex.dev/restore-anchor-revision: "1"
+    kodex.dev/restore-epoch: "1"
+    kodex.dev/restore-evidence-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    kodex.dev/restore-predecessor-revision: "0"
+    kodex.dev/restore-predecessor-digest-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    kodex.dev/restored-cluster-uid: bootstrap
+    kodex.dev/restored-timeline-id: "0"
 type: Opaque
 data:
   evidence.jws: ""
@@ -44,10 +44,10 @@ metadata:
   name: internal-rpc-authority-restore-coordination
   labels:
     app.kubernetes.io/name: internal-rpc-authority-restore-controller
-    mattercodex.io/durable-coordination: external-to-restored-database
+    kodex.io/durable-coordination: external-to-restored-database
 data:
   state.json: >-
-    {"acks":{},"anchor_revision":1,"backup_manifest_digest_sha256":"0000000000000000000000000000000000000000000000000000000000000000","coordination_revision":2,"database_cluster_id":"internal-rpc-authority-primary","deliveries":{},"directives":{},"evidence_digest_sha256":"0000000000000000000000000000000000000000000000000000000000000000","expected_targets":{"control-api-gateway.authorization-issuer":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_ISSUER","target_id":"control-api-gateway.authorization-issuer","workload_generation":1,"workload_id":"control-api-gateway","workload_spiffe_id":"spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"},"control-plane.authorization-verifier":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_VERIFIER","target_id":"control-plane.authorization-verifier","workload_generation":1,"workload_id":"control-plane","workload_spiffe_id":"spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"},"integration-gateway.authorization-issuer":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_ISSUER","target_id":"integration-gateway.authorization-issuer","workload_generation":1,"workload_id":"integration-gateway","workload_spiffe_id":"spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"}},"issuances":{},"phase":"OPEN","prepare_idempotency_key":"","prepare_semantic_digest_sha256":"","recovery_target_unix":0,"restore_epoch":1,"restore_id":"00000000-0000-4000-8000-000000000001","updated_at":0,"v":1}
+    {"acks":{},"anchor_revision":1,"backup_manifest_digest_sha256":"0000000000000000000000000000000000000000000000000000000000000000","coordination_revision":2,"database_cluster_id":"internal-rpc-authority-primary","deliveries":{},"directives":{},"evidence_digest_sha256":"0000000000000000000000000000000000000000000000000000000000000000","expected_targets":{"control-api-gateway.authorization-issuer":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_ISSUER","target_id":"control-api-gateway.authorization-issuer","workload_generation":1,"workload_id":"control-api-gateway","workload_spiffe_id":"spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"},"control-plane.authorization-verifier":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_VERIFIER","target_id":"control-plane.authorization-verifier","workload_generation":1,"workload_id":"control-plane","workload_spiffe_id":"spiffe://kodex.local/ns/kodex-system/sa/control-plane"},"integration-gateway.authorization-issuer":{"ack_key_generation":1,"credential_generation":1,"role":"AUTHORIZATION_ISSUER","target_id":"integration-gateway.authorization-issuer","workload_generation":1,"workload_id":"integration-gateway","workload_spiffe_id":"spiffe://kodex.local/ns/kodex-system/sa/integration-gateway"}},"issuances":{},"phase":"OPEN","prepare_idempotency_key":"","prepare_semantic_digest_sha256":"","recovery_target_unix":0,"restore_epoch":1,"restore_id":"00000000-0000-4000-8000-000000000001","updated_at":0,"v":1}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -57,18 +57,18 @@ data:
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_LISTEN: ":8443"
   INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN: ":9090"
   INTERNAL_RPC_AUTHORITY_DATABASE_CLUSTER_ID: internal-rpc-authority-primary
-  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+  INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
   INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER: ira_restore_controller_g1
   INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_GENERATION: "1"
-  INTERNAL_RPC_AUTHORITY_PUBLISHER_ADDRESS: internal-rpc-authority-publisher.mattercodex-system.svc:8444
-  INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME: internal-rpc-authority-publisher.mattercodex-system.svc
+  INTERNAL_RPC_AUTHORITY_PUBLISHER_ADDRESS: internal-rpc-authority-publisher.kodex-system.svc:8444
+  INTERNAL_RPC_AUTHORITY_PUBLISHER_TLS_SERVER_NAME: internal-rpc-authority-publisher.kodex-system.svc
   INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS: https://kubernetes.default.svc:443
   INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME: kubernetes.default.svc
   OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317
   OTEL_EXPORTER_OTLP_TLS_SERVER_NAME: otel-collector.observability.svc.cluster.local
-  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+  OTEL_EXPORTER_OTLP_CA_FILE: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
   OTEL_TRACES_SAMPLER_ARG: "0.1"
-  SENTRY_DSN_FILE: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+  SENTRY_DSN_FILE: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
   SENTRY_EXPECTED_HOST: sentry-relay.observability.svc:8443
 ---
 apiVersion: apps/v1
@@ -108,7 +108,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: restore-controller
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/internal-rpc-authority-restore-controller]
           envFrom:
@@ -118,23 +118,23 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
+                  fieldPath: metadata.labels['kodex.dev/environment']
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/database/dsn
             - name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.crt
+              value: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/tls/tls.crt
             - name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.key
+              value: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/tls/tls.key
             - name: INTERNAL_RPC_AUTHORITY_CLIENT_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore-controller/client-ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/restore-controller/client-ca.pem
             - name: INTERNAL_RPC_AUTHORITY_PUBLISHER_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore-controller/publisher-ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/restore-controller/publisher-ca.pem
             - name: INTERNAL_RPC_AUTHORITY_MANIFEST_TRUST_BUNDLE_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore-trust/manifest-trust.jws
+              value: /var/run/config/kodex/internal-rpc-authority/restore-trust/manifest-trust.jws
             - name: INTERNAL_RPC_AUTHORITY_RESTORE_ROLE_TRUST_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore-trust/restore-role-trust.jws
+              value: /var/run/config/kodex/internal-rpc-authority/restore-trust/restore-role-trust.jws
             - name: INTERNAL_RPC_AUTHORITY_TARGET_REGISTRY_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore-targets/key-delivery-targets.yaml
+              value: /var/run/config/kodex/internal-rpc-authority/restore-targets/key-delivery-targets.yaml
             - name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE
               value: /var/run/secrets/tokens/kubernetes/token
             - name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE
@@ -162,17 +162,17 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: database-credentials, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database, readOnly: true}
-            - {name: postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
-            - {name: server-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls, readOnly: true}
-            - {name: controller-config, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-controller, readOnly: true}
-            - {name: restore-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-trust, readOnly: true}
+            - {name: database-credentials, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/database, readOnly: true}
+            - {name: postgresql-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql, readOnly: true}
+            - {name: server-tls, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/tls, readOnly: true}
+            - {name: controller-config, mountPath: /var/run/config/kodex/internal-rpc-authority/restore-controller, readOnly: true}
+            - {name: restore-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/restore-trust, readOnly: true}
             - {name: authority-bootstrap-roots, mountPath: /usr/local/share/internal-rpc-authority/manifest-root, readOnly: true}
-            - {name: target-registry, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-targets, readOnly: true}
+            - {name: target-registry, mountPath: /var/run/config/kodex/internal-rpc-authority/restore-targets, readOnly: true}
             - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
             - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
-            - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: database-credentials
@@ -273,15 +273,15 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: operator
-              image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
               command: [/usr/local/bin/internal-rpc-authority-restore-operator]
               env:
-                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}}
                 - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
                 - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
-                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem}
                 - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn}
                 - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ACTION, value: owner-must-set-prepare-or-complete}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_ID, value: owner-must-set-uuid}
@@ -290,9 +290,9 @@ spec:
                 - {name: INTERNAL_RPC_AUTHORITY_RECOVERY_TARGET, value: owner-must-set-rfc3339}
                 - {name: INTERNAL_RPC_AUTHORITY_IDEMPOTENCY_KEY, value: owner-must-set-uuid}
                 - {name: INTERNAL_RPC_AUTHORITY_CORRELATION_ID, value: owner-must-set-uuid}
-                - {name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt}
-                - {name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key}
-                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem}
+                - {name: INTERNAL_RPC_AUTHORITY_TLS_CERTIFICATE_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/restore-operator/tls/tls.crt}
+                - {name: INTERNAL_RPC_AUTHORITY_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/restore-operator/tls/tls.key}
+                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/restore-operator/controller-ca.pem}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_OPERATOR_TOKEN_FILE, value: /var/run/secrets/tokens/restore-operator/token}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS, value: "https://kubernetes.default.svc:443"}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME, value: kubernetes.default.svc}
@@ -303,10 +303,10 @@ spec:
                 readOnlyRootFilesystem: true
                 capabilities: {drop: [ALL]}
               volumeMounts:
-                - {name: operator-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls, readOnly: true}
-                - {name: controller-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore-operator, readOnly: true}
-                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: operator-tls, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-operator/tls, readOnly: true}
+                - {name: controller-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/restore-operator, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
                 - {name: restore-operator-token, mountPath: /var/run/secrets/tokens/restore-operator, readOnly: true}
                 - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes-api, readOnly: true}
                 - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
@@ -331,7 +331,7 @@ spec:
                 sources:
                   - serviceAccountToken:
                       path: token
-                      audience: urn:mattercodex:internal-rpc-authority-restore-controller
+                      audience: urn:kodex:internal-rpc-authority-restore-controller
                       expirationSeconds: 600
             - name: kubernetes-token
               projected:
@@ -374,39 +374,39 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: pitr
-              image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
               command: [/usr/local/bin/internal-rpc-authority-restore-pitr]
               env:
-                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_ADDRESS, value: "https://kubernetes.default.svc:443"}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TLS_SERVER_NAME, value: kubernetes.default.svc}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes/token}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
-                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PRIVATE_JWK_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr/evidence-private.jwk}
+                - {name: INTERNAL_RPC_AUTHORITY_RESTORE_EVIDENCE_PRIVATE_JWK_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/restore-pitr/evidence-private.jwk}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_BACKUP_NAME, value: internal-rpc-authority-backup}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_SOURCE_CLUSTER_NAME, value: internal-rpc-authority-primary}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_OBJECT_NAME, value: internal-rpc-authority-backup}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_BARMAN_SERVER_NAME, value: internal-rpc-authority-primary}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_POSTGRES_IMAGE, value: "ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie@sha256:660141d8ac12d783f12a3f6bb5ca6c3b1412ea18881f73b9853cfb1eeb9cf128"}
-                - {name: INTERNAL_RPC_AUTHORITY_CNPG_STORAGE_CLASS, value: mattercodex-postgresql}
+                - {name: INTERNAL_RPC_AUTHORITY_CNPG_STORAGE_CLASS, value: kodex-postgresql}
                 - {name: INTERNAL_RPC_AUTHORITY_CNPG_STORAGE_SIZE, value: 20Gi}
                 - {name: INTERNAL_RPC_AUTHORITY_RESTORE_TIMEOUT, value: 10s}
                 - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
                 - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
-                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+                - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem}
                 - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+                - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn}
                 - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities: {drop: [ALL]}
               volumeMounts:
-                - {name: evidence-signer, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr, readOnly: true}
+                - {name: evidence-signer, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-pitr, readOnly: true}
                 - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
                 - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
-                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
           volumes:
             - name: evidence-signer
               csi:
@@ -462,13 +462,13 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: recovery
-              image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
               command: [/usr/local/bin/internal-rpc-authority-restore-recovery]
               envFrom:
                 - configMapRef: {name: internal-rpc-authority-restore-controller}
               env:
-                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}}
-                - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn}
+                - {name: DEPLOYMENT_ENVIRONMENT, valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}}
+                - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/database/dsn}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_TOKEN_FILE, value: /var/run/secrets/tokens/kubernetes/token}
                 - {name: INTERNAL_RPC_AUTHORITY_KUBERNETES_CA_FILE, value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
               securityContext:
@@ -476,11 +476,11 @@ spec:
                 readOnlyRootFilesystem: true
                 capabilities: {drop: [ALL]}
               volumeMounts:
-                - {name: database-credentials, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database, readOnly: true}
+                - {name: database-credentials, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore-controller/database, readOnly: true}
                 - {name: kubernetes-token, mountPath: /var/run/secrets/tokens/kubernetes, readOnly: true}
                 - {name: kubernetes-ca, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
-                - {name: observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
-                - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
+                - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
           volumes:
             - name: database-credentials
               secret: {secretName: internal-rpc-authority-restore-controller-postgresql, defaultMode: 0440}

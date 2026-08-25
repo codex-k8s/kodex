@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authorization-context.schema.json",
-  "title": "Контекст авторизации внутреннего RPC MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authorization-context.schema.json",
+  "title": "Контекст авторизации внутреннего RPC Kodex",
   "$comment": "authority переносится только из криптографически проверенного authority proof; request issuer не задает actor, tenant, project или provenance",
   "type": "object",
   "additionalProperties": false,
@@ -128,7 +128,7 @@
       "type": "string",
       "minLength": 32,
       "maxLength": 125,
-      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "fullMethod": {
       "type": "string",

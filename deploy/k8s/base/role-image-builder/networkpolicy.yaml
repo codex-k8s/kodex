@@ -33,23 +33,23 @@ spec:
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels: {app.kubernetes.io/name: control-plane}
       ports: [{protocol: TCP, port: 8443}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
-            matchLabels: {app.kubernetes.io/name: mattercodex-buildkit}
+            matchLabels: {app.kubernetes.io/name: kodex-buildkit}
       ports: [{protocol: TCP, port: 1234}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-image-registry
-              mattercodex.dev/registry-scope: pull
+              app.kubernetes.io/name: kodex-image-registry
+              kodex.dev/registry-scope: pull
       ports: [{protocol: TCP, port: 5000}]
     - to:
         - namespaceSelector:
@@ -65,7 +65,7 @@ spec:
       ports: [{protocol: TCP, port: 8443}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels: {app.kubernetes.io/name: vault}
       ports: [{protocol: TCP, port: 8200}]

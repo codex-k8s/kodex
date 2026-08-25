@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/connect"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/dnsresolver"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/tlshello"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/tlshello"
 )
 
 const connectEstablished = "HTTP/1.1 200 Connection Established\r\n\r\n"

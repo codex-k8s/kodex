@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/credentialfs"
+	"github.com/codex-k8s/kodex/libs/go/credentialfs"
 )
 
 func TestEmptyConnectionCatalogKeepsAdapterConstructible(t *testing.T) {
 	t.Parallel()
-	adapter, err := New(Config{CredentialDirectory: "/var/run/secrets/mattercodex/integration-connections", ProxyURL: "http://egress-gateway.mattercodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second})
+	adapter, err := New(Config{CredentialDirectory: "/var/run/secrets/kodex/integration-connections", ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second})
 	if err != nil || adapter == nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -22,7 +22,7 @@ func TestEmptyConnectionCatalogKeepsAdapterConstructible(t *testing.T) {
 
 func TestConfiguredBaseURLRequiresDeploymentAllowlist(t *testing.T) {
 	t.Parallel()
-	adapter, err := New(Config{CredentialDirectory: "/run/credentials", ProxyURL: "http://egress-gateway.mattercodex-system.svc.cluster.local:8080", AllowedHosts: "chat.example.test", Timeout: 10 * time.Second})
+	adapter, err := New(Config{CredentialDirectory: "/run/credentials", ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", AllowedHosts: "chat.example.test", Timeout: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

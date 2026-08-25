@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/credentialfs"
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/credentialfs"
+	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
 	"github.com/gorilla/websocket"
 	"github.com/mattermost/mattermost/server/public/model"
 )

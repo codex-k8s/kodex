@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	expectedClientCN = "mattercodex-buildkit-staging-push"
+	expectedClientCN = "kodex-buildkit-staging-push"
 	serverError      = "registry write authorizer failed"
 	denialLog        = "registry request denied"
 )
@@ -128,9 +128,9 @@ func normalizeMethod(method string) string {
 func allowedEvidenceRequest(commonName, method, path string) bool {
 	if path == "/v2/" && method == http.MethodGet {
 		return commonName == "image-admission" || commonName == "image-promotion" ||
-			commonName == "mattercodex-image-registry-evidence-probe"
+			commonName == "kodex-image-registry-evidence-probe"
 	}
-	if commonName == "mattercodex-image-registry-evidence-probe" || method == http.MethodDelete ||
+	if commonName == "kodex-image-registry-evidence-probe" || method == http.MethodDelete ||
 		!pathInRegistryRepository(path, "evidence/role-image-admission") || strings.ContainsAny(path, "\r\n\\") {
 		return false
 	}
@@ -163,7 +163,7 @@ func authorizedEvidenceCredentialWithReader(
 		prefix += "admission"
 	case "image-promotion":
 		prefix += "promotion"
-	case "mattercodex-image-registry-evidence-probe":
+	case "kodex-image-registry-evidence-probe":
 		prefix += "probe"
 	default:
 		return false

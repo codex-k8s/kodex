@@ -5,7 +5,7 @@ package controlplane.v1;
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
 // Control-plane является единственным владельцем web-first предметной модели.
 // Actor, organization и permissions поступают только из проверенного transport

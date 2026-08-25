@@ -14,14 +14,14 @@ destination=$2
 shift 2
 [[ "${1:-}" == -- && -n "${2:-}" && $# -eq 2 ]] || fail "exact context terminator is required"
 context=$2
-[[ -n "${MATTERCODEX_AGENT_RUNNER_DESTINATION:-}" ]] || fail "expected destination is required"
-[[ "$destination" == "$MATTERCODEX_AGENT_RUNNER_DESTINATION" ]] || fail "destination is not allowed"
+[[ -n "${KODEX_AGENT_RUNNER_DESTINATION:-}" ]] || fail "expected destination is required"
+[[ "$destination" == "$KODEX_AGENT_RUNNER_DESTINATION" ]] || fail "destination is not allowed"
 [[ "$dockerfile" == services/jobs/agent-runner/Dockerfile || "$dockerfile" == "$context/services/jobs/agent-runner/Dockerfile" ]] || fail "Dockerfile is not allowed"
-[[ -n "${MATTERCODEX_BUILDKIT_METADATA_FILE:-}" ]] || fail "metadata file is required"
-buildctl_path=${BUILDCTL_PATH:-/var/run/mattercodex-tools/buildctl}
+[[ -n "${KODEX_BUILDKIT_METADATA_FILE:-}" ]] || fail "metadata file is required"
+buildctl_path=${BUILDCTL_PATH:-/var/run/kodex-tools/buildctl}
 buildkit_host=${BUILDKIT_HOST:-unix:///var/run/buildkit/buildkitd.sock}
-build_proxy=${MATTERCODEX_RELEASE_BUILD_PROXY:-}
-build_no_proxy=${MATTERCODEX_RELEASE_BUILD_NO_PROXY:-}
+build_proxy=${KODEX_RELEASE_BUILD_PROXY:-}
+build_no_proxy=${KODEX_RELEASE_BUILD_NO_PROXY:-}
 proxy_options=()
 if [[ -n "$build_proxy" || -n "$build_no_proxy" ]]; then
   [[ -n "$build_proxy" && -n "$build_no_proxy" ]] || fail "build proxy configuration is incomplete"
@@ -45,4 +45,4 @@ exec "$buildctl_path" --addr "$buildkit_host" build \
   --opt network=host \
   "${proxy_options[@]}" \
   --output "type=image,name=$destination,push=true" \
-  --metadata-file "$MATTERCODEX_BUILDKIT_METADATA_FILE"
+  --metadata-file "$KODEX_BUILDKIT_METADATA_FILE"

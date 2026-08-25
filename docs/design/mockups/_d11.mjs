@@ -51,7 +51,7 @@ export const d11 = L.page(L.shellDesktop({
 
       ${row('Подготовить недельную сводку', 'Корпоративные продажи', 'ИИ-сотрудник · Аналитик продаж',
         L.statusPill('done', 'Успешно', 'sm'),
-        `<span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: ${T.ink2};">${L.icon('file', 14)}Сводка.pdf</span><span style="display: block; font-size: 11px; color: ${T.mut}; margin-top: 2px;">Источник: Помощник MatterCodex</span>`,
+        `<span style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: ${T.ink2};">${L.icon('file', 14)}Сводка.pdf</span><span style="display: block; font-size: 11px; color: ${T.mut}; margin-top: 2px;">Источник: Помощник Kodex</span>`,
         '9 мин', 'вчера', L.btn('Открыть', 'sec', 28))}
 
       ${row('Проверить условия договора', 'Корпоративные продажи', 'ИИ-сотрудник · Юридический консультант',

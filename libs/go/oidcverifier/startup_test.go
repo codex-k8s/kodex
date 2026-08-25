@@ -37,7 +37,7 @@ func TestVerifierStartsFailClosedWhenInitialJWKSIsUnavailable(t *testing.T) {
 	}
 
 	verifier, err := New(t.Context(), Config{
-		Issuer: "https://issuer.test", Audience: "mattercodex-test", JWKSURL: "https://issuer.test/jwks",
+		Issuer: "https://issuer.test", Audience: "kodex-test", JWKSURL: "https://issuer.test/jwks",
 		ConnectAddress: "localhost:443", TLSServerName: "issuer.test", CAFile: caFile, Timeout: time.Second,
 	})
 	if err != nil {

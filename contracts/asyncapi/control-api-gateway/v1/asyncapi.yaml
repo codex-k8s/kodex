@@ -1,6 +1,6 @@
 asyncapi: 3.0.0
 info:
-  title: MatterCodex resumable owner streams
+  title: Kodex resumable owner streams
   version: 2.2.0
   description: |
     Защищённые owner-scoped WebSocket потоки запуска и общей конфигурации.
@@ -15,14 +15,14 @@ info:
 defaultContentType: application/json
 servers:
   owner:
-    host: control-center.mattercodex.local
+    host: control-center.kodex.local
     pathname: /api/v1
     protocol: wss
     security: [{ $ref: '#/components/securitySchemes/OwnerSession' }]
     x-origin-policy: EXACT_HTTPS_ALLOWLIST
     x-channel-subprotocols:
-      runStream: [mattercodex.run.v1, csrf.<csrf-token>]
-      platformStream: [mattercodex.platform.v1, csrf.<csrf-token>]
+      runStream: [kodex.run.v1, csrf.<csrf-token>]
+      platformStream: [kodex.platform.v1, csrf.<csrf-token>]
     x-locale-query:
       name: locale
       values: [ru, en]
@@ -134,7 +134,7 @@ components:
     OwnerSession:
       type: httpApiKey
       in: cookie
-      name: __Host-mattercodex-session
+      name: __Host-kodex-session
   messages:
     Resume:
       name: resume

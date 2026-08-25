@@ -1,6 +1,6 @@
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-errors, namespace: mattercodex-system }
+metadata: { name: oauth2-control-center-errors, namespace: kodex-system }
 spec:
   errors:
     status: ["401-403"]
@@ -9,17 +9,17 @@ spec:
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-auth, namespace: mattercodex-system }
+metadata: { name: oauth2-control-center-auth, namespace: kodex-system }
 spec:
   forwardAuth:
-    address: http://oauth2-control-center.mattercodex-system.svc.cluster.local/oauth2/auth
+    address: http://oauth2-control-center.kodex-system.svc.cluster.local/oauth2/auth
     trustForwardHeader: true
     authResponseHeaders:
       [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-control-center-chain, namespace: mattercodex-system }
+metadata: { name: oauth2-control-center-chain, namespace: kodex-system }
 spec:
   chain:
     middlewares:
@@ -56,7 +56,7 @@ spec:
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-vault-errors, namespace: mattercodex-system }
+metadata: { name: oauth2-vault-errors, namespace: kodex-system }
 spec:
   errors:
     status: ["401-403"]
@@ -65,17 +65,17 @@ spec:
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-vault-auth, namespace: mattercodex-system }
+metadata: { name: oauth2-vault-auth, namespace: kodex-system }
 spec:
   forwardAuth:
-    address: http://oauth2-vault.mattercodex-system.svc.cluster.local/oauth2/auth
+    address: http://oauth2-vault.kodex-system.svc.cluster.local/oauth2/auth
     trustForwardHeader: true
     authResponseHeaders:
       [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
-metadata: { name: oauth2-vault-chain, namespace: mattercodex-system }
+metadata: { name: oauth2-vault-chain, namespace: kodex-system }
 spec:
   chain:
     middlewares:
@@ -112,30 +112,30 @@ spec:
 ---
 apiVersion: traefik.io/v1alpha1
 kind: ServersTransport
-metadata: { name: vault-ui, namespace: mattercodex-system }
+metadata: { name: vault-ui, namespace: kodex-system }
 spec:
-  serverName: vault.mattercodex-system.svc.cluster.local
+  serverName: vault.kodex-system.svc.cluster.local
   insecureSkipVerify: false
-  rootCAsSecrets: [mattercodex-vault-server-tls]
+  rootCAsSecrets: [kodex-vault-server-tls]
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mattercodex-grafana
+  name: kodex-grafana
   namespace: observability
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.middlewares: observability-oauth2-grafana-chain@kubernetescrd
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_GRAFANA_HOST__]
-      secretName: mattercodex-grafana-public-tls
+    - hosts: [__KODEX_GRAFANA_HOST__]
+      secretName: kodex-grafana-public-tls
   rules:
-    - host: __MATTERCODEX_GRAFANA_HOST__
+    - host: __KODEX_GRAFANA_HOST__
       http:
         paths:
           - path: /
@@ -143,29 +143,29 @@ spec:
             backend:
               service:
                 {
-                  name: mattercodex-monitoring-grafana,
+                  name: kodex-monitoring-grafana,
                   port: { name: http-web },
                 }
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mattercodex-vault-ui
-  namespace: mattercodex-system
+  name: kodex-vault-ui
+  namespace: kodex-system
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: mattercodex-system-oauth2-vault-chain@kubernetescrd
-    traefik.ingress.kubernetes.io/service.serverstransport: mattercodex-system-vault-ui@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: kodex-system-oauth2-vault-chain@kubernetescrd
+    traefik.ingress.kubernetes.io/service.serverstransport: kodex-system-vault-ui@kubernetescrd
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_VAULT_HOST__]
-      secretName: mattercodex-vault-ui-public-tls
+    - hosts: [__KODEX_VAULT_HOST__]
+      secretName: kodex-vault-ui-public-tls
   rules:
-    - host: __MATTERCODEX_VAULT_HOST__
+    - host: __KODEX_VAULT_HOST__
       http:
         paths:
           - path: /
@@ -176,32 +176,32 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mattercodex-headlamp
+  name: kodex-headlamp
   namespace: platform-admin
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.middlewares: platform-admin-oauth2-headlamp-chain@kubernetescrd
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_HEADLAMP_HOST__]
-      secretName: mattercodex-headlamp-public-tls
+    - hosts: [__KODEX_HEADLAMP_HOST__]
+      secretName: kodex-headlamp-public-tls
   rules:
-    - host: __MATTERCODEX_HEADLAMP_HOST__
+    - host: __KODEX_HEADLAMP_HOST__
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
-              service: { name: mattercodex-headlamp, port: { name: http } }
+              service: { name: kodex-headlamp, port: { name: http } }
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  { name: oauth2-control-center-exact-paths, namespace: mattercodex-system }
+  { name: oauth2-control-center-exact-paths, namespace: kodex-system }
 spec:
   podSelector:
     { matchLabels: { app.kubernetes.io/instance: oauth2-control-center } }
@@ -212,13 +212,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 4180 }]
   egress:
@@ -227,12 +227,12 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_PUBLIC_IPV4_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: oauth2-vault-exact-paths, namespace: mattercodex-system }
+metadata: { name: oauth2-vault-exact-paths, namespace: kodex-system }
 spec:
   podSelector: { matchLabels: { app.kubernetes.io/instance: oauth2-vault } }
   policyTypes: [Ingress, Egress]
@@ -242,13 +242,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 4180 }]
   egress:
@@ -257,7 +257,7 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_PUBLIC_IPV4_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
 ---
 apiVersion: networking.k8s.io/v1
@@ -272,13 +272,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 4180 }]
   egress:
@@ -287,7 +287,7 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_PUBLIC_IPV4_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
 ---
 apiVersion: networking.k8s.io/v1
@@ -302,13 +302,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 4180 }]
   egress:
@@ -317,7 +317,7 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_PUBLIC_IPV4_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
 ---
 apiVersion: networking.k8s.io/v1
@@ -332,13 +332,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 3000 }]
 ---
@@ -347,7 +347,7 @@ kind: NetworkPolicy
 metadata: { name: headlamp-exact-paths, namespace: platform-admin }
 spec:
   podSelector:
-    { matchLabels: { app.kubernetes.io/instance: mattercodex-headlamp } }
+    { matchLabels: { app.kubernetes.io/instance: kodex-headlamp } }
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
@@ -355,13 +355,13 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 4466 }]
   egress:
@@ -370,12 +370,12 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: vault-ui-from-public-ingress, namespace: mattercodex-system }
+metadata: { name: vault-ui-from-public-ingress, namespace: kodex-system }
 spec:
   podSelector: { matchLabels: { app.kubernetes.io/name: vault } }
   policyTypes: [Ingress]
@@ -385,19 +385,19 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 8200 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: vault-exact-egress, namespace: mattercodex-system }
+metadata: { name: vault-exact-egress, namespace: kodex-system }
 spec:
   podSelector: { matchLabels: { app.kubernetes.io/name: vault } }
   policyTypes: [Egress]
@@ -407,11 +407,11 @@ spec:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }
           podSelector: { matchLabels: { k8s-app: kube-dns } }
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_PUBLIC_IPV4_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_PUBLIC_IPV4_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]
     - to:
         - podSelector:
-            { matchLabels: { app.kubernetes.io/name: mattercodex-postgresql } }
+            { matchLabels: { app.kubernetes.io/name: kodex-postgresql } }
       ports: [{ protocol: TCP, port: 5432 }]
-    - to: [{ ipBlock: { cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
+    - to: [{ ipBlock: { cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__ } }]
       ports: [{ protocol: TCP, port: 443 }]

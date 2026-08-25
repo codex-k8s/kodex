@@ -3,5 +3,5 @@ kind: Namespace
 metadata:
   name: identity
   labels:
-    app.kubernetes.io/part-of: mattercodex
-    mattercodex.dev/capability: identity
+    app.kubernetes.io/part-of: kodex
+    kodex.dev/capability: identity

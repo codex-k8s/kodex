@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
 var ErrMaterialization = errors.New("role image input materialization failed")
@@ -131,7 +131,7 @@ func (materializer *Materializer) Materialize(
 		if !materializer.allowedRef(item.GetSourceRef()) || !plainSHA256(digest) {
 			return "INPUT_FETCH_REJECTED", ErrMaterialization
 		}
-		destination := filepath.Join(contextDirectory, ".mattercodex", "packages", digest)
+		destination := filepath.Join(contextDirectory, ".kodex", "packages", digest)
 		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, digest, maximumFileBytes); err != nil {
 			return "INPUT_DIGEST_MISMATCH", err
 		}
@@ -140,7 +140,7 @@ func (materializer *Materializer) Materialize(
 		if !materializer.allowedRef(item.GetSourceRef()) || !plainSHA256(item.GetSha256()) {
 			return "INPUT_FETCH_REJECTED", ErrMaterialization
 		}
-		destination := filepath.Join(contextDirectory, ".mattercodex", "tools", item.GetSha256())
+		destination := filepath.Join(contextDirectory, ".kodex", "tools", item.GetSha256())
 		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, item.GetSha256(), maximumFileBytes); err != nil {
 			return "INPUT_DIGEST_MISMATCH", err
 		}
@@ -184,7 +184,7 @@ func (materializer *Materializer) downloadExact(
 	}
 	if json.Unmarshal(manifest, &document) != nil || document.SchemaVersion != 2 ||
 		document.MediaType != "application/vnd.oci.image.manifest.v1+json" || len(document.Layers) != 1 ||
-		document.Layers[0].MediaType != "application/vnd.mattercodex.role-image-input.v1" ||
+		document.Layers[0].MediaType != "application/vnd.kodex.role-image-input.v1" ||
 		document.Layers[0].Digest != "sha256:"+expectedSHA256 || document.Layers[0].Size < 1 ||
 		document.Layers[0].Size > maximumBytes {
 		return ErrMaterialization
@@ -232,7 +232,7 @@ func (materializer *Materializer) request(ctx context.Context, method, target st
 		return nil, err
 	}
 	request.SetBasicAuth(materializer.username, materializer.password)
-	request.Header.Set("User-Agent", "mattercodex-role-image-materializer/1")
+	request.Header.Set("User-Agent", "kodex-role-image-materializer/1")
 	return request, nil
 }
 

@@ -4,8 +4,8 @@ import { currentLocale } from "@/shared/locale";
 
 const ru = {
   app: {
-    name: "MatterCodex",
-    assistant: "Помощник MatterCodex",
+    name: "Kodex",
+    assistant: "Помощник Kodex",
     assistantShort: "Помощник",
     project: "Проект",
     chooseProject: "Выберите Проект",
@@ -34,7 +34,7 @@ const ru = {
   nav: {
     home: "Главная",
     onboarding: "Первичная настройка",
-    assistant: "Помощник MatterCodex",
+    assistant: "Помощник Kodex",
     projects: "Проекты",
     runs: "Запуски",
     decisions: "Решения",
@@ -107,7 +107,7 @@ const ru = {
     skipToContent: "Перейти к содержимому",
   },
   auth: {
-    title: "Вход в MatterCodex",
+    title: "Вход в Kodex",
     description: "Войдите через настроенного провайдера организации.",
     checking: "Проверяем защищённую сессию…",
     signIn: "Войти",
@@ -116,7 +116,7 @@ const ru = {
     failed: "Не удалось завершить вход",
   },
   onboarding: {
-    title: "Настроим MatterCodex",
+    title: "Настроим Kodex",
     subtitle: "Помощник уже готов и проведёт через первый рабочий запуск.",
     ready: "Системный помощник готов",
     webOnly: "Внешние интеграции не нужны для начала работы",
@@ -219,7 +219,7 @@ const ru = {
         "Среда для PDF, OCR, офисных документов и извлечения структурированных данных.",
     },
     software: {
-      base: "Базовые инструменты MatterCodex",
+      base: "Базовые инструменты Kodex",
       pdf: "Обработка PDF",
       ocr: "Распознавание текста",
       office: "Офисные форматы",
@@ -333,7 +333,7 @@ const ru = {
     noNodeActivity: "Сообщения появятся после начала работы этого узла.",
     source: {
       CONTROL_CENTER: "Control Center",
-      SYSTEM_ASSISTANT: "Помощник MatterCodex",
+      SYSTEM_ASSISTANT: "Помощник Kodex",
       SCHEDULE: "Автоматизация",
       INTEGRATION: "Интеграция",
       AGENT_DELEGATION: "Делегирование ИИ-сотрудника",
@@ -597,7 +597,7 @@ const ru = {
     operationCode: "Код операции",
     executorValue: {
       CONTROL_CENTER: "Control Center",
-      SYSTEM_ASSISTANT: "Помощник MatterCodex",
+      SYSTEM_ASSISTANT: "Помощник Kodex",
     },
     resourceTypeValue: {
       INSTALLATION: "Установка",
@@ -625,11 +625,11 @@ const ru = {
       ASSISTANT_CONVERSATION: "Диалог с помощником",
       ASSISTANT_TURN: "Сообщение помощнику",
       ASSISTANT_PLAN: "План помощника",
-      SYSTEM_ASSISTANT: "Помощник MatterCodex",
+      SYSTEM_ASSISTANT: "Помощник Kodex",
     },
   },
   assistant: {
-    title: "Помощник MatterCodex",
+    title: "Помощник Kodex",
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
@@ -722,7 +722,7 @@ const en = {
   ...ru,
   app: {
     ...ru.app,
-    assistant: "MatterCodex Assistant",
+    assistant: "Kodex Assistant",
     assistantShort: "Assistant",
     project: "Project",
     chooseProject: "Choose project",
@@ -751,7 +751,7 @@ const en = {
   nav: {
     home: "Home",
     onboarding: "First-time setup",
-    assistant: "MatterCodex Assistant",
+    assistant: "Kodex Assistant",
     projects: "Projects",
     runs: "Runs",
     decisions: "Decisions",
@@ -825,7 +825,7 @@ const en = {
     skipToContent: "Skip to content",
   },
   auth: {
-    title: "Sign in to MatterCodex",
+    title: "Sign in to Kodex",
     description:
       "Sign in with the identity provider configured for your organization.",
     checking: "Checking secure session…",
@@ -836,7 +836,7 @@ const en = {
   },
   onboarding: {
     ...ru.onboarding,
-    title: "Set up MatterCodex",
+    title: "Set up Kodex",
     subtitle: "The assistant is ready to guide your first working run.",
     ready: "System assistant is ready",
     webOnly: "External integrations are not required",
@@ -942,7 +942,7 @@ const en = {
         "PDF, OCR, office document and structured data extraction environment.",
     },
     software: {
-      base: "MatterCodex core tools",
+      base: "Kodex core tools",
       pdf: "PDF processing",
       ocr: "Text recognition",
       office: "Office formats",
@@ -1059,7 +1059,7 @@ const en = {
     noNodeActivity: "Messages will appear after this node starts working.",
     source: {
       CONTROL_CENTER: "Control Center",
-      SYSTEM_ASSISTANT: "MatterCodex Assistant",
+      SYSTEM_ASSISTANT: "Kodex Assistant",
       SCHEDULE: "Automation",
       INTEGRATION: "Integration",
       AGENT_DELEGATION: "AI employee delegation",
@@ -1325,7 +1325,7 @@ const en = {
     operationCode: "Operation code",
     executorValue: {
       CONTROL_CENTER: "Control Center",
-      SYSTEM_ASSISTANT: "MatterCodex Assistant",
+      SYSTEM_ASSISTANT: "Kodex Assistant",
     },
     resourceTypeValue: {
       INSTALLATION: "Installation",
@@ -1353,12 +1353,12 @@ const en = {
       ASSISTANT_CONVERSATION: "Assistant conversation",
       ASSISTANT_TURN: "Assistant message",
       ASSISTANT_PLAN: "Assistant plan",
-      SYSTEM_ASSISTANT: "MatterCodex Assistant",
+      SYSTEM_ASSISTANT: "Kodex Assistant",
     },
   },
   assistant: {
     ...ru.assistant,
-    title: "MatterCodex Assistant",
+    title: "Kodex Assistant",
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",

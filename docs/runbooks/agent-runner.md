@@ -18,7 +18,7 @@ terminal state.
 
 Проверить:
 
-1. input schema `mattercodex.agent-runner-input.v4` и bounded file mode/size;
+1. input schema `kodex.agent-runner-input.v4` и bounded file mode/size;
 2. exact execution/revision/turn/attempt/fence;
 3. trusted runtime ABI digest;
 4. runtime-controller callback TLS/SPIFFE/ticket;

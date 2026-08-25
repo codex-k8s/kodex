@@ -204,14 +204,14 @@ OIDC_ORIGIN="$oidc_origin" \
 PULL_REGISTRY_HOST="$promoted_pull_host" \
 KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
   (.. | select(tag == "!!str")) |= (
-    sub("__MATTERCODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
-    sub("__MATTERCODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
-    sub("__MATTERCODEX_OIDC_ISSUER__"; strenv(OIDC_ISSUER)) |
-    sub("__MATTERCODEX_OIDC_JWKS_URL__"; strenv(OIDC_JWKS_URL)) |
-    sub("__MATTERCODEX_OIDC_CONNECT_ADDRESS__"; strenv(OIDC_CONNECT_ADDRESS)) |
-    sub("__MATTERCODEX_OIDC_TLS_SERVER_NAME__"; strenv(OIDC_TLS_SERVER_NAME)) |
-    sub("__MATTERCODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
-    sub("__MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR)) |
+    sub("__KODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
+    sub("__KODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
+    sub("__KODEX_OIDC_ISSUER__"; strenv(OIDC_ISSUER)) |
+    sub("__KODEX_OIDC_JWKS_URL__"; strenv(OIDC_JWKS_URL)) |
+    sub("__KODEX_OIDC_CONNECT_ADDRESS__"; strenv(OIDC_CONNECT_ADDRESS)) |
+    sub("__KODEX_OIDC_TLS_SERVER_NAME__"; strenv(OIDC_TLS_SERVER_NAME)) |
+    sub("__KODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
+    sub("__KODEX_KUBERNETES_API_SERVICE_CIDR__"; strenv(KUBERNETES_API_SERVICE_CIDR)) |
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
   )
 ' "$rendered"
@@ -226,7 +226,7 @@ api_endpoint_rule=$(jq -cn \
   '{to:$to,ports:$ports}')
 api_client_policy_count=$(yq -o=json '
   select(.kind == "NetworkPolicy" and (
-    .metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
     .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
     .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
@@ -236,7 +236,7 @@ api_client_policy_count=$(yq -o=json '
   fail 'release profile must contain exactly four Kubernetes API client policies'
 KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
   with(select(.kind == "NetworkPolicy" and (
-    .metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    .metadata.name == "kodex-image-admission-controller-exact-paths" or
     .metadata.name == "runtime-controller-exact-paths" or
     .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
     .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"
@@ -273,13 +273,13 @@ OIDC_POD_NAME="$oidc_pod_name" \
 OIDC_POD_COMPONENT="$oidc_pod_component" \
 OIDC_TARGET_PORT="$oidc_target_port" yq -i '
   (.. | select(tag == "!!str")) |= (
-    sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
-    sub("__MATTERCODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
-    sub("__MATTERCODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
-    sub("__MATTERCODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME)) |
-    sub("__MATTERCODEX_OIDC_NAMESPACE__"; strenv(OIDC_NAMESPACE)) |
-    sub("__MATTERCODEX_OIDC_POD_NAME__"; strenv(OIDC_POD_NAME)) |
-    sub("__MATTERCODEX_OIDC_POD_COMPONENT__"; strenv(OIDC_POD_COMPONENT))
+    sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
+    sub("__KODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
+    sub("__KODEX_INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME)) |
+    sub("__KODEX_OIDC_NAMESPACE__"; strenv(OIDC_NAMESPACE)) |
+    sub("__KODEX_OIDC_POD_NAME__"; strenv(OIDC_POD_NAME)) |
+    sub("__KODEX_OIDC_POD_COMPONENT__"; strenv(OIDC_POD_COMPONENT))
   ) |
   with(select(.kind == "NetworkPolicy" and (
       .metadata.name == "control-api-gateway-exact-runtime-paths" or
@@ -317,8 +317,8 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     "[A-Za-z0-9._:/-]+/image-admission-tools@sha256:[a-f0-9]{64}";
     strenv(ADMISSION_TOOLS_REF)
   ) |
-  with(select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy");
-    .metadata.annotations."mattercodex.dev/admission-tools-sha256" = strenv(ADMISSION_TOOLS_DIGEST) |
+  with(select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy");
+    .metadata.annotations."kodex.dev/admission-tools-sha256" = strenv(ADMISSION_TOOLS_DIGEST) |
     .data.orchestrationRevision = strenv(SOURCE_SHA) |
     .data.toolsImage = strenv(ADMISSION_TOOLS_REF) |
     .data.admissionImage = strenv(ADMISSION_REF) |
@@ -327,10 +327,10 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.pullRegistryHost = strenv(PULL_REGISTRY_HOST) |
     .data.pullCredentialGeneration = "1" |
     .data.nodeReadbackImage = (strenv(PULL_REGISTRY_HOST) + "/" + strenv(REPOSITORY_PREFIX) + "/agent-runner@" + strenv(AGENT_RUNNER_DIGEST)) |
-    .data.roleImageInputRepository = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs" |
+    .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
     .data.policySHA256 = strenv(LOCK_DIGEST) |
-    .data.trustedRoleBaseRepository = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner" |
+    .data.trustedRoleBaseRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .data.trustedRoleBaseDigest = strenv(AGENT_RUNNER_DIGEST) |
     .data.builderSHA256 = "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
@@ -342,10 +342,10 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(LOCK_DIGEST)
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
-    .spec.template.metadata.annotations."mattercodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
+    .spec.template.metadata.annotations."kodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
   ) |
-  with(select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull");
-    .spec.template.metadata.annotations."mattercodex.dev/pull-credential-generation" = "1" |
+  with(select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull");
+    .spec.template.metadata.annotations."kodex.dev/pull-credential-generation" = "1" |
     (.spec.template.spec.containers[] |
       select(.name == "certificate-guard").env[] |
       select(.name == "READBACK_IMAGE").value) =
@@ -355,16 +355,16 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
 ' "$rendered"
 
 admission_policy_json=$(yq -o=json -I=0 '
-  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data
 ' "$rendered")
 [[ -n "$admission_policy_json" && "$admission_policy_json" != "null" ]] ||
   fail 'image admission policy projection is absent'
 ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
   with(select(
-    .apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+    .apiVersion == "supplychain.kodex.dev/v1alpha1" and
     .kind == "ImageAdmissionPolicyParameters" and
-    .metadata.name == "mattercodex-image-admission-policy"
+    .metadata.name == "kodex-image-admission-policy"
   );
     .spec = (strenv(ADMISSION_POLICY_JSON) | from_json)
   )
@@ -378,26 +378,26 @@ role_environment_catalog=$(jq -cn \
   --arg agent_runner_digest "$agent_runner_digest" \
   --arg documents_digest "$role_base_documents_digest" '
   {schemaVersion:1,
-   context:{sourceRef:"urn:mattercodex:release-source",sourceRevision:$source_revision,
+   context:{sourceRef:"urn:kodex:release-source",sourceRevision:$source_revision,
      sourceSha256:$source_sha256,
-     contextRef:("oci://mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs@" + $manifest_digest),
+     contextRef:("oci://kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs@" + $manifest_digest),
      contextSha256:$payload_sha256},
    environments:[
      {key:"standard",nameMessageKey:"role-environments.standard.name",
       descriptionMessageKey:"role-environments.standard.description",unavailableMessageKey:"",
       softwareMessageKeys:["role-environments.software.base"],recommended:true,available:true,
       customInstallationAllowed:false,
-      baseImageReference:"mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
+      baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner",
       baseImageDigest:$agent_runner_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]},
      {key:"documents",nameMessageKey:"role-environments.documents.name",
       descriptionMessageKey:"role-environments.documents.description",unavailableMessageKey:"",
       softwareMessageKeys:["role-environments.software.base","role-environments.software.pdf",
         "role-environments.software.ocr","role-environments.software.office"],recommended:false,available:true,
       customInstallationAllowed:false,
-      baseImageReference:"mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-base-documents",
+      baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-base-documents",
       baseImageDigest:$documents_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]}]}')
 ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" yq -i '
-  with(select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments");
+  with(select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments");
     .data."catalog.json" = strenv(ROLE_ENVIRONMENT_CATALOG)
   )
 ' "$rendered"
@@ -447,7 +447,7 @@ EGRESS_POLICY_NAME="$egress_policy_name" yq -i '
     .data."policy.json" = strenv(EGRESS_POLICY)
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "egress-gateway");
-    .spec.template.metadata.annotations."mattercodex.dev/egress-policy-sha256" = strenv(EGRESS_DIGEST) |
+    .spec.template.metadata.annotations."kodex.dev/egress-policy-sha256" = strenv(EGRESS_DIGEST) |
     (.spec.template.spec.volumes[] | select(.name == "policy").configMap.name) = strenv(EGRESS_POLICY_NAME) |
     (.spec.template.spec.containers[] | select(.name == "egress-gateway").env[] |
       select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_REVISION").value) = strenv(EGRESS_REVISION) |
@@ -488,7 +488,7 @@ yq -o=json '.' "$rendered" | jq -sc '
 if rg -n 'sha256:0{64}' "$output" >/dev/null; then
   fail 'render contains a zero image digest'
 fi
-if rg -n '__MATTERCODEX_[A-Z0-9_]+__|admission-tools\.invalid|registry-pull\.invalid|https://control\.invalid|control-api\.mattercodex\.local.*Ingress' "$output" >/dev/null; then
+if rg -n '__KODEX_[A-Z0-9_]+__|admission-tools\.invalid|registry-pull\.invalid|https://control\.invalid|control-api\.kodex\.local.*Ingress' "$output" >/dev/null; then
   fail 'render contains an unresolved deployment placeholder'
 fi
 if rg -n '\$\{[A-Z][A-Z0-9_]*IMAGE[A-Z0-9_]*\}' "$output" >/dev/null; then

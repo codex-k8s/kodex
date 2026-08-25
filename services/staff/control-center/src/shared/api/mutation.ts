@@ -23,7 +23,7 @@ function readCookie(name: string): string | undefined {
 }
 
 export function csrfToken(): string {
-  const value = readCookie("__Host-mattercodex-csrf");
+  const value = readCookie("__Host-kodex-csrf");
   if (!value || value.length < 43 || value.length > 256)
     throw new Error("CSRF token is unavailable");
   return value;

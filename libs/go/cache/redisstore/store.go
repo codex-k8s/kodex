@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/cache"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/cache"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/redis/go-redis/v9"
 )
 

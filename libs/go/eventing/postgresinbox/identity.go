@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"math"
 
-	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/codex-k8s/kodex/libs/go/eventing"
 	"github.com/google/uuid"
 )
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	_ "embed"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +57,30 @@ func TestValidateQueryHeader(t *testing.T) {
 	invalid := filepath.Join("testdata", "invalid", "membership__get.sql")
 	if err := validateQueryHeader(invalid); err == nil {
 		t.Fatal("validateQueryHeader(invalid) accepted a mismatched name")
+	}
+}
+
+func TestInspectRepositoryIgnoresSQLLiteralsInTests(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := filepath.Join(root, "services", "example", "repository_test.go")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const source = `package example
+
+const fixture = "SET ROLE test_role"
+`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	violations, err := inspectRepository(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("test SQL literal produced violations: %s", strings.Join(violations, "; "))
 	}
 }

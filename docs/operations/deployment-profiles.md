@@ -67,8 +67,8 @@ TLS, database role и NATS account contracts; значение replication facto
 материализуется тем же release profile, а не меняется вручную после render.
 
 Manifest не содержит secret values. До применения StatefulSet владелец
-материализует `mattercodex-installation-ca`,
-`mattercodex-postgresql-bootstrap` и `mattercodex-nats-credentials` по
+материализует `kodex-installation-ca`,
+`kodex-postgresql-bootstrap` и `kodex-nats-credentials` по
 `RUN-MC-002`. CA bundle переносится в клиентские ConfigMap через trust-manager;
 клиентские Pod не получают server private key.
 
@@ -89,15 +89,15 @@ tools image не используется: build dependency и runtime pull refe
 `--mattermost-host <exact-dns>`. Он одновременно материализует installation-level
 allowlist interaction adapter и тот же exact destination в egress policy. В
 `web-only` этот параметр запрещён. Release workflow читает значение только из
-installation variable `MATTERCODEX_MATTERMOST_HOST` и не хранит домен в коде.
+installation variable `KODEX_MATTERMOST_HOST` и не хранит домен в коде.
 
 Оба профиля требуют три installation-level параметра Kubernetes API:
 
-- `MATTERCODEX_KUBERNETES_API_SERVICE_CIDR` — один host CIDR ClusterIP сервиса
+- `KODEX_KUBERNETES_API_SERVICE_CIDR` — один host CIDR ClusterIP сервиса
   `kubernetes`;
-- `MATTERCODEX_KUBERNETES_API_ENDPOINT_CIDRS` — непустой ограниченный список
+- `KODEX_KUBERNETES_API_ENDPOINT_CIDRS` — непустой ограниченный список
   host CIDR готовых API EndpointSlice;
-- `MATTERCODEX_KUBERNETES_API_ENDPOINT_PORTS` — непустой ограниченный список
+- `KODEX_KUBERNETES_API_ENDPOINT_PORTS` — непустой ограниченный список
   фактических TCP-портов этих endpoints.
 
 Значения получают перед render из текущих Service и EndpointSlice через

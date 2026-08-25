@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-registry_host="mattercodex-image-registry-admin.mattercodex-system.svc.cluster.local:5002"
-ca_file="/var/run/secrets/mattercodex/image-registry/admin/ca.pem"
-certificate_file="/var/run/secrets/mattercodex/image-registry/admin/client.crt"
-key_file="/var/run/secrets/mattercodex/image-registry/admin/client.key"
-username_file="/var/run/secrets/mattercodex/image-registry/admin/username"
-password_file="/var/run/secrets/mattercodex/image-registry/admin/password"
+registry_host="kodex-image-registry-admin.kodex-system.svc.cluster.local:5002"
+ca_file="/var/run/secrets/kodex/image-registry/admin/ca.pem"
+certificate_file="/var/run/secrets/kodex/image-registry/admin/client.crt"
+key_file="/var/run/secrets/kodex/image-registry/admin/client.key"
+username_file="/var/run/secrets/kodex/image-registry/admin/username"
+password_file="/var/run/secrets/kodex/image-registry/admin/password"
 
 regctl registry set "${registry_host}" --tls enabled \
   --cacert "$(cat "${ca_file}")" \
@@ -23,7 +23,7 @@ repository_file="$(mktemp)"
 regctl repo ls "${registry_host}" >"${repository_file}"
 while IFS= read -r repository; do
   case "${repository}" in
-    mattercodex/*) ;;
+    kodex/*) ;;
     *) exit 1 ;;
   esac
   tag_file="$(mktemp)"

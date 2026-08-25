@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	HandoffSchemaV1       = "mattercodex.runtime-turn-handoff.v1"
-	HandoffSchemaV2       = "mattercodex.runtime-turn-handoff.v2"
-	SignedHandoffSchemaV1 = "mattercodex.signed-runtime-turn-handoff.v1"
+	HandoffSchemaV1       = "kodex.runtime-turn-handoff.v1"
+	HandoffSchemaV2       = "kodex.runtime-turn-handoff.v2"
+	SignedHandoffSchemaV1 = "kodex.signed-runtime-turn-handoff.v1"
 	MaximumOutputs        = 32
 	MaximumOutputBytes    = 512 << 10
 	MaximumHandoffBytes   = 900 << 10
@@ -264,7 +264,7 @@ func validCodexArchiveProvenance(value, path, digest string) bool {
 }
 
 func validArchiveRelativePath(value string) bool {
-	return regexp.MustCompile(`^\.matter-codex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
+	return regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
 		len(value) <= 255 &&
 		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
 }

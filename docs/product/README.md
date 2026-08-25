@@ -1,6 +1,6 @@
 ---
 id: PRD-MC-001
-title: Базовый продуктовый контракт MatterCodex
+title: Базовый продуктовый контракт Kodex
 type: product-index
 status: approved
 owner: product
@@ -8,9 +8,9 @@ version: 1.0.1
 updated: 2026-08-22
 ---
 
-# Базовый продуктовый контракт MatterCodex
+# Базовый продуктовый контракт Kodex
 
-MatterCodex — универсальная web-first платформа управления ИИ-сотрудниками и
+Kodex — универсальная web-first платформа управления ИИ-сотрудниками и
 выполняемыми ими Процессами. Control Center является основной пользовательской
 поверхностью. Продажи, поддержка, документы, бухгалтерия, право, контент,
 аналитика, разработка и эксплуатация используют одну предметную модель.
@@ -43,7 +43,7 @@ MatterCodex — универсальная web-first платформа упра
 - `Решение` (`Human Gate`) — долговечное one-winner ожидание человека.
 - `Artifact` — versioned входной или созданный файл.
 - `Integration` — необязательное типизированное подключение внешней системы.
-- `Помощник MatterCodex` — встроенный системный Agent с реальным warm runtime.
+- `Помощник Kodex` — встроенный системный Agent с реальным warm runtime.
 
 Workspace, Room, Team, Channel, Thread, repository, cluster и provider account не
 являются core alias или обязательным authority. Они могут существовать только

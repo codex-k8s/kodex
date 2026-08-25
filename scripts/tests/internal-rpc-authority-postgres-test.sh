@@ -7,7 +7,7 @@ fail() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-container_name="mattercodex-internal-rpc-authority-postgres-${BASHPID}"
+container_name="kodex-internal-rpc-authority-postgres-${BASHPID}"
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true

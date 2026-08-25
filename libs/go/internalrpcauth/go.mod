@@ -1,4 +1,4 @@
-module github.com/codex-k8s/matter-codex/libs/go/internalrpcauth
+module github.com/codex-k8s/kodex/libs/go/internalrpcauth
 
 go 1.26.6
 

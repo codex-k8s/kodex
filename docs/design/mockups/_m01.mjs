@@ -15,7 +15,7 @@ export const m01 = L.page(L.frameMobile(`
       <span style="width: 24px; height: 24px; border-radius: 6px; background: ${T.acc}; display: flex; align-items: center; justify-content: center;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V7l8 5 8-5v11"/></svg>
       </span>
-      <span style="font-size: 15px; font-weight: 600;">MatterCodex</span>
+      <span style="font-size: 15px; font-weight: 600;">Kodex</span>
     </span>
     <button aria-label="Меню пользователя: Анна Волкова, Владелец" style="height: 44px; display: flex; align-items: center; gap: 7px; border: 0; background: none; margin-right: -8px; padding: 0 8px;">
       ${L.avatar('АВ', 30)}<span style="color: ${T.mut}; display: flex;">${L.icon('chev', 15)}</span>
@@ -35,7 +35,7 @@ export const m01 = L.page(L.frameMobile(`
     </div>
 
     <div>
-      <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Добро пожаловать в MatterCodex</h1>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2;">Добро пожаловать в Kodex</h1>
       <p style="margin: 8px 0 0; font-size: 14px; color: ${T.sec}; line-height: 1.5;">Создайте первый Проект и ИИ-сотрудника. Интеграции можно подключить позже.</p>
     </div>
 
@@ -43,7 +43,7 @@ export const m01 = L.page(L.frameMobile(`
       <div style="display: flex; align-items: center; gap: 11px;">
         <span style="width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; background: ${T.accTint}; border: 1px solid ${T.accSoftLine}; color: ${T.acc}; display: flex; align-items: center; justify-content: center;">${L.icon('bot', 19)}</span>
         <span style="flex: 1 1 auto; min-width: 0;">
-          <span style="display: block; font-size: 14.5px; font-weight: 600;">Помощник MatterCodex</span>
+          <span style="display: block; font-size: 14.5px; font-weight: 600;">Помощник Kodex</span>
           <span style="display: block; font-size: 11.5px; color: ${T.mut}; margin-top: 2px;">Системный · неудаляемый</span>
         </span>
       </div>
@@ -72,7 +72,7 @@ export const m02 = L.page(L.frameMobile(`
   <header style="flex: 0 0 56px; display: flex; align-items: center; gap: 6px; padding: 0 16px; border-bottom: 1px solid ${T.line};">
     <button aria-label="Меню" style="width: 44px; height: 44px; margin-left: -10px; border: 0; background: none; color: ${T.ink}; display: flex; align-items: center; justify-content: center;">${L.icon('menu', 22)}</button>
     <span style="flex: 1 1 auto; min-width: 0;">
-      <span style="display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Помощник MatterCodex</span>
+      <span style="display: block; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Помощник Kodex</span>
       <span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: ${T.ok};"><span style="width: 6px; height: 6px; border-radius: 3px; background: ${T.ok};"></span>Готов</span>
     </span>
     <button aria-label="История диалогов" style="width: 44px; height: 44px; margin-right: -10px; border: 0; background: none; color: ${T.sec}; display: flex; align-items: center; justify-content: center;">${L.icon('list', 20)}</button>
@@ -106,7 +106,7 @@ export const m02 = L.page(L.frameMobile(`
         <span style="display: flex; align-items: flex-start; gap: 9px; font-size: 13px;"><span style="width: 18px; height: 18px; flex: 0 0 18px; border-radius: 9px; background: ${T.acc}; color: #FFFFFF; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</span>Создать ИИ-сотрудника «Аналитик продаж»</span>
       </div>
       <div style="margin-top: 12px; padding: 10px 11px; border-radius: 9px; background: ${T.subtle}; border: 1px solid ${T.line}; font-size: 12px; color: ${T.sec}; line-height: 1.5;">
-        Работа с файлами · runtime «Стандартный» · интеграции: нет<br>В аудит: Анна Волкова через Помощника MatterCodex
+        Работа с файлами · runtime «Стандартный» · интеграции: нет<br>В аудит: Анна Волкова через Помощника Kodex
       </div>
       <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
         ${L.mBtn('Применить изменения', 'pri')}

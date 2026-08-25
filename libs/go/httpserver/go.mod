@@ -1,4 +1,4 @@
-module github.com/codex-k8s/matter-codex/libs/go/httpserver
+module github.com/codex-k8s/kodex/libs/go/httpserver
 
 go 1.26.6
 

@@ -1,40 +1,40 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: mattercodex-registry-node-pull-readback
+  name: kodex-registry-node-pull-readback
   labels:
-    app.kubernetes.io/name: mattercodex-registry-node-pull-readback
+    app.kubernetes.io/name: kodex-registry-node-pull-readback
     app.kubernetes.io/component: image-pull-readback
 spec:
   updateStrategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 1}}
   selector:
-    matchLabels: {app.kubernetes.io/name: mattercodex-registry-node-pull-readback}
+    matchLabels: {app.kubernetes.io/name: kodex-registry-node-pull-readback}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-registry-node-pull-readback
+        app.kubernetes.io/name: kodex-registry-node-pull-readback
         app.kubernetes.io/component: image-pull-readback
       annotations:
-        mattercodex.dev/registry-pull-host: registry-pull.invalid
-        mattercodex.dev/pull-credential-generation: "0"
+        kodex.dev/registry-pull-host: registry-pull.invalid
+        kodex.dev/pull-credential-generation: "0"
     spec:
-      serviceAccountName: mattercodex-image-pull-readback
+      serviceAccountName: kodex-image-pull-readback
       automountServiceAccountToken: false
       enableServiceLinks: false
       tolerations: [{operator: Exists}]
       containers:
         - name: bootstrap
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/node-pull-bootstrap]
           env:
             - {name: NODE_NAME, valueFrom: {fieldRef: {fieldPath: spec.nodeName}}}
             - {name: HOST_IP, valueFrom: {fieldRef: {fieldPath: status.hostIP}}}
             - name: REGISTRY_PULL_HOST
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullRegistryHost}}
             - name: PULL_CREDENTIAL_GENERATION
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullCredentialGeneration}}
             - name: READBACK_IMAGE
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: nodeReadbackImage}}
           readinessProbe:
             exec: {command: [/bin/sh, -ec, test -s /ready/node-pull]}
             periodSeconds: 10
@@ -61,7 +61,7 @@ spec:
         - name: containerd-socket
           hostPath: {path: /run/k3s/containerd/containerd.sock, type: Socket}
         - name: vault-ca
-          configMap: {name: mattercodex-vault-ca, defaultMode: 0440}
+          configMap: {name: kodex-vault-ca, defaultMode: 0440}
         - name: vault-token
           projected:
             defaultMode: 0400

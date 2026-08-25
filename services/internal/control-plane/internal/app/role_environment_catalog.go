@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	roleimageservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/roleimage"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 const maximumRoleEnvironmentCatalogBytes = 1 << 20

@@ -9,10 +9,10 @@ spec:
     - name: interaction-gateway
       rules:
         - alert: InteractionGatewayLocalAuthorityUnavailable
-          expr: mattercodex_interaction_gateway_readiness{ready="false"} == 1
+          expr: kodex_interaction_gateway_readiness{ready="false"} == 1
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: Interaction gateway local authority path is unavailable
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/interaction-gateway.md

@@ -46,7 +46,7 @@ parent, child, recipient policy и route.
 
 ## System Assistant
 
-Помощник MatterCodex — системный Agent со stable key `system-assistant`.
+Помощник Kodex — системный Agent со stable key `system-assistant`.
 Bootstrap создаёт один экземпляр, protected versioned core prompt и owner
 supplement. Domain constraints и команды запрещают delete, archive, disable,
 смену purpose и замену core prompt.
@@ -60,7 +60,7 @@ commands. Каждая invocation повторно проверяет текущ
 
 Agent ссылается только на admitted promoted role image digest. Образ определяет
 доступные ОС-пакеты, CLI, языки и прикладное ПО роли. Защищённый
-`matter-codex-agent-runner` и runtime contract добавляются после недоверенного
+`kodex-agent-runner` и runtime contract добавляются после недоверенного
 installation step и проверяются supply chain admission.
 
 ## События и критерии приёмки

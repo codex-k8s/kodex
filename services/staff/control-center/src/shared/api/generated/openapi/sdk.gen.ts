@@ -21,7 +21,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 export const deleteOwnerSession = <ThrowOnError extends boolean = false>(options: Options<DeleteOwnerSessionData, ThrowOnError>): RequestResult<DeleteOwnerSessionResponses, DeleteOwnerSessionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteOwnerSessionResponses, DeleteOwnerSessionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/session',
@@ -37,7 +37,7 @@ export const createOwnerSession = <ThrowOnError extends boolean = false>(options
 export const getBootstrapState = <ThrowOnError extends boolean = false>(options?: Options<GetBootstrapStateData, ThrowOnError>): RequestResult<GetBootstrapStateResponses, GetBootstrapStateErrors, ThrowOnError> => (options?.client ?? client).get<GetBootstrapStateResponses, GetBootstrapStateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/bootstrap',
@@ -47,7 +47,7 @@ export const getBootstrapState = <ThrowOnError extends boolean = false>(options?
 export const completeOnboarding = <ThrowOnError extends boolean = false>(options: Options<CompleteOnboardingData, ThrowOnError>): RequestResult<CompleteOnboardingResponses, CompleteOnboardingErrors, ThrowOnError> => (options.client ?? client).post<CompleteOnboardingResponses, CompleteOnboardingErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/onboarding/completion',
@@ -57,7 +57,7 @@ export const completeOnboarding = <ThrowOnError extends boolean = false>(options
 export const getOverview = <ThrowOnError extends boolean = false>(options?: Options<GetOverviewData, ThrowOnError>): RequestResult<GetOverviewResponses, GetOverviewErrors, ThrowOnError> => (options?.client ?? client).get<GetOverviewResponses, GetOverviewErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/overview',
@@ -67,7 +67,7 @@ export const getOverview = <ThrowOnError extends boolean = false>(options?: Opti
 export const listPlatformCapabilities = <ThrowOnError extends boolean = false>(options?: Options<ListPlatformCapabilitiesData, ThrowOnError>): RequestResult<ListPlatformCapabilitiesResponses, ListPlatformCapabilitiesErrors, ThrowOnError> => (options?.client ?? client).get<ListPlatformCapabilitiesResponses, ListPlatformCapabilitiesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/platform-capabilities',
@@ -77,7 +77,7 @@ export const listPlatformCapabilities = <ThrowOnError extends boolean = false>(o
 export const listRuntimeSelections = <ThrowOnError extends boolean = false>(options?: Options<ListRuntimeSelectionsData, ThrowOnError>): RequestResult<ListRuntimeSelectionsResponses, ListRuntimeSelectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListRuntimeSelectionsResponses, ListRuntimeSelectionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runtime-selections',
@@ -87,7 +87,7 @@ export const listRuntimeSelections = <ThrowOnError extends boolean = false>(opti
 export const searchPlatform = <ThrowOnError extends boolean = false>(options: Options<SearchPlatformData, ThrowOnError>): RequestResult<SearchPlatformResponses, SearchPlatformErrors, ThrowOnError> => (options.client ?? client).get<SearchPlatformResponses, SearchPlatformErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/search',
@@ -97,7 +97,7 @@ export const searchPlatform = <ThrowOnError extends boolean = false>(options: Op
 export const listProjects = <ThrowOnError extends boolean = false>(options?: Options<ListProjectsData, ThrowOnError>): RequestResult<ListProjectsResponses, ListProjectsErrors, ThrowOnError> => (options?.client ?? client).get<ListProjectsResponses, ListProjectsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects',
@@ -107,7 +107,7 @@ export const listProjects = <ThrowOnError extends boolean = false>(options?: Opt
 export const createProject = <ThrowOnError extends boolean = false>(options: Options<CreateProjectData, ThrowOnError>): RequestResult<CreateProjectResponses, CreateProjectErrors, ThrowOnError> => (options.client ?? client).post<CreateProjectResponses, CreateProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects',
@@ -121,7 +121,7 @@ export const createProject = <ThrowOnError extends boolean = false>(options: Opt
 export const getProject = <ThrowOnError extends boolean = false>(options: Options<GetProjectData, ThrowOnError>): RequestResult<GetProjectResponses, GetProjectErrors, ThrowOnError> => (options.client ?? client).get<GetProjectResponses, GetProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}',
@@ -131,7 +131,7 @@ export const getProject = <ThrowOnError extends boolean = false>(options: Option
 export const updateProject = <ThrowOnError extends boolean = false>(options: Options<UpdateProjectData, ThrowOnError>): RequestResult<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError> => (options.client ?? client).patch<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}',
@@ -145,7 +145,7 @@ export const updateProject = <ThrowOnError extends boolean = false>(options: Opt
 export const listProjectMemberships = <ThrowOnError extends boolean = false>(options: Options<ListProjectMembershipsData, ThrowOnError>): RequestResult<ListProjectMembershipsResponses, ListProjectMembershipsErrors, ThrowOnError> => (options.client ?? client).get<ListProjectMembershipsResponses, ListProjectMembershipsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/members',
@@ -155,7 +155,7 @@ export const listProjectMemberships = <ThrowOnError extends boolean = false>(opt
 export const addProjectMembership = <ThrowOnError extends boolean = false>(options: Options<AddProjectMembershipData, ThrowOnError>): RequestResult<AddProjectMembershipResponses, AddProjectMembershipErrors, ThrowOnError> => (options.client ?? client).post<AddProjectMembershipResponses, AddProjectMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/members',
@@ -169,7 +169,7 @@ export const addProjectMembership = <ThrowOnError extends boolean = false>(optio
 export const listPlatformMemberships = <ThrowOnError extends boolean = false>(options?: Options<ListPlatformMembershipsData, ThrowOnError>): RequestResult<ListPlatformMembershipsResponses, ListPlatformMembershipsErrors, ThrowOnError> => (options?.client ?? client).get<ListPlatformMembershipsResponses, ListPlatformMembershipsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration/members',
@@ -179,7 +179,7 @@ export const listPlatformMemberships = <ThrowOnError extends boolean = false>(op
 export const addPlatformMembership = <ThrowOnError extends boolean = false>(options: Options<AddPlatformMembershipData, ThrowOnError>): RequestResult<AddPlatformMembershipResponses, AddPlatformMembershipErrors, ThrowOnError> => (options.client ?? client).post<AddPlatformMembershipResponses, AddPlatformMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration/members',
@@ -193,7 +193,7 @@ export const addPlatformMembership = <ThrowOnError extends boolean = false>(opti
 export const listPlatformMembershipCandidates = <ThrowOnError extends boolean = false>(options?: Options<ListPlatformMembershipCandidatesData, ThrowOnError>): RequestResult<ListPlatformMembershipCandidatesResponses, ListPlatformMembershipCandidatesErrors, ThrowOnError> => (options?.client ?? client).get<ListPlatformMembershipCandidatesResponses, ListPlatformMembershipCandidatesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration/membership-candidates',
@@ -203,7 +203,7 @@ export const listPlatformMembershipCandidates = <ThrowOnError extends boolean = 
 export const removePlatformMembership = <ThrowOnError extends boolean = false>(options: Options<RemovePlatformMembershipData, ThrowOnError>): RequestResult<RemovePlatformMembershipResponses, RemovePlatformMembershipErrors, ThrowOnError> => (options.client ?? client).delete<RemovePlatformMembershipResponses, RemovePlatformMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration/members/{membershipRef}',
@@ -213,7 +213,7 @@ export const removePlatformMembership = <ThrowOnError extends boolean = false>(o
 export const changePlatformMembership = <ThrowOnError extends boolean = false>(options: Options<ChangePlatformMembershipData, ThrowOnError>): RequestResult<ChangePlatformMembershipResponses, ChangePlatformMembershipErrors, ThrowOnError> => (options.client ?? client).patch<ChangePlatformMembershipResponses, ChangePlatformMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration/members/{membershipRef}',
@@ -227,7 +227,7 @@ export const changePlatformMembership = <ThrowOnError extends boolean = false>(o
 export const listProjectMembershipCandidates = <ThrowOnError extends boolean = false>(options: Options<ListProjectMembershipCandidatesData, ThrowOnError>): RequestResult<ListProjectMembershipCandidatesResponses, ListProjectMembershipCandidatesErrors, ThrowOnError> => (options.client ?? client).get<ListProjectMembershipCandidatesResponses, ListProjectMembershipCandidatesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/membership-candidates',
@@ -237,7 +237,7 @@ export const listProjectMembershipCandidates = <ThrowOnError extends boolean = f
 export const removeProjectMembership = <ThrowOnError extends boolean = false>(options: Options<RemoveProjectMembershipData, ThrowOnError>): RequestResult<RemoveProjectMembershipResponses, RemoveProjectMembershipErrors, ThrowOnError> => (options.client ?? client).delete<RemoveProjectMembershipResponses, RemoveProjectMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/members/{membershipRef}',
@@ -247,7 +247,7 @@ export const removeProjectMembership = <ThrowOnError extends boolean = false>(op
 export const changeProjectMembership = <ThrowOnError extends boolean = false>(options: Options<ChangeProjectMembershipData, ThrowOnError>): RequestResult<ChangeProjectMembershipResponses, ChangeProjectMembershipErrors, ThrowOnError> => (options.client ?? client).patch<ChangeProjectMembershipResponses, ChangeProjectMembershipErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/members/{membershipRef}',
@@ -261,7 +261,7 @@ export const changeProjectMembership = <ThrowOnError extends boolean = false>(op
 export const listAgents = <ThrowOnError extends boolean = false>(options: Options<ListAgentsData, ThrowOnError>): RequestResult<ListAgentsResponses, ListAgentsErrors, ThrowOnError> => (options.client ?? client).get<ListAgentsResponses, ListAgentsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/agents',
@@ -271,7 +271,7 @@ export const listAgents = <ThrowOnError extends boolean = false>(options: Option
 export const createAgent = <ThrowOnError extends boolean = false>(options: Options<CreateAgentData, ThrowOnError>): RequestResult<CreateAgentResponses, CreateAgentErrors, ThrowOnError> => (options.client ?? client).post<CreateAgentResponses, CreateAgentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/agents',
@@ -285,7 +285,7 @@ export const createAgent = <ThrowOnError extends boolean = false>(options: Optio
 export const getAgent = <ThrowOnError extends boolean = false>(options: Options<GetAgentData, ThrowOnError>): RequestResult<GetAgentResponses, GetAgentErrors, ThrowOnError> => (options.client ?? client).get<GetAgentResponses, GetAgentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}',
@@ -295,7 +295,7 @@ export const getAgent = <ThrowOnError extends boolean = false>(options: Options<
 export const updateAgent = <ThrowOnError extends boolean = false>(options: Options<UpdateAgentData, ThrowOnError>): RequestResult<UpdateAgentResponses, UpdateAgentErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAgentResponses, UpdateAgentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}',
@@ -309,7 +309,7 @@ export const updateAgent = <ThrowOnError extends boolean = false>(options: Optio
 export const commandAgent = <ThrowOnError extends boolean = false>(options: Options<CommandAgentData, ThrowOnError>): RequestResult<CommandAgentResponses, CommandAgentErrors, ThrowOnError> => (options.client ?? client).post<CommandAgentResponses, CommandAgentErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}/commands',
@@ -323,7 +323,7 @@ export const commandAgent = <ThrowOnError extends boolean = false>(options: Opti
 export const createInstructionDraft = <ThrowOnError extends boolean = false>(options: Options<CreateInstructionDraftData, ThrowOnError>): RequestResult<CreateInstructionDraftResponses, CreateInstructionDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateInstructionDraftResponses, CreateInstructionDraftErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}/instruction-drafts',
@@ -337,7 +337,7 @@ export const createInstructionDraft = <ThrowOnError extends boolean = false>(opt
 export const commandAgentInstructions = <ThrowOnError extends boolean = false>(options: Options<CommandAgentInstructionsData, ThrowOnError>): RequestResult<CommandAgentInstructionsResponses, CommandAgentInstructionsErrors, ThrowOnError> => (options.client ?? client).post<CommandAgentInstructionsResponses, CommandAgentInstructionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/agents/{agentRef}/instruction-commands',
@@ -351,7 +351,7 @@ export const commandAgentInstructions = <ThrowOnError extends boolean = false>(o
 export const listRoleEnvironments = <ThrowOnError extends boolean = false>(options?: Options<ListRoleEnvironmentsData, ThrowOnError>): RequestResult<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError> => (options?.client ?? client).get<ListRoleEnvironmentsResponses, ListRoleEnvironmentsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/role-environments',
@@ -361,7 +361,7 @@ export const listRoleEnvironments = <ThrowOnError extends boolean = false>(optio
 export const listRoleImageRecipes = <ThrowOnError extends boolean = false>(options: Options<ListRoleImageRecipesData, ThrowOnError>): RequestResult<ListRoleImageRecipesResponses, ListRoleImageRecipesErrors, ThrowOnError> => (options.client ?? client).get<ListRoleImageRecipesResponses, ListRoleImageRecipesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes',
@@ -371,7 +371,7 @@ export const listRoleImageRecipes = <ThrowOnError extends boolean = false>(optio
 export const createRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<CreateRoleImageRecipeData, ThrowOnError>): RequestResult<CreateRoleImageRecipeResponses, CreateRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).post<CreateRoleImageRecipeResponses, CreateRoleImageRecipeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes',
@@ -385,7 +385,7 @@ export const createRoleImageRecipe = <ThrowOnError extends boolean = false>(opti
 export const getRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<GetRoleImageRecipeData, ThrowOnError>): RequestResult<GetRoleImageRecipeResponses, GetRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).get<GetRoleImageRecipeResponses, GetRoleImageRecipeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}',
@@ -395,7 +395,7 @@ export const getRoleImageRecipe = <ThrowOnError extends boolean = false>(options
 export const updateRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<UpdateRoleImageRecipeData, ThrowOnError>): RequestResult<UpdateRoleImageRecipeResponses, UpdateRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRoleImageRecipeResponses, UpdateRoleImageRecipeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}',
@@ -409,7 +409,7 @@ export const updateRoleImageRecipe = <ThrowOnError extends boolean = false>(opti
 export const commandRoleImageRecipe = <ThrowOnError extends boolean = false>(options: Options<CommandRoleImageRecipeData, ThrowOnError>): RequestResult<CommandRoleImageRecipeResponses, CommandRoleImageRecipeErrors, ThrowOnError> => (options.client ?? client).post<CommandRoleImageRecipeResponses, CommandRoleImageRecipeErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands',
@@ -423,7 +423,7 @@ export const commandRoleImageRecipe = <ThrowOnError extends boolean = false>(opt
 export const listWorkflows = <ThrowOnError extends boolean = false>(options: Options<ListWorkflowsData, ThrowOnError>): RequestResult<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError> => (options.client ?? client).get<ListWorkflowsResponses, ListWorkflowsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/workflows',
@@ -433,7 +433,7 @@ export const listWorkflows = <ThrowOnError extends boolean = false>(options: Opt
 export const createWorkflow = <ThrowOnError extends boolean = false>(options: Options<CreateWorkflowData, ThrowOnError>): RequestResult<CreateWorkflowResponses, CreateWorkflowErrors, ThrowOnError> => (options.client ?? client).post<CreateWorkflowResponses, CreateWorkflowErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/workflows',
@@ -447,7 +447,7 @@ export const createWorkflow = <ThrowOnError extends boolean = false>(options: Op
 export const getWorkflow = <ThrowOnError extends boolean = false>(options: Options<GetWorkflowData, ThrowOnError>): RequestResult<GetWorkflowResponses, GetWorkflowErrors, ThrowOnError> => (options.client ?? client).get<GetWorkflowResponses, GetWorkflowErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/workflows/{workflowRef}',
@@ -457,7 +457,7 @@ export const getWorkflow = <ThrowOnError extends boolean = false>(options: Optio
 export const updateWorkflowDraft = <ThrowOnError extends boolean = false>(options: Options<UpdateWorkflowDraftData, ThrowOnError>): RequestResult<UpdateWorkflowDraftResponses, UpdateWorkflowDraftErrors, ThrowOnError> => (options.client ?? client).patch<UpdateWorkflowDraftResponses, UpdateWorkflowDraftErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/workflows/{workflowRef}',
@@ -471,7 +471,7 @@ export const updateWorkflowDraft = <ThrowOnError extends boolean = false>(option
 export const commandWorkflow = <ThrowOnError extends boolean = false>(options: Options<CommandWorkflowData, ThrowOnError>): RequestResult<CommandWorkflowResponses, CommandWorkflowErrors, ThrowOnError> => (options.client ?? client).post<CommandWorkflowResponses, CommandWorkflowErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/workflows/{workflowRef}/commands',
@@ -485,7 +485,7 @@ export const commandWorkflow = <ThrowOnError extends boolean = false>(options: O
 export const listRuns = <ThrowOnError extends boolean = false>(options?: Options<ListRunsData, ThrowOnError>): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> => (options?.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs',
@@ -495,7 +495,7 @@ export const listRuns = <ThrowOnError extends boolean = false>(options?: Options
 export const createRun = <ThrowOnError extends boolean = false>(options: Options<CreateRunData, ThrowOnError>): RequestResult<CreateRunResponses, CreateRunErrors, ThrowOnError> => (options.client ?? client).post<CreateRunResponses, CreateRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs',
@@ -509,7 +509,7 @@ export const createRun = <ThrowOnError extends boolean = false>(options: Options
 export const getRun = <ThrowOnError extends boolean = false>(options: Options<GetRunData, ThrowOnError>): RequestResult<GetRunResponses, GetRunErrors, ThrowOnError> => (options.client ?? client).get<GetRunResponses, GetRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs/{runRef}',
@@ -519,7 +519,7 @@ export const getRun = <ThrowOnError extends boolean = false>(options: Options<Ge
 export const getRunGraph = <ThrowOnError extends boolean = false>(options: Options<GetRunGraphData, ThrowOnError>): RequestResult<GetRunGraphResponses, GetRunGraphErrors, ThrowOnError> => (options.client ?? client).get<GetRunGraphResponses, GetRunGraphErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs/{runRef}/graph',
@@ -529,7 +529,7 @@ export const getRunGraph = <ThrowOnError extends boolean = false>(options: Optio
 export const listRunEvents = <ThrowOnError extends boolean = false>(options: Options<ListRunEventsData, ThrowOnError>): RequestResult<ListRunEventsResponses, ListRunEventsErrors, ThrowOnError> => (options.client ?? client).get<ListRunEventsResponses, ListRunEventsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs/{runRef}/events',
@@ -539,7 +539,7 @@ export const listRunEvents = <ThrowOnError extends boolean = false>(options: Opt
 export const commandRun = <ThrowOnError extends boolean = false>(options: Options<CommandRunData, ThrowOnError>): RequestResult<CommandRunResponses, CommandRunErrors, ThrowOnError> => (options.client ?? client).post<CommandRunResponses, CommandRunErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/runs/{runRef}/commands',
@@ -553,7 +553,7 @@ export const commandRun = <ThrowOnError extends boolean = false>(options: Option
 export const addSessionTurn = <ThrowOnError extends boolean = false>(options: Options<AddSessionTurnData, ThrowOnError>): RequestResult<AddSessionTurnResponses, AddSessionTurnErrors, ThrowOnError> => (options.client ?? client).post<AddSessionTurnResponses, AddSessionTurnErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/sessions/{sessionRef}/turns',
@@ -567,7 +567,7 @@ export const addSessionTurn = <ThrowOnError extends boolean = false>(options: Op
 export const listOwnerGates = <ThrowOnError extends boolean = false>(options?: Options<ListOwnerGatesData, ThrowOnError>): RequestResult<ListOwnerGatesResponses, ListOwnerGatesErrors, ThrowOnError> => (options?.client ?? client).get<ListOwnerGatesResponses, ListOwnerGatesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/owner-gates',
@@ -577,7 +577,7 @@ export const listOwnerGates = <ThrowOnError extends boolean = false>(options?: O
 export const getOwnerGate = <ThrowOnError extends boolean = false>(options: Options<GetOwnerGateData, ThrowOnError>): RequestResult<GetOwnerGateResponses, GetOwnerGateErrors, ThrowOnError> => (options.client ?? client).get<GetOwnerGateResponses, GetOwnerGateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/owner-gates/{gateRef}',
@@ -587,7 +587,7 @@ export const getOwnerGate = <ThrowOnError extends boolean = false>(options: Opti
 export const resolveOwnerGate = <ThrowOnError extends boolean = false>(options: Options<ResolveOwnerGateData, ThrowOnError>): RequestResult<ResolveOwnerGateResponses, ResolveOwnerGateErrors, ThrowOnError> => (options.client ?? client).post<ResolveOwnerGateResponses, ResolveOwnerGateErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/owner-gates/{gateRef}/resolution',
@@ -601,7 +601,7 @@ export const resolveOwnerGate = <ThrowOnError extends boolean = false>(options: 
 export const listArtifacts = <ThrowOnError extends boolean = false>(options: Options<ListArtifactsData, ThrowOnError>): RequestResult<ListArtifactsResponses, ListArtifactsErrors, ThrowOnError> => (options.client ?? client).get<ListArtifactsResponses, ListArtifactsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/artifacts',
@@ -612,7 +612,7 @@ export const uploadArtifact = <ThrowOnError extends boolean = false>(options: Op
     bodySerializer: null,
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/artifacts',
@@ -626,7 +626,7 @@ export const uploadArtifact = <ThrowOnError extends boolean = false>(options: Op
 export const getArtifact = <ThrowOnError extends boolean = false>(options: Options<GetArtifactData, ThrowOnError>): RequestResult<GetArtifactResponses, GetArtifactErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactResponses, GetArtifactErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/artifacts/{artifactRef}',
@@ -636,7 +636,7 @@ export const getArtifact = <ThrowOnError extends boolean = false>(options: Optio
 export const downloadArtifact = <ThrowOnError extends boolean = false>(options: Options<DownloadArtifactData, ThrowOnError>): RequestResult<DownloadArtifactResponses, DownloadArtifactErrors, ThrowOnError> => (options.client ?? client).get<DownloadArtifactResponses, DownloadArtifactErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/artifacts/{artifactRef}/content',
@@ -646,7 +646,7 @@ export const downloadArtifact = <ThrowOnError extends boolean = false>(options: 
 export const changeArtifactBinding = <ThrowOnError extends boolean = false>(options: Options<ChangeArtifactBindingData, ThrowOnError>): RequestResult<ChangeArtifactBindingResponses, ChangeArtifactBindingErrors, ThrowOnError> => (options.client ?? client).post<ChangeArtifactBindingResponses, ChangeArtifactBindingErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/artifacts/{artifactRef}/bindings',
@@ -660,7 +660,7 @@ export const changeArtifactBinding = <ThrowOnError extends boolean = false>(opti
 export const listSchedules = <ThrowOnError extends boolean = false>(options: Options<ListSchedulesData, ThrowOnError>): RequestResult<ListSchedulesResponses, ListSchedulesErrors, ThrowOnError> => (options.client ?? client).get<ListSchedulesResponses, ListSchedulesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/schedules',
@@ -670,7 +670,7 @@ export const listSchedules = <ThrowOnError extends boolean = false>(options: Opt
 export const createSchedule = <ThrowOnError extends boolean = false>(options: Options<CreateScheduleData, ThrowOnError>): RequestResult<CreateScheduleResponses, CreateScheduleErrors, ThrowOnError> => (options.client ?? client).post<CreateScheduleResponses, CreateScheduleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/projects/{projectRef}/schedules',
@@ -684,7 +684,7 @@ export const createSchedule = <ThrowOnError extends boolean = false>(options: Op
 export const updateSchedule = <ThrowOnError extends boolean = false>(options: Options<UpdateScheduleData, ThrowOnError>): RequestResult<UpdateScheduleResponses, UpdateScheduleErrors, ThrowOnError> => (options.client ?? client).patch<UpdateScheduleResponses, UpdateScheduleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/schedules/{scheduleRef}',
@@ -698,7 +698,7 @@ export const updateSchedule = <ThrowOnError extends boolean = false>(options: Op
 export const commandSchedule = <ThrowOnError extends boolean = false>(options: Options<CommandScheduleData, ThrowOnError>): RequestResult<CommandScheduleResponses, CommandScheduleErrors, ThrowOnError> => (options.client ?? client).post<CommandScheduleResponses, CommandScheduleErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/schedules/{scheduleRef}/commands',
@@ -712,7 +712,7 @@ export const commandSchedule = <ThrowOnError extends boolean = false>(options: O
 export const listIntegrationDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationDefinitionsData, ThrowOnError>): RequestResult<ListIntegrationDefinitionsResponses, ListIntegrationDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationDefinitionsResponses, ListIntegrationDefinitionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-definitions',
@@ -722,7 +722,7 @@ export const listIntegrationDefinitions = <ThrowOnError extends boolean = false>
 export const listIntegrationConnections = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationConnectionsData, ThrowOnError>): RequestResult<ListIntegrationConnectionsResponses, ListIntegrationConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationConnectionsResponses, ListIntegrationConnectionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-connections',
@@ -732,7 +732,7 @@ export const listIntegrationConnections = <ThrowOnError extends boolean = false>
 export const createIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<CreateIntegrationConnectionData, ThrowOnError>): RequestResult<CreateIntegrationConnectionResponses, CreateIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).post<CreateIntegrationConnectionResponses, CreateIntegrationConnectionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-connections',
@@ -746,7 +746,7 @@ export const createIntegrationConnection = <ThrowOnError extends boolean = false
 export const getIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationConnectionData, ThrowOnError>): RequestResult<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-connections/{connectionRef}',
@@ -756,7 +756,7 @@ export const getIntegrationConnection = <ThrowOnError extends boolean = false>(o
 export const commandIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<CommandIntegrationConnectionData, ThrowOnError>): RequestResult<CommandIntegrationConnectionResponses, CommandIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).post<CommandIntegrationConnectionResponses, CommandIntegrationConnectionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-connections/{connectionRef}/commands',
@@ -770,7 +770,7 @@ export const commandIntegrationConnection = <ThrowOnError extends boolean = fals
 export const changeIntegrationGrant = <ThrowOnError extends boolean = false>(options: Options<ChangeIntegrationGrantData, ThrowOnError>): RequestResult<ChangeIntegrationGrantResponses, ChangeIntegrationGrantErrors, ThrowOnError> => (options.client ?? client).post<ChangeIntegrationGrantResponses, ChangeIntegrationGrantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/integration-connections/{connectionRef}/grants',
@@ -784,7 +784,7 @@ export const changeIntegrationGrant = <ThrowOnError extends boolean = false>(opt
 export const getSystemAssistant = <ThrowOnError extends boolean = false>(options?: Options<GetSystemAssistantData, ThrowOnError>): RequestResult<GetSystemAssistantResponses, GetSystemAssistantErrors, ThrowOnError> => (options?.client ?? client).get<GetSystemAssistantResponses, GetSystemAssistantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/system-assistant',
@@ -794,7 +794,7 @@ export const getSystemAssistant = <ThrowOnError extends boolean = false>(options
 export const updateSystemAssistantOwnerInstructions = <ThrowOnError extends boolean = false>(options: Options<UpdateSystemAssistantOwnerInstructionsData, ThrowOnError>): RequestResult<UpdateSystemAssistantOwnerInstructionsResponses, UpdateSystemAssistantOwnerInstructionsErrors, ThrowOnError> => (options.client ?? client).patch<UpdateSystemAssistantOwnerInstructionsResponses, UpdateSystemAssistantOwnerInstructionsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/system-assistant',
@@ -808,7 +808,7 @@ export const updateSystemAssistantOwnerInstructions = <ThrowOnError extends bool
 export const commandSystemAssistant = <ThrowOnError extends boolean = false>(options: Options<CommandSystemAssistantData, ThrowOnError>): RequestResult<CommandSystemAssistantResponses, CommandSystemAssistantErrors, ThrowOnError> => (options.client ?? client).post<CommandSystemAssistantResponses, CommandSystemAssistantErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/system-assistant/commands',
@@ -822,7 +822,7 @@ export const commandSystemAssistant = <ThrowOnError extends boolean = false>(opt
 export const listAssistantConversations = <ThrowOnError extends boolean = false>(options?: Options<ListAssistantConversationsData, ThrowOnError>): RequestResult<ListAssistantConversationsResponses, ListAssistantConversationsErrors, ThrowOnError> => (options?.client ?? client).get<ListAssistantConversationsResponses, ListAssistantConversationsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/assistant-conversations',
@@ -832,7 +832,7 @@ export const listAssistantConversations = <ThrowOnError extends boolean = false>
 export const createAssistantConversation = <ThrowOnError extends boolean = false>(options: Options<CreateAssistantConversationData, ThrowOnError>): RequestResult<CreateAssistantConversationResponses, CreateAssistantConversationErrors, ThrowOnError> => (options.client ?? client).post<CreateAssistantConversationResponses, CreateAssistantConversationErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/assistant-conversations',
@@ -846,7 +846,7 @@ export const createAssistantConversation = <ThrowOnError extends boolean = false
 export const addAssistantTurn = <ThrowOnError extends boolean = false>(options: Options<AddAssistantTurnData, ThrowOnError>): RequestResult<AddAssistantTurnResponses, AddAssistantTurnErrors, ThrowOnError> => (options.client ?? client).post<AddAssistantTurnResponses, AddAssistantTurnErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/assistant-conversations/{conversationRef}/turns',
@@ -860,7 +860,7 @@ export const addAssistantTurn = <ThrowOnError extends boolean = false>(options: 
 export const applyAssistantPlan = <ThrowOnError extends boolean = false>(options: Options<ApplyAssistantPlanData, ThrowOnError>): RequestResult<ApplyAssistantPlanResponses, ApplyAssistantPlanErrors, ThrowOnError> => (options.client ?? client).post<ApplyAssistantPlanResponses, ApplyAssistantPlanErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/assistant-plans/{planRef}/application',
@@ -870,7 +870,7 @@ export const applyAssistantPlan = <ThrowOnError extends boolean = false>(options
 export const getAdministration = <ThrowOnError extends boolean = false>(options?: Options<GetAdministrationData, ThrowOnError>): RequestResult<GetAdministrationResponses, GetAdministrationErrors, ThrowOnError> => (options?.client ?? client).get<GetAdministrationResponses, GetAdministrationErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/administration',
@@ -880,7 +880,7 @@ export const getAdministration = <ThrowOnError extends boolean = false>(options?
 export const listAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<ListAuditEventsData, ThrowOnError>): RequestResult<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError> => (options?.client ?? client).get<ListAuditEventsResponses, ListAuditEventsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: 'mattercodex_session',
+            name: 'kodex_session',
             type: 'apiKey'
         }],
     url: '/api/v1/audit-events',

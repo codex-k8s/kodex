@@ -1,7 +1,7 @@
 import * as L from './_lib.mjs';
 const T = L.T;
 
-// ============ UX-02 Помощник MatterCodex ============
+// ============ UX-02 Помощник Kodex ============
 const histItem = (t, sub, active) => `
   <a href="#" style="display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px; ${active ? `background: ${T.accTint}; border: 1px solid ${T.accLine};` : `border: 1px solid transparent;`} color: ${T.ink};">
     <span style="font-size: 12.5px; font-weight: ${active ? 600 : 500}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t}</span>
@@ -42,7 +42,7 @@ export const d02 = L.page(L.shellDesktop({
       <div style="flex: 0 0 66px; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid ${T.line};">
         <span style="width: 34px; height: 34px; border-radius: 10px; background: ${T.accTint}; border: 1px solid ${T.accSoftLine}; color: ${T.acc}; display: flex; align-items: center; justify-content: center;">${L.icon('bot', 19)}</span>
         <span style="display: flex; flex-direction: column;">
-          <span style="font-size: 15px; font-weight: 600;">Помощник MatterCodex</span>
+          <span style="font-size: 15px; font-weight: 600;">Помощник Kodex</span>
           <span style="font-size: 11px; color: ${T.mut};">Системный · неудаляемый</span>
         </span>
         <span style="margin-left: 12px;">${L.statusPill('done', 'Готов')}</span>
@@ -54,7 +54,7 @@ export const d02 = L.page(L.shellDesktop({
           <div style="padding: 12px 14px; border-radius: 12px 12px 4px 12px; background: ${T.bg}; border: 1px solid ${T.line}; font-size: 13.5px; line-height: 1.55;">Создай проект для отдела продаж и агента, который будет анализировать материалы клиентов и готовить краткие рекомендации</div>
         </div>
         <div style="align-self: flex-start; max-width: 620px;">
-          <div style="font-size: 11px; color: ${T.mut}; margin-bottom: 5px;">Помощник MatterCodex · 10:08</div>
+          <div style="font-size: 11px; color: ${T.mut}; margin-bottom: 5px;">Помощник Kodex · 10:08</div>
           <div style="padding: 12px 14px; border-radius: 12px 12px 12px 4px; background: ${T.accSoft}; border: 1px solid ${T.accSoftLine}; font-size: 13.5px; line-height: 1.55; color: ${T.ink};">Я подготовил безопасный план. Внешние интеграции не требуются; их можно добавить позже.</div>
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: ${T.sec};">
             <span style="color: ${T.acc}; display: flex;">${L.icon('chevR', 14)}</span>План изменений открыт в панели справа — ничего не применено
@@ -96,7 +96,7 @@ export const d02 = L.page(L.shellDesktop({
         ].join(''))}
 
         <div style="padding: 11px 12px; border-radius: 10px; background: ${T.bg}; border: 1px solid ${T.line}; font-size: 12px; color: ${T.sec}; line-height: 1.5;">
-          Будет записано в аудит: <span style="color: ${T.ink};">Анна Волкова через Помощника MatterCodex</span>
+          Будет записано в аудит: <span style="color: ${T.ink};">Анна Волкова через Помощника Kodex</span>
         </div>
       </div>
 

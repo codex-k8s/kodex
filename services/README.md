@@ -13,7 +13,7 @@ updated: 2026-07-28
 - `internal/` — внутренние доменные Go-сервисы;
 - `external/` — внешние gateway;
 - `jobs/` — workers и периодические jobs;
-- `staff/control-center/` — PWA владельца и операторов MatterCodex.
+- `staff/control-center/` — PWA владельца и операторов Kodex.
 
 Каждый deployable имеет отдельный module/package boundary, Dockerfile,
 Kubernetes profile, README и runbook.

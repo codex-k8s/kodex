@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
 func TestExtractContextAcceptsExactRegularArchive(t *testing.T) {
 	sourceSHA := strings.Repeat("a", 64)
-	raw := tarBytes(t, []tarEntry{{name: ".mattercodex/source.sha256", body: sourceSHA + "\n", kind: tar.TypeReg},
+	raw := tarBytes(t, []tarEntry{{name: ".kodex/source.sha256", body: sourceSHA + "\n", kind: tar.TypeReg},
 		{name: "cmd/runtime/main.go", body: "package main\n", kind: tar.TypeReg}})
 	archive := filepath.Join(t.TempDir(), "context.tar")
 	if err := os.WriteFile(archive, raw, 0o600); err != nil {
@@ -35,7 +35,7 @@ func TestExtractContextRejectsTraversalLinksAndSourceMismatch(t *testing.T) {
 	for name, entries := range map[string][]tarEntry{
 		"traversal": {{name: "../escape", body: "x", kind: tar.TypeReg}},
 		"symlink":   {{name: "link", link: "/etc/passwd", kind: tar.TypeSymlink}},
-		"source":    {{name: ".mattercodex/source.sha256", body: strings.Repeat("b", 64), kind: tar.TypeReg}},
+		"source":    {{name: ".kodex/source.sha256", body: strings.Repeat("b", 64), kind: tar.TypeReg}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			raw := tarBytes(t, entries)
@@ -65,8 +65,8 @@ func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeAB
 	first := installationScript(input)
 	dockerfileRaw := dockerfile(
 		input,
-		"registry.example.test/mattercodex/dockerfile",
-		"registry.example.test/mattercodex/agent-runner",
+		"registry.example.test/kodex/dockerfile",
+		"registry.example.test/kodex/agent-runner",
 		"sha256:"+strings.Repeat("e", 64),
 	)
 	input.InstallationBlock = "echo second"
@@ -75,17 +75,17 @@ func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeAB
 		t.Fatal("installation block did not affect BuildKit input")
 	}
 	if bytes.Contains(dockerfileRaw, []byte("type=secret")) ||
-		bytes.Contains(dockerfileRaw, first) || !bytes.Contains(dockerfileRaw, []byte("from=mattercodex-install")) ||
+		bytes.Contains(dockerfileRaw, first) || !bytes.Contains(dockerfileRaw, []byte("from=kodex-install")) ||
 		bytes.Contains(dockerfileRaw, []byte("COPY .")) || !bytes.Contains(dockerfileRaw, []byte("target=/workspace/source,readonly")) ||
-		!bytes.Contains(dockerfileRaw, []byte("COPY --from=trusted-runtime /usr/local/bin/mattercodex-init")) ||
-		!bytes.Contains(dockerfileRaw, []byte("ENTRYPOINT [\"/usr/local/bin/mattercodex-init\",\"entrypoint\",\"/usr/local/bin/matter-codex-agent-runner\"]")) {
+		!bytes.Contains(dockerfileRaw, []byte("COPY --from=trusted-runtime /usr/local/bin/kodex-init")) ||
+		!bytes.Contains(dockerfileRaw, []byte("ENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]")) {
 		t.Fatal("Dockerfile exposed credentials or omitted the protected runtime ABI")
 	}
 }
 
 func TestExtractContextHashesTrailingAndMutatedBytesFromTheSameStream(t *testing.T) {
 	sourceSHA := strings.Repeat("a", 64)
-	raw := tarBytes(t, []tarEntry{{name: ".mattercodex/source.sha256", body: sourceSHA, kind: tar.TypeReg}})
+	raw := tarBytes(t, []tarEntry{{name: ".kodex/source.sha256", body: sourceSHA, kind: tar.TypeReg}})
 	digest := sha256.Sum256(raw)
 	for name, input := range map[string][]byte{
 		"trailing": append(append([]byte(nil), raw...), []byte("tampered")...),
@@ -110,8 +110,8 @@ func TestPinnedPackageAndToolBlobsAreVerifiedAndInstalledOffline(t *testing.T) {
 	packageHex, toolHex := hex.EncodeToString(packageDigest[:]), hex.EncodeToString(toolDigest[:])
 	root := t.TempDir()
 	for path, body := range map[string]string{
-		filepath.Join(root, ".mattercodex", "packages", packageHex): packageBody,
-		filepath.Join(root, ".mattercodex", "tools", toolHex):       toolBody,
+		filepath.Join(root, ".kodex", "packages", packageHex): packageBody,
+		filepath.Join(root, ".kodex", "tools", toolHex):       toolBody,
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestPinnedPackageAndToolBlobsAreVerifiedAndInstalledOffline(t *testing.T) {
 	if !bytes.Contains(script, []byte("dpkg --install")) || !bytes.Contains(script, []byte("install -m 0555")) {
 		t.Fatal("typed package or tool was omitted from the offline installation script")
 	}
-	if err := os.WriteFile(filepath.Join(root, ".mattercodex", "tools", toolHex), []byte("tampered"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".kodex", "tools", toolHex), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyPinnedInputs(root, input); err == nil {
@@ -149,7 +149,7 @@ func TestProvenanceBindingCoversImmutableTuple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first != "d7312284b2e409541ad86d086a275e651154664b812f4bfb6411f2ffee1db006" {
+	if first != "03ef1cd8e7acf2eb8c331b938a352aa430ffc88d20446102efc878e631fb2f48" {
 		t.Fatalf("unexpected canonical provenance binding: %s", first)
 	}
 	input.ImmutableBuildSha256 = strings.Repeat("e", 64)

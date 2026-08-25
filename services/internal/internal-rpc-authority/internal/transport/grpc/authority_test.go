@@ -3,7 +3,7 @@ package authoritygrpc
 import (
 	"testing"
 
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 )
 
 func TestAuthoritySourcePreservesSupportedPolicySources(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	oidcauth "github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
+	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
 )
 
 func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
@@ -24,9 +24,9 @@ func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
 }
 
 func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
-	request := httptest.NewRequest(http.MethodOptions, "https://control-api.mattercodex.local/api/v1/session", nil)
+	request := httptest.NewRequest(http.MethodOptions, "https://control-api.kodex.local/api/v1/session", nil)
 	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
+	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
 	if !allowedPreflight(request) {
 		t.Fatal("exact credentialed owner preflight was rejected")
 	}
@@ -36,7 +36,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	}
 
 	request.Header.Set("Origin", "https://control.example.test")
-	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID")
+	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
 	called := false
 	boundary := &Boundary{origins: map[string]struct{}{"https://control.example.test": {}}}
 	response := httptest.NewRecorder()
@@ -44,7 +44,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	if called || response.Code != http.StatusNoContent ||
 		response.Header().Get("Access-Control-Allow-Origin") != "https://control.example.test" ||
 		response.Header().Get("Access-Control-Allow-Credentials") != "true" ||
-		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-MatterCodex-Project-ID" {
+		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID" {
 		t.Fatalf("credentialed preflight response is incomplete: status=%d headers=%v", response.Code, response.Header())
 	}
 	vary := make([]string, 0)

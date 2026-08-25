@@ -8,9 +8,9 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-    - hosts: [control-api.mattercodex.local]
+    - hosts: [control-api.kodex.local]
   rules:
-    - host: control-api.mattercodex.local
+    - host: control-api.kodex.local
       http:
         paths:
           - path: /

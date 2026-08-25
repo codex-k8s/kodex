@@ -9,11 +9,11 @@ metadata: {name: image-admission-controller}
 rules:
   - apiGroups: [""]
     resources: [configmaps]
-    resourceNames: [mattercodex-image-admission-policy]
+    resourceNames: [kodex-image-admission-policy]
     verbs: [get]
-  - apiGroups: [supplychain.mattercodex.dev]
+  - apiGroups: [supplychain.kodex.dev]
     resources: [imageadmissionpolicyparameters]
-    resourceNames: [mattercodex-image-admission-policy]
+    resourceNames: [kodex-image-admission-policy]
     verbs: [get]
   - apiGroups: [""]
     resources: [persistentvolumeclaims]
@@ -61,16 +61,16 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: image-admission-controller
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/image-admission-controller]
           env:
             - name: POD_NAMESPACE
               valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
             - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
-            - {name: IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP, value: mattercodex-image-admission-policy}
-            - {name: IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH, value: /opt/mattercodex/render-image-admission-job.sh}
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
+            - {name: IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP, value: kodex-image-admission-policy}
+            - {name: IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH, value: /opt/kodex/render-image-admission-job.sh}
             - {name: IMAGE_ADMISSION_CONTROLLER_TECHNICAL_LISTEN, value: ":9090"}
             - {name: IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL, value: 5s}
             - {name: IMAGE_ADMISSION_CONTROLLER_RETRY_INTERVAL, value: 30s}
@@ -79,9 +79,9 @@ spec:
             - {name: IMAGE_ADMISSION_CONTROLLER_SHUTDOWN_TIMEOUT, value: 20s}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/image-admission-controller/observability/otel-ca.pem}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/image-admission-controller/observability/otel-ca.pem}
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/image-admission-controller/observability/sentry-dsn}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/image-admission-controller/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
           ports: [{name: metrics, containerPort: 9090, protocol: TCP}]
           startupProbe:
@@ -111,8 +111,8 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: kube-api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
-            - {name: otel-ca, mountPath: /var/run/config/mattercodex/image-admission-controller/observability, readOnly: true}
-            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/image-admission-controller/observability, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/kodex/image-admission-controller/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/image-admission-controller/observability, readOnly: true}
       volumes:
         - name: kube-api-access
           projected:
@@ -125,9 +125,9 @@ spec:
               - downwardAPI:
                   items: [{path: namespace, fieldRef: {fieldPath: metadata.namespace}}]
         - name: otel-ca
-          configMap: {name: mattercodex-otel-ca, defaultMode: 0440}
+          configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn
-          secret: {secretName: mattercodex-sentry, defaultMode: 0440}
+          secret: {secretName: kodex-sentry, defaultMode: 0440}
 ---
 apiVersion: v1
 kind: Service
@@ -158,10 +158,10 @@ spec:
   groups:
     - name: image-admission-controller
       rules:
-        - alert: MatterCodexImageAdmissionControllerUnavailable
-          expr: absent(mattercodex_image_admission_controller_readiness{ready="true"}) or sum(mattercodex_image_admission_controller_readiness{ready="true"}) < 1
+        - alert: KodexImageAdmissionControllerUnavailable
+          expr: absent(kodex_image_admission_controller_readiness{ready="true"}) or sum(kodex_image_admission_controller_readiness{ready="true"}) < 1
           for: 10m
           labels: {severity: warning, service: image-admission-controller}
           annotations:
             summary: Image admission orchestration is unavailable
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/image-supply-chain.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/image-supply-chain.md

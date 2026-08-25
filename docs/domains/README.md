@@ -1,6 +1,6 @@
 ---
 id: DOM-MC-001
-title: Домены MatterCodex
+title: Домены Kodex
 type: domain-index
 status: approved
 owner: architect
@@ -8,7 +8,7 @@ version: 1.0.0
 updated: 2026-08-23
 ---
 
-# Домены MatterCodex
+# Домены Kodex
 
 Доменная документация определяет ответственность, данные, интерфейсы, события, наблюдаемость и критерии приемки доменных контекстов.
 

@@ -28,7 +28,7 @@ func TestRoleImageInputIsDeterministicAndSourceBound(t *testing.T) {
 	}
 	reader := tar.NewReader(bytes.NewReader(first))
 	header, err := reader.Next()
-	if err != nil || header.Name != ".mattercodex/source.sha256" ||
+	if err != nil || header.Name != ".kodex/source.sha256" ||
 		!header.FileInfo().Mode().IsRegular() {
 		t.Fatalf("unexpected input entry: %#v, %v", header, err)
 	}

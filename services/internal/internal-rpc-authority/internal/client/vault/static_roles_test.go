@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 func TestVerifyStaticRoleResponseBindsPrincipalAndRotation(t *testing.T) {
@@ -63,7 +63,7 @@ func TestValidateStaticRoleExpectationSeparatesVaultAndPostgreSQLNames(t *testin
 	valid := repository.VaultStaticRoleExpectation{
 		Role:         "internal-rpc-authority-publisher-g3",
 		Principal:    "ira_publisher_g3",
-		DatabaseName: "mattercodex-postgresql",
+		DatabaseName: "kodex-postgresql",
 	}
 	if err := validateStaticRoleExpectation(valid); err != nil {
 		t.Fatalf("valid PostgreSQL principal rejected: %v", err)
@@ -94,7 +94,7 @@ func TestValidateStaticRoleExpectationSeparatesVaultAndPostgreSQLNames(t *testin
 			expectation: repository.VaultStaticRoleExpectation{
 				Role:         valid.Role,
 				Principal:    valid.Principal,
-				DatabaseName: "mattercodex/postgresql",
+				DatabaseName: "kodex/postgresql",
 			},
 		},
 	}

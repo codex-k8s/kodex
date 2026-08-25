@@ -17,9 +17,9 @@ RUN npm run build
 FROM docker.io/library/nginx:1.29.4-alpine3.23@sha256:4870c12cd2ca986de501a804b4f506ad3875a0b1874940ba0a2c7f763f1855b2
 
 ARG SOURCE_SHA=unknown
-LABEL org.opencontainers.image.source="https://github.com/codex-k8s/matter-codex" \
+LABEL org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
       org.opencontainers.image.revision="${SOURCE_SHA}" \
-      org.opencontainers.image.title="MatterCodex Staff Control Center"
+      org.opencontainers.image.title="Kodex Staff Control Center"
 
 RUN rm -f /etc/nginx/conf.d/default.conf && \
     mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/run/nginx && \

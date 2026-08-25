@@ -1,6 +1,6 @@
 ---
 id: REPO-MC-001
-title: MatterCodex
+title: Kodex
 type: repository-readme
 status: approved
 owner: manager
@@ -8,9 +8,13 @@ version: 1.1.0
 updated: 2026-08-24
 ---
 
-# MatterCodex
+# Kodex
 
-MatterCodex — web-first платформа управления ИИ-сотрудниками и выполняемыми ими
+<p align="center">
+  <img src="docs/media/logo.png" alt="Логотип Kodex" width="192" height="192">
+</p>
+
+Kodex — web-first платформа управления ИИ-сотрудниками и выполняемыми ими
 Процессами для продаж, поддержки, финансов, юридической работы, контента,
 аналитики, разработки и операционной деятельности.
 

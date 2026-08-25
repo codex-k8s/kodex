@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 )
 
 func main() {

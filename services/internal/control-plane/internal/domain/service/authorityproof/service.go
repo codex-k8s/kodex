@@ -14,19 +14,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/oidcverifier"
-	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
+	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/google/uuid"
 )
 
 const (
-	proofType          = "mattercodex-authority-proof+jws"
-	workerGrantType    = "mattercodex-application-grant+jws"
+	proofType          = "kodex-authority-proof+jws"
+	workerGrantType    = "kodex-application-grant+jws"
 	maximumFileSize    = 1 << 20
 	workerGrantTTL     = 4 * time.Minute
-	controlPlaneSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+	controlPlaneSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 )
 
 type AuthorityOwner interface {
@@ -204,7 +204,7 @@ func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, er
 		return nil, errors.New("read authority proof policy")
 	}
 	var document policyDocument
-	if err := internalrpcauth.DecodeStrictJSON(raw, &document); err != nil || document.Version != 1 || document.PolicyRevision == 0 || document.Policy.TrustDomain != "mattercodex.local" || document.Policy.DefaultDecision != "DENY" {
+	if err := internalrpcauth.DecodeStrictJSON(raw, &document); err != nil || document.Version != 1 || document.PolicyRevision == 0 || document.Policy.TrustDomain != "kodex.local" || document.Policy.DefaultDecision != "DENY" {
 		return nil, errors.New("authority proof policy is invalid")
 	}
 	digest := sha256.Sum256(raw)
@@ -333,7 +333,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}); err != nil {
 			return ResolveResult{}, err
 		}
-		principal.ExternalActorID, principal.ExternalTenantID = "mattercodex-system-subject", "mattercodex-installation"
+		principal.ExternalActorID, principal.ExternalTenantID = "kodex-system-subject", "kodex-installation"
 		callerCredentialRevision = grant.Revision
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
@@ -450,7 +450,7 @@ func verifySignerTrust(path string, signer internalrpcauth.ES256Key, now time.Ti
 	if internalrpcauth.DecodeCanonicalJSON(raw, &document) == nil && document.Version == 1 && document.Purpose == "AUTHORITY_PROOF_VERIFICATION" {
 		for _, record := range document.Keys {
 			key, parseErr := internalrpcauth.ParsePublicJWK(record.JWK)
-			if parseErr == nil && record.Issuer == controlPlaneSPIFFE && record.Generation > 0 && record.Status == "CURRENT" && record.Purpose == "AUTHORITY_PROOF" && contains(record.Audiences, "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway") && !now.Before(time.Unix(record.NotBefore, 0)) && now.Before(time.Unix(record.NotAfter, 0)) && sameKey(key, signer) {
+			if parseErr == nil && record.Issuer == controlPlaneSPIFFE && record.Generation > 0 && record.Status == "CURRENT" && record.Purpose == "AUTHORITY_PROOF" && contains(record.Audiences, "urn:kodex:internal-rpc-authority-issuer:control-api-gateway") && !now.Before(time.Unix(record.NotBefore, 0)) && now.Before(time.Unix(record.NotAfter, 0)) && sameKey(key, signer) {
 				return record.Generation, nil
 			}
 		}

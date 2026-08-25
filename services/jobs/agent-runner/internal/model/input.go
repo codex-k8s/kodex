@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 type Input = runtimecontract.RunnerInput

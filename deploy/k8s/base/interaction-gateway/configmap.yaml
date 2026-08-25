@@ -4,9 +4,9 @@ metadata:
   name: interaction-gateway-runtime
 data:
   INTERACTION_GATEWAY_TECHNICAL_LISTEN: ":9090"
-  INTERACTION_GATEWAY_CONTROL_PLANE_TARGET: control-plane.mattercodex-system.svc:8443
-  INTERACTION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.mattercodex-system.svc.cluster.local
-  INTERACTION_GATEWAY_EGRESS_PROXY_URL: http://egress-gateway.mattercodex-system.svc.cluster.local:8080
+  INTERACTION_GATEWAY_CONTROL_PLANE_TARGET: control-plane.kodex-system.svc:8443
+  INTERACTION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.kodex-system.svc.cluster.local
+  INTERACTION_GATEWAY_EGRESS_PROXY_URL: http://egress-gateway.kodex-system.svc.cluster.local:8080
   INTERACTION_GATEWAY_ALLOWED_HOSTS: ""
   INTERACTION_GATEWAY_STARTUP_TIMEOUT: 30s
   INTERACTION_GATEWAY_SHUTDOWN_TIMEOUT: 20s

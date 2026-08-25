@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
 const (
-	ProtectedType     = "mattercodex-integration-continuation-grant+jws"
+	ProtectedType     = "kodex-integration-continuation-grant+jws"
 	PurposeTransition = "CONTINUATION_TRANSITION"
 	maximumFileBytes  = 64 << 10
 	keyStatusCurrent  = "CURRENT"

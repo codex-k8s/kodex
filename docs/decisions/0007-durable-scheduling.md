@@ -20,7 +20,7 @@ fenced claim наступившего occurrence и просит владель�
 
 Долговечные определения, вычисленный due time, timezone, политики пропущенных
 запусков и параллельности, attempts и история occurrences принадлежат
-MatterCodex. Реализация внутренней очереди не изменяет этот контракт.
+Kodex. Реализация внутренней очереди не изменяет этот контракт.
 
 При claim control-plane одной транзакцией фиксирует immutable input/target
 snapshot и digest occurrence, выдаёт fenced lease и вычисляет следующий due

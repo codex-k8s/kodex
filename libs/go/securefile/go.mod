@@ -1,3 +1,3 @@
-module github.com/codex-k8s/matter-codex/libs/go/securefile
+module github.com/codex-k8s/kodex/libs/go/securefile
 
 go 1.26.6

@@ -22,7 +22,7 @@ updated: 2026-08-23
 - `services/external/` - внешние API-шлюзы и ingress-адаптеры.
 - `services/jobs/` - самостоятельно развертываемые фоновые задачи и workers.
 - `services/staff/` - PWA и служебные поверхности владельца и операторов
-  MatterCodex.
+  Kodex.
 - `deploy/` - Kubernetes-манифесты, overlays и deploy inventory.
 - `infra/` - инфраструктурный код, bootstrap scripts и IaC.
 - `tools/` - утилиты разработки и генерации.
@@ -310,7 +310,7 @@ Job не читает PostgreSQL другого сервиса напрямую 
 
 ## Vue/TypeScript PWA
 
-Пример служебной PWA MatterCodex.
+Пример служебной PWA Kodex.
 
 ```text
 services/staff/staff-frontend/

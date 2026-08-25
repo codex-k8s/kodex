@@ -1,9 +1,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: mattercodex-registry-cleanup
+  name: kodex-registry-cleanup
   labels:
-    app.kubernetes.io/name: mattercodex-registry-cleanup
+    app.kubernetes.io/name: kodex-registry-cleanup
     app.kubernetes.io/component: image-retention
 spec:
   schedule: "17 3 * * *"
@@ -18,10 +18,10 @@ spec:
       template:
         metadata:
           labels:
-            app.kubernetes.io/name: mattercodex-registry-cleanup
+            app.kubernetes.io/name: kodex-registry-cleanup
             app.kubernetes.io/component: image-retention
         spec:
-          serviceAccountName: mattercodex-registry-cleanup
+          serviceAccountName: kodex-registry-cleanup
           automountServiceAccountToken: false
           enableServiceLinks: false
           restartPolicy: Never
@@ -35,7 +35,7 @@ spec:
               imagePullPolicy: IfNotPresent
               command:
                 - /bin/sh
-                - /var/run/config/mattercodex/registry-cleanup/cleanup.sh
+                - /var/run/config/kodex/registry-cleanup/cleanup.sh
               env:
                 - name: HOME
                   value: /tmp
@@ -57,24 +57,24 @@ spec:
                     - ALL
               volumeMounts:
                 - name: script
-                  mountPath: /var/run/config/mattercodex/registry-cleanup
+                  mountPath: /var/run/config/kodex/registry-cleanup
                   readOnly: true
                 - name: registry-identity
-                  mountPath: /var/run/secrets/mattercodex/image-registry/admin
+                  mountPath: /var/run/secrets/kodex/image-registry/admin
                   readOnly: true
                 - name: tmp
                   mountPath: /tmp
           volumes:
             - name: script
               configMap:
-                name: mattercodex-registry-cleanup
+                name: kodex-registry-cleanup
                 defaultMode: 0550
             - name: registry-identity
               csi:
                 driver: secrets-store.csi.k8s.io
                 readOnly: true
                 volumeAttributes:
-                  secretProviderClass: mattercodex-registry-cleanup-client
+                  secretProviderClass: kodex-registry-cleanup-client
             - name: tmp
               emptyDir:
                 sizeLimit: 16Mi

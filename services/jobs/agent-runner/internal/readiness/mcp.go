@@ -23,14 +23,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
 
 const (
 	maximumMCPBodyBytes  = 1 << 20
-	mcpAuthoritySocket   = "/run/mattercodex/provider/mcp-authority.sock"
-	mcpAuthorityHostName = "mattercodex-mcp-authority"
+	mcpAuthoritySocket   = "/run/kodex/provider/mcp-authority.sock"
+	mcpAuthorityHostName = "kodex-mcp-authority"
 )
 
 // MCPProxy — trusted UDS adapter, который проверяет SO_PEERCRED и применяет к
@@ -86,10 +86,10 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 			request.Header.Del("X-Forwarded-Host")
 			request.Header.Del("X-Forwarded-Proto")
 			request.Header.Set("Authorization", "Bearer "+token)
-			request.Header.Set("X-MatterCodex-Run-Ref", input.RunRef)
-			request.Header.Set("X-MatterCodex-Turn-Ref", input.TurnRef)
-			request.Header.Set("X-MatterCodex-Attempt", strconv.FormatUint(uint64(input.Attempt), 10))
-			request.Header.Set("X-MatterCodex-MCP-Binding-Version", strconv.FormatInt(input.RuntimeRevisionVersion, 10))
+			request.Header.Set("X-Kodex-Run-Ref", input.RunRef)
+			request.Header.Set("X-Kodex-Turn-Ref", input.TurnRef)
+			request.Header.Set("X-Kodex-Attempt", strconv.FormatUint(uint64(input.Attempt), 10))
+			request.Header.Set("X-Kodex-MCP-Binding-Version", strconv.FormatInt(input.RuntimeRevisionVersion, 10))
 		},
 		Transport: transport,
 		ErrorLog:  log.New(io.Discard, "", 0),
@@ -210,7 +210,7 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 }
 
 func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string) error {
-	payload := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mattercodex-agent-runner","version":"1"}}}`)
+	payload := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(payload))
 	if err != nil {
 		return errors.New("create MCP readiness request")

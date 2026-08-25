@@ -12,7 +12,7 @@ import (
 	"syscall"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"

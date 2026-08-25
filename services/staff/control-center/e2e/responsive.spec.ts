@@ -29,7 +29,7 @@ test("mobile shell, помощник и граф доступны без гор�
     .last()
     .click();
   await expect(
-    page.getByRole("heading", { name: "Помощник MatterCodex" }),
+    page.getByRole("heading", { name: "Помощник Kodex" }),
   ).toBeVisible();
   await expect(
     page.getByLabel("Опишите, что нужно настроить или запустить"),

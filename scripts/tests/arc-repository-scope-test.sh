@@ -73,7 +73,7 @@ rg -q '__REGISTRY_|matter-kodex-prod' "$temporary_directory/network-policy.yaml"
 mkdir -p "$temporary_directory/helm-values"
 "$helm_values_renderer" 10.96.0.1 \
   0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
-  matter-codex-registry.fixture-registry.svc.cluster.local \
+  kodex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null
 rg -q '__REGISTRY_HOST__|matter-kodex-prod' "$temporary_directory/helm-values" && {
   printf 'ARC Helm values retained an unresolved or legacy registry locator\n' >&2
@@ -81,15 +81,15 @@ rg -q '__REGISTRY_HOST__|matter-kodex-prod' "$temporary_directory/helm-values" &
 }
 
 yq -e '
-  .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
-  .githubConfigSecret == "mattercodex-github-runner-auth" and
+  .githubConfigUrl == "https://github.com/codex-k8s/kodex" and
+  .githubConfigSecret == "kodex-github-runner-auth" and
   (.runnerGroup == null) and
-  .runnerScaleSetName == "mattercodex-build" and
+  .runnerScaleSetName == "kodex-build" and
   ([.template.spec.containers[] | select(.name == "runner") | .env[] |
     select(.name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
-      .value == "/var/run/mattercodex-owner-gate/job-started.sh")] | length) == 1 and
+      .value == "/var/run/kodex-owner-gate/job-started.sh")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "owner-gate" and
-    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
+    .configMap.name == "kodex-runner-owner-gate")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "tools" and
     .emptyDir.sizeLimit == "256Mi")] | length) == 1 and
   (.template.spec.hostUsers == null) and
@@ -107,23 +107,23 @@ yq -e '
     (.securityContext.capabilities.add | any_c(. == "SETGID")))] | length) == 1
 ' "$repository_root/infra/arc/build-runner-values.yaml" >/dev/null
 yq -e '
-  .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
-  .githubConfigSecret == "mattercodex-github-runner-auth" and
+  .githubConfigUrl == "https://github.com/codex-k8s/kodex" and
+  .githubConfigSecret == "kodex-github-runner-auth" and
   (.runnerGroup == null) and
-  .runnerScaleSetName == "mattercodex-deploy" and
+  .runnerScaleSetName == "kodex-deploy" and
   ([.template.spec.containers[] | select(.name == "runner") | .env[] |
     select(.name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
-      .value == "/var/run/mattercodex-owner-gate/job-started.sh")] | length) == 1 and
+      .value == "/var/run/kodex-owner-gate/job-started.sh")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "owner-gate" and
-    .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
+    .configMap.name == "kodex-runner-owner-gate")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "tools" and
     .emptyDir.sizeLimit == "256Mi")] | length) == 1
 ' "$repository_root/infra/arc/deploy-runner-values.yaml" >/dev/null
 yq -e '
-  .jobs.build."runs-on" == "mattercodex-build"
+  .jobs.build."runs-on" == "kodex-build"
 ' "$repository_root/.github/workflows/build-release.yml" >/dev/null
 yq -e '
-  .jobs.render."runs-on" == "mattercodex-deploy"
+  .jobs.render."runs-on" == "kodex-deploy"
 ' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null
 
 grep -Fq '!has(object.spec.runnerGroup)' "$repository_root/infra/arc/namespace-rbac.yaml"
@@ -133,7 +133,7 @@ for gate_variable in GITHUB_REPOSITORY GITHUB_EVENT_NAME GITHUB_REF GITHUB_WORKF
   GITHUB_WORKFLOW_SHA GITHUB_SHA GITHUB_ACTOR_ID GITHUB_JOB; do
   grep -Fq "$gate_variable" "$owner_gate"
 done
-if rg -q 'runnerGroup:|runner-groups|mattercodex-production-(build|deploy)([^a-z]|$)' \
+if rg -q 'runnerGroup:|runner-groups|kodex-production-(build|deploy)([^a-z]|$)' \
   "$repository_root/infra/arc/build-runner-values.yaml" \
   "$repository_root/infra/arc/deploy-runner-values.yaml" \
   "$policy_bootstrap"; then
@@ -163,7 +163,7 @@ if grep -Fq 'render_owner_gate_config "$deploy_namespace" .github/workflows/depl
   printf 'Deploy runner owner gate still expects a non-existent deploy job\n' >&2
   exit 1
 fi
-yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
+yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-ci-egress-proxy") |
   .data."envoy.yaml"' "$temporary_directory/network-policy.yaml" \
   >"$temporary_directory/envoy.yaml"
 yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
@@ -218,7 +218,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
 "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
   fixture-registry registry.example.test "$temporary_directory/rendered-network-policy.yaml"
 yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq -sc -e '
-  map(select(.kind == "NetworkPolicy" and .metadata.namespace == "mattercodex-ci" and
+  map(select(.kind == "NetworkPolicy" and .metadata.namespace == "kodex-ci" and
     .metadata.name == "build-registry")) |
   length == 1 and
   .[0].spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" ==
@@ -254,17 +254,17 @@ if "$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
   printf 'Registry network policy renderer accepted a registry host with a port\n' >&2
   exit 1
 fi
-for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
+for proxy_namespace in kodex-ci kodex-ci-deploy; do
   rendered_config="$temporary_directory/envoy-$proxy_namespace.yaml"
   PROXY_NAMESPACE=$proxy_namespace yq -r '
     select(.kind == "ConfigMap" and .metadata.namespace == strenv(PROXY_NAMESPACE) and
-      .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
+      .metadata.name == "kodex-ci-egress-proxy") | .data."envoy.yaml"
   ' "$temporary_directory/rendered-network-policy.yaml" >"$rendered_config"
   expected_checksum=$(sha256sum "$rendered_config" | awk '{print $1}')
   PROXY_NAMESPACE=$proxy_namespace CONFIG_CHECKSUM=$expected_checksum yq -e '
     select(.kind == "Deployment" and .metadata.namespace == strenv(PROXY_NAMESPACE) and
-      .metadata.name == "mattercodex-ci-egress-proxy") |
-    .spec.template.metadata.annotations."mattercodex.dev/envoy-config-sha256" ==
+      .metadata.name == "kodex-ci-egress-proxy") |
+    .spec.template.metadata.annotations."kodex.dev/envoy-config-sha256" ==
       strenv(CONFIG_CHECKSUM)
   ' "$temporary_directory/rendered-network-policy.yaml" >/dev/null || {
     printf 'Rendered Envoy checksum does not trigger an exact proxy rollout\n' >&2
@@ -275,13 +275,13 @@ done
 mkdir -p -- "$temporary_directory/helm-values"
 fixture_proxy_sha=$(printf '%064d' 0)
 "$helm_values_renderer" 10.43.0.1 "$fixture_proxy_sha" \
-  matter-codex-registry.fixture-registry.svc.cluster.local \
+  kodex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null
 expected_kubernetes_no_proxy='10.43.0.1,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1'
 for controller_values in controller-values controller-deploy-values; do
   NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy \
     PROXY_SHA_EXPECTED=$fixture_proxy_sha yq -e '
-    (.podAnnotations."mattercodex.dev/egress-proxy-config-sha256" ==
+    (.podAnnotations."kodex.dev/egress-proxy-config-sha256" ==
       strenv(PROXY_SHA_EXPECTED)) and
     ([.env[] | select(.name == "NO_PROXY" and .value == strenv(NO_PROXY_EXPECTED))] |
       length == 1)
@@ -297,7 +297,7 @@ NO_PROXY_EXPECTED=$expected_kubernetes_no_proxy yq -e '
     .securityContext.capabilities.drop[0] == "ALL" and
     .securityContext.seccompProfile.type == "RuntimeDefault")] | length == 1)
 ' "$temporary_directory/helm-values/build-runner-values.yaml" >/dev/null
-REGISTRY_NO_PROXY='matter-codex-registry.fixture-registry.svc.cluster.local,localhost,127.0.0.1' \
+REGISTRY_NO_PROXY='kodex-registry.fixture-registry.svc.cluster.local,localhost,127.0.0.1' \
   yq -e '
     ([.template.spec.containers[] | select(.name == "runner" or .name == "buildkitd") |
       .env[] | select(.name == "NO_PROXY" and .value == strenv(REGISTRY_NO_PROXY))] |
@@ -321,14 +321,14 @@ if rg -q '__KUBERNETES_API_SERVICE_IP__|__EGRESS_PROXY_CONFIG_SHA256__|__REGISTR
   exit 1
 fi
 if "$helm_values_renderer" 10.43.0.999 "$fixture_proxy_sha" \
-  matter-codex-registry.fixture-registry.svc.cluster.local \
+  kodex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" \
   >/dev/null 2>&1; then
   printf 'ARC Helm values renderer accepted an invalid Kubernetes API IP\n' >&2
   exit 1
 fi
 if "$helm_values_renderer" 10.43.0.1 invalid-sha \
-  matter-codex-registry.fixture-registry.svc.cluster.local \
+  kodex-registry.fixture-registry.svc.cluster.local \
   "$temporary_directory/helm-values" >/dev/null 2>&1; then
   printf 'ARC Helm values renderer accepted an invalid proxy config SHA-256\n' >&2
   exit 1

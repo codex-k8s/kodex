@@ -1,4 +1,4 @@
-module github.com/codex-k8s/matter-codex/libs/go/i18n
+module github.com/codex-k8s/kodex/libs/go/i18n
 
 go 1.26.6
 

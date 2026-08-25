@@ -1,11 +1,11 @@
-githubConfigUrl: https://github.com/codex-k8s/matter-codex
-githubConfigSecret: mattercodex-github-runner-auth
-runnerScaleSetName: mattercodex-deploy
+githubConfigUrl: https://github.com/codex-k8s/kodex
+githubConfigSecret: kodex-github-runner-auth
+runnerScaleSetName: kodex-deploy
 minRunners: 0
 maxRunners: 1
 listenerTemplate:
   metadata:
-    labels: {mattercodex.dev/arc-role: listener}
+    labels: {kodex.dev/arc-role: listener}
   spec:
     containers:
       - name: listener
@@ -15,17 +15,17 @@ listenerTemplate:
           capabilities: {drop: [ALL]}
           seccompProfile: {type: RuntimeDefault}
         env:
-          - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
-          - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
+          - {name: HTTPS_PROXY, value: http://kodex-ci-egress-proxy.kodex-ci-deploy.svc.cluster.local:8080}
+          - {name: HTTP_PROXY, value: http://kodex-ci-egress-proxy.kodex-ci-deploy.svc.cluster.local:8080}
           - {name: NO_PROXY, value: "__KUBERNETES_API_SERVICE_IP__,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1"}
 controllerServiceAccount:
-  namespace: mattercodex-ci-deploy
-  name: mattercodex-arc-deploy-gha-rs-controller
+  namespace: kodex-ci-deploy
+  name: kodex-arc-deploy-gha-rs-controller
 template:
   metadata:
-    labels: {mattercodex.dev/arc-role: deploy-runner}
+    labels: {kodex.dev/arc-role: deploy-runner}
   spec:
-    serviceAccountName: mattercodex-production-deployer
+    serviceAccountName: kodex-production-deployer
     automountServiceAccountToken: true
     enableServiceLinks: false
     restartPolicy: Never
@@ -42,9 +42,9 @@ template:
         imagePullPolicy: IfNotPresent
         command: [/home/runner/run.sh]
         env:
-          - {name: ACTIONS_RUNNER_HOOK_JOB_STARTED, value: /var/run/mattercodex-owner-gate/job-started.sh}
-          - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
-          - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci-deploy.svc.cluster.local:8080}
+          - {name: ACTIONS_RUNNER_HOOK_JOB_STARTED, value: /var/run/kodex-owner-gate/job-started.sh}
+          - {name: HTTPS_PROXY, value: http://kodex-ci-egress-proxy.kodex-ci-deploy.svc.cluster.local:8080}
+          - {name: HTTP_PROXY, value: http://kodex-ci-egress-proxy.kodex-ci-deploy.svc.cluster.local:8080}
           - {name: NO_PROXY, value: "__KUBERNETES_API_SERVICE_IP__,kubernetes.default.svc,kubernetes.default.svc.cluster.local,.svc,.svc.cluster.local,localhost,127.0.0.1"}
         resources:
           requests: {cpu: 100m, memory: 256Mi}
@@ -55,9 +55,9 @@ template:
           seccompProfile: {type: RuntimeDefault}
         volumeMounts:
           - {name: work, mountPath: /home/runner/_work}
-          - {name: tools, mountPath: /var/run/mattercodex-tools}
-          - {name: owner-gate, mountPath: /var/run/mattercodex-owner-gate, readOnly: true}
+          - {name: tools, mountPath: /var/run/kodex-tools}
+          - {name: owner-gate, mountPath: /var/run/kodex-owner-gate, readOnly: true}
     volumes:
       - {name: work, emptyDir: {sizeLimit: 2Gi}}
       - {name: tools, emptyDir: {sizeLimit: 256Mi}}
-      - {name: owner-gate, configMap: {name: mattercodex-runner-owner-gate, defaultMode: 365}}
+      - {name: owner-gate, configMap: {name: kodex-runner-owner-gate, defaultMode: 365}}

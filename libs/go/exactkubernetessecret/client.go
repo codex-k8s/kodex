@@ -23,7 +23,7 @@ import (
 const (
 	KubernetesAPIAddress = "https://kubernetes.default.svc:443"
 	KubernetesServerName = "kubernetes.default.svc"
-	KubernetesNamespace  = "mattercodex-system"
+	KubernetesNamespace  = "kodex-system"
 	KubernetesCAFile     = "/var/run/config/kubernetes.io/serviceaccount/ca.crt"
 	KubernetesTokenFile  = "/var/run/secrets/tokens/kubernetes-api/token"
 	maximumResponseBytes = 2 << 20

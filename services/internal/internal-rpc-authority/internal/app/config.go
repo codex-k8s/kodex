@@ -21,7 +21,7 @@ const (
 	ModeVerifier Mode = "verifier"
 )
 
-const socketRoot = "/run/mattercodex/internal-rpc-authority"
+const socketRoot = "/run/kodex/internal-rpc-authority"
 
 // Config задаёт полностью проверенную конфигурацию issuer или verifier.
 type Config struct {
@@ -98,29 +98,29 @@ func LoadConfig(mode Mode) (Config, error) {
 		ExpectedPeerGID:                  10001,
 		SocketMode:                       0o660,
 		TechnicalListen:                  ":9090",
-		PostgresDSNFile:                  "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn",
-		PostgresTLSServerName:            "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
+		PostgresDSNFile:                  "/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn",
+		PostgresTLSServerName:            "internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local",
 		PostgresMaxConnections:           8,
-		SnapshotJWSFile:                  "/var/run/config/mattercodex/internal-rpc-authority/snapshot/snapshot.jws",
+		SnapshotJWSFile:                  "/var/run/config/kodex/internal-rpc-authority/snapshot/snapshot.jws",
 		ManifestRootPublicJWKFile:        "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
 		ManifestRootMetadataFile:         "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
-		ManifestTrustBundleJWSFile:       "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust/bundle.jws",
-		ContextPrivateJWKFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/issuer/private.jwk",
-		ProofTrustJWKFile:                "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
-		VaultAddress:                     "https://vault.mattercodex-system.svc:8200",
-		VaultTLSServerName:               "vault.mattercodex-system.svc.cluster.local",
-		VaultCAFile:                      "/var/run/config/mattercodex/internal-rpc-authority/vault/ca.pem",
+		ManifestTrustBundleJWSFile:       "/var/run/config/kodex/internal-rpc-authority/manifest-trust/bundle.jws",
+		ContextPrivateJWKFile:            "/var/run/secrets/kodex/internal-rpc-authority/issuer/private.jwk",
+		ProofTrustJWKFile:                "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
+		VaultAddress:                     "https://vault.kodex-system.svc:8200",
+		VaultTLSServerName:               "vault.kodex-system.svc.cluster.local",
+		VaultCAFile:                      "/var/run/config/kodex/internal-rpc-authority/vault/ca.pem",
 		VaultAuthFile:                    "/var/run/secrets/tokens/vault/token",
-		ReadbackAttestorAddress:          "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443",
-		ReadbackAttestorTLSServerName:    "internal-rpc-authority-readback-attestor.mattercodex-system.svc",
-		ReadbackAttestorCAFile:           "/var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem",
-		WorkloadCertificateFile:          "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.crt",
-		WorkloadPrivateKeyFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls/tls.key",
-		RestoreControllerAddress:         "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443",
-		RestoreControllerTLSServerName:   "internal-rpc-authority-restore-controller.mattercodex-system.svc",
-		RestoreControllerCAFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem",
-		RestoreControllerCertificateFile: "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust/tls.crt",
-		RestoreRoleTrustJWSFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore/role-trust/restore-role-trust.jws",
+		ReadbackAttestorAddress:          "internal-rpc-authority-readback-attestor.kodex-system.svc:8443",
+		ReadbackAttestorTLSServerName:    "internal-rpc-authority-readback-attestor.kodex-system.svc",
+		ReadbackAttestorCAFile:           "/var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem",
+		WorkloadCertificateFile:          "/var/run/secrets/kodex/internal-rpc-authority/workload-tls/tls.crt",
+		WorkloadPrivateKeyFile:           "/var/run/secrets/kodex/internal-rpc-authority/workload-tls/tls.key",
+		RestoreControllerAddress:         "internal-rpc-authority-restore-controller.kodex-system.svc:8443",
+		RestoreControllerTLSServerName:   "internal-rpc-authority-restore-controller.kodex-system.svc",
+		RestoreControllerCAFile:          "/var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem",
+		RestoreControllerCertificateFile: "/var/run/config/kodex/internal-rpc-authority/restore/controller-trust/tls.crt",
+		RestoreRoleTrustJWSFile:          "/var/run/config/kodex/internal-rpc-authority/restore/role-trust/restore-role-trust.jws",
 		WorkloadGeneration:               1,
 		CredentialGeneration:             1,
 		PossessionKeyGeneration:          1,
@@ -141,10 +141,10 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.DatabaseCapabilityRole = "internal_rpc_authority_issuer"
 		config.ReadbackRole = "AUTHORIZATION_ISSUER"
 		config.VaultAuthRole = "internal-rpc-authority-control-api-gateway"
-		config.ReadbackCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential"
-		config.ReadbackPossessionVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession"
-		config.RestoreRoleCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-credential"
-		config.RestoreACKVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack"
+		config.ReadbackCredentialVaultPath = "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential"
+		config.ReadbackPossessionVaultPath = "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession"
+		config.RestoreRoleCredentialVaultPath = "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/restore-credential"
+		config.RestoreACKVaultPath = "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack"
 	case ModeVerifier:
 		config.ServiceName = "internal_rpc_authority_verifier"
 		config.SocketPath = socketRoot + "/verifier.sock"
@@ -153,18 +153,18 @@ func LoadConfig(mode Mode) (Config, error) {
 		config.DatabaseCapabilityRole = "internal_rpc_authority_verifier"
 		config.ReadbackRole = "AUTHORIZATION_VERIFIER"
 		config.VaultAuthRole = "internal-rpc-authority-control-plane"
-		config.ReadbackCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential"
-		config.ReadbackPossessionVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession"
-		config.ResolverReadbackCredentialPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-credential"
-		config.ResolverReadbackPossessionPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/resolver/readback-possession"
-		config.ResolverProofPrivateJWKFile = "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk"
-		config.ResolverProofTrustJWKFile = "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json"
+		config.ReadbackCredentialVaultPath = "kv/data/kodex/internal-rpc-authority/control-plane/verifier/readback-credential"
+		config.ReadbackPossessionVaultPath = "kv/data/kodex/internal-rpc-authority/control-plane/verifier/readback-possession"
+		config.ResolverReadbackCredentialPath = "kv/data/kodex/internal-rpc-authority/control-plane/resolver/readback-credential"
+		config.ResolverReadbackPossessionPath = "kv/data/kodex/internal-rpc-authority/control-plane/resolver/readback-possession"
+		config.ResolverProofPrivateJWKFile = "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk"
+		config.ResolverProofTrustJWKFile = "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json"
 		config.ResolverCredentialGeneration = 1
 		config.ResolverPossessionKeyGeneration = 1
 		config.ResolverProofSignerGeneration = 1
 		config.ResolverEnabled = true
-		config.RestoreRoleCredentialVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential"
-		config.RestoreACKVaultPath = "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack"
+		config.RestoreRoleCredentialVaultPath = "kv/data/kodex/internal-rpc-authority/control-plane/verifier/restore-credential"
+		config.RestoreACKVaultPath = "kv/data/kodex/internal-rpc-authority/control-plane/verifier/restore-ack"
 	default:
 		return Config{}, errors.New("unsupported internal-rpc-authority mode")
 	}
@@ -198,78 +198,78 @@ func applyWorkloadProfile(config *Config) error {
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
 			"role-image-builder": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
 				vaultRole:                 "internal-rpc-authority-role-image-builder",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/role-image-builder/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/role-image-builder/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/role-image-builder/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/role-image-builder/issuer/restore-ack",
 			},
 			"image-admission": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/image-admission",
 				vaultRole:                 "internal-rpc-authority-image-admission",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/image-admission/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/image-admission/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/image-admission/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/image-admission/issuer/restore-ack",
 			},
 			"image-promotion": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/image-promotion",
 				vaultRole:                 "internal-rpc-authority-image-promotion",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/image-promotion/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/image-promotion/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/image-promotion/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/image-promotion/issuer/restore-ack",
 			},
 			"automation-scheduler": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
 				vaultRole:                 "internal-rpc-authority-automation-scheduler",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack",
 			},
 			"control-api-gateway": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
 				vaultRole:                 "internal-rpc-authority-control-api-gateway",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/control-api-gateway/issuer/restore-ack",
 			},
 			"integration-gateway": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway",
 				vaultRole:                 "internal-rpc-authority-integration-gateway",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/integration-gateway/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/integration-gateway/issuer/restore-ack",
 			},
 			"interaction-gateway": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
 				vaultRole:                 "internal-rpc-authority-interaction-gateway",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/interaction-gateway/issuer/restore-ack",
 			},
 			"runtime-controller": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
 				vaultRole:                 "internal-rpc-authority-runtime-controller",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/runtime-controller/issuer/restore-ack",
 			},
 		},
 		ModeVerifier: {
 			"control-plane": {
-				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+				spiffeID:                  "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
 				vaultRole:                 "internal-rpc-authority-control-plane",
-				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-credential",
-				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/readback-possession",
-				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-credential",
-				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/control-plane/verifier/restore-ack",
+				readbackCredentialPath:    "kv/data/kodex/internal-rpc-authority/control-plane/verifier/readback-credential",
+				readbackPossessionPath:    "kv/data/kodex/internal-rpc-authority/control-plane/verifier/readback-possession",
+				restoreRoleCredentialPath: "kv/data/kodex/internal-rpc-authority/control-plane/verifier/restore-credential",
+				restoreACKPath:            "kv/data/kodex/internal-rpc-authority/control-plane/verifier/restore-ack",
 				resolverEnabled:           true,
 			},
 		},
@@ -304,7 +304,7 @@ func (config Config) Validate() error {
 	}
 	if !strings.HasPrefix(
 		config.WorkloadSPIFFEID,
-		"spiffe://mattercodex.local/ns/mattercodex-system/sa/",
+		"spiffe://kodex.local/ns/kodex-system/sa/",
 	) {
 		return errors.New("exact authority workload SPIFFE ID is required")
 	}
@@ -326,8 +326,8 @@ func (config Config) Validate() error {
 		return errors.New("exact Vault authority delivery boundary is required")
 	}
 	if backend == secretBackendVault &&
-		(config.VaultAddress != "https://vault.mattercodex-system.svc:8200" ||
-			config.VaultTLSServerName != "vault.mattercodex-system.svc.cluster.local") {
+		(config.VaultAddress != "https://vault.kodex-system.svc:8200" ||
+			config.VaultTLSServerName != "vault.kodex-system.svc.cluster.local") {
 		return errors.New("exact Vault authority delivery endpoint is required")
 	}
 	expectedSocket := map[Mode]string{

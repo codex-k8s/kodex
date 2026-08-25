@@ -77,7 +77,7 @@ render() {
       apiVersion:"networking.k8s.io/v1",
       kind:"NetworkPolicy",
       metadata:{name:$policy, namespace:$namespace,
-        labels:{"app.kubernetes.io/managed-by":"mattercodex-kubernetes-api-egress"}},
+        labels:{"app.kubernetes.io/managed-by":"kodex-kubernetes-api-egress"}},
       spec:{
         podSelector:{matchLabels:{($selector_key):$selector_value}},
         policyTypes:["Egress"],
@@ -114,14 +114,14 @@ case "$command_name" in
     kubectl --context "$kube_context" get networkpolicy "$policy_name" -n "$target_namespace" -o name
     ;;
   apply)
-    if [[ "${MATTERCODEX_OWNER_APPROVED:-}" != "true" ]]; then
+    if [[ "${KODEX_OWNER_APPROVED:-}" != "true" ]]; then
       printf '%s\n' 'apply requires explicit owner approval' >&2
       exit 1
     fi
     rendered_dir="$(mktemp -d)"
     trap 'rm -rf -- "$rendered_dir"' EXIT
     render >"$rendered_dir/networkpolicy.yaml"
-    kubectl --context "$kube_context" apply --server-side --field-manager=mattercodex-kubernetes-api-egress -f "$rendered_dir/networkpolicy.yaml"
+    kubectl --context "$kube_context" apply --server-side --field-manager=kodex-kubernetes-api-egress -f "$rendered_dir/networkpolicy.yaml"
     kubectl --context "$kube_context" diff -f "$rendered_dir/networkpolicy.yaml" >/dev/null
     ;;
   *)

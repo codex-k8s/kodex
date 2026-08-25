@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: automation-scheduler
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/automation-scheduler@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/automation-scheduler@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -42,15 +42,15 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: "metadata.labels['mattercodex.dev/environment']"
+                  fieldPath: "metadata.labels['kodex.dev/environment']"
             - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_CA_FILE
-              value: /var/run/config/mattercodex/automation-scheduler/control-plane/ca.pem
+              value: /var/run/config/kodex/automation-scheduler/control-plane/ca.pem
             - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.crt
+              value: /var/run/secrets/kodex/automation-scheduler/workload-tls/tls.crt
             - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key
+              value: /var/run/secrets/kodex/automation-scheduler/workload-tls/tls.key
             - name: AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE
-              value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws
+              value: /var/run/secrets/kodex/automation-scheduler/application-grant/application-grant.jws
             - name: AUTOMATION_SCHEDULER_INSTANCE_ID
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -58,11 +58,11 @@ spec:
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
               value: otel-collector.observability.svc.cluster.local
             - name: OTEL_EXPORTER_OTLP_CA_FILE
-              value: /var/run/config/mattercodex/automation-scheduler/observability/otel-ca.pem
+              value: /var/run/config/kodex/automation-scheduler/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
             - name: SENTRY_DSN_FILE
-              value: /var/run/secrets/mattercodex/automation-scheduler/observability/sentry-dsn
+              value: /var/run/secrets/kodex/automation-scheduler/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
           ports:
@@ -107,19 +107,19 @@ spec:
               drop: [ALL]
           volumeMounts:
             - name: workload-tls
-              mountPath: /var/run/secrets/mattercodex/automation-scheduler/workload-tls
+              mountPath: /var/run/secrets/kodex/automation-scheduler/workload-tls
               readOnly: true
             - name: control-plane-ca
-              mountPath: /var/run/config/mattercodex/automation-scheduler/control-plane
+              mountPath: /var/run/config/kodex/automation-scheduler/control-plane
               readOnly: true
             - name: application-grant
-              mountPath: /var/run/secrets/mattercodex/automation-scheduler/application-grant
+              mountPath: /var/run/secrets/kodex/automation-scheduler/application-grant
               readOnly: true
             - name: otel-ca
-              mountPath: /var/run/config/mattercodex/automation-scheduler/observability
+              mountPath: /var/run/config/kodex/automation-scheduler/observability
               readOnly: true
             - name: sentry-dsn
-              mountPath: /var/run/secrets/mattercodex/automation-scheduler/observability
+              mountPath: /var/run/secrets/kodex/automation-scheduler/observability
               readOnly: true
       volumes:
         - name: workload-tls
@@ -128,15 +128,15 @@ spec:
             defaultMode: 0440
         - name: control-plane-ca
           configMap:
-            name: mattercodex-internal-ca
+            name: kodex-internal-ca
             defaultMode: 0440
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
         - name: otel-ca
           configMap:
-            name: mattercodex-otel-ca
+            name: kodex-otel-ca
             defaultMode: 0440
         - name: sentry-dsn
           secret:
-            secretName: mattercodex-sentry
+            secretName: kodex-sentry
             defaultMode: 0440

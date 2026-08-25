@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	APIVersion       = "mattercodex.io/v1alpha1"
+	APIVersion       = "kodex.io/v1alpha1"
 	Kind             = "EgressGatewayPolicy"
 	MaximumFileBytes = 64 << 10
 )

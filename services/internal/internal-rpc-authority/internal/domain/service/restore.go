@@ -8,22 +8,22 @@ import (
 	"sort"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	restoreDirectiveType         = "mattercodex-internal-rpc-restore-directive+jws"
-	restoreACKType               = "mattercodex-internal-rpc-restore-quiescence-ack+jws"
+	restoreDirectiveType         = "kodex-internal-rpc-restore-directive+jws"
+	restoreACKType               = "kodex-internal-rpc-restore-quiescence-ack+jws"
 	restoreDirectiveTTL          = 30 * time.Second
 	restoreACKTTL                = 30 * time.Second
 	restoreControllerIssuer      = restoreControllerSPIFFE
-	restoreWorkloadAudience      = "urn:mattercodex:internal-rpc-authority-restore-workload"
+	restoreWorkloadAudience      = "urn:kodex:internal-rpc-authority-restore-workload"
 	restoreRoleCredentialPurpose = "RESTORE_ROLE_CREDENTIAL"
-	restoreOperatorSubject       = "system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator"
-	restoreOperatorAudience      = "urn:mattercodex:internal-rpc-authority-restore-controller"
+	restoreOperatorSubject       = "system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator"
+	restoreOperatorAudience      = "urn:kodex:internal-rpc-authority-restore-controller"
 )
 
 // RestorePeer описывает проверенную mTLS-идентичность caller.
@@ -69,7 +69,7 @@ func (controller *RestoreController) AuthorizeOperator(
 	semanticDigest string,
 ) error {
 	if credential.Subject != restoreOperatorSubject ||
-		credential.Namespace != "mattercodex-system" ||
+		credential.Namespace != "kodex-system" ||
 		credential.ServiceAccount != "internal-rpc-authority-restore-operator" ||
 		credential.Audience != restoreOperatorAudience ||
 		!digestPattern.MatchString(credential.TokenDigestSHA256) ||

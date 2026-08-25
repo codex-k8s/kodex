@@ -35,7 +35,7 @@ export const m11 = L.page(L.frameMobile(`
 
     ${runCard('Подготовить недельную сводку', 'Корпоративные продажи', 'Аналитик продаж',
       L.statusPill('done', 'Успешно', 'sm'), `<span style="display: inline-flex; align-items: center; gap: 6px;">${L.icon('file', 14)}Сводка.pdf</span>`,
-      'вчера · Помощник MatterCodex', act('Открыть', false))}
+      'вчера · Помощник Kodex', act('Открыть', false))}
 
     ${runCard('Проверить условия договора', 'Корпоративные продажи', 'Юридический консультант',
       L.statusPill('err', 'Ошибка', 'sm'), 'Исполнение остановлено',

@@ -148,7 +148,7 @@ func (testRenderer) Render(_ context.Context, _ *corev1.ConfigMap, environment, 
 	}, Spec: batchv1.JobSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		ServiceAccountName: phaseAccounts[phase], AutomountServiceAccountToken: &automount,
 		RestartPolicy: corev1.RestartPolicyNever,
-		Containers:    []corev1.Container{{Name: phase, Command: []string{"/bin/sh", "/opt/mattercodex/image-admission.sh", phase}}},
+		Containers:    []corev1.Container{{Name: phase, Command: []string{"/bin/sh", "/opt/kodex/image-admission.sh", phase}}},
 	}}}}
 	result := Rendered{Job: job}
 	if phase == "claim" {
@@ -171,13 +171,13 @@ func (invalidRenderer) Render(ctx context.Context, policy *corev1.ConfigMap, env
 func testPolicy() *corev1.ConfigMap {
 	immutable := true
 	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: testConfig().Namespace,
-		Labels: map[string]string{"mattercodex.dev/owner-intent": "true"}}, Immutable: &immutable,
+		Labels: map[string]string{"kodex.dev/owner-intent": "true"}}, Immutable: &immutable,
 		Data: map[string]string{"orchestrationRevision": testOrchestrationRevision}}
 }
 
 func testConfig() Config {
-	return Config{Environment: "production", Namespace: "mattercodex-system", PolicyConfigMap: policyName,
-		RendererPath: "/opt/mattercodex/render-image-admission-job.sh", TechnicalListen: ":9090",
+	return Config{Environment: "production", Namespace: "kodex-system", PolicyConfigMap: policyName,
+		RendererPath: "/opt/kodex/render-image-admission-job.sh", TechnicalListen: ":9090",
 		ReconcileInterval: 5 * time.Second, RetryInterval: 30 * time.Second,
 		InfrastructureCheck: 10 * time.Second, RequestTimeout: 5 * time.Second}
 }

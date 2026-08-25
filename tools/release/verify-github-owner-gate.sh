@@ -47,7 +47,7 @@ done
 for command_name in curl jq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$GITHUB_REPOSITORY" == codex-k8s/matter-codex ]] || fail "repository mismatch"
+[[ "$GITHUB_REPOSITORY" == codex-k8s/kodex ]] || fail "repository mismatch"
 expected_workflow_ref="$GITHUB_REPOSITORY/$workflow@refs/heads/main"
 [[ "$GITHUB_WORKFLOW_REF" == "$expected_workflow_ref" ]] || fail "workflow ref is not exact main"
 [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]] || fail "run ID is invalid"

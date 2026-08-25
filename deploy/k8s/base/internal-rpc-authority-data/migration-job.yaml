@@ -32,21 +32,21 @@ spec:
           command: [/bin/sh, -ec]
           args: ['until pg_isready --host="$POSTGRES_HOST" --port=5432 --timeout=2; do sleep 2; done']
           env:
-            - {name: POSTGRES_HOST, value: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local}
+            - {name: POSTGRES_HOST, value: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local}
           resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 64Mi}}
           securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       containers:
         - name: migrate
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:
             - /usr/local/bin/internal-rpc-authority-cli
           args:
             - up
           env:
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME
-              value: internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+              value: internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
           resources:
             requests:
               cpu: 25m
@@ -62,10 +62,10 @@ spec:
                 - ALL
           volumeMounts:
             - name: postgresql-credentials
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres
               readOnly: true
             - name: postgresql-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql
               readOnly: true
             - name: tmp
               mountPath: /tmp

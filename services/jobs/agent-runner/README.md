@@ -19,7 +19,7 @@ updated: 2026-08-23
 
 Runner:
 
-- читает и валидирует immutable `mattercodex.agent-runner-input.v4`;
+- читает и валидирует immutable `kodex.agent-runner-input.v4`;
 - подтверждает exact turn/attempt/fence через runtime-controller callback;
 - материализует bounded instructions, files, provider binding и MCP config;
 - запускает provider runtime прямым `exec.CommandContext` без shell workflow;
@@ -36,8 +36,8 @@ credentials. External channel delivery выполняет optional interaction a
 
 Role image содержит собственное окружение роли: OS packages, языки, CLI,
 браузеры, OCR/office tools либо другое ПО. После недоверенного installation
-step supply chain добавляет trusted `mattercodex-init` и
-`matter-codex-agent-runner`, фиксирует runtime ABI и допускает exact digest.
+step supply chain добавляет trusted `kodex-init` и
+`kodex-agent-runner`, фиксирует runtime ABI и допускает exact digest.
 
 Таким образом, образ юридического сотрудника может содержать PDF/OCR, образ
 аналитика — Python/R, а образ разработчика — compiler/Git tools. Выбор display

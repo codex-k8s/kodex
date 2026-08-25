@@ -38,7 +38,7 @@ while (($# > 0)); do
   esac
 done
 [[ -n "$output_file" ]]
-if [[ "${FAKE_NSC_MALFORMED:-false}" == true && "$name" == MATTERCODEX ]]; then
+if [[ "${FAKE_NSC_MALFORMED:-false}" == true && "$name" == KODEX ]]; then
   printf '%s\n' '-----BEGIN NATS OPERATOR JWT-----' 'not-a-jwt' '------END NATS OPERATOR JWT------' >"$output_file"
   exit 0
 fi

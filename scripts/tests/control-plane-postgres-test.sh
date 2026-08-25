@@ -7,7 +7,7 @@ fail() {
 }
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-container_name="mattercodex-control-plane-postgres-${BASHPID}"
+container_name="kodex-control-plane-postgres-${BASHPID}"
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
@@ -51,7 +51,7 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
-  MATTERCODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+  KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
       ./internal/repository/postgres/platform -run '^TestBootstrapComponent$'
 )

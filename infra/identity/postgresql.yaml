@@ -49,19 +49,19 @@ spec:
           args:
             - |
               set -eu
-              cp /var/run/secrets/mattercodex/postgresql-source/tls.crt /var/run/secrets/mattercodex/postgresql/tls.crt;
-              cp /var/run/secrets/mattercodex/postgresql-source/tls.key /var/run/secrets/mattercodex/postgresql/tls.key;
-              cp /var/run/secrets/mattercodex/postgresql-source/ca.crt /var/run/secrets/mattercodex/postgresql/ca.crt;
-              chmod 0644 /var/run/secrets/mattercodex/postgresql/tls.crt /var/run/secrets/mattercodex/postgresql/ca.crt;
-              chmod 0600 /var/run/secrets/mattercodex/postgresql/tls.key;
-              cat > /var/run/secrets/mattercodex/postgresql/pg_hba.conf <<'EOF'
+              cp /var/run/secrets/kodex/postgresql-source/tls.crt /var/run/secrets/kodex/postgresql/tls.crt;
+              cp /var/run/secrets/kodex/postgresql-source/tls.key /var/run/secrets/kodex/postgresql/tls.key;
+              cp /var/run/secrets/kodex/postgresql-source/ca.crt /var/run/secrets/kodex/postgresql/ca.crt;
+              chmod 0644 /var/run/secrets/kodex/postgresql/tls.crt /var/run/secrets/kodex/postgresql/ca.crt;
+              chmod 0600 /var/run/secrets/kodex/postgresql/tls.key;
+              cat > /var/run/secrets/kodex/postgresql/pg_hba.conf <<'EOF'
               local all all trust
               hostnossl all all 0.0.0.0/0 reject
               hostnossl all all ::0/0 reject
               hostssl all all 0.0.0.0/0 scram-sha-256
               hostssl all all ::0/0 scram-sha-256
               EOF
-              chmod 0600 /var/run/secrets/mattercodex/postgresql/pg_hba.conf
+              chmod 0600 /var/run/secrets/kodex/postgresql/pg_hba.conf
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -72,12 +72,12 @@ spec:
           volumeMounts:
             - {
                 name: database-tls-source,
-                mountPath: /var/run/secrets/mattercodex/postgresql-source,
+                mountPath: /var/run/secrets/kodex/postgresql-source,
                 readOnly: true,
               }
             - {
                 name: database-tls,
-                mountPath: /var/run/secrets/mattercodex/postgresql,
+                mountPath: /var/run/secrets/kodex/postgresql,
               }
       containers:
         - name: postgresql
@@ -87,15 +87,15 @@ spec:
             - -c
             - ssl=on
             - -c
-            - ssl_cert_file=/var/run/secrets/mattercodex/postgresql/tls.crt
+            - ssl_cert_file=/var/run/secrets/kodex/postgresql/tls.crt
             - -c
-            - ssl_key_file=/var/run/secrets/mattercodex/postgresql/tls.key
+            - ssl_key_file=/var/run/secrets/kodex/postgresql/tls.key
             - -c
-            - ssl_ca_file=/var/run/secrets/mattercodex/postgresql/ca.crt
+            - ssl_ca_file=/var/run/secrets/kodex/postgresql/ca.crt
             - -c
             - ssl_min_protocol_version=TLSv1.3
             - -c
-            - hba_file=/var/run/secrets/mattercodex/postgresql/pg_hba.conf
+            - hba_file=/var/run/secrets/kodex/postgresql/pg_hba.conf
             - -c
             - password_encryption=scram-sha-256
           ports:
@@ -136,7 +136,7 @@ spec:
             - { name: data, mountPath: /var/lib/postgresql/data }
             - {
                 name: database-tls,
-                mountPath: /var/run/secrets/mattercodex/postgresql,
+                mountPath: /var/run/secrets/kodex/postgresql,
                 readOnly: true,
               }
       volumes:

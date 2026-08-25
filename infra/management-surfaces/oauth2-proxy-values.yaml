@@ -6,15 +6,15 @@ image:
   tag: v7.15.3@sha256:10a1165743a192e1940b4708fb9647027185ce11a681a1c5519b442ff7f1f561
   pullPolicy: IfNotPresent
 config:
-  existingSecret: __MATTERCODEX_OAUTH2_SECRET__
+  existingSecret: __KODEX_OAUTH2_SECRET__
   forceLegacyConfig: false
-  cookieName: __MATTERCODEX_OAUTH2_COOKIE_NAME__
+  cookieName: __KODEX_OAUTH2_COOKIE_NAME__
 extraArgs:
   provider: keycloak-oidc
-  oidc-issuer-url: __MATTERCODEX_OIDC_ISSUER__
-  redirect-url: __MATTERCODEX_SURFACE_ORIGIN__/oauth2/callback
+  oidc-issuer-url: __KODEX_OIDC_ISSUER__
+  redirect-url: __KODEX_SURFACE_ORIGIN__/oauth2/callback
   upstream: static://202
-  allowed-role: __MATTERCODEX_ALLOWED_ROLE__
+  allowed-role: __KODEX_ALLOWED_ROLE__
   email-domain: "*"
   scope: openid profile email roles
   code-challenge-method: S256
@@ -32,7 +32,7 @@ extraArgs:
   cookie-refresh: 1h
   cookie-csrf-per-request: "true"
   cookie-csrf-expire: 10m
-  whitelist-domain: __MATTERCODEX_SURFACE_HOST__
+  whitelist-domain: __KODEX_SURFACE_HOST__
   skip-provider-button: "true"
   silence-ping-logging: "true"
   standard-logging: "true"
@@ -46,19 +46,19 @@ service:
   portNumber: 80
 ingress:
   enabled: true
-  className: __MATTERCODEX_INGRESS_CLASS__
+  className: __KODEX_INGRESS_CLASS__
   path: /oauth2
   pathType: Prefix
   hosts:
-    - __MATTERCODEX_SURFACE_HOST__
+    - __KODEX_SURFACE_HOST__
   annotations:
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
   tls:
-    - secretName: __MATTERCODEX_SURFACE_TLS_SECRET__
+    - secretName: __KODEX_SURFACE_TLS_SECRET__
       hosts:
-        - __MATTERCODEX_SURFACE_HOST__
+        - __KODEX_SURFACE_HOST__
 resources:
   requests: { cpu: 25m, memory: 64Mi }
   limits: { memory: 256Mi }

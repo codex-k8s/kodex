@@ -3,6 +3,6 @@ kind: Ingress
 metadata: {name: control-api-gateway}
 spec:
   tls:
-    - hosts: [control-api.staging.mattercodex.local]
+    - hosts: [control-api.staging.kodex.local]
   rules:
-    - host: control-api.staging.mattercodex.local
+    - host: control-api.staging.kodex.local

@@ -63,7 +63,7 @@ updated: 2026-08-22
   decisions.
 - `FR-020`: core startup, readiness, execution, Human Gates и artifacts работают
   при полностью отключённых Mattermost, GitHub, GitLab и Kubernetes-интеграциях.
-- `FR-021`: `Помощник MatterCodex` автоматически создаётся при bootstrap, имеет
+- `FR-021`: `Помощник Kodex` автоматически создаётся при bootstrap, имеет
   stable key, protected versioned core prompt, owner supplement, durable history
   и не может быть удалён, архивирован или отключён.
 - `FR-022`: системный помощник использует тот же закрытый registry

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
 func TestRestoreBlockAtomicallyClosesAdmissionAndWaitsForInflight(t *testing.T) {

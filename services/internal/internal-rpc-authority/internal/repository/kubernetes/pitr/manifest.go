@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 // ManifestResolverConfig закрепляет exact CNPG Backup и его source Cluster.
@@ -117,7 +117,7 @@ type sourceClusterSpec struct {
 func NewManifestResolver(config ManifestResolverConfig) (*ManifestResolver, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		config.BackupName == "" ||
 		config.SourceCluster != "internal-rpc-authority-primary" ||
 		config.BarmanObjectName == "" ||

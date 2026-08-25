@@ -21,7 +21,7 @@ const M = Object.assign({}, ...await Promise.all([
 // UX-12 desktop собран вручную (эталон дизайн-системы) и не перегенерируется.
 export const SCREENS = [
   ['01', 'onboarding', 'Первичная настройка', '/onboarding', 'global', D.d01, M.m01],
-  ['02', 'assistant', 'Помощник MatterCodex', '/assistant', 'global + Проект', D.d02, M.m02],
+  ['02', 'assistant', 'Помощник Kodex', '/assistant', 'global + Проект', D.d02, M.m02],
   ['03', 'home', 'Главная', '/', 'global', D.d03, M.m03],
   ['04', 'projects', 'Проекты', '/projects', 'global', D.d04, M.m04],
   ['05', 'project_overview', 'Обзор Проекта', '/projects/:projectRef', 'project', D.d05, M.m05],
@@ -72,7 +72,7 @@ SCREENS.forEach(([id, slug, name], i) => {
 });
 
 const groups = [
-  ['grp-start', 0, 'НАЧАЛО РАБОТЫ\nUX-01 Первичная настройка, UX-02 Помощник MatterCodex, UX-03 Главная.\nЗдесь пользователь впервые видит платформу: помощник готов, интеграции не нужны, основной путь — «Начать с помощником».'],
+  ['grp-start', 0, 'НАЧАЛО РАБОТЫ\nUX-01 Первичная настройка, UX-02 Помощник Kodex, UX-03 Главная.\nЗдесь пользователь впервые видит платформу: помощник готов, интеграции не нужны, основной путь — «Начать с помощником».'],
   ['grp-projects', 3, 'ПРОЕКТЫ И КОМАНДА\nUX-04 Проекты, UX-05 Обзор Проекта, UX-06 ИИ-сотрудники, UX-07 ИИ-сотрудник.\nПроект — единственный контейнер работы. У агента версионируемые инструкции: опубликованная неизменяема, правки идут через черновик.'],
   ['grp-runs', 7, 'ПРОЦЕССЫ И ЗАПУСКИ\nUX-08 Процессы, UX-09 Редактор Процесса, UX-10 Новый запуск, UX-11 Запуски, UX-12 Live Run Workspace.\nСостояние определения Процесса нигде не смешивается с состоянием запуска. UX-12 — эталон дизайн-системы, с него начинался вариант А.'],
   ['grp-material', 12, 'МАТЕРИАЛЫ И ПОДКЛЮЧЕНИЯ\nUX-13 Файлы и знания, UX-14 Автоматизации, UX-15 Интеграции.\nПроверка безопасности файла показана отдельным этапом. Пустой каталог интеграций — валидное готовое состояние, а не ошибка.'],
@@ -98,7 +98,7 @@ const rows = SCREENS.map(([id, slug, name, route, scope]) =>
 
 const md = `---
 id: UX-MC-003
-title: Индекс макетов web-first MatterCodex
+title: Индекс макетов web-first Kodex
 type: product-design
 status: approved
 owner: product
@@ -106,7 +106,7 @@ version: 1.1.0
 updated: 2026-08-23
 ---
 
-# Индекс макетов web-first MatterCodex
+# Индекс макетов web-first Kodex
 
 Макеты к пакету промптов [UX-MC-002](../web-first-reset-prompt-pack.md).
 19 экранов в двух размерах: **desktop 1440×1024** и **mobile 390×844**.
@@ -114,8 +114,8 @@ updated: 2026-08-23
 
 Утверждённые исходные canvas-экспорты владельца хранятся в репозитории:
 
-- [полный набор экранов](../matter-codex-mockups.html);
-- [детальный Live Run Workspace](../matter-codex-live-run.html).
+- [полный набор экранов](../kodex-mockups.html);
+- [детальный Live Run Workspace](../kodex-live-run.html).
 
 Они являются binding UX source наравне с реестром ниже. Это HTML, а не PNG:
 экспорт содержит самостоятельный интерактивный canvas и вложенные artboards.

@@ -11,7 +11,7 @@ updated: 2026-08-23
 # Control-plane
 
 `control-plane` — единственный авторитетный владелец универсальной web-first
-модели MatterCodex. Сервис не зависит от Mattermost, GitHub, Kubernetes или
+модели Kodex. Сервис не зависит от Mattermost, GitHub, Kubernetes или
 другой внешней интеграции как от пользовательского или lifecycle authority.
 
 ## Ответственность

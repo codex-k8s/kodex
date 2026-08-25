@@ -9,10 +9,10 @@ spec:
         - name: control-plane
           env:
             - name: CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE
-              value: /var/run/config/mattercodex/control-plane/interaction-grant-trust/interaction-gateway.platform-worker.public.jwk
+              value: /var/run/config/kodex/control-plane/interaction-grant-trust/interaction-gateway.platform-worker.public.jwk
           volumeMounts:
             - name: interaction-grant-trust
-              mountPath: /var/run/config/mattercodex/control-plane/interaction-grant-trust
+              mountPath: /var/run/config/kodex/control-plane/interaction-grant-trust
               readOnly: true
       volumes:
         - name: interaction-grant-trust
