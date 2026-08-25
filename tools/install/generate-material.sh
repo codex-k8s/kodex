@@ -63,6 +63,7 @@ jq -e '
     ([.items[].key] | length == (unique | length)) and
     all(.items[];
       (.key | type == "string" and test("^[A-Za-z0-9._-]+$")) and
+      ((.required // true) | type == "boolean") and
       (.source | type == "object") and (.source.type | type == "string" and length > 0)))
 ' "$registry_file" >/dev/null || fail 'secret projection registry is invalid'
 

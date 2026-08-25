@@ -50,7 +50,8 @@ jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
   ([.secrets[].name] | length == (unique | length)) and
   all(.secrets[]; (.items | type == "array" and length > 0) and
-    ([.items[].key] | length == (unique | length)))
+    ([.items[].key] | length == (unique | length)) and
+    all(.items[]; ((.required // true) | type == "boolean")))
 ' "$registry_file" >/dev/null || fail 'secret projection registry is invalid'
 namespace=$(jq -er '.namespace' "$registry_file")
 temporary_directory=$(mktemp -d)
