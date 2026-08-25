@@ -44,6 +44,7 @@ vault_bootstrap="$repository_root/tools/deploy/bootstrap-vault.sh"
 namespace=mattercodex-system
 restore_evidence_name=internal-rpc-authority-restore-evidence
 authority_roots_name=internal-rpc-authority-bootstrap-roots
+authority_snapshot_name=internal-rpc-authority-snapshot
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
@@ -334,6 +335,72 @@ ensure_restore_evidence_anchor() {
   validate_restore_evidence_anchor "$anchor_json"
 }
 
+validate_authority_snapshot() {
+  local input_file=$1
+  jq -e --arg namespace "$namespace" --arg name "$authority_snapshot_name" '
+    .apiVersion == "v1" and
+    .kind == "Secret" and
+    .metadata.namespace == $namespace and
+    .metadata.name == $name and
+    .type == "Opaque" and
+    ((.data | keys) == ["snapshot.jws"]) and
+    (.metadata.annotations as $annotations |
+      ($annotations["mattercodex.dev/source-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      ($annotations["mattercodex.dev/signer-generation"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      (($annotations["mattercodex.dev/source-revision"] | tonumber) as $revision |
+       ($annotations["mattercodex.dev/signer-generation"] | tonumber) as $generation |
+       if $revision == 0 then
+         $generation == 0 and
+         $annotations["mattercodex.dev/source-digest-sha256"] == "" and
+         .data["snapshot.jws"] == ""
+       else
+         $generation > 0 and
+         ($annotations["mattercodex.dev/source-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+         (.data["snapshot.jws"] | type == "string" and length > 0)
+       end))
+  ' "$input_file" >/dev/null || fail 'authority snapshot is absent or malformed'
+}
+
+write_authority_snapshot_seed_manifest() {
+  local output_file=$1
+  AUTHORITY_SNAPSHOT_NAME="$authority_snapshot_name" yq '
+    select(.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+      .metadata.name == strenv(AUTHORITY_SNAPSHOT_NAME))
+  ' "$render_file" >"$output_file"
+  [[ -s "$output_file" ]] || fail 'authority snapshot seed is absent from release render'
+}
+
+ensure_authority_snapshot() {
+  local seed_manifest="$temporary_directory/authority-snapshot-seed.yaml"
+  local seed_json="$temporary_directory/authority-snapshot-seed.json"
+  local live_json="$temporary_directory/authority-snapshot-live.json"
+
+  write_authority_snapshot_seed_manifest "$seed_manifest"
+  yq -o=json -I=0 '.' "$seed_manifest" >"$seed_json"
+  validate_authority_snapshot "$seed_json"
+
+  if kubectl -n "$namespace" get secret "$authority_snapshot_name" -o json >"$live_json" 2>/dev/null; then
+    validate_authority_snapshot "$live_json"
+    return
+  fi
+
+  if ! kubectl create --field-manager=mattercodex-fresh-install -f "$seed_manifest" >/dev/null; then
+    kubectl -n "$namespace" get secret "$authority_snapshot_name" -o json >"$live_json" ||
+      fail 'authority snapshot seed creation failed'
+  else
+    kubectl -n "$namespace" get secret "$authority_snapshot_name" -o json >"$live_json" ||
+      fail 'authority snapshot seed readback failed'
+  fi
+  validate_authority_snapshot "$live_json"
+}
+
+require_authority_snapshot() {
+  local live_json="$temporary_directory/authority-snapshot-live.json"
+  kubectl -n "$namespace" get secret "$authority_snapshot_name" -o json >"$live_json" ||
+    fail 'authority snapshot is absent; run apply-state first'
+  validate_authority_snapshot "$live_json"
+}
+
 wait_statefulset() {
   local name=$1
   kubectl -n "$namespace" rollout status "statefulset/$name" --timeout=10m >/dev/null ||
@@ -446,6 +513,7 @@ if [[ "$mode" == apply-state ]]; then
 
   ensure_restore_evidence_anchor
   ensure_authority_bootstrap_roots
+  ensure_authority_snapshot
   apply_filter custom-resource-definitions '
     select(.kind == "CustomResourceDefinition")
   '
@@ -465,7 +533,8 @@ if [[ "$mode" == apply-state ]]; then
       ((.kind == "VaultStaticSecret" and .metadata.namespace == "mattercodex-system" and
         .metadata.name == "internal-rpc-authority-restore-controller-postgresql") | not) and
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
-        .metadata.name == "internal-rpc-authority-restore-evidence") | not))
+        (.metadata.name == "internal-rpc-authority-restore-evidence" or
+         .metadata.name == "internal-rpc-authority-snapshot")) | not))
   '
   wait_trust_material true
   apply_filter stateful '
@@ -497,12 +566,14 @@ if [[ "$mode" == apply-workloads ]]; then
   done
   ensure_restore_evidence_anchor
   require_authority_bootstrap_roots
+  require_authority_snapshot
   wait_vault_dynamic_secrets
   rotate_release_immutable_resources
   apply_filter workloads '
     select(.kind != "Job" and
       ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
-        .metadata.name == "internal-rpc-authority-restore-evidence") | not))
+        (.metadata.name == "internal-rpc-authority-restore-evidence" or
+         .metadata.name == "internal-rpc-authority-snapshot")) | not))
   '
   pin_authority_root_revision
   wait_trust_material
@@ -535,6 +606,7 @@ if [[ "$mode" == readback ]]; then
     --material-directory "$material_directory" --render "$render_file"
   ensure_restore_evidence_anchor
   require_authority_bootstrap_roots
+  require_authority_snapshot
   wait_trust_material
   wait_vault_dynamic_secrets
   while IFS=$'\t' read -r kind name; do
