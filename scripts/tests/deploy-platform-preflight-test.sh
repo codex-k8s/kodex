@@ -50,6 +50,28 @@ metadata:
   name: known-resource
   namespace: kodex-system
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immutable-resource
+  namespace: kodex-system
+immutable: true
+data:
+  marker: exact
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: recreated-job
+  namespace: kodex-system
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: task
+          image: registry.example.com/task@sha256:1111111111111111111111111111111111111111111111111111111111111111
+---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -99,6 +121,24 @@ if [[ " $* " == *' apply '* ]]; then
     "${KODEX_DEPLOY_PUBLIC_TLS_MODE:-unset}" "$public" "$custom" >>"$KUBECTL_LOG"
   exit 0
 fi
+if [[ " $* " == *' create '* ]]; then
+  manifest=""
+  while (($# > 0)); do
+    if [[ "$1" == -f ]]; then
+      manifest=${2:-}
+      break
+    fi
+    shift
+  done
+  [[ -n "$manifest" && -s "$manifest" ]] || exit 12
+  immutable=no
+  job=no
+  rg -q 'immutable: true' "$manifest" && immutable=yes
+  rg -q 'kind: Job' "$manifest" && job=yes
+  printf 'create mode=%s immutable=%s job=%s\n' \
+    "${KODEX_DEPLOY_PUBLIC_TLS_MODE:-unset}" "$immutable" "$job" >>"$KUBECTL_LOG"
+  exit 0
+fi
 exit 0
 BASH
 chmod +x "$fake_bin/kubectl"
@@ -127,6 +167,13 @@ done
   fail 'deferred preflight submitted the public Certificate'
 ! grep -q 'manifest .* custom=yes' "$kubectl_log" ||
   fail 'preflight submitted a custom resource introduced by the same render'
+[[ "$(grep -c ' args=.* create .*--dry-run=server .*--field-manager=kodex-install ' \
+  "$kubectl_log")" == 8 ]] ||
+  fail 'recreated resources were not validated with server-side create dry-run'
+[[ "$(grep -c 'create mode=.* immutable=yes job=no' "$kubectl_log")" == 4 ]] ||
+  fail 'immutable ConfigMaps were not validated independently'
+[[ "$(grep -c 'create mode=.* immutable=no job=yes' "$kubectl_log")" == 4 ]] ||
+  fail 'Jobs were not validated independently'
 ! grep -q ' args=.* delete ' "$kubectl_log" ||
   fail 'preflight mutated the Kubernetes API'
 

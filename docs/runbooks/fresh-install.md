@@ -207,7 +207,7 @@ Actions; установщик скачивает digest-bound render и прим
 
 `tools/install/deploy-platform.sh` соблюдает порядок:
 
-1. server-side dry-run CRD и уже известных API без persistence;
+1. phase-aware server-side dry-run CRD и уже известных API без persistence;
 2. CRD и foundation; в режиме `deferred` публичный Certificate исключается;
 3. Certificate/Bundle readback;
 4. PostgreSQL и NATS;
@@ -222,6 +222,13 @@ Actions; установщик скачивает digest-bound render и прим
 
 Нельзя запускать workloads до готовности authority projections или считать
 GitHub render фактическим deployment.
+
+Preflight повторяет семантику actual apply: mutable ресурсы проверяются через
+server-side apply с тем же field manager, а удаляемые перед заменой immutable
+ConfigMap и Job проверяются отдельным server-side create с временным именем.
+Существующий seed Secret не переотправляется через admission policy. При apply
+изменившийся immutable ConfigMap удаляется только после проверки platform-owned
+labels и затем воссоздаётся из exact render.
 
 ## 7. Восстановление и rollback
 

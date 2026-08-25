@@ -126,6 +126,66 @@ ensure_seed_secret() {
   kubectl --context "$context" create --field-manager=kodex-install -f "$seed" >/dev/null
 }
 
+preflight_seed_secret() {
+  local name=$1 seed="$temporary_directory/preflight-seed-$1.yaml"
+  if kubectl --context "$context" -n "$namespace" get "secret/$name" >/dev/null 2>&1; then
+    return
+  fi
+  SECRET_NAME="$name" yq '
+    select(.kind == "Secret" and .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(SECRET_NAME))
+  ' "$render_file" >"$seed"
+  [[ -s "$seed" ]] || fail "release seed Secret is absent: $name"
+  kubectl --context "$context" create --dry-run=server \
+    --field-manager=kodex-install -f "$seed" >/dev/null
+}
+
+preflight_recreated_resources() {
+  local name=$1 expression=$2 source output
+  source=$(render_filter "preflight-$name-source" "$expression")
+  output="$temporary_directory/preflight-$name.yaml"
+  yq '
+    .metadata.generateName = "kodex-preflight-" |
+    del(.metadata.name)
+  ' "$source" >"$output"
+  kubectl --context "$context" create --dry-run=server \
+    --field-manager=kodex-install -f "$output" >/dev/null
+}
+
+reconcile_immutable_configmaps() {
+  local name current expected current_content expected_content
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    if ! current=$(kubectl --context "$context" -n "$namespace" get \
+      "configmap/$name" -o json 2>/dev/null); then
+      continue
+    fi
+    expected=$(CONFIGMAP_NAME="$name" yq -o=json -I=0 '
+      select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+        .metadata.name == strenv(CONFIGMAP_NAME))
+    ' "$render_file")
+    [[ -n "$expected" ]] || fail "immutable ConfigMap is absent from render: $name"
+    current_content=$(jq -S -c \
+      '{immutable:.immutable,data:.data,binaryData:.binaryData}' <<<"$current")
+    expected_content=$(jq -S -c \
+      '{immutable:.immutable,data:.data,binaryData:.binaryData}' <<<"$expected")
+    if [[ "$current_content" == "$expected_content" ]]; then
+      continue
+    fi
+    jq -e '
+      .immutable == true and
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/owner-intent"] == "true"
+    ' <<<"$current" >/dev/null ||
+      fail "immutable ConfigMap is not owned by Kodex: $name"
+    kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
+      --wait=true --timeout=3m >/dev/null
+  done < <(yq -N -r '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .immutable == true) | .metadata.name
+  ' "$render_file" | sort -u)
+}
+
 wait_trust_material() {
   local resource_name
   while IFS= read -r resource_name; do
@@ -232,7 +292,8 @@ if [[ "$mode" == preflight ]]; then
     (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
      .kind != "Certificate" or
      .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)) and
-    .kind != "CustomResourceDefinition"'
+    .kind != "CustomResourceDefinition" and .kind != "Secret" and
+    .kind != "Job" and (.kind != "ConfigMap" or .immutable != true)'
   while IFS= read -r api_version; do
     [[ "$api_version" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9][a-z0-9]*$ ]] ||
       fail "rendered CustomResourceDefinition API version is invalid: $api_version"
@@ -247,6 +308,11 @@ if [[ "$mode" == preflight ]]; then
   kubectl --context "$context" apply --server-side --dry-run=server \
     --field-manager=kodex-install \
     -f "$known_resources_file" >/dev/null
+  preflight_recreated_resources immutable-configmaps \
+    'select(.kind == "ConfigMap" and .immutable == true)'
+  preflight_recreated_resources jobs 'select(.kind == "Job")'
+  preflight_seed_secret internal-rpc-authority-restore-evidence
+  preflight_seed_secret internal-rpc-authority-snapshot
   printf 'Kodex platform deployment preflight completed\n'
   exit 0
 fi
@@ -264,6 +330,7 @@ if [[ "$mode" == apply ]]; then
 
   ensure_seed_secret internal-rpc-authority-restore-evidence
   ensure_seed_secret internal-rpc-authority-snapshot
+  reconcile_immutable_configmaps
   apply_render foundation '
     select(.kind != "CustomResourceDefinition" and .kind != "Deployment" and
       .kind != "StatefulSet" and .kind != "DaemonSet" and .kind != "Job" and
