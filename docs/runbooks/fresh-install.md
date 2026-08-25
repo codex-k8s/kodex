@@ -201,7 +201,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    фаза создаёт и ротирует exact Vault static database role, а
    `VaultDynamicSecret` проецирует только `dsn` и `username` в отдельный
    Kubernetes Secret целевого sidecar. Фаза дожидается готовности каждого
-   dynamic secret и сверяет его закрытый набор ключей до запуска
+   dynamic secret только для текущей `metadata.generation`: `lastGeneration`,
+   `Ready.observedGeneration` и `SecretSynced.observedGeneration` должны
+   совпасть, после чего bounded readback сверяет закрытый набор ключей destination
+   Secret до запуска
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 11. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и

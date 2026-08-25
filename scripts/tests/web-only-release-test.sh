@@ -140,15 +140,15 @@ vault_wait_function=$(awk '
 ' "$fresh_deployer")
 grep -Fq '"$resource_name" == internal-rpc-authority-restore-controller-postgresql' \
   <<<"$vault_wait_function" || fail 'deferred restore predicate is outside VaultStaticSecret readiness'
-grep -Fq 'vaultstaticsecrets.secrets.hashicorp.com/$resource_name' \
-  <<<"$vault_wait_function" || fail 'deferred restore predicate is not bound to VaultStaticSecret wait'
+grep -Fq 'wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com "$resource_name" 300' \
+  <<<"$vault_wait_function" || fail 'deferred restore predicate is not bound to generation-aware VaultStaticSecret wait'
 [[ $(grep -c '^[[:space:]]*wait_trust_material$' "$fresh_deployer") -eq 2 &&
   $(grep -c '^[[:space:]]*wait_trust_material true$' "$fresh_deployer") -eq 1 ]] ||
   fail 'fresh deploy does not verify trust material in state, workloads and readback phases'
 for readiness_condition in \
   'certificates.cert-manager.io/$resource_name' \
   'bundles.trust.cert-manager.io/$resource_name' \
-  'vaultstaticsecrets.secrets.hashicorp.com/$resource_name'; do
+  'wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com "$resource_name" 300'; do
   grep -Fq "$readiness_condition" "$fresh_deployer" ||
     fail "fresh deploy omits trust resource readiness: $readiness_condition"
 done
@@ -354,6 +354,17 @@ yq -o=json -I=0 '
 
 [[ $(grep -c '^[[:space:]]*wait_vault_dynamic_secrets$' "$fresh_deployer") -eq 3 ]] ||
   fail 'fresh deploy does not gate migrations, workloads and readback on dynamic database credentials'
+for generation_contract in \
+  '.status.lastGeneration == $generation' \
+  '.observedGeneration == $generation' \
+  '["Ready", "SecretSynced"]'; do
+  grep -Fq "$generation_contract" "$fresh_deployer" ||
+    fail "Vault secret readiness can accept a stale generation: $generation_contract"
+done
+if grep -Fq 'vaultdynamicsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m' \
+  "$fresh_deployer"; then
+  fail 'VaultDynamicSecret readiness still relies on stale kubectl condition wait'
+fi
 grep -Fq '(.data | keys | sort) == ["dsn", "username"]' "$fresh_deployer" ||
   fail 'fresh deploy does not reject extra dynamic database credential fields'
 
