@@ -19,7 +19,7 @@ spec:
     # только после начала удаления всего изолированного platform namespace.
     - name: namespace-not-terminating
       expression: >-
-        namespaceObject == null ||
+        namespaceObject != null &&
         !has(namespaceObject.metadata.deletionTimestamp)
   validations:
     - expression: request.operation == 'UPDATE'
