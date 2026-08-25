@@ -9,6 +9,9 @@ KODEX_KUBE_CONTEXT=default
 KODEX_SERVER_PUBLIC_IP=203.0.113.10
 KODEX_PUBLIC_IPV4_CIDR=203.0.113.10/32
 KODEX_CONTROL_HOST=control.kodex.example.com
+# deferred не создаёт публичный ACME Certificate и используется только до
+# разрешённого окна выдачи. enabled является каноническим режимом релиза.
+KODEX_PUBLIC_TLS_MODE=enabled
 # Необязательный отдельный DNS для восстановления после ACME duplicate-certificate
 # rate limit. Он должен указывать на тот же ingress и оставаться стабильным до
 # следующей плановой ротации сертификата.

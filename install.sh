@@ -36,7 +36,10 @@ kodex_require_env KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG \
 [[ "$KODEX_NAMESPACE" == kodex-system ]] ||
   fail 'the current release supports the isolated kodex-system namespace only'
 KODEX_INGRESS_SERVICE_NAME=${KODEX_INGRESS_SERVICE_NAME:-${KODEX_INGRESS_POD_NAME:-}}
-export KODEX_INGRESS_SERVICE_NAME
+KODEX_PUBLIC_TLS_MODE=${KODEX_PUBLIC_TLS_MODE:-enabled}
+export KODEX_INGRESS_SERVICE_NAME KODEX_PUBLIC_TLS_MODE
+[[ "$KODEX_PUBLIC_TLS_MODE" == deferred || "$KODEX_PUBLIC_TLS_MODE" == enabled ]] ||
+  fail 'KODEX_PUBLIC_TLS_MODE must be deferred or enabled'
 
 all_components=(host cert-manager identity trust management registry arc secrets platform)
 if [[ -z "$components" ]]; then
@@ -392,7 +395,8 @@ fi
 
 if component_selected platform; then
   "$repository_root/tools/install/release-platform.sh" --context "$KODEX_KUBE_CONTEXT" \
-    --owner-pat-file "$material_directory/inputs/github-owner-pat" --profile web-only
+    --owner-pat-file "$material_directory/inputs/github-owner-pat" --profile web-only \
+    --public-tls-mode "$KODEX_PUBLIC_TLS_MODE"
 fi
 
 if component_selected management; then
