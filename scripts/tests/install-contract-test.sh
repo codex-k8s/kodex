@@ -16,17 +16,20 @@ export KODEX_NAMESPACE=kodex-system
 export KODEX_KUBECONFIG=/tmp/test-kubeconfig
 export KODEX_KUBE_CONTEXT=kodex-test
 export KODEX_RELEASE_REGISTRY_PASSWORD='test-registry-password-with-equals=='
+export KODEX_CONTROL_TLS_RECOVERY_HOST=control-recovery.example.com
 env_file="$temporary_directory/.kodex-env"
 "$repository_root/tools/install/write-env-file.sh" --output "$env_file" >/dev/null
 [[ "$(stat -c '%a' "$env_file")" == 600 ]] || fail '.kodex-env mode differs from 0600'
 
 unset KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG KODEX_KUBE_CONTEXT
 unset KODEX_RELEASE_REGISTRY_PASSWORD
+unset KODEX_CONTROL_TLS_RECOVERY_HOST
 # shellcheck source=../../tools/install/load-env.sh
 source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
 [[ "$KODEX_INSTALL_MODE" == existing-kubernetes && "$KODEX_NAMESPACE" == kodex-system &&
-  "$KODEX_RELEASE_REGISTRY_PASSWORD" == 'test-registry-password-with-equals==' ]] ||
+  "$KODEX_RELEASE_REGISTRY_PASSWORD" == 'test-registry-password-with-equals==' &&
+  "$KODEX_CONTROL_TLS_RECOVERY_HOST" == control-recovery.example.com ]] ||
   fail 'generated .kodex-env readback mismatch'
 
 chmod 0644 "$env_file"
@@ -68,6 +71,16 @@ grep -Fq 'repos/$repository/actions/variables/$name' \
   fail 'GitHub variable readback does not use the repository REST endpoint'
 grep -Fq 'while ((attempt <= 15))' "$repository_root/tools/install/configure-github.sh" ||
   fail 'GitHub variable readback does not have a bounded retry budget'
+for recovery_contract in \
+  'set_variable KODEX_CONTROL_TLS_RECOVERY_HOST' \
+  'gh variable delete KODEX_CONTROL_TLS_RECOVERY_HOST' \
+  '--control-tls-recovery-host "$CONTROL_TLS_RECOVERY_HOST"' \
+  '.spec.dnsNames += [strenv(CONTROL_TLS_RECOVERY_HOST)]'; do
+  rg -Fq -- "$recovery_contract" "$repository_root/tools/install/configure-github.sh" \
+    "$repository_root/.github/workflows/deploy-production.yml" \
+    "$repository_root/tools/release/render-web-only.sh" ||
+    fail "Control Center TLS recovery contract is absent: $recovery_contract"
+done
 grep -Fq 'preflight-custom-resource-definitions' \
   "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'platform preflight does not validate CustomResourceDefinitions separately'

@@ -108,6 +108,19 @@ set_variable KODEX_BUILD_PROXY http://kodex-ci-egress-proxy.kodex-ci.svc.cluster
 set_variable KODEX_BUILD_NO_PROXY kodex-registry.kodex-infra.svc.cluster.local,localhost,127.0.0.1
 set_variable KODEX_PUBLIC_HOST "$KODEX_CONTROL_HOST"
 set_variable KODEX_PUBLIC_ORIGIN "https://$KODEX_CONTROL_HOST"
+if [[ -n "${KODEX_CONTROL_TLS_RECOVERY_HOST:-}" ]]; then
+  set_variable KODEX_CONTROL_TLS_RECOVERY_HOST "$KODEX_CONTROL_TLS_RECOVERY_HOST"
+elif get_variable_value KODEX_CONTROL_TLS_RECOVERY_HOST >/dev/null 2>&1; then
+  if [[ "$mode" == apply ]]; then
+    gh variable delete KODEX_CONTROL_TLS_RECOVERY_HOST --repo "$repository"
+  else
+    fail 'retired Control Center TLS recovery host remains configured'
+  fi
+fi
+if [[ -z "${KODEX_CONTROL_TLS_RECOVERY_HOST:-}" ]] &&
+  get_variable_value KODEX_CONTROL_TLS_RECOVERY_HOST >/dev/null 2>&1; then
+  fail 'Control Center TLS recovery host deletion readback failed'
+fi
 set_variable KODEX_OIDC_ISSUER "https://$KODEX_OIDC_HOST/realms/kodex"
 set_variable KODEX_OIDC_JWKS_URL "https://$KODEX_OIDC_HOST/realms/kodex/protocol/openid-connect/certs"
 set_variable KODEX_OIDC_CONNECT_ADDRESS "$KODEX_OIDC_CONNECT_ADDRESS"

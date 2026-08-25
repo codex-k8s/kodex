@@ -78,6 +78,8 @@ chmod 0600 .kodex-env
 
 - режим, kubeconfig/context и публичный IPv4;
 - DNS Control Center, SSO, Grafana, Headlamp и registry;
+- необязательный отдельный DNS SAN для восстановления Control Center TLS после
+  внешнего ACME duplicate-certificate rate limit;
 - exact connect address, TLS server name и Kubernetes selector OIDC workload;
 - ACME email, ingress workload selector и имя ingress Service;
 - постоянного Keycloak administrator и первого owner;
@@ -102,6 +104,15 @@ GitHub Variables/Secrets, предварительно передав их в en
 
 Установщик принимает только `KODEX_*` assignments, запрещает shell evaluation
 и требует mode `0600`. Значения никогда не печатаются.
+
+`KODEX_CONTROL_TLS_RECOVERY_HOST` обычно остается пустым. Если удостоверяющий
+центр временно запретил повторную выдачу для точного набора identifiers после
+нескольких чистых переустановок, владелец может указать отдельное lowercase DNS
+имя, заранее направленное на тот же ingress. Оно добавляется только в SAN
+сертификата Control Center: публичный host, ingress и OIDC redirect не меняются.
+После успешной выдачи значение нельзя удалять до согласованной плановой ротации,
+поскольку изменение `dnsNames` само инициирует reissuance. Удаление TLS Secret
+для ручной ротации запрещено; используется штатный lifecycle cert-manager.
 
 ## 3. Secret model
 

@@ -96,6 +96,7 @@ jobs:
           LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
           PUBLIC_HOST: ${{ vars.KODEX_PUBLIC_HOST }}
           PUBLIC_ORIGIN: ${{ vars.KODEX_PUBLIC_ORIGIN }}
+          CONTROL_TLS_RECOVERY_HOST: ${{ vars.KODEX_CONTROL_TLS_RECOVERY_HOST }}
           OIDC_ISSUER: ${{ vars.KODEX_OIDC_ISSUER }}
           OIDC_JWKS_URL: ${{ vars.KODEX_OIDC_JWKS_URL }}
           OIDC_CONNECT_ADDRESS: ${{ vars.KODEX_OIDC_CONNECT_ADDRESS }}
@@ -139,6 +140,9 @@ jobs:
           if [[ "$DEPLOYMENT_PROFILE" == "web-with-mattermost" ]]; then
             test -n "$MATTERMOST_HOST"
             render_arguments+=(--mattermost-host "$MATTERMOST_HOST")
+          fi
+          if [[ -n "$CONTROL_TLS_RECOVERY_HOST" ]]; then
+            render_arguments+=(--control-tls-recovery-host "$CONTROL_TLS_RECOVERY_HOST")
           fi
           if [[ "$DISABLE_OBSERVABILITY" == "true" ]]; then
             render_arguments+=(--disable-observability)

@@ -114,6 +114,13 @@ if component_selected platform; then
     KODEX_OIDC_TARGET_PORT KODEX_INGRESS_CLASS KODEX_CLUSTER_ISSUER \
     KODEX_INGRESS_NAMESPACE KODEX_INGRESS_POD_NAME || exit 1
 fi
+if [[ -n "${KODEX_CONTROL_TLS_RECOVERY_HOST:-}" ]]; then
+  [[ "$KODEX_CONTROL_TLS_RECOVERY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
+    "$KODEX_CONTROL_TLS_RECOVERY_HOST" == *.* ]] ||
+    fail 'KODEX_CONTROL_TLS_RECOVERY_HOST must be an exact lowercase DNS name'
+  [[ "$KODEX_CONTROL_TLS_RECOVERY_HOST" != "$KODEX_CONTROL_HOST" ]] ||
+    fail 'KODEX_CONTROL_TLS_RECOVERY_HOST must differ from KODEX_CONTROL_HOST'
+fi
 if component_selected secrets; then
   [[ -n "${KODEX_OPENAI_AUTH_JSON_B64:-}" || -n "${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]] ||
     fail 'KODEX_OPENAI_AUTH_JSON_B64 or KODEX_OPENAI_AUTH_JSON_FILE is required'

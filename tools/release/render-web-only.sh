@@ -10,6 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --lock <release-lock.json> --lock-sha256 <64-hex> --output <render.yaml>" \
     '  --public-host <dns> --public-origin <https://dns>' \
+    '  [--control-tls-recovery-host <different-dns>]' \
     '  --oidc-issuer <https-url> --oidc-jwks-url <https-url>' \
     '  --oidc-connect-address <host:port> --oidc-tls-server-name <dns>' \
     '  --promoted-pull-host <dns>' \
@@ -30,6 +31,7 @@ lock_sha256=""
 output=""
 public_host=""
 public_origin=""
+control_tls_recovery_host=""
 oidc_issuer=""
 oidc_jwks_url=""
 oidc_connect_address=""
@@ -57,6 +59,7 @@ while (($# > 0)); do
     --output) output="${2:-}"; shift 2 ;;
     --public-host) public_host="${2:-}"; shift 2 ;;
     --public-origin) public_origin="${2:-}"; shift 2 ;;
+    --control-tls-recovery-host) control_tls_recovery_host="${2:-}"; shift 2 ;;
     --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
     --oidc-jwks-url) oidc_jwks_url="${2:-}"; shift 2 ;;
     --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
@@ -88,6 +91,13 @@ done
 [[ -n "$output" ]] || fail 'output path is required'
 [[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$public_host" == *.* ]] || fail 'public host is invalid'
 [[ "$public_origin" == "https://$public_host" ]] || fail 'public origin must be the exact HTTPS public host'
+if [[ -n "$control_tls_recovery_host" ]]; then
+  [[ "$control_tls_recovery_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
+    "$control_tls_recovery_host" == *.* ]] ||
+    fail 'Control Center TLS recovery host is invalid'
+  [[ "$control_tls_recovery_host" != "$public_host" ]] ||
+    fail 'Control Center TLS recovery host must differ from the public host'
+fi
 [[ "$oidc_issuer" =~ ^https://[a-zA-Z0-9._:-]+(/[^[:space:]]*)?$ ]] || fail 'OIDC issuer is invalid'
 [[ "$oidc_jwks_url" =~ ^https://[a-zA-Z0-9._:-]+(/[^[:space:]]*)?$ ]] || fail 'OIDC JWKS URL is invalid'
 [[ "$oidc_connect_address" =~ ^[a-zA-Z0-9._-]+:[1-9][0-9]{0,4}$ ]] || fail 'OIDC connect address is invalid'
@@ -215,6 +225,24 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq -i '
     sub("registry-pull\\.invalid"; strenv(PULL_REGISTRY_HOST))
   )
 ' "$rendered"
+
+if [[ -n "$control_tls_recovery_host" ]]; then
+  CONTROL_TLS_RECOVERY_HOST="$control_tls_recovery_host" yq -i '
+    with(select(.kind == "Certificate" and
+      .metadata.name == "staff-control-center-public");
+      .spec.dnsNames += [strenv(CONTROL_TLS_RECOVERY_HOST)])
+  ' "$rendered"
+fi
+expected_control_tls_names=1
+[[ -z "$control_tls_recovery_host" ]] || expected_control_tls_names=2
+EXPECTED_CONTROL_TLS_NAMES="$expected_control_tls_names" \
+PUBLIC_HOST="$public_host" RECOVERY_HOST="$control_tls_recovery_host" yq -e '
+  select(.kind == "Certificate" and
+    .metadata.name == "staff-control-center-public") |
+  (.spec.dnsNames | length) == (strenv(EXPECTED_CONTROL_TLS_NAMES) | tonumber) and
+  (.spec.dnsNames[0] == strenv(PUBLIC_HOST)) and
+  (strenv(RECOVERY_HOST) == "" or .spec.dnsNames[1] == strenv(RECOVERY_HOST))
+' "$rendered" >/dev/null || fail 'Control Center TLS DNS names are invalid'
 
 api_endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" |
   jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
