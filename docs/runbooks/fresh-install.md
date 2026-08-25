@@ -4,7 +4,7 @@ title: Чистое развертывание web-first MatterCodex
 type: runbook
 status: approved
 owner: sre
-version: 1.3.5
+version: 1.3.6
 updated: 2026-08-24
 ---
 
@@ -163,10 +163,11 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    Базовая Vault ingress policy не разрешает другие workload. Отдельные exact
    policies добавляют только зарегистрированные publisher/issuer paths, причём
    publisher runtime policy строится из закрытого target registry в exact
-   release render и содержит `read/update` для каждого полного KV path без
-   wildcard, `create` и `delete`. CSI provider подключается к Vault по HTTPS с
-   адресом, installation CA path и exact SNI из pinned Helm values. Публичный
-   `ca.crt` монтируется read-only из
+   release render и содержит `create/read/update` для каждого полного KV path.
+   `create` используется только для CAS=0 genesis отсутствующего keyset;
+   wildcard, `delete` и произвольный create запрещены. CSI provider
+   подключается к Vault по HTTPS с адресом, installation CA path и exact SNI из
+   pinned Helm values. Публичный `ca.crt` монтируется read-only из
    `mattercodex-vault-server-tls`;
    `SecretProviderClass` не переопределяет transport trust, а Vault Agent
    sidecar не участвует в этом пути. Каждый SPC обязан запрашивать projected
