@@ -96,6 +96,25 @@ if grep -Fq 'kubectl apply --server-side --field-manager=mattercodex-fresh-insta
   "$fresh_deployer"; then
   fail 'fresh workload deploy can overwrite the forward-only restore evidence anchor'
 fi
+grep -Fq 'ensure_authority_snapshot()' "$fresh_deployer" ||
+  fail 'fresh deploy does not implement create-once authority snapshot seed materialization'
+[[ $(grep -c '^[[:space:]]*ensure_authority_snapshot$' "$fresh_deployer") -eq 1 ]] ||
+  fail 'fresh deploy does not limit authority snapshot seed materialization to apply-state'
+[[ $(grep -c '^[[:space:]]*require_authority_snapshot$' "$fresh_deployer") -eq 2 ]] ||
+  fail 'fresh deploy does not require the published authority snapshot in workloads and readback phases'
+[[ $(grep -c '.metadata.name == "internal-rpc-authority-snapshot"' "$fresh_deployer") -eq 2 ]] ||
+  fail 'fresh deploy does not exclude the runtime-owned authority snapshot from both generic apply phases'
+authority_snapshot_ensure=$(awk '
+  /^ensure_authority_snapshot\(\) \{/ {capture=1}
+  capture {print}
+  capture && /^}$/ {exit}
+' "$fresh_deployer")
+grep -Fq 'kubectl create --field-manager=mattercodex-fresh-install -f "$seed_manifest"' \
+  <<<"$authority_snapshot_ensure" ||
+  fail 'fresh deploy does not create the absent authority snapshot seed explicitly'
+if grep -Fq 'kubectl apply' <<<"$authority_snapshot_ensure"; then
+  fail 'fresh deploy can overwrite a publisher-owned authority snapshot'
+fi
 grep -Fq 'select(.kind != "Job" and' "$fresh_deployer" ||
   fail 'fresh workload deploy can mutate immutable completed Jobs through generic apply'
 [[ $(grep -c '^[[:space:]]*apply_job ' "$fresh_deployer") -eq 4 ]] ||

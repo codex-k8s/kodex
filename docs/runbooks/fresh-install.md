@@ -138,8 +138,9 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    и повторяющиеся resource identities, а также отсутствие установленных
    внешних observability CRD, если они используются render-ом.
 9. Выполнить фазу `apply-state`. Она инициализирует Vault, создаёт exact policy,
-   image PKI и static material, создаёт bootstrap restore evidence anchor только
-   при его отсутствии, материализует четыре публичных per-install authority root
+   image PKI и static material, создаёт bootstrap restore evidence anchor и
+   нулевой authority snapshot только при их отсутствии, материализует четыре
+   публичных per-install authority root
    файла в immutable Secret с exact digest и монтирует только соответствующую
    пару в publisher, readback attestor и restore controller, отдельно применяет
    release-owned CRD и ждёт состояния
@@ -175,7 +176,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    закрыто отклоняют отсутствующую или иную аудиторию. `vaultSkipTLSVerify` и
    plaintext fallback запрещены. Существующий anchor только
    проверяется по обязательной форме и не переписывается render-ом: продвинуть
-   его вправе исключительно PITR executor через forward-only policy. Первый
+   его вправе исключительно PITR executor через forward-only policy. Уже
+   опубликованный authority snapshot также только проверяется: generic apply не
+   владеет `snapshot.jws` и runtime-аннотациями и не откатывает их к нулевому
+   render seed. Первый
    verified Vault database connect может попасть в короткий restart PostgreSQL
    после init scripts: только `connection refused` повторяется с ограниченным
    backoff; semantic/configuration ошибки завершают фазу немедленно, а
@@ -201,9 +205,10 @@ workflow; bootstrap identity удаляется после reconciliation, а п
    `control-plane-migrate` и `control-plane-broker-bootstrap`. Успешный Job не
    перезапускается; неуспешный удаляется и создаётся заново из того же render.
 11. Выполнить фазу `apply-workloads`. Она проверяет restore evidence anchor и
-    повторно проверяет готовность всех registry-derived database Secret,
-    применяет workload-ресурсы за исключением этого create-once ресурса и всех
-    `Job`, дожидается image supply chain, отдельно выполняет
+    существующий опубликованный authority snapshot, повторно проверяет готовность
+    всех registry-derived database Secret, применяет workload-ресурсы за
+    исключением этих runtime-owned ресурсов и всех `Job`, дожидается image supply
+    chain, отдельно выполняет
     `release-artifact-materializer`, затем ждёт rollout каждого Deployment и
     DaemonSet. Первая публикация authority graph в новой пустой БД обязана иметь
     `source_revision: 1`; историческая ревизия без predecessor chain закрыто
