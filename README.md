@@ -58,4 +58,4 @@ Public domain, Origin, OIDC, registry и external hosts передаются п�
 
 ## Лицензия
 
-MIT и коммерческая лицензия.
+Код распространяется по [лицензии MIT](LICENSE).
