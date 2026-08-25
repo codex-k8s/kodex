@@ -54,4 +54,4 @@ Public domain, Origin, OIDC, registry и external hosts передаются п�
 
 ## Лицензия
 
-AGPL и коммерческая лицензия.
+MIT и коммерческая лицензия.
