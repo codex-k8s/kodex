@@ -4,8 +4,8 @@ title: Диагностика и восстановление internal-rpc-autho
 type: runbook
 status: approved
 owner: sre
-version: 1.2.8
-updated: 2026-08-24
+version: 1.2.9
+updated: 2026-08-25
 ---
 
 # Диагностика и восстановление internal-rpc-authority
@@ -29,6 +29,16 @@ keyset, а последующая ротация выполняется versione
 `kv/data/mattercodex/internal-rpc-authority/` запрещены. Release `readback`
 повторно строит ожидаемую policy из того же render и сравнивает её с фактически
 обслуживаемой Vault policy и Kubernetes auth role.
+
+Для каждого issuer/verifier target закрытый publisher registry также задаёт
+Vault static database role и PostgreSQL LOGIN principal. Fresh-install
+bootstrap добавляет только эти роли в Vault database connection, создаёт и
+ротирует их после migration, а `VaultDynamicSecret` материализует целевому
+sidecar Kubernetes Secret только с ключами `dsn` и `username`. Отсутствующий
+registry target, неоднозначный role/principal, неготовый dynamic secret или
+лишний ключ в destination Secret являются terminal release failure. Restore
+trust доставляется отдельно через `VaultStaticSecret`; ручной Kubernetes
+Secret не является поддерживаемым путём восстановления.
 
 ## Предварительная проверка без изменений
 

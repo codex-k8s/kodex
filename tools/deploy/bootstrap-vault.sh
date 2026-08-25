@@ -134,6 +134,39 @@ write_publisher_runtime_policy() {
   ((path_count >= 6)) || fail 'publisher runtime Vault policy has too few exact paths'
 }
 
+write_target_database_registry() {
+  local output_file=$1
+  [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
+    fail 'release render is required for target database registry'
+  yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and
+      .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+    (.data."key-delivery-targets.yaml" | from_yaml)
+  ' "$render_file" | jq -s -e '
+    if length != 1 or .[0].version != 1 or
+      (.[0].targets | type) != "array" or (.[0].targets | length) < 3
+    then error("publisher target registry is missing or ambiguous")
+    else
+      [.[0].targets[] | {
+        role: .database_identity.vault_database_role,
+        principal: .database_identity.login_principal,
+        generation: .database_identity.credential_generation
+      }] as $entries |
+      if any($entries[];
+        ((.role | type) != "string") or
+        ((.role | test("^[a-z0-9](?:[a-z0-9-]{1,94}[a-z0-9])$")) | not) or
+        ((.principal | type) != "string") or
+        ((.principal | test("^[a-z][a-z0-9_]{2,62}$")) | not) or
+        .generation != 1) or
+        ([$entries[].role] | unique | length) != ($entries | length) or
+        ([$entries[].principal] | unique | length) != ($entries | length)
+      then error("publisher target database registry is invalid")
+      else $entries
+      end
+    end
+  ' >"$output_file"
+}
+
 vault_kv_put_file() {
   local path=$1 key=$2 seed_file_path=$3 root_token
   [[ "$path" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]+$ && "$path" != kv/* ]] ||
@@ -290,8 +323,30 @@ if [[ "$mode" == configure-policies ]]; then
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   yq -o=json -I=0 '.' "$render_file" | jq -s '.' >"$temporary_directory/render.json"
-  yq -o=json -I=0 'select(.kind == "SecretProviderClass") | .metadata.name as $spc | .spec.parameters.roleName as $role | (.spec.parameters.objects | from_yaml)[] | {"spc": $spc, "role": $role, "path": .secretPath, "method": (.method // "GET")}' \
-    "$render_file" | jq -s '.' >"$temporary_directory/objects.json"
+  yq -o=json -I=0 'select(.kind == "SecretProviderClass") | .metadata.name as $spc | .spec.parameters.roleName as $role | (.spec.parameters.objects | from_yaml)[] | {"spc": $spc, "role": $role, "path": .secretPath, "method": (.method // "GET"), "service_account": ""}' \
+    "$render_file" | jq -s '.' >"$temporary_directory/spc-objects.json"
+  jq --slurpfile spc "$temporary_directory/spc-objects.json" -e '
+    ([.[] | select(.kind == "VaultAuth") |
+      {key: .metadata.name, value: {
+        role: .spec.kubernetes.role,
+        service_account: .spec.kubernetes.serviceAccount
+      }}] | from_entries) as $auths |
+    ($spc[0] + [
+      .[] | select(.kind == "VaultDynamicSecret") | . as $secret |
+      if ($secret.spec.vaultAuthRef | type) != "string" or
+        ($secret.spec.vaultAuthRef | contains("/")) or
+        ($auths[$secret.spec.vaultAuthRef] == null)
+      then error("VaultDynamicSecret has no exact local VaultAuth")
+      else {
+        spc: "",
+        role: $auths[$secret.spec.vaultAuthRef].role,
+        path: ($secret.spec.mount + "/" + $secret.spec.path),
+        method: ($secret.spec.requestHTTPMethod // "GET"),
+        service_account: $auths[$secret.spec.vaultAuthRef].service_account
+      }
+      end
+    ])
+  ' "$temporary_directory/render.json" >"$temporary_directory/objects.json"
   yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | (.data."key-delivery-targets.yaml" | from_yaml)' \
     "$render_file" | jq -s -e '
       if length == 1 and .[0].version == 1 and (.[0].source_revision | type) == "number" and
@@ -337,18 +392,28 @@ HCL
     [[ -s "$temporary_directory/$role.hcl" ]] || fail "Vault role policy is empty: $role"
     vault_input "$temporary_directory/$role.hcl" policy write "spc-$role" - >/dev/null
 
-    mapfile -t spcs < <(jq -r --arg role "$role" '.[] | select(.role==$role) | .spc' \
+    mapfile -t spcs < <(jq -r --arg role "$role" '.[] | select(.role==$role and .spc!="") | .spc' \
       "$temporary_directory/objects.json" | sort -u)
     spc_json=$(printf '%s\n' "${spcs[@]}" | jq -R . | jq -s .)
-    service_accounts=$(jq -r --argjson spcs "$spc_json" '
+    mounted_service_accounts=$(jq -r --argjson spcs "$spc_json" '
       def podspec:
         if .kind=="CronJob" then .spec.jobTemplate.spec.template.spec
         elif (.kind=="Deployment" or .kind=="StatefulSet" or .kind=="Job" or .kind=="DaemonSet") then .spec.template.spec
         else empty end;
       [ .[] | podspec as $spec |
         select(any($spec.volumes[]?.csi.volumeAttributes.secretProviderClass?; . as $name | $spcs | index($name))) |
-        $spec.serviceAccountName ] | map(select(. != null)) | unique | join(",")
+      $spec.serviceAccountName ] | map(select(. != null)) | unique | join(",")
     ' "$temporary_directory/render.json")
+    direct_service_accounts=$(jq -r --arg role "$role" '
+      [.[] | select(.role==$role) | .service_account | select(length > 0)] |
+      unique | join(",")
+    ' "$temporary_directory/objects.json")
+    service_accounts=$(jq -rn \
+      --arg mounted "$mounted_service_accounts" \
+      --arg direct "$direct_service_accounts" '
+        [$mounted, $direct] | map(split(",")) | add |
+        map(select(length > 0)) | unique | join(",")
+      ')
     if [[ -z "$service_accounts" ]]; then
       case "$role" in
         image-admission|internal-rpc-authority-image-admission)
@@ -394,6 +459,7 @@ HCL
 
   cat >"$temporary_directory/internal-rpc-authority-restore-controller-vso.hcl" <<'HCL'
 path "kv/data/internal-rpc-authority/restore-controller/postgres" { capabilities = ["read"] }
+path "kv/data/internal-rpc-authority/restore/trust" { capabilities = ["read"] }
 HCL
   vault_input "$temporary_directory/internal-rpc-authority-restore-controller-vso.hcl" \
     policy write internal-rpc-authority-restore-controller-vso - >/dev/null
@@ -407,6 +473,8 @@ fi
 
 if [[ "$mode" == configure-database ]]; then
   require_root_material
+  [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
+    fail 'release render is required for database configuration'
   kubectl -n mattercodex-system wait --for=condition=Ready pod/mattercodex-postgresql-0 --timeout=300s >/dev/null
   database_password_file="$material_directory/postgresql/password"
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
@@ -452,9 +520,14 @@ HCL
   done
 
   database_connection="postgresql://postgres:$(jq -rn --arg value "$database_password" '$value|@uri')@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
-  jq -cn --arg connection "$database_connection" --arg password_policy "$database_password_policy" '{
+  write_target_database_registry "$temporary_directory/target-database-registry.json"
+  target_database_roles=$(jq -r '[.[].role] | sort | join(",")' \
+    "$temporary_directory/target-database-registry.json")
+  [[ -n "$target_database_roles" ]] || fail 'target database roles are absent'
+  jq -cn --arg connection "$database_connection" --arg password_policy "$database_password_policy" \
+    --arg target_roles "$target_database_roles" '{
     plugin_name:"postgresql-database-plugin",
-    allowed_roles:"control-plane-migrator,control-plane-runtime-g1,internal-rpc-authority-migrator,internal-rpc-authority-publisher-g3,internal-rpc-authority-publisher-g4,internal-rpc-authority-publisher-g5,internal-rpc-authority-readback-attestor-g3,internal-rpc-authority-readback-attestor-g4,internal-rpc-authority-readback-attestor-g5",
+    allowed_roles:("control-plane-migrator,control-plane-runtime-g1,internal-rpc-authority-migrator,internal-rpc-authority-publisher-g3,internal-rpc-authority-publisher-g4,internal-rpc-authority-publisher-g5,internal-rpc-authority-readback-attestor-g3,internal-rpc-authority-readback-attestor-g4,internal-rpc-authority-readback-attestor-g5," + $target_roles),
     connection_url:$connection,
     password_policy:$password_policy
   }' >"$temporary_directory/database-config.json"
@@ -513,6 +586,8 @@ fi
 
 if [[ "$mode" == configure-database-runtime ]]; then
   require_root_material
+  [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
+    fail 'release render is required for runtime database configuration'
   kubectl -n mattercodex-system wait --for=condition=Complete \
     job/internal-rpc-authority-migrate --timeout=300s >/dev/null
   database_password_file="$material_directory/postgresql/password"
@@ -580,6 +655,19 @@ if [[ "$mode" == configure-database-runtime ]]; then
       jq -e --arg username "$principal" '.data.username == $username and (.data.password | length) >= 48' \
       >/dev/null || fail "database static credential readback failed: $role_name"
   done
+  write_target_database_registry "$temporary_directory/target-database-registry.json"
+  while IFS=$'\t' read -r role_name principal; do
+    [[ -n "$role_name" && -n "$principal" ]] ||
+      fail 'target database role mapping is incomplete'
+    vault_cli write "database/static-roles/$role_name" \
+      db_name=mattercodex-postgresql username="$principal" rotation_period=1h >/dev/null
+    vault_cli write -f "database/rotate-role/$role_name" >/dev/null
+    vault_cli read -format=json "database/static-creds/$role_name" |
+      jq -e --arg username "$principal" \
+        '.data.username == $username and (.data.password | length) >= 48' \
+      >/dev/null || fail "target database static credential readback failed: $role_name"
+  done < <(jq -r '.[] | [.role,.principal] | @tsv' \
+    "$temporary_directory/target-database-registry.json")
 fi
 
 if [[ "$mode" == configure-image-pki ]]; then

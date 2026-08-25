@@ -1,0 +1,363 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-role-image-builder-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-role-image-builder-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-role-image-builder-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-role-image-builder-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-role-image-builder
+    serviceAccount: role-image-builder
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-role-image-builder-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-role-image-builder-database
+  mount: database
+  path: static-creds/role-image-builder-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: role-image-builder}
+  destination:
+    create: true
+    name: internal-rpc-authority-role-image-builder-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-image-admission-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-image-admission-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-image-admission-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-image-admission-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-image-admission
+    serviceAccount: image-admission
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-image-admission-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-image-admission-database
+  mount: database
+  path: static-creds/image-admission-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  destination:
+    create: true
+    name: internal-rpc-authority-image-admission-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-image-promotion-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-image-promotion-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-image-promotion-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-image-promotion-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-image-promotion
+    serviceAccount: image-promotion
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-image-promotion-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-image-promotion-database
+  mount: database
+  path: static-creds/image-promotion-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  destination:
+    create: true
+    name: internal-rpc-authority-image-promotion-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-automation-scheduler-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-automation-scheduler-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-automation-scheduler-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-automation-scheduler-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-automation-scheduler
+    serviceAccount: automation-scheduler
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-automation-scheduler-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-automation-scheduler-database
+  mount: database
+  path: static-creds/automation-scheduler-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: automation-scheduler}
+  destination:
+    create: true
+    name: internal-rpc-authority-automation-scheduler-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-control-api-gateway-issuer-postgresql
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: database
+  path: static-creds/control-api-gateway-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: internal-rpc-authority-control-api-gateway-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-control-plane-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-control-plane-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-control-plane-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-control-plane-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-control-plane
+    serviceAccount: control-plane
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-control-plane-verifier-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-control-plane-database
+  mount: database
+  path: static-creds/control-plane-verifier-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-plane}
+  destination:
+    create: true
+    name: internal-rpc-authority-control-plane-verifier-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-integration-gateway-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-integration-gateway-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-integration-gateway-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-integration-gateway-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-integration-gateway
+    serviceAccount: integration-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-integration-gateway-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-integration-gateway-database
+  mount: database
+  path: static-creds/integration-gateway-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: integration-gateway}
+  destination:
+    create: true
+    name: internal-rpc-authority-integration-gateway-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: internal-rpc-authority-runtime-controller-database
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: internal-rpc-authority-runtime-controller-workload-tls
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: internal-rpc-authority-runtime-controller-database
+spec:
+  vaultConnectionRef: internal-rpc-authority-runtime-controller-database
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: internal-rpc-authority-runtime-controller
+    serviceAccount: runtime-controller
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  name: internal-rpc-authority-runtime-controller-issuer-postgresql
+spec:
+  vaultAuthRef: internal-rpc-authority-runtime-controller-database
+  mount: database
+  path: static-creds/runtime-controller-issuer-g1
+  allowStaticCreds: true
+  refreshAfter: 1m
+  revoke: false
+  rolloutRestartTargets:
+    - {kind: Deployment, name: runtime-controller}
+  destination:
+    create: true
+    name: internal-rpc-authority-runtime-controller-issuer-postgresql
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        username: {text: '{{ get .Secrets "username" }}'}
+        dsn:
+          text: >-
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem

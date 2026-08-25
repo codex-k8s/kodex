@@ -356,6 +356,25 @@ wait_vault_static_secrets() {
   done < <(yq -N -r 'select(.kind == "VaultStaticSecret") | .metadata.name' "$render_file" | sort -u)
 }
 
+wait_vault_dynamic_secrets() {
+  local resource_name destination_name
+  while IFS=$'\t' read -r resource_name destination_name; do
+    [[ -n "$resource_name" && -n "$destination_name" ]] || continue
+    kubectl -n "$namespace" wait --for=condition=Ready \
+      "vaultdynamicsecrets.secrets.hashicorp.com/$resource_name" --timeout=5m >/dev/null ||
+      fail "VaultDynamicSecret is not ready: $resource_name"
+    kubectl -n "$namespace" get secret "$destination_name" -o json | jq -e '
+      .type == "Opaque" and
+      (.data | keys | sort) == ["dsn", "username"] and
+      (.data.dsn | type == "string" and length > 0) and
+      (.data.username | type == "string" and length > 0)
+    ' >/dev/null || fail "VaultDynamicSecret destination readback failed: $destination_name"
+  done < <(yq -N -r '
+    select(.kind == "VaultDynamicSecret") |
+    [.metadata.name,.spec.destination.name] | @tsv
+  ' "$render_file" | sort -u)
+}
+
 wait_trust_material() {
   local allow_deferred_restore_secret=${1:-false}
   local resource_name
@@ -456,7 +475,7 @@ if [[ "$mode" == apply-state ]]; then
   wait_statefulset mattercodex-postgresql
   wait_statefulset mattercodex-nats
   "$vault_bootstrap" --context "$expected_context" --mode configure-database \
-    --material-directory "$material_directory"
+    --material-directory "$material_directory" --render "$render_file"
 fi
 
 if [[ "$mode" == apply-migrations ]]; then
@@ -464,7 +483,8 @@ if [[ "$mode" == apply-migrations ]]; then
   wait_statefulset mattercodex-nats
   apply_job internal-rpc-authority-migrate
   "$vault_bootstrap" --context "$expected_context" --mode configure-database-runtime \
-    --material-directory "$material_directory"
+    --material-directory "$material_directory" --render "$render_file"
+  wait_vault_dynamic_secrets
   apply_restore_controller_database_secret
   apply_job control-plane-migrate
   apply_job control-plane-broker-bootstrap
@@ -477,6 +497,7 @@ if [[ "$mode" == apply-workloads ]]; then
   done
   ensure_restore_evidence_anchor
   require_authority_bootstrap_roots
+  wait_vault_dynamic_secrets
   rotate_release_immutable_resources
   apply_filter workloads '
     select(.kind != "Job" and
@@ -515,6 +536,7 @@ if [[ "$mode" == readback ]]; then
   ensure_restore_evidence_anchor
   require_authority_bootstrap_roots
   wait_trust_material
+  wait_vault_dynamic_secrets
   while IFS=$'\t' read -r kind name; do
     [[ -n "$kind" && -n "$name" ]] || continue
     case "$kind" in
