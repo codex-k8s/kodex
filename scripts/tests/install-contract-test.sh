@@ -58,7 +58,8 @@ jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
   ([.secrets[].name] | length == (unique | length)) and
   all(.secrets[]; (.items | type == "array" and length > 0) and
-    ([.items[].key] | length == (unique | length)))
+    ([.items[].key] | length == (unique | length)) and
+    all(.items[]; ((.required // true) | type == "boolean")))
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'secret projection registry contract is invalid'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
@@ -70,6 +71,14 @@ jq -e '
 		any(.items[]; .key == "issuance_directive_jti"))] | length) > 0
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
 	fail 'authority bootstrap and runtime projection phases are not represented'
+jq -n -e '
+	def valid($required; $allowed; $actual):
+		(($required - $actual) | length == 0) and
+		(($actual - $allowed) | length == 0);
+	valid(["current"]; ["current","previous"]; ["current"]) and
+	(valid(["current"]; ["current","previous"]; ["previous"]) | not) and
+	(valid(["current"]; ["current","previous"]; ["current","unknown"]) | not)
+' >/dev/null || fail 'dynamic Secret required and allowed key-set contract is invalid'
 publisher_apply_line=$(grep -nE '^[[:space:]]+apply_render authority-publisher ' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 bootstrap_wait_line=$(grep -nE '^[[:space:]]+wait_authority_projections bootstrap$' \
