@@ -50,6 +50,17 @@ done
 bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
   "$repository_root/tools/deploy/materialize-identity-secrets.sh"
 
+material_assignment_line=$(grep -n '^material_directory=' "$repository_root/install.sh" | cut -d: -f1)
+registry_credentials_guard_line=$(grep -n \
+  '^if ! component_selected registry && any_component_selected secrets platform &&$' \
+  "$repository_root/install.sh" | cut -d: -f1)
+[[ -n "$material_assignment_line" && -n "$registry_credentials_guard_line" &&
+  "$material_assignment_line" -lt "$registry_credentials_guard_line" ]] ||
+  fail 'existing installation material is not resolved before registry credential validation'
+sed -n "$((registry_credentials_guard_line + 1))p" "$repository_root/install.sh" |
+  grep -Fq '[[ ! -e "$material_directory" ]]' ||
+  fail 'existing installation material does not bypass duplicate registry credential input'
+
 rg -n 'Vault|SecretProviderClass|secrets-store\.csi' \
   "$repository_root/install.sh" "$repository_root/tools/install" \
   --glob '!deploy-platform.sh' >/dev/null &&

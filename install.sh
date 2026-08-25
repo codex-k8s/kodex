@@ -83,6 +83,8 @@ any_component_selected() {
   done
   return 1
 }
+material_directory=${KODEX_MATERIAL_DIRECTORY:-$repository_root/.kodex-material}
+[[ "$material_directory" == /* ]] || material_directory="$repository_root/$material_directory"
 if component_selected host && [[ "$KODEX_INSTALL_MODE" != bare-metal ]]; then
   fail 'host component is available only in bare-metal mode'
 fi
@@ -134,7 +136,8 @@ if component_selected secrets; then
   [[ -n "${KODEX_OPENAI_AUTH_JSON_B64:-}" || -n "${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]] ||
     fail 'KODEX_OPENAI_AUTH_JSON_B64 or KODEX_OPENAI_AUTH_JSON_FILE is required'
 fi
-if ! component_selected registry && any_component_selected secrets platform; then
+if ! component_selected registry && any_component_selected secrets platform &&
+  [[ ! -e "$material_directory" ]]; then
   kodex_require_env KODEX_RELEASE_REGISTRY_USERNAME KODEX_RELEASE_REGISTRY_PASSWORD || exit 1
 fi
 if [[ "${KODEX_ENABLE_EXTERNAL_S3:-false}" == true ]]; then
@@ -155,8 +158,6 @@ kubectl config use-context "$KODEX_KUBE_CONTEXT" >/dev/null
 [[ "$(kubectl config current-context)" == "$KODEX_KUBE_CONTEXT" ]] || fail 'Kubernetes context mismatch'
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 
-material_directory=${KODEX_MATERIAL_DIRECTORY:-$repository_root/.kodex-material}
-[[ "$material_directory" == /* ]] || material_directory="$repository_root/$material_directory"
 installer_temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$installer_temporary_directory"' EXIT
 ensure_core_material() {
