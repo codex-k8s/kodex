@@ -62,6 +62,32 @@ missing_secrets=$(comm -23 "$secret_references" "$secret_producers")
 [[ -z "$missing_secrets" ]] ||
   fail "release references Kubernetes Secrets without a producer: ${missing_secrets//$'\n'/,}"
 
+postgres_clients="$temporary_directory/postgres-clients"
+postgres_allowed_clients="$temporary_directory/postgres-allowed-clients"
+yq -o=json -I=0 '.' "$render" | jq -sr '
+  .[] |
+  if .kind == "CronJob" then .spec.jobTemplate.spec.template
+  elif (.kind == "Deployment" or .kind == "StatefulSet" or
+    .kind == "DaemonSet" or .kind == "Job") then .spec.template
+  else empty end as $template |
+  select(any($template.spec.containers[]?.env[]?;
+    (.name // "") | test("POSTGRES.*DSN_FILE$"))) |
+  $template.metadata.labels["app.kubernetes.io/name"]
+' | sort -u >"$postgres_clients"
+yq -o=json -I=0 '.' "$render" | jq -sr '
+  .[] |
+  select(.kind == "NetworkPolicy" and
+    .metadata.name == "platform-postgresql-exact-clients") |
+  .spec.ingress[].from[].podSelector.matchExpressions[] |
+  select(.key == "app.kubernetes.io/name" and .operator == "In") |
+  .values[]
+' | sort -u >"$postgres_allowed_clients"
+missing_postgres_clients=$(comm -23 "$postgres_clients" "$postgres_allowed_clients")
+[[ -z "$missing_postgres_clients" ]] ||
+  fail "PostgreSQL DSN consumers are denied by NetworkPolicy: ${missing_postgres_clients//$'\n'/,}"
+grep -Fxq kodex-postgresql-runtime-credentials "$postgres_allowed_clients" ||
+  fail 'PostgreSQL credential reconciler is denied by NetworkPolicy'
+
 for script in "$repository_root/install.sh" "$repository_root/tools/install"/*.sh; do
   bash -n "$script"
 done

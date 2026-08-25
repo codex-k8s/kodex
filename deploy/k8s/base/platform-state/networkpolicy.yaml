@@ -14,9 +14,18 @@ spec:
               - key: app.kubernetes.io/name
                 operator: In
                 values:
+                  - automation-scheduler
+                  - control-api-gateway
                   - control-plane
+                  - integration-gateway
                   - internal-rpc-authority
+                  - internal-rpc-authority-publisher
+                  - internal-rpc-authority-readback-attestor
+                  - internal-rpc-authority-restore-controller
+                  - internal-rpc-authority-restore-recovery
                   - kodex-postgresql-runtime-credentials
+                  - role-image-builder
+                  - runtime-controller
       ports:
         - protocol: TCP
           port: 5432
