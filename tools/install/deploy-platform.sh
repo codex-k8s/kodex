@@ -202,7 +202,9 @@ reconcile_image_admission_policy_parameters() {
   [[ -n "$expected" ]] || fail 'image admission policy parameters are absent from render'
   current_spec=$(jq -S -c '.spec' <<<"$current")
   expected_spec=$(jq -S -c '.spec' <<<"$expected")
-  [[ "$current_spec" != "$expected_spec" ]] || return
+  if [[ "$current_spec" == "$expected_spec" ]]; then
+    return 0
+  fi
   jq -e '
     .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
     .metadata.labels["kodex.dev/owner-intent"] == "true"
