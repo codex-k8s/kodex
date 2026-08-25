@@ -273,8 +273,10 @@ if [[ "$mode" == defer-public-tls ]]; then
 fi
 
 wait_authority_projections() {
-  local name expected_keys deadline actual
-  while IFS=$'\t' read -r name expected_keys; do
+	local phase=${1:-all} name expected_keys deadline actual
+	[[ "$phase" == bootstrap || "$phase" == all ]] ||
+		fail "authority projection phase is invalid: $phase"
+	while IFS=$'\t' read -r name expected_keys; do
     [[ -n "$name" ]] || continue
     deadline=$((SECONDS + 600))
     while ((SECONDS < deadline)); do
@@ -290,8 +292,12 @@ wait_authority_projections() {
       sleep 2
     done
     ((SECONDS < deadline)) || fail "authority Secret projection is not ready: $name"
-  done < <(jq -r '.secrets[] | select(.dynamic == true) |
-    [.name,([.items[].key] | sort | @json)] | @tsv' "$projection_registry")
+	done < <(jq -r --arg phase "$phase" '
+		.secrets[] |
+		select(.dynamic == true) |
+		select($phase == "all" or
+			(any(.items[]; .key == "issuance_directive_jti") | not)) |
+		[.name,([.items[].key] | sort | @json)] | @tsv' "$projection_registry")
 }
 
 wait_workloads() {
@@ -376,15 +382,14 @@ if [[ "$mode" == apply ]]; then
   apply_job kodex-postgresql-runtime-credentials
   apply_job control-plane-broker-bootstrap
 
-  apply_render authority-publisher '
-    select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
-  '
-  kubectl --context "$context" -n "$namespace" rollout status \
-    deployment/internal-rpc-authority-publisher --timeout=15m >/dev/null ||
-    fail 'internal RPC authority publisher rollout failed'
-  wait_authority_projections
+	apply_render authority-publisher '
+		select(.kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher")
+	'
+	# Publisher materializes bootstrap keys before it can become Ready: full
+	# readiness requires readbacks from workloads applied in the next phase.
+	wait_authority_projections bootstrap
 
-  apply_render workloads '
+	apply_render workloads '
     select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "CronJob")
   '
   for dependency in egress-gateway kodex-image-registry-promotion; do
@@ -399,7 +404,7 @@ if [[ "$public_tls_mode" == deferred ]]; then
   verify_public_tls_deferred
 fi
 wait_trust_material
-wait_authority_projections
+wait_authority_projections all
 wait_workloads
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
