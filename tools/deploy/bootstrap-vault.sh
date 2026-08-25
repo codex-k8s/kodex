@@ -121,7 +121,7 @@ write_publisher_runtime_policy() {
   while IFS= read -r path; do
     [[ "$path" =~ ^kv/data/mattercodex/internal-rpc-authority/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$ ]] ||
       fail 'publisher runtime Vault path is outside the authority registry boundary'
-    printf 'path "%s" { capabilities = ["read", "update"] }\n' "$path" >>"$output_file"
+    printf 'path "%s" { capabilities = ["create", "read", "update"] }\n' "$path" >>"$output_file"
     ((path_count += 1))
   done < <(jq -r '
     [

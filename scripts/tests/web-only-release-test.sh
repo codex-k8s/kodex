@@ -72,7 +72,7 @@ for bootstrap_entry in \
   'internal-rpc-authority-database-credential-reconciler-runtime' \
   'internal-rpc-authority-publisher-runtime' \
   'publisher runtime Vault path is outside the authority registry boundary' \
-  'capabilities = ["read", "update"]' \
+  'capabilities = ["create", "read", "update"]' \
   'Vault publisher runtime policy readback failed' \
   'database/static-creds/internal-rpc-authority-publisher-g4' \
   'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
