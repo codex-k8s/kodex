@@ -37,9 +37,15 @@ kodex_require_env KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG \
   fail 'the current release supports the isolated kodex-system namespace only'
 KODEX_INGRESS_SERVICE_NAME=${KODEX_INGRESS_SERVICE_NAME:-${KODEX_INGRESS_POD_NAME:-}}
 KODEX_PUBLIC_TLS_MODE=${KODEX_PUBLIC_TLS_MODE:-enabled}
-export KODEX_INGRESS_SERVICE_NAME KODEX_PUBLIC_TLS_MODE
+KODEX_DISABLE_OBSERVABILITY=${KODEX_DISABLE_OBSERVABILITY:-true}
+export KODEX_INGRESS_SERVICE_NAME KODEX_PUBLIC_TLS_MODE KODEX_DISABLE_OBSERVABILITY
 [[ "$KODEX_PUBLIC_TLS_MODE" == deferred || "$KODEX_PUBLIC_TLS_MODE" == enabled ]] ||
   fail 'KODEX_PUBLIC_TLS_MODE must be deferred or enabled'
+[[ "$KODEX_DISABLE_OBSERVABILITY" == true || "$KODEX_DISABLE_OBSERVABILITY" == false ]] ||
+  fail 'KODEX_DISABLE_OBSERVABILITY must be true or false'
+if [[ "$KODEX_DISABLE_OBSERVABILITY" == false && -z "${KODEX_SENTRY_DSN:-}" ]]; then
+  fail 'KODEX_SENTRY_DSN is required when external observability exporters are enabled'
+fi
 
 all_components=(host cert-manager identity trust management registry arc secrets platform)
 if [[ -z "$components" ]]; then

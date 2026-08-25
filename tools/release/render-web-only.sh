@@ -286,8 +286,6 @@ if [[ "$disable_observability" == true ]]; then
       )
     )
   ' "$rendered"
-  yq -i 'select(.kind != "PodMonitor" and .kind != "ServiceMonitor" and .kind != "PrometheusRule")' \
-    "$rendered"
 fi
 
 INGRESS_CLASS="$ingress_class" \
