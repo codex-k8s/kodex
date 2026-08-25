@@ -401,7 +401,8 @@ fi
 
 if component_selected platform; then
   "$repository_root/tools/install/release-platform.sh" --context "$KODEX_KUBE_CONTEXT" \
-    --owner-pat-file "$material_directory/inputs/github-owner-pat" --profile web-only \
+    --owner-pat-file "$material_directory/inputs/github-owner-pat" \
+    --workflow-sha-file "$workflow_sha_file" --profile web-only \
     --public-tls-mode "$KODEX_PUBLIC_TLS_MODE"
 fi
 
