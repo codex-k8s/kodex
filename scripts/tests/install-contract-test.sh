@@ -41,6 +41,7 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/configure-github.sh tools/install/configure-node-registry.sh \
   tools/install/deploy-platform.sh tools/install/generate-material.sh \
   tools/install/materialize-secrets.sh tools/install/prepare-host.sh \
+  tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/write-env-file.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
@@ -175,6 +176,40 @@ for registry_pull_contract in \
   '"$output_directory/registry/pull/dockerconfig.json.next"'; do
   rg -Fq -- "$registry_pull_contract" "$repository_root/tools/install/generate-material.sh" ||
     fail "pull Docker config alias contract is absent: $registry_pull_contract"
+done
+pull_material="$temporary_directory/pull-material"
+mkdir -p \
+  "$pull_material/registry/pull" \
+  "$pull_material/material/kodex/image-registry/pull" \
+  "$pull_material/projections/kodex-image-registry-pull"
+jq -n '{auths:{"kodex-image-registry.kodex-system.svc.cluster.local:5000":{auth:"test-auth"}}}' \
+  >"$pull_material/registry/pull/dockerconfig.json"
+for target in \
+  "$pull_material/material/kodex/image-registry/pull/dockerconfigjson" \
+  "$pull_material/projections/kodex-image-registry-pull/pull-dockerconfigjson" \
+  "$pull_material/projections/kodex-image-registry-pull/probe-dockerconfig.json"; do
+  install -m 0600 "$pull_material/registry/pull/dockerconfig.json" "$target"
+done
+"$repository_root/tools/install/reconcile-pull-docker-config.sh" \
+  --material-directory "$pull_material" --promoted-pull-host images.example.com >/dev/null
+pull_sha256=$(sha256sum "$pull_material/registry/pull/dockerconfig.json" | awk '{print $1}')
+jq -e '
+  (.auths | keys | sort) == [
+    "images.example.com",
+    "kodex-image-registry.kodex-system.svc.cluster.local:5000"
+  ] and ([.auths[].auth] | unique) == ["test-auth"]
+' "$pull_material/registry/pull/dockerconfig.json" >/dev/null ||
+  fail 'existing pull Docker config was not canonicalized'
+"$repository_root/tools/install/reconcile-pull-docker-config.sh" \
+  --material-directory "$pull_material" --promoted-pull-host images.example.com >/dev/null
+[[ "$(sha256sum "$pull_material/registry/pull/dockerconfig.json" | awk '{print $1}')" == "$pull_sha256" ]] ||
+  fail 'pull Docker config reconciliation is not idempotent'
+for target in \
+  "$pull_material/material/kodex/image-registry/pull/dockerconfigjson" \
+  "$pull_material/projections/kodex-image-registry-pull/pull-dockerconfigjson" \
+  "$pull_material/projections/kodex-image-registry-pull/probe-dockerconfig.json"; do
+  [[ "$(sha256sum "$target" | awk '{print $1}')" == "$pull_sha256" ]] ||
+    fail 'pull Docker config copies disagree after reconciliation'
 done
 if rg -Fq 'select(.kind != "PodMonitor" and .kind != "ServiceMonitor" and .kind != "PrometheusRule")' \
   "$repository_root/tools/release/render-web-only.sh"; then
