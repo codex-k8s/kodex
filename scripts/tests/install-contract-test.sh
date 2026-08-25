@@ -66,6 +66,8 @@ fi
 grep -Fq 'repos/$repository/actions/variables/$name' \
   "$repository_root/tools/install/configure-github.sh" ||
   fail 'GitHub variable readback does not use the repository REST endpoint'
+grep -Fq 'while ((attempt <= 15))' "$repository_root/tools/install/configure-github.sh" ||
+  fail 'GitHub variable readback does not have a bounded retry budget'
 
 for firewall_contract in \
   'systemctl disable --now nftables' \
