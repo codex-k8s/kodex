@@ -60,6 +60,12 @@ jq -e '
   fail 'secret projection registry contract is invalid'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||
   fail 'dynamic Secret readback does not use the projection item registry'
+if rg -Fq 'gh variable get' "$repository_root/tools/install/configure-github.sh"; then
+  fail 'GitHub variable readback relies on an unsupported gh subcommand'
+fi
+grep -Fq 'repos/$repository/actions/variables/$name' \
+  "$repository_root/tools/install/configure-github.sh" ||
+  fail 'GitHub variable readback does not use the repository REST endpoint'
 
 for firewall_contract in \
   'systemctl disable --now nftables' \

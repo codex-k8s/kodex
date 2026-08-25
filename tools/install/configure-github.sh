@@ -80,12 +80,17 @@ api_endpoint_ports=$(kubectl --context "$context" -n default get endpoints kuber
   [.subsets[]?.ports[]?.port | tostring] | unique | sort | select(length > 0) | join(",")
 ')
 
+get_variable_value() {
+  local name=$1
+  gh api "repos/$repository/actions/variables/$name" --jq '.value'
+}
+
 set_variable() {
   local name=$1 value=$2
   if [[ "$mode" == apply ]]; then
     gh variable set "$name" --repo "$repository" --body "$value"
   fi
-  [[ "$(gh variable get "$name" --repo "$repository")" == "$value" ]] ||
+  [[ "$(get_variable_value "$name")" == "$value" ]] ||
     fail "GitHub variable readback mismatch: $name"
 }
 
@@ -115,7 +120,7 @@ set_variable KODEX_OIDC_TARGET_PORT "$KODEX_OIDC_TARGET_PORT"
 set_variable KODEX_DISABLE_OBSERVABILITY "${KODEX_DISABLE_OBSERVABILITY:-false}"
 if [[ -n "${KODEX_MATTERMOST_HOST:-}" ]]; then
   set_variable KODEX_MATTERMOST_HOST "$KODEX_MATTERMOST_HOST"
-elif gh variable get KODEX_MATTERMOST_HOST --repo "$repository" >/dev/null 2>&1; then
+elif get_variable_value KODEX_MATTERMOST_HOST >/dev/null 2>&1; then
   if [[ "$mode" == apply ]]; then
     gh variable delete KODEX_MATTERMOST_HOST --repo "$repository"
   else
@@ -123,7 +128,7 @@ elif gh variable get KODEX_MATTERMOST_HOST --repo "$repository" >/dev/null 2>&1;
   fi
 fi
 if [[ -z "${KODEX_MATTERMOST_HOST:-}" ]] &&
-  gh variable get KODEX_MATTERMOST_HOST --repo "$repository" >/dev/null 2>&1; then
+  get_variable_value KODEX_MATTERMOST_HOST >/dev/null 2>&1; then
   fail 'retired Mattermost variable deletion readback failed'
 fi
 
