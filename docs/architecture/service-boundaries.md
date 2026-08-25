@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.9
-updated: 2026-08-24
+version: 1.3.0
+updated: 2026-08-25
 ---
 
 # Границы сервисов и структура репозитория
@@ -67,6 +67,21 @@ runbook и ручная проверка входят в один Issue и од�
 Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
 search projection и UI не читают БД другого компонента и не изменяют его
 состояние напрямую.
+
+### Будущая package/application boundary
+
+Модель `ARCH-MC-012` относится к `POST-MVP` и не добавляет package-компонент в
+текущий реестр или профиль развертывания. Будущий package catalog владеет
+источниками, пакетами, версиями, manifest и desired state установок, но не
+исполняет workloads и не хранит значения секретов.
+
+`control-plane` остаётся владельцем actor/scope resolution, permissions, Human
+Gate, grants и общего audit/outbox. `runtime-controller` материализует только
+одобренный immutable runtime plan. `integration-gateway` исполняет
+типизированные внешние effects и изолирует credentials. Store adapter только
+синхронизирует внешний индекс в локальный каталог. Такое разделение действует
+независимо от того, будет package catalog отдельным сервисом или модулем
+`control-plane`.
 
 `egress-gateway` материализует переиспользуемую сетевую границу в
 `services/external/egress-gateway` и `deploy/k8s/base/egress-gateway`. Он

@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-23
+version: 1.3.0
+updated: 2026-08-25
 ---
 
 # Карта интеграций
@@ -88,6 +88,13 @@ spec:
 Декларативные MCP definitions дополняются разделением организаций,
 авторизацией, typed grants, аудитом и server-owned Human Gates, доступными в
 Control Center независимо от interaction adapters.
+
+В MVP встроенные `IntegrationDefinition` остаются частью bootstrap catalog и не
+зависят от магазина пакетов. В будущей модели `ARCH-MC-012` пакет приложения
+может доставить одну или несколько definitions как типизированную capability.
+Установка такого пакета не создаёт `IntegrationConnection`, не заполняет
+секреты и не выдаёт grant автоматически: connection lifecycle, проверка
+capability и исполнение effect остаются в существующей интеграционной границе.
 
 ## Карта внешних систем
 
