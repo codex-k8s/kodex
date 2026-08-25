@@ -1,34 +1,34 @@
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: mattercodex-release-registry-auth
+  name: kodex-release-registry-auth
 spec:
   basicAuth:
-    secret: mattercodex-release-registry-auth
+    secret: kodex-release-registry-auth
     removeHeader: true
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mattercodex-release-registry
+  name: kodex-release-registry
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.middlewares: matter-kodex-prod-mattercodex-release-registry-auth@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: matter-kodex-prod-kodex-release-registry-auth@kubernetescrd
     traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_REGISTRY_HOST__]
-      secretName: mattercodex-release-registry-tls
+    - hosts: [__KODEX_REGISTRY_HOST__]
+      secretName: kodex-release-registry-tls
   rules:
-    - host: __MATTERCODEX_REGISTRY_HOST__
+    - host: __KODEX_REGISTRY_HOST__
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: matter-codex-registry
+                name: kodex-registry
                 port: {name: registry}

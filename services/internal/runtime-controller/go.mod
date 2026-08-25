@@ -1,14 +1,14 @@
-module github.com/codex-k8s/matter-codex/services/internal/runtime-controller
+module github.com/codex-k8s/kodex/services/internal/runtime-controller
 
 go 1.26.6
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/runtimecontract v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
@@ -21,9 +21,9 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
@@ -78,22 +78,22 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
+replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 
-replace github.com/codex-k8s/matter-codex/libs/go/eventing => ../../../libs/go/eventing
+replace github.com/codex-k8s/kodex/libs/go/eventing => ../../../libs/go/eventing
 
-replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
+replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/httpserver => ../../../libs/go/httpserver
+replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
+replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 
-replace github.com/codex-k8s/matter-codex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 
-replace github.com/codex-k8s/matter-codex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile

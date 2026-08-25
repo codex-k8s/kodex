@@ -36,8 +36,8 @@ validate_image() {
   local digest="${value##*@sha256:}"
   [[ "$digest" =~ ^[0-9a-f]{64}$ && "$digest" != "$(printf '0%.0s' {1..64})" ]] || fail "image digest must be non-zero lowercase sha256"
 }
-validate_image "$controller_image" "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller"
-validate_image "$authority_image" "ghcr.io/codex-k8s/matter-codex/internal-rpc-authority"
+validate_image "$controller_image" "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller"
+validate_image "$authority_image" "ghcr.io/codex-k8s/kodex/internal-rpc-authority"
 [[ "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] && [[ "$registry_pull_host" == *.* ]] &&
   [[ "$registry_pull_host" != *.svc ]] && [[ "$registry_pull_host" != *.svc.cluster.local ]] ||
   fail "registry pull host must be an exact node-reachable DNS name"
@@ -60,11 +60,11 @@ command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "$script_dir/.." && pwd -P)"
 rendered="$(kubectl kustomize "$repo_root/deploy/k8s/overlays/$environment_name/runtime-controller")" || fail "kustomize render failed"
-controller_placeholder="mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:$(printf '0%.0s' {1..64})"
-authority_placeholder="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:$(printf '0%.0s' {1..64})"
+controller_placeholder="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:$(printf '0%.0s' {1..64})"
+authority_placeholder="ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:$(printf '0%.0s' {1..64})"
 [[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 12 ]] || fail "render has an unexpected controller placeholder count"
 [[ "$(grep -Fc "$authority_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected authority placeholder count"
-[[ "$(grep -Fc 'registry-pull-placeholder/mattercodex/roles@sha256:' <<<"$rendered" || true)" == 1 ]] ||
+[[ "$(grep -Fc 'registry-pull-placeholder/kodex/roles@sha256:' <<<"$rendered" || true)" == 1 ]] ||
   fail "render has no exact promoted role repository placeholder"
 registry_pull_pattern=${registry_pull_host//./\\\\\\\\.}
 materialized=$(sed -e "s|$controller_placeholder|$controller_image|g" \
@@ -75,7 +75,7 @@ printf '%s\n' "$materialized"
 
 emit_policy() {
   local name="$1" selector="$2"
-  printf '%s\n' '---' 'apiVersion: networking.k8s.io/v1' 'kind: NetworkPolicy' 'metadata:' "  name: $name" '  namespace: mattercodex-system' 'spec:' '  podSelector:'
+  printf '%s\n' '---' 'apiVersion: networking.k8s.io/v1' 'kind: NetworkPolicy' 'metadata:' "  name: $name" '  namespace: kodex-system' 'spec:' '  podSelector:'
   printf '%s\n' "$selector"
   printf '%s\n' '  policyTypes: [Egress]' '  egress:' '    - to:'
   for cidr in "${api_cidrs[@]}"; do printf '        - ipBlock: {cidr: %s}\n' "$cidr"; done
@@ -88,7 +88,7 @@ emit_policy runtime-controller-kubernetes-api-exact-endpoints '    matchLabels:
       app.kubernetes.io/component: internal-controller'
 emit_policy runtime-controller-workers-kubernetes-api-exact-endpoints '    matchLabels:
       app.kubernetes.io/name: runtime-controller
-      runtime.mattercodex.dev/managed: "true"
+      runtime.kodex.dev/managed: "true"
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In

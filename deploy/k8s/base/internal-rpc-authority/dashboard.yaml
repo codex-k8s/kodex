@@ -18,7 +18,7 @@ data:
           "id": 1,
           "targets": [
             {
-              "expr": "{__name__=~\"mattercodex_internal_rpc_authority_(issuer|verifier|publisher|readback_attestor|restore_controller|database_credential_reconciler)_readiness\",ready=\"true\"}",
+              "expr": "{__name__=~\"kodex_internal_rpc_authority_(issuer|verifier|publisher|readback_attestor|restore_controller|database_credential_reconciler)_readiness\",ready=\"true\"}",
               "legendFormat": "{{pod}} {{__name__}}",
               "refId": "A"
             }
@@ -33,7 +33,7 @@ data:
           "id": 2,
           "targets": [
             {
-              "expr": "sum by (operation, code) (rate({__name__=~\"mattercodex_internal_rpc_authority_.*_grpc_requests_total\"}[5m]))",
+              "expr": "sum by (operation, code) (rate({__name__=~\"kodex_internal_rpc_authority_.*_grpc_requests_total\"}[5m]))",
               "legendFormat": "{{operation}} {{code}}",
               "refId": "A"
             }
@@ -48,7 +48,7 @@ data:
           "id": 3,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (le, operation) (rate({__name__=~\"mattercodex_internal_rpc_authority_.*_grpc_request_duration_seconds_bucket\"}[5m])))",
+              "expr": "histogram_quantile(0.99, sum by (le, operation) (rate({__name__=~\"kodex_internal_rpc_authority_.*_grpc_request_duration_seconds_bucket\"}[5m])))",
               "legendFormat": "{{operation}}",
               "refId": "A"
             }
@@ -58,10 +58,10 @@ data:
         }
       ],
       "schemaVersion": 39,
-      "tags": ["mattercodex", "internal-rpc-authority"],
+      "tags": ["kodex", "internal-rpc-authority"],
       "templating": {"list": []},
       "time": {"from": "now-6h", "to": "now"},
-      "title": "MatterCodex internal RPC authority",
-      "uid": "mattercodex-internal-rpc-authority",
+      "title": "Kodex internal RPC authority",
+      "uid": "kodex-internal-rpc-authority",
       "version": 1
     }

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 func TestBuildPromptNamesOnlyMaterializedInputPaths(t *testing.T) {

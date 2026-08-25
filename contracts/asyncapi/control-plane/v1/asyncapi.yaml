@@ -12,7 +12,7 @@ info:
 defaultContentType: application/json
 servers:
   cluster:
-    host: nats.mattercodex-system.svc:4222
+    host: nats.kodex-system.svc:4222
     protocol: nats
     description: Внутрикластерный NATS JetStream с TLS и workload identity.
 channels:

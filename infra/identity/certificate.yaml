@@ -6,6 +6,6 @@ spec:
   secretName: sso-public-tls
   issuerRef:
     kind: ClusterIssuer
-    name: __MATTERCODEX_CLUSTER_ISSUER__
+    name: __KODEX_CLUSTER_ISSUER__
   dnsNames:
-    - __MATTERCODEX_OIDC_HOST__
+    - __KODEX_OIDC_HOST__

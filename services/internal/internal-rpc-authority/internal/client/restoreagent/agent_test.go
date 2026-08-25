@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

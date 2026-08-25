@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bootstrap
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/control-plane-cli
@@ -41,17 +41,17 @@ spec:
                 name: control-plane-runtime
           env:
             - name: CONTROL_PLANE_NATS_URL
-              value: tls://nats.mattercodex-system.svc:4222
+              value: tls://nats.kodex-system.svc:4222
             - name: CONTROL_PLANE_NATS_TLS_SERVER_NAME
-              value: nats.mattercodex-system.svc.cluster.local
+              value: nats.kodex-system.svc.cluster.local
             - name: CONTROL_PLANE_NATS_CA_FILE
-              value: /var/run/config/mattercodex/control-plane/nats/ca.pem
+              value: /var/run/config/kodex/control-plane/nats/ca.pem
             - name: CONTROL_PLANE_NATS_CREDENTIALS_FILE
-              value: /var/run/secrets/mattercodex/control-plane/nats/user.creds
+              value: /var/run/secrets/kodex/control-plane/nats/user.creds
             - name: CONTROL_PLANE_NATS_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/control-plane/nats-client/tls.crt
+              value: /var/run/secrets/kodex/control-plane/nats-client/tls.crt
             - name: CONTROL_PLANE_NATS_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/control-plane/nats-client/tls.key
+              value: /var/run/secrets/kodex/control-plane/nats-client/tls.key
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "1"
             - name: CONTROL_PLANE_BROKER_BOOTSTRAP_TIMEOUT
@@ -73,13 +73,13 @@ spec:
                 - ALL
           volumeMounts:
             - name: nats-client-tls
-              mountPath: /var/run/secrets/mattercodex/control-plane/nats-client
+              mountPath: /var/run/secrets/kodex/control-plane/nats-client
               readOnly: true
             - name: nats-credential
-              mountPath: /var/run/secrets/mattercodex/control-plane/nats
+              mountPath: /var/run/secrets/kodex/control-plane/nats
               readOnly: true
             - name: nats-ca
-              mountPath: /var/run/config/mattercodex/control-plane/nats
+              mountPath: /var/run/config/kodex/control-plane/nats
               readOnly: true
       volumes:
         - name: nats-client-tls
@@ -94,7 +94,7 @@ spec:
               secretProviderClass: control-plane-nats-bootstrap
         - name: nats-ca
           configMap:
-            name: mattercodex-nats-ca
+            name: kodex-nats-ca
             defaultMode: 0440
             items:
               - key: ca.pem

@@ -76,8 +76,8 @@ sed -e "s|$placeholder_key_id|$handoff_key_id|g" -e "s|$placeholder_public_key|$
 emit_policy() {
   local name="$1" destination="$2" ports="$3"
   printf '%s\n' '---' 'apiVersion: networking.k8s.io/v1' 'kind: NetworkPolicy' 'metadata:' "  name: $name" \
-    '  namespace: mattercodex-system' 'spec:' '  podSelector:' '    matchLabels:' \
-    '      app.kubernetes.io/component: role-runtime' '      runtime.mattercodex.dev/managed: "true"' \
+    '  namespace: kodex-system' 'spec:' '  podSelector:' '    matchLabels:' \
+    '      app.kubernetes.io/component: role-runtime' '      runtime.kodex.dev/managed: "true"' \
     '  policyTypes: [Egress]' '  egress:' '    - to:'
   for cidr in $destination; do printf '        - ipBlock: {cidr: %s}\n' "$cidr"; done
   printf '%s\n' '      ports:'

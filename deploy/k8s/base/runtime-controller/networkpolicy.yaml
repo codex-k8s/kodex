@@ -28,7 +28,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: agent-runner
               app.kubernetes.io/component: role-runtime
-              runtime.mattercodex.dev/managed: "true"
+              runtime.kodex.dev/managed: "true"
       ports: [{protocol: TCP, port: 8444}]
   egress:
     - to:
@@ -38,7 +38,7 @@ spec:
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}}]
       ports: [{protocol: TCP, port: 8443}]
     - to:
-        - ipBlock: {cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__}
+        - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
       ports: [{protocol: TCP, port: 443}]
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
@@ -57,7 +57,7 @@ spec:
     matchLabels:
       app.kubernetes.io/name: agent-runner
       app.kubernetes.io/component: role-runtime
-      runtime.mattercodex.dev/managed: "true"
+      runtime.kodex.dev/managed: "true"
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:

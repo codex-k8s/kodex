@@ -1,5 +1,5 @@
 // Package oidcidentity приводит идентификаторы стандартных OIDC-провайдеров
-// к внутреннему UUID-представлению MatterCodex.
+// к внутреннему UUID-представлению Kodex.
 package oidcidentity
 
 import (

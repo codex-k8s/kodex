@@ -15,8 +15,8 @@ import (
 	"regexp"
 	"strings"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	controlclient "github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/clients/controlplane"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	controlclient "github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/controlplane"
 )
 
 var (
@@ -25,8 +25,8 @@ var (
 )
 
 const (
-	provenanceBindingSchema = "mattercodex.dev/image-provenance-binding/v1"
-	expectedBuilderID       = "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder"
+	provenanceBindingSchema = "kodex.dev/image-provenance-binding/v1"
+	expectedBuilderID       = "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder"
 	expectedBuildType       = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
 )
 
@@ -115,7 +115,7 @@ func (executor *Executor) Check(ctx context.Context) error {
 		return ErrBuildKit
 	}
 	defer os.RemoveAll(root)
-	dockerfile := []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s\nRUN [\"/bin/sh\",\"-c\",\"test -x /usr/local/bin/mattercodex-init && test -x /usr/local/bin/matter-codex-agent-runner\"]\n",
+	dockerfile := []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s\nRUN [\"/bin/sh\",\"-c\",\"test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner\"]\n",
 		executor.config.FrontendRepository, executor.config.ExpectedFrontendSHA256,
 		executor.config.TrustedRoleBaseRepository, executor.config.TrustedRoleBaseDigest))
 	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), dockerfile, 0o600); err != nil {
@@ -214,19 +214,19 @@ func (executor *Executor) Build(
 		"--tlscert", executor.config.CertificateFile, "--tlskey", executor.config.PrivateKeyFile,
 		"--tlsservername", executor.config.TLSServerName, "build", "--frontend", "dockerfile.v0",
 		"--local", "context=" + prepared.contextDirectory, "--local", "dockerfile=" + prepared.dockerfile,
-		"--local", "mattercodex-install=" + prepared.installation,
-		"--opt", "context:mattercodex-install=local:mattercodex-install",
+		"--local", "kodex-install=" + prepared.installation,
+		"--opt", "context:kodex-install=local:kodex-install",
 		"--opt", "filename=Dockerfile", "--opt", "platform=" + strings.Join(platforms, ","),
-		"--opt", "label:mattercodex.dev/spec-sha256=" + input.GetSpecSha256(),
-		"--opt", "label:mattercodex.dev/source-sha256=" + input.GetSourceSha256(),
-		"--opt", "label:mattercodex.dev/context-sha256=" + input.GetContextSha256(),
-		"--opt", "label:mattercodex.dev/base-image-digest=" + input.GetBaseImageDigest(),
-		"--opt", "label:mattercodex.dev/builder-sha256=" + input.GetBuilderSha256(),
-		"--opt", "label:mattercodex.dev/frontend-sha256=" + input.GetFrontendSha256(),
-		"--opt", "label:mattercodex.dev/toolchain-sha256=" + input.GetToolchainSha256(),
-		"--opt", "label:mattercodex.dev/immutable-build-sha256=" + input.GetImmutableBuildSha256(),
-		"--opt", fmt.Sprintf("label:mattercodex.dev/policy-revision=%d", input.GetPolicyRevision()),
-		"--opt", "label:mattercodex.dev/policy-sha256=" + input.GetPolicySha256(),
+		"--opt", "label:kodex.dev/spec-sha256=" + input.GetSpecSha256(),
+		"--opt", "label:kodex.dev/source-sha256=" + input.GetSourceSha256(),
+		"--opt", "label:kodex.dev/context-sha256=" + input.GetContextSha256(),
+		"--opt", "label:kodex.dev/base-image-digest=" + input.GetBaseImageDigest(),
+		"--opt", "label:kodex.dev/builder-sha256=" + input.GetBuilderSha256(),
+		"--opt", "label:kodex.dev/frontend-sha256=" + input.GetFrontendSha256(),
+		"--opt", "label:kodex.dev/toolchain-sha256=" + input.GetToolchainSha256(),
+		"--opt", "label:kodex.dev/immutable-build-sha256=" + input.GetImmutableBuildSha256(),
+		"--opt", fmt.Sprintf("label:kodex.dev/policy-revision=%d", input.GetPolicyRevision()),
+		"--opt", "label:kodex.dev/policy-sha256=" + input.GetPolicySha256(),
 		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID, "--progress=rawjson",
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
@@ -316,9 +316,9 @@ func dockerfile(
 ) []byte {
 	mounts := []string{
 		"--mount=type=bind,target=/workspace/source,readonly",
-		"--mount=type=bind,from=mattercodex-install,source=install.sh,target=/run/mattercodex/install.sh,readonly",
+		"--mount=type=bind,from=kodex-install,source=install.sh,target=/run/kodex/install.sh,readonly",
 	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/mattercodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/mattercodex-init /usr/local/bin/mattercodex-init\nCOPY --from=trusted-runtime /usr/local/bin/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/mattercodex-init\",\"entrypoint\",\"/usr/local/bin/matter-codex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL mattercodex.dev/spec-sha256=%q mattercodex.dev/runtime-contract-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
 		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
 		input.GetBaseImageReference(), input.GetBaseImageDigest(), strings.Join(mounts, " "), input.GetSpecSha256(),
 		input.GetRoleRuntimeContractSha256()))
@@ -328,7 +328,7 @@ func installationScript(input *controlplanev1.RoleImageBuildInput) []byte {
 	var script strings.Builder
 	script.WriteString("set -eu\n")
 	for _, item := range input.GetPackages() {
-		path := "/workspace/source/.mattercodex/packages/" + strings.TrimPrefix(item.GetDigest(), "sha256:")
+		path := "/workspace/source/.kodex/packages/" + strings.TrimPrefix(item.GetDigest(), "sha256:")
 		switch item.GetManager() {
 		case "apk":
 			fmt.Fprintf(&script, "apk add --no-network --allow-untrusted %s\n", shellQuote(path))
@@ -343,7 +343,7 @@ func installationScript(input *controlplanev1.RoleImageBuildInput) []byte {
 		}
 	}
 	for _, item := range input.GetTools() {
-		source := "/workspace/source/.mattercodex/tools/" + item.GetSha256()
+		source := "/workspace/source/.kodex/tools/" + item.GetSha256()
 		target := "/usr/local/bin/" + item.GetName()
 		fmt.Fprintf(&script, "install -m 0555 %s %s\n", shellQuote(source), shellQuote(target))
 	}
@@ -356,13 +356,13 @@ func verifyPinnedInputs(root string, input *controlplanev1.RoleImageBuildInput) 
 	for _, item := range input.GetPackages() {
 		digest := strings.TrimPrefix(item.GetDigest(), "sha256:")
 		if !plainSHA256(digest) || !supportedPackageManager(item.GetManager()) ||
-			verifyRegularFileSHA256(filepath.Join(root, ".mattercodex", "packages", digest), digest) != nil {
+			verifyRegularFileSHA256(filepath.Join(root, ".kodex", "packages", digest), digest) != nil {
 			return ErrInvalidContext
 		}
 	}
 	for _, item := range input.GetTools() {
 		if !plainSHA256(item.GetSha256()) || strings.Contains(item.GetName(), "/") ||
-			verifyRegularFileSHA256(filepath.Join(root, ".mattercodex", "tools", item.GetSha256()), item.GetSha256()) != nil {
+			verifyRegularFileSHA256(filepath.Join(root, ".kodex", "tools", item.GetSha256()), item.GetSha256()) != nil {
 			return ErrInvalidContext
 		}
 	}
@@ -418,7 +418,7 @@ func phaseFromRawJSON(raw []byte) controlplanev1.ImageBuildStage {
 		switch {
 		case strings.Contains(name, "exporting to image") || strings.Contains(name, "pushing layers"):
 			return controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH
-		case strings.Contains(name, "/run/mattercodex/install.sh"):
+		case strings.Contains(name, "/run/kodex/install.sh"):
 			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION
 		case strings.Contains(name, "copy --from=trusted-runtime"):
 			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION

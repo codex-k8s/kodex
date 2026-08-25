@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/app"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/app"
 )
 
 var version = "dev"

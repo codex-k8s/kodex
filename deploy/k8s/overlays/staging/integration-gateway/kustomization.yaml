@@ -6,6 +6,6 @@ patches:
   - path: deployment-patch.yaml
 labels:
   - pairs:
-      mattercodex.dev/environment: staging
+      kodex.dev/environment: staging
     includeSelectors: false
     includeTemplates: true

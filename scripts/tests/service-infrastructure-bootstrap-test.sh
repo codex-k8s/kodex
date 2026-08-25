@@ -45,7 +45,7 @@ grep -Fq 'require_ready_deployment_by_selector vault-secrets-operator-system' "$
   fail 'Vault Secrets Operator does not use the strict deployment readback'
 grep -Fq 'app.kubernetes.io/component=controller-manager' "$bootstrap" ||
   fail 'Vault Secrets Operator selector does not identify the controller manager'
-grep -Fq 'daemonset/mattercodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s' "$bootstrap" ||
+grep -Fq 'daemonset/kodex-secrets-store-csi-secrets-store-csi-driver --timeout=180s' "$bootstrap" ||
   fail 'Secrets Store CSI Driver rollout readback is absent'
 grep -Fq 'require_vault_csi_provider' "$bootstrap" ||
   fail 'Vault CSI provider strict readback is absent'
@@ -59,9 +59,9 @@ yq -e '.csi.enabled == true and .csi.agent.enabled == false' "$vault_values" >/d
   fail 'Vault CSI provider or direct mode is disabled'
 yq -e '
   (.csi.extraArgs | length) == 3 and
-  .csi.extraArgs[0] == "--vault-addr=https://vault.mattercodex-system.svc:8200" and
+  .csi.extraArgs[0] == "--vault-addr=https://vault.kodex-system.svc:8200" and
   .csi.extraArgs[1] == "--vault-tls-ca-cert=/vault/tls/ca.crt" and
-  .csi.extraArgs[2] == "--vault-tls-server-name=vault.mattercodex-system.svc.cluster.local"
+  .csi.extraArgs[2] == "--vault-tls-server-name=vault.kodex-system.svc.cluster.local"
 ' "$vault_values" >/dev/null || fail 'Vault CSI provider endpoint or TLS args are not exact'
 yq -e '
   (.csi.volumeMounts | length) == 1 and
@@ -70,7 +70,7 @@ yq -e '
   .csi.volumeMounts[0].readOnly == true and
   (.csi.volumes | length) == 1 and
   .csi.volumes[0].name == "vault-server-ca" and
-  .csi.volumes[0].secret.secretName == "mattercodex-vault-server-tls" and
+  .csi.volumes[0].secret.secretName == "kodex-vault-server-tls" and
   (.csi.volumes[0].secret.items | length) == 1 and
   .csi.volumes[0].secret.items[0].key == "ca.crt" and
   .csi.volumes[0].secret.items[0].path == "ca.crt"
@@ -99,18 +99,18 @@ for readiness_contract in \
     fail "deployment readiness contract is absent: $readiness_contract"
 done
 
-if grep -Fq 'mattercodex-vault-secrets-operator-vault-secrets-operator-controller-manager' "$bootstrap"; then
+if grep -Fq 'kodex-vault-secrets-operator-vault-secrets-operator-controller-manager' "$bootstrap"; then
   fail 'readback still depends on the invalid duplicated release name'
 fi
 
 yq -e '
-  select(.kind == "Certificate" and .metadata.name == "mattercodex-control-api-bootstrap") |
-  .metadata.namespace == "mattercodex-system" and
-  .spec.secretName == "mattercodex-control-api-bootstrap-tls"
+  select(.kind == "Certificate" and .metadata.name == "kodex-control-api-bootstrap") |
+  .metadata.namespace == "kodex-system" and
+  .spec.secretName == "kodex-control-api-bootstrap-tls"
 ' "$vault_bootstrap" >/dev/null ||
-  fail 'control API bootstrap certificate is outside the MatterCodex namespace'
+  fail 'control API bootstrap certificate is outside the Kodex namespace'
 
-vault_endpoint='VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200'
+vault_endpoint='VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200'
 [[ $(grep -Fc "$vault_endpoint" "$vault_initializer") -eq 7 ]] ||
   fail 'Vault bootstrap does not consistently use the certificate-bound service DNS'
 if rg -q 'VAULT_ADDR=https://(127\.0\.0\.1|localhost)' "$vault_initializer"; then
@@ -155,7 +155,7 @@ grep -Fq 'Vault PostgreSQL connection did not become ready within the bounded re
 if grep -Fq 'verify_connection=false' "$vault_initializer"; then
   fail 'Vault PostgreSQL connection verification is disabled'
 fi
-grep -Fq 'database_password_policy=mattercodex-database' "$vault_initializer" ||
+grep -Fq 'database_password_policy=kodex-database' "$vault_initializer" ||
   fail 'Vault PostgreSQL connection has no project-owned password policy'
 grep -Fq 'length = 48' "$vault_initializer" ||
   fail 'Vault PostgreSQL password policy is shorter than the approved contract'
@@ -172,8 +172,8 @@ grep -Fq 'local vault_path=$1 username=$2 password_file=$3 database=$4 postgresq
   "$vault_initializer" || fail 'workload DSN helper does not require an exact PostgreSQL authority'
 grep -Fq 'postgresql://%s:%s@%s:5432/%s?sslmode=verify-full&sslrootcert=%s' \
   "$vault_initializer" || fail 'workload DSN does not preserve verify-full with an exact authority'
-control_plane_postgresql_host=control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
-internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+control_plane_postgresql_host=control-plane-postgresql-rw.kodex-system.svc.cluster.local
+internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
 grep -Fq "control_plane_postgresql_host=$control_plane_postgresql_host" "$vault_initializer" ||
   fail 'control-plane PostgreSQL authority is not canonical'
 grep -Fq "internal_rpc_authority_postgresql_host=$internal_rpc_authority_postgresql_host" \
@@ -197,17 +197,17 @@ grep -Fq 'allowed_roles:("control-plane-migrator' "$vault_initializer" ||
   fail 'Vault database connection does not include registry-derived static roles'
 grep -Fq 'target database static credential readback failed' "$vault_initializer" ||
   fail 'target database static credentials have no immediate exact readback'
-grep -Fq 'policy write mattercodex-node-pull-bootstrap' "$vault_initializer" ||
+grep -Fq 'policy write kodex-node-pull-bootstrap' "$vault_initializer" ||
   fail 'node pull bootstrap Vault policy is absent'
-grep -Fq 'path "pki-node-pull/issue/mattercodex-node-pull"' "$vault_initializer" ||
+grep -Fq 'path "pki-node-pull/issue/kodex-node-pull"' "$vault_initializer" ||
   fail 'node pull bootstrap cannot issue its exact client certificate'
-grep -Fq 'vault_cli write auth/kubernetes/role/mattercodex-node-pull-bootstrap' \
+grep -Fq 'vault_cli write auth/kubernetes/role/kodex-node-pull-bootstrap' \
   "$vault_initializer" || fail 'node pull bootstrap Vault auth role is absent'
-grep -Fq 'bound_service_account_names=mattercodex-image-pull-readback' \
+grep -Fq 'bound_service_account_names=kodex-image-pull-readback' \
   "$vault_initializer" || fail 'node pull bootstrap Vault auth is not bound to its exact ServiceAccount'
 grep -Fq '.data.audience == "vault"' "$vault_initializer" ||
   fail 'node pull bootstrap Vault auth readback does not enforce the projected token audience'
-grep -Fq '.data.allowed_domains == ["mattercodex-node-pull"]' "$vault_initializer" ||
+grep -Fq '.data.allowed_domains == ["kodex-node-pull"]' "$vault_initializer" ||
   fail 'node pull certificate role readback does not pin the DNS root'
 grep -Fq '.data.allow_subdomains == true and .data.allow_glob_domains == false' "$vault_initializer" ||
   fail 'node pull certificate role readback does not enforce exact subdomain semantics'

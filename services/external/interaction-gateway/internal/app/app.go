@@ -9,13 +9,13 @@ import (
 	"os"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	"github.com/codex-k8s/matter-codex/libs/go/httpserver"
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/mattermost"
-	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/usertext"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/usertext"
 	"github.com/google/uuid"
 )
 

@@ -6,12 +6,12 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 const (
-	expectedAudience   = "urn:mattercodex:internal-rpc:control-plane"
+	expectedAudience   = "urn:kodex:internal-rpc:control-plane"
 	expectedWorkloadID = "control-plane"
 )
 

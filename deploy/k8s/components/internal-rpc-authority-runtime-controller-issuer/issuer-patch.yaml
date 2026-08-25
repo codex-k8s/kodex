@@ -6,14 +6,14 @@ spec:
   template:
     metadata:
       labels:
-        mattercodex.dev/internal-rpc-authority-issuer: enabled
+        kodex.dev/internal-rpc-authority-issuer: enabled
     spec:
       securityContext:
         fsGroup: 29000
         fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: internal-rpc-authority-socket-init
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:
             - /usr/local/bin/internal-rpc-authority-socket-init
           securityContext:
@@ -27,53 +27,53 @@ spec:
                 - ALL
           volumeMounts:
             - name: internal-rpc-authority-sockets
-              mountPath: /run/mattercodex
+              mountPath: /run/kodex
       containers:
         - name: runtime-controller
           env:
             - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
-              value: /run/mattercodex/internal-rpc-authority/issuer.sock
+              value: /run/kodex/internal-rpc-authority/issuer.sock
             - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
               value: issuer
           volumeMounts:
             - name: internal-rpc-authority-sockets
-              mountPath: /run/mattercodex
+              mountPath: /run/kodex
               readOnly: true
         - name: internal-rpc-authority-issuer
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:
             - /usr/local/bin/internal-rpc-authority-issuer
           env:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.labels['mattercodex.dev/environment']
+                  fieldPath: metadata.labels['kodex.dev/environment']
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
               value: otel-collector.observability.svc.cluster.local
             - name: OTEL_EXPORTER_OTLP_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
             - name: SENTRY_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
               value: runtime-controller
             - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID
-              value: spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller
+              value: spiffe://kodex.local/ns/kodex-system/sa/runtime-controller
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
-              value: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
+              value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
-              value: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+              value: internal-rpc-authority-readback-attestor.kodex-system.svc
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE
               value: internal-rpc-authority-runtime-controller
             - name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
-              value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem
+              value: /var/run/config/kodex/internal-rpc-authority/restore/ca.pem
             - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
               value: ":9091"
             - name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT
@@ -83,7 +83,7 @@ spec:
             - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID
               value: "10001"
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
-              value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+              value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
               valueFrom:
                 secretKeyRef:
@@ -130,61 +130,61 @@ spec:
                 - ALL
           volumeMounts:
             - name: internal-rpc-authority-sockets
-              mountPath: /run/mattercodex
+              mountPath: /run/kodex
             - name: internal-rpc-authority-snapshot
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+              mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
               readOnly: true
             - name: internal-rpc-authority-manifest-trust
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
               readOnly: true
             - name: internal-rpc-authority-proof-trust
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
               readOnly: true
             - name: internal-rpc-authority-issuer-key
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer
               readOnly: true
             - name: internal-rpc-authority-workload-tls
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls
               readOnly: true
             - name: internal-rpc-authority-readback-attestor-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback
+              mountPath: /var/run/config/kodex/internal-rpc-authority/readback
               readOnly: true
             - name: internal-rpc-authority-vault-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault
+              mountPath: /var/run/config/kodex/internal-rpc-authority/vault
               readOnly: true
             - name: internal-rpc-authority-vault-token
               mountPath: /var/run/secrets/tokens/vault
               readOnly: true
             - name: internal-rpc-authority-restore-controller-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore
               readOnly: true
             - name: internal-rpc-authority-restore-controller-certificate
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust
               readOnly: true
             - name: internal-rpc-authority-restore-role-trust
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust
               readOnly: true
             - name: internal-rpc-authority-postgresql
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres
               readOnly: true
             - name: internal-rpc-authority-postgresql-ca
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql
+              mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql
               readOnly: true
             - name: internal-rpc-authority-observability
-              mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability
+              mountPath: /var/run/config/kodex/internal-rpc-authority/observability
               readOnly: true
             - name: internal-rpc-authority-sentry-dsn
-              mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability
               readOnly: true
             - name: authority-bootstrap-roots
               mountPath: /usr/local/share/internal-rpc-authority/manifest-root
               readOnly: true
         - name: platform-worker-grant-agent
-          image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
           env:
             - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: runtime-controller}
-            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws}
+            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws}
           ports: [{name: grant-metrics, containerPort: 9093, protocol: TCP}]
           startupProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: grant-metrics}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
@@ -200,8 +200,8 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/runtime-controller/application-grant}
-            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/mattercodex/platform-worker-grant-signer, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/kodex/runtime-controller/application-grant}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/kodex/platform-worker-grant-signer, readOnly: true}
       volumes:
         - name: authority-bootstrap-roots
           secret:

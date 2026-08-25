@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -120,7 +120,7 @@ func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T
 	if verifier.request.GetObservedFullMethod() != "/example.v1.Service/Method" ||
 		verifier.request.GetCompactJws() != "compact" ||
 		verifier.request.GetDownstreamPeer().GetSpiffeId() !=
-			"spiffe://mattercodex.local/ns/mattercodex-system/sa/caller" {
+			"spiffe://kodex.local/ns/kodex-system/sa/caller" {
 		t.Fatalf("verifier request lost exact binding: %+v", verifier.request)
 	}
 }
@@ -172,7 +172,7 @@ func testCertificate(t *testing.T) *x509.Certificate {
 		t.Fatalf("generate certificate key: %v", err)
 	}
 	spiffeID, err := url.Parse(
-		"spiffe://mattercodex.local/ns/mattercodex-system/sa/caller",
+		"spiffe://kodex.local/ns/kodex-system/sa/caller",
 	)
 	if err != nil {
 		t.Fatalf("parse SPIFFE ID: %v", err)

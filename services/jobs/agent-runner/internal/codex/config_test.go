@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	workspace := t.TempDir()
-	home := filepath.Join(workspace, ".matter-codex", "state", "codex-home")
+	home := filepath.Join(workspace, ".kodex", "state", "codex-home")
 	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)
 	digestFile := filepath.Join(workspace, "auth.sha256")
@@ -37,7 +37,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	if err != nil || len(metadata.Undecoded()) != 0 || profile.Extends != ":workspace" ||
 		profile.Filesystem[home] != "deny" || profile.Filesystem[filepath.Join(home, "**")] != "deny" ||
 		profile.Filesystem["/proc/**"] != "deny" ||
-		config.MCPServers["mattercodex"].BearerTokenEnvVar != "MATTERCODEX_MCP_PROXY_TOKEN" {
+		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
 	}
 }
@@ -46,7 +46,7 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 	for sandbox, expected := range map[string]string{"read-only": ":read-only", "workspace-write": ":workspace"} {
 		t.Run(sandbox, func(t *testing.T) {
 			workspace := t.TempDir()
-			home := filepath.Join(workspace, ".matter-codex", "state", "codex-home")
+			home := filepath.Join(workspace, ".kodex", "state", "codex-home")
 			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
 			digest := sha256.Sum256(auth)
 			digestFile := filepath.Join(workspace, "auth.sha256")

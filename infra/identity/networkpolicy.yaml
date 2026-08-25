@@ -37,18 +37,18 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 8443 }]
     - from:
         - namespaceSelector:
-            { matchLabels: { kubernetes.io/metadata.name: mattercodex-system } }
+            { matchLabels: { kubernetes.io/metadata.name: kodex-system } }
           podSelector:
             matchExpressions:
               - key: app.kubernetes.io/name
@@ -82,12 +82,12 @@ spec:
             {
               matchLabels:
                 {
-                  kubernetes.io/metadata.name: __MATTERCODEX_INGRESS_NAMESPACE__,
+                  kubernetes.io/metadata.name: __KODEX_INGRESS_NAMESPACE__,
                 },
             }
           podSelector:
             {
               matchLabels:
-                { app.kubernetes.io/name: __MATTERCODEX_INGRESS_POD_NAME__ },
+                { app.kubernetes.io/name: __KODEX_INGRESS_POD_NAME__ },
             }
       ports: [{ protocol: TCP, port: 8089 }]

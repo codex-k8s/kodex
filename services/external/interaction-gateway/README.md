@@ -1,6 +1,6 @@
 ---
 id: UNIT-INTERACTION-GATEWAY-001
-title: Необязательный interaction gateway MatterCodex
+title: Необязательный interaction gateway Kodex
 type: unit-readme
 status: approved
 owner: platform

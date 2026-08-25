@@ -1,39 +1,39 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mattercodex-image-admission-policy
+  name: kodex-image-admission-policy
   labels:
-    app.kubernetes.io/name: mattercodex-image-admission
-    mattercodex.dev/owner-intent: "true"
+    app.kubernetes.io/name: kodex-image-admission
+    kodex.dev/owner-intent: "true"
   annotations:
-    mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    kodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000
 immutable: true
 data:
   orchestrationRevision: "0000000000000000000000000000000000000000"
-  toolsImage: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  admissionImage: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  authorityImage: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  promotionRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles
-  promotionEvidenceRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence
-  evidenceRepository: mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission
-  promotedPullRepository: registry-pull.invalid/mattercodex/roles
+  toolsImage: admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  admissionImage: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  authorityImage: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  promotionRepository: kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles
+  promotionEvidenceRepository: kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence
+  evidenceRepository: kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission
+  promotedPullRepository: registry-pull.invalid/kodex/roles
   pullRegistryHost: registry-pull.invalid
   pullCredentialGeneration: "0"
-  nodeReadbackImage: registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
-  roleImageInputRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs
+  nodeReadbackImage: registry-pull.invalid/kodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  roleImageInputRepository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs
   policyRevision: "0"
   policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  builderIdentity: spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
+  builderIdentity: spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
   buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
-  trustedRoleBaseRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner
+  trustedRoleBaseRepository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner
   trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   builderSHA256: "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4"
   frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   toolchainSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   roleRuntimeContractRevision: "1"
   roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-  scannerIdentity: mattercodex-image-scanner
-  signerIdentity: mattercodex-image-signer
-  admissionOwnerIdentity: mattercodex-image-admission-owner
-  promotionIdentity: mattercodex-image-promotion-writer
+  scannerIdentity: kodex-image-scanner
+  signerIdentity: kodex-image-signer
+  admissionOwnerIdentity: kodex-image-admission-owner
+  promotionIdentity: kodex-image-promotion-writer
   requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc

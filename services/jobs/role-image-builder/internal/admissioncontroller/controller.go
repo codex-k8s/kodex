@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	orchestratedLabel = "mattercodex.dev/image-admission-orchestrated"
-	idLabel           = "mattercodex.dev/image-admission-id"
-	phaseLabel        = "mattercodex.dev/image-admission-phase"
-	runIDAnnotation   = "mattercodex.dev/admission-run-id"
-	policyName        = "mattercodex-image-admission-policy"
+	orchestratedLabel = "kodex.dev/image-admission-orchestrated"
+	idLabel           = "kodex.dev/image-admission-id"
+	phaseLabel        = "kodex.dev/image-admission-phase"
+	runIDAnnotation   = "kodex.dev/admission-run-id"
+	policyName        = "kodex-image-admission-policy"
 )
 
 var (
@@ -32,8 +32,8 @@ var (
 	idPattern       = regexp.MustCompile(`^[a-f0-9]{32}$`)
 	phaseOrder      = []string{"claim", "scan", "sign", "admit"}
 	phaseAccounts   = map[string]string{
-		"claim": "image-admission", "scan": "mattercodex-image-scanner",
-		"sign": "mattercodex-image-signer", "admit": "image-admission", "promote": "image-promotion",
+		"claim": "image-admission", "scan": "kodex-image-scanner",
+		"sign": "kodex-image-signer", "admit": "image-admission", "promote": "image-promotion",
 	}
 )
 
@@ -359,8 +359,8 @@ func validManagedJob(job *batchv1.Job, namespace, phase string) bool {
 }
 
 func validatePolicy(policy *corev1.ConfigMap) (string, error) {
-	if policy == nil || policy.Name != policyName || policy.Namespace != "mattercodex-system" || policy.Immutable == nil || !*policy.Immutable ||
-		policy.Labels["mattercodex.dev/owner-intent"] != "true" {
+	if policy == nil || policy.Name != policyName || policy.Namespace != "kodex-system" || policy.Immutable == nil || !*policy.Immutable ||
+		policy.Labels["kodex.dev/owner-intent"] != "true" {
 		return "", errors.New("image admission owner policy is invalid")
 	}
 	revision := policy.Data["orchestrationRevision"]

@@ -11,14 +11,14 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
-	httptransport "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
+	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
 
-const platformSubprotocol = "mattercodex.platform.v1"
+const platformSubprotocol = "kodex.platform.v1"
 
 var platformEventNames = map[string]string{
 	"PROJECT_CHANGED":                "PROJECT",

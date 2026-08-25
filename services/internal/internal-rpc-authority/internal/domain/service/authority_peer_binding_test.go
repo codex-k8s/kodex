@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 func TestMatchesObservedCaller(t *testing.T) {
 	const (
-		callerSPIFFEID = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
-		targetSPIFFEID = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+		callerSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+		targetSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	)
 	claims := model.AuthorizationClaims{
 		Caller: model.Workload{SPIFFEID: callerSPIFFEID},
@@ -42,13 +42,13 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	}
 	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
 	const (
-		callerIssuer   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler"
-		verifierIssuer = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
-		audience       = "urn:mattercodex:internal-rpc:control-plane"
+		callerIssuer   = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
+		verifierIssuer = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+		audience       = "urn:kodex:internal-rpc:control-plane"
 		method         = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
 		operation      = "platform.runtime.schedules.claim"
-		callerSPIFFE   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler"
-		targetSPIFFE   = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane"
+		callerSPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler"
+		targetSPIFFE   = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	)
 	policy := model.PolicySnapshot{
 		Version: 1, DefaultDecision: "DENY", TokenTTLSeconds: 30,
@@ -62,7 +62,7 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 			CallerSPIFFEID: callerSPIFFE, Issuer: callerIssuer,
 			TargetWorkloadID: "control-plane", TargetSPIFFEID: targetSPIFFE,
 			Audience: audience, FullMethod: method, Permission: operation,
-			AuthorityProofIssuer: targetSPIFFE, AuthorityProofAudience: "urn:mattercodex:proof",
+			AuthorityProofIssuer: targetSPIFFE, AuthorityProofAudience: "urn:kodex:proof",
 			AuthoritySources: []string{"DOMAIN_STATE"}, TokenTTLSeconds: 30,
 		}},
 	}

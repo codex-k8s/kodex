@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
 
@@ -29,7 +29,7 @@ const (
 	maximumRequestBytes   = 2 << 20
 )
 
-var rolloutPathPattern = regexp.MustCompile(`^\.matter-codex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
+var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
 
 type streamEvent struct {
 	message wireMessage
@@ -58,7 +58,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	state := newProtocolState(input.CodexSessionID)
 	initialize := map[string]any{
-		"clientInfo":   map[string]string{"name": "mattercodex-agent-runner", "title": "MatterCodex agent-runner", "version": "1"},
+		"clientInfo":   map[string]string{"name": "kodex-agent-runner", "title": "Kodex agent-runner", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": false, "optOutNotificationMethods": suppressedNotificationMethods},
 	}
 	raw, err := server.call(ctx, state, "initialize", initialize)
@@ -131,7 +131,7 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = input.WorkspaceRoot
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
-		"CODEX_HOME=" + input.CodexHome, "MATTERCODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
+		"CODEX_HOME=" + input.CodexHome, "KODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {

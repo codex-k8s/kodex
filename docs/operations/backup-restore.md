@@ -35,7 +35,7 @@ Shamir `5/3` в портативном single-owner профиле защища�
 KMS adapter.
 
 Optional Mattermost принадлежит владельцу этой внешней системы и не является
-источником истины MatterCodex. External message/post IDs восстанавливаются
+источником истины Kodex. External message/post IDs восстанавливаются
 только как locator metadata.
 
 ## Восстановление

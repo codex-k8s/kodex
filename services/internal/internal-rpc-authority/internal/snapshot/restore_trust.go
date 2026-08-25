@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
-const restoreRoleTrustType = "mattercodex-internal-rpc-restore-role-trust+jws"
+const restoreRoleTrustType = "kodex-internal-rpc-restore-role-trust+jws"
 
 const restoreRoleTrustMaximumValidity = 366 * 24 * time.Hour
 
@@ -110,9 +110,9 @@ func LoadRestoreRoleTrust(options RestoreRoleTrustOptions) (
 	}
 	if document.Version != model.ContractVersion ||
 		document.Issuer !=
-			"spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher" ||
+			"spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher" ||
 		document.Audience !=
-			"urn:mattercodex:internal-rpc-authority-restore-controller" ||
+			"urn:kodex:internal-rpc-authority-restore-controller" ||
 		document.SourceRevision == 0 ||
 		document.KeySetRevision == 0 ||
 		document.SignerGeneration != signerGeneration ||

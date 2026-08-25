@@ -62,7 +62,7 @@ export const m18 = L.page(L.frameMobile(`
     </div>
 
     ${statusRow('Основные сервисы', 'Готовы', 'Все рабочие пути проверены')}
-    ${statusRow('Помощник MatterCodex', 'Готов', 'Горячий runtime доступен')}
+    ${statusRow('Помощник Kodex', 'Готов', 'Горячий runtime доступен')}
     ${statusRow('AI runtime', 'Доступен', 'Стандартный рабочий runtime')}
     ${statusRow('Хранилище', 'Доступно', 'Локальное хранилище платформы')}
 
@@ -73,7 +73,7 @@ export const m18 = L.page(L.frameMobile(`
 
     ${L.mCard(`
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-        <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: ${T.sec};">Помощник MatterCodex</span>
+        <span style="font-size: 11.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: ${T.sec};">Помощник Kodex</span>
         <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 11px; background: ${T.field}; border: 1px solid ${T.line}; font-size: 11px; color: ${T.sec};">Системный</span>
       </div>
       <div style="margin-top: 6px;">

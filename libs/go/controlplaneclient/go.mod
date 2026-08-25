@@ -1,10 +1,10 @@
-module github.com/codex-k8s/matter-codex/libs/go/controlplaneclient
+module github.com/codex-k8s/kodex/libs/go/controlplaneclient
 
 go 1.26.6
 
 require (
-	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.82.1
 )
@@ -17,6 +17,6 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../controlplaneapi
+replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../controlplaneapi
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../internalrpcauth

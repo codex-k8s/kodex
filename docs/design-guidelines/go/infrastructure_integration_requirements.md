@@ -36,21 +36,21 @@
 ## PostgreSQL: тестовый контур
 
 - `make test-go` запускает только герметичные Go unit/component tests и не должен требовать PostgreSQL, Docker
-  или `MATTERCODEX_*_TEST_DATABASE_DSN`.
+  или `KODEX_*_TEST_DATABASE_DSN`.
 - PostgreSQL repository, migrations, SQL и storage-level изменения проверяются явным target `make test-go-postgres`.
   Этот target не делает silent skip в required mode: если тестовая БД недоступна, проверка считается незапущенной
   или упавшей в зависимости от требований среза.
 - Полный Go-контур с тестовой БД запускается через `make test-go-all`; он объединяет `make test-go`
   и `make test-go-postgres`.
 - Предпочтительный remote-agent путь для integration tests — Kubernetes-native runner:
-  `MATTERCODEX_TEST_POSTGRES_MODE=kubernetes make test-go-postgres`. Runner использует только явно заданный
-  `MATTERCODEX_TEST_POSTGRES_K8S_NAMESPACE`, заранее помеченный как disposable test namespace, создаёт ephemeral
+  `KODEX_TEST_POSTGRES_MODE=kubernetes make test-go-postgres`. Runner использует только явно заданный
+  `KODEX_TEST_POSTGRES_K8S_NAMESPACE`, заранее помеченный как disposable test namespace, создаёт ephemeral
   PostgreSQL Job/Service, тестовые БД и локальный `port-forward`, передаёт дочернему тесту только scoped
-  `MATTERCODEX_*_TEST_DATABASE_DSN` и удаляет созданные ресурсы по точным UID после завершения. Job имеет
+  `KODEX_*_TEST_DATABASE_DSN` и удаляет созданные ресурсы по точным UID после завершения. Job имеет
   `activeDeadlineSeconds`, `ttlSecondsAfterFinished` и владеет Service через точный `ownerReference`, поэтому
   срок полномочия и внешняя очистка не зависят от живого callback runner. Namespace, RBAC и ServiceAccount этот
   target не создаёт и не изменяет.
-- Docker fallback допустим только как локальный convenience path (`MATTERCODEX_TEST_POSTGRES_MODE=docker make test-go-postgres`)
+- Docker fallback допустим только как локальный convenience path (`KODEX_TEST_POSTGRES_MODE=docker make test-go-postgres`)
   и не является требованием к remote-agent серверу или CI. Контейнер запускается с `--rm`, независимым
   self-deadline и проверяемой lease-label; persistent custom network не создаётся.
 - Production PostgreSQL запрещено использовать для repository integration tests. Для required integration-проверки
@@ -107,7 +107,7 @@
 
 ## Секреты и конфигурация
 
-- Секреты платформы и конфиг деплоя `matter-codex` читаются из env.
+- Секреты платформы и конфиг деплоя `kodex` читаются из env.
 - Пользовательские настройки продукта хранятся в БД и управляются через UI.
 - Секреты не коммитим, не логируем и не возвращаем в API-ответах.
 - В логах и теле аудита запрещены ключи и токены в открытом виде.
@@ -130,7 +130,7 @@
 - Стадия `prod` запускает готовый бинарник в минимальном runtime без исходников и инструментов разработки.
 - Kubernetes Deployment для Go-сервиса использует `prod` image. Запрещено доставлять исходники сервиса через
   ConfigMap/Secret/tar archive и запускать `go run` в production pod.
-- Корневой `services.yaml` — единый stack inventory deploy-конфигурации в рамках репозитория matter-codex.
+- Корневой `services.yaml` — единый stack inventory deploy-конфигурации в рамках репозитория kodex.
 - Go tools читают root stack inventory через `libs/go/stackinventory`; не добавлять новый YAML parser для тех же версий, образов и deploy inventory.
 - Проектный `services.yaml` пользовательских репозиториев является project policy и принадлежит `project-catalog`, а не bootstrap/render tooling.
 - Изменения deploy tooling и inventory должны сохранять последовательное обновление live-кластера:

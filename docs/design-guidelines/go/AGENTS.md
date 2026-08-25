@@ -15,7 +15,7 @@
 - `docs/design-guidelines/go/libraries.md` — что выносить в `libs/go/*` и как.
 - `docs/design-guidelines/common/external_dependencies_catalog.md` — согласованный список внешних библиотек и инструментов.
 
-Проектный overlay `matter-codex`:
+Проектный overlay `kodex`:
 - Kubernetes интеграция только через `client-go` и адаптеры.
 - Репозитории (GitHub/GitLab) только через provider-интерфейсы.
 - Оркестрация процессов строится через durable queue, playbooks, schedules, MCP delegation и callbacks без ad-hoc background goroutines.

@@ -20,7 +20,7 @@ metadata:
   labels:
     app.kubernetes.io/name: egress-gateway
     app.kubernetes.io/component: platform-egress
-    mattercodex.dev/endpoint: technical
+    kodex.dev/endpoint: technical
 spec:
   type: ClusterIP
   publishNotReadyAddresses: true

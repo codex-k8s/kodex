@@ -1,10 +1,10 @@
-module github.com/codex-k8s/matter-codex/libs/go/observability
+module github.com/codex-k8s/kodex/libs/go/observability
 
 go 1.26.6
 
 require (
-	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0
+	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/getsentry/sentry-go v0.48.0
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.44.0
@@ -14,9 +14,9 @@ require (
 	google.golang.org/grpc v1.82.1
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../grpcserver
+replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../grpcserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../securefile
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

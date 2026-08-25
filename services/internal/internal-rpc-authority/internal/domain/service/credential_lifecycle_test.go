@@ -8,7 +8,7 @@ import (
 func TestVaultDatabaseNameMatchesBootstrapConnection(t *testing.T) {
 	t.Parallel()
 
-	if vaultDatabaseName != "mattercodex-postgresql" {
+	if vaultDatabaseName != "kodex-postgresql" {
 		t.Fatalf("unexpected Vault database connection: %q", vaultDatabaseName)
 	}
 }

@@ -16,7 +16,7 @@ func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount
 	const (
 		operatorToken = "operator-projected-token"
 		serverToken   = "controller-kubernetes-token"
-		audience      = "urn:mattercodex:internal-rpc-authority-restore-controller"
+		audience      = "urn:kodex:internal-rpc-authority-restore-controller"
 	)
 	server := httptest.NewTLSServer(http.HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
@@ -38,7 +38,7 @@ func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount
 			_, _ = response.Write([]byte(
 				`{"apiVersion":"authentication.k8s.io/v1","kind":"TokenReview","status":{"authenticated":true,"audiences":["` +
 					audience +
-					`"],"user":{"username":"system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator","uid":"service-account-uid","extra":{"authentication.kubernetes.io/pod-name":["internal-rpc-authority-restore-operator-test"],"authentication.kubernetes.io/pod-uid":["pod-bound-token-uid"]}},"error":""}}`,
+					`"],"user":{"username":"system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator","uid":"service-account-uid","extra":{"authentication.kubernetes.io/pod-name":["internal-rpc-authority-restore-operator-test"],"authentication.kubernetes.io/pod-uid":["pod-bound-token-uid"]}},"error":""}}`,
 			))
 		},
 	))
@@ -60,7 +60,7 @@ func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount
 		t.Fatalf("VerifyOperatorCredential() error = %v", err)
 	}
 	if credential.Subject !=
-		"system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-operator" ||
+		"system:serviceaccount:kodex-system:internal-rpc-authority-restore-operator" ||
 		credential.Audience != audience ||
 		credential.TokenDigestSHA256 == "" {
 		t.Fatalf("credential binding is incomplete: %#v", credential)
@@ -68,7 +68,7 @@ func TestVerifyOperatorCredentialПроверяетExactAudienceИServiceAccount
 	if _, err := store.VerifyOperatorCredential(
 		t.Context(),
 		operatorToken,
-		"urn:mattercodex:wrong-audience",
+		"urn:kodex:wrong-audience",
 	); err == nil {
 		t.Fatal("wrong TokenReview audience accepted")
 	}

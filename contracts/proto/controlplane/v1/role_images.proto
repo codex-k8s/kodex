@@ -5,7 +5,7 @@ package controlplane.v1;
 import "controlplane/v1/control_plane.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
 
 // RoleImageService владеет специализированным lifecycle окружений ролей.
 // Caller не назначает organization, owner, policy, generation или promotion target.

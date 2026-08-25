@@ -12,7 +12,7 @@ updated: 2026-08-07
 
 ## Назначение и ownership
 
-`egress-gateway` — platform deployable в namespace `mattercodex-system`.
+`egress-gateway` — platform deployable в namespace `kodex-system`.
 Repository owner управляет schema, immutable policy, expected revision/digest,
 образом, Service и endpoint labels. Gateway не владеет provider management
 lifecycle и не имеет application credentials. Production rollout, rollback и
@@ -21,7 +21,7 @@ lifecycle и не имеет application credentials. Production rollout, rollba
 ## Безопасный readback
 
 Technical Service
-`egress-gateway-technical.mattercodex-system.svc.cluster.local:9090` с
+`egress-gateway-technical.kodex-system.svc.cluster.local:9090` с
 `publishNotReadyAddresses=true` публикует:
 
 - `/healthz` — жив ли собственный процесс, без сетевых вызовов;
@@ -35,7 +35,7 @@ Technical Service
 Readback не принимает hostname, policy, destination или credentials от caller.
 
 Тот же consumer URL
-`http://egress-gateway.mattercodex-system.svc.cluster.local:8080` обслуживает
+`http://egress-gateway.kodex-system.svc.cluster.local:8080` обслуживает
 HTTP CONNECT и узкую compatibility-проверку: только bodyless `GET /readyz` без
 query получает `204` при том же effective readiness либо `503`. Иные методы и
 пути на `8080` закрыто отклоняются; consumer не получает доступ к `9090`.
@@ -93,7 +93,7 @@ tunnels. Alert означает устойчивые rejects с закрытой
 
 ## Проверка сетевой границы
 
-- Consumer egress выбирает только namespace `mattercodex-system`, Pod labels
+- Consumer egress выбирает только namespace `kodex-system`, Pod labels
   `egress-gateway`/`platform-egress` и `8080/TCP`.
 - Gateway ingress принимает CONNECT только от точного
   `integration-gateway` workload selector, а technical path — от точного

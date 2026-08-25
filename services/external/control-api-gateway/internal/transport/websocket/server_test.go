@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +34,7 @@ func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
 
 func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/platform/stream", nil)
-	request.Header.Add("Sec-WebSocket-Protocol", "mattercodex.platform.v1, csrf.token-value")
+	request.Header.Add("Sec-WebSocket-Protocol", "kodex.platform.v1, csrf.token-value")
 	selection, ok := requestedProtocols(request, platformSubprotocol)
 	if !ok || selection.csrf != "token-value" {
 		t.Fatalf("valid protocol selection rejected: ok=%t csrf=%q", ok, selection.csrf)

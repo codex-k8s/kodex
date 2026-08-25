@@ -58,15 +58,15 @@ fi
 yq eval-all '.' "$temporary_directory/resolved-source.yaml" >"$temporary_directory/build-unannotated.yaml"
 yq eval-all '
   select(.metadata.name != "build-registry") |
-  .metadata.namespace = "mattercodex-ci-deploy" |
-  (.. | select(tag == "!!str")) |= sub("mattercodex-ci\\.svc"; "mattercodex-ci-deploy.svc") |
+  .metadata.namespace = "kodex-ci-deploy" |
+  (.. | select(tag == "!!str")) |= sub("kodex-ci\\.svc"; "kodex-ci-deploy.svc") |
   (.. | select(tag == "!!str")) |= sub("build-runner"; "deploy-runner")
 ' "$temporary_directory/resolved-source.yaml" >"$temporary_directory/deploy-unannotated.yaml"
 
 annotate_proxy_config() {
   local input=$1 output=$2 config_checksum
   config_checksum=$(yq -r '
-    select(.kind == "ConfigMap" and .metadata.name == "mattercodex-ci-egress-proxy") |
+    select(.kind == "ConfigMap" and .metadata.name == "kodex-ci-egress-proxy") |
     .data."envoy.yaml"
   ' "$input" | sha256sum | awk '{print $1}')
   [[ "$config_checksum" =~ ^[a-f0-9]{64}$ ]] || {
@@ -75,8 +75,8 @@ annotate_proxy_config() {
   }
   CONFIG_CHECKSUM=$config_checksum yq eval-all '
     (. | select(.kind == "Deployment" and
-      .metadata.name == "mattercodex-ci-egress-proxy") |
-      .spec.template.metadata.annotations."mattercodex.dev/envoy-config-sha256") =
+      .metadata.name == "kodex-ci-egress-proxy") |
+      .spec.template.metadata.annotations."kodex.dev/envoy-config-sha256") =
         strenv(CONFIG_CHECKSUM)
   ' "$input" >"$output"
 }

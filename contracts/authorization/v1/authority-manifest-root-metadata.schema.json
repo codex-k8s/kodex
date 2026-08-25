@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-manifest-root-metadata.schema.json",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authority-manifest-root-metadata.schema.json",
   "title": "Независимо встроенный корень authority snapshot manifest",
   "type": "object",
   "additionalProperties": false,
@@ -31,7 +31,7 @@
       "const": "AUTHORITY_SNAPSHOT_MANIFEST_ROOT"
     },
     "aud": {
-      "const": "urn:mattercodex:internal-rpc-authority:manifest-root"
+      "const": "urn:kodex:internal-rpc-authority:manifest-root"
     },
     "kid": {
       "$ref": "#/$defs/kid"

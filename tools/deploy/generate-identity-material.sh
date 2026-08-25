@@ -65,7 +65,7 @@ umask 077
 mkdir -p "$identity_directory" "$management_directory"
 printf '%s' "$admin_username" >"$identity_directory/admin-username"
 printf '%s' "$admin_password" >"$identity_directory/admin-initial-password"
-printf 'mattercodex-bootstrap-%s' "$(openssl rand -hex 8)" >"$identity_directory/bootstrap-admin-username"
+printf 'kodex-bootstrap-%s' "$(openssl rand -hex 8)" >"$identity_directory/bootstrap-admin-username"
 openssl rand -base64 48 | tr -d '\n' >"$identity_directory/bootstrap-admin-password"
 printf '%s' "$owner_username" >"$identity_directory/owner-username"
 printf '%s' "$owner_email" >"$identity_directory/owner-email"
@@ -73,7 +73,7 @@ printf '%s' "$owner_password" >"$identity_directory/owner-initial-password"
 openssl rand -base64 48 | tr -d '\n' >"$identity_directory/database-password"
 openssl ecparam -name prime256v1 -genkey -noout -out "$identity_directory/database-ca.key"
 openssl req -x509 -new -sha256 -key "$identity_directory/database-ca.key" \
-  -subj /CN=MatterCodex-Identity-Database-CA -days 3650 \
+  -subj /CN=Kodex-Identity-Database-CA -days 3650 \
   -addext 'basicConstraints=critical,CA:TRUE,pathlen:0' \
   -addext 'keyUsage=critical,keyCertSign,cRLSign' \
   -addext 'subjectKeyIdentifier=hash' \
@@ -88,20 +88,20 @@ else
     "$variant" "${uuid_hex:17:3}" "${uuid_hex:20:12}" \
     >"$identity_directory/organization-id"
 fi
-printf '%s' mattercodex-sso-bootstrap >"$identity_directory/admin-client-id"
+printf '%s' kodex-sso-bootstrap >"$identity_directory/admin-client-id"
 openssl rand -base64 48 | tr -d '\n' >"$identity_directory/admin-client-secret"
 
 for surface in control-center grafana vault headlamp; do
   surface_directory="$management_directory/oauth2-$surface"
   mkdir -p "$surface_directory"
-  printf 'mattercodex-%s-proxy' "$surface" >"$surface_directory/client-id"
+  printf 'kodex-%s-proxy' "$surface" >"$surface_directory/client-id"
   openssl rand -base64 48 | tr -d '\n' >"$surface_directory/client-secret"
   openssl rand -base64 32 | tr -d '\n' >"$surface_directory/cookie-secret"
 done
 mkdir -p "$management_directory/vault-oidc" "$management_directory/grafana-admin"
-printf '%s' mattercodex-vault-ui >"$management_directory/vault-oidc/client-id"
+printf '%s' kodex-vault-ui >"$management_directory/vault-oidc/client-id"
 openssl rand -base64 48 | tr -d '\n' >"$management_directory/vault-oidc/client-secret"
-printf '%s' mattercodex-owner >"$management_directory/grafana-admin/admin-user"
+printf '%s' kodex-owner >"$management_directory/grafana-admin/admin-user"
 openssl rand -base64 48 | tr -d '\n' >"$management_directory/grafana-admin/admin-password"
 
 find "$identity_directory" "$management_directory" -type f -exec chmod 0600 {} +

@@ -29,7 +29,7 @@ export const d18 = L.page(L.shellDesktop({
     title: 'Администрирование',
     sub: 'Состояние платформы и системные настройки',
   })}
-  ${tabs(['Организация', 'AI runtimes', 'Помощник MatterCodex', 'Хранилище и резервирование', 'Необязательные адаптеры'], 'Организация')}
+  ${tabs(['Организация', 'AI runtimes', 'Помощник Kodex', 'Хранилище и резервирование', 'Необязательные адаптеры'], 'Организация')}
 
   <div style="flex: 1 1 auto; padding: 18px 24px 22px; display: flex; flex-direction: column; gap: 16px; background: ${T.subtle}; min-height: 0;">
 
@@ -44,7 +44,7 @@ export const d18 = L.page(L.shellDesktop({
 
     <div style="display: flex; gap: 14px;">
       ${statusCard('Основные сервисы', 'Готовы', 'Все рабочие пути проверены')}
-      ${statusCard('Помощник MatterCodex', 'Горячий runtime готов', 'Системная сессия доступна')}
+      ${statusCard('Помощник Kodex', 'Горячий runtime готов', 'Системная сессия доступна')}
       ${statusCard('AI runtime', 'Доступен', 'Стандартный рабочий runtime')}
       ${statusCard('Хранилище', 'Доступно', 'Локальное хранилище платформы')}
     </div>
@@ -53,7 +53,7 @@ export const d18 = L.page(L.shellDesktop({
       <div style="flex: 1 1 0; border: 1px solid ${T.line}; border-radius: 12px; background: ${T.bg}; padding: 16px 18px;">
         <div style="font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: ${T.sec};">Организация</div>
         <div style="margin-top: 10px;">
-          ${kv('Название', 'MatterCodex')}
+          ${kv('Название', 'Kodex')}
           ${kv('Язык по умолчанию', 'Русский')}
           ${kv('Часовой пояс', 'Europe/Saratov')}
           ${kv('Владелец', 'Анна Волкова · единственный владелец')}
@@ -67,7 +67,7 @@ export const d18 = L.page(L.shellDesktop({
 
       <div style="flex: 1 1 0; border: 1px solid ${T.line}; border-radius: 12px; background: ${T.bg}; padding: 16px 18px;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: ${T.sec};">Помощник MatterCodex</div>
+          <div style="font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: ${T.sec};">Помощник Kodex</div>
           <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 11px; background: ${T.field}; border: 1px solid ${T.line}; font-size: 11px; color: ${T.sec};">Системный · неудаляемый</span>
         </div>
         <div style="margin-top: 10px;">

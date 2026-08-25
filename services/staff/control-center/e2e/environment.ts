@@ -22,13 +22,13 @@ export interface MattermostE2EEnvironment {
   readonly outageConnectionName: string;
 }
 
-const checkOnly = process.env.MATTERCODEX_E2E_CHECK_ONLY === "1";
+const checkOnly = process.env.KODEX_E2E_CHECK_ONLY === "1";
 const disposableConfirmation =
   "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION";
 
 function exactHTTPSURL(
   raw: string,
-  variable = "MATTERCODEX_E2E_BASE_URL",
+  variable = "KODEX_E2E_BASE_URL",
 ): string {
   const parsed = new URL(raw);
   if (
@@ -50,7 +50,7 @@ function boundedInteger(raw: string | undefined): number {
   const value = Number(raw ?? "900000");
   if (!Number.isSafeInteger(value) || value < 60_000 || value > 1_800_000) {
     throw new Error(
-      "MATTERCODEX_E2E_RUN_TIMEOUT_MS must be between 60000 and 1800000",
+      "KODEX_E2E_RUN_TIMEOUT_MS must be between 60000 and 1800000",
     );
   }
   return value;
@@ -60,14 +60,14 @@ function storageStatePath(raw: string | undefined): string | undefined {
   if (checkOnly) return undefined;
   if (!raw) {
     throw new Error(
-      "MATTERCODEX_E2E_STORAGE_STATE is required for a real authenticated E2E run",
+      "KODEX_E2E_STORAGE_STATE is required for a real authenticated E2E run",
     );
   }
   const path = isAbsolute(raw) ? raw : resolve(raw);
   const info = lstatSync(path);
   if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) {
     throw new Error(
-      "MATTERCODEX_E2E_STORAGE_STATE must be a regular non-symlink file readable only by its owner",
+      "KODEX_E2E_STORAGE_STATE must be a regular non-symlink file readable only by its owner",
     );
   }
   return path;
@@ -102,42 +102,42 @@ function mattermostEnvironment(
 ): MattermostE2EEnvironment | undefined {
   if (selectedProfile !== "mattermost") return undefined;
   const teamName = boundedName(
-    "MATTERCODEX_E2E_MATTERMOST_TEAM_NAME",
-    process.env.MATTERCODEX_E2E_MATTERMOST_TEAM_NAME,
+    "KODEX_E2E_MATTERMOST_TEAM_NAME",
+    process.env.KODEX_E2E_MATTERMOST_TEAM_NAME,
   );
   const channelName = boundedName(
-    "MATTERCODEX_E2E_MATTERMOST_CHANNEL_NAME",
-    process.env.MATTERCODEX_E2E_MATTERMOST_CHANNEL_NAME,
+    "KODEX_E2E_MATTERMOST_CHANNEL_NAME",
+    process.env.KODEX_E2E_MATTERMOST_CHANNEL_NAME,
   );
   if (!/^[a-z0-9][a-z0-9_-]{1,62}$/.test(teamName)) {
     throw new Error(
-      "MATTERCODEX_E2E_MATTERMOST_TEAM_NAME must be a lowercase Mattermost name",
+      "KODEX_E2E_MATTERMOST_TEAM_NAME must be a lowercase Mattermost name",
     );
   }
   if (!/^[a-z0-9][a-z0-9_-]{1,62}$/.test(channelName)) {
     throw new Error(
-      "MATTERCODEX_E2E_MATTERMOST_CHANNEL_NAME must be a lowercase Mattermost name",
+      "KODEX_E2E_MATTERMOST_CHANNEL_NAME must be a lowercase Mattermost name",
     );
   }
   return {
     origin: exactHTTPSURL(
-      process.env.MATTERCODEX_E2E_MATTERMOST_ORIGIN ??
+      process.env.KODEX_E2E_MATTERMOST_ORIGIN ??
         "https://mattermost.invalid",
-      "MATTERCODEX_E2E_MATTERMOST_ORIGIN",
+      "KODEX_E2E_MATTERMOST_ORIGIN",
     ),
     tokenFile: protectedFilePath(
-      "MATTERCODEX_E2E_MATTERMOST_TOKEN_FILE",
-      process.env.MATTERCODEX_E2E_MATTERMOST_TOKEN_FILE,
+      "KODEX_E2E_MATTERMOST_TOKEN_FILE",
+      process.env.KODEX_E2E_MATTERMOST_TOKEN_FILE,
     ),
     teamName,
     channelName,
     healthyConnectionName: boundedName(
-      "MATTERCODEX_E2E_MATTERMOST_HEALTHY_CONNECTION",
-      process.env.MATTERCODEX_E2E_MATTERMOST_HEALTHY_CONNECTION,
+      "KODEX_E2E_MATTERMOST_HEALTHY_CONNECTION",
+      process.env.KODEX_E2E_MATTERMOST_HEALTHY_CONNECTION,
     ),
     outageConnectionName: boundedName(
-      "MATTERCODEX_E2E_MATTERMOST_OUTAGE_CONNECTION",
-      process.env.MATTERCODEX_E2E_MATTERMOST_OUTAGE_CONNECTION,
+      "KODEX_E2E_MATTERMOST_OUTAGE_CONNECTION",
+      process.env.KODEX_E2E_MATTERMOST_OUTAGE_CONNECTION,
     ),
   };
 }
@@ -145,10 +145,10 @@ function mattermostEnvironment(
 function requireDisposableConfirmation(): void {
   if (
     !checkOnly &&
-    process.env.MATTERCODEX_E2E_CONFIRM_DISPOSABLE !== disposableConfirmation
+    process.env.KODEX_E2E_CONFIRM_DISPOSABLE !== disposableConfirmation
   ) {
     throw new Error(
-      `MATTERCODEX_E2E_CONFIRM_DISPOSABLE must equal ${disposableConfirmation}`,
+      `KODEX_E2E_CONFIRM_DISPOSABLE must equal ${disposableConfirmation}`,
     );
   }
 }
@@ -157,7 +157,7 @@ function profile(raw: string | undefined): E2EProfile {
   if (raw === undefined || raw === "web-only") return "web-only";
   if (raw === "mattermost") return "mattermost";
   throw new Error(
-    "MATTERCODEX_E2E_PROFILE must be either web-only or mattermost",
+    "KODEX_E2E_PROFILE must be either web-only or mattermost",
   );
 }
 
@@ -165,7 +165,7 @@ function resourcePrefix(raw: string | undefined): string {
   const value = raw ?? (checkOnly ? "check-only" : "");
   if (!/^[a-z0-9](?:[a-z0-9-]{2,38}[a-z0-9])$/.test(value)) {
     throw new Error(
-      "MATTERCODEX_E2E_RESOURCE_PREFIX must be a unique lowercase 4-40 character slug",
+      "KODEX_E2E_RESOURCE_PREFIX must be a unique lowercase 4-40 character slug",
     );
   }
   return value;
@@ -173,16 +173,16 @@ function resourcePrefix(raw: string | undefined): string {
 
 export function loadE2EEnvironment(): E2EEnvironment {
   requireDisposableConfirmation();
-  const selectedProfile = profile(process.env.MATTERCODEX_E2E_PROFILE);
+  const selectedProfile = profile(process.env.KODEX_E2E_PROFILE);
   return {
     baseURL: exactHTTPSURL(
-      process.env.MATTERCODEX_E2E_BASE_URL ?? "https://mattercodex.invalid",
+      process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",
     ),
     checkOnly,
     profile: selectedProfile,
-    resourcePrefix: resourcePrefix(process.env.MATTERCODEX_E2E_RESOURCE_PREFIX),
-    runTimeoutMs: boundedInteger(process.env.MATTERCODEX_E2E_RUN_TIMEOUT_MS),
-    storageState: storageStatePath(process.env.MATTERCODEX_E2E_STORAGE_STATE),
+    resourcePrefix: resourcePrefix(process.env.KODEX_E2E_RESOURCE_PREFIX),
+    runTimeoutMs: boundedInteger(process.env.KODEX_E2E_RUN_TIMEOUT_MS),
+    storageState: storageStatePath(process.env.KODEX_E2E_STORAGE_STATE),
     mattermost: mattermostEnvironment(selectedProfile),
   };
 }
@@ -198,20 +198,20 @@ export interface E2EAuthEnvironment {
 export function loadE2EAuthEnvironment(): E2EAuthEnvironment {
   requireDisposableConfirmation();
   const ownerUsername =
-    process.env.MATTERCODEX_E2E_OWNER_USERNAME ?? (checkOnly ? "owner" : "");
+    process.env.KODEX_E2E_OWNER_USERNAME ?? (checkOnly ? "owner" : "");
   const ownerPassword =
-    process.env.MATTERCODEX_E2E_OWNER_PASSWORD ??
+    process.env.KODEX_E2E_OWNER_PASSWORD ??
     (checkOnly ? "check-only-password" : "");
   if (!ownerUsername || !ownerPassword) {
     throw new Error(
-      "MATTERCODEX_E2E_OWNER_USERNAME and MATTERCODEX_E2E_OWNER_PASSWORD are required for OIDC sign-in",
+      "KODEX_E2E_OWNER_USERNAME and KODEX_E2E_OWNER_PASSWORD are required for OIDC sign-in",
     );
   }
   const output =
-    process.env.MATTERCODEX_E2E_STORAGE_STATE ?? ".auth/owner.json";
+    process.env.KODEX_E2E_STORAGE_STATE ?? ".auth/owner.json";
   return {
     baseURL: exactHTTPSURL(
-      process.env.MATTERCODEX_E2E_BASE_URL ?? "https://mattercodex.invalid",
+      process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",
     ),
     checkOnly,
     outputStorageState: isAbsolute(output) ? output : resolve(output),

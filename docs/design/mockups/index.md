@@ -1,6 +1,6 @@
 ---
 id: UX-MC-003
-title: Индекс макетов web-first MatterCodex
+title: Индекс макетов web-first Kodex
 type: product-design
 status: approved
 owner: product
@@ -8,7 +8,7 @@ version: 1.1.0
 updated: 2026-08-23
 ---
 
-# Индекс макетов web-first MatterCodex
+# Индекс макетов web-first Kodex
 
 Макеты к пакету промптов [UX-MC-002](../web-first-reset-prompt-pack.md).
 19 экранов в двух размерах: **desktop 1440×1024** и **mobile 390×844**.
@@ -16,8 +16,8 @@ updated: 2026-08-23
 
 Утверждённые исходные canvas-экспорты владельца хранятся в репозитории:
 
-- [полный набор экранов](../matter-codex-mockups.html);
-- [детальный Live Run Workspace](../matter-codex-live-run.html).
+- [полный набор экранов](../kodex-mockups.html);
+- [детальный Live Run Workspace](../kodex-live-run.html).
 
 Они являются binding UX source наравне с реестром ниже. Это HTML, а не PNG:
 экспорт содержит самостоятельный интерактивный canvas и вложенные artboards.
@@ -42,7 +42,7 @@ NN_slug_mobile.dc.html     мобильный макет того же экра�
 | ID | Экран | Route | Scope | Desktop | Mobile |
 |---|---|---|---|---|---|
 | `UX-01` | Первичная настройка | `/onboarding` | global | `01_onboarding_desktop.dc.html` | `01_onboarding_mobile.dc.html` |
-| `UX-02` | Помощник MatterCodex | `/assistant` | global + Проект | `02_assistant_desktop.dc.html` | `02_assistant_mobile.dc.html` |
+| `UX-02` | Помощник Kodex | `/assistant` | global + Проект | `02_assistant_desktop.dc.html` | `02_assistant_mobile.dc.html` |
 | `UX-03` | Главная | `/` | global | `03_home_desktop.dc.html` | `03_home_mobile.dc.html` |
 | `UX-04` | Проекты | `/projects` | global | `04_projects_desktop.dc.html` | `04_projects_mobile.dc.html` |
 | `UX-05` | Обзор Проекта | `/projects/:projectRef` | project | `05_project_overview_desktop.dc.html` | `05_project_overview_mobile.dc.html` |

@@ -67,7 +67,7 @@ make gen-proto-go
 Контракт:
 - `contracts/asyncapi/<service-name>.v<major>.yaml`
 
-Применение в `matter-codex`:
+Применение в `kodex`:
 - описание webhook payloads и внутренних async-событий,
 - обязательная генерация Go-констант типов событий, типов агрегатов и общих payload-моделей для доменных событий.
 

@@ -6,7 +6,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: runtime-controller
-      mattercodex.dev/internal-rpc-authority-issuer: enabled
+      kodex.dev/internal-rpc-authority-issuer: enabled
   policyTypes:
     - Ingress
     - Egress
@@ -37,7 +37,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-postgresql
+              app.kubernetes.io/name: kodex-postgresql
       ports:
         - protocol: TCP
           port: 5432

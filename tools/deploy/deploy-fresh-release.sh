@@ -41,7 +41,7 @@ done
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 vault_bootstrap="$repository_root/tools/deploy/bootstrap-vault.sh"
-namespace=mattercodex-system
+namespace=kodex-system
 restore_evidence_name=internal-rpc-authority-restore-evidence
 authority_roots_name=internal-rpc-authority-bootstrap-roots
 authority_snapshot_name=internal-rpc-authority-snapshot
@@ -112,7 +112,7 @@ authority_roots_payload() {
   jq -S '{
     immutable:(.immutable // false),
     data:(.data // {}),
-    digest:(.metadata.annotations["mattercodex.dev/authority-bootstrap-roots-sha256"] // "")
+    digest:(.metadata.annotations["kodex.dev/authority-bootstrap-roots-sha256"] // "")
   }' "$1" >"$2"
 }
 
@@ -138,7 +138,7 @@ write_authority_bootstrap_roots_manifest() {
       "app.kubernetes.io/component":"bootstrap-roots"
     } |
     .metadata.annotations = {
-      "mattercodex.dev/authority-bootstrap-roots-sha256":$digest
+      "kodex.dev/authority-bootstrap-roots-sha256":$digest
     }
   ' "$raw_manifest" >"$desired_manifest"
 }
@@ -160,7 +160,7 @@ ensure_authority_bootstrap_roots() {
     fi
     kubectl -n "$namespace" delete "secret/$authority_roots_name" --wait=true --timeout=2m >/dev/null
   fi
-  kubectl create --field-manager=mattercodex-fresh-install -f "$desired_manifest" >/dev/null
+  kubectl create --field-manager=kodex-fresh-install -f "$desired_manifest" >/dev/null
   require_authority_bootstrap_roots
 }
 
@@ -185,7 +185,7 @@ pin_authority_root_revision() {
 
   patch=$(jq -nc --arg digest "$authority_roots_digest" '{
     spec:{template:{metadata:{annotations:{
-      "mattercodex.dev/authority-bootstrap-roots-sha256":$digest
+      "kodex.dev/authority-bootstrap-roots-sha256":$digest
     }}}}
   }')
   for deployment_name in internal-rpc-authority-publisher \
@@ -196,10 +196,10 @@ pin_authority_root_revision() {
 
 validate_authority_bootstrap_material
 
-if rg -n '__MATTERCODEX_[A-Z0-9_]+__|\.invalid|sha256:0{64}' "$render_file" >/dev/null; then
+if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|sha256:0{64}' "$render_file" >/dev/null; then
   fail 'release render contains an unresolved placeholder'
 fi
-yq -e 'select(.kind == "Namespace" and .metadata.name == "mattercodex-system")' \
+yq -e 'select(.kind == "Namespace" and .metadata.name == "kodex-system")' \
   "$render_file" >/dev/null || fail 'release namespace contract is absent'
 yq -o=json -I=0 '.' "$render_file" | jq -s -e '
   map(select(.kind != null)) as $resources |
@@ -239,7 +239,7 @@ apply_filter() {
   local output_file="$temporary_directory/$name.yaml"
   yq "$expression" "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail "release phase is empty: $name"
-  kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$output_file" >/dev/null
+  kubectl apply --server-side --field-manager=kodex-fresh-install -f "$output_file" >/dev/null
 }
 
 immutable_resource_payload() {
@@ -265,7 +265,7 @@ replace_immutable_resource_on_drift() {
   local live_payload="$temporary_directory/immutable-$name-live-payload.json"
 
   RESOURCE_KIND="$kind" RESOURCE_NAME="$name" yq '
-    select(.kind == strenv(RESOURCE_KIND) and .metadata.namespace == "mattercodex-system" and
+    select(.kind == strenv(RESOURCE_KIND) and .metadata.namespace == "kodex-system" and
       .metadata.name == strenv(RESOURCE_NAME))
   ' "$render_file" >"$desired_yaml"
   [[ -s "$desired_yaml" ]] || fail "immutable release resource is absent: $kind/$name"
@@ -280,7 +280,7 @@ replace_immutable_resource_on_drift() {
     kubectl -n "$namespace" delete "$resource/$name" --wait=true --timeout=2m >/dev/null
   fi
 
-  kubectl create --field-manager=mattercodex-fresh-install -f "$desired_yaml" >/dev/null
+  kubectl create --field-manager=kodex-fresh-install -f "$desired_yaml" >/dev/null
   kubectl -n "$namespace" get "$resource/$name" -o json >"$live_json" ||
     fail "immutable release resource readback failed: $kind/$name"
   immutable_resource_payload "$kind" "$live_json" "$live_payload"
@@ -289,11 +289,11 @@ replace_immutable_resource_on_drift() {
 }
 
 rotate_release_immutable_resources() {
-  replace_immutable_resource_on_drift configmap ConfigMap mattercodex-role-environments
-  replace_immutable_resource_on_drift configmap ConfigMap mattercodex-image-admission-policy
+  replace_immutable_resource_on_drift configmap ConfigMap kodex-role-environments
+  replace_immutable_resource_on_drift configmap ConfigMap kodex-image-admission-policy
   replace_immutable_resource_on_drift \
-    imageadmissionpolicyparameters.supplychain.mattercodex.dev \
-    ImageAdmissionPolicyParameters mattercodex-image-admission-policy
+    imageadmissionpolicyparameters.supplychain.kodex.dev \
+    ImageAdmissionPolicyParameters kodex-image-admission-policy
 }
 
 validate_restore_evidence_anchor() {
@@ -305,15 +305,15 @@ validate_restore_evidence_anchor() {
     .metadata.name == $name and
     .type == "Opaque" and
     (.metadata.annotations as $annotations |
-      ($annotations["mattercodex.dev/restore-anchor-revision"] | type == "string" and test("^[1-9][0-9]*$")) and
-      ($annotations["mattercodex.dev/restore-epoch"] | type == "string" and test("^[1-9][0-9]*$")) and
-      ($annotations["mattercodex.dev/restore-evidence-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
-      ($annotations["mattercodex.dev/restore-predecessor-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
-      ($annotations["mattercodex.dev/restore-predecessor-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
-      ($annotations["mattercodex.dev/restored-cluster-uid"] | type == "string" and length > 0) and
-      ($annotations["mattercodex.dev/restored-timeline-id"] | type == "string" and length > 0) and
-      (($annotations["mattercodex.dev/restore-anchor-revision"] | tonumber) >
-        ($annotations["mattercodex.dev/restore-predecessor-revision"] | tonumber))) and
+      ($annotations["kodex.dev/restore-anchor-revision"] | type == "string" and test("^[1-9][0-9]*$")) and
+      ($annotations["kodex.dev/restore-epoch"] | type == "string" and test("^[1-9][0-9]*$")) and
+      ($annotations["kodex.dev/restore-evidence-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+      ($annotations["kodex.dev/restore-predecessor-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      ($annotations["kodex.dev/restore-predecessor-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+      ($annotations["kodex.dev/restored-cluster-uid"] | type == "string" and length > 0) and
+      ($annotations["kodex.dev/restored-timeline-id"] | type == "string" and length > 0) and
+      (($annotations["kodex.dev/restore-anchor-revision"] | tonumber) >
+        ($annotations["kodex.dev/restore-predecessor-revision"] | tonumber))) and
     (.data["evidence.jws"] | type == "string")
   ' "$input_file" >/dev/null || fail 'restore evidence anchor is absent or malformed'
 }
@@ -322,7 +322,7 @@ ensure_restore_evidence_anchor() {
   local anchor_manifest="$temporary_directory/restore-evidence-anchor.yaml"
   local anchor_json="$temporary_directory/restore-evidence-anchor.json"
   RESTORE_EVIDENCE_NAME="$restore_evidence_name" yq '
-    select(.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+    select(.kind == "Secret" and .metadata.namespace == "kodex-system" and
       .metadata.name == strenv(RESTORE_EVIDENCE_NAME))
   ' "$render_file" >"$anchor_manifest"
   [[ -s "$anchor_manifest" ]] || fail 'restore evidence anchor is absent from release render'
@@ -345,17 +345,17 @@ validate_authority_snapshot() {
     .type == "Opaque" and
     ((.data | keys) == ["snapshot.jws"]) and
     (.metadata.annotations as $annotations |
-      ($annotations["mattercodex.dev/source-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
-      ($annotations["mattercodex.dev/signer-generation"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
-      (($annotations["mattercodex.dev/source-revision"] | tonumber) as $revision |
-       ($annotations["mattercodex.dev/signer-generation"] | tonumber) as $generation |
+      ($annotations["kodex.dev/source-revision"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      ($annotations["kodex.dev/signer-generation"] | type == "string" and test("^(0|[1-9][0-9]*)$")) and
+      (($annotations["kodex.dev/source-revision"] | tonumber) as $revision |
+       ($annotations["kodex.dev/signer-generation"] | tonumber) as $generation |
        if $revision == 0 then
          $generation == 0 and
-         $annotations["mattercodex.dev/source-digest-sha256"] == "" and
+         $annotations["kodex.dev/source-digest-sha256"] == "" and
          .data["snapshot.jws"] == ""
        else
          $generation > 0 and
-         ($annotations["mattercodex.dev/source-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
+         ($annotations["kodex.dev/source-digest-sha256"] | type == "string" and test("^[a-f0-9]{64}$")) and
          (.data["snapshot.jws"] | type == "string" and length > 0)
        end))
   ' "$input_file" >/dev/null || fail 'authority snapshot is absent or malformed'
@@ -364,7 +364,7 @@ validate_authority_snapshot() {
 write_authority_snapshot_seed_manifest() {
   local output_file=$1
   AUTHORITY_SNAPSHOT_NAME="$authority_snapshot_name" yq '
-    select(.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+    select(.kind == "Secret" and .metadata.namespace == "kodex-system" and
       .metadata.name == strenv(AUTHORITY_SNAPSHOT_NAME))
   ' "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail 'authority snapshot seed is absent from release render'
@@ -384,7 +384,7 @@ ensure_authority_snapshot() {
     return
   fi
 
-  if ! kubectl create --field-manager=mattercodex-fresh-install -f "$seed_manifest" >/dev/null; then
+  if ! kubectl create --field-manager=kodex-fresh-install -f "$seed_manifest" >/dev/null; then
     kubectl -n "$namespace" get secret "$authority_snapshot_name" -o json >"$live_json" ||
       fail 'authority snapshot seed creation failed'
   else
@@ -521,11 +521,11 @@ apply_restore_controller_database_secret() {
   local output_file="$temporary_directory/restore-controller-database-secret.yaml"
   yq '
     select(.kind == "VaultStaticSecret" and
-      .metadata.namespace == "mattercodex-system" and
+      .metadata.namespace == "kodex-system" and
       .metadata.name == "internal-rpc-authority-restore-controller-postgresql")
   ' "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail 'restore controller VaultStaticSecret is absent'
-  kubectl apply --server-side --field-manager=mattercodex-fresh-install \
+  kubectl apply --server-side --field-manager=kodex-fresh-install \
     -f "$output_file" >/dev/null
   wait_vault_secret_ready vaultstaticsecrets.secrets.hashicorp.com \
     internal-rpc-authority-restore-controller-postgresql 120
@@ -548,7 +548,7 @@ apply_job() {
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render_file" >"$output_file"
   [[ -s "$output_file" ]] || fail "release Job is absent: $name"
-  kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$output_file" >/dev/null
+  kubectl apply --server-side --field-manager=kodex-fresh-install -f "$output_file" >/dev/null
   kubectl -n "$namespace" wait --for=condition=Complete "job/$name" --timeout=15m >/dev/null ||
     fail "release Job failed: $name"
 }
@@ -583,26 +583,26 @@ if [[ "$mode" == apply-state ]]; then
     select(.kind != "CustomResourceDefinition" and
       .kind != "Deployment" and .kind != "StatefulSet" and .kind != "DaemonSet" and
       .kind != "Job" and .kind != "CronJob" and
-      ((.kind == "VaultStaticSecret" and .metadata.namespace == "mattercodex-system" and
+      ((.kind == "VaultStaticSecret" and .metadata.namespace == "kodex-system" and
         .metadata.name == "internal-rpc-authority-restore-controller-postgresql") | not) and
-      ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+      ((.kind == "Secret" and .metadata.namespace == "kodex-system" and
         (.metadata.name == "internal-rpc-authority-restore-evidence" or
          .metadata.name == "internal-rpc-authority-snapshot")) | not))
   '
   wait_trust_material true
   apply_filter stateful '
     select(.kind == "StatefulSet" and
-      (.metadata.name == "mattercodex-postgresql" or .metadata.name == "mattercodex-nats"))
+      (.metadata.name == "kodex-postgresql" or .metadata.name == "kodex-nats"))
   '
-  wait_statefulset mattercodex-postgresql
-  wait_statefulset mattercodex-nats
+  wait_statefulset kodex-postgresql
+  wait_statefulset kodex-nats
   "$vault_bootstrap" --context "$expected_context" --mode configure-database \
     --material-directory "$material_directory" --render "$render_file"
 fi
 
 if [[ "$mode" == apply-migrations ]]; then
-  wait_statefulset mattercodex-postgresql
-  wait_statefulset mattercodex-nats
+  wait_statefulset kodex-postgresql
+  wait_statefulset kodex-nats
   apply_job internal-rpc-authority-migrate
   "$vault_bootstrap" --context "$expected_context" --mode configure-database-runtime \
     --material-directory "$material_directory" --render "$render_file"
@@ -624,21 +624,21 @@ if [[ "$mode" == apply-workloads ]]; then
   rotate_release_immutable_resources
   apply_filter workloads '
     select(.kind != "Job" and
-      ((.kind == "Secret" and .metadata.namespace == "mattercodex-system" and
+      ((.kind == "Secret" and .metadata.namespace == "kodex-system" and
         (.metadata.name == "internal-rpc-authority-restore-evidence" or
          .metadata.name == "internal-rpc-authority-snapshot")) | not))
   '
   pin_authority_root_revision
   wait_trust_material
-  for materializer_dependency in egress-gateway mattercodex-image-registry-promotion; do
+  for materializer_dependency in egress-gateway kodex-image-registry-promotion; do
     kubectl -n "$namespace" rollout status "deployment/$materializer_dependency" --timeout=15m >/dev/null ||
       fail "release artifact materializer dependency failed: $materializer_dependency"
   done
   apply_job release-artifact-materializer
   for registry_deployment in \
-    mattercodex-image-registry-push mattercodex-image-registry-staging-read \
-    mattercodex-image-registry-evidence mattercodex-image-registry-admin \
-    mattercodex-image-registry-promotion mattercodex-image-registry-pull mattercodex-buildkit; do
+    kodex-image-registry-push kodex-image-registry-staging-read \
+    kodex-image-registry-evidence kodex-image-registry-admin \
+    kodex-image-registry-promotion kodex-image-registry-pull kodex-buildkit; do
     kubectl -n "$namespace" rollout status "deployment/$registry_deployment" --timeout=15m >/dev/null ||
       fail "image supply chain rollout failed: $registry_deployment"
   done

@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 const zeroDigest = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -122,7 +122,7 @@ func generate(
 		SourceRevision uint64 `json:"source_revision"`
 		Version        int    `json:"v"`
 	}{
-		Audience: "urn:mattercodex:internal-rpc-authority:manifest-root", Thumbprint: manifestRootThumbprint,
+		Audience: "urn:kodex:internal-rpc-authority:manifest-root", Thumbprint: manifestRootThumbprint,
 		KeyID: manifestRoot.KeyID, NotAfter: rootValidUntil, NotBefore: validFrom,
 		Purpose: "AUTHORITY_SNAPSHOT_MANIFEST_ROOT", RootGeneration: 1,
 		RootID: "internal-rpc-authority-manifest-root-v1", SourceDigest: sha256Hex(manifestRootPublic),
@@ -146,12 +146,12 @@ func generate(
 		ValidUntil     int64            `json:"valid_until"`
 		Version        int              `json:"v"`
 	}{
-		Audience:     "urn:mattercodex:internal-rpc-authority:manifest-bundle",
+		Audience:     "urn:kodex:internal-rpc-authority:manifest-bundle",
 		BundleDigest: mustDigest(manifestKeys), BundleRevision: 1, History: []revisionDigest{}, Keys: manifestKeys,
 		Predecessor: predecessor, PublishedAt: now.Unix(), Purpose: "AUTHORITY_SNAPSHOT_MANIFEST_VERIFICATION",
 		RootGeneration: 1, RootID: "internal-rpc-authority-manifest-root-v1", ValidUntil: validUntil, Version: 1,
 	}
-	manifestBundleJWS := mustSign(manifestBundle, manifestRoot, "mattercodex-internal-rpc-manifest-trust+jws")
+	manifestBundleJWS := mustSign(manifestBundle, manifestRoot, "kodex-internal-rpc-manifest-trust+jws")
 
 	readbackRootPublic := mustPublic(readbackRoot)
 	readbackRootThumbprint := mustThumbprint(readbackRoot)
@@ -169,7 +169,7 @@ func generate(
 		SourceRevision uint64          `json:"source_revision"`
 		Version        int             `json:"v"`
 	}{
-		Audience:   "urn:mattercodex:internal-rpc-authority-readback-attestor:root-verification",
+		Audience:   "urn:kodex:internal-rpc-authority-readback-attestor:root-verification",
 		Thumbprint: readbackRootThumbprint, KeyID: readbackRoot.KeyID, NotAfter: rootValidUntil,
 		NotBefore: validFrom, PublicJWK: readbackRootPublic, Purpose: "NORMAL_READBACK_ROOT_VERIFICATION",
 		RootGeneration: 1, RootID: "internal-rpc-authority-readback-manifest-root-v1",
@@ -193,14 +193,14 @@ func generate(
 		ValidUntil     int64                 `json:"valid_until"`
 		Version        int                   `json:"v"`
 	}{
-		Audience:     "urn:mattercodex:internal-rpc-authority-readback-attestor:manifest-root",
+		Audience:     "urn:kodex:internal-rpc-authority-readback-attestor:manifest-root",
 		BundleDigest: mustDigest(readbackManifestKeys), BundleRevision: 1, History: []revisionDigest{},
-		Issuer: "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-readback-trust-root-controller",
+		Issuer: "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-readback-trust-root-controller",
 		Keys:   readbackManifestKeys, Predecessor: predecessor, PublishedAt: now.Unix(),
 		Purpose: "NORMAL_READBACK_CREDENTIAL_TRUST_VERIFICATION",
 		RootID:  "internal-rpc-authority-readback-manifest-root-v1", ValidUntil: validUntil, Version: 1,
 	}
-	readbackManifestJWS := mustSign(readbackManifestBundle, readbackRoot, "mattercodex-internal-rpc-readback-manifest-root+jws")
+	readbackManifestJWS := mustSign(readbackManifestBundle, readbackRoot, "kodex-internal-rpc-readback-manifest-root+jws")
 
 	readbackCredentialKeys := []readbackCredentialKey{
 		newReadbackCredentialKey("CURRENT", 1, readbackSigner, validFrom, validUntil),
@@ -224,15 +224,15 @@ func generate(
 		ValidUntil               int64                   `json:"valid_until"`
 		Version                  int                     `json:"v"`
 	}{
-		Audience: "urn:mattercodex:internal-rpc-authority-readback-attestor", History: []revisionDigest{},
-		Issuer:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher",
+		Audience: "urn:kodex:internal-rpc-authority-readback-attestor", History: []revisionDigest{},
+		Issuer:         "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher",
 		KeySetRevision: 1, Keys: readbackCredentialKeys, ManifestSignerGeneration: 1,
 		Predecessor: predecessor, PublishedAt: now.Unix(), ManifestBundleRevision: 1,
 		RootFingerprint: readbackRootThumbprint, RootID: "internal-rpc-authority-readback-manifest-root-v1",
 		ManifestSignerKeyID: readbackManifestCurrent.KeyID, SourceRevision: 1,
 		TrustSetDigest: mustDigest(readbackCredentialKeys), ValidUntil: validUntil, Version: 1,
 	}
-	readbackCredentialJWS := mustSign(readbackCredentialTrust, readbackManifestCurrent, "mattercodex-internal-rpc-readback-credential-trust+jws")
+	readbackCredentialJWS := mustSign(readbackCredentialTrust, readbackManifestCurrent, "kodex-internal-rpc-readback-credential-trust+jws")
 	restoreKeys := []restoreRoleTrustKey{
 		newRestoreRoleTrustKey("CURRENT", 1, restoreSigner, validFrom, validUntil),
 		newRestoreRoleTrustKey("NEXT", 2, restoreNext, validFrom, validUntil),
@@ -252,8 +252,8 @@ func generate(
 		ValidUntil       int64                 `json:"valid_until"`
 	}{
 		Version:          1,
-		Issuer:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher",
-		Audience:         "urn:mattercodex:internal-rpc-authority-restore-controller",
+		Issuer:           "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher",
+		Audience:         "urn:kodex:internal-rpc-authority-restore-controller",
 		SourceRevision:   1,
 		KeySetRevision:   1,
 		TrustSetDigest:   mustDigest(restoreKeys),
@@ -267,7 +267,7 @@ func generate(
 	restoreRoleTrustJWS := mustSign(
 		restoreRoleTrust,
 		manifestSigner,
-		"mattercodex-internal-rpc-restore-role-trust+jws",
+		"kodex-internal-rpc-restore-role-trust+jws",
 	)
 
 	for path, data := range map[string][]byte{

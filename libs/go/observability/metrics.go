@@ -36,26 +36,26 @@ func NewMetrics(
 	}
 	registry := prometheus.NewRegistry()
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "mattercodex",
+		Namespace: "kodex",
 		Subsystem: serviceName,
 		Name:      "grpc_requests_total",
 		Help:      "Total number of completed gRPC requests.",
 	}, []string{"operation", "code"})
 	duration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "mattercodex",
+		Namespace: "kodex",
 		Subsystem: serviceName,
 		Name:      "grpc_request_duration_seconds",
 		Help:      "Duration of completed gRPC requests in seconds.",
 		Buckets:   prometheus.DefBuckets,
 	}, []string{"operation"})
 	readiness := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "mattercodex",
+		Namespace: "kodex",
 		Subsystem: serviceName,
 		Name:      "readiness",
 		Help:      "Readiness state of the served runtime dependency.",
 	}, []string{"ready"})
 	buildInfo := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "mattercodex",
+		Namespace: "kodex",
 		Subsystem: serviceName,
 		Name:      "build_info",
 		Help:      "Build information for the running binary.",

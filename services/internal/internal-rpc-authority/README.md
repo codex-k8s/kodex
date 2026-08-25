@@ -22,7 +22,7 @@ proof от домена-владельца и связывается с зара
    границы и выдаёт ES256 authority proof.
 2. Приложение вызывает локальный
    `/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext`
-   через `/run/mattercodex/internal-rpc-authority/issuer.sock`.
+   через `/run/kodex/internal-rpc-authority/issuer.sock`.
 3. Issuer проверяет Linux `SO_PEERCRED`, точную привязку операции, proof,
    происхождение и одноразовый `jti`, затем подписывает контекст текущим ключом
    workload.
@@ -180,7 +180,7 @@ test -n "$KUBERNETES_API_CIDRS"
 test -n "$KUBERNETES_API_PORTS"
 scripts/render-internal-rpc-authority.sh \
   --environment staging \
-  --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --image-ref ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:<digest> \
   --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
   --kubernetes-api-ports "$KUBERNETES_API_PORTS"
 ```

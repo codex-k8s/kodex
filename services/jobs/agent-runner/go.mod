@@ -1,11 +1,11 @@
-module github.com/codex-k8s/matter-codex/services/jobs/agent-runner
+module github.com/codex-k8s/kodex/services/jobs/agent-runner
 
 go 1.26.6
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
-	github.com/codex-k8s/matter-codex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/google/uuid v1.6.0
 	golang.org/x/sys v0.47.0
 )
@@ -14,8 +14,8 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0 // indirect
-	github.com/codex-k8s/matter-codex/libs/go/securefile v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -42,16 +42,16 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
+replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
-replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 
-replace github.com/codex-k8s/matter-codex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/runtimecontract
 
-replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
+replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
-replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
+replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 
-replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
+replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
-replace github.com/codex-k8s/matter-codex/libs/go/securefile => ../../../libs/go/securefile
+replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile

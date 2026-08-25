@@ -31,7 +31,7 @@ done
 for command_name in curl jq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$GITHUB_REPOSITORY" == codex-k8s/matter-codex ]] || fail "repository mismatch"
+[[ "$GITHUB_REPOSITORY" == codex-k8s/kodex ]] || fail "repository mismatch"
 
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
@@ -71,8 +71,8 @@ jq -e --arg run_id "$build_run_id" '
     .total_count == 1 and (.jobs | length) == 1 and
     .jobs[0].name == "build" and
     .jobs[0].status == "completed" and .jobs[0].conclusion == "success" and
-    (.jobs[0].labels | index("mattercodex-build") != null) and
-    (.jobs[0].runner_name | type == "string" and startswith("mattercodex-build-")) and
+    (.jobs[0].labels | index("kodex-build") != null) and
+    (.jobs[0].runner_name | type == "string" and startswith("kodex-build-")) and
     (.jobs[0].html_url | type == "string" and contains("/actions/runs/" + $run_id + "/job/"))
   ' "$jobs_file" >/dev/null || fail "exact successful build job was not found"
 build_job_id=$(jq -r '.jobs[0].id' "$jobs_file")

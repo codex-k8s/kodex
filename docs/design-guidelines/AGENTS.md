@@ -1,6 +1,6 @@
 # Design Guidelines
 
-Этот каталог является локальной адаптацией Go-гайдов из `/home/s/projects/kodex` под самостоятельный проект `matter-codex`.
+Этот каталог является локальной адаптацией Go-гайдов из `/home/s/projects/kodex` под самостоятельный проект `kodex`.
 
 Документация разделена по областям:
 
@@ -13,7 +13,7 @@
 - `docs/design-guidelines/common/check_list.md`;
 - `docs/design-guidelines/go/check_list.md`, если PR затрагивает Go.
 
-Специфика `matter-codex`, которую нельзя нарушать:
+Специфика `kodex`, которую нельзя нарушать:
 
 - runtime MVP разворачивается только в Kubernetes;
 - production control surface является web-first PWA `services/staff/control-center`;

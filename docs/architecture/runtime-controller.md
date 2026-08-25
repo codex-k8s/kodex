@@ -33,7 +33,7 @@ Caller-provided owner/root/parent, role name, prompt и external conversation ID
 Каждый turn, retry и continuation создаёт новый execution-scoped Pod из exact
 promoted role image. Role image содержит собственное окружение, пакеты,
 инструменты и ПО конкретной роли. Supply chain после недоверенного installation
-step добавляет защищённые `mattercodex-init` и `matter-codex-agent-runner` из
+step добавляет защищённые `kodex-init` и `kodex-agent-runner` из
 trusted base и подтверждает runtime ABI перед promotion.
 
 Pod использует отдельный ServiceAccount, immutable ConfigMap/input, bounded

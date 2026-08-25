@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 )
 
-const proofResolverAudience = "urn:mattercodex:internal-rpc-authority-issuer:control-api-gateway"
+const proofResolverAudience = "urn:kodex:internal-rpc-authority-issuer:control-api-gateway"
 
 type proofResolverAttestor struct {
 	primary          repository.SnapshotAttestor

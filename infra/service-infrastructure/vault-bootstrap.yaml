@@ -1,31 +1,31 @@
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  name: mattercodex-installation-ca
-  namespace: mattercodex-system
+  name: kodex-installation-ca
+  namespace: kodex-system
 spec:
   ca:
-    secretName: mattercodex-installation-ca
+    secretName: kodex-installation-ca
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: mattercodex-vault-server
-  namespace: mattercodex-system
+  name: kodex-vault-server
+  namespace: kodex-system
 spec:
-  secretName: mattercodex-vault-server-tls
+  secretName: kodex-vault-server-tls
   duration: 2160h
   renewBefore: 360h
-  commonName: vault.mattercodex-system.svc.cluster.local
+  commonName: vault.kodex-system.svc.cluster.local
   dnsNames:
     - vault
-    - vault.mattercodex-system
-    - vault.mattercodex-system.svc
-    - vault.mattercodex-system.svc.cluster.local
+    - vault.kodex-system
+    - vault.kodex-system.svc
+    - vault.kodex-system.svc.cluster.local
     - vault-active
-    - vault-active.mattercodex-system
-    - vault-active.mattercodex-system.svc
-    - vault-active.mattercodex-system.svc.cluster.local
+    - vault-active.kodex-system
+    - vault-active.kodex-system.svc
+    - vault-active.kodex-system.svc.cluster.local
   privateKey:
     algorithm: RSA
     size: 3072
@@ -33,16 +33,16 @@ spec:
   usages:
     - server auth
   issuerRef:
-    name: mattercodex-installation-ca
+    name: kodex-installation-ca
     kind: Issuer
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: mattercodex-control-api-bootstrap
-  namespace: mattercodex-system
+  name: kodex-control-api-bootstrap
+  namespace: kodex-system
 spec:
-  secretName: mattercodex-control-api-bootstrap-tls
+  secretName: kodex-control-api-bootstrap-tls
   duration: 720h
   renewBefore: 120h
   privateKey:
@@ -50,9 +50,9 @@ spec:
     size: 256
     rotationPolicy: Always
   dnsNames:
-    - control-api.mattercodex.local
+    - control-api.kodex.local
   usages:
     - server auth
   issuerRef:
-    name: mattercodex-installation-ca
+    name: kodex-installation-ca
     kind: Issuer

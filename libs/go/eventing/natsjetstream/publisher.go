@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/eventing"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/eventing"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )

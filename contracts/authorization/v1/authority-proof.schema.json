@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-proof.schema.json",
-  "title": "Авторитетное доказательство actor/tenant/project MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authority-proof.schema.json",
+  "title": "Авторитетное доказательство actor/tenant/project Kodex",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -99,13 +99,13 @@
       "type": "string",
       "minLength": 49,
       "maxLength": 142,
-      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "contextAudience": {
       "type": "string",
       "minLength": 32,
       "maxLength": 125,
-      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "operationId": {
       "type": "string",

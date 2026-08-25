@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/nodepullidentity"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -124,7 +124,7 @@ func bootstrap(ctx context.Context, configuration config) error {
 }
 
 func validNodeReadbackImage(registry, image string) bool {
-	prefix := registry + "/mattercodex/agent-runner@sha256:"
+	prefix := registry + "/kodex/agent-runner@sha256:"
 	digest := strings.TrimPrefix(image, prefix)
 	return strings.Contains(registry, ".") && !strings.ContainsAny(registry, "/:@?# \\\r\n\t") &&
 		digest != image && digest != strings.Repeat("0", 64) && len(digest) == 64 &&
@@ -140,12 +140,12 @@ func vaultClient(caPath string) (*http.Client, error) {
 	if !pool.AppendCertsFromPEM(ca) {
 		return nil, errors.New(vaultClientError)
 	}
-	return &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "vault.mattercodex-system.svc.cluster.local", RootCAs: pool}}}, nil
+	return &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "vault.kodex-system.svc.cluster.local", RootCAs: pool}}}, nil
 }
 
 func vaultLogin(ctx context.Context, client *http.Client, jwt string) (string, error) {
-	payload, _ := json.Marshal(map[string]string{"role": "mattercodex-node-pull-bootstrap", "jwt": jwt})
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.mattercodex-system.svc:8200/v1/auth/kubernetes/login", bytes.NewReader(payload))
+	payload, _ := json.Marshal(map[string]string{"role": "kodex-node-pull-bootstrap", "jwt": jwt})
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.kodex-system.svc:8200/v1/auth/kubernetes/login", bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
@@ -165,7 +165,7 @@ func vaultLogin(ctx context.Context, client *http.Client, jwt string) (string, e
 
 func issueCertificate(ctx context.Context, client *http.Client, token, cn, ip string) (string, string, string, error) {
 	payload, _ := json.Marshal(map[string]string{"common_name": cn, "ip_sans": ip, "ttl": "30m"})
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.mattercodex-system.svc:8200/v1/pki-node-pull/issue/mattercodex-node-pull", bytes.NewReader(payload))
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.kodex-system.svc:8200/v1/pki-node-pull/issue/kodex-node-pull", bytes.NewReader(payload))
 	request.Header.Set("X-Vault-Token", token)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
@@ -187,7 +187,7 @@ func issueCertificate(ctx context.Context, client *http.Client, token, cn, ip st
 }
 
 func vaultRevoke(ctx context.Context, client *http.Client, token string) {
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.mattercodex-system.svc:8200/v1/auth/token/revoke-self", bytes.NewReader([]byte("{}")))
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://vault.kodex-system.svc:8200/v1/auth/token/revoke-self", bytes.NewReader([]byte("{}")))
 	request.Header.Set("X-Vault-Token", token)
 	if response, err := client.Do(request); err == nil {
 		_ = response.Body.Close()

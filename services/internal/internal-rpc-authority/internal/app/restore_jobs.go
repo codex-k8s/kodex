@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
-	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
-	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	kubernetespitr "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
+	kubernetesrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
+	postgresrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -48,11 +48,11 @@ type RestoreOperatorConfig struct {
 // LoadRestoreOperatorConfig читает и проверяет окружение операторской команды.
 func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	config := RestoreOperatorConfig{
-		ControllerAddress:       "internal-rpc-authority-restore-controller.mattercodex-system.svc:8443",
-		ControllerTLSServerName: "internal-rpc-authority-restore-controller.mattercodex-system.svc",
-		ControllerCAFile:        "/var/run/config/mattercodex/internal-rpc-authority/restore-operator/controller-ca.pem",
-		ClientCertificateFile:   "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.crt",
-		ClientPrivateKeyFile:    "/var/run/secrets/mattercodex/internal-rpc-authority/restore-operator/tls/tls.key",
+		ControllerAddress:       "internal-rpc-authority-restore-controller.kodex-system.svc:8443",
+		ControllerTLSServerName: "internal-rpc-authority-restore-controller.kodex-system.svc",
+		ControllerCAFile:        "/var/run/config/kodex/internal-rpc-authority/restore-operator/controller-ca.pem",
+		ClientCertificateFile:   "/var/run/secrets/kodex/internal-rpc-authority/restore-operator/tls/tls.crt",
+		ClientPrivateKeyFile:    "/var/run/secrets/kodex/internal-rpc-authority/restore-operator/tls/tls.key",
 		ApplicationTokenFile:    "/var/run/secrets/tokens/restore-operator/token",
 		KubernetesAddress:       "https://kubernetes.default.svc:443",
 		KubernetesTLSServerName: "kubernetes.default.svc",
@@ -69,7 +69,7 @@ func LoadRestoreOperatorConfig() (RestoreOperatorConfig, error) {
 	if splitErr != nil ||
 		host != config.ControllerTLSServerName ||
 		config.ControllerTLSServerName !=
-			"internal-rpc-authority-restore-controller.mattercodex-system.svc" ||
+			"internal-rpc-authority-restore-controller.kodex-system.svc" ||
 		(config.Action != "prepare" && config.Action != "complete") ||
 		config.RestoreID == "" ||
 		config.RecoveryTarget.IsZero() ||
@@ -115,7 +115,7 @@ func RunRestoreOperator(
 			TLSServerName:    config.KubernetesTLSServerName,
 			CAFile:           config.KubernetesCAFile,
 			TokenFile:        config.KubernetesTokenFile,
-			Namespace:        "mattercodex-system",
+			Namespace:        "kodex-system",
 			BackupName:       config.BackupResourceName,
 			SourceCluster:    config.DatabaseClusterID,
 			BarmanObjectName: config.BarmanObjectName,

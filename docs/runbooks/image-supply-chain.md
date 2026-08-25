@@ -44,11 +44,11 @@ Runtime читает отдельную immutable `ConfigMap`-проекцию; 
    Проверить общий Vault ingress только на TCP/8200 и ровно от трёх источников:
    exact `vault-csi-provider`, exact `vault-secrets-operator` из его namespace
    и прямого workload-исключения
-   `mattercodex-registry-node-pull-readback`. Последний получает node-bound
+   `kodex-registry-node-pull-readback`. Последний получает node-bound
    client certificate под exact ServiceAccount
-   `mattercodex-image-pull-readback`, `audience: vault` и минимальной Vault
+   `kodex-image-pull-readback`, `audience: vault` и минимальной Vault
    policy. Его CN обязан иметь вид
-   `<16-hex-node-hash>.g<generation>.mattercodex-node-pull`; другие workload не
+   `<16-hex-node-hash>.g<generation>.kodex-node-pull`; другие workload не
    должны иметь прямого Vault ingress.
 5. Сверить обе admission policy и binding: `failurePolicy: Fail`, действие
    `Deny`, exact controller username, namespace, typed `paramKind` и

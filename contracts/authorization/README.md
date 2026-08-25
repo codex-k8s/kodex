@@ -109,12 +109,12 @@ JSON Schema описывает семантическую модель. В тр�
 | Source requirement | #186, `ARCH-MC-002`, `GO-DOC-005`, `GUIDE-DOC-003` |
 | Actor/tenant/project authority | Signed authority proof от точный `authority_proof_issuer`; каждый ID и provenance связан с immutable `reference`, положительной безопасный целочисленный `revision` и SHA-256 digest |
 | Локальный caller | Application container, UID/GID `10001:10001`, workload и SPIFFE ID из pod identity; private pod `emptyDir` ограничивает область UDS |
-| Issuer endpoint | `unix:///run/mattercodex/internal-rpc-authority/issuer.sock`; `/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext` |
+| Issuer endpoint | `unix:///run/kodex/internal-rpc-authority/issuer.sock`; `/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext` |
 | Issuer binding | `SO_PEERCRED` обязан совпасть с UID/GID policy; loaded workload SVID обязан совпасть с `caller_workload_id`/`caller_spiffe_id` operation binding |
 | Authority proof | Issuer проверяет strict compact JWS, точный proof signer/trust generation, caller workload/SPIFFE, `operation_id`, proof audience, downstream audience, 15-second lifetime, proof revision/digest watermark и одноразовый proof JTI |
 | Policy binding | Request выбирает только `operation_id`; issuer на стороне сервера выводит issuer, audience, target workload/SPIFFE, точный TLS server name/trust bundle, полный RPC, permission, TTL и snapshot revisions, а authority копирует только из проверенного proof |
 | ES256 JWS | Issuer создает новый UUID `jti`, canonical claims, compact JWS и signing key точный `(iss,kid)` со статусом `CURRENT` |
-| Downstream transport | Client adapter открывает mTLS с точным server name/SPIFFE и доверенной CA; metadata содержит ровно одно `x-mattercodex-internal-authorization: Bearer <compact-jws>` |
+| Downstream transport | Client adapter открывает mTLS с точным server name/SPIFFE и доверенной CA; metadata содержит ровно одно `x-kodex-internal-authorization: Bearer <compact-jws>` |
 | Target | Target gRPC interceptor получает фактический полный метод и проверенного mTLS peer из transport, а не из business request |
 | Результат | Только после успешной локальной verifier проверки target adapter получает neutral `VerifiedAuthorizationContext` |
 | Domain owner | Domain service заново разрешает resource внутри tenant/project boundary и проверяет business state/ownership |
@@ -178,7 +178,7 @@ proof лишь после положительного на стороне се�
 hidden resource неразличимы по status/detail. Первый вызов и все негативные
 исходы определяются этой закрытой матрицей, Proto и схемой authority proof.
 
-Proof имеет `typ=mattercodex-internal-rpc-authority-proof+jws`, проверяется
+Proof имеет `typ=kodex-internal-rpc-authority-proof+jws`, проверяется
 только ключом точный issuer/trust generation и содержит semantic model
 `authority-proof.schema.json`:
 
@@ -228,7 +228,7 @@ operation — его `allowed_operation_ids`; неиспользуемый produ
 | --- | --- |
 | Инициатор | Target gRPC interceptor после обязательной mTLS-проверки и извлечения точный полный метод |
 | Локальный caller | Target application container UID/GID `10001:10001`; verifier сверяет `SO_PEERCRED` и local target workload identity |
-| Verifier endpoint | `unix:///run/mattercodex/internal-rpc-authority/verifier.sock`; `/internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext` |
+| Verifier endpoint | `unix:///run/kodex/internal-rpc-authority/verifier.sock`; `/internalrpcauthority.v1.AuthorizationVerifierService/VerifyAuthorizationContext` |
 | Вход | Compact JWS, `observed_full_method`, mTLS peer SPIFFE/certificate SHA-256 и correlation UUID; эти поля доверяются только в сочетании с UDS peer binding |
 | Snapshot | Фактически обслуживаемый immutable snapshot содержит manifest signer generation, JWKS current/next/previous и точный operation policy |
 | Проверка | Размер → compact shape → protected header → strict canonical claims → key `(iss,kid)` → ES256 signature → time/revision → точный audience/workloads/RPC/permission → mTLS peer |
@@ -258,7 +258,7 @@ RPC всегда получает новый context/JTI. Бизнесовая c
 | Intent | Publisher под PostgreSQL lease CAS-фиксирует один immutable rotation intent с точным generation, digest и union обязательных `(workload,role)` targets из всех operation bindings и producer profiles |
 | Подготовка | Publisher генерирует auth/proof key как `NEXT`; private parts и trust overlap пишет через Vault KV v2 CAS только в точный role paths зарегистрированных targets; wildcard/list/delete запрещены |
 | Доставка | Caller `AUTHORIZATION_ISSUER` получает auth private key, manifest trust и proof trust; target `AUTHORIZATION_VERIFIER` получает только snapshot/manifest trust; `AUTHORITY_PROOF_RESOLVER` получает proof private key и trust. Target-only workload допустим и auth private key не получает |
-| Normal-readback credential | Для каждого pinned intent publisher отдельно выпускает credential `mattercodex-internal-rpc-readback-credential+jws` только с audience attestor и purpose `KEY_DELIVERY_READBACK` либо `SNAPSHOT_READBACK`, генерирует distinct possession key и доставляет credential/private key по точному normal-readback Vault paths, не совпадающим с restore role credential/ACK paths |
+| Normal-readback credential | Для каждого pinned intent publisher отдельно выпускает credential `kodex-internal-rpc-readback-credential+jws` только с audience attestor и purpose `KEY_DELIVERY_READBACK` либо `SNAPSHOT_READBACK`, генерирует distinct possession key и доставляет credential/private key по точному normal-readback Vault paths, не совпадающим с restore role credential/ACK paths |
 | Readback trust | Attestor независимо проверяет отдельный `readback-credential-trust.schema.json`, собственный persistent high-watermark и cryptographic served readback; restore controller credential/trust/audience на этом пути не принимаются |
 | Cryptographic readback | Каждая обязательная `(workload,role)` identity проверяет только свой private→public/trust material; точный readback фиксируется отдельным workload/role-bound PostgreSQL login principal, publisher требует ровно одну строку на каждую требуемую роль |
 | Публикация | Только после всех delivery readbacks publisher строит следующий подписанный снимок с `source_revision + 1`, применимым key/policy/signer counter, predecessor и ограниченный history |
@@ -358,7 +358,7 @@ Kubernetes `resourceVersion` используется только как lost-u
 
 Чтобы admission был исполняем без разбора JWS внутри CEL, controller атомарно
 проецирует revision/epoch/evidence digest/predecessor в пять точный
-`mattercodex.dev/restore-*` annotations того же Secret. Policy сравнивает
+`kodex.dev/restore-*` annotations того же Secret. Policy сравнивает
 `oldObject`/`object` annotations. После API write controller и каждый consumer
 перечитывают Secret, проверяют JWS и требуют полного равенства annotations
 подписанным claims и SHA-256 compact JWS; annotation сама по себе authority не
@@ -370,9 +370,9 @@ Kubernetes `resourceVersion` используется только как lost-u
 
 | Назначение | Path | Listener | Client | Owner | Mode |
 | --- | --- | --- | --- | --- | --- |
-| Issuer | `/run/mattercodex/internal-rpc-authority/issuer.sock` | issuer sidecar UID `29001` | application UID `10001` | `29001:29000` | `0660` |
-| Verifier | `/run/mattercodex/internal-rpc-authority/verifier.sock` | verifier sidecar UID `29002` | application UID `10001` | `29002:29000` | `0660` |
-| Parent | `/run/mattercodex/internal-rpc-authority` | socket init UID `29000` | все три процесса | `29000:29000` | `1770` |
+| Issuer | `/run/kodex/internal-rpc-authority/issuer.sock` | issuer sidecar UID `29001` | application UID `10001` | `29001:29000` | `0660` |
+| Verifier | `/run/kodex/internal-rpc-authority/verifier.sock` | verifier sidecar UID `29002` | application UID `10001` | `29002:29000` | `0660` |
+| Parent | `/run/kodex/internal-rpc-authority` | socket init UID `29000` | все три процесса | `29000:29000` | `1770` |
 
 Pod задает `fsGroup: 29000` и
 `fsGroupChangePolicy: OnRootMismatch`. Application имеет
@@ -582,13 +582,13 @@ round-trip, безопасный целочисленный и negative fixtures
 Authorization context имеет ровно:
 
 ```json
-{"alg":"ES256","crit":["mcxv"],"kid":"<id>","mcxv":1,"typ":"mattercodex-internal-rpc-auth+jws"}
+{"alg":"ES256","crit":["mcxv"],"kid":"<id>","mcxv":1,"typ":"kodex-internal-rpc-auth+jws"}
 ```
 
 Signed snapshot отличается только:
 
 ```json
-{"alg":"ES256","crit":["mcxv"],"kid":"<id>","mcxv":1,"typ":"mattercodex-internal-rpc-snapshot+jws"}
+{"alg":"ES256","crit":["mcxv"],"kid":"<id>","mcxv":1,"typ":"kodex-internal-rpc-snapshot+jws"}
 ```
 
 ASCII member names расположены в RFC 8785 order
@@ -628,7 +628,7 @@ values.
 - `v == 1`;
 - `iss` — issuer SPIFFE ID текущего caller workload;
 - `sub == caller.spiffe_id`;
-- `aud == "urn:mattercodex:internal-rpc:" + target.workload_id`;
+- `aud == "urn:kodex:internal-rpc:" + target.workload_id`;
 - caller/target workload и SPIFFE совпадают с точным operation binding;
 - `rpc`, `operation_id` и `permission` образуют одну binding;
 - actor/tenant обязательны; project присутствует только когда policy требует
@@ -857,7 +857,7 @@ readback-attestor — точные
 `PUBLIC` отозван.
 
 Normal-readback credential имеет audience
-`urn:mattercodex:internal-rpc-authority-readback-attestor`, точный purpose,
+`urn:kodex:internal-rpc-authority-readback-attestor`, точный purpose,
 workload SPIFFE, role, поколения и отдельный possession JWK. Credential и
 private key доставляются по разным Vault paths из target registry и не
 совпадают с restore credential/ACK. Attestor проверяет independently rooted
@@ -911,8 +911,8 @@ ACK public JWK/kid/generation/RFC 7638 thumbprint. ACK private key достав�
 SPIFFE получают разные key pairs.
 
 Этот restore credential имеет только typ
-`mattercodex-internal-rpc-restore-role-credential+jws`, единственный audience
-`urn:mattercodex:internal-rpc-authority-restore-controller`, точный restore
+`kodex-internal-rpc-restore-role-credential+jws`, единственный audience
+`urn:kodex:internal-rpc-authority-restore-controller`, точный restore
 purpose/ID/epoch/coordination revision и restore-only ACK key. Его нельзя
 передать readback attestor. Normal-readback credential имеет другой typ,
 audience, trust snapshot, Vault paths и possession key и не принимается
@@ -922,8 +922,8 @@ SPIFFE всегда отклоняются до семантического и�
 Issuance достижим через точный mTLS
 `/internalrpcauthority.v1.RestoreRoleCredentialPublisherService/PublishRoleCredential`
 на
-`internal-rpc-authority-publisher.mattercodex-system.svc:8444`, SNI
-`internal-rpc-authority-publisher.mattercodex-system.svc` и trust bundle
+`internal-rpc-authority-publisher.kodex-system.svc:8444`, SNI
+`internal-rpc-authority-publisher.kodex-system.svc` и trust bundle
 `internal-rpc-authority-publisher-ca`. Controller передаёт только собственный
 signed issuance directive, связанный с restore epoch/revision, immutable
 target registry revision/digest и точный role tuple. Publisher проверяет
@@ -1231,7 +1231,7 @@ make check-proto-codegen
 нулевой diff с committed files. В активной фазе прототипа отдельная тяжёлая
 contract/deploy/integration suite не является обязательной и не входит в этот
 PR. Полный поддерживаемый контур будет спроектирован после прототипа в
-[Issue #216](https://github.com/codex-k8s/matter-codex/issues/216).
+[Issue #216](https://github.com/codex-k8s/kodex/issues/216).
 
 ## Ручная проверка контрактный этап
 

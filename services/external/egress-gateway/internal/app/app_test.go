@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	internalobservability "github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 func TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback(t *testing.T) {
@@ -69,7 +69,7 @@ func TestInvalidPolicyUsesSharedReadinessAndSafeReadback(t *testing.T) {
 
 func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	values := map[string]string{
-		"EGRESS_GATEWAY_POLICY_FILE":              "/var/run/config/mattercodex/egress-gateway/policy.json",
+		"EGRESS_GATEWAY_POLICY_FILE":              "/var/run/config/kodex/egress-gateway/policy.json",
 		"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION": "2026-08-07.1",
 		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":   strings.Repeat("a", 64),
 		"EGRESS_GATEWAY_CONNECT_LISTEN":           ":8080",
@@ -143,7 +143,7 @@ func loadRepositoryPolicy(t *testing.T) *policy.Active {
 	if err != nil {
 		t.Fatal(err)
 	}
-	active, err := policy.Load(value, "2026-08-07.1", "5c71fefd60e624d6891e857442302c2b119f21b76b474d3c34f1c6df330f62ae")
+	active, err := policy.Load(value, "2026-08-07.1", "a32b8c5aa305640eaee494b65019804f668466b9dd82a1d5cc84af7f77747d4f")
 	if err != nil {
 		t.Fatal(err)
 	}

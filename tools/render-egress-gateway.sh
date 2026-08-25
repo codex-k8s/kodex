@@ -66,9 +66,9 @@ final_render="$temporary_directory/final.yaml"
 
 kubectl kustomize "$overlay" >"$raw_render"
 
-registry_host='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000'
-placeholder="$registry_host/mattercodex/egress-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-replacement="$registry_pull_host/mattercodex/egress-gateway@$gateway_digest"
+registry_host='kodex-image-registry.kodex-system.svc.cluster.local:5000'
+placeholder="$registry_host/kodex/egress-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+replacement="$registry_pull_host/kodex/egress-gateway@$gateway_digest"
 if [[ $(grep -F -c "$placeholder" "$raw_render" || true) -ne 1 ]]; then
   echo "canonical render does not contain exactly one egress-gateway image input" >&2
   exit 1

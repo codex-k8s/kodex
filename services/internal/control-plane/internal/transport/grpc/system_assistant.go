@@ -3,9 +3,9 @@ package grpc
 import (
 	"context"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/command"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
 func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.GetSystemAssistantRequest) (*controlplanev1.GetSystemAssistantResponse, error) {

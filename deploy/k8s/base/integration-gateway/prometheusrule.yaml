@@ -9,26 +9,26 @@ spec:
     - name: integration-gateway
       rules:
         - alert: AutomationSchedulerCycleFailures
-          expr: increase(mattercodex_integration_gateway_cycles_total{outcome="error"}[10m]) > 2
+          expr: increase(kodex_integration_gateway_cycles_total{outcome="error"}[10m]) > 2
           for: 5m
           labels:
             severity: warning
           annotations:
             summary: Automation scheduler reconciliation is failing
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
         - alert: AutomationSchedulerClaimBacklog
-          expr: mattercodex_integration_gateway_tracked_claims > 200
+          expr: kodex_integration_gateway_tracked_claims > 200
           for: 10m
           labels:
             severity: warning
           annotations:
             summary: Automation scheduler transient claim tracking is near its bound
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
         - alert: AutomationSchedulerProtectedPathUnavailable
-          expr: mattercodex_integration_gateway_readiness{ready="false"} == 1
+          expr: kodex_integration_gateway_readiness{ready="false"} == 1
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: Automation scheduler protected control-plane path is unavailable
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md

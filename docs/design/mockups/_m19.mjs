@@ -21,8 +21,8 @@ export const m19 = L.page(L.frameMobile(`
 
     <div style="font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: ${T.mut}; padding: 2px 2px 0;">Сегодня, 22 августа</div>
 
-    ${evCard('10:12', 'Анна Волкова через Помощника MatterCodex', 'Создан Проект «Корпоративные продажи»', L.statusPill('done', 'Успешно', 'sm'))}
-    ${evCard('10:13', 'Помощник MatterCodex от имени Анны Волковой', 'Создан ИИ-сотрудник «Аналитик продаж»', L.statusPill('done', 'Успешно', 'sm'))}
+    ${evCard('10:12', 'Анна Волкова через Помощника Kodex', 'Создан Проект «Корпоративные продажи»', L.statusPill('done', 'Успешно', 'sm'))}
+    ${evCard('10:13', 'Помощник Kodex от имени Анны Волковой', 'Создан ИИ-сотрудник «Аналитик продаж»', L.statusPill('done', 'Успешно', 'sm'))}
     ${evCard('10:41', 'Михаил Орлов', 'Запущен Процесс «Обработка нового лида»', L.statusPill('done', 'Успешно', 'sm'))}
     ${evCard('11:04', 'Система · код <span style="font-family: ' + T.mono + '; color: ' + T.err + ';">RUNTIME_EXECUTION_FAILED</span>', 'Запуск «Проверить условия договора» остановлен', L.statusPill('err', 'Ошибка', 'sm'))}
     ${evCard('11:05', 'Доставка уведомления · основной запуск завершён успешно', 'Уведомление Mattermost не доставлено', L.statusPill('wait', 'Доставка', 'sm'))}

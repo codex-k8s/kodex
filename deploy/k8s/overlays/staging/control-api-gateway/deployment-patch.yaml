@@ -8,5 +8,5 @@ spec:
       containers:
         - name: control-api-gateway
           env:
-            - {name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS, value: "https://control.staging.mattercodex.local"}
-            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.staging.mattercodex.local}
+            - {name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS, value: "https://control.staging.kodex.local"}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.staging.kodex.local}

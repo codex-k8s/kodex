@@ -37,7 +37,7 @@ let workflowRunRef = "";
 test.describe.serial("web-only fresh installation", () => {
   test("первый вход, горячий помощник и первый Проект", async ({ page }) => {
     await page.goto("/onboarding");
-    await expectPageHeading(page, "Настроим MatterCodex");
+    await expectPageHeading(page, "Настроим Kodex");
     await expect(
       page.getByRole("heading", { name: "Системный помощник готов" }),
     ).toBeVisible();
@@ -47,7 +47,7 @@ test.describe.serial("web-only fresh installation", () => {
     await expect(page.getByText("Готов", { exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "Начать с помощником" }).click();
-    await expectPageHeading(page, "Помощник MatterCodex");
+    await expectPageHeading(page, "Помощник Kodex");
     await expect(page.getByText(/Системный.*неудаляемый/)).toBeVisible();
 
     const prompt = [

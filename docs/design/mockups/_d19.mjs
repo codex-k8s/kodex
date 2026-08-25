@@ -41,9 +41,9 @@ export const d19 = L.page(L.shellDesktop({
 
       <div style="flex: 1 1 auto; border: 1px solid ${T.line}; border-radius: 12px; background: ${T.bg}; overflow: hidden; display: flex; flex-direction: column; min-width: 0;">
         <div style="padding: 11px 16px; background: ${T.field}; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: ${T.mut};">Сегодня, 22 августа</div>
-        ${ev('10:12', 'Анна Волкова через Помощника MatterCodex',
+        ${ev('10:12', 'Анна Волкова через Помощника Kodex',
           'Создан Проект «Корпоративные продажи»', L.statusPill('done', 'Успешно', 'sm'), false)}
-        ${ev('10:13', 'Помощник MatterCodex от имени Анны Волковой',
+        ${ev('10:13', 'Помощник Kodex от имени Анны Волковой',
           'Создан ИИ-сотрудник «Аналитик продаж»', L.statusPill('done', 'Успешно', 'sm'), true)}
         ${ev('10:41', 'Михаил Орлов',
           'Запущен Процесс «Обработка нового лида»', L.statusPill('done', 'Успешно', 'sm'), false)}
@@ -67,7 +67,7 @@ export const d19 = L.page(L.shellDesktop({
         <div style="flex: 1 1 auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0;">
           <div>
             ${kv('Инициатор', 'Анна Волкова')}
-            ${kv('Исполнитель команды', 'Помощник MatterCodex')}
+            ${kv('Исполнитель команды', 'Помощник Kodex')}
             ${kv('Источник', 'Системный помощник')}
             ${kv('Проект', 'Корпоративные продажи')}
             ${kv('Тип операции', 'Создание ИИ-сотрудника')}

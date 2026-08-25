@@ -64,7 +64,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
   yq -e 'select(.kind == "ServiceAccount" and .metadata.name == "egress-gateway") |
     .automountServiceAccountToken == false and
     (.imagePullSecrets | length) == 1 and
-    .imagePullSecrets[0].name == "mattercodex-image-pull"' "$gateway_render" >/dev/null
+    .imagePullSecrets[0].name == "kodex-image-pull"' "$gateway_render" >/dev/null
 
   policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != "") | .metadata.name' "$gateway_render")"
   if [[ ! "$policy_name" =~ ^egress-gateway-policy-[a-z0-9]+$ ]]; then
@@ -90,20 +90,20 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
   yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths") |
     (.spec.ingress | length == 2) and (.spec.egress | length == 2) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "integration-gateway" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "integration-worker")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "interaction-gateway" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "interaction-adapter")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "agent-runner" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "role-runtime" and
-        .podSelector.matchLabels."runtime.mattercodex.dev/managed" == "true")] | length == 1) and
+        .podSelector.matchLabels."runtime.kodex.dev/managed" == "true")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "release-artifact-materializer" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "release-bootstrap")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 9090) | .from[] |
@@ -129,9 +129,9 @@ done
 for environment_name in staging production; do
   delivered_render="$temporary_directory/$environment_name.yaml"
   ENVIRONMENT_NAME="$environment_name" yq -e 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
-    .metadata.namespace == "mattercodex-system" and
-    .spec.template.metadata.labels."mattercodex.dev/environment" == strenv(ENVIRONMENT_NAME) and
-    .spec.template.spec.containers[0].image == "registry-pull.example.com/mattercodex/egress-gateway@sha256:1111111111111111111111111111111111111111111111111111111111111111"' \
+    .metadata.namespace == "kodex-system" and
+    .spec.template.metadata.labels."kodex.dev/environment" == strenv(ENVIRONMENT_NAME) and
+    .spec.template.spec.containers[0].image == "registry-pull.example.com/kodex/egress-gateway@sha256:1111111111111111111111111111111111111111111111111111111111111111"' \
     "$delivered_render" >/dev/null
   if rg -F '@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$delivered_render" >/dev/null; then
     echo "environment render contains an unresolved image" >&2
@@ -141,7 +141,7 @@ done
 
 yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths") |
   ([.spec.egress[] | select(.ports[].protocol == "TCP" and .ports[].port == 8080) | .to[] |
-    select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "mattercodex-system" and
+    select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
       .podSelector.matchLabels."app.kubernetes.io/name" == "egress-gateway" and
       .podSelector.matchLabels."app.kubernetes.io/component" == "platform-egress")] | length == 1) and
   ([.spec.egress[] | select(.ports[].port == 9090)] | length == 0) and

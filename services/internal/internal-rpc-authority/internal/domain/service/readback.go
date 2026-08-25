@@ -10,18 +10,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	readbackCredentialType        = "mattercodex-internal-rpc-readback-credential+jws"
-	readbackAttestationType       = "mattercodex-internal-rpc-readback-attestation+jws"
+	readbackCredentialType        = "kodex-internal-rpc-readback-credential+jws"
+	readbackAttestationType       = "kodex-internal-rpc-readback-attestation+jws"
 	readbackCredentialPurpose     = "READBACK_CREDENTIAL"
-	readbackAudience              = "urn:mattercodex:internal-rpc-authority-readback-attestor"
-	readbackPublisherIssuer       = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
+	readbackAudience              = "urn:kodex:internal-rpc-authority-readback-attestor"
+	readbackPublisherIssuer       = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
 	readbackCredentialTTL         = 5 * time.Minute
 	readbackChallengeTTL          = 30 * time.Second
 	readbackAllowedClockSkew      = 5 * time.Second

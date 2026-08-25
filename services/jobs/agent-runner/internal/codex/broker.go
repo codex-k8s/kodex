@@ -19,13 +19,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/security"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	ProviderSocketPath = "/run/mattercodex/provider/provider.sock"
+	ProviderSocketPath = "/run/kodex/provider/provider.sock"
 	maximumBrokerBytes = 4 << 20
 )
 
@@ -187,7 +187,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if hex.EncodeToString(digest[:]) != expectedDigest {
 		return errors.New("provider broker account pin mismatch")
 	}
-	if request.MCPSocket != "/run/mattercodex/provider/mcp-authority.sock" || len(request.MCPProxyToken) != 64 {
+	if request.MCPSocket != "/run/kodex/provider/mcp-authority.sock" || len(request.MCPProxyToken) != 64 {
 		return errors.New("provider broker MCP binding is invalid")
 	}
 	if _, err := hex.DecodeString(request.MCPProxyToken); err != nil {
@@ -217,7 +217,7 @@ type providerMCPBridge struct {
 }
 
 func startProviderMCPBridge(ctx context.Context, socketPath, localToken string) (*providerMCPBridge, error) {
-	if os.Geteuid() != 10002 || socketPath != "/run/mattercodex/provider/mcp-authority.sock" || len(localToken) != 64 {
+	if os.Geteuid() != 10002 || socketPath != "/run/kodex/provider/mcp-authority.sock" || len(localToken) != 64 {
 		return nil, errors.New("provider MCP bridge binding is invalid")
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -227,7 +227,7 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string) 
 	transport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}
-	target, _ := url.Parse("http://mattercodex-mcp-authority/mcp")
+	target, _ := url.Parse("http://kodex-mcp-authority/mcp")
 	reverse := &httputil.ReverseProxy{Transport: transport, ErrorLog: log.New(io.Discard, "", 0),
 		Director: func(request *http.Request) {
 			request.URL.Scheme, request.URL.Host, request.URL.Path = target.Scheme, target.Host, target.Path

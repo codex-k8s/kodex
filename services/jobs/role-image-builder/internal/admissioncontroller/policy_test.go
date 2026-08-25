@@ -76,20 +76,20 @@ func TestAdmissionPoliciesAcceptExactRenderedResources(t *testing.T) {
 		if err != nil {
 			t.Fatalf("render %s: %v", phase, err)
 		}
-		if err := prepareRendered(rendered, "mattercodex-system", runID, phase); err != nil {
+		if err := prepareRendered(rendered, "kodex-system", runID, phase); err != nil {
 			t.Fatalf("prepare %s: %v", phase, err)
 		}
 		job, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rendered.Job)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertPolicyAccepts(t, byName["mattercodex-image-admission-controller-jobs"], job, ownerPolicy)
+		assertPolicyAccepts(t, byName["kodex-image-admission-controller-jobs"], job, ownerPolicy)
 		if rendered.PVC != nil {
 			workspace, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rendered.PVC)
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertPolicyAccepts(t, byName["mattercodex-image-admission-controller-workspaces"], workspace, ownerPolicy)
+			assertPolicyAccepts(t, byName["kodex-image-admission-controller-workspaces"], workspace, ownerPolicy)
 		}
 	}
 }
@@ -112,7 +112,7 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepareRendered(rendered, "mattercodex-system", runID, "claim"); err != nil {
+	if err := prepareRendered(rendered, "kodex-system", runID, "claim"); err != nil {
 		t.Fatal(err)
 	}
 	mutations := map[string]func(*batchv1.Job){
@@ -132,13 +132,13 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 			for index := range job.Spec.Template.Spec.InitContainers[1].Env {
 				item := &job.Spec.Template.Spec.InitContainers[1].Env[index]
 				if item.Name == "INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS" {
-					item.Value = "foreign-service.mattercodex-system.svc:8443"
+					item.Value = "foreign-service.kodex-system.svc:8443"
 				}
 			}
 		},
 	}
 	for _, policy := range policies {
-		if policy.Metadata.Name == "mattercodex-image-admission-controller-jobs" {
+		if policy.Metadata.Name == "kodex-image-admission-controller-jobs" {
 			for name, mutate := range mutations {
 				t.Run(name, func(t *testing.T) {
 					job := rendered.Job.DeepCopy()
@@ -195,22 +195,22 @@ func readAdmissionPolicies() ([]admissionPolicyDocument, error) {
 func completeTestPolicy() *corev1.ConfigMap {
 	immutable := true
 	return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
-		Name: policyName, Namespace: "mattercodex-system",
-		Labels:      map[string]string{"mattercodex.dev/owner-intent": "true"},
-		Annotations: map[string]string{"mattercodex.dev/admission-tools-sha256": "sha256:" + stringsOf("e", 64)},
+		Name: policyName, Namespace: "kodex-system",
+		Labels:      map[string]string{"kodex.dev/owner-intent": "true"},
+		Annotations: map[string]string{"kodex.dev/admission-tools-sha256": "sha256:" + stringsOf("e", 64)},
 	}, Immutable: &immutable, Data: map[string]string{
 		"orchestrationRevision":       testOrchestrationRevision,
-		"toolsImage":                  "registry.example.test/mattercodex/admission-tools@sha256:" + stringsOf("e", 64),
-		"admissionImage":              "registry.example.test/mattercodex/image-admission@sha256:" + stringsOf("f", 64),
-		"authorityImage":              "registry.example.test/mattercodex/internal-rpc-authority@sha256:" + stringsOf("b", 64),
-		"promotionRepository":         "mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles",
-		"promotionEvidenceRepository": "mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence",
-		"evidenceRepository":          "mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission",
-		"promotedPullRepository":      "registry.example.test/mattercodex/roles",
+		"toolsImage":                  "registry.example.test/kodex/admission-tools@sha256:" + stringsOf("e", 64),
+		"admissionImage":              "registry.example.test/kodex/image-admission@sha256:" + stringsOf("f", 64),
+		"authorityImage":              "registry.example.test/kodex/internal-rpc-authority@sha256:" + stringsOf("b", 64),
+		"promotionRepository":         "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles",
+		"promotionEvidenceRepository": "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence",
+		"evidenceRepository":          "kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission",
+		"promotedPullRepository":      "registry.example.test/kodex/roles",
 		"policyRevision":              "7", "policySHA256": stringsOf("c", 64),
-		"builderIdentity":             "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
+		"builderIdentity":             "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
 		"buildType":                   "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
-		"trustedRoleBaseRepository":   "registry.example.test/mattercodex/agent-runner",
+		"trustedRoleBaseRepository":   "registry.example.test/kodex/agent-runner",
 		"trustedRoleBaseDigest":       "sha256:" + stringsOf("a", 64),
 		"roleRuntimeContractRevision": "1", "roleRuntimeContractSHA256": stringsOf("d", 64),
 		"requiredTools": "base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc",
@@ -281,7 +281,7 @@ func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]a
 		parameterSpec[name] = value
 	}
 	params := map[string]any{
-		"apiVersion": "supplychain.mattercodex.dev/v1alpha1",
+		"apiVersion": "supplychain.kodex.dev/v1alpha1",
 		"kind":       "ImageAdmissionPolicyParameters",
 		"metadata": map[string]any{
 			"name":      ownerPolicy.Name,
@@ -293,7 +293,7 @@ func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]a
 	activation := map[string]any{
 		"object": object, "oldObject": nil, "params": params,
 		"request": map[string]any{"userInfo": map[string]any{
-			"username": "system:serviceaccount:mattercodex-system:image-admission-controller",
+			"username": "system:serviceaccount:kodex-system:image-admission-controller",
 		}},
 		"variables": variableValues,
 	}

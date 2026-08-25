@@ -1,6 +1,6 @@
 ---
 id: PRD-MC-002
-title: Персоны web-first MatterCodex
+title: Персоны web-first Kodex
 type: product
 status: approved
 owner: product
@@ -8,12 +8,12 @@ version: 1.0.0
 updated: 2026-08-22
 ---
 
-# Персоны web-first MatterCodex
+# Персоны web-first Kodex
 
 ## Владелец
 
 Запускает установку, управляет Organization, администраторами и системными
-политиками. Ожидает увидеть готового Помощника MatterCodex, создать первый
+политиками. Ожидает увидеть готового Помощника Kodex, создать первый
 Проект и получить полезный результат без Mattermost, Git или Kubernetes.
 
 ## Администратор

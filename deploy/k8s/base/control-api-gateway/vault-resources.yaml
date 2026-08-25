@@ -4,8 +4,8 @@ metadata:
   name: control-api-gateway
   annotations: {argocd.argoproj.io/sync-wave: "-8"}
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: control-api-gateway-vault-ca
 ---
@@ -33,7 +33,7 @@ spec:
   vaultAuthRef: control-api-gateway
   mount: kv
   type: kv-v2
-  path: mattercodex/control-api-gateway/public-tls-material
+  path: kodex/control-api-gateway/public-tls-material
   refreshAfter: 1m
   rolloutRestartTargets:
     - {kind: Deployment, name: control-api-gateway}
@@ -61,7 +61,7 @@ spec:
   vaultAuthRef: control-api-gateway
   mount: kv
   type: kv-v2
-  path: mattercodex/control-api-gateway/session
+  path: kodex/control-api-gateway/session
   refreshAfter: 5m
   rolloutRestartTargets:
     - {kind: Deployment, name: control-api-gateway}
@@ -85,7 +85,7 @@ spec:
   vaultAuthRef: control-api-gateway
   mount: kv
   type: kv-v2
-  path: mattercodex/control-api-gateway/nats
+  path: kodex/control-api-gateway/nats
   refreshAfter: 5m
   rolloutRestartTargets:
     - {kind: Deployment, name: control-api-gateway}

@@ -37,7 +37,7 @@ for command_name in awk base64 jq kubectl openssl rg sha256sum sleep sort stat y
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
-kubectl -n mattercodex-system get pod vault-0 >/dev/null 2>&1 || fail 'Vault Pod is absent'
+kubectl -n kodex-system get pod vault-0 >/dev/null 2>&1 || fail 'Vault Pod is absent'
 
 vault_directory="$material_directory/vault"
 root_token_file="$vault_directory/root-token"
@@ -45,8 +45,8 @@ mkdir -p "$vault_directory"
 chmod 0700 "$vault_directory"
 
 vault_status() {
-  kubectl -n mattercodex-system exec vault-0 -- sh -ec '
-    export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+  kubectl -n kodex-system exec vault-0 -- sh -ec '
+    export VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
     export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
     status_code=0
     status_json=$(vault status -format=json) || status_code=$?
@@ -93,9 +93,9 @@ vault_cli() {
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
   printf '%s\n' "$root_token" |
-    kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
+    kubectl -n kodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault "$@"
     ' sh "$@"
@@ -107,9 +107,9 @@ vault_input() {
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
   { printf '%s\n' "$root_token"; cat "$input_file"; } |
-    kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
+    kubectl -n kodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault "$@"
     ' sh "$@"
@@ -119,7 +119,7 @@ write_publisher_runtime_policy() {
   local registry_json=$1 output_file=$2 path path_count=0
   : >"$output_file"
   while IFS= read -r path; do
-    [[ "$path" =~ ^kv/data/mattercodex/internal-rpc-authority/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$ ]] ||
+    [[ "$path" =~ ^kv/data/kodex/internal-rpc-authority/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$ ]] ||
       fail 'publisher runtime Vault path is outside the authority registry boundary'
     printf 'path "%s" { capabilities = ["create", "read", "update"] }\n' "$path" >>"$output_file"
     ((path_count += 1))
@@ -176,9 +176,9 @@ vault_kv_put_file() {
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
   { printf '%s\n' "$root_token"; cat "$seed_file_path"; } |
-    kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
+    kubectl -n kodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault kv put -mount=kv "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
@@ -193,9 +193,9 @@ vault_kv_patch_file() {
   require_root_material
   root_token=$(read_single_line_secret "$root_token_file" 'Vault root token')
   { printf '%s\n' "$root_token"; cat "$seed_file_path"; } |
-    kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
+    kubectl -n kodex-system exec -i vault-0 -- sh -ec '
       IFS= read -r VAULT_TOKEN
-      export VAULT_TOKEN VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+      export VAULT_TOKEN VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       exec vault kv patch -mount=kv "$1" "$2"=-
     ' sh "$path" "$key" >/dev/null
@@ -207,8 +207,8 @@ if [[ "$mode" == initialize ]]; then
   if [[ "$initialized" == false ]]; then
     umask 077
     init_file="$vault_directory/init.json"
-    kubectl -n mattercodex-system exec vault-0 -- sh -ec '
-      export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+    kubectl -n kodex-system exec vault-0 -- sh -ec '
+      export VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
       export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
       vault operator init -format=json -key-shares=5 -key-threshold=3
     ' >"$init_file"
@@ -223,8 +223,8 @@ if [[ "$mode" == initialize ]]; then
   sealed=$(vault_status | read_vault_boolean sealed)
   if [[ "$sealed" == true ]]; then
     for index in 1 2 3; do
-      kubectl -n mattercodex-system exec -i vault-0 -- sh -ec '
-        export VAULT_ADDR=https://vault.mattercodex-system.svc.cluster.local:8200
+      kubectl -n kodex-system exec -i vault-0 -- sh -ec '
+        export VAULT_ADDR=https://vault.kodex-system.svc.cluster.local:8200
         export VAULT_CACERT=/vault/userconfig/vault-server-tls/ca.crt
         vault write -format=json sys/unseal key=-
       ' <"$vault_directory/unseal-key-$index" >/dev/null
@@ -244,11 +244,11 @@ if [[ "$mode" == configure-core ]]; then
   vault_cli secrets tune -max-lease-ttl=87600h pki >/dev/null
   vault_cli secrets tune -max-lease-ttl=87600h pki-public >/dev/null
   if ! vault_cli read -format=json pki/cert/ca >/dev/null 2>&1; then
-    vault_cli write pki/root/generate/internal common_name=mattercodex-internal-pki ttl=87600h \
+    vault_cli write pki/root/generate/internal common_name=kodex-internal-pki ttl=87600h \
       key_type=rsa key_bits=4096 >/dev/null
   fi
   if ! vault_cli read -format=json pki-public/cert/ca >/dev/null 2>&1; then
-    vault_cli write pki-public/root/generate/internal common_name=mattercodex-public-registry-pki ttl=87600h \
+    vault_cli write pki-public/root/generate/internal common_name=kodex-public-registry-pki ttl=87600h \
       key_type=rsa key_bits=4096 >/dev/null
   fi
   auths=$(vault_cli auth list -format=json)
@@ -262,24 +262,24 @@ if [[ "$mode" == configure-core ]]; then
     vault_cli audit enable file file_path=/vault/audit/audit.log >/dev/null
   fi
 
-  vault_kv_put_file mattercodex/control-plane/nats credentials "$material_directory/nats/users/control-plane.creds"
-  vault_kv_put_file mattercodex/control-plane/nats-bootstrap credentials "$material_directory/nats/users/control-plane-broker-bootstrap.creds"
-  vault_kv_put_file mattercodex/control-api-gateway/nats credentials "$material_directory/nats/users/control-api-gateway.creds"
-  vault_kv_put_file mattercodex/control-plane/lease-signing key "$material_directory/control-api/lease-signing.key"
-  vault_kv_put_file mattercodex/control-api-gateway/session current-hex "$material_directory/control-api/session-current.hex"
-  vault_kv_patch_file mattercodex/control-api-gateway/session previous-hex "$material_directory/control-api/session-previous.hex"
+  vault_kv_put_file kodex/control-plane/nats credentials "$material_directory/nats/users/control-plane.creds"
+  vault_kv_put_file kodex/control-plane/nats-bootstrap credentials "$material_directory/nats/users/control-plane-broker-bootstrap.creds"
+  vault_kv_put_file kodex/control-api-gateway/nats credentials "$material_directory/nats/users/control-api-gateway.creds"
+  vault_kv_put_file kodex/control-plane/lease-signing key "$material_directory/control-api/lease-signing.key"
+  vault_kv_put_file kodex/control-api-gateway/session current-hex "$material_directory/control-api/session-current.hex"
+  vault_kv_patch_file kodex/control-api-gateway/session previous-hex "$material_directory/control-api/session-previous.hex"
 
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   for key_name in tls.crt tls.key ca.crt; do
-    kubectl -n mattercodex-system get secret mattercodex-control-api-bootstrap-tls \
+    kubectl -n kodex-system get secret kodex-control-api-bootstrap-tls \
       -o "jsonpath={.data['${key_name//./\\.}']}" | base64 -d >"$temporary_directory/$key_name"
   done
   printf '1\n' >"$temporary_directory/generation"
   printf '0\n' >"$temporary_directory/predecessor-generation"
   sha256sum "$temporary_directory/tls.crt" | awk '{print $1}' >"$temporary_directory/certificate-sha256"
   printf '%064d\n' 0 >"$temporary_directory/predecessor-certificate-sha256"
-  vault_kv_put_file mattercodex/control-api-gateway/public-tls-material tls-crt "$temporary_directory/tls.crt"
+  vault_kv_put_file kodex/control-api-gateway/public-tls-material tls-crt "$temporary_directory/tls.crt"
   for entry in \
     "tls-key:$temporary_directory/tls.key" \
     "ca-crt:$temporary_directory/ca.crt" \
@@ -287,13 +287,13 @@ if [[ "$mode" == configure-core ]]; then
     "certificate-sha256:$temporary_directory/certificate-sha256" \
     "predecessor-generation:$temporary_directory/predecessor-generation" \
     "predecessor-certificate-sha256:$temporary_directory/predecessor-certificate-sha256"; do
-    vault_kv_patch_file mattercodex/control-api-gateway/public-tls-material "${entry%%:*}" "${entry#*:}"
+    vault_kv_patch_file kodex/control-api-gateway/public-tls-material "${entry%%:*}" "${entry#*:}"
   done
 
   for worker in automation-scheduler integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion; do
-    vault_kv_put_file "mattercodex/platform-worker-grants/$worker" private.jwk \
+    vault_kv_put_file "kodex/platform-worker-grants/$worker" private.jwk \
       "$material_directory/crypto/platform-worker/$worker/private.jwk"
-    vault_kv_patch_file "mattercodex/platform-worker-grants/$worker" public-jwk \
+    vault_kv_patch_file "kodex/platform-worker-grants/$worker" public-jwk \
       "$material_directory/crypto/platform-worker/$worker/public.jwk"
   done
   vault_kv_put_file internal-rpc-authority/publisher/restore-signer private.jwk \
@@ -441,11 +441,11 @@ HCL
         image-promotion|internal-rpc-authority-image-promotion)
           service_accounts=image-promotion
           ;;
-        mattercodex-image-scanner)
-          service_accounts=mattercodex-image-scanner
+        kodex-image-scanner)
+          service_accounts=kodex-image-scanner
           ;;
-        mattercodex-image-signer)
-          service_accounts=mattercodex-image-signer
+        kodex-image-signer)
+          service_accounts=kodex-image-signer
           ;;
       esac
     fi
@@ -459,21 +459,21 @@ HCL
     fi
     vault_cli write "auth/kubernetes/role/$role" \
       bound_service_account_names="$service_accounts" \
-      bound_service_account_namespaces=mattercodex-system \
+      bound_service_account_namespaces=kodex-system \
       audience=vault \
       token_policies="$role_policies" token_ttl=30m token_max_ttl=1h >/dev/null
   done < <(jq -r '.[].role' "$temporary_directory/objects.json" | sort -u)
 
   cat >"$temporary_directory/control-api-gateway-vso.hcl" <<'HCL'
-path "kv/data/mattercodex/control-api-gateway/public-tls-material" { capabilities = ["read"] }
-path "kv/data/mattercodex/control-api-gateway/session" { capabilities = ["read"] }
-path "kv/data/mattercodex/control-api-gateway/nats" { capabilities = ["read"] }
+path "kv/data/kodex/control-api-gateway/public-tls-material" { capabilities = ["read"] }
+path "kv/data/kodex/control-api-gateway/session" { capabilities = ["read"] }
+path "kv/data/kodex/control-api-gateway/nats" { capabilities = ["read"] }
 path "database/static-creds/control-api-gateway-issuer-g1" { capabilities = ["read"] }
 HCL
   vault_input "$temporary_directory/control-api-gateway-vso.hcl" policy write control-api-gateway-vso - >/dev/null
   vault_cli write auth/kubernetes/role/control-api-gateway-vso \
     bound_service_account_names=control-api-gateway \
-    bound_service_account_namespaces=mattercodex-system \
+    bound_service_account_namespaces=kodex-system \
     audience=vault \
     token_policies=control-api-gateway-vso \
     token_ttl=30m token_max_ttl=1h >/dev/null
@@ -486,7 +486,7 @@ HCL
     policy write internal-rpc-authority-restore-controller-vso - >/dev/null
   vault_cli write auth/kubernetes/role/internal-rpc-authority-restore-controller-vso \
     bound_service_account_names=internal-rpc-authority-restore-controller \
-    bound_service_account_namespaces=mattercodex-system \
+    bound_service_account_namespaces=kodex-system \
     audience=vault \
     token_policies=internal-rpc-authority-restore-controller-vso \
     token_ttl=30m token_max_ttl=1h >/dev/null
@@ -496,14 +496,14 @@ if [[ "$mode" == configure-database ]]; then
   require_root_material
   [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
     fail 'release render is required for database configuration'
-  kubectl -n mattercodex-system wait --for=condition=Ready pod/mattercodex-postgresql-0 --timeout=300s >/dev/null
+  kubectl -n kodex-system wait --for=condition=Ready pod/kodex-postgresql-0 --timeout=300s >/dev/null
   database_password_file="$material_directory/postgresql/password"
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
   temporary_directory=$(mktemp -d)
   trap 'rm -rf -- "$temporary_directory"' EXIT
   database_password=$(read_single_line_secret "$database_password_file" 'PostgreSQL bootstrap password')
 
-  database_password_policy=mattercodex-database
+  database_password_policy=kodex-database
   cat >"$temporary_directory/database-password-policy.hcl" <<'HCL'
 length = 48
 
@@ -531,7 +531,7 @@ HCL
     openssl rand -base64 48 >"$temporary_directory/$role"
     role_password=$(read_single_line_secret "$temporary_directory/$role" 'generated PostgreSQL role password')
     printf '%s\n%s\n' "$database_password" "$role_password" |
-      kubectl -n mattercodex-system exec -i mattercodex-postgresql-0 -- sh -ec '
+      kubectl -n kodex-system exec -i kodex-postgresql-0 -- sh -ec '
         IFS= read -r PGPASSWORD
         IFS= read -r role_password
         export PGPASSWORD
@@ -540,7 +540,7 @@ HCL
       ' sh "$role" >/dev/null
   done
 
-  database_connection="postgresql://postgres:$(jq -rn --arg value "$database_password" '$value|@uri')@mattercodex-postgresql.mattercodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
+  database_connection="postgresql://postgres:$(jq -rn --arg value "$database_password" '$value|@uri')@kodex-postgresql.kodex-system.svc.cluster.local:5432/postgres?sslmode=verify-full&sslrootcert=/vault/userconfig/vault-server-tls/ca.crt"
   write_target_database_registry "$temporary_directory/target-database-registry.json"
   target_database_roles=$(jq -r '[.[].role] | sort | join(",")' \
     "$temporary_directory/target-database-registry.json")
@@ -558,7 +558,7 @@ HCL
     local attempt=1 delay
     for delay in 1 2 3 5 8 13; do
       if vault_input "$temporary_directory/database-config.json" \
-        write database/config/mattercodex-postgresql - >/dev/null 2>"$error_file"; then
+        write database/config/kodex-postgresql - >/dev/null 2>"$error_file"; then
         return
       fi
       rg -q 'error verifying connection:.*connection refused' "$error_file" ||
@@ -569,7 +569,7 @@ HCL
       attempt=$((attempt + 1))
     done
     if vault_input "$temporary_directory/database-config.json" \
-      write database/config/mattercodex-postgresql - >/dev/null 2>"$error_file"; then
+      write database/config/kodex-postgresql - >/dev/null 2>"$error_file"; then
       return
     fi
     if rg -q 'error verifying connection:.*connection refused' "$error_file"; then
@@ -580,8 +580,8 @@ HCL
 
   configure_verified_database
 
-  control_plane_postgresql_host=control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
-  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+  control_plane_postgresql_host=control-plane-postgresql-rw.kodex-system.svc.cluster.local
+  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
 
   write_dsn() {
     local vault_path=$1 username=$2 password_file=$3 database=$4 postgresql_host=$5 ca_file=$6
@@ -593,23 +593,23 @@ HCL
       >"$temporary_directory/dsn"
     vault_kv_put_file "$vault_path" dsn "$temporary_directory/dsn"
   }
-  write_dsn mattercodex/control-plane/postgres-migration control_plane_migrator \
+  write_dsn kodex/control-plane/postgres-migration control_plane_migrator \
     "$temporary_directory/control_plane_migrator" control_plane "$control_plane_postgresql_host" \
-    /var/run/config/mattercodex/control-plane/postgres/ca.pem
-  write_dsn mattercodex/control-plane/postgres-runtime control_plane_runtime_g1 \
+    /var/run/config/kodex/control-plane/postgres/ca.pem
+  write_dsn kodex/control-plane/postgres-runtime control_plane_runtime_g1 \
     "$temporary_directory/control_plane_runtime_g1" control_plane "$control_plane_postgresql_host" \
-    /var/run/config/mattercodex/control-plane/postgres/ca.pem
+    /var/run/config/kodex/control-plane/postgres/ca.pem
   write_dsn internal-rpc-authority/postgres-migration internal_rpc_authority_migrator \
     "$temporary_directory/internal_rpc_authority_migrator" internal_rpc_authority \
     "$internal_rpc_authority_postgresql_host" \
-    /var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+    /var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 fi
 
 if [[ "$mode" == configure-database-runtime ]]; then
   require_root_material
   [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
     fail 'release render is required for runtime database configuration'
-  kubectl -n mattercodex-system wait --for=condition=Complete \
+  kubectl -n kodex-system wait --for=condition=Complete \
     job/internal-rpc-authority-migrate --timeout=300s >/dev/null
   database_password_file="$material_directory/postgresql/password"
   [[ -f "$database_password_file" && -s "$database_password_file" ]] || fail 'PostgreSQL bootstrap password is absent'
@@ -630,7 +630,7 @@ if [[ "$mode" == configure-database-runtime ]]; then
     "$temporary_directory/ira_database_credential_reconciler" 'generated PostgreSQL reconciler password')
   printf '%s\n%s\n%s\n' "$database_password" "$reconciler_password" \
     "$restore_controller_password" |
-    kubectl -n mattercodex-system exec -i mattercodex-postgresql-0 -- sh -ec '
+    kubectl -n kodex-system exec -i kodex-postgresql-0 -- sh -ec '
       IFS= read -r PGPASSWORD
       IFS= read -r reconciler_password
       IFS= read -r restore_controller_password
@@ -640,15 +640,15 @@ if [[ "$mode" == configure-database-runtime ]]; then
         psql --host=127.0.0.1 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1
     ' >/dev/null
   encoded_password=$(jq -rn --arg value "$reconciler_password" '$value|@uri')
-  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
-  printf 'postgresql://ira_database_credential_reconciler:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
+  internal_rpc_authority_postgresql_host=internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local
+  printf 'postgresql://ira_database_credential_reconciler:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem\n' \
     "$encoded_password" "$internal_rpc_authority_postgresql_host" \
     >"$temporary_directory/reconciler-dsn"
   vault_kv_put_file internal-rpc-authority/database-credential-reconciler dsn \
     "$temporary_directory/reconciler-dsn"
 
   encoded_restore_controller_password=$(jq -rn --arg value "$restore_controller_password" '$value|@uri')
-  printf 'postgresql://ira_restore_controller_g1:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem\n' \
+  printf 'postgresql://ira_restore_controller_g1:%s@%s:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem\n' \
     "$encoded_restore_controller_password" "$internal_rpc_authority_postgresql_host" \
     >"$temporary_directory/restore-controller-dsn"
   vault_kv_put_file internal-rpc-authority/restore-controller/postgres dsn \
@@ -670,7 +670,7 @@ if [[ "$mode" == configure-database-runtime ]]; then
     role_name=${mapping%%:*}
     principal=${mapping#*:}
     vault_cli write "database/static-roles/$role_name" \
-      db_name=mattercodex-postgresql username="$principal" rotation_period=1h >/dev/null
+      db_name=kodex-postgresql username="$principal" rotation_period=1h >/dev/null
     vault_cli write -f "database/rotate-role/$role_name" >/dev/null
     vault_cli read -format=json "database/static-creds/$role_name" |
       jq -e --arg username "$principal" '.data.username == $username and (.data.password | length) >= 48' \
@@ -681,7 +681,7 @@ if [[ "$mode" == configure-database-runtime ]]; then
     [[ -n "$role_name" && -n "$principal" ]] ||
       fail 'target database role mapping is incomplete'
     vault_cli write "database/static-roles/$role_name" \
-      db_name=mattercodex-postgresql username="$principal" rotation_period=1h >/dev/null
+      db_name=kodex-postgresql username="$principal" rotation_period=1h >/dev/null
     vault_cli write -f "database/rotate-role/$role_name" >/dev/null
     vault_cli read -format=json "database/static-creds/$role_name" |
       jq -e --arg username "$principal" \
@@ -694,7 +694,7 @@ fi
 if [[ "$mode" == configure-image-pki ]]; then
   require_root_material
   [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] || fail 'release render is required'
-  promoted_pull_host=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") | .data.pullRegistryHost' "$render_file")
+  promoted_pull_host=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") | .data.pullRegistryHost' "$render_file")
   [[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$promoted_pull_host" == *.* ]] ||
     fail 'promoted pull host is invalid'
 
@@ -707,17 +707,17 @@ if [[ "$mode" == configure-image-pki ]]; then
   done
   if ! vault_cli read -format=json pki-buildkit-push/cert/ca >/dev/null 2>&1; then
     vault_cli write pki-buildkit-push/root/generate/internal \
-      common_name=mattercodex-buildkit-staging-push-root ttl=87600h key_type=rsa key_bits=4096 >/dev/null
+      common_name=kodex-buildkit-staging-push-root ttl=87600h key_type=rsa key_bits=4096 >/dev/null
   fi
   if ! vault_cli read -format=json pki-node-pull/cert/ca >/dev/null 2>&1; then
     vault_cli write pki-node-pull/root/generate/internal \
-      common_name=mattercodex-node-pull-root ttl=87600h key_type=rsa key_bits=4096 >/dev/null
+      common_name=kodex-node-pull-root ttl=87600h key_type=rsa key_bits=4096 >/dev/null
   fi
 
   configure_server_role() {
     local mount=$1 role=$2 service=$3
     vault_cli write "$mount/roles/$role" \
-      allowed_domains="$service,$service.mattercodex-system.svc,$service.mattercodex-system.svc.cluster.local" \
+      allowed_domains="$service,$service.kodex-system.svc,$service.kodex-system.svc.cluster.local" \
       allow_bare_domains=true allow_subdomains=false allow_glob_domains=false enforce_hostnames=true require_cn=true \
       server_flag=true client_flag=false key_type=rsa key_bits=3072 \
       key_usage=DigitalSignature,KeyEncipherment ext_key_usage=ServerAuth ttl=1h max_ttl=2h >/dev/null
@@ -725,45 +725,45 @@ if [[ "$mode" == configure-image-pki ]]; then
   configure_client_role() {
     local mount=$1 role=$2 common_name=$3
     vault_cli write "$mount/roles/$role" \
-      allowed_domains="$common_name,$common_name.mattercodex-system.svc" \
+      allowed_domains="$common_name,$common_name.kodex-system.svc" \
       allow_bare_domains=true allow_subdomains=false allow_glob_domains=false enforce_hostnames=true require_cn=true \
       server_flag=false client_flag=true key_type=rsa key_bits=3072 \
       key_usage=DigitalSignature,KeyEncipherment ext_key_usage=ClientAuth ttl=30m max_ttl=1h >/dev/null
   }
 
-  configure_server_role pki mattercodex-buildkit-server mattercodex-buildkit
-  configure_server_role pki-buildkit-push mattercodex-image-registry-push mattercodex-image-registry-push
-  configure_server_role pki mattercodex-image-registry-staging-read mattercodex-image-registry-staging-read
-  configure_server_role pki mattercodex-image-registry-evidence mattercodex-image-registry-evidence
-  configure_server_role pki mattercodex-image-registry-admin mattercodex-image-registry-admin
-  configure_server_role pki mattercodex-image-registry-promotion mattercodex-image-registry-promotion
-  vault_cli write pki-public/roles/mattercodex-image-registry-pull \
-    allowed_domains="$promoted_pull_host,mattercodex-image-registry,mattercodex-image-registry.mattercodex-system.svc,mattercodex-image-registry.mattercodex-system.svc.cluster.local" \
+  configure_server_role pki kodex-buildkit-server kodex-buildkit
+  configure_server_role pki-buildkit-push kodex-image-registry-push kodex-image-registry-push
+  configure_server_role pki kodex-image-registry-staging-read kodex-image-registry-staging-read
+  configure_server_role pki kodex-image-registry-evidence kodex-image-registry-evidence
+  configure_server_role pki kodex-image-registry-admin kodex-image-registry-admin
+  configure_server_role pki kodex-image-registry-promotion kodex-image-registry-promotion
+  vault_cli write pki-public/roles/kodex-image-registry-pull \
+    allowed_domains="$promoted_pull_host,kodex-image-registry,kodex-image-registry.kodex-system.svc,kodex-image-registry.kodex-system.svc.cluster.local" \
     allow_bare_domains=true allow_subdomains=false allow_glob_domains=false enforce_hostnames=true require_cn=true \
     server_flag=true client_flag=false key_type=rsa key_bits=3072 \
     key_usage=DigitalSignature,KeyEncipherment ext_key_usage=ServerAuth ttl=1h max_ttl=2h >/dev/null
 
   for mapping in \
-    mattercodex-buildkit-probe:mattercodex-buildkit-probe \
-    mattercodex-buildkit-client:role-image-builder \
-    mattercodex-buildkit-base-pull:mattercodex-buildkit-base-pull \
-    mattercodex-role-image-input-read:role-image-builder-input-read \
-    mattercodex-image-registry-pull-probe:mattercodex-image-registry-pull-probe \
-    mattercodex-image-registry-admin-probe:mattercodex-image-registry-admin-probe \
-    mattercodex-image-registry-promotion-probe:mattercodex-image-registry-promotion-probe \
-    mattercodex-image-registry-evidence-probe:mattercodex-image-registry-evidence-probe \
-    mattercodex-image-scanner:mattercodex-image-scanner \
-    mattercodex-image-signer:mattercodex-image-signer \
+    kodex-buildkit-probe:kodex-buildkit-probe \
+    kodex-buildkit-client:role-image-builder \
+    kodex-buildkit-base-pull:kodex-buildkit-base-pull \
+    kodex-role-image-input-read:role-image-builder-input-read \
+    kodex-image-registry-pull-probe:kodex-image-registry-pull-probe \
+    kodex-image-registry-admin-probe:kodex-image-registry-admin-probe \
+    kodex-image-registry-promotion-probe:kodex-image-registry-promotion-probe \
+    kodex-image-registry-evidence-probe:kodex-image-registry-evidence-probe \
+    kodex-image-scanner:kodex-image-scanner \
+    kodex-image-signer:kodex-image-signer \
     image-admission:image-admission \
     image-promotion:image-promotion \
-    mattercodex-registry-cleanup:mattercodex-registry-cleanup \
+    kodex-registry-cleanup:kodex-registry-cleanup \
     release-artifact-materializer:release-artifact-materializer; do
     configure_client_role pki "${mapping%%:*}" "${mapping#*:}"
   done
-  configure_client_role pki-buildkit-push mattercodex-buildkit-staging-push mattercodex-buildkit-staging-push
-  configure_client_role pki-buildkit-push mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
-  vault_cli write pki-node-pull/roles/mattercodex-node-pull \
-    allowed_domains=mattercodex-node-pull allow_bare_domains=false allow_subdomains=true \
+  configure_client_role pki-buildkit-push kodex-buildkit-staging-push kodex-buildkit-staging-push
+  configure_client_role pki-buildkit-push kodex-image-registry-push-probe kodex-image-registry-push-probe
+  vault_cli write pki-node-pull/roles/kodex-node-pull \
+    allowed_domains=kodex-node-pull allow_bare_domains=false allow_subdomains=true \
     allow_glob_domains=false enforce_hostnames=true require_cn=true allow_ip_sans=true \
     server_flag=false client_flag=true key_type=rsa key_bits=3072 \
     key_usage=DigitalSignature,KeyEncipherment ext_key_usage=ClientAuth ttl=30m max_ttl=30m >/dev/null
@@ -772,7 +772,7 @@ if [[ "$mode" == configure-image-pki ]]; then
   trap 'rm -rf -- "$temporary_directory"' EXIT
 
   cat >"$temporary_directory/node-pull-bootstrap.hcl" <<'HCL'
-path "pki-node-pull/issue/mattercodex-node-pull" {
+path "pki-node-pull/issue/kodex-node-pull" {
   capabilities = ["update"]
 }
 path "auth/token/revoke-self" {
@@ -780,12 +780,12 @@ path "auth/token/revoke-self" {
 }
 HCL
   vault_input "$temporary_directory/node-pull-bootstrap.hcl" \
-    policy write mattercodex-node-pull-bootstrap - >/dev/null
-  vault_cli write auth/kubernetes/role/mattercodex-node-pull-bootstrap \
-    bound_service_account_names=mattercodex-image-pull-readback \
-    bound_service_account_namespaces=mattercodex-system \
+    policy write kodex-node-pull-bootstrap - >/dev/null
+  vault_cli write auth/kubernetes/role/kodex-node-pull-bootstrap \
+    bound_service_account_names=kodex-image-pull-readback \
+    bound_service_account_namespaces=kodex-system \
     audience=vault \
-    token_policies=mattercodex-node-pull-bootstrap \
+    token_policies=kodex-node-pull-bootstrap \
     token_ttl=30m token_max_ttl=1h >/dev/null
 
   image_material="$material_directory/image-registry"
@@ -810,39 +810,39 @@ HCL
     vault_kv_put_file "$vault_path" username "$image_material/$source_name/username"
     vault_kv_patch_file "$vault_path" password "$image_material/$source_name/password"
   }
-  vault_kv_put_file mattercodex/image-registry/pull htpasswd "$image_material/pull/htpasswd"
-  vault_kv_patch_file mattercodex/image-registry/pull dockerconfigjson "$temporary_directory/pull-dockerconfig.json"
-  vault_kv_put_file mattercodex/image-registry/buildkit-base-pull dockerconfigjson "$image_material/buildkit-base-pull/dockerconfig.json"
-  vault_kv_put_file mattercodex/role-image-builder/input-read docker-config "$image_material/input-read/dockerconfig.json"
-  vault_kv_put_file mattercodex/image-registry/staging-read htpasswd "$temporary_directory/staging-read.htpasswd"
+  vault_kv_put_file kodex/image-registry/pull htpasswd "$image_material/pull/htpasswd"
+  vault_kv_patch_file kodex/image-registry/pull dockerconfigjson "$temporary_directory/pull-dockerconfig.json"
+  vault_kv_put_file kodex/image-registry/buildkit-base-pull dockerconfigjson "$image_material/buildkit-base-pull/dockerconfig.json"
+  vault_kv_put_file kodex/role-image-builder/input-read docker-config "$image_material/input-read/dockerconfig.json"
+  vault_kv_put_file kodex/image-registry/staging-read htpasswd "$temporary_directory/staging-read.htpasswd"
   for mapping in \
-    mattercodex/image-registry/evidence-probe:evidence-probe \
-    mattercodex/image-registry/evidence-admission:evidence-admission \
-    mattercodex/image-registry/evidence-promotion:evidence-promotion \
-    mattercodex/image-registry/scanner:scanner \
-    mattercodex/image-registry/signer:signer \
-    mattercodex/image-registry/admission:admission \
-    mattercodex/image-registry/promotion-staging:promotion-staging; do
+    kodex/image-registry/evidence-probe:evidence-probe \
+    kodex/image-registry/evidence-admission:evidence-admission \
+    kodex/image-registry/evidence-promotion:evidence-promotion \
+    kodex/image-registry/scanner:scanner \
+    kodex/image-registry/signer:signer \
+    kodex/image-registry/admission:admission \
+    kodex/image-registry/promotion-staging:promotion-staging; do
     seed_credential "${mapping%%:*}" "${mapping#*:}"
   done
-  seed_credential mattercodex/image-registry/admin admin
-  vault_kv_patch_file mattercodex/image-registry/admin htpasswd "$image_material/admin/htpasswd"
-  seed_credential mattercodex/image-registry/promotion promotion
-  vault_kv_patch_file mattercodex/image-registry/promotion htpasswd "$image_material/promotion/htpasswd"
-  vault_kv_patch_file mattercodex/image-registry/promotion dockerconfigjson "$image_material/promotion/dockerconfig.json"
-  vault_kv_put_file mattercodex/release-registry/pull dockerconfigjson "$image_material/release-source/dockerconfig.json"
-  vault_kv_put_file mattercodex/image-admission/signing private_key "$image_material/signing/cosign.key"
-  vault_kv_patch_file mattercodex/image-admission/signing public_key "$image_material/signing/cosign.pub"
-  vault_kv_patch_file mattercodex/image-admission/signing password "$image_material/signing/password"
+  seed_credential kodex/image-registry/admin admin
+  vault_kv_patch_file kodex/image-registry/admin htpasswd "$image_material/admin/htpasswd"
+  seed_credential kodex/image-registry/promotion promotion
+  vault_kv_patch_file kodex/image-registry/promotion htpasswd "$image_material/promotion/htpasswd"
+  vault_kv_patch_file kodex/image-registry/promotion dockerconfigjson "$image_material/promotion/dockerconfig.json"
+  vault_kv_put_file kodex/release-registry/pull dockerconfigjson "$image_material/release-source/dockerconfig.json"
+  vault_kv_put_file kodex/image-admission/signing private_key "$image_material/signing/cosign.key"
+  vault_kv_patch_file kodex/image-admission/signing public_key "$image_material/signing/cosign.pub"
+  vault_kv_patch_file kodex/image-admission/signing password "$image_material/signing/password"
 
   for required_path in \
-    pki/roles/mattercodex-buildkit-server \
-    pki-public/roles/mattercodex-image-registry-pull \
-    pki-buildkit-push/roles/mattercodex-image-registry-push \
-    pki-node-pull/roles/mattercodex-node-pull \
-    kv/data/mattercodex/image-registry/pull \
-    kv/data/mattercodex/image-registry/promotion \
-    kv/data/mattercodex/image-admission/signing; do
+    pki/roles/kodex-buildkit-server \
+    pki-public/roles/kodex-image-registry-pull \
+    pki-buildkit-push/roles/kodex-image-registry-push \
+    pki-node-pull/roles/kodex-node-pull \
+    kv/data/kodex/image-registry/pull \
+    kv/data/kodex/image-registry/promotion \
+    kv/data/kodex/image-admission/signing; do
     vault_cli read -format=json "$required_path" >/dev/null || fail "image PKI readback failed: $required_path"
   done
 fi
@@ -872,7 +872,7 @@ if [[ "$mode" == readback ]]; then
   vault_cli read -format=json auth/kubernetes/role/internal-rpc-authority-publisher |
     jq -e '
       .data.bound_service_account_names == ["internal-rpc-authority-publisher"] and
-      .data.bound_service_account_namespaces == ["mattercodex-system"] and
+      .data.bound_service_account_namespaces == ["kodex-system"] and
       .data.audience == "vault" and
       (.data.token_policies | sort) ==
         (["internal-rpc-authority-publisher-runtime", "spc-internal-rpc-authority-publisher"] | sort) and
@@ -882,27 +882,27 @@ if [[ "$mode" == readback ]]; then
   vault_cli secrets list -format=json | jq -e 'has("kv/") and has("secret/") and has("database/") and has("pki/")' >/dev/null ||
     fail 'Vault engines readback failed'
   vault_cli auth list -format=json | jq -e 'has("kubernetes/")' >/dev/null || fail 'Vault auth readback failed'
-  vault_cli read -format=json sys/policies/password/mattercodex-database |
+  vault_cli read -format=json sys/policies/password/kodex-database |
     jq -e '.data.policy | contains("length = 48")' >/dev/null ||
     fail 'Vault database password policy readback failed'
-  vault_cli read -format=json database/config/mattercodex-postgresql |
-    jq -e '.data.password_policy == "mattercodex-database"' >/dev/null ||
+  vault_cli read -format=json database/config/kodex-postgresql |
+    jq -e '.data.password_policy == "kodex-database"' >/dev/null ||
     fail 'Vault database password policy binding readback failed'
-  node_pull_policy=$(vault_cli policy read mattercodex-node-pull-bootstrap)
-  grep -Fq 'path "pki-node-pull/issue/mattercodex-node-pull"' <<<"$node_pull_policy" &&
+  node_pull_policy=$(vault_cli policy read kodex-node-pull-bootstrap)
+  grep -Fq 'path "pki-node-pull/issue/kodex-node-pull"' <<<"$node_pull_policy" &&
     grep -Fq 'path "auth/token/revoke-self"' <<<"$node_pull_policy" ||
     fail 'Vault node pull bootstrap policy readback failed'
-  vault_cli read -format=json auth/kubernetes/role/mattercodex-node-pull-bootstrap |
+  vault_cli read -format=json auth/kubernetes/role/kodex-node-pull-bootstrap |
     jq -e '
-      .data.bound_service_account_names == ["mattercodex-image-pull-readback"] and
-      .data.bound_service_account_namespaces == ["mattercodex-system"] and
+      .data.bound_service_account_names == ["kodex-image-pull-readback"] and
+      .data.bound_service_account_namespaces == ["kodex-system"] and
       .data.audience == "vault" and
-      .data.token_policies == ["mattercodex-node-pull-bootstrap"] and
+      .data.token_policies == ["kodex-node-pull-bootstrap"] and
       .data.token_ttl == 1800 and .data.token_max_ttl == 3600
     ' >/dev/null || fail 'Vault node pull bootstrap auth role readback failed'
-  vault_cli read -format=json pki-node-pull/roles/mattercodex-node-pull |
+  vault_cli read -format=json pki-node-pull/roles/kodex-node-pull |
     jq -e '
-      .data.allowed_domains == ["mattercodex-node-pull"] and
+      .data.allowed_domains == ["kodex-node-pull"] and
       .data.allow_any_name == false and .data.allow_bare_domains == false and
       .data.allow_subdomains == true and .data.allow_glob_domains == false and
       .data.enforce_hostnames == true and .data.require_cn == true and

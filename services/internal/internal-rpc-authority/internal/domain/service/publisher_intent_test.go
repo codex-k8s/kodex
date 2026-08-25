@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	model "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	model "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 func TestReadbackIntentIdentityIncludesSourceRevision(t *testing.T) {

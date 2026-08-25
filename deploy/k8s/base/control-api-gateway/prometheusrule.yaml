@@ -14,36 +14,36 @@ spec:
           annotations:
             summary: Control API gateway недоступен
             description: Prometheus не видит готовой реплики owner API.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-api-gateway.md
         - alert: ControlAPIGatewayLocalReadinessUnavailable
-          expr: absent(mattercodex_control_api_gateway_readiness{ready="true"}) or sum(mattercodex_control_api_gateway_readiness{ready="true"}) < 1
+          expr: absent(kodex_control_api_gateway_readiness{ready="true"}) or sum(kodex_control_api_gateway_readiness{ready="true"}) < 1
           for: 5m
           labels: {severity: critical}
           annotations:
             summary: Локальная готовность control API потеряна
             description: Проверить локальный issuer sidecar и NATS consumer; соседние business services не входят в Pod readiness.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-api-gateway.md
         - alert: ControlAPIGatewayDependencyUnavailable
-          expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status=~"502|503|504"}[5m])) > 0.1
+          expr: sum(rate(kodex_control_api_gateway_http_requests_total{status=~"502|503|504"}[5m])) > 0.1
           for: 5m
           labels: {severity: warning}
           annotations:
             summary: Рабочий путь control API теряет соседнюю зависимость
             description: Проверить service-graph diagnostics для OIDC/control-plane; Pod readiness не изменять.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-api-gateway.md
         - alert: ControlAPIGatewayUnexpectedFailures
-          expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status="500"}[5m])) > 0.1
+          expr: sum(rate(kodex_control_api_gateway_http_requests_total{status="500"}[5m])) > 0.1
           for: 5m
           labels: {severity: warning}
           annotations:
             summary: Растут неожиданные ошибки control API
             description: Проверить единый error contract и protected RPC path.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-api-gateway.md
         - alert: ControlAPIGatewayRateLimited
-          expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status="429"}[5m])) > 1
+          expr: sum(rate(kodex_control_api_gateway_http_requests_total{status="429"}[5m])) > 1
           for: 10m
           labels: {severity: warning}
           annotations:
             summary: Control API устойчиво ограничивает запросы
             description: Проверить owner client loop и configured bounded rate.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-api-gateway.md

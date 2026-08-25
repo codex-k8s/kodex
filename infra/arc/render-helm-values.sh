@@ -22,7 +22,7 @@ for octet in "$octet1" "$octet2" "$octet3" "$octet4"; do
 done
 [[ "$egress_proxy_config_sha256" =~ ^[a-f0-9]{64}$ ]] ||
   fail 'egress proxy config SHA-256 is invalid'
-[[ "$registry_host" =~ ^matter-codex-registry\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.svc\.cluster\.local$ ]] ||
+[[ "$registry_host" =~ ^kodex-registry\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.svc\.cluster\.local$ ]] ||
   fail 'registry host is invalid'
 [[ -d "$output_directory" ]] || fail 'output directory does not exist'
 

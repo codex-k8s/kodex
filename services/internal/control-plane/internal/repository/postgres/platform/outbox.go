@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/eventing"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/libs/go/eventing"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 )
 
 type OutboxItem struct {

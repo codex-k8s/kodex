@@ -219,7 +219,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     let socket: WebSocket;
     try {
       socket = new WebSocket(streamURL(runRef), [
-        "mattercodex.run.v1",
+        "kodex.run.v1",
         `csrf.${csrfToken()}`,
       ]);
     } catch {
@@ -366,7 +366,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     let socket: WebSocket;
     try {
       socket = new WebSocket(platformStreamURL(), [
-        "mattercodex.platform.v1",
+        "kodex.platform.v1",
         `csrf.${csrfToken()}`,
       ]);
     } catch {

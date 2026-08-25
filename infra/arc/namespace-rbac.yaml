@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: mattercodex-ci
+  name: kodex-ci
   labels:
-    mattercodex.dev/profile: web-first-release-build
+    kodex.dev/profile: web-first-release-build
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
@@ -14,9 +14,9 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: mattercodex-ci-deploy
+  name: kodex-ci-deploy
   labels:
-    mattercodex.dev/profile: web-first-release-build
+    kodex.dev/profile: web-first-release-build
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
@@ -27,8 +27,8 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mattercodex-buildkit-config
-  namespace: mattercodex-ci
+  name: kodex-buildkit-config
+  namespace: kodex-ci
 data:
   buildkitd.toml: |
     root = "/home/user/.local/share/buildkit"
@@ -44,14 +44,14 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: mattercodex-production-deployer
-  namespace: mattercodex-ci-deploy
+  name: kodex-production-deployer
+  namespace: kodex-ci-deploy
 automountServiceAccountToken: true
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: mattercodex-ci-workload-allowlist
+  name: kodex-ci-workload-allowlist
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -69,27 +69,27 @@ spec:
   validations:
     - expression: >-
         object.kind != 'Service' ||
-        (object.metadata.name == 'mattercodex-ci-egress-proxy' &&
+        (object.metadata.name == 'kodex-ci-egress-proxy' &&
          object.spec.type == 'ClusterIP' && size(object.spec.ports) == 1 &&
          object.spec.ports[0].port == 8080)
       message: CI Service is outside the machine allowlist.
     - expression: >-
         object.kind != 'Pod' ||
         ((object.metadata.labels['app.kubernetes.io/name'] == 'gha-rs-controller' &&
-          object.metadata.labels['app.kubernetes.io/instance'] in ['mattercodex-arc-build','mattercodex-arc-deploy']) ||
-         object.metadata.labels['app.kubernetes.io/name'] == 'mattercodex-ci-egress-proxy' ||
-         object.metadata.labels['mattercodex.dev/arc-role'] == 'listener' ||
-         object.metadata.labels['actions.github.com/scale-set-name'] in ['mattercodex-build','mattercodex-deploy'])
+          object.metadata.labels['app.kubernetes.io/instance'] in ['kodex-arc-build','kodex-arc-deploy']) ||
+         object.metadata.labels['app.kubernetes.io/name'] == 'kodex-ci-egress-proxy' ||
+         object.metadata.labels['kodex.dev/arc-role'] == 'listener' ||
+         object.metadata.labels['actions.github.com/scale-set-name'] in ['kodex-build','kodex-deploy'])
       message: CI Pod identity is outside the machine allowlist.
     - expression: >-
         object.kind != 'Pod' ||
-        object.metadata.labels['mattercodex.dev/arc-role'] == 'listener' ||
-        (object.metadata.namespace == 'mattercodex-ci' &&
-          object.spec.serviceAccountName in ['mattercodex-arc-build-gha-rs-controller',
-            'mattercodex-build-gha-rs-no-permission','mattercodex-ci-egress-proxy']) ||
-        (object.metadata.namespace == 'mattercodex-ci-deploy' &&
-          object.spec.serviceAccountName in ['mattercodex-arc-deploy-gha-rs-controller',
-            'mattercodex-production-deployer','mattercodex-ci-egress-proxy'])
+        object.metadata.labels['kodex.dev/arc-role'] == 'listener' ||
+        (object.metadata.namespace == 'kodex-ci' &&
+          object.spec.serviceAccountName in ['kodex-arc-build-gha-rs-controller',
+            'kodex-build-gha-rs-no-permission','kodex-ci-egress-proxy']) ||
+        (object.metadata.namespace == 'kodex-ci-deploy' &&
+          object.spec.serviceAccountName in ['kodex-arc-deploy-gha-rs-controller',
+            'kodex-production-deployer','kodex-ci-egress-proxy'])
       message: CI Pod ServiceAccount is outside the machine allowlist.
     - expression: >-
         object.kind != 'Pod' ||
@@ -107,32 +107,32 @@ spec:
       message: CI Pod image, volume or host namespace is outside the machine allowlist.
     - expression: >-
         object.apiVersion != 'actions.github.com/v1alpha1' ||
-        (object.metadata.namespace == 'mattercodex-ci' && object.metadata.name == 'mattercodex-build' &&
-          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
+        (object.metadata.namespace == 'kodex-ci' && object.metadata.name == 'kodex-build' &&
+          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/kodex' &&
           !has(object.spec.runnerGroup) &&
-          object.spec.runnerScaleSetName == 'mattercodex-build' &&
+          object.spec.runnerScaleSetName == 'kodex-build' &&
           object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
-          object.spec.template.spec.serviceAccountName == 'mattercodex-build-gha-rs-no-permission' &&
+          object.spec.template.spec.serviceAccountName == 'kodex-build-gha-rs-no-permission' &&
           object.spec.template.spec.automountServiceAccountToken == false) ||
-        (object.metadata.namespace == 'mattercodex-ci-deploy' && object.metadata.name == 'mattercodex-deploy' &&
-          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
+        (object.metadata.namespace == 'kodex-ci-deploy' && object.metadata.name == 'kodex-deploy' &&
+          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/kodex' &&
           !has(object.spec.runnerGroup) &&
-          object.spec.runnerScaleSetName == 'mattercodex-deploy' &&
+          object.spec.runnerScaleSetName == 'kodex-deploy' &&
           object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
-          object.spec.template.spec.serviceAccountName == 'mattercodex-production-deployer' &&
+          object.spec.template.spec.serviceAccountName == 'kodex-production-deployer' &&
           object.spec.template.spec.automountServiceAccountToken == true)
       message: ARC scale set scope or credential boundary is outside the machine allowlist.
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: mattercodex-ci-workload-allowlist
+  name: kodex-ci-workload-allowlist
 spec:
-  policyName: mattercodex-ci-workload-allowlist
+  policyName: kodex-ci-workload-allowlist
   validationActions: [Deny]
   matchResources:
     namespaceSelector:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: In
-          values: [mattercodex-ci, mattercodex-ci-deploy]
+          values: [kodex-ci, kodex-ci-deploy]

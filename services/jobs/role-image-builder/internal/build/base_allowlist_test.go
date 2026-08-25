@@ -15,12 +15,12 @@ func TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests(t *testing.T) {
 		`{"key":"standard","nameMessageKey":"role-environments.standard.name",` +
 		`"descriptionMessageKey":"role-environments.standard.description","unavailableMessageKey":"",` +
 		`"softwareMessageKeys":[],"recommended":true,"available":true,` +
-		`"customInstallationAllowed":false,"baseImageReference":"registry.example/mattercodex/agent-runner",` +
+		`"customInstallationAllowed":false,"baseImageReference":"registry.example/kodex/agent-runner",` +
 		`"baseImageDigest":"` + digestA + `","platforms":[],"packages":[],"tools":[]},` +
 		`{"key":"documents","nameMessageKey":"role-environments.documents.name",` +
 		`"descriptionMessageKey":"role-environments.documents.description","unavailableMessageKey":"",` +
 		`"softwareMessageKeys":[],"recommended":false,"available":true,` +
-		`"customInstallationAllowed":false,"baseImageReference":"registry.example/mattercodex/role-base-documents",` +
+		`"customInstallationAllowed":false,"baseImageReference":"registry.example/kodex/role-base-documents",` +
 		`"baseImageDigest":"` + digestB + `","platforms":[],"packages":[],"tools":[]}]}`
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
@@ -30,9 +30,9 @@ func TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load exact catalog: %v", err)
 	}
-	if !allowlist.Allows("registry.example/mattercodex/agent-runner", digestA) ||
-		!allowlist.Allows("registry.example/mattercodex/role-base-documents", digestB) ||
-		allowlist.Allows("registry.example/mattercodex/role-base-documents", digestA) {
+	if !allowlist.Allows("registry.example/kodex/agent-runner", digestA) ||
+		!allowlist.Allows("registry.example/kodex/role-base-documents", digestB) ||
+		allowlist.Allows("registry.example/kodex/role-base-documents", digestA) {
 		t.Fatal("base allowlist did not preserve the exact repository and digest tuple")
 	}
 }

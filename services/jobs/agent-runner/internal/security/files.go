@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const protectedExecutable = "/usr/local/bin/matter-codex-agent-runner"
+const protectedExecutable = "/usr/local/bin/kodex-agent-runner"
 
 func VerifyInvocation(args []string, mode string) error {
 	if len(args) != 2 || args[0] != protectedExecutable || args[1] != mode {

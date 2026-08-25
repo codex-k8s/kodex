@@ -31,7 +31,7 @@ workflow_sha=$(git -C "$repository_root" rev-parse HEAD)
 [[ "$(git -C "$repository_root" rev-parse refs/remotes/origin/main)" == "$workflow_sha" ]] ||
   fail "current main differs from origin/main"
 
-repository=codex-k8s/matter-codex
+repository=codex-k8s/kodex
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 gh api "repos/$repository" >"$temporary_directory/repository.json"

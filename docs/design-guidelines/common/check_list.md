@@ -13,7 +13,7 @@
 - Повторяющиеся литералы, ключи событий и runtime status values вынесены в typed constants/value objects, если они используются больше одного раза.
 - В production-коде нет анонимных структур для транспортных контрактов, persistent payloads и публичных API-моделей.
 - Секреты не хардкодятся и не коммитятся; в логах, ошибках, метриках и документации нет сырых значений секретов.
-- Имена platform env/secrets/CI variables используют префикс `MATTERCODEX_`, если внешний runtime не требует другое имя.
+- Имена platform env/secrets/CI variables используют префикс `KODEX_`, если внешний runtime не требует другое имя.
 - Новые обязательные env/secrets/config имеют staged rollout path или безопасную диагностику, чтобы не ломать уже развёрнутый сервис.
 
 ## Deploy и runtime
@@ -30,7 +30,7 @@
 - Go deployable-сервис запускается из собранного runtime image; production Deployment не получает исходники через ConfigMap/Secret и не запускает `go run`.
 - Если добавлена внешняя зависимость, обновлён `docs/design-guidelines/common/external_dependencies_catalog.md`.
 
-## Специфика matter-codex
+## Специфика kodex
 
 - Control Center является основной conversational и configuration surface;
   typed owner API обслуживает её, а не считается debug/fallback.

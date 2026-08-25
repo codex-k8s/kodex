@@ -117,7 +117,7 @@ for bootstrap_entry in \
   'Vault publisher runtime policy readback failed' \
   'database/static-creds/internal-rpc-authority-publisher-g4' \
   'database/rotate-role/internal-rpc-authority-readback-attestor-g4' \
-  'kv/data/mattercodex/control-api-gateway/nats' \
+  'kv/data/kodex/control-api-gateway/nats' \
   'database/static-creds/control-api-gateway-issuer-g1' \
   'auth/kubernetes/role/control-api-gateway-vso' \
   'audience=vault'; do
@@ -136,7 +136,7 @@ grep -Fq 'ensure_restore_evidence_anchor()' "$fresh_deployer" ||
   fail 'fresh deploy does not validate restore evidence in state, workloads and readback phases'
 [[ $(grep -c 'metadata.name == "internal-rpc-authority-restore-evidence"' "$fresh_deployer") -eq 2 ]] ||
   fail 'fresh deploy does not exclude restore evidence from both generic apply phases'
-if grep -Fq 'kubectl apply --server-side --field-manager=mattercodex-fresh-install -f "$render_file"' \
+if grep -Fq 'kubectl apply --server-side --field-manager=kodex-fresh-install -f "$render_file"' \
   "$fresh_deployer"; then
   fail 'fresh workload deploy can overwrite the forward-only restore evidence anchor'
 fi
@@ -153,7 +153,7 @@ authority_snapshot_ensure=$(awk '
   capture {print}
   capture && /^}$/ {exit}
 ' "$fresh_deployer")
-grep -Fq 'kubectl create --field-manager=mattercodex-fresh-install -f "$seed_manifest"' \
+grep -Fq 'kubectl create --field-manager=kodex-fresh-install -f "$seed_manifest"' \
   <<<"$authority_snapshot_ensure" ||
   fail 'fresh deploy does not create the absent authority snapshot seed explicitly'
 if grep -Fq 'kubectl apply' <<<"$authority_snapshot_ensure"; then
@@ -167,11 +167,11 @@ grep -Fq 'replace_immutable_resource_on_drift()' "$fresh_deployer" ||
   fail 'fresh deploy does not implement bounded immutable resource replacement'
 [[ $(grep -c '^[[:space:]]*rotate_release_immutable_resources$' "$fresh_deployer") -eq 2 ]] ||
   fail 'fresh deploy does not reconcile immutable resources in state and workload phases'
-for immutable_name in mattercodex-role-environments mattercodex-image-admission-policy; do
+for immutable_name in kodex-role-environments kodex-image-admission-policy; do
   grep -Fq "replace_immutable_resource_on_drift configmap ConfigMap $immutable_name" "$fresh_deployer" ||
     fail "fresh deploy omits immutable ConfigMap lifecycle: $immutable_name"
 done
-grep -Fq 'imageadmissionpolicyparameters.supplychain.mattercodex.dev' "$fresh_deployer" ||
+grep -Fq 'imageadmissionpolicyparameters.supplychain.kodex.dev' "$fresh_deployer" ||
   fail 'fresh deploy omits immutable image admission parameters lifecycle'
 grep -Fq 'cmp -s "$desired_payload" "$live_payload"' "$fresh_deployer" ||
   fail 'fresh deploy replaces immutable resources without semantic drift comparison'
@@ -196,7 +196,7 @@ for readiness_condition in \
   grep -Fq "$readiness_condition" "$fresh_deployer" ||
     fail "fresh deploy omits trust resource readiness: $readiness_condition"
 done
-grep -Fq 'create_secret mattercodex-system control-api-gateway-vault-ca' "$fresh_materializer" ||
+grep -Fq 'create_secret kodex-system control-api-gateway-vault-ca' "$fresh_materializer" ||
   fail 'fresh secret materialization omits the exact Vault CA Secret for VSO'
 if yq -e 'select(.kind == "Bundle" and .metadata.name == "control-api-gateway-vault-ca")' \
   "$repository_root/deploy/k8s/base/control-api-gateway/vault-resources.yaml" >/dev/null 2>&1; then
@@ -210,10 +210,10 @@ yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and
     .spec.matchConstraints.resourceRules[0].operations == ["UPDATE", "DELETE"] and
     any(.spec.validations[];
       .message == "only the independent PITR executor may update restore evidence" and
-      (.expression | contains("system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-pitr")))
+      (.expression | contains("system:serviceaccount:kodex-system:internal-rpc-authority-restore-pitr")))
   ' >/dev/null ||
   fail 'restore evidence forward-only admission boundary was weakened'
-grep -Fq 'mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)' \
+grep -Fq 'kodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)' \
   "$legacy_resetter" || fail 'incompatible reset does not use the closed release profile selector'
 for cluster_kind in \
   customresourcedefinitions.apiextensions.k8s.io \
@@ -302,22 +302,22 @@ done
 jq -n --arg source_sha "$source_sha" \
   --slurpfile manifest "$repository_root/tools/release/images.json" '
   {schema_version:2,profile:"web-only",source_sha:$source_sha,build_run_id:"local",
-   registry:{push:"registry.example.test",node_pull:"registry.example.test:5001",repository_prefix:"mattercodex"},
+   registry:{push:"registry.example.test",node_pull:"registry.example.test:5001",repository_prefix:"kodex"},
    external_images:[{
      component:"admission-tools",
      pull_ref:"registry.example.test/tools/admission@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
      digest:"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
    role_image_input:{
-     repository:"mattercodex/role-image-inputs",
+     repository:"kodex/role-image-inputs",
      manifest_digest:"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
      payload_sha256:"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
      source_sha256:"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-     pull_ref:"registry.example.test:5001/mattercodex/role-image-inputs@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+     pull_ref:"registry.example.test:5001/kodex/role-image-inputs@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
    images:[$manifest[0].images[] | {
      component:.component,
-     repository:("mattercodex/" + .component),
+     repository:("kodex/" + .component),
      digest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-     pull_ref:("registry.example.test:5001/mattercodex/" + .component + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")}]}
+     pull_ref:("registry.example.test:5001/kodex/" + .component + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")}]}
 ' >"$lock_file"
 lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
 
@@ -326,8 +326,8 @@ lock_sha256=$(sha256sum "$lock_file" | awk '{print $1}')
 "$repository_root/tools/release/render-web-only.sh" \
   --lock "$lock_file" --lock-sha256 "$lock_sha256" --output "$render_file" \
   --public-host console.example.test --public-origin https://console.example.test \
-  --oidc-issuer https://identity.example.test/realms/mattercodex \
-  --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
+  --oidc-issuer https://identity.example.test/realms/kodex \
+  --oidc-jwks-url https://identity.example.test/realms/kodex/protocol/openid-connect/certs \
   --oidc-connect-address identity.example.test:443 \
   --oidc-tls-server-name identity.example.test \
   --promoted-pull-host roles.example.test \
@@ -436,7 +436,7 @@ yq -o=json -I=0 '
     "control-api-gateway-session-keys"
   ] and
   $secrets["control-api-gateway-nats"].spec.path ==
-    "mattercodex/control-api-gateway/nats" and
+    "kodex/control-api-gateway/nats" and
   $secrets["control-api-gateway-nats"].spec.destination.name ==
     "control-api-gateway-nats" and
   ($secrets["control-api-gateway-nats"].spec.destination.transformation.templates |
@@ -447,7 +447,7 @@ yq -o=json -I=0 '
     .spec.destination.transformation.excludeRaw == true)
 ' >/dev/null || fail 'control API static secret materialization graph is incomplete'
 
-if rg -n 'sha256:0{64}|__MATTERCODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
+if rg -n 'sha256:0{64}|__KODEX_[A-Z0-9_]+__|\.invalid|matter-kodex-prod|kodex\.works|runtime-provider-auth' "$render_file" >/dev/null; then
   fail 'render contains a forbidden deployment placeholder'
 fi
 if rg -ni 'bot-service|legacy-data-migration|mattermostMode' "$render_file" >/dev/null; then
@@ -463,12 +463,12 @@ grep -Fq '{"platform-worker/interaction-gateway", "interaction-gateway-platform-
   fail 'fresh key generator omits the optional interaction worker'
 grep -Fq 'integration-gateway interaction-gateway runtime-controller' "$vault_bootstrap" ||
   fail 'Vault bootstrap omits the optional interaction worker grant'
-grep -Fq 'mkdir -p /var/run/mattercodex/work' \
+grep -Fq 'mkdir -p /var/run/kodex/work' \
   "$repository_root/services/jobs/role-image-builder/Dockerfile" ||
   fail 'role image builder image omits its read-only-rootfs workspace mountpoint'
 
 buildkit_deployment=$(yq -o=json -I=0 '
-  select(.kind == "Deployment" and .metadata.name == "mattercodex-buildkit")
+  select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
 ' "$render_file")
 jq -e '
   .spec.template.spec.hostUsers == false and
@@ -508,7 +508,7 @@ if rg -q 'REGISTRY_HTTP_TLS_CLIENTAUTH|REGISTRY_STORAGE_MAINTENANCE_READONLY_ENA
   "$render_file"; then
   fail 'render contains unsupported registry configuration or a non-canonical Vault path'
 fi
-for registry_deployment in mattercodex-image-registry-pull mattercodex-image-registry-staging-read; do
+for registry_deployment in kodex-image-registry-pull kodex-image-registry-staging-read; do
   REGISTRY_DEPLOYMENT="$registry_deployment" yq -o=json '
     select(.kind == "Deployment" and .metadata.name == strenv(REGISTRY_DEPLOYMENT)) |
     .spec.template.spec.containers[] | select(.name == "registry") |
@@ -519,7 +519,7 @@ done
 for registry_scope in pull push evidence; do
   REGISTRY_SCOPE="$registry_scope" yq -o=json '
     select(.kind == "Deployment" and
-      .metadata.labels."mattercodex.dev/registry-scope" == strenv(REGISTRY_SCOPE)) |
+      .metadata.labels."kodex.dev/registry-scope" == strenv(REGISTRY_SCOPE)) |
     .spec.template.spec.containers[] | select(.name == "registry")
   ' "$render_file" | jq -e '
     (.env[] | select(.name == "REGISTRY_HTTP_ADDR").value) as $address |
@@ -530,11 +530,11 @@ for registry_scope in pull push evidence; do
   ' >/dev/null || fail "loopback registry has a kubelet Pod-IP probe: $registry_scope"
 done
 yq -o=json '
-  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull") |
+  select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull") |
   .spec.template.spec.containers[] | select(.name == "certificate-guard") |
   .env[] | select(.name == "READBACK_IMAGE").value
 ' "$render_file" | jq -er '
-  startswith("roles.example.test/mattercodex/control-plane@sha256:")
+  startswith("roles.example.test/kodex/control-plane@sha256:")
 ' >/dev/null || fail 'pull registry readback is not pinned to its authorized control-plane probe image'
 while IFS=$'\t' read -r deployment_name mount_path public_key metadata_key; do
   DEPLOYMENT_NAME="$deployment_name" MOUNT_PATH="$mount_path" \
@@ -577,7 +577,7 @@ yq -o=json '
   (.spec.destination.transformation.templates.dsn.text | contains("dsn"))
 ' >/dev/null || fail 'restore controller PostgreSQL credential is not synchronized through Vault'
 yq -o=json 'select(.kind == "DaemonSet" and
-  .metadata.name == "mattercodex-registry-node-pull-readback")' "$render_file" |
+  .metadata.name == "kodex-registry-node-pull-readback")' "$render_file" |
   jq -e '
     any(.spec.template.spec.volumes[];
       .name == "containerd-socket" and
@@ -623,7 +623,7 @@ if yq -e '
 fi
 admission_command_expression=$(yq -N -r '
   select(.kind == "ValidatingAdmissionPolicy" and
-    .metadata.name == "mattercodex-image-admission-controller-jobs") |
+    .metadata.name == "kodex-image-admission-controller-jobs") |
   .spec.validations[] |
   select(.message == "Image admission executable or container privileges differ from the owner contract.") |
   .expression
@@ -633,7 +633,7 @@ for command_contract in \
   'variables.main.command[0] ==' \
   '/bin/sh' \
   'variables.main.command[1] ==' \
-  '/opt/mattercodex/image-admission.sh' \
+  '/opt/kodex/image-admission.sh' \
   'variables.main.command[2] == variables.phase'; do
   [[ "$admission_command_expression" == *"$command_contract"* ]] ||
     fail "image admission command CEL contract is absent: $command_contract"
@@ -643,9 +643,9 @@ done
 
 yq -o=json '
   select(.kind == "CustomResourceDefinition" and
-    .metadata.name == "imageadmissionpolicyparameters.supplychain.mattercodex.dev")
+    .metadata.name == "imageadmissionpolicyparameters.supplychain.kodex.dev")
 ' "$render_file" | jq -e '
-  .spec.group == "supplychain.mattercodex.dev" and
+  .spec.group == "supplychain.kodex.dev" and
   .spec.scope == "Namespaced" and
   .spec.versions[0].name == "v1alpha1" and
   .spec.versions[0].served == true and
@@ -659,10 +659,10 @@ yq -o=json '
 
 yq -o=json '
   select(.kind == "ValidatingAdmissionPolicy" and
-    .metadata.name == "mattercodex-image-admission-controller-jobs")
+    .metadata.name == "kodex-image-admission-controller-jobs")
 ' "$render_file" | jq -e '
   .spec.failurePolicy == "Fail" and
-  .spec.paramKind.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+  .spec.paramKind.apiVersion == "supplychain.kodex.dev/v1alpha1" and
   .spec.paramKind.kind == "ImageAdmissionPolicyParameters" and
   all(.spec.validations[]; (.expression | contains("params.data.")) | not) and
   any(.spec.validations[]; .expression | contains("params.spec.policyRevision"))
@@ -670,15 +670,15 @@ yq -o=json '
 
 yq -o=json '
   select(.kind == "ValidatingAdmissionPolicyBinding" and
-    .metadata.name == "mattercodex-image-admission-controller-jobs")
+    .metadata.name == "kodex-image-admission-controller-jobs")
 ' "$render_file" | jq -e '
   .spec.validationActions == ["Deny"] and
-  .spec.paramRef.name == "mattercodex-image-admission-policy" and
-  .spec.paramRef.namespace == "mattercodex-system" and
+  .spec.paramRef.name == "kodex-image-admission-policy" and
+  .spec.paramRef.namespace == "kodex-system" and
   .spec.paramRef.parameterNotFoundAction == "Deny"
 ' >/dev/null || fail 'typed image admission policy binding is not fail-closed'
 
-for stateful_set in mattercodex-postgresql mattercodex-nats; do
+for stateful_set in kodex-postgresql kodex-nats; do
   STATEFUL_SET="$stateful_set" yq -e '
     select(.kind == "StatefulSet" and .metadata.name == strenv(STATEFUL_SET)) |
     .spec.replicas == 1 and
@@ -710,13 +710,13 @@ yq -o=json -I=0 'select(.kind == "NetworkPolicy")' "$render_file" | jq -s -e '
       all(. != "internal-rpc-authority-postgresql" and . != "control-plane-postgresql"))) and
   all(.[] | select(any(.spec.egress[]?.ports[]?; .port == 5432));
     all(.spec.egress[] | select(any(.ports[]?; .port == 5432));
-      all(.to[]; .podSelector.matchLabels["app.kubernetes.io/name"] == "mattercodex-postgresql")))
+      all(.to[]; .podSelector.matchLabels["app.kubernetes.io/name"] == "kodex-postgresql")))
 ' >/dev/null || fail 'PostgreSQL NetworkPolicy points to a DNS alias instead of the actual workload label'
 
 yq -o=json 'select(.kind == "NetworkPolicy" and
   .metadata.name == "internal-rpc-authority-postgresql-from-migrator")' "$render_file" |
   jq -e '
-    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"mattercodex-postgresql"} and
+    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"kodex-postgresql"} and
     .spec.ingress == [{
       "from":[{"podSelector":{"matchLabels":{
         "app.kubernetes.io/name":"internal-rpc-authority",
@@ -728,10 +728,10 @@ yq -o=json 'select(.kind == "NetworkPolicy" and
 yq -o=json 'select(.kind == "NetworkPolicy" and
   .metadata.name == "internal-rpc-authority-postgresql-from-runtime")' "$render_file" |
   jq -e '
-    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"mattercodex-postgresql"} and
+    .spec.podSelector.matchLabels == {"app.kubernetes.io/name":"kodex-postgresql"} and
     any(.spec.ingress[0].from[];
       .podSelector.matchExpressions == [{
-        "key":"mattercodex.dev/image-admission-phase",
+        "key":"kodex.dev/image-admission-phase",
         "operator":"In",
         "values":["claim","admit","promote"]
       }])
@@ -757,7 +757,7 @@ yq -o=json 'select(.kind == "NetworkPolicy" and
       }) and
     any(.spec.ingress[0].from[];
       . == {"podSelector":{"matchLabels":{
-        "app.kubernetes.io/name":"mattercodex-registry-node-pull-readback"}}}) and
+        "app.kubernetes.io/name":"kodex-registry-node-pull-readback"}}}) and
     all(.spec.ingress[0].from[];
       has("podSelector") and
       ((has("namespaceSelector") | not) or
@@ -772,7 +772,7 @@ for service in control-plane-postgresql-rw internal-rpc-authority-postgresql-rw 
 done
 
 for certificate in \
-  mattercodex-postgresql mattercodex-nats control-plane-nats-client \
+  kodex-postgresql kodex-nats control-plane-nats-client \
   control-plane-nats-bootstrap-client control-api-gateway-nats-client \
   internal-rpc-authority-database-credential-reconciler internal-rpc-authority-publisher \
   internal-rpc-authority-readback-attestor internal-rpc-authority-restore-controller \
@@ -786,14 +786,14 @@ for certificate in \
   runtime-execution-client; do
   CERTIFICATE="$certificate" yq -e '
     select(.kind == "Certificate" and .metadata.name == strenv(CERTIFICATE)) |
-    .spec.issuerRef.name == "mattercodex-installation-ca"
+    .spec.issuerRef.name == "kodex-installation-ca"
   ' "$render_file" >/dev/null || fail "fresh TLS certificate contract is absent: $certificate"
 done
 
 while IFS=$'\t' read -r certificate service_account; do
   CERTIFICATE="$certificate" SERVICE_ACCOUNT="$service_account" yq -e '
     select(.kind == "Certificate" and .metadata.name == strenv(CERTIFICATE)) |
-    ((.spec.uris | contains(["spiffe://mattercodex.local/ns/mattercodex-system/sa/" + strenv(SERVICE_ACCOUNT)])) and
+    ((.spec.uris | contains(["spiffe://kodex.local/ns/kodex-system/sa/" + strenv(SERVICE_ACCOUNT)])) and
       (.spec.usages | contains(["client auth"])))
   ' "$render_file" >/dev/null || fail "fresh workload identity is incomplete: $certificate"
 done <<'EOF'
@@ -815,14 +815,14 @@ runtime-execution-client	agent-runner
 EOF
 
 for bundle in \
-  control-plane-postgresql-ca internal-rpc-authority-postgresql-ca mattercodex-nats-ca \
+  control-plane-postgresql-ca internal-rpc-authority-postgresql-ca kodex-nats-ca \
   internal-rpc-authority-publisher-ca internal-rpc-authority-readback-attestor-ca \
   internal-rpc-authority-restore-controller-ca internal-rpc-authority-vault-ca \
-  mattercodex-vault-ca; do
+  kodex-vault-ca; do
   BUNDLE="$bundle" yq -e '
     select(.kind == "Bundle" and .metadata.name == strenv(BUNDLE)) |
     .metadata.namespace == null and
-    .spec.sources[0].secret.name == "mattercodex-installation-ca" and
+    .spec.sources[0].secret.name == "kodex-installation-ca" and
     .spec.target.configMap.key == "ca.pem"
   ' "$render_file" >/dev/null || fail "fresh CA bundle contract is absent or incorrectly namespaced: $bundle"
 done
@@ -834,21 +834,21 @@ for bundle in \
   BUNDLE="$bundle" yq -e '
     select(.kind == "Bundle" and .metadata.name == strenv(BUNDLE)) |
     .metadata.namespace == null and
-    .spec.sources[0].secret.name == "mattercodex-installation-ca" and
+    .spec.sources[0].secret.name == "kodex-installation-ca" and
     .spec.target.configMap.key == "client-ca.pem"
   ' "$render_file" >/dev/null || fail "fresh client CA bundle contract is absent: $bundle"
 done
 
-yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql")' "$render_file" |
+yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "kodex-postgresql")' "$render_file" |
   jq -e '
     .spec.template.spec.containers[] | select(.name == "postgresql") |
     .env[] | select(.name == "POSTGRES_PASSWORD_FILE") |
     .value == "/var/run/bootstrap/password"
   ' >/dev/null || fail 'PostgreSQL bootstrap password is not file-backed'
-yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "mattercodex-nats")' "$render_file" |
+yq -o=json 'select(.kind == "StatefulSet" and .metadata.name == "kodex-nats")' "$render_file" |
   jq -e '
     .spec.template.spec.volumes[] | select(.name == "credentials") |
-    .secret.secretName == "mattercodex-nats-credentials"
+    .secret.secretName == "kodex-nats-credentials"
   ' >/dev/null || fail 'NATS operator/account material is not secret-backed'
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$render_file" |
   jq -e '
@@ -897,7 +897,7 @@ yq -o=json 'select(.kind == "Job" and .metadata.name == "control-plane-migrate")
     .command == ["/usr/local/bin/control-plane-cli"] and
     .args == ["up"] and
     any(.env[]; .name == "CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE" and
-      .value == "/var/run/secrets/mattercodex/control-plane/postgres-migration/dsn")
+      .value == "/var/run/secrets/kodex/control-plane/postgres-migration/dsn")
   ' >/dev/null || fail 'fresh control-plane migration command is inconsistent with the CLI contract'
 
 yq -o=json 'select(.kind == "Job" and .metadata.name == "internal-rpc-authority-migrate")' "$render_file" |
@@ -906,7 +906,7 @@ yq -o=json 'select(.kind == "Job" and .metadata.name == "internal-rpc-authority-
     .command == ["/usr/local/bin/internal-rpc-authority-cli"] and
     .args == ["up"] and
     any(.env[]; .name == "INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE" and
-      .value == "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn")
+      .value == "/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn")
   ' >/dev/null || fail 'fresh internal RPC authority migration command is inconsistent with the CLI contract'
 
 yq -o=json 'select(.kind == "Deployment" and .metadata.name == "control-api-gateway")' "$render_file" |
@@ -920,7 +920,7 @@ yq -o=json '
   select(.kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths")
 ' "$render_file" | jq -e '
   any(.spec.egress[];
-    any(.to[]?; .podSelector.matchLabels."app.kubernetes.io/name" == "mattercodex-nats") and
+    any(.to[]?; .podSelector.matchLabels."app.kubernetes.io/name" == "kodex-nats") and
     any(.ports[]?; .protocol == "TCP" and .port == 4222))
 ' >/dev/null || fail 'control API realtime NATS egress is absent'
 
@@ -929,7 +929,7 @@ yq -o=json 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gatewa
     any(.spec.ingress[].from[]?;
       .podSelector.matchLabels."app.kubernetes.io/name" == "agent-runner" and
       .podSelector.matchLabels."app.kubernetes.io/component" == "role-runtime" and
-      .podSelector.matchLabels."runtime.mattercodex.dev/managed" == "true") and
+      .podSelector.matchLabels."runtime.kodex.dev/managed" == "true") and
     (any(.spec.ingress[].from[]?;
       .podSelector.matchLabels."app.kubernetes.io/name" == "runtime-controller" and
       .podSelector.matchLabels."app.kubernetes.io/component" == "hot-runtime") | not)
@@ -949,7 +949,7 @@ yq -o=json 'select(.kind == "Deployment" and .metadata.name == "runtime-controll
   jq -e '
     .spec.template.spec.containers[] | select(.name == "runtime-controller") |
     any(.env[]; .name == "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE" and
-      .valueFrom.configMapKeyRef.name == "mattercodex-image-admission-policy" and
+      .valueFrom.configMapKeyRef.name == "kodex-image-admission-policy" and
       .valueFrom.configMapKeyRef.key == "nodeReadbackImage")
   ' >/dev/null || fail 'runtime-controller does not accept the exact release default role image'
 
@@ -958,7 +958,7 @@ test -f "$repository_root/contracts/runtime-controller/v4/agent-runner-input.sch
 test ! -e "$repository_root/contracts/runtime-controller/v3" ||
   fail 'retired runtime input v3 contract remains'
 jq -e '
-  .properties.schema.const == "mattercodex.agent-runner-input.v4" and
+  .properties.schema.const == "kodex.agent-runner-input.v4" and
   (.required | index("provider_account_ref") != null) and
   (.required | index("provider_credential_revision_ref") != null) and
   (.required | index("provider_credential_sha256") != null)
@@ -967,7 +967,7 @@ jq -e '
 
 api_policy_matches=$(yq -e '
   select(.kind == "NetworkPolicy" and
-    (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    (.metadata.name == "kodex-image-admission-controller-exact-paths" or
      .metadata.name == "runtime-controller-exact-paths" or
      .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
      .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints")) |
@@ -979,7 +979,7 @@ if [[ $api_policy_matches -ne 4 ]]; then
 fi
 yq -o=json '
   select(.kind == "NetworkPolicy" and
-    (.metadata.name == "mattercodex-image-admission-controller-exact-paths" or
+    (.metadata.name == "kodex-image-admission-controller-exact-paths" or
      .metadata.name == "runtime-controller-exact-paths" or
      .metadata.name == "internal-rpc-authority-database-credential-reconciler" or
      .metadata.name == "internal-rpc-authority-kubernetes-api-exact-endpoints"))
@@ -996,7 +996,7 @@ if go run "$repository_root/tools/release/validate-host-cidr.go" 10.96.0.0/24 >/
 fi
 
 yq -e '
-  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data.policyRevision == "1" and
   (.data.policySHA256 | test("^[a-f0-9]{64}$")) and
   (.data.trustedRoleBaseDigest | test("^sha256:[a-f0-9]{64}$")) and
@@ -1006,23 +1006,23 @@ yq -e '
 ' "$render_file" >/dev/null || fail 'role image release policy was not materialized'
 
 yq -o=json '
-  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull")
+  select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull")
 ' "$render_file" | jq -e '
-  .spec.template.metadata.annotations."mattercodex.dev/pull-credential-generation" == "1" and
+  .spec.template.metadata.annotations."kodex.dev/pull-credential-generation" == "1" and
   (.spec.template.spec.containers[] | select(.name == "certificate-guard") |
     any(.env[]; .name == "PULL_CREDENTIAL_GENERATION" and
-      .valueFrom.configMapKeyRef.name == "mattercodex-image-admission-policy" and
+      .valueFrom.configMapKeyRef.name == "kodex-image-admission-policy" and
       .valueFrom.configMapKeyRef.key == "pullCredentialGeneration"))
 ' >/dev/null || fail 'pull registry does not consume the rendered credential generation'
 
 admission_policy_config_map_json=$(yq -o=json -I=0 '
-  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-image-admission-policy") |
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
   .data
 ' "$render_file" | jq -Sc .)
 admission_policy_parameters_json=$(yq -o=json -I=0 '
-  select(.apiVersion == "supplychain.mattercodex.dev/v1alpha1" and
+  select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
     .kind == "ImageAdmissionPolicyParameters" and
-    .metadata.name == "mattercodex-image-admission-policy") |
+    .metadata.name == "kodex-image-admission-policy") |
   .spec
 ' "$render_file" | jq -Sc .)
 [[ -n "$admission_policy_parameters_json" &&
@@ -1033,28 +1033,28 @@ yq -o=json '
   select(.kind == "Role" and .metadata.name == "image-admission-controller")
 ' "$render_file" | jq -e '
   any(.rules[];
-    .apiGroups == ["supplychain.mattercodex.dev"] and
+    .apiGroups == ["supplychain.kodex.dev"] and
     .resources == ["imageadmissionpolicyparameters"] and
-    .resourceNames == ["mattercodex-image-admission-policy"] and
+    .resourceNames == ["kodex-image-admission-policy"] and
     .verbs == ["get"])
 ' >/dev/null || fail 'image admission controller lacks exact typed parameter read access'
 
-role_environment_catalog=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "mattercodex-role-environments") | .data."catalog.json"' "$render_file")
+role_environment_catalog=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments") | .data."catalog.json"' "$render_file")
 jq -e '
   .schemaVersion == 1 and (.environments | length) == 2 and
   .environments[0].key == "standard" and .environments[1].key == "documents" and
   (.environments[0].baseImageDigest | test("^sha256:[a-f0-9]{64}$")) and
   (.environments[1].baseImageDigest | test("^sha256:[a-f0-9]{64}$")) and
-  (.context.contextRef | contains("mattercodex/role-image-inputs@sha256:"))
+  (.context.contextRef | contains("kodex/role-image-inputs@sha256:"))
 ' <<<"$role_environment_catalog" >/dev/null || fail 'role environment catalog was not materialized'
 
 yq -o=json 'select(.kind == "Job" and .metadata.name == "release-artifact-materializer")' "$render_file" |
   jq -e '
     .spec.template.spec.containers[0].env as $env |
     ($env[] | select(.name == "RELEASE_SOURCE_REGISTRY").value) == "registry.example.test" and
-    ($env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value | startswith("registry.example.test/mattercodex/agent-runner@sha256:")) and
-    ($env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-base-documents@sha256:")) and
-    ($env[] | select(.name == "ROLE_IMAGE_INPUT_SOURCE_REF").value | startswith("registry.example.test/mattercodex/role-image-inputs@sha256:"))
+    ($env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value | startswith("registry.example.test/kodex/agent-runner@sha256:")) and
+    ($env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value | startswith("registry.example.test/kodex/role-base-documents@sha256:")) and
+    ($env[] | select(.name == "ROLE_IMAGE_INPUT_SOURCE_REF").value | startswith("registry.example.test/kodex/role-image-inputs@sha256:"))
   ' >/dev/null || fail 'release artifact materializer was not pinned to the lock'
 grep -Fq 'export DOCKER_CONFIG="$work/docker"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh" ||
@@ -1083,7 +1083,7 @@ grep -Fq 'openssl x509 -inform DER -in /tmp/served.der -checkend 900' \
   "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh" ||
   fail 'registry certificate guard does not bound pending certificate overlap'
 yq -o=json '
-  select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-pull") |
+  select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull") |
   .spec.template.spec.containers[] | select(.name == "certificate-guard")
 ' "$render_file" | jq -e '
   any(.env[];
@@ -1129,8 +1129,8 @@ mattermost_lock_sha256=$(sha256sum "$mattermost_lock" | awk '{print $1}')
   --profile web-with-mattermost \
   --mattermost-host chat.example.test \
   --public-host console.example.test --public-origin https://console.example.test \
-  --oidc-issuer https://identity.example.test/realms/mattercodex \
-  --oidc-jwks-url https://identity.example.test/realms/mattercodex/protocol/openid-connect/certs \
+  --oidc-issuer https://identity.example.test/realms/kodex \
+  --oidc-jwks-url https://identity.example.test/realms/kodex/protocol/openid-connect/certs \
   --oidc-connect-address identity.example.test:443 \
   --oidc-tls-server-name identity.example.test \
   --promoted-pull-host roles.example.test \

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
-	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	kubernetespitr "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
+	kubernetesrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
 )
 
 // RestorePITRConfig задаёт independent executable CloudNativePG owner.
@@ -35,7 +35,7 @@ func LoadRestorePITRConfig() (RestorePITRConfig, error) {
 		KubernetesTLSServerName: "kubernetes.default.svc",
 		KubernetesCAFile:        "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 		KubernetesTokenFile:     "/var/run/secrets/tokens/kubernetes/token",
-		EvidencePrivateJWKFile:  "/var/run/secrets/mattercodex/internal-rpc-authority/restore-pitr/evidence-private.jwk",
+		EvidencePrivateJWKFile:  "/var/run/secrets/kodex/internal-rpc-authority/restore-pitr/evidence-private.jwk",
 		BarmanServerName:        "internal-rpc-authority-primary",
 		SourceClusterName:       "internal-rpc-authority-primary",
 		StorageSize:             "20Gi",
@@ -82,7 +82,7 @@ func RunRestorePITR(
 		TLSServerName: config.KubernetesTLSServerName,
 		CAFile:        config.KubernetesCAFile,
 		TokenFile:     config.KubernetesTokenFile,
-		Namespace:     "mattercodex-system",
+		Namespace:     "kodex-system",
 		ResourceName:  "internal-rpc-authority-restore-coordination",
 		Timeout:       config.Timeout,
 	})
@@ -95,7 +95,7 @@ func RunRestorePITR(
 		TLSServerName:      config.KubernetesTLSServerName,
 		CAFile:             config.KubernetesCAFile,
 		TokenFile:          config.KubernetesTokenFile,
-		Namespace:          "mattercodex-system",
+		Namespace:          "kodex-system",
 		EvidenceSecretName: "internal-rpc-authority-restore-evidence",
 		PrivateJWKFile:     config.EvidencePrivateJWKFile,
 		BackupName:         config.BackupResourceName,

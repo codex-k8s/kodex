@@ -12,7 +12,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-const repositoryPolicyDigest = "5c71fefd60e624d6891e857442302c2b119f21b76b474d3c34f1c6df330f62ae"
+const repositoryPolicyDigest = "a32b8c5aa305640eaee494b65019804f668466b9dd82a1d5cc84af7f77747d4f"
 
 func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")

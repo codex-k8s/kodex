@@ -3,7 +3,7 @@ import { runtimeConfig } from "@/shared/config/runtime";
 import { currentLocale } from "@/shared/locale";
 import { selectedProjectRef } from "@/shared/project-context";
 
-const projectReferenceHeader = "X-MatterCodex-Project-ID";
+const projectReferenceHeader = "X-Kodex-Project-ID";
 let projectInterceptorConfigured = false;
 
 export function configureApiClient(): void {

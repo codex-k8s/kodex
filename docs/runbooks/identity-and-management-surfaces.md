@@ -18,16 +18,16 @@ Vault UI и Headlamp. Он применяется только после read-o
 
 | Интерфейс      | Публичный host        | Внешний шлюз                                                | Дополнительная authority                         |
 | -------------- | --------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
-| Control Center | installation variable | OAuth2 Proxy, realm `mattercodex`, role `mattercodex-owner` | собственный OIDC/PKCE и API authorization        |
-| Grafana        | installation variable | OAuth2 Proxy, realm `mattercodex`, role `mattercodex-owner` | доверенный auth-proxy header только от ingress   |
-| Vault UI       | installation variable | OAuth2 Proxy, realm `mattercodex`, role `mattercodex-owner` | нативный Vault OIDC и policy `mattercodex-owner` |
+| Control Center | installation variable | OAuth2 Proxy, realm `kodex`, role `kodex-owner` | собственный OIDC/PKCE и API authorization        |
+| Grafana        | installation variable | OAuth2 Proxy, realm `kodex`, role `kodex-owner` | доверенный auth-proxy header только от ingress   |
+| Vault UI       | installation variable | OAuth2 Proxy, realm `kodex`, role `kodex-owner` | нативный Vault OIDC и policy `kodex-owner` |
 | Headlamp       | installation variable | OAuth2 Proxy, Keycloak `master` realm, role `admin`         | отдельный ServiceAccount с `cluster-admin`       |
 
 Headlamp намеренно использует общий административный ServiceAccount. Это
 допустимо только потому, что его единственный ingress закрыт OAuth2 Proxy и
 пропускает исключительно Keycloak administrators с realm-role `admin`.
 Назначение этой роли означает полный доступ к Kubernetes. Обычный owner или
-пользователь realm `mattercodex` не получает доступ к Headlamp автоматически.
+пользователь realm `kodex` не получает доступ к Headlamp автоматически.
 
 Keycloak login и OIDC endpoints не закрываются его же OAuth2 Proxy: это создало
 бы циклическую зависимость. Keycloak Admin Console использует собственную
@@ -40,29 +40,29 @@ Keycloak login и OIDC endpoints не закрываются его же OAuth2 
 
 | Variable                                   | Пример формы      | Назначение                                       |
 | ------------------------------------------ | ----------------- | ------------------------------------------------ |
-| `MATTERCODEX_KEYCLOAK_ADMIN_USERNAME`      | непустой username | постоянный администратор Keycloak `master` realm |
-| `MATTERCODEX_OWNER_USERNAME`               | непустой username | первый владелец MatterCodex                      |
-| `MATTERCODEX_OWNER_EMAIL`                  | email             | email первого владельца                          |
-| `MATTERCODEX_GRAFANA_HOST`                 | DNS без схемы     | публичный Grafana host                           |
-| `MATTERCODEX_VAULT_HOST`                   | DNS без схемы     | публичный Vault UI host                          |
-| `MATTERCODEX_HEADLAMP_HOST`                | DNS без схемы     | публичный Headlamp host                          |
-| `MATTERCODEX_PUBLIC_IPV4_CIDR`             | один IPv4 `/32`   | точный публичный egress к Keycloak               |
-| `MATTERCODEX_VAULT_RECOVERY_AGE_RECIPIENT` | `age1...`         | публичный recipient owner recovery key           |
+| `KODEX_KEYCLOAK_ADMIN_USERNAME`      | непустой username | постоянный администратор Keycloak `master` realm |
+| `KODEX_OWNER_USERNAME`               | непустой username | первый владелец Kodex                      |
+| `KODEX_OWNER_EMAIL`                  | email             | email первого владельца                          |
+| `KODEX_GRAFANA_HOST`                 | DNS без схемы     | публичный Grafana host                           |
+| `KODEX_VAULT_HOST`                   | DNS без схемы     | публичный Vault UI host                          |
+| `KODEX_HEADLAMP_HOST`                | DNS без схемы     | публичный Headlamp host                          |
+| `KODEX_PUBLIC_IPV4_CIDR`             | один IPv4 `/32`   | точный публичный egress к Keycloak               |
+| `KODEX_VAULT_RECOVERY_AGE_RECIPIENT` | `age1...`         | публичный recipient owner recovery key           |
 
 Повторно используются существующие deployment variables:
-`MATTERCODEX_PUBLIC_HOST`, `MATTERCODEX_PUBLIC_ORIGIN`,
-`MATTERCODEX_OIDC_ISSUER`, `MATTERCODEX_INGRESS_CLASS`,
-`MATTERCODEX_CLUSTER_ISSUER`, `MATTERCODEX_INGRESS_NAMESPACE`,
-`MATTERCODEX_INGRESS_POD_NAME`, `MATTERCODEX_KUBERNETES_API_SERVICE_CIDR`,
-`MATTERCODEX_KUBERNETES_API_ENDPOINT_CIDRS` и
-`MATTERCODEX_KUBERNETES_API_ENDPOINT_PORTS`.
+`KODEX_PUBLIC_HOST`, `KODEX_PUBLIC_ORIGIN`,
+`KODEX_OIDC_ISSUER`, `KODEX_INGRESS_CLASS`,
+`KODEX_CLUSTER_ISSUER`, `KODEX_INGRESS_NAMESPACE`,
+`KODEX_INGRESS_POD_NAME`, `KODEX_KUBERNETES_API_SERVICE_CIDR`,
+`KODEX_KUBERNETES_API_ENDPOINT_CIDRS` и
+`KODEX_KUBERNETES_API_ENDPOINT_PORTS`.
 
 В Environment secrets создать:
 
 | Secret                                        | Назначение                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------ |
-| `MATTERCODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD` | начальный пароль постоянного администратора, не короче 20 символов |
-| `MATTERCODEX_OWNER_INITIAL_PASSWORD`          | начальный пароль owner, не короче 20 символов                      |
+| `KODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD` | начальный пароль постоянного администратора, не короче 20 символов |
+| `KODEX_OWNER_INITIAL_PASSWORD`          | начальный пароль owner, не короче 20 символов                      |
 
 Значения не передаются аргументами CLI и не печатаются. Временный Keycloak
 bootstrap administrator создаётся генератором случайно, используется только
@@ -82,12 +82,12 @@ GitHub Environment, а `Secret/identity/keycloak-initial-passwords` удаляе
 установки или репозитории. Владелец создаёт его на доверенном узле:
 
 ```bash
-install -d -m 0700 /var/lib/mattercodex-owner/recovery
-age-keygen -o /var/lib/mattercodex-owner/recovery/age-key.txt
-chmod 0600 /var/lib/mattercodex-owner/recovery/age-key.txt
-age-keygen -y /var/lib/mattercodex-owner/recovery/age-key.txt \
-  > /var/lib/mattercodex-owner/recovery/age-recipient.txt
-chmod 0600 /var/lib/mattercodex-owner/recovery/age-recipient.txt
+install -d -m 0700 /var/lib/kodex-owner/recovery
+age-keygen -o /var/lib/kodex-owner/recovery/age-key.txt
+chmod 0600 /var/lib/kodex-owner/recovery/age-key.txt
+age-keygen -y /var/lib/kodex-owner/recovery/age-key.txt \
+  > /var/lib/kodex-owner/recovery/age-recipient.txt
+chmod 0600 /var/lib/kodex-owner/recovery/age-recipient.txt
 ```
 
 В GitHub variable записывается только строка из `age-recipient.txt`. Приватный
@@ -106,12 +106,12 @@ machine secrets, зашифровывает полный identity bundle пуб�
 owner-controlled backup locations. Расшифровка выполняется только в `tmpfs`:
 
 ```bash
-install -d -m 0700 /run/mattercodex-installation-identity
+install -d -m 0700 /run/kodex-installation-identity
 tools/deploy/import-identity-material.sh \
-  --material-directory /run/mattercodex-installation-identity \
-  --age-identity-file /var/lib/mattercodex-owner/recovery/age-key.txt \
-  --bundle-file /path/to/mattercodex-identity-<exact-sha>.tar.age \
-  --checksum-file /path/to/mattercodex-identity-<exact-sha>.tar.age.sha256
+  --material-directory /run/kodex-installation-identity \
+  --age-identity-file /var/lib/kodex-owner/recovery/age-key.txt \
+  --bundle-file /path/to/kodex-identity-<exact-sha>.tar.age \
+  --checksum-file /path/to/kodex-identity-<exact-sha>.tar.age.sha256
 ```
 
 Скрипт принимает только закрытый список ожидаемых regular files и отказывается
@@ -121,14 +121,14 @@ tools/deploy/import-identity-material.sh \
 ```bash
 tools/deploy/materialize-identity-secrets.sh \
   --context <exact-context> \
-  --material-directory /run/mattercodex-installation-identity
+  --material-directory /run/kodex-installation-identity
 ```
 
 После Keycloak и management readback plaintext удаляется code-first командой:
 
 ```bash
 tools/deploy/destroy-plaintext-identity-material.sh \
-  --material-directory /run/mattercodex-installation-identity
+  --material-directory /run/kodex-installation-identity
 ```
 
 Скрипт принимает только закрытый набор ожидаемых файлов и только путь в `/run`
@@ -162,7 +162,7 @@ tools/deploy/configure-keycloak.sh \
 Команда создаёт отдельные confidential clients и secrets для каждой
 поверхности. Постоянный administrator создаётся в `master` realm с ролью
 `admin`, а временный bootstrap administrator удаляется; owner создаётся в
-realm `mattercodex`. Повторить команду с `--mode readback`.
+realm `kodex`. Повторить команду с `--mode readback`.
 Keycloak обращается к своему PostgreSQL только по TLS 1.3 с `verify-full` и
 installation-owned identity CA; Traefik также подключается к Keycloak по HTTPS
 с exact SNI публичного OIDC host. Keycloak bind-ит основной и management
@@ -184,9 +184,9 @@ unseal shares, для распечатывания нужны любые три.
 
 ```bash
 tools/deploy/seal-vault-recovery-material.sh \
-  --material-directory /var/lib/mattercodex-owner/material \
-  --age-recipient-file /var/lib/mattercodex-owner/recovery/age-recipient.txt \
-  --output-file /var/lib/mattercodex-owner/recovery/vault-recovery.tar.age
+  --material-directory /var/lib/kodex-owner/material \
+  --age-recipient-file /var/lib/kodex-owner/recovery/age-recipient.txt \
+  --output-file /var/lib/kodex-owner/recovery/vault-recovery.tar.age
 ```
 
 Скрипт удаляет plaintext root token и все shares только после успешного
@@ -201,8 +201,8 @@ Vault UI OIDC настраивается после unseal:
 ```bash
 tools/deploy/configure-vault-oidc.sh \
   --context <exact-context> --mode apply \
-  --material-directory /var/lib/mattercodex-owner/material \
-  --oidc-issuer https://<sso-host>/realms/mattercodex \
+  --material-directory /var/lib/kodex-owner/material \
+  --oidc-issuer https://<sso-host>/realms/kodex \
   --vault-public-origin https://<vault-host>
 ```
 
@@ -219,7 +219,7 @@ release `preflight` и `apply-state`: release render уже содержит
 ```bash
 infra/management-surfaces/bootstrap.sh \
   --context <exact-context> --mode preflight \
-  --oidc-issuer https://<sso-host>/realms/mattercodex \
+  --oidc-issuer https://<sso-host>/realms/kodex \
   --control-center-host <control-center-host> \
   --grafana-host <grafana-host> --vault-host <vault-host> \
   --headlamp-host <headlamp-host> --public-ipv4-cidr <public-ip>/32 \
@@ -231,7 +231,7 @@ infra/management-surfaces/bootstrap.sh \
 ```
 
 Headlamp OAuth2 Proxy автоматически использует issuer `master` и роль `admin`;
-остальные поверхности используют переданный realm `mattercodex`. Повторный
+остальные поверхности используют переданный realm `kodex`. Повторный
 запуск идемпотентен и не генерирует новые secrets.
 
 ## 8. Проверка и восстановление

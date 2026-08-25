@@ -3,19 +3,19 @@ kind: Ingress
 metadata:
   name: staff-control-center
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: mattercodex-system-oauth2-control-center-chain@kubernetescrd
-    traefik.ingress.kubernetes.io/service.serverstransport: mattercodex-system-staff-control-center@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: kodex-system-oauth2-control-center-chain@kubernetescrd
+    traefik.ingress.kubernetes.io/service.serverstransport: kodex-system-staff-control-center@kubernetescrd
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_PUBLIC_HOST__]
+    - hosts: [__KODEX_PUBLIC_HOST__]
       secretName: staff-control-center-public-tls
   rules:
-    - host: __MATTERCODEX_PUBLIC_HOST__
+    - host: __KODEX_PUBLIC_HOST__
       http:
         paths:
           - path: /

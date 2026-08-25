@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/httpserver"
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/admissioncontroller"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/admissioncontroller"
 )
 
 const admissionControllerServiceName = "image-admission-controller"

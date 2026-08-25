@@ -16,8 +16,8 @@ canonical="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/aut
   cd -- "$repository_root/libs/go/controlplaneclient"
   env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/policygen \
     --output "$generated" \
-    --oidc-issuer '__MATTERCODEX_OIDC_ISSUER__' \
-    --oidc-audience mattercodex-control-api
+    --oidc-issuer '__KODEX_OIDC_ISSUER__' \
+    --oidc-audience kodex-control-api
 )
 
 cmp -s "$generated" "$canonical" || fail 'generated policy differs from the canonical file'

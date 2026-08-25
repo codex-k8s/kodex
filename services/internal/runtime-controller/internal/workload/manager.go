@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -28,11 +28,11 @@ import (
 )
 
 const (
-	managedLabel         = "runtime.mattercodex.dev/managed"
-	modeLabel            = "runtime.mattercodex.dev/mode"
-	revisionAnnotation   = "runtime.mattercodex.dev/revision-digest"
-	controllerAnnotation = "runtime.mattercodex.dev/controller-pod-uid"
-	podAnnotation        = "runtime.mattercodex.dev/pod-name"
+	managedLabel         = "runtime.kodex.dev/managed"
+	modeLabel            = "runtime.kodex.dev/mode"
+	revisionAnnotation   = "runtime.kodex.dev/revision-digest"
+	controllerAnnotation = "runtime.kodex.dev/controller-pod-uid"
+	podAnnotation        = "runtime.kodex.dev/pod-name"
 	inputKey             = "runtime.json"
 	ticketKey            = "token"
 )
@@ -212,10 +212,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		CodexSandbox:               "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
-			CAFile: "/var/run/config/mattercodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/mattercodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/mattercodex/runtime/callback-client/tls.key"},
-		ExecutionTicketFile: "/var/run/secrets/mattercodex/runtime/ticket/token",
-		ProviderAuthFile:    "/var/run/secrets/mattercodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/var/run/secrets/mattercodex/runtime/provider/auth.sha256",
-		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.matter-codex/outbox", CodexHome: "/tmp/codex-home",
+			CAFile: "/var/run/config/kodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/kodex/runtime/callback-client/tls.key"},
+		ExecutionTicketFile: "/var/run/secrets/kodex/runtime/ticket/token",
+		ProviderAuthFile:    "/var/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/var/run/secrets/kodex/runtime/provider/auth.sha256",
+		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/tmp/codex-home",
 	}
 }
 
@@ -482,7 +482,7 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 		return errors.New("read runtime session volume")
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.Namespace,
-		Labels: map[string]string{managedLabel: "true", "runtime.mattercodex.dev/session-hash": shortHash(sessionRef)}},
+		Labels: map[string]string{managedLabel: "true", "runtime.kodex.dev/session-hash": shortHash(sessionRef)}},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: &manager.config.StorageClass,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
@@ -507,10 +507,10 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 	}
-	baseMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/mattercodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/mattercodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/mattercodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/mattercodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/mattercodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
+	baseMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
 	requests := corev1.ResourceList{corev1.ResourceCPU: *resource.NewMilliQuantity(manager.config.TurnCPUMilli, resource.DecimalSI), corev1.ResourceMemory: *resource.NewQuantity(manager.config.TurnMemoryBytes, resource.BinarySI)}
 	role := corev1.Container{Name: "role-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: roleArgs,
-		Env:   []corev1.EnvVar{{Name: "MATTERCODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/mattercodex/runtime/runtime.json"}},
+		Env:   []corev1.EnvVar{{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"}},
 		Ports: []corev1.ContainerPort{{Name: "runtime-health", ContainerPort: 9090}}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: baseMounts,
 		Resources:    corev1.ResourceRequirements{Requests: requests, Limits: requests},
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
@@ -518,10 +518,10 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: manager.config.ProviderHTTPSProxy}, {Name: "HTTP_PROXY", Value: manager.config.ProviderHTTPSProxy},
 			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: restrictedSecurityContext(10002),
-		VolumeMounts: []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/mattercodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "provider-auth", MountPath: "/var/run/secrets/mattercodex/runtime/provider", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/mattercodex/provider"}, {Name: "provider-tmp", MountPath: "/tmp"}},
-		Resources:    smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/mattercodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
+		VolumeMounts: []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "provider-auth", MountPath: "/var/run/secrets/kodex/runtime/provider", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "provider-tmp", MountPath: "/tmp"}},
+		Resources:    smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.Namespace,
-		Labels:      map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "mattercodex.dev/environment": manager.config.Environment},
+		Labels:      map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment},
 		Annotations: map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, controllerAnnotation: manager.config.ControllerPodUID}},
 		Spec: corev1.PodSpec{ServiceAccountName: manager.config.RunnerServiceAccount, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},

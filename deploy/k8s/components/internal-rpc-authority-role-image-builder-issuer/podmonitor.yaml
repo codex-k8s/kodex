@@ -9,7 +9,7 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: role-image-builder
-      mattercodex.dev/internal-rpc-authority-issuer: enabled
+      kodex.dev/internal-rpc-authority-issuer: enabled
   podMetricsEndpoints:
     - port: auth-metrics
       path: /metrics

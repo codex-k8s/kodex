@@ -66,20 +66,20 @@ if [[ "$mode" == apply ]]; then
   trap 'rm -rf -- "$temporary_directory"' EXIT
   htpasswd -i -B -C 12 -c "$temporary_directory/users" "$username" \
     <"$password_file" >/dev/null
-  kubectl -n "$namespace" create secret generic mattercodex-release-registry-auth \
+  kubectl -n "$namespace" create secret generic kodex-release-registry-auth \
     --from-file=users="$temporary_directory/users" --dry-run=client -o yaml |
     kubectl apply -f - >/dev/null
   rendered="$temporary_directory/registry.yaml"
   kubectl kustomize "$script_directory" >"$rendered"
   REGISTRY_HOST="$registry_host" INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" yq -i '
     (.. | select(tag == "!!str")) |= (
-      sub("__MATTERCODEX_REGISTRY_HOST__"; strenv(REGISTRY_HOST)) |
-      sub("__MATTERCODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
-      sub("__MATTERCODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER))
+      sub("__KODEX_REGISTRY_HOST__"; strenv(REGISTRY_HOST)) |
+      sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+      sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER))
     )
   ' "$rendered"
   kubectl apply -f "$rendered" >/dev/null
-  kubectl -n "$namespace" rollout status deployment/matter-codex-registry --timeout=300s >/dev/null
+  kubectl -n "$namespace" rollout status deployment/kodex-registry --timeout=300s >/dev/null
 
   if [[ -n "$docker_config_output" ]]; then
     umask 077
@@ -90,9 +90,9 @@ if [[ "$mode" == apply ]]; then
 fi
 
 if [[ "$mode" == preflight || "$mode" == readback ]]; then
-  kubectl -n "$namespace" get deployment matter-codex-registry >/dev/null
-  kubectl -n "$namespace" get service matter-codex-registry >/dev/null
-  kubectl -n "$namespace" get persistentvolumeclaim matter-codex-registry >/dev/null
+  kubectl -n "$namespace" get deployment kodex-registry >/dev/null
+  kubectl -n "$namespace" get service kodex-registry >/dev/null
+  kubectl -n "$namespace" get persistentvolumeclaim kodex-registry >/dev/null
 fi
 
 if [[ "$mode" == readback ]]; then

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	domainrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -42,7 +42,7 @@ func New(config Config) (*Client, error) {
 	if err != nil ||
 		host != config.TLSServerName ||
 		config.TLSServerName !=
-			"internal-rpc-authority-publisher.mattercodex-system.svc" ||
+			"internal-rpc-authority-publisher.kodex-system.svc" ||
 		config.Timeout < time.Second ||
 		config.Timeout > 10*time.Second ||
 		config.UnaryInterceptor == nil {

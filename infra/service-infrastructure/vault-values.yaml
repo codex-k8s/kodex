@@ -34,7 +34,7 @@ server:
   volumes:
     - name: vault-server-tls
       secret:
-        secretName: mattercodex-vault-server-tls
+        secretName: kodex-vault-server-tls
   volumeMounts:
     - name: vault-server-tls
       mountPath: /vault/userconfig/vault-server-tls
@@ -44,7 +44,7 @@ server:
     config: |-
       ui = true
       disable_mlock = true
-      api_addr = "https://vault.mattercodex-system.svc:8200"
+      api_addr = "https://vault.kodex-system.svc:8200"
       listener "tcp" {
         address = "[::]:8200"
         cluster_address = "[::]:8201"
@@ -70,7 +70,7 @@ csi:
   volumes:
     - name: vault-server-ca
       secret:
-        secretName: mattercodex-vault-server-tls
+        secretName: kodex-vault-server-tls
         items:
           - key: ca.crt
             path: ca.crt
@@ -79,9 +79,9 @@ csi:
       mountPath: /vault/tls
       readOnly: true
   extraArgs:
-    - --vault-addr=https://vault.mattercodex-system.svc:8200
+    - --vault-addr=https://vault.kodex-system.svc:8200
     - --vault-tls-ca-cert=/vault/tls/ca.crt
-    - --vault-tls-server-name=vault.mattercodex-system.svc.cluster.local
+    - --vault-tls-server-name=vault.kodex-system.svc.cluster.local
   daemonSet:
     kubeletRootDir: /var/lib/kubelet
   agent:

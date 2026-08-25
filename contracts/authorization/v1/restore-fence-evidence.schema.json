@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/restore-fence-evidence.schema.json",
-  "title": "Внешнее монотонное доказательство PITR MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/restore-fence-evidence.schema.json",
+  "title": "Внешнее монотонное доказательство PITR Kodex",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -185,7 +185,7 @@
       "type": "string",
       "minLength": 51,
       "maxLength": 144,
-      "pattern": "^urn:mattercodex:internal-rpc-authority-recovery:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc-authority-recovery:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "revisionDigest": {
       "type": "object",

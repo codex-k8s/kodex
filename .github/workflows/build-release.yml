@@ -1,4 +1,4 @@
-name: Build exact MatterCodex release
+name: Build exact Kodex release
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: mattercodex-build
+    runs-on: kodex-build
     timeout-minutes: 60
     environment: production-build
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Checkout exact owner-authorized SHA
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
+          ref: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
       - name: Verify checkout and owner gate
@@ -44,8 +44,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-          WORKFLOW_SHA: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
-          OWNER_ACTOR_ID: ${{ vars.MATTERCODEX_BUILD_OWNER_ACTOR_ID }}
+          WORKFLOW_SHA: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
+          OWNER_ACTOR_ID: ${{ vars.KODEX_BUILD_OWNER_ACTOR_ID }}
         run: |
           test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
           tools/release/verify-github-owner-gate.sh \
@@ -61,16 +61,16 @@ jobs:
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-          BUILDCTL_PATH: /var/run/mattercodex-tools/buildctl
+          BUILDCTL_PATH: /var/run/kodex-tools/buildctl
           BUILDKIT_HOST: unix:///var/run/buildkit/buildkitd.sock
-          REGISTRY_PUSH: ${{ vars.MATTERCODEX_REGISTRY_PUSH }}
-          NODE_PULL: ${{ vars.MATTERCODEX_NODE_PULL }}
-          REPOSITORY_PREFIX: ${{ vars.MATTERCODEX_REPOSITORY_PREFIX }}
+          REGISTRY_PUSH: ${{ vars.KODEX_REGISTRY_PUSH }}
+          NODE_PULL: ${{ vars.KODEX_NODE_PULL }}
+          REPOSITORY_PREFIX: ${{ vars.KODEX_REPOSITORY_PREFIX }}
           DEPLOYMENT_PROFILE: ${{ inputs.deployment_profile }}
-          REGISTRY_DOCKER_CONFIG_JSON: ${{ secrets.MATTERCODEX_RELEASE_REGISTRY_DOCKER_CONFIG_JSON }}
-          HTTPS_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
-          HTTP_PROXY: ${{ vars.MATTERCODEX_BUILD_PROXY }}
-          NO_PROXY: ${{ vars.MATTERCODEX_BUILD_NO_PROXY }}
+          REGISTRY_DOCKER_CONFIG_JSON: ${{ secrets.KODEX_RELEASE_REGISTRY_DOCKER_CONFIG_JSON }}
+          HTTPS_PROXY: ${{ vars.KODEX_BUILD_PROXY }}
+          HTTP_PROXY: ${{ vars.KODEX_BUILD_PROXY }}
+          NO_PROXY: ${{ vars.KODEX_BUILD_NO_PROXY }}
         run: |
           umask 077
           registry_docker_config=$(mktemp -d)
@@ -84,7 +84,7 @@ jobs:
             --output release-lock.json
             --registry-push "$REGISTRY_PUSH"
             --node-pull "$NODE_PULL"
-            --repository-prefix "${REPOSITORY_PREFIX:-mattercodex}"
+            --repository-prefix "${REPOSITORY_PREFIX:-kodex}"
             --profile "$DEPLOYMENT_PROFILE"
           )
           if [[ -n "${HTTPS_PROXY:-}" ]]; then

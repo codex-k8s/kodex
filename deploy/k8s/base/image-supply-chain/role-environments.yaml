@@ -1,20 +1,20 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mattercodex-role-environments
+  name: kodex-role-environments
   labels:
-    app.kubernetes.io/name: mattercodex-role-environments
-    mattercodex.dev/owner-intent: "true"
+    app.kubernetes.io/name: kodex-role-environments
+    kodex.dev/owner-intent: "true"
 immutable: true
 data:
   catalog.json: |
     {
       "schemaVersion": 1,
       "context": {
-        "sourceRef": "urn:mattercodex:release-source",
+        "sourceRef": "urn:kodex:release-source",
         "sourceRevision": "0000000000000000000000000000000000000000",
         "sourceSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-        "contextRef": "oci://mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "contextRef": "oci://kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs@sha256:0000000000000000000000000000000000000000000000000000000000000000",
         "contextSha256": "0000000000000000000000000000000000000000000000000000000000000000"
       },
       "environments": [
@@ -27,7 +27,7 @@ data:
           "recommended": true,
           "available": true,
           "customInstallationAllowed": false,
-          "baseImageReference": "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
+          "baseImageReference": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner",
           "baseImageDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
           "platforms": [{"os": "linux", "architecture": "amd64", "variant": ""}],
           "packages": [],
@@ -47,7 +47,7 @@ data:
           "recommended": false,
           "available": true,
           "customInstallationAllowed": false,
-          "baseImageReference": "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-base-documents",
+          "baseImageReference": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-base-documents",
           "baseImageDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
           "platforms": [{"os": "linux", "architecture": "amd64", "variant": ""}],
           "packages": [],

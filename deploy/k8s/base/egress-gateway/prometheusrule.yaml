@@ -16,54 +16,54 @@ spec:
           annotations:
             summary: Egress gateway недоступен
             description: Ни одна реплика platform egress gateway не доступна для scrape.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayNotReady
-          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(mattercodex_egress_gateway_readiness{ready="true"} == 1) or vector(0)) > 0
+          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(kodex_egress_gateway_readiness{ready="true"} == 1) or vector(0)) > 0
           for: 2m
           labels: {severity: critical}
           annotations:
             summary: Egress gateway не проходит effective readiness
             description: Проверить ACTIVE policy readback и server-owned DNS validation.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayPolicyInactive
-          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(mattercodex_egress_gateway_policy_active == 1) or vector(0)) > 0
+          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(kodex_egress_gateway_policy_active == 1) or vector(0)) > 0
           for: 2m
           labels: {severity: critical}
           annotations:
             summary: Immutable policy egress gateway не активна
             description: Revision либо canonical digest не подтверждены runtime.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
     - name: egress-gateway.security
       rules:
         - alert: EgressGatewayUnsafeDNSAnswers
-          expr: sum(rate(mattercodex_egress_gateway_dns_resolutions_total{outcome="rejected",reason="special_address"}[5m])) > 0
+          expr: sum(rate(kodex_egress_gateway_dns_resolutions_total{outcome="rejected",reason="special_address"}[5m])) > 0
           for: 2m
           labels: {severity: critical}
           annotations:
             summary: Egress gateway отклоняет special-purpose DNS answers
             description: Возможен DNS rebinding либо ошибочная внешняя DNS-конфигурация; unsafe cache отсутствует.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayClientHelloRejections
-          expr: sum(rate(mattercodex_egress_gateway_connection_attempts_total{outcome="rejected",stage="clienthello"}[5m])) > 0.1
+          expr: sum(rate(kodex_egress_gateway_connection_attempts_total{outcome="rejected",stage="clienthello"}[5m])) > 0.1
           for: 5m
           labels: {severity: warning}
           annotations:
             summary: Растёт число ClientHello reject
             description: Проверить mismatch, missing, duplicate SNI и попытки ECH без раскрытия destination.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayLiteralDialFailures
-          expr: sum(rate(mattercodex_egress_gateway_external_dials_total{outcome="failure"}[5m])) > 0.1
+          expr: sum(rate(kodex_egress_gateway_external_dials_total{outcome="failure"}[5m])) > 0.1
           for: 10m
           labels: {severity: warning}
           annotations:
             summary: Растёт число literal dial failures
             description: Проверить внешний TCP/443 path после успешной DNS validation.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayConnectionLimitRejections
-          expr: sum(rate(mattercodex_egress_gateway_connection_attempts_total{outcome="rejected",stage="accept",reason="connection_limit"}[5m])) > 0.1
+          expr: sum(rate(kodex_egress_gateway_connection_attempts_total{outcome="rejected",stage="accept",reason="connection_limit"}[5m])) > 0.1
           for: 5m
           labels: {severity: warning}
           annotations:
             summary: Egress gateway устойчиво отклоняет новые соединения по лимиту
             description: Проверить active connections и saturation; readiness может оставаться успешной.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/egress-gateway.md

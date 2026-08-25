@@ -26,7 +26,7 @@ Publisher получает отдельную Vault policy, построенну
 `create/read/update`: `create` нужен только для CAS=0 genesis отсутствующего
 keyset, а последующая ротация выполняется versioned CAS update. Wildcard,
 `delete`, произвольный create и выход за namespace
-`kv/data/mattercodex/internal-rpc-authority/` запрещены. Release `readback`
+`kv/data/kodex/internal-rpc-authority/` запрещены. Release `readback`
 повторно строит ожидаемую policy из того же render и сравнивает её с фактически
 обслуживаемой Vault policy и Kubernetes auth role.
 
@@ -52,7 +52,7 @@ test -n "$KUBERNETES_API_CIDRS"
 test -n "$KUBERNETES_API_PORTS"
 scripts/render-internal-rpc-authority.sh \
   --environment staging \
-  --image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --image-ref ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:<digest> \
   --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
   --kubernetes-api-ports "$KUBERNETES_API_PORTS" \
   > /tmp/internal-rpc-authority-staging.yaml
@@ -68,9 +68,9 @@ scripts/render-internal-rpc-authority.sh \
 3. Проверить без значений Secret:
 
 ```bash
-kubectl -n mattercodex-system get deploy,pod,job,svc,networkpolicy \
+kubectl -n kodex-system get deploy,pod,job,svc,networkpolicy \
   -l app.kubernetes.io/name=internal-rpc-authority
-kubectl -n mattercodex-system get endpoints \
+kubectl -n kodex-system get endpoints \
   internal-rpc-authority-database-credential-reconciler
 ```
 
@@ -99,7 +99,7 @@ kubectl -n mattercodex-system get endpoints \
 
 Не выводить Sentry DSN при диагностике. Проверять только имя Secret, режим
 файла, размер файла и совпадение ожидаемого узла. Панель
-`mattercodex-internal-rpc-authority` показывает готовность обслуживаемого
+`kodex-internal-rpc-authority` показывает готовность обслуживаемого
 состояния, ограниченные исходы gRPC и задержку p99. Оповещения
 `InternalRPCAuthorityServedStateUnavailable`,
 `InternalRPCAuthorityUnexpectedGRPCFailures` и

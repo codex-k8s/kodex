@@ -8,18 +8,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
-	snapshotdelivery "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/snapshot"
-	publisherrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/publisher"
-	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
-	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/publisher"
+	snapshotdelivery "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/snapshot"
+	publisherrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/publisher"
+	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
+	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -73,25 +73,25 @@ func LoadPublisherConfig() (PublisherConfig, error) {
 	config := PublisherConfig{
 		Listen:                       ":8444",
 		TechnicalListen:              ":9090",
-		TLSCertificateFile:           "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.crt",
-		TLSPrivateKeyFile:            "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/tls/tls.key",
-		ClientCAFile:                 "/var/run/config/mattercodex/internal-rpc-authority/publisher/client-ca.pem",
-		PostgresDSNFile:              "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/dsn",
-		PostgresTLSServerName:        "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
+		TLSCertificateFile:           "/var/run/secrets/kodex/internal-rpc-authority/publisher/tls/tls.crt",
+		TLSPrivateKeyFile:            "/var/run/secrets/kodex/internal-rpc-authority/publisher/tls/tls.key",
+		ClientCAFile:                 "/var/run/config/kodex/internal-rpc-authority/publisher/client-ca.pem",
+		PostgresDSNFile:              "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/dsn",
+		PostgresTLSServerName:        "internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local",
 		SecretBackend:                string(secretBackendVault),
-		VaultAddress:                 "https://vault.mattercodex-system.svc:8200",
-		VaultTLSServerName:           "vault.mattercodex-system.svc.cluster.local",
-		VaultCAFile:                  "/var/run/config/mattercodex/internal-rpc-authority/publisher/vault-ca.pem",
+		VaultAddress:                 "https://vault.kodex-system.svc:8200",
+		VaultTLSServerName:           "vault.kodex-system.svc.cluster.local",
+		VaultCAFile:                  "/var/run/config/kodex/internal-rpc-authority/publisher/vault-ca.pem",
 		VaultAuthRole:                "internal-rpc-authority-publisher",
 		VaultAuthFile:                "/var/run/secrets/tokens/vault/token",
 		TargetRegistryFile:           "/usr/local/share/internal-rpc-authority/bootstrap-key-delivery-targets.yaml",
-		SignerPrivateJWKFile:         "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/restore-signer/private.jwk",
-		ReadbackSignerPrivateJWKFile: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
-		ManifestSignerPrivateJWKFile: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/manifest-signer/private.jwk",
+		SignerPrivateJWKFile:         "/var/run/secrets/kodex/internal-rpc-authority/publisher/restore-signer/private.jwk",
+		ReadbackSignerPrivateJWKFile: "/var/run/secrets/kodex/internal-rpc-authority/publisher/readback-signer/private.jwk",
+		ManifestSignerPrivateJWKFile: "/var/run/secrets/kodex/internal-rpc-authority/publisher/manifest-signer/private.jwk",
 		ManifestRootPublicJWKFile:    "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
 		ManifestRootMetadataFile:     "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
-		ManifestTrustBundleJWSFile:   "/var/run/config/mattercodex/internal-rpc-authority/publisher/manifest-trust/manifest-trust.jws",
-		AuthorityPolicyFile:          "/var/run/config/mattercodex/internal-rpc-authority/publisher-targets/authority-policy.json",
+		ManifestTrustBundleJWSFile:   "/var/run/config/kodex/internal-rpc-authority/publisher/manifest-trust/manifest-trust.jws",
+		AuthorityPolicyFile:          "/var/run/config/kodex/internal-rpc-authority/publisher-targets/authority-policy.json",
 		KubernetesAPIAddress:         "https://kubernetes.default.svc:443",
 		KubernetesAPITLSServerName:   "kubernetes.default.svc",
 		KubernetesAPICAFile:          "/var/run/config/kubernetes.io/serviceaccount/ca.crt",
@@ -212,7 +212,7 @@ func RunPublisher(
 		TLSServerName: config.KubernetesAPITLSServerName,
 		CAFile:        config.KubernetesAPICAFile,
 		TokenFile:     config.KubernetesAPITokenFile,
-		Namespace:     "mattercodex-system",
+		Namespace:     "kodex-system",
 		SecretName:    "internal-rpc-authority-snapshot",
 		Timeout:       5 * time.Second,
 	})
@@ -485,9 +485,9 @@ func openPublisherPostgres(
 		ApplicationName: "internal_rpc_authority_publisher",
 		PodUID:          config.PodUID,
 		Candidates: []databaseCredentialCandidate{
-			{Role: "internal-rpc-authority-publisher-g3", Principal: "ira_publisher_g3", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g3"},
-			{Role: "internal-rpc-authority-publisher-g4", Principal: "ira_publisher_g4", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g4"},
-			{Role: "internal-rpc-authority-publisher-g5", Principal: "ira_publisher_g5", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/publisher/database/g5"},
+			{Role: "internal-rpc-authority-publisher-g3", Principal: "ira_publisher_g3", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g3"},
+			{Role: "internal-rpc-authority-publisher-g4", Principal: "ira_publisher_g4", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g4"},
+			{Role: "internal-rpc-authority-publisher-g5", Principal: "ira_publisher_g5", Directory: "/var/run/secrets/kodex/internal-rpc-authority/publisher/database/g5"},
 		},
 	})
 }

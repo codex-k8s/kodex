@@ -18,7 +18,7 @@ source_sha=""
 output=""
 registry_push=""
 node_pull=""
-repository_prefix="mattercodex"
+repository_prefix="kodex"
 build_proxy=""
 build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
@@ -75,7 +75,7 @@ repository_root=$(git rev-parse --show-toplevel)
 manifest="$repository_root/tools/release/images.json"
 jq -e '.schema_version == 2 and (.images | length > 0)' "$manifest" >/dev/null || fail 'image manifest is invalid'
 
-buildctl_path=${BUILDCTL_PATH:-/var/run/mattercodex-tools/buildctl}
+buildctl_path=${BUILDCTL_PATH:-/var/run/kodex-tools/buildctl}
 buildkit_host=${BUILDKIT_HOST:-unix:///var/run/buildkit/buildkitd.sock}
 [[ -x "$buildctl_path" ]] || fail 'buildctl is not executable'
 [[ "$buildkit_host" == unix:///* ]] || fail 'BuildKit must use a local Unix socket'
@@ -136,10 +136,10 @@ while IFS=$'\t' read -r component dockerfile target; do
     env -u BASH_ENV -u ENV \
       PATH="$repository_root/tools/release/shims:$PATH" \
       BUILDCTL_PATH="$buildctl_path" BUILDKIT_HOST="$buildkit_host" \
-      MATTERCODEX_BUILDKIT_METADATA_FILE="$metadata_directory/$component.json" \
-      MATTERCODEX_AGENT_RUNNER_DESTINATION="$destination" \
-      MATTERCODEX_RELEASE_BUILD_PROXY="$build_proxy" \
-      MATTERCODEX_RELEASE_BUILD_NO_PROXY="$build_no_proxy" \
+      KODEX_BUILDKIT_METADATA_FILE="$metadata_directory/$component.json" \
+      KODEX_AGENT_RUNNER_DESTINATION="$destination" \
+      KODEX_RELEASE_BUILD_PROXY="$build_proxy" \
+      KODEX_RELEASE_BUILD_NO_PROXY="$build_no_proxy" \
       "$repository_root/scripts/build-agent-runner-image.sh" \
         --builder docker --context "$source_context" --dockerfile "$source_context/$dockerfile" \
         --tag "$destination" --network host

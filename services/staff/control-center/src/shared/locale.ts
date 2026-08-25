@@ -1,6 +1,6 @@
 export type SupportedLocale = "ru" | "en";
 
-const localeKey = "mattercodex.locale";
+const localeKey = "kodex.locale";
 
 export function currentLocale(): SupportedLocale {
   const stored = window.localStorage.getItem(localeKey);

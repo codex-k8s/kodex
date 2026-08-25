@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	socketRoot      = "/run/mattercodex/internal-rpc-authority"
+	socketRoot      = "/run/kodex/internal-rpc-authority"
 	socketUID       = 29000
 	socketGID       = 29000
 	readinessSource = "/usr/local/bin/internal-rpc-authority-local-readiness"
-	readinessTarget = "/run/mattercodex/internal-rpc-authority/local-readiness"
+	readinessTarget = "/run/kodex/internal-rpc-authority/local-readiness"
 )
 
 func main() {

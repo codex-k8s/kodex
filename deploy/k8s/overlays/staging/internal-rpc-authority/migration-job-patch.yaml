@@ -3,4 +3,4 @@ kind: Job
 metadata:
   name: internal-rpc-authority-migrate
   annotations:
-    mattercodex.dev/execution-policy: before-rollout
+    kodex.dev/execution-policy: before-rollout

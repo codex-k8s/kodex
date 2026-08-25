@@ -23,7 +23,7 @@ case "$RELEASE_SOURCE_REGISTRY" in
   *) fail 'release source registry must use HTTPS port 443' ;;
 esac
 
-destination_registry=mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003
+destination_registry=kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003
 work=/work/registry
 mkdir -p "$work/docker"
 umask 077
@@ -95,9 +95,9 @@ copy_exact() {
   test "$actual_digest" = "$expected_digest" || fail 'release artifact digest mismatch'
 }
 
-copy_exact "$AGENT_RUNNER_SOURCE_REF" mattercodex/agent-runner "$AGENT_RUNNER_DIGEST"
-copy_exact "$ROLE_BASE_DOCUMENTS_SOURCE_REF" mattercodex/role-base-documents "$ROLE_BASE_DOCUMENTS_DIGEST"
-copy_exact "$ROLE_IMAGE_INPUT_SOURCE_REF" mattercodex/role-image-inputs "$ROLE_IMAGE_INPUT_MANIFEST_DIGEST"
+copy_exact "$AGENT_RUNNER_SOURCE_REF" kodex/agent-runner "$AGENT_RUNNER_DIGEST"
+copy_exact "$ROLE_BASE_DOCUMENTS_SOURCE_REF" kodex/role-base-documents "$ROLE_BASE_DOCUMENTS_DIGEST"
+copy_exact "$ROLE_IMAGE_INPUT_SOURCE_REF" kodex/role-image-inputs "$ROLE_IMAGE_INPUT_MANIFEST_DIGEST"
 
 rm -f "$REGCTL_CONFIG" "$DOCKER_CONFIG/config.json"
 printf 'Release artifact materialization completed\n'

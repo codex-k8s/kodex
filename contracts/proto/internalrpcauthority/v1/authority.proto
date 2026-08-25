@@ -4,7 +4,7 @@ package internalrpcauthority.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1;internalrpcauthorityv1";
+option go_package = "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1;internalrpcauthorityv1";
 
 // AuthorizationIssuerService выпускает один короткоживущий authorization
 // context для одной попытки точного downstream RPC.

@@ -13,7 +13,7 @@ import (
 	"syscall"
 
 	"github.com/BurntSushi/toml"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 type runtimeConfig struct {
@@ -68,7 +68,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err := replacePrivateFile(filepath.Join(input.CodexHome, "auth.json"), auth); err != nil {
 		return err
 	}
-	const permissionProfileName = "mattercodex-runtime"
+	const permissionProfileName = "kodex-runtime"
 	permissionBase, err := codexPermissionBase(input.CodexSandbox)
 	if err != nil {
 		return err
@@ -80,14 +80,14 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 			Filesystem: map[string]string{
 				input.CodexHome: "deny", filepath.Join(input.CodexHome, "**"): "deny",
 				"/var/run/secrets": "deny", "/var/run/secrets/**": "deny",
-				"/run/mattercodex/internal-rpc-authority":    "deny",
-				"/run/mattercodex/internal-rpc-authority/**": "deny",
+				"/run/kodex/internal-rpc-authority":    "deny",
+				"/run/kodex/internal-rpc-authority/**": "deny",
 				"/proc": "deny", "/proc/**": "deny",
 			}}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "none", Set: map[string]string{
 			"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp",
-		}}, MCPServers: map[string]mcpServerConfig{"mattercodex": {URL: mcpURL,
-			BearerTokenEnvVar: "MATTERCODEX_MCP_PROXY_TOKEN",
+		}}, MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
+			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN",
 			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
 	var raw bytes.Buffer
 	if err := toml.NewEncoder(&raw).Encode(config); err != nil {
@@ -96,8 +96,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	var decoded runtimeConfig
 	metadata, err := toml.Decode(raw.String(), &decoded)
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
-		!decoded.MCPServers["mattercodex"].Required ||
-		decoded.MCPServers["mattercodex"].BearerTokenEnvVar != "MATTERCODEX_MCP_PROXY_TOKEN" ||
+		!decoded.MCPServers["kodex"].Required ||
+		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.Permissions[permissionProfileName].Filesystem[input.CodexHome] != "deny" {
 		return errors.New("validate Codex configuration")

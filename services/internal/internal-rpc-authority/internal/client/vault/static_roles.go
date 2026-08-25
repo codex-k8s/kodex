@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 const maxVaultResponseBytes = 1 << 20

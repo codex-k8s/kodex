@@ -1,4 +1,4 @@
-// Дизайн-система макетов MatterCodex — светлый вариант А.
+// Дизайн-система макетов Kodex — светлый вариант А.
 // Все размеры и цвета зафиксированы здесь; экраны собираются из этих примитивов.
 
 export const T = {
@@ -169,13 +169,13 @@ export function navDesktop(active, opts = {}) {
       <div style="width: 24px; height: 24px; border-radius: 6px; background: ${T.acc}; display: flex; align-items: center; justify-content: center;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V7l8 5 8-5v11"/></svg>
       </div>
-      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">MatterCodex</span>
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kodex</span>
     </div>
     <div style="padding: 14px 12px 10px;">
       <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: ${assistantActive ? T.accTint : '#F1F6FC'}; border: 1px solid ${assistantActive ? T.acc : T.accSoftLine}; color: ${T.ink};">
         <span style="width: 26px; height: 26px; flex: 0 0 26px; border-radius: 7px; background: ${T.bg}; border: 1px solid ${T.accSoftLine}; display: flex; align-items: center; justify-content: center; color: ${T.acc};">${icon('bot', 15)}</span>
         <span style="display: flex; flex-direction: column; gap: 1px;">
-          <span style="font-size: 12.5px; font-weight: ${assistantActive ? 600 : 500};">Помощник MatterCodex</span>
+          <span style="font-size: 12.5px; font-weight: ${assistantActive ? 600 : 500};">Помощник Kodex</span>
           <span style="font-size: 10.5px; color: ${st[1]};">${st[0]}</span>
         </span>
       </a>

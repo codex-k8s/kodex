@@ -80,7 +80,7 @@ valid_dns_host() {
   done
 }
 valid_dns_host "$release_registry_host" || fail "exact release registry DNS host is required"
-registry_host="matter-codex-registry.${registry_namespace}.svc.cluster.local"
+registry_host="kodex-registry.${registry_namespace}.svc.cluster.local"
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
 command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
@@ -92,21 +92,21 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 lock_file="$script_directory/chart.lock"
-credential_secret=mattercodex-github-runner-auth
-owner_gate_config=mattercodex-runner-owner-gate
-build_namespace=mattercodex-ci
-deploy_namespace=mattercodex-ci-deploy
+credential_secret=kodex-github-runner-auth
+owner_gate_config=kodex-runner-owner-gate
+build_namespace=kodex-ci
+deploy_namespace=kodex-ci-deploy
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
 kubernetes_api_service_ip=$(kubectl --context "$expected_context" -n default get service kubernetes \
   -o json | jq -er '.spec.clusterIP | select(type == "string" and length > 0 and . != "None")')
 registry_service_json=$(kubectl --context "$expected_context" -n "$registry_namespace" \
-  get service matter-codex-registry -o json)
+  get service kodex-registry -o json)
 registry_service_ip=$(jq -er '
   select(.spec.selector == {
     "app.kubernetes.io/component":"image-registry",
-    "app.kubernetes.io/name":"matter-codex-registry"
+    "app.kubernetes.io/name":"kodex-registry"
   }) |
   select((.spec.ports | length) == 1 and .spec.ports[0].name == "registry" and
     .spec.ports[0].protocol == "TCP" and .spec.ports[0].port == 5000 and
@@ -118,7 +118,7 @@ registry_service_ip=$(jq -er '
       ((tonumber >= 0) and (tonumber <= 255))))
 ' <<<"$registry_service_json") || fail "registry Service binding is invalid"
 registry_endpoint_binding=$(kubectl --context "$expected_context" -n "$registry_namespace" \
-  get endpointslice -l kubernetes.io/service-name=matter-codex-registry -o json | jq -er '
+  get endpointslice -l kubernetes.io/service-name=kodex-registry -o json | jq -er '
   [
     .items[] as $slice |
     ($slice.ports[]? | select(.name == "registry" and .protocol == "TCP" and .port == 5001)) as $port |
@@ -142,7 +142,7 @@ IFS=$'\t' read -r registry_endpoint_ip registry_pod_name registry_endpoint_port 
 kubectl --context "$expected_context" -n "$registry_namespace" get pod "$registry_pod_name" -o json |
   jq -e --arg endpoint_ip "$registry_endpoint_ip" '
     .spec.hostNetwork == true and .status.podIP == $endpoint_ip and
-    .metadata.labels."app.kubernetes.io/name" == "matter-codex-registry" and
+    .metadata.labels."app.kubernetes.io/name" == "kodex-registry" and
     .metadata.labels."app.kubernetes.io/component" == "image-registry" and
     any(.status.conditions[]?; .type == "Ready" and .status == "True") and
     any(.spec.containers[]; .name == "registry" and
@@ -155,8 +155,8 @@ rendered_network_policy="$temporary_directory/network-policy.yaml"
   "$registry_endpoint_ip/32" "$registry_namespace" "$release_registry_host" \
   "$rendered_network_policy"
 egress_proxy_config_sha256=$(yq -r '
-  select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-ci" and
-    .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
+  select(.kind == "ConfigMap" and .metadata.namespace == "kodex-ci" and
+    .metadata.name == "kodex-ci-egress-proxy") | .data."envoy.yaml"
 ' "$rendered_network_policy" | sha256sum | awk '{print $1}')
 [[ "$egress_proxy_config_sha256" =~ ^[a-f0-9]{64}$ ]] ||
   fail "rendered egress proxy config SHA-256 is invalid"
@@ -213,11 +213,11 @@ validate_github_pat_file() {
     "$pat" >"$curl_config"
   unset pat
   curl --config "$curl_config" --fail --silent --show-error \
-    https://api.github.com/repos/codex-k8s/matter-codex >"$temporary_directory/github-repository.json"
+    https://api.github.com/repos/codex-k8s/kodex >"$temporary_directory/github-repository.json"
   jq -e '.permissions.admin == true' "$temporary_directory/github-repository.json" >/dev/null ||
     fail "GitHub PAT lacks repository administration"
   curl --config "$curl_config" --fail --silent --show-error \
-    'https://api.github.com/repos/codex-k8s/matter-codex/actions/runners?per_page=1' \
+    'https://api.github.com/repos/codex-k8s/kodex/actions/runners?per_page=1' \
     >"$temporary_directory/github-runners.json"
   jq -e '.total_count | type == "number"' "$temporary_directory/github-runners.json" >/dev/null ||
     fail "GitHub PAT cannot read the repository runners API"
@@ -289,7 +289,7 @@ render_owner_gate_config() {
   local namespace=$1 workflow_path=$2 job=$3 owner_actor_file=$4 output=$5 gate_directory
   gate_directory="$temporary_directory/owner-gate-$namespace"
   mkdir -p -- "$gate_directory"
-  printf 'codex-k8s/matter-codex/%s@refs/heads/main\n' "$workflow_path" \
+  printf 'codex-k8s/kodex/%s@refs/heads/main\n' "$workflow_path" \
     >"$gate_directory/expected-workflow-ref"
   cp -- "$workflow_sha_file" "$gate_directory/expected-workflow-sha"
   cp -- "$owner_actor_file" "$gate_directory/expected-owner-actor-id"
@@ -320,13 +320,13 @@ kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_names
 kubectl --context "$expected_context" apply --dry-run=client -f "$rendered_network_policy" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$build_owner_gate" >/dev/null
 kubectl --context "$expected_context" apply --dry-run=client -f "$deploy_owner_gate" >/dev/null
-helm template mattercodex-arc-build "$controller_chart" -n "$build_namespace" \
+helm template kodex-arc-build "$controller_chart" -n "$build_namespace" \
   -f "$controller_values" >/dev/null
-helm template mattercodex-build "$runner_chart" -n "$build_namespace" \
+helm template kodex-build "$runner_chart" -n "$build_namespace" \
   -f "$build_runner_values" >/dev/null
-helm template mattercodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
+helm template kodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
   -f "$controller_deploy_values" >/dev/null
-helm template mattercodex-deploy "$runner_chart" -n "$deploy_namespace" \
+helm template kodex-deploy "$runner_chart" -n "$deploy_namespace" \
   -f "$deploy_runner_values" >/dev/null
 
 if [[ "$mode" == preflight ]]; then
@@ -341,29 +341,29 @@ if [[ "$mode" == apply ]]; then
   kubectl --context "$expected_context" apply -f "$deploy_owner_gate" >/dev/null
   for policy_spec in \
     "$build_namespace controller-kubernetes-api app.kubernetes.io/name=gha-rs-controller" \
-    "$build_namespace listener-kubernetes-api mattercodex.dev/arc-role=listener" \
+    "$build_namespace listener-kubernetes-api kodex.dev/arc-role=listener" \
     "$deploy_namespace controller-kubernetes-api app.kubernetes.io/name=gha-rs-controller" \
-    "$deploy_namespace listener-kubernetes-api mattercodex.dev/arc-role=listener" \
-    "$deploy_namespace runner-kubernetes-api mattercodex.dev/arc-role=deploy-runner"; do
+    "$deploy_namespace listener-kubernetes-api kodex.dev/arc-role=listener" \
+    "$deploy_namespace runner-kubernetes-api kodex.dev/arc-role=deploy-runner"; do
     read -r namespace policy selector <<<"$policy_spec"
     "$repository_root/tools/deploy/kubernetes-api-egress.sh" render --context "$expected_context" \
       --namespace "$namespace" --policy "$policy" --pod-selector "$selector" |
       kubectl --context "$expected_context" apply -f - >/dev/null
   done
   kubectl --context "$expected_context" -n "$build_namespace" rollout status \
-    deployment/mattercodex-ci-egress-proxy --timeout=3m >/dev/null
+    deployment/kodex-ci-egress-proxy --timeout=3m >/dev/null
   kubectl --context "$expected_context" -n "$deploy_namespace" rollout status \
-    deployment/mattercodex-ci-egress-proxy --timeout=3m >/dev/null
+    deployment/kodex-ci-egress-proxy --timeout=3m >/dev/null
   materialize_credential_secret "$build_namespace"
   materialize_credential_secret "$deploy_namespace"
 
-  helm upgrade --install mattercodex-arc-build "$controller_chart" -n "$build_namespace" \
+  helm upgrade --install kodex-arc-build "$controller_chart" -n "$build_namespace" \
     -f "$controller_values" --wait --timeout 5m >/dev/null
-  helm upgrade --install mattercodex-build "$runner_chart" -n "$build_namespace" \
+  helm upgrade --install kodex-build "$runner_chart" -n "$build_namespace" \
     -f "$build_runner_values" --wait --timeout 5m >/dev/null
-  helm upgrade --install mattercodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
+  helm upgrade --install kodex-arc-deploy "$controller_chart" -n "$deploy_namespace" \
     -f "$controller_deploy_values" --wait --timeout 5m >/dev/null
-  helm upgrade --install mattercodex-deploy "$runner_chart" -n "$deploy_namespace" \
+  helm upgrade --install kodex-deploy "$runner_chart" -n "$deploy_namespace" \
     -f "$deploy_runner_values" --wait --timeout 5m >/dev/null
 fi
 
@@ -371,10 +371,10 @@ kubectl --context "$expected_context" diff -f "$rendered_network_policy" >/dev/n
   fail "static CI network policy readback mismatch"
 for policy_spec in \
   "$build_namespace controller-kubernetes-api app.kubernetes.io/name=gha-rs-controller" \
-  "$build_namespace listener-kubernetes-api mattercodex.dev/arc-role=listener" \
+  "$build_namespace listener-kubernetes-api kodex.dev/arc-role=listener" \
   "$deploy_namespace controller-kubernetes-api app.kubernetes.io/name=gha-rs-controller" \
-  "$deploy_namespace listener-kubernetes-api mattercodex.dev/arc-role=listener" \
-  "$deploy_namespace runner-kubernetes-api mattercodex.dev/arc-role=deploy-runner"; do
+  "$deploy_namespace listener-kubernetes-api kodex.dev/arc-role=listener" \
+  "$deploy_namespace runner-kubernetes-api kodex.dev/arc-role=deploy-runner"; do
   read -r namespace policy selector <<<"$policy_spec"
   "$repository_root/tools/deploy/kubernetes-api-egress.sh" readback --context "$expected_context" \
     --namespace "$namespace" --policy "$policy" --pod-selector "$selector" >/dev/null
@@ -383,15 +383,15 @@ done
 verify_credential_secret "$build_namespace"
 verify_credential_secret "$deploy_namespace"
 for controller_spec in \
-  "$build_namespace mattercodex-arc-build-gha-rs-controller" \
-  "$deploy_namespace mattercodex-arc-deploy-gha-rs-controller"; do
+  "$build_namespace kodex-arc-build-gha-rs-controller" \
+  "$deploy_namespace kodex-arc-deploy-gha-rs-controller"; do
   read -r namespace controller_name <<<"$controller_spec"
   kubectl --context "$expected_context" -n "$namespace" rollout status \
     "deployment/$controller_name" --timeout=5m >/dev/null
   kubectl --context "$expected_context" -n "$namespace" get deployment "$controller_name" -o json |
     jq -e --arg no_proxy "$kubernetes_api_no_proxy" \
       --arg proxy_sha "$egress_proxy_config_sha256" '
-      (.spec.template.metadata.annotations."mattercodex.dev/egress-proxy-config-sha256" ==
+      (.spec.template.metadata.annotations."kodex.dev/egress-proxy-config-sha256" ==
         $proxy_sha) and
       ([.spec.template.spec.containers[].env[]? |
         select(.name == "NO_PROXY" and .value == $no_proxy)] | length == 1)
@@ -399,7 +399,7 @@ for controller_spec in \
 done
 for proxy_namespace in "$build_namespace" "$deploy_namespace"; do
   kubectl --context "$expected_context" -n "$proxy_namespace" rollout status \
-    deployment/mattercodex-ci-egress-proxy --timeout=3m >/dev/null
+    deployment/kodex-ci-egress-proxy --timeout=3m >/dev/null
 done
 
 verify_owner_gate_config() {
@@ -415,11 +415,11 @@ verify_owner_gate_config "$build_namespace" "$build_owner_gate"
 verify_owner_gate_config "$deploy_namespace" "$deploy_owner_gate"
 
 expected_buildkit_config=$(yq -o=json '
-  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-buildkit-config") |
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-buildkit-config") |
   .data
 ' "$rendered_namespace_rbac" | jq -Sc .)
 actual_buildkit_config=$(kubectl --context "$expected_context" -n "$build_namespace" \
-  get configmap mattercodex-buildkit-config -o json | jq -Sc '.data')
+  get configmap kodex-buildkit-config -o json | jq -Sc '.data')
 [[ -n "$expected_buildkit_config" && "$actual_buildkit_config" == "$expected_buildkit_config" ]] ||
   fail "BuildKit ConfigMap readback mismatch"
 
@@ -429,20 +429,20 @@ readback_scale_set() {
   kubectl --context "$expected_context" -n "$namespace" get autoscalingrunnerset "$name" -o json |
     jq -e --arg name "$name" --arg service_account "$service_account" \
       --argjson automount "$automount" --arg runner_no_proxy "$runner_no_proxy" '
-      .spec.githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
+      .spec.githubConfigUrl == "https://github.com/codex-k8s/kodex" and
       .spec.runnerScaleSetName == $name and (.spec | has("runnerGroup") | not) and
       .spec.minRunners == 0 and .spec.maxRunners == 1 and
       .spec.template.spec.serviceAccountName == $service_account and
       .spec.template.spec.automountServiceAccountToken == $automount and
       any(.spec.template.spec.volumes[];
-        .name == "owner-gate" and .configMap.name == "mattercodex-runner-owner-gate" and
+        .name == "owner-gate" and .configMap.name == "kodex-runner-owner-gate" and
         .configMap.defaultMode == 365) and
       any(.spec.template.spec.containers[]; .name == "runner" and
         any(.env[]; .name == "NO_PROXY" and .value == $runner_no_proxy) and
         any(.env[]; .name == "ACTIONS_RUNNER_HOOK_JOB_STARTED" and
-          .value == "/var/run/mattercodex-owner-gate/job-started.sh") and
+          .value == "/var/run/kodex-owner-gate/job-started.sh") and
         any(.volumeMounts[]; .name == "owner-gate" and
-          .mountPath == "/var/run/mattercodex-owner-gate" and .readOnly == true))
+          .mountPath == "/var/run/kodex-owner-gate" and .readOnly == true))
     ' >/dev/null || fail "runner scale set readback mismatch: $name"
   ephemeral_runner_set=$(kubectl --context "$expected_context" -n "$namespace" \
     get autoscalinglistener -l "actions.github.com/scale-set-name=$name" -o json |
@@ -455,7 +455,7 @@ readback_scale_set() {
       select(type == "string" and length > 0)
     ') || fail "listener resource is absent, non-unique or detached: $name"
   kubectl --context "$expected_context" -n "$namespace" get pod -l \
-    "mattercodex.dev/arc-role=listener,actions.github.com/scale-set-name=$name" -o json |
+    "kodex.dev/arc-role=listener,actions.github.com/scale-set-name=$name" -o json |
     jq -e --arg no_proxy "$kubernetes_api_no_proxy" '.items as $items |
       ($items | length) == 1 and all($items[];
       .status.phase == "Running" and
@@ -478,21 +478,21 @@ readback_scale_set() {
     fail "ephemeral runner set idle readback mismatch: $name"
 }
 
-readback_scale_set "$build_namespace" mattercodex-build \
-  mattercodex-build-gha-rs-no-permission false \
+readback_scale_set "$build_namespace" kodex-build \
+  kodex-build-gha-rs-no-permission false \
   "$registry_host,localhost,127.0.0.1"
-readback_scale_set "$deploy_namespace" mattercodex-deploy \
-  mattercodex-production-deployer true "$kubernetes_api_no_proxy"
+readback_scale_set "$deploy_namespace" kodex-deploy \
+  kodex-production-deployer true "$kubernetes_api_no_proxy"
 run_actions_policy readback >/dev/null
 require_denied "deploy runner unexpectedly has Secret read access" \
   kubectl --context "$expected_context" auth can-i get secrets -n "$deploy_namespace" \
-  --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
+  --as=system:serviceaccount:kodex-ci-deploy:kodex-production-deployer
 
 negative_manifest="$temporary_directory/forbidden-pod.yaml"
 printf '%s\n' \
   'apiVersion: v1' 'kind: Pod' 'metadata:' '  name: forbidden-ci-pod' \
-  '  namespace: mattercodex-ci-deploy' '  labels:' '    mattercodex.dev/arc-role: deploy-runner' \
-  'spec:' '  serviceAccountName: mattercodex-production-deployer' '  containers:' \
+  '  namespace: kodex-ci-deploy' '  labels:' '    kodex.dev/arc-role: deploy-runner' \
+  'spec:' '  serviceAccountName: kodex-production-deployer' '  containers:' \
   '    - name: forbidden' '      image: docker.io/library/alpine:latest' >"$negative_manifest"
 if kubectl --context "$expected_context" --as=system:admin --as-group=system:masters \
   apply --dry-run=server -f "$negative_manifest" >/dev/null 2>&1; then

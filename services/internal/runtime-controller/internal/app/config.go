@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	controlPlaneTarget        = "dns:///control-plane.mattercodex-system.svc:8443"
-	controlPlaneTLSServerName = "control-plane.mattercodex-system.svc.cluster.local"
-	callbackTLSServerName     = "runtime-controller-callback.mattercodex-system.svc.cluster.local"
+	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
+	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
+	callbackTLSServerName     = "runtime-controller-callback.kodex-system.svc.cluster.local"
 )
 
 var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -62,20 +62,20 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		Environment: "development", Namespace: "mattercodex-system",
+		Environment: "development", Namespace: "kodex-system",
 		TechnicalListen: ":9090", CallbackListen: ":8444", CallbackTLSServerName: callbackTLSServerName,
-		CallbackServerCertificateFile:  "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.crt",
-		CallbackServerPrivateKeyFile:   "/var/run/secrets/mattercodex/runtime-controller/callback-server/tls.key",
-		CallbackClientCAFile:           "/var/run/config/mattercodex/runtime-controller/callback-client/ca.crt",
-		CallbackExpectedClientSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		CallbackServerCertificateFile:  "/var/run/secrets/kodex/runtime-controller/callback-server/tls.crt",
+		CallbackServerPrivateKeyFile:   "/var/run/secrets/kodex/runtime-controller/callback-server/tls.key",
+		CallbackClientCAFile:           "/var/run/config/kodex/runtime-controller/callback-client/ca.crt",
+		CallbackExpectedClientSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/agent-runner",
 		CallbackClientCASecret:         "runtime-execution-client-tls", CallbackClientTLSSecret: "runtime-execution-client-tls",
 		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName,
-		ControlPlaneCAFile:          "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
-		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
-		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
-		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		DefaultRoleImageReference:   "registry-pull.invalid/mattercodex/agent-runner@sha256:" + strings.Repeat("0", 64),
-		ProviderHTTPSProxy:          "http://egress-gateway.mattercodex-system.svc:8080",
+		ControlPlaneCAFile:          "/var/run/config/kodex/runtime-controller/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
+		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
+		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
 		StorageClass:                "runtime-session", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16, TurnCPUMilli: 2000, TurnMemoryBytes: 4 << 30,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
@@ -113,7 +113,7 @@ func (config Config) validate() error {
 	proxy, proxyErr := url.Parse(config.ProviderHTTPSProxy)
 	if !validDNSLabel(config.CallbackClientCASecret) || !validDNSLabel(config.CallbackClientTLSSecret) ||
 		!validDNSLabel(config.StorageClass) || !validDNSLabel(config.RunnerServiceAccount) ||
-		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
+		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
 		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
 		!validPinnedImageReference(config.DefaultRoleImageReference) ||
 		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {

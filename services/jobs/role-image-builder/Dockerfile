@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.19.0@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
 
-ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
 ENV GOTOOLCHAIN=local
@@ -52,9 +52,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 
 FROM moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe AS runtime
 USER 0:0
-RUN mkdir -p /var/run/mattercodex/work \
-    && chown 1000:1000 /var/run/mattercodex/work \
-    && chmod 0700 /var/run/mattercodex/work
+RUN mkdir -p /var/run/kodex/work \
+    && chown 1000:1000 /var/run/kodex/work \
+    && chmod 0700 /var/run/kodex/work
 COPY --from=build --chmod=0555 /out/role-image-builder /usr/local/bin/role-image-builder
 USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/role-image-builder"]
@@ -65,5 +65,5 @@ COPY --from=build --chmod=0555 /out/image-admission-controller /usr/local/bin/im
 COPY --from=build --chmod=0555 /out/registry-write-authorizer /usr/local/bin/registry-write-authorizer
 COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
 COPY --from=build --chmod=0555 /out/node-pull-bootstrap /usr/local/bin/node-pull-bootstrap
-COPY --chmod=0555 tools/render-image-admission-job.sh /opt/mattercodex/render-image-admission-job.sh
+COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
 USER 10001:10001

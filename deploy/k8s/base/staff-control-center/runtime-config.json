@@ -5,10 +5,10 @@
   "realtimeUrl": "/api/v1",
   "requestTimeoutMs": 15000,
   "oidc": {
-    "authority": "__MATTERCODEX_OIDC_ISSUER__",
-    "clientId": "mattercodex-control-center",
+    "authority": "__KODEX_OIDC_ISSUER__",
+    "clientId": "kodex-control-center",
     "redirectUri": "/auth/callback",
     "postLogoutRedirectUri": "/",
-    "scope": "openid mattercodex.owner"
+    "scope": "openid kodex.owner"
   }
 }

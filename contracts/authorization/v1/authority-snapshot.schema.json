@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mattercodex.dev/contracts/authorization/v1/authority-snapshot.schema.json",
-  "title": "Подписанный JWKS и machine policy snapshot MatterCodex",
+  "$id": "https://kodex.dev/contracts/authorization/v1/authority-snapshot.schema.json",
+  "title": "Подписанный JWKS и machine policy snapshot Kodex",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -101,13 +101,13 @@
       "type": "string",
       "minLength": 32,
       "maxLength": 125,
-      "pattern": "^urn:mattercodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "authorityProofAudience": {
       "type": "string",
       "minLength": 49,
       "maxLength": 142,
-      "pattern": "^urn:mattercodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
+      "pattern": "^urn:kodex:internal-rpc-authority-issuer:[a-z0-9](?:[a-z0-9.-]{1,94}[a-z0-9])$"
     },
     "producerId": {
       "type": "string",

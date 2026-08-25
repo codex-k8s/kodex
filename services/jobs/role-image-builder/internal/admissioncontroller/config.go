@@ -23,8 +23,8 @@ type Config struct {
 
 func (config Config) Validate() error {
 	if config.Environment != "staging" && config.Environment != "production" ||
-		config.Namespace != "mattercodex-system" ||
-		config.PolicyConfigMap != "mattercodex-image-admission-policy" ||
+		config.Namespace != "kodex-system" ||
+		config.PolicyConfigMap != "kodex-image-admission-policy" ||
 		!filepath.IsAbs(config.RendererPath) || filepath.Clean(config.RendererPath) != config.RendererPath {
 		return errors.New("image admission controller identity is invalid")
 	}

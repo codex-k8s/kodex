@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const zeroSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -115,7 +115,7 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	); err != nil ||
 		policyDocument.Version != model.ContractVersion ||
 		policyDocument.PolicyRevision == 0 ||
-		policyDocument.Policy.TrustDomain != "mattercodex.local" ||
+		policyDocument.Policy.TrustDomain != "kodex.local" ||
 		policyDocument.Policy.DefaultDecision != "DENY" ||
 		len(policyDocument.Policy.OperationBindings) == 0 ||
 		len(policyDocument.Policy.ProofProducers) == 0 {

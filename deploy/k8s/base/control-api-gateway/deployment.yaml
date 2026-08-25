@@ -32,29 +32,29 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: control-api-gateway
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-api-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/control-api-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           env:
             - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
             - {name: CONTROL_API_GATEWAY_HTTP_LISTEN, value: ":8443"}
             - {name: CONTROL_API_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
-            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.mattercodex.local}
-            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt}
-            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.kodex.local}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE, value: /var/run/secrets/kodex/control-api-gateway/public-tls/ca.crt}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE, value: /var/run/secrets/kodex/control-api-gateway/public-tls/material.json}
             - name: CONTROL_API_GATEWAY_OIDC_ISSUER
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcIssuer}}
-            - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: mattercodex-control-api}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
+            - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: kodex-control-api}
             - name: CONTROL_API_GATEWAY_OIDC_JWKS_URL
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcJwksUrl}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcJwksUrl}}
             - name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcConnectAddress}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcConnectAddress}}
             - name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: oidcTlsServerName}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcTlsServerName}}
             - name: CONTROL_API_GATEWAY_ALLOWED_ORIGINS
-              valueFrom: {configMapKeyRef: {name: mattercodex-platform-endpoints, key: publicOrigin}}
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: publicOrigin}}
             - {name: CONTROL_API_GATEWAY_SESSION_TTL, value: 15m}
-            - {name: CONTROL_API_GATEWAY_SESSION_PREVIOUS_KEY_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/session/previous.hex}
+            - {name: CONTROL_API_GATEWAY_SESSION_PREVIOUS_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/session/previous.hex}
             - {name: CONTROL_API_GATEWAY_REQUEST_TIMEOUT, value: 15s}
             - {name: CONTROL_API_GATEWAY_RPC_TIMEOUT, value: 5s}
             - {name: CONTROL_API_GATEWAY_STARTUP_TIMEOUT, value: 20s}
@@ -68,13 +68,13 @@ spec:
             - {name: CONTROL_API_GATEWAY_PER_SUBJECT_HTTP_CONCURRENCY, value: "16"}
             - {name: CONTROL_API_GATEWAY_MAXIMUM_WEBSOCKET_CONCURRENCY, value: "128"}
             - {name: CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY, value: "4"}
-            - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.mattercodex-system.svc:8443"}
-            - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.kodex-system.svc:8443"}
+            - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/control-api-gateway/observability/otel-ca.pem}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/control-api-gateway/observability/otel-ca.pem}
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/observability/sentry-dsn}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/control-api-gateway/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
           ports:
             - {name: https, containerPort: 8443, protocol: TCP}
@@ -105,35 +105,35 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: public-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/public-tls, readOnly: true}
-            - {name: oidc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/oidc, readOnly: true}
-            - {name: session-keys, mountPath: /var/run/secrets/mattercodex/control-api-gateway/session, readOnly: true}
-            - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
-            - {name: internal-rpc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/control-plane, readOnly: true}
-            - {name: nats-client-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats-client, readOnly: true}
-            - {name: nats-credential, mountPath: /var/run/secrets/mattercodex/control-api-gateway/nats, readOnly: true}
-            - {name: nats-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/nats, readOnly: true}
-            - {name: observability-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/observability, readOnly: true}
-            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/control-api-gateway/observability, readOnly: true}
+            - {name: public-tls, mountPath: /var/run/secrets/kodex/control-api-gateway/public-tls, readOnly: true}
+            - {name: oidc-ca, mountPath: /var/run/config/kodex/control-api-gateway/oidc, readOnly: true}
+            - {name: session-keys, mountPath: /var/run/secrets/kodex/control-api-gateway/session, readOnly: true}
+            - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/kodex/control-api-gateway/control-plane-client, readOnly: true}
+            - {name: internal-rpc-ca, mountPath: /var/run/config/kodex/control-api-gateway/control-plane, readOnly: true}
+            - {name: nats-client-tls, mountPath: /var/run/secrets/kodex/control-api-gateway/nats-client, readOnly: true}
+            - {name: nats-credential, mountPath: /var/run/secrets/kodex/control-api-gateway/nats, readOnly: true}
+            - {name: nats-ca, mountPath: /var/run/config/kodex/control-api-gateway/nats, readOnly: true}
+            - {name: observability-ca, mountPath: /var/run/config/kodex/control-api-gateway/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/control-api-gateway/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: public-tls
           secret: {secretName: control-api-gateway-public-tls-material, defaultMode: 0440}
         - name: oidc-ca
-          configMap: {name: mattercodex-oidc-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+          configMap: {name: kodex-oidc-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: session-keys
           secret: {secretName: control-api-gateway-session-keys, defaultMode: 0440}
         - name: internal-rpc-ca
-          configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+          configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: nats-client-tls
           secret: {secretName: control-api-gateway-nats-client-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}, {key: tls.key, path: tls.key}]}
         - name: nats-credential
           secret: {secretName: control-api-gateway-nats, defaultMode: 0440, items: [{key: user.creds, path: user.creds}]}
         - name: nats-ca
-          configMap: {name: mattercodex-nats-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+          configMap: {name: kodex-nats-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: observability-ca
-          configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}
+          configMap: {name: kodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}
         - name: sentry-dsn
-          secret: {secretName: mattercodex-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}
+          secret: {secretName: kodex-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}
         - name: tmp
           emptyDir: {sizeLimit: 16Mi}

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	vaultclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/vault"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	vaultclient "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/vault"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 type secretBackend string

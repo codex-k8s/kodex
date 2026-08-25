@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/app"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/app"
 )
 
 var version = "dev"

@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: MatterCodex Control Center API
+  title: Kodex Control Center API
   version: 1.0.0
   description: |
-    Owner-facing web-first API MatterCodex. Actor, organization, ownership,
+    Owner-facing web-first API Kodex. Actor, organization, ownership,
     permissions и root lineage выводятся из проверенной сессии и состояния
     control-plane. Внешние интеграции не являются обязательными.
 servers:
-  - url: https://mattercodex.example.com
+  - url: https://kodex.example.com
     description: Environment-owned HTTPS endpoint
 security:
   - sessionCookie: []
@@ -1245,7 +1245,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: mattercodex_session
+      name: kodex_session
   headers:
     ETag:
       description: Версия авторитетного агрегата

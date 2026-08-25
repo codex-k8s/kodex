@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 )
 
 type Config struct {
@@ -91,19 +91,19 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		GRPCListen: ":8443", TechnicalListen: ":9090",
-		ServerCertificateFile:   "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.crt",
-		ServerPrivateKeyFile:    "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.key",
-		ClientCAFile:            "/var/run/config/mattercodex/control-plane/internal-ca/ca.pem",
-		PostgresDSNFile:         "/var/run/secrets/mattercodex/control-plane/postgres-runtime/dsn",
-		PostgresCAFile:          "/var/run/config/mattercodex/control-plane/postgres/ca.pem",
-		PostgresTLSServerName:   "control-plane-postgresql-rw.mattercodex-system.svc.cluster.local",
+		ServerCertificateFile:   "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
+		ServerPrivateKeyFile:    "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
+		ClientCAFile:            "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
+		PostgresDSNFile:         "/var/run/secrets/kodex/control-plane/postgres-runtime/dsn",
+		PostgresCAFile:          "/var/run/config/kodex/control-plane/postgres/ca.pem",
+		PostgresTLSServerName:   "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
 		PostgresMaxConnections:  16,
-		NATSURL:                 "tls://nats.mattercodex-system.svc:4222",
-		NATSTLSServerName:       "nats.mattercodex-system.svc.cluster.local",
-		NATSCAFile:              "/var/run/config/mattercodex/control-plane/nats/ca.pem",
-		NATSCertificateFile:     "/var/run/secrets/mattercodex/control-plane/nats-client/tls.crt",
-		NATSPrivateKeyFile:      "/var/run/secrets/mattercodex/control-plane/nats-client/tls.key",
-		NATSCredentialsFile:     "/var/run/secrets/mattercodex/control-plane/nats/user.creds",
+		NATSURL:                 "tls://nats.kodex-system.svc:4222",
+		NATSTLSServerName:       "nats.kodex-system.svc.cluster.local",
+		NATSCAFile:              "/var/run/config/kodex/control-plane/nats/ca.pem",
+		NATSCertificateFile:     "/var/run/secrets/kodex/control-plane/nats-client/tls.crt",
+		NATSPrivateKeyFile:      "/var/run/secrets/kodex/control-plane/nats-client/tls.key",
+		NATSCredentialsFile:     "/var/run/secrets/kodex/control-plane/nats/user.creds",
 		NATSStream:              "CONTROL_PLANE",
 		NATSReplicas:            3,
 		NATSMaxBytes:            32 << 30,
@@ -111,23 +111,23 @@ func loadConfig() (Config, error) {
 		DefaultRuntimeModel:     "gpt-5",
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
-		AuthorityPolicyFile:            "/var/run/config/mattercodex/control-plane/authority/policy.json",
-		ProofSignerFile:                "/var/run/secrets/mattercodex/internal-rpc-authority/proof-signer/private.jwk",
-		ProofSignerTrustFile:           "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
-		AutomationGrantTrustFile:       "/var/run/config/mattercodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
-		IntegrationGrantTrustFile:      "/var/run/config/mattercodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
+		AuthorityPolicyFile:            "/var/run/config/kodex/control-plane/authority/policy.json",
+		ProofSignerFile:                "/var/run/secrets/kodex/internal-rpc-authority/proof-signer/private.jwk",
+		ProofSignerTrustFile:           "/var/run/config/kodex/internal-rpc-authority/authority-proof-trust/jwks.json",
+		AutomationGrantTrustFile:       "/var/run/config/kodex/control-plane/application-grants/automation-scheduler.platform-worker.public.jwk",
+		IntegrationGrantTrustFile:      "/var/run/config/kodex/control-plane/application-grants/integration-gateway.platform-worker.public.jwk",
 		InteractionGrantTrustFile:      "",
-		RuntimeGrantTrustFile:          "/var/run/config/mattercodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
-		RoleImageBuilderGrantTrustFile: "/var/run/config/mattercodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk",
-		ImageAdmissionGrantTrustFile:   "/var/run/config/mattercodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
-		ImagePromotionGrantTrustFile:   "/var/run/config/mattercodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
-		LeaseSigningKeyFile:            "/var/run/secrets/mattercodex/control-plane/lease-signing/key",
+		RuntimeGrantTrustFile:          "/var/run/config/kodex/control-plane/application-grants/runtime-controller.platform-worker.public.jwk",
+		RoleImageBuilderGrantTrustFile: "/var/run/config/kodex/control-plane/application-grants/role-image-builder.platform-worker.public.jwk",
+		ImageAdmissionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-admission.platform-worker.public.jwk",
+		ImagePromotionGrantTrustFile:   "/var/run/config/kodex/control-plane/application-grants/image-promotion.platform-worker.public.jwk",
+		LeaseSigningKeyFile:            "/var/run/secrets/kodex/control-plane/lease-signing/key",
 		ImageBuildLeaseDuration:        5 * time.Minute,
 		ImageAdmissionClaimTTL:         30 * time.Minute,
 		ImagePromotionClaimTTL:         15 * time.Minute,
 		ImageMaximumAttempts:           3,
-		RoleEnvironmentCatalogFile:     "/var/run/config/mattercodex/control-plane/role-environments/catalog.json",
-		OIDCAudience:                   "mattercodex-control-api", OIDCCAFile: "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
+		RoleEnvironmentCatalogFile:     "/var/run/config/kodex/control-plane/role-environments/catalog.json",
+		OIDCAudience:                   "kodex-control-api", OIDCCAFile: "/var/run/config/kodex/control-plane/oidc/ca.pem",
 		OIDCRefreshInterval: 30 * time.Second,
 		StartupTimeout:      20 * time.Second, ReadinessTimeout: 2 * time.Second,
 		ReadinessInterval: 2 * time.Second, ShutdownTimeout: 10 * time.Second,
@@ -178,7 +178,7 @@ func (config Config) validate() error {
 		!validSHA256(config.RoleImageToolchainSHA256) ||
 		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
-		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
+		config.OIDCAudience != "kodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
 		config.OIDCRefreshInterval < 10*time.Second || config.OIDCRefreshInterval > time.Minute ||
 		config.StartupTimeout < time.Second || config.StartupTimeout > time.Minute ||
 		config.ReadinessTimeout < 100*time.Millisecond || config.ReadinessTimeout > 10*time.Second ||

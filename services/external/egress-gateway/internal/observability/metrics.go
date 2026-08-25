@@ -23,23 +23,23 @@ type Metrics struct {
 func New(register RegisterCollectors) (*Metrics, error) {
 	metrics := &Metrics{
 		connections: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "connection_attempts_total",
+			Namespace: "kodex", Subsystem: "egress_gateway", Name: "connection_attempts_total",
 			Help: "Total number of bounded CONNECT connection outcomes.",
 		}, []string{"outcome", "stage", "reason"}),
 		dns: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "dns_resolutions_total",
+			Namespace: "kodex", Subsystem: "egress_gateway", Name: "dns_resolutions_total",
 			Help: "Total number of server-owned DNS resolution outcomes.",
 		}, []string{"outcome", "reason"}),
 		dials: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "external_dials_total",
+			Namespace: "kodex", Subsystem: "egress_gateway", Name: "external_dials_total",
 			Help: "Total number of literal external dial outcomes.",
 		}, []string{"outcome", "reason"}),
 		active: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "active_connections",
+			Namespace: "kodex", Subsystem: "egress_gateway", Name: "active_connections",
 			Help: "Current number of bounded CONNECT connections.",
 		}),
 		policyActive: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "policy_active",
+			Namespace: "kodex", Subsystem: "egress_gateway", Name: "policy_active",
 			Help: "Whether the immutable policy passed revision and digest validation.",
 		}),
 	}

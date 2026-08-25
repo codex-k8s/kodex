@@ -81,8 +81,8 @@ openssl x509 -in "$oidc_ca_file" -noout -checkend 3600 >/dev/null || fail 'OIDC 
 [[ $(wc -c <"$postgresql_password_file") -ge 32 ]] || fail 'PostgreSQL bootstrap password is too short'
 [[ $(wc -c <"$provider_auth_file") -ge 32 ]] || fail 'provider authorization material is too short'
 
-kubectl create namespace mattercodex-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl create namespace mattercodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl create namespace kodex-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl create namespace kodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 create_secret() {
   local namespace=$1
@@ -92,43 +92,43 @@ create_secret() {
     kubectl apply -f - >/dev/null
 }
 
-create_secret mattercodex-system mattercodex-installation-ca \
+create_secret kodex-system kodex-installation-ca \
   --from-file=tls.crt="$ca_certificate_file" --from-file=tls.key="$ca_private_key_file"
-create_secret mattercodex-trust mattercodex-installation-ca \
+create_secret kodex-trust kodex-installation-ca \
   --from-file=tls.crt="$ca_certificate_file"
-create_secret mattercodex-trust mattercodex-vault-ca-source \
+create_secret kodex-trust kodex-vault-ca-source \
   --from-file=ca.crt="$ca_certificate_file"
-create_secret mattercodex-system control-api-gateway-vault-ca \
+create_secret kodex-system control-api-gateway-vault-ca \
   --from-file=ca.crt="$ca_certificate_file"
-create_secret mattercodex-system internal-rpc-authority-restore-controller-vault-ca \
+create_secret kodex-system internal-rpc-authority-restore-controller-vault-ca \
   --from-file=ca.crt="$ca_certificate_file"
-create_secret mattercodex-system mattercodex-postgresql-bootstrap \
+create_secret kodex-system kodex-postgresql-bootstrap \
   --from-file=password="$postgresql_password_file"
-create_secret mattercodex-system mattercodex-nats-credentials \
+create_secret kodex-system kodex-nats-credentials \
   --from-file=operator.jwt="$nats_material_directory/operator.jwt" \
   --from-file=system-account.public="$nats_material_directory/system-account.public" \
   --from-file=system-account.jwt="$nats_material_directory/system-account.jwt" \
   --from-file=account.public="$nats_material_directory/account.public" \
   --from-file=account.jwt="$nats_material_directory/account.jwt"
-create_secret mattercodex-system mattercodex-sentry --from-literal=dsn=
-create_secret mattercodex-system internal-rpc-authority-sentry --from-literal=dsn=
-create_secret mattercodex-system mattercodex-integration-credentials --from-literal=empty=
-create_secret mattercodex-system runtime-provider-openai-default-r1 \
+create_secret kodex-system kodex-sentry --from-literal=dsn=
+create_secret kodex-system internal-rpc-authority-sentry --from-literal=dsn=
+create_secret kodex-system kodex-integration-credentials --from-literal=empty=
+create_secret kodex-system runtime-provider-openai-default-r1 \
   --from-file=auth.json="$provider_auth_file"
 
-kubectl -n mattercodex-system create configmap mattercodex-oidc-ca \
+kubectl -n kodex-system create configmap kodex-oidc-ca \
   --from-file=ca.pem="$oidc_ca_file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl -n mattercodex-system create configmap mattercodex-internal-ca \
+kubectl -n kodex-system create configmap kodex-internal-ca \
   --from-file=ca.pem="$ca_certificate_file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl -n mattercodex-system create configmap mattercodex-otel-ca \
+kubectl -n kodex-system create configmap kodex-otel-ca \
   --from-file=ca.pem="$ca_certificate_file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl -n mattercodex-system create configmap internal-rpc-authority-otel-ca \
+kubectl -n kodex-system create configmap internal-rpc-authority-otel-ca \
   --from-file=ca.pem="$ca_certificate_file" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
-provider_uid=$(kubectl -n mattercodex-system get secret runtime-provider-openai-default-r1 -o jsonpath='{.metadata.uid}')
-provider_resource_version=$(kubectl -n mattercodex-system get secret runtime-provider-openai-default-r1 -o jsonpath='{.metadata.resourceVersion}')
+provider_uid=$(kubectl -n kodex-system get secret runtime-provider-openai-default-r1 -o jsonpath='{.metadata.uid}')
+provider_resource_version=$(kubectl -n kodex-system get secret runtime-provider-openai-default-r1 -o jsonpath='{.metadata.resourceVersion}')
 provider_sha256=$(sha256sum "$provider_auth_file" | awk '{print $1}')
-kubectl -n mattercodex-system create configmap runtime-provider-openai-default-metadata \
+kubectl -n kodex-system create configmap runtime-provider-openai-default-metadata \
   --from-literal=secretName=runtime-provider-openai-default-r1 \
   --from-literal=secretUID="$provider_uid" \
   --from-literal=secretResourceVersion="$provider_resource_version" \
@@ -137,12 +137,12 @@ kubectl -n mattercodex-system create configmap runtime-provider-openai-default-m
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 kubectl apply -f "$repository_root/infra/service-infrastructure/vault-bootstrap.yaml" >/dev/null
-kubectl -n mattercodex-system wait --for=condition=Ready certificate/mattercodex-vault-server --timeout=180s >/dev/null
-kubectl -n mattercodex-system wait --for=condition=Ready certificate/mattercodex-control-api-bootstrap --timeout=180s >/dev/null
+kubectl -n kodex-system wait --for=condition=Ready certificate/kodex-vault-server --timeout=180s >/dev/null
+kubectl -n kodex-system wait --for=condition=Ready certificate/kodex-control-api-bootstrap --timeout=180s >/dev/null
 
-for secret_name in mattercodex-installation-ca mattercodex-postgresql-bootstrap mattercodex-nats-credentials \
-  mattercodex-vault-server-tls control-api-gateway-vault-ca runtime-provider-openai-default-r1 \
-  internal-rpc-authority-restore-controller-vault-ca mattercodex-sentry; do
-  kubectl -n mattercodex-system get secret "$secret_name" >/dev/null || fail "secret readback failed: $secret_name"
+for secret_name in kodex-installation-ca kodex-postgresql-bootstrap kodex-nats-credentials \
+  kodex-vault-server-tls control-api-gateway-vault-ca runtime-provider-openai-default-r1 \
+  internal-rpc-authority-restore-controller-vault-ca kodex-sentry; do
+  kubectl -n kodex-system get secret "$secret_name" >/dev/null || fail "secret readback failed: $secret_name"
 done
 printf 'Fresh install secret materialization completed\n'

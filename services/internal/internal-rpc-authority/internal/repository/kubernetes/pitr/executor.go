@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
@@ -156,7 +156,7 @@ type externalPlugin struct {
 func NewExecutor(config ExecutorConfig) (*Executor, error) {
 	if config.Address != "https://kubernetes.default.svc:443" ||
 		config.TLSServerName != "kubernetes.default.svc" ||
-		config.Namespace != "mattercodex-system" ||
+		config.Namespace != "kodex-system" ||
 		config.EvidenceSecretName != "internal-rpc-authority-restore-evidence" ||
 		config.BackupName == "" ||
 		config.SourceClusterName != "internal-rpc-authority-primary" ||
@@ -406,15 +406,15 @@ func (executor *Executor) desiredCluster(
 			Name:      name,
 			Namespace: executor.config.Namespace,
 			Annotations: map[string]string{
-				"mattercodex.dev/restore-id":                           state.RestoreID,
-				"mattercodex.dev/restore-epoch":                        strconv.FormatUint(state.RestoreEpoch, 10),
-				"mattercodex.dev/restore-intent-digest-sha256":         intentDigest,
-				"mattercodex.dev/backup-manifest-digest-sha256":        manifest.DigestSHA256,
-				"mattercodex.dev/cnpg-backup-uid":                      manifest.BackupUID,
-				"mattercodex.dev/cnpg-backup-resource-version":         manifest.BackupResourceVersion,
-				"mattercodex.dev/cnpg-backup-id":                       manifest.ProviderBackupID,
-				"mattercodex.dev/cnpg-source-cluster-uid":              manifest.SourceClusterUID,
-				"mattercodex.dev/cnpg-source-cluster-resource-version": manifest.SourceClusterResourceVersion,
+				"kodex.dev/restore-id":                           state.RestoreID,
+				"kodex.dev/restore-epoch":                        strconv.FormatUint(state.RestoreEpoch, 10),
+				"kodex.dev/restore-intent-digest-sha256":         intentDigest,
+				"kodex.dev/backup-manifest-digest-sha256":        manifest.DigestSHA256,
+				"kodex.dev/cnpg-backup-uid":                      manifest.BackupUID,
+				"kodex.dev/cnpg-backup-resource-version":         manifest.BackupResourceVersion,
+				"kodex.dev/cnpg-backup-id":                       manifest.ProviderBackupID,
+				"kodex.dev/cnpg-source-cluster-uid":              manifest.SourceClusterUID,
+				"kodex.dev/cnpg-source-cluster-resource-version": manifest.SourceClusterResourceVersion,
 			},
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "internal-rpc-authority-restore-pitr",
@@ -574,9 +574,9 @@ func (executor *Executor) publishEvidence(
 	if executor.existingEvidenceMatches(current, claims) {
 		return nil
 	}
-	if current.Metadata.Annotations["mattercodex.dev/restore-anchor-revision"] !=
+	if current.Metadata.Annotations["kodex.dev/restore-anchor-revision"] !=
 		strconv.FormatUint(state.AnchorRevision, 10) ||
-		current.Metadata.Annotations["mattercodex.dev/restore-evidence-digest-sha256"] !=
+		current.Metadata.Annotations["kodex.dev/restore-evidence-digest-sha256"] !=
 			state.EvidenceDigest {
 		return errors.New("restore evidence predecessor CAS rejected")
 	}
@@ -596,18 +596,18 @@ func (executor *Executor) publishEvidence(
 	current.Kind = "Secret"
 	current.Type = "Opaque"
 	current.Metadata.Annotations = map[string]string{
-		"mattercodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
-		"mattercodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
-		"mattercodex.dev/restore-evidence-digest-sha256":       digestHex,
-		"mattercodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
-		"mattercodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
-		"mattercodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
-		"mattercodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
-		"mattercodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
-		"mattercodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
-		"mattercodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
-		"mattercodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
-		"mattercodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
+		"kodex.dev/restore-anchor-revision":              strconv.FormatUint(claims.AnchorRevision, 10),
+		"kodex.dev/restore-epoch":                        strconv.FormatUint(claims.RestoreEpoch, 10),
+		"kodex.dev/restore-evidence-digest-sha256":       digestHex,
+		"kodex.dev/restore-predecessor-revision":         strconv.FormatUint(claims.Predecessor.Revision, 10),
+		"kodex.dev/restore-predecessor-digest-sha256":    claims.Predecessor.DigestSHA256,
+		"kodex.dev/restored-cluster-uid":                 claims.RestoredClusterUID,
+		"kodex.dev/restored-timeline-id":                 strconv.FormatUint(claims.RestoredTimelineID, 10),
+		"kodex.dev/cnpg-backup-uid":                      claims.BackupResourceUID,
+		"kodex.dev/cnpg-backup-resource-version":         claims.BackupResourceVersion,
+		"kodex.dev/cnpg-backup-id":                       claims.ProviderBackupID,
+		"kodex.dev/cnpg-source-cluster-uid":              claims.SourceClusterUID,
+		"kodex.dev/cnpg-source-cluster-resource-version": claims.SourceClusterResourceVersion,
 	}
 	current.Data = map[string]string{
 		evidenceDataKey: base64.StdEncoding.EncodeToString([]byte(compact)),

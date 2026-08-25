@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 )
 
 func TestBootstrapRootMetadataIsCanonical(t *testing.T) {
@@ -119,7 +119,7 @@ func TestBuildPolicySnapshotUsesCurrentWorkloadKeyGeneration(t *testing.T) {
 		document{SignerGeneration: 1},
 		service.VerificationKeyRecord{
 			Key: key.PublicOnly(), Generation: 2,
-			Issuer: "spiffe://mattercodex.local/ns/mattercodex-system/sa/issuer",
+			Issuer: "spiffe://kodex.local/ns/kodex-system/sa/issuer",
 		},
 		repeatedDigest("a"),
 		nil,

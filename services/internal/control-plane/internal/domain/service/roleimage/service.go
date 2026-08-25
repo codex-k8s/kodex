@@ -12,10 +12,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	repository "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/roleimage"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 const (

@@ -5,11 +5,11 @@ import (
 	"crypto/x509"
 	"errors"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -245,7 +245,7 @@ func exactSPIFFEURI(certificate *x509.Certificate) (string, error) {
 	}
 	value := certificate.URIs[0].String()
 	if value == "" || certificate.URIs[0].Scheme != "spiffe" ||
-		certificate.URIs[0].Host != "mattercodex.local" {
+		certificate.URIs[0].Host != "kodex.local" {
 		return "", errors.New("SPIFFE URI is outside the trust domain")
 	}
 	return value, nil

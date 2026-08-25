@@ -6,12 +6,12 @@ metadata:
 data:
   runtime-controller.json: |
     {
-      "title": "MatterCodex runtime-controller",
-      "uid": "mattercodex-runtime-controller",
+      "title": "Kodex runtime-controller",
+      "uid": "kodex-runtime-controller",
       "schemaVersion": 39,
       "refresh": "30s",
       "panels": [
-        {"type":"stat","title":"Readiness","targets":[{"expr":"max(mattercodex_runtime_controller_readiness{ready=\"true\"})"}],"gridPos":{"x":0,"y":0,"w":8,"h":4}},
+        {"type":"stat","title":"Readiness","targets":[{"expr":"max(kodex_runtime_controller_readiness{ready=\"true\"})"}],"gridPos":{"x":0,"y":0,"w":8,"h":4}},
         {"type":"timeseries","title":"Process CPU","targets":[{"expr":"rate(process_cpu_seconds_total{job=\"runtime-controller\"}[5m])"}],"gridPos":{"x":8,"y":0,"w":8,"h":8}},
         {"type":"timeseries","title":"Go memory","targets":[{"expr":"go_memstats_heap_alloc_bytes{job=\"runtime-controller\"}"}],"gridPos":{"x":16,"y":0,"w":8,"h":8}}
       ]

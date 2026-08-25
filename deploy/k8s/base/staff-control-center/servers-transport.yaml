@@ -3,7 +3,7 @@ kind: ServersTransport
 metadata:
   name: staff-control-center
 spec:
-  serverName: staff-control-center.mattercodex-system.svc.cluster.local
+  serverName: staff-control-center.kodex-system.svc.cluster.local
   insecureSkipVerify: false
   rootCAsSecrets:
     - staff-control-center-backend-tls

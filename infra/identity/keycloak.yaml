@@ -57,7 +57,7 @@ spec:
             - { name: PGSSLMODE, value: verify-full }
             - {
                 name: PGSSLROOTCERT,
-                value: /var/run/secrets/mattercodex/database/ca.crt,
+                value: /var/run/secrets/kodex/database/ca.crt,
               }
           securityContext:
             allowPrivilegeEscalation: false
@@ -69,7 +69,7 @@ spec:
           volumeMounts:
             - {
                 name: database-tls,
-                mountPath: /var/run/secrets/mattercodex/database,
+                mountPath: /var/run/secrets/kodex/database,
                 readOnly: true,
               }
       containers:
@@ -83,7 +83,7 @@ spec:
           env:
             - { name: KC_DB, value: postgres }
             - name: KC_DB_URL
-              value: jdbc:postgresql://keycloak-postgresql.identity.svc.cluster.local:5432/keycloak?sslmode=verify-full&sslrootcert=/var/run/secrets/mattercodex/database/ca.crt
+              value: jdbc:postgresql://keycloak-postgresql.identity.svc.cluster.local:5432/keycloak?sslmode=verify-full&sslrootcert=/var/run/secrets/kodex/database/ca.crt
             - { name: KC_DB_USERNAME, value: keycloak }
             - name: KC_DB_PASSWORD
               valueFrom:
@@ -103,7 +103,7 @@ spec:
                   secretKeyRef:
                     { name: keycloak-bootstrap, key: admin-password },
                 }
-            - { name: KC_HOSTNAME, value: https://__MATTERCODEX_OIDC_HOST__ }
+            - { name: KC_HOSTNAME, value: https://__KODEX_OIDC_HOST__ }
             - { name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "false" }
             - { name: KC_PROXY_HEADERS, value: xforwarded }
             - { name: KC_HTTP_ENABLED, value: "true" }
@@ -111,11 +111,11 @@ spec:
             - { name: KC_HTTP_MANAGEMENT_HOST, value: 0.0.0.0 }
             - {
                 name: KC_HTTPS_CERTIFICATE_FILE,
-                value: /var/run/secrets/mattercodex/sso/tls/tls.crt,
+                value: /var/run/secrets/kodex/sso/tls/tls.crt,
               }
             - {
                 name: KC_HTTPS_CERTIFICATE_KEY_FILE,
-                value: /var/run/secrets/mattercodex/sso/tls/tls.key,
+                value: /var/run/secrets/kodex/sso/tls/tls.key,
               }
             - { name: KC_HEALTH_ENABLED, value: "true" }
             - { name: KC_METRICS_ENABLED, value: "true" }
@@ -149,12 +149,12 @@ spec:
           volumeMounts:
             - {
                 name: public-tls,
-                mountPath: /var/run/secrets/mattercodex/sso/tls,
+                mountPath: /var/run/secrets/kodex/sso/tls,
                 readOnly: true,
               }
             - {
                 name: database-tls,
-                mountPath: /var/run/secrets/mattercodex/database,
+                mountPath: /var/run/secrets/kodex/database,
                 readOnly: true,
               }
             - { name: tmp, mountPath: /tmp }
@@ -175,18 +175,18 @@ kind: Ingress
 metadata:
   name: sso
   annotations:
-    cert-manager.io/cluster-issuer: __MATTERCODEX_CLUSTER_ISSUER__
-    kubernetes.io/ingress.class: __MATTERCODEX_INGRESS_CLASS__
+    cert-manager.io/cluster-issuer: __KODEX_CLUSTER_ISSUER__
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serverstransport: identity-sso-public@kubernetescrd
 spec:
-  ingressClassName: __MATTERCODEX_INGRESS_CLASS__
+  ingressClassName: __KODEX_INGRESS_CLASS__
   tls:
-    - hosts: [__MATTERCODEX_OIDC_HOST__]
+    - hosts: [__KODEX_OIDC_HOST__]
       secretName: sso-public-tls
   rules:
-    - host: __MATTERCODEX_OIDC_HOST__
+    - host: __KODEX_OIDC_HOST__
       http:
         paths:
           - path: /
@@ -199,5 +199,5 @@ kind: ServersTransport
 metadata:
   name: sso-public
 spec:
-  serverName: __MATTERCODEX_OIDC_HOST__
+  serverName: __KODEX_OIDC_HOST__
   insecureSkipVerify: false

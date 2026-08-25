@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 func TestValidateIntegrationConfigurationUsesClosedTypedSchema(t *testing.T) {

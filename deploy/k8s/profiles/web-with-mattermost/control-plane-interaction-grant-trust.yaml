@@ -9,6 +9,6 @@ spec:
     audience: vault
     objects: |
       - objectName: "interaction-gateway.platform-worker.public.jwk"
-        secretPath: "kv/data/mattercodex/platform-worker-grants/interaction-gateway"
+        secretPath: "kv/data/kodex/platform-worker-grants/interaction-gateway"
         secretKey: "public-jwk"
         filePermission: 292

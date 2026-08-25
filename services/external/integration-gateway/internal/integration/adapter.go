@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/credentialfs"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/credentialfs"
 )
 
 const maximumResponseBytes = 64 << 10
@@ -291,7 +291,7 @@ func (adapter *Adapter) call(ctx context.Context, request Request, method, endpo
 	}
 	httpRequest.Header.Set("Authorization", "Bearer "+string(credential))
 	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("User-Agent", "MatterCodex/integration-gateway")
+	httpRequest.Header.Set("User-Agent", "Kodex/integration-gateway")
 	if len(body) > 0 {
 		httpRequest.Header.Set("Content-Type", "application/json")
 	}

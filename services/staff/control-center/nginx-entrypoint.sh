@@ -3,9 +3,9 @@ set -eu
 
 tls_digest() {
   sha256sum \
-    /var/run/secrets/mattercodex/staff-control-center/backend-tls/tls.crt \
-    /var/run/secrets/mattercodex/staff-control-center/backend-tls/tls.key \
-    /var/run/secrets/mattercodex/staff-control-center/ingress-client-tls/ca.crt |
+    /var/run/secrets/kodex/staff-control-center/backend-tls/tls.crt \
+    /var/run/secrets/kodex/staff-control-center/backend-tls/tls.key \
+    /var/run/secrets/kodex/staff-control-center/ingress-client-tls/ca.crt |
     sha256sum | awk '{print $1}'
 }
 

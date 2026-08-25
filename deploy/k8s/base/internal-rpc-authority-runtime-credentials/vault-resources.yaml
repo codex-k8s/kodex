@@ -3,8 +3,8 @@ kind: VaultConnection
 metadata:
   name: internal-rpc-authority-role-image-builder-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-role-image-builder-workload-tls
 ---
@@ -46,15 +46,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-image-admission-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-image-admission-workload-tls
 ---
@@ -94,15 +94,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-image-promotion-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-image-promotion-workload-tls
 ---
@@ -142,15 +142,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-automation-scheduler-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-automation-scheduler-workload-tls
 ---
@@ -192,7 +192,7 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultDynamicSecret
@@ -218,15 +218,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-control-plane-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-control-plane-workload-tls
 ---
@@ -268,15 +268,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-integration-gateway-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-integration-gateway-workload-tls
 ---
@@ -318,15 +318,15 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultConnection
 metadata:
   name: internal-rpc-authority-runtime-controller-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-runtime-controller-workload-tls
 ---
@@ -368,4 +368,4 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem

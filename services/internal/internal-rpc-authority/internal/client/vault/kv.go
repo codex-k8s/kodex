@@ -11,12 +11,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 )
 
 var kvDataPathPattern = regexp.MustCompile(
-	`^kv/data/mattercodex/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$`,
+	`^kv/data/kodex/[a-z0-9][a-z0-9./_-]{14,500}[a-z0-9]$`,
 )
 
 // ReadKV2 читает материал KV v2 только из разрешённого реестром пути.

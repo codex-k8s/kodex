@@ -52,13 +52,13 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-postgresql
+              app.kubernetes.io/name: kodex-postgresql
       ports:
         - port: 5432
           protocol: TCP
     - to:
         - ipBlock:
-            cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__
+            cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__
       ports:
         - port: 443
           protocol: TCP
@@ -103,7 +103,7 @@ spec:
   egress:
     - to:
         - ipBlock:
-            cidr: __MATTERCODEX_KUBERNETES_API_SERVICE_CIDR__
+            cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__
       ports:
         - port: 443
           protocol: TCP
@@ -115,7 +115,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-postgresql
+      app.kubernetes.io/name: kodex-postgresql
   policyTypes:
     - Ingress
   ingress:
@@ -126,10 +126,10 @@ spec:
               app.kubernetes.io/component: database-credential-reconciler
         - podSelector:
             matchLabels:
-              mattercodex.dev/internal-rpc-authority-issuer: enabled
+              kodex.dev/internal-rpc-authority-issuer: enabled
         - podSelector:
             matchLabels:
-              mattercodex.dev/internal-rpc-authority-verifier: enabled
+              kodex.dev/internal-rpc-authority-verifier: enabled
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: internal-rpc-authority-publisher
@@ -144,7 +144,7 @@ spec:
               app.kubernetes.io/name: internal-rpc-authority-restore-recovery
         - podSelector:
             matchExpressions:
-              - key: mattercodex.dev/image-admission-phase
+              - key: kodex.dev/image-admission-phase
                 operator: In
                 values: [claim, admit, promote]
       ports:
@@ -169,10 +169,10 @@ spec:
               app.kubernetes.io/component: database-credential-reconciler
         - podSelector:
             matchLabels:
-              mattercodex.dev/internal-rpc-authority-issuer: enabled
+              kodex.dev/internal-rpc-authority-issuer: enabled
         - podSelector:
             matchLabels:
-              mattercodex.dev/internal-rpc-authority-verifier: enabled
+              kodex.dev/internal-rpc-authority-verifier: enabled
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: internal-rpc-authority-publisher

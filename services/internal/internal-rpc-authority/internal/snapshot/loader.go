@@ -10,17 +10,17 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 var snapshotDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 const (
-	snapshotProtectedType = "mattercodex-internal-rpc-snapshot+jws"
-	manifestBundleType    = "mattercodex-internal-rpc-manifest-trust+jws"
+	snapshotProtectedType = "kodex-internal-rpc-snapshot+jws"
+	manifestBundleType    = "kodex-internal-rpc-manifest-trust+jws"
 	// MaxPublisherSnapshotBytes ограничивает полный служебный snapshot и не
 	// расширяет лимит обычного authorization JWS.
 	MaxPublisherSnapshotBytes = 1 << 20
@@ -442,7 +442,7 @@ func loadManifestVerificationKeyForType(
 		metadata.RootGeneration == 0 ||
 		metadata.Purpose != "AUTHORITY_SNAPSHOT_MANIFEST_ROOT" ||
 		metadata.Audience !=
-			"urn:mattercodex:internal-rpc-authority:manifest-root" ||
+			"urn:kodex:internal-rpc-authority:manifest-root" ||
 		metadata.KeyID != rootKey.KeyID ||
 		metadata.JWKThumbprint != thumbprint ||
 		metadata.SourceRevision == 0 ||
@@ -482,7 +482,7 @@ func loadManifestVerificationKeyForType(
 		bundle.RootGeneration != metadata.RootGeneration ||
 		bundle.Purpose != "AUTHORITY_SNAPSHOT_MANIFEST_VERIFICATION" ||
 		bundle.Audience !=
-			"urn:mattercodex:internal-rpc-authority:manifest-bundle" ||
+			"urn:kodex:internal-rpc-authority:manifest-bundle" ||
 		bundle.BundleRevision == 0 ||
 		bundle.BundleRevision < metadata.SourceRevision ||
 		!snapshotDigestPattern.MatchString(bundle.BundleDigest) ||

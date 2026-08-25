@@ -8,12 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -176,4 +176,4 @@ func controllerIdentityFromMTLS(
 	}, nil
 }
 
-const restoreControllerSPIFFEForTransport = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
+const restoreControllerSPIFFEForTransport = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"

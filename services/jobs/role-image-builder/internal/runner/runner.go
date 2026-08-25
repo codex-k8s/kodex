@@ -6,10 +6,10 @@ import (
 	"errors"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/build"
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/clients/controlplane"
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/observability"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/build"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/controlplane"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/observability"
 	"github.com/google/uuid"
 )
 

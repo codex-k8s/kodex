@@ -18,21 +18,21 @@ spec:
           annotations:
             summary: Control-plane недоступен
             description: Prometheus не видит ни одного доступного control-plane pod.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneNotReady
           expr: >-
-            absent(mattercodex_control_plane_readiness{ready="true"})
-            or sum(mattercodex_control_plane_readiness{ready="true"}) < 1
+            absent(kodex_control_plane_readiness{ready="true"})
+            or sum(kodex_control_plane_readiness{ready="true"}) < 1
           for: 10m
           labels:
             severity: warning
           annotations:
             summary: Control-plane не проходит readiness
             description: Все реплики закрыто отклоняют traffic из-за dependency barrier.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneInternalRPCFailures
           expr: >-
-            sum(rate(mattercodex_control_plane_grpc_requests_total{
+            sum(rate(kodex_control_plane_grpc_requests_total{
               code=~"Internal|Unavailable|Unknown|DataLoss"
             }[5m])) > 0.1
           for: 10m
@@ -41,13 +41,13 @@ spec:
           annotations:
             summary: Растёт число неожиданных control-plane RPC ошибок
             description: Проверить PostgreSQL, NATS, authority verifier и traces.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneGRPCLatencyHigh
           expr: >-
             histogram_quantile(
               0.99,
               sum by (le) (
-                rate(mattercodex_control_plane_grpc_request_duration_seconds_bucket[5m])
+                rate(kodex_control_plane_grpc_request_duration_seconds_bucket[5m])
               )
             ) > 2
           for: 10m
@@ -56,20 +56,20 @@ spec:
           annotations:
             summary: Высокая p99 задержка control-plane gRPC
             description: Проверить dependency latency, pool saturation и traces без payload.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneOutboxTerminalPredecessor
           expr: >-
-            max(mattercodex_control_plane_outbox_terminal_events) > 0
+            max(kodex_control_plane_outbox_terminal_events) > 0
           for: 5m
           labels:
             severity: critical
           annotations:
             summary: Terminal predecessor заблокировал ordering key control-plane
             description: Использовать bounded read/repair RPC; не удалять и не пропускать событие вручную.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md
         - alert: ControlPlaneOwnerLifecycleFailures
           expr: >-
-            sum(rate(mattercodex_control_plane_grpc_requests_total{
+            sum(rate(kodex_control_plane_grpc_requests_total{
               operation=~"platform\\.(command|assistant|runtime|role-images)\\..+",
               code=~"Internal|Unavailable|Unknown|DataLoss"
             }[5m])) > 0.05
@@ -79,4 +79,4 @@ spec:
           annotations:
             summary: Ошибки owner lifecycle control-plane
             description: Проверить PostgreSQL transaction, authority profile, outbox и exact graph locks новых owner-команд.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/control-plane.md

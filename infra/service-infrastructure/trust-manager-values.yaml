@@ -1,7 +1,7 @@
 replicaCount: 1
 app:
   trust:
-    namespace: mattercodex-trust
+    namespace: kodex-trust
   webhook:
     tls:
       approverPolicy:

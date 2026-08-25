@@ -1,6 +1,6 @@
 ---
 id: RUN-MC-001
-title: Runbooks MatterCodex
+title: Runbooks Kodex
 type: runbook-index
 status: approved
 owner: sre
@@ -8,7 +8,7 @@ version: 1.1.0
 updated: 2026-08-24
 ---
 
-# Runbooks MatterCodex
+# Runbooks Kodex
 
 - `fresh-install.md` — безопасная подготовка новой web-first установки;
 - `identity-and-management-surfaces.md` — Keycloak, OAuth2 Proxy, Grafana,

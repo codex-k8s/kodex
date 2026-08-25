@@ -25,7 +25,7 @@ export const cover = (screens) => L.page(L.frameDesktop(`
         <span style="width: 32px; height: 32px; border-radius: 9px; background: ${T.acc}; display: flex; align-items: center; justify-content: center;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V7l8 5 8-5v11"/></svg>
         </span>
-        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">MatterCodex</span>
+        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">Kodex</span>
         <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 11px; border-radius: 12px; background: ${T.accTint}; border: 1px solid ${T.accLine}; color: ${T.accDark}; font-size: 11.5px;">web-first reset · UX-MC-002</span>
       </div>
       <h1 style="margin: 18px 0 0; font-size: 34px; font-weight: 600; letter-spacing: -0.03em;">Макеты интерфейса · 19 экранов</h1>

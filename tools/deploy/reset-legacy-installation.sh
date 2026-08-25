@@ -9,7 +9,7 @@ fail() {
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply|readback" \
-    '  [--confirm DELETE-LEGACY-MATTERCODEX-AND-MYQRCONTACT] [--wipe-bootstrap-registry]' >&2
+    '  [--confirm DELETE-LEGACY-KODEX-AND-MYQRCONTACT] [--wipe-bootstrap-registry]' >&2
 }
 
 expected_context=""
@@ -34,11 +34,11 @@ for command_name in jq kubectl; do
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] || fail 'current Kubernetes context mismatch'
 
-legacy_namespace=mattercodex-system
+legacy_namespace=kodex-system
 myqr_namespace=myqrcontact
 shared_namespace=matter-kodex-prod
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-release_profile_selector='mattercodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)'
+release_profile_selector='kodex.dev/profile in (direct-production-single-node-prototype,web-only,web-with-mattermost)'
 release_cluster_resource_kinds=(
   customresourcedefinitions.apiextensions.k8s.io
   validatingadmissionpolicies.admissionregistration.k8s.io
@@ -80,37 +80,37 @@ detect_mattermost_workload() {
 remove_legacy_session_token_finalizer() {
   local secret_name=$1 patch
   if patch=$(kubectl -n "$shared_namespace" get secret "$secret_name" -o json | jq -ce '
-    select((.metadata.finalizers // []) | index("matter-codex.dev/session-token-protection")) |
-    {metadata:{finalizers:[.metadata.finalizers[] | select(. != "matter-codex.dev/session-token-protection")]}}
+    select((.metadata.finalizers // []) | index("kodex.dev/session-token-protection")) |
+    {metadata:{finalizers:[.metadata.finalizers[] | select(. != "kodex.dev/session-token-protection")]}}
   '); then
     kubectl -n "$shared_namespace" patch secret "$secret_name" --type=merge -p "$patch" >/dev/null
   fi
 }
 
 delete_stray_default_registry_resource() {
-  local resource_kind=$1 resource_name=matter-codex-registry actual_owner
+  local resource_kind=$1 resource_name=kodex-registry actual_owner
   if ! kubectl -n default get "$resource_kind" "$resource_name" >/dev/null 2>&1; then
     return
   fi
   actual_owner=$(kubectl -n default get "$resource_kind" "$resource_name" \
     -o jsonpath='{.metadata.labels.app\.kubernetes\.io/part-of}')
-  [[ "$actual_owner" == mattercodex-release-bootstrap ]] ||
-    fail "refusing to delete non-MatterCodex default resource: $resource_kind/$resource_name"
+  [[ "$actual_owner" == kodex-release-bootstrap ]] ||
+    fail "refusing to delete non-Kodex default resource: $resource_kind/$resource_name"
   kubectl -n default delete "$resource_kind" "$resource_name" --wait=true --timeout=5m
 }
 
-for retained_namespace in "$shared_namespace" mattercodex-ci mattercodex-ci-deploy identity cert-manager; do
+for retained_namespace in "$shared_namespace" kodex-ci kodex-ci-deploy identity cert-manager; do
   kubectl get namespace "$retained_namespace" >/dev/null 2>&1 || fail "retained namespace is absent: $retained_namespace"
 done
 mattermost_workload_kind=$(detect_mattermost_workload)
-kubectl -n "$shared_namespace" get deployment matter-codex-registry >/dev/null 2>&1 || fail 'retained registry is absent'
+kubectl -n "$shared_namespace" get deployment kodex-registry >/dev/null 2>&1 || fail 'retained registry is absent'
 
 if [[ "$mode" == preflight ]]; then
   legacy_pvcs=$(kubectl -n "$shared_namespace" get persistentvolumeclaims -o json |
-    jq '[.items[] | select(.metadata.name == "matter-codex-kaniko-context" or (.metadata.name | startswith("mc-session-")))] | length')
+    jq '[.items[] | select(.metadata.name == "kodex-kaniko-context" or (.metadata.name | startswith("mc-session-")))] | length')
   legacy_secrets=$(kubectl -n "$shared_namespace" get secrets -o json |
     jq '[.items[] | select(
-      (.metadata.name | startswith("matter-codex-")) or
+      (.metadata.name | startswith("kodex-")) or
       (.metadata.name | startswith("mc-session-")) or
       (.metadata.name | startswith("mc-var-")) or
       .metadata.name == "legacy-data-migration-source-postgresql-g1"
@@ -121,29 +121,29 @@ if [[ "$mode" == preflight ]]; then
 fi
 
 if [[ "$mode" == apply ]]; then
-  [[ "$confirmation" == DELETE-LEGACY-MATTERCODEX-AND-MYQRCONTACT ]] || fail 'destructive confirmation mismatch'
+  [[ "$confirmation" == DELETE-LEGACY-KODEX-AND-MYQRCONTACT ]] || fail 'destructive confirmation mismatch'
 
   delete_release_cluster_scope
   kubectl delete namespace "$legacy_namespace" "$myqr_namespace" --ignore-not-found --wait=true --timeout=20m
 
-  kubectl -n "$shared_namespace" delete deployment,service,ingress matter-codex-bot-service \
+  kubectl -n "$shared_namespace" delete deployment,service,ingress kodex-bot-service \
     --ignore-not-found --wait=true --timeout=5m
 
-  kubectl delete clusterrole matter-codex-agent-runner-cluster-readonly --ignore-not-found
+  kubectl delete clusterrole kodex-agent-runner-cluster-readonly --ignore-not-found
   kubectl delete clusterrolebinding \
-    matter-codex-agent-runner-cluster-admin \
-    matter-codex-agent-runner-cluster-readonly \
+    kodex-agent-runner-cluster-admin \
+    kodex-agent-runner-cluster-readonly \
     --ignore-not-found
   kubectl delete validatingadmissionpolicy,validatingadmissionpolicybinding \
-    mattercodex-production-workload-contracts \
-    mattercodex-runtime-archive-restore-disabled \
+    kodex-production-workload-contracts \
+    kodex-runtime-archive-restore-disabled \
     --ignore-not-found
 
   while IFS= read -r resource_name; do
     [[ -n "$resource_name" ]] || continue
     kubectl -n "$shared_namespace" delete persistentvolumeclaim "$resource_name" --wait=true --timeout=5m
   done < <(kubectl -n "$shared_namespace" get persistentvolumeclaims -o json |
-    jq -r '.items[] | select(.metadata.name == "matter-codex-kaniko-context" or (.metadata.name | startswith("mc-session-"))) | .metadata.name')
+    jq -r '.items[] | select(.metadata.name == "kodex-kaniko-context" or (.metadata.name | startswith("mc-session-"))) | .metadata.name')
 
   while IFS= read -r resource_name; do
     [[ -n "$resource_name" ]] || continue
@@ -152,7 +152,7 @@ if [[ "$mode" == apply ]]; then
       --ignore-not-found --wait=true --timeout=2m
   done < <(kubectl -n "$shared_namespace" get secrets -o json |
     jq -r '.items[] | select(
-      (.metadata.name | startswith("matter-codex-")) or
+      (.metadata.name | startswith("kodex-")) or
       (.metadata.name | startswith("mc-session-")) or
       (.metadata.name | startswith("mc-var-")) or
       .metadata.name == "legacy-data-migration-source-postgresql-g1"
@@ -164,7 +164,7 @@ if [[ "$mode" == apply ]]; then
       kubectl -n "$shared_namespace" delete "$resource_kind" "$resource_name" --wait=true --timeout=2m
     done < <(kubectl -n "$shared_namespace" get "$resource_kind" -o json |
       jq -r '.items[] | select(
-        (.metadata.name | startswith("matter-codex-")) or
+        (.metadata.name | startswith("kodex-")) or
         (.metadata.name | startswith("mc-session-"))
       ) | .metadata.name')
   done
@@ -173,11 +173,11 @@ if [[ "$mode" == apply ]]; then
     for resource_kind in deployment service persistentvolumeclaim; do
       delete_stray_default_registry_resource "$resource_kind"
     done
-    kubectl -n "$shared_namespace" scale deployment/matter-codex-registry --replicas=0 >/dev/null
-    kubectl -n "$shared_namespace" rollout status deployment/matter-codex-registry --timeout=180s >/dev/null
-    kubectl -n "$shared_namespace" delete persistentvolumeclaim matter-codex-registry --wait=true --timeout=5m
+    kubectl -n "$shared_namespace" scale deployment/kodex-registry --replicas=0 >/dev/null
+    kubectl -n "$shared_namespace" rollout status deployment/kodex-registry --timeout=180s >/dev/null
+    kubectl -n "$shared_namespace" delete persistentvolumeclaim kodex-registry --wait=true --timeout=5m
     kubectl -n "$shared_namespace" apply -f "$repository_root/infra/bootstrap-registry/registry.yaml" >/dev/null
-    kubectl -n "$shared_namespace" rollout status deployment/matter-codex-registry --timeout=300s >/dev/null
+    kubectl -n "$shared_namespace" rollout status deployment/kodex-registry --timeout=300s >/dev/null
   fi
 fi
 
@@ -190,9 +190,9 @@ if [[ "$mode" == readback ]]; then
   verify_release_cluster_scope_absent
   [[ $(detect_mattermost_workload) == "$mattermost_workload_kind" ]] ||
     fail 'retained Mattermost workload kind changed during reset'
-  kubectl -n "$shared_namespace" get deployment matter-codex-registry >/dev/null
-  kubectl -n mattercodex-ci get deployment mattercodex-arc-build-gha-rs-controller >/dev/null
-  kubectl -n mattercodex-ci-deploy get deployment mattercodex-arc-deploy-gha-rs-controller >/dev/null
+  kubectl -n "$shared_namespace" get deployment kodex-registry >/dev/null
+  kubectl -n kodex-ci get deployment kodex-arc-build-gha-rs-controller >/dev/null
+  kubectl -n kodex-ci-deploy get deployment kodex-arc-deploy-gha-rs-controller >/dev/null
   kubectl -n identity get ingress sso >/dev/null
 fi
 

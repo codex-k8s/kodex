@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/app"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/app"
 )
 
 var version = "dev"

@@ -4,8 +4,8 @@ metadata:
   name: automation-scheduler-runtime
 data:
   AUTOMATION_SCHEDULER_TECHNICAL_LISTEN: ":9090"
-  AUTOMATION_SCHEDULER_CONTROL_PLANE_TARGET: "control-plane.mattercodex-system.svc:8443"
-  AUTOMATION_SCHEDULER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.mattercodex-system.svc.cluster.local"
+  AUTOMATION_SCHEDULER_CONTROL_PLANE_TARGET: "control-plane.kodex-system.svc:8443"
+  AUTOMATION_SCHEDULER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
   AUTOMATION_SCHEDULER_STARTUP_TIMEOUT: "30s"
   AUTOMATION_SCHEDULER_SHUTDOWN_TIMEOUT: "20s"
   AUTOMATION_SCHEDULER_RPC_DEADLINE: "3s"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 func main() {

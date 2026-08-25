@@ -10,11 +10,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/callback"
-	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/workload"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 )
 
 const (

@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
-	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 type Client struct {
@@ -76,7 +76,7 @@ func (client *Client) ReadArtifact(ctx context.Context, input model.Input, artif
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != artifact.MediaType ||
-		response.Header.Get("X-MatterCodex-Artifact-Digest") != artifact.Digest || response.ContentLength != artifact.SizeBytes {
+		response.Header.Get("X-Kodex-Artifact-Digest") != artifact.Digest || response.ContentLength != artifact.SizeBytes {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 16<<10))
 		return nil, errors.New("runtime artifact callback rejected request")
 	}
@@ -100,7 +100,7 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 		return model.Input{}, false, errors.New("create warm runtime request")
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
-	request.Header.Set("X-MatterCodex-Runtime-Revision", input.RuntimeRevisionRef)
+	request.Header.Set("X-Kodex-Runtime-Revision", input.RuntimeRevisionRef)
 	request.Header.Set("Accept", "application/json")
 	response, err := client.http.Do(request)
 	if err != nil {

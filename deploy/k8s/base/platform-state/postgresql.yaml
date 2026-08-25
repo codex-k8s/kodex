@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: mattercodex-postgresql
+  name: kodex-postgresql
   labels:
-    app.kubernetes.io/name: mattercodex-postgresql
+    app.kubernetes.io/name: kodex-postgresql
     app.kubernetes.io/component: database
   annotations:
     argocd.argoproj.io/sync-wave: "-8"
 spec:
-  serviceName: mattercodex-postgresql
+  serviceName: kodex-postgresql
   replicas: 1
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app.kubernetes.io/name: mattercodex-postgresql
+      app.kubernetes.io/name: kodex-postgresql
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mattercodex-postgresql
+        app.kubernetes.io/name: kodex-postgresql
         app.kubernetes.io/component: database
     spec:
       automountServiceAccountToken: false
@@ -113,25 +113,25 @@ spec:
       volumes:
         - name: tls
           secret:
-            secretName: mattercodex-postgresql-tls
+            secretName: kodex-postgresql-tls
             defaultMode: 0440
         - name: bootstrap
           secret:
-            secretName: mattercodex-postgresql-bootstrap
+            secretName: kodex-postgresql-bootstrap
             defaultMode: 0400
             items:
               - key: password
                 path: password
         - name: init
           configMap:
-            name: mattercodex-postgresql-init
+            name: kodex-postgresql-init
             defaultMode: 0440
             items:
               - key: 10-bootstrap.sql
                 path: 10-bootstrap.sql
         - name: config
           configMap:
-            name: mattercodex-postgresql-init
+            name: kodex-postgresql-init
             defaultMode: 0440
             items:
               - key: pg_hba.conf
@@ -154,12 +154,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mattercodex-postgresql
+  name: kodex-postgresql
 spec:
   clusterIP: None
   publishNotReadyAddresses: true
   selector:
-    app.kubernetes.io/name: mattercodex-postgresql
+    app.kubernetes.io/name: kodex-postgresql
   ports:
     - name: postgresql
       port: 5432
@@ -172,7 +172,7 @@ metadata:
   name: control-plane-postgresql-rw
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-postgresql
+    app.kubernetes.io/name: kodex-postgresql
   ports:
     - name: postgresql
       port: 5432
@@ -185,7 +185,7 @@ metadata:
   name: internal-rpc-authority-postgresql-rw
 spec:
   selector:
-    app.kubernetes.io/name: mattercodex-postgresql
+    app.kubernetes.io/name: kodex-postgresql
   ports:
     - name: postgresql
       port: 5432

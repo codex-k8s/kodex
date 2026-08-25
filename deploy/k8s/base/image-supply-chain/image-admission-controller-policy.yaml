@@ -1,11 +1,11 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: mattercodex-image-admission-controller-jobs
+  name: kodex-image-admission-controller-jobs
 spec:
   failurePolicy: Fail
   paramKind:
-    apiVersion: supplychain.mattercodex.dev/v1alpha1
+    apiVersion: supplychain.kodex.dev/v1alpha1
     kind: ImageAdmissionPolicyParameters
   matchConstraints:
     resourceRules:
@@ -18,12 +18,12 @@ spec:
     - name: exact-controller
       expression: >-
         request.userInfo.username ==
-        'system:serviceaccount:mattercodex-system:image-admission-controller'
+        'system:serviceaccount:kodex-system:image-admission-controller'
   variables:
     - name: phase
-      expression: object.metadata.labels['mattercodex.dev/image-admission-phase']
+      expression: object.metadata.labels['kodex.dev/image-admission-phase']
     - name: admissionId
-      expression: object.metadata.labels['mattercodex.dev/image-admission-id']
+      expression: object.metadata.labels['kodex.dev/image-admission-id']
     - name: protected
       expression: variables.phase in ['claim', 'admit', 'promote']
     - name: workload
@@ -31,15 +31,15 @@ spec:
         variables.phase == 'promote' ? 'image-promotion' : 'image-admission'
     - name: expectedServiceAccount
       expression: >-
-        variables.phase == 'scan' ? 'mattercodex-image-scanner' :
-        variables.phase == 'sign' ? 'mattercodex-image-signer' :
+        variables.phase == 'scan' ? 'kodex-image-scanner' :
+        variables.phase == 'sign' ? 'kodex-image-signer' :
         variables.workload
     - name: expectedIdentity
       expression: >-
-        variables.phase == 'scan' ? 'mattercodex-image-scanner' :
-        variables.phase == 'sign' ? 'mattercodex-image-signer' :
-        variables.phase == 'promote' ? 'mattercodex-image-promotion-writer' :
-        'mattercodex-image-admission-owner'
+        variables.phase == 'scan' ? 'kodex-image-scanner' :
+        variables.phase == 'sign' ? 'kodex-image-signer' :
+        variables.phase == 'promote' ? 'kodex-image-promotion-writer' :
+        'kodex-image-admission-owner'
     - name: pod
       expression: object.spec.template.spec
     - name: main
@@ -73,21 +73,21 @@ spec:
             'authority-proof-trust', 'authority-issuer-key', 'platform-worker-grant-signer'])
   validations:
     - expression: >-
-        object.metadata.namespace == 'mattercodex-system' &&
+        object.metadata.namespace == 'kodex-system' &&
         has(object.metadata.labels) &&
         variables.phase in ['claim', 'scan', 'sign', 'admit', 'promote'] &&
         variables.admissionId.matches('^[a-f0-9]{32}$') &&
         object.metadata.name ==
           'mc-admit-' + variables.admissionId + '-' + variables.phase &&
-        object.metadata.labels['mattercodex.dev/image-admission-orchestrated'] == 'true' &&
+        object.metadata.labels['kodex.dev/image-admission-orchestrated'] == 'true' &&
         has(object.metadata.annotations) &&
-        object.metadata.annotations['mattercodex.dev/admission-run-id'].matches(
+        object.metadata.annotations['kodex.dev/admission-run-id'].matches(
           '^v[0-9]{14}-[a-f0-9]{40}$') &&
-        object.metadata.annotations['mattercodex.dev/admission-run-id'].endsWith(
+        object.metadata.annotations['kodex.dev/admission-run-id'].endsWith(
           '-' + params.spec.orchestrationRevision) &&
-        object.metadata.annotations['mattercodex.dev/admission-run-sha256'].matches(
+        object.metadata.annotations['kodex.dev/admission-run-sha256'].matches(
           '^[a-f0-9]{64}$') &&
-        object.metadata.annotations['mattercodex.dev/admission-policy-revision'] ==
+        object.metadata.annotations['kodex.dev/admission-policy-revision'] ==
           params.spec.policyRevision
       message: Image admission Job identity is outside the owner contract.
     - expression: >-
@@ -127,7 +127,7 @@ spec:
         has(variables.main.command) &&
         variables.main.command.size() == 3 &&
         variables.main.command[0] == '/bin/sh' &&
-        variables.main.command[1] == '/opt/mattercodex/image-admission.sh' &&
+        variables.main.command[1] == '/opt/kodex/image-admission.sh' &&
         variables.main.command[2] == variables.phase &&
         (!has(variables.main.args) || variables.main.args.size() == 0) &&
         !has(variables.main.lifecycle) &&
@@ -159,7 +159,7 @@ spec:
         variables.main.env.all(item,
           !has(item.valueFrom) && has(item.value) &&
           (item.name == 'ADMISSION_RUN_ID' ?
-             item.value == object.metadata.annotations['mattercodex.dev/admission-run-id'] :
+             item.value == object.metadata.annotations['kodex.dev/admission-run-id'] :
            item.name == 'POLICY_REVISION' ? item.value == params.spec.policyRevision :
            item.name == 'POLICY_SHA256' ? item.value == params.spec.policySHA256 :
            item.name == 'ADMISSION_TOOLS_IMAGE' ? item.value == params.spec.toolsImage :
@@ -175,10 +175,10 @@ spec:
            item.name == 'ROLE_RUNTIME_CONTRACT_REVISION' ? item.value == params.spec.roleRuntimeContractRevision :
            item.name == 'ROLE_RUNTIME_CONTRACT_SHA256' ? item.value == params.spec.roleRuntimeContractSHA256 :
            item.name == 'HOME' ? item.value == '/tmp' :
-           item.name == 'INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET' ? item.value == '/run/mattercodex/internal-rpc-authority/issuer.sock' :
+           item.name == 'INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET' ? item.value == '/run/kodex/internal-rpc-authority/issuer.sock' :
            item.name == 'INTERNAL_RPC_AUTHORITY_LOCAL_ROLE' ? item.value == 'issuer' :
-           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TARGET' ? item.value == 'control-plane.mattercodex-system.svc:8443' :
-           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME' ? item.value == 'control-plane.mattercodex-system.svc.cluster.local' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TARGET' ? item.value == 'control-plane.kodex-system.svc:8443' :
+           item.name == 'IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME' ? item.value == 'control-plane.kodex-system.svc.cluster.local' :
            item.name == 'IMAGE_OWNER_CONTROL_PLANE_CA_FILE' ? item.value == '/control-plane/ca.pem' :
            item.name == 'IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE' ? item.value == '/workload-tls/tls.crt' :
            item.name == 'IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE' ? item.value == '/workload-tls/tls.key' :
@@ -242,36 +242,36 @@ spec:
               item.valueFrom.secretKeyRef.optional == false) :
              !has(item.valueFrom) && has(item.value) &&
              (item.name == 'DEPLOYMENT_ENVIRONMENT' ?
-                item.value == object.spec.template.metadata.labels['mattercodex.dev/environment'] :
+                item.value == object.spec.template.metadata.labels['kodex.dev/environment'] :
               item.name == 'OTEL_EXPORTER_OTLP_ENDPOINT' ?
                 item.value == 'otel-collector.observability.svc:4317' :
               item.name == 'OTEL_EXPORTER_OTLP_TLS_SERVER_NAME' ?
                 item.value == 'otel-collector.observability.svc.cluster.local' :
               item.name == 'OTEL_EXPORTER_OTLP_CA_FILE' ?
-                item.value == '/var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem' :
+                item.value == '/var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem' :
               item.name == 'OTEL_TRACES_SAMPLER_ARG' ? item.value == '0.1' :
               item.name == 'SENTRY_DSN_FILE' ?
-                item.value == '/var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn' :
+                item.value == '/var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn' :
               item.name == 'SENTRY_EXPECTED_HOST' ?
                 item.value == 'sentry-relay.observability.svc:8443' :
               item.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_ID' ?
                 item.value == variables.workload :
               item.name == 'INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID' ?
-                item.value == 'spiffe://mattercodex.local/ns/mattercodex-system/sa/' + variables.workload :
+                item.value == 'spiffe://kodex.local/ns/kodex-system/sa/' + variables.workload :
               item.name == 'INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE' ?
                 item.value == 'internal-rpc-authority-' + variables.workload :
               item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS' ?
-                item.value == 'internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443' :
+                item.value == 'internal-rpc-authority-readback-attestor.kodex-system.svc:8443' :
               item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME' ?
-                item.value == 'internal-rpc-authority-readback-attestor.mattercodex-system.svc' :
+                item.value == 'internal-rpc-authority-readback-attestor.kodex-system.svc' :
               item.name == 'INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE' ?
-                item.value == '/var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem' :
+                item.value == '/var/run/config/kodex/internal-rpc-authority/readback/ca.pem' :
               item.name == 'INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE' ?
-                item.value == '/var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem' :
+                item.value == '/var/run/config/kodex/internal-rpc-authority/restore/ca.pem' :
               item.name == 'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID' ? item.value == '10001' :
               item.name == 'INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID' ? item.value == '10001' :
               item.name == 'INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE' ?
-                item.value == '/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn' :
+                item.value == '/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn' :
               item.name == 'INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN' ? item.value == ':9091' :
               false)))
       message: Image admission authority sidecar configuration differs from the exact contract.
@@ -325,7 +325,7 @@ spec:
             has(volume.emptyDir) && string(volume.emptyDir.sizeLimit) == '64Mi' :
           volume.name == 'script' ?
             has(volume.configMap) &&
-            volume.configMap.name == 'mattercodex-image-admission' &&
+            volume.configMap.name == 'kodex-image-admission' &&
             volume.configMap.defaultMode == 365 :
           volume.name == 'identity' ?
             has(volume.csi) && volume.csi.driver == 'secrets-store.csi.k8s.io' &&
@@ -355,7 +355,7 @@ spec:
               'internal-rpc-authority-' + variables.workload + '-workload-tls' :
           volume.name == 'control-plane-ca' ?
             variables.protected && has(volume.configMap) &&
-            volume.configMap.name == 'mattercodex-internal-ca' :
+            volume.configMap.name == 'kodex-internal-ca' :
           volume.name == 'application-grant' ?
             variables.protected && has(volume.emptyDir) &&
             string(volume.emptyDir.sizeLimit) == '1Mi' :
@@ -404,23 +404,23 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: mattercodex-image-admission-controller-jobs
+  name: kodex-image-admission-controller-jobs
 spec:
-  policyName: mattercodex-image-admission-controller-jobs
+  policyName: kodex-image-admission-controller-jobs
   validationActions: [Deny]
   paramRef:
-    name: mattercodex-image-admission-policy
-    namespace: mattercodex-system
+    name: kodex-image-admission-policy
+    namespace: kodex-system
     parameterNotFoundAction: Deny
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: mattercodex-image-admission-controller-workspaces
+  name: kodex-image-admission-controller-workspaces
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -434,21 +434,21 @@ spec:
     - name: exact-controller
       expression: >-
         request.userInfo.username ==
-        'system:serviceaccount:mattercodex-system:image-admission-controller'
+        'system:serviceaccount:kodex-system:image-admission-controller'
   variables:
     - name: admissionId
-      expression: object.metadata.labels['mattercodex.dev/image-admission-id']
+      expression: object.metadata.labels['kodex.dev/image-admission-id']
   validations:
     - expression: >-
-        object.metadata.namespace == 'mattercodex-system' &&
+        object.metadata.namespace == 'kodex-system' &&
         has(object.metadata.labels) &&
         variables.admissionId.matches('^[a-f0-9]{32}$') &&
         object.metadata.name == 'mc-admit-' + variables.admissionId &&
-        object.metadata.labels['mattercodex.dev/image-admission-orchestrated'] == 'true' &&
+        object.metadata.labels['kodex.dev/image-admission-orchestrated'] == 'true' &&
         has(object.metadata.annotations) &&
-        object.metadata.annotations['mattercodex.dev/admission-run-id'].matches(
+        object.metadata.annotations['kodex.dev/admission-run-id'].matches(
           '^v[0-9]{14}-[a-f0-9]{40}$') &&
-        object.metadata.annotations['mattercodex.dev/admission-run-sha256'].matches(
+        object.metadata.annotations['kodex.dev/admission-run-sha256'].matches(
           '^[a-f0-9]{64}$')
       message: Image admission workspace identity is outside the owner contract.
     - expression: >-
@@ -463,11 +463,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: mattercodex-image-admission-controller-workspaces
+  name: kodex-image-admission-controller-workspaces
 spec:
-  policyName: mattercodex-image-admission-controller-workspaces
+  policyName: kodex-image-admission-controller-workspaces
   validationActions: [Deny]
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system

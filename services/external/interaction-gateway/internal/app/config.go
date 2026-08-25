@@ -41,14 +41,14 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.mattercodex-system.svc:8443",
-		ControlPlaneTLSServerName:   "control-plane.mattercodex-system.svc.cluster.local",
-		ControlPlaneCAFile:          "/var/run/config/mattercodex/interaction-gateway/control-plane/ca.pem",
-		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt",
-		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key",
-		ApplicationGrantFile:        "/var/run/secrets/mattercodex/interaction-gateway/application-grant/application-grant.jws",
-		CredentialDirectory:         "/var/run/secrets/mattercodex/integration-connections",
-		EgressProxyURL:              "http://egress-gateway.mattercodex-system.svc.cluster.local:8080",
+		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
+		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
+		ControlPlaneCAFile:          "/var/run/config/kodex/interaction-gateway/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/kodex/interaction-gateway/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/kodex/interaction-gateway/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/kodex/interaction-gateway/application-grant/application-grant.jws",
+		CredentialDirectory:         "/var/run/secrets/kodex/integration-connections",
+		EgressProxyURL:              "http://egress-gateway.kodex-system.svc.cluster.local:8080",
 		StartupTimeout:              30 * time.Second, ShutdownTimeout: 20 * time.Second,
 		RequestTimeout: 3 * time.Second, OperationTimeout: 30 * time.Second,
 		PollInterval: 500 * time.Millisecond, SourceRefreshInterval: 10 * time.Second,
@@ -73,7 +73,7 @@ func (config Config) validate() error {
 		}
 	}
 	proxy, err := url.Parse(config.EgressProxyURL)
-	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.mattercodex-system.svc.cluster.local:8080" || proxy.Path != "" || proxy.User != nil || proxy.RawQuery != "" {
+	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" || proxy.Path != "" || proxy.User != nil || proxy.RawQuery != "" {
 		return errors.New("interaction-gateway egress proxy is invalid")
 	}
 	if strings.TrimSpace(config.ControlPlaneTLSServerName) == "" || strings.ContainsAny(config.ControlPlaneTLSServerName, "*/") {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 func TestContinuationGrantRoundTripAndDeterministicTamperRejection(t *testing.T) {
@@ -131,8 +131,8 @@ func signForGeneration(t *testing.T, key internalrpcauth.ES256Key, generation ui
 func testConfig(generation uint64) Config {
 	return Config{
 		Issuer:   "https://control-plane.test/authority/integration-continuation",
-		Audience: "urn:mattercodex:integration-continuation", WorkloadID: "integration-gateway",
-		CallerSPIFFEID: "spiffe://mattercodex.test/ns/system/sa/integration-gateway",
+		Audience: "urn:kodex:integration-continuation", WorkloadID: "integration-gateway",
+		CallerSPIFFEID: "spiffe://kodex.test/ns/system/sa/integration-gateway",
 		Generation:     generation, MaximumTTL: 8 * 24 * time.Hour,
 	}
 }

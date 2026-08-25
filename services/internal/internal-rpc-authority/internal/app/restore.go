@@ -15,22 +15,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	publisherclient "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/client/publisher"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	model "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/publisher"
-	kubernetespitr "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
-	kubernetesrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
-	postgresrestore "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
-	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
-	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/application"
+	publisherclient "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/client/publisher"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	model "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/publisher"
+	kubernetespitr "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/pitr"
+	kubernetesrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/kubernetes/restore"
+	postgresrestore "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/restore"
+	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
+	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
@@ -75,26 +75,26 @@ func LoadRestoreControllerConfig() (RestoreControllerConfig, error) {
 	config := RestoreControllerConfig{
 		Listen:                   ":8443",
 		TechnicalListen:          ":9090",
-		TLSCertificateFile:       "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.crt",
-		TLSPrivateKeyFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/tls/tls.key",
-		ClientCAFile:             "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/client-ca.pem",
-		PostgresDSNFile:          "/var/run/secrets/mattercodex/internal-rpc-authority/restore-controller/database/dsn",
-		PostgresTLSServerName:    "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
+		TLSCertificateFile:       "/var/run/secrets/kodex/internal-rpc-authority/restore-controller/tls/tls.crt",
+		TLSPrivateKeyFile:        "/var/run/secrets/kodex/internal-rpc-authority/restore-controller/tls/tls.key",
+		ClientCAFile:             "/var/run/config/kodex/internal-rpc-authority/restore-controller/client-ca.pem",
+		PostgresDSNFile:          "/var/run/secrets/kodex/internal-rpc-authority/restore-controller/database/dsn",
+		PostgresTLSServerName:    "internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local",
 		DatabaseClusterID:        "internal-rpc-authority-primary",
-		TargetRegistryFile:       "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/key-delivery-targets.yaml",
+		TargetRegistryFile:       "/var/run/config/kodex/internal-rpc-authority/restore-controller/key-delivery-targets.yaml",
 		ManifestRootJWKFile:      "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-public.jwk",
 		ManifestRootMetadataFile: "/usr/local/share/internal-rpc-authority/manifest-root/bootstrap-metadata.json",
-		ManifestTrustBundleFile:  "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/manifest-trust.jws",
-		RestoreRoleTrustFile:     "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/restore-role-trust.jws",
-		PublisherAddress:         "internal-rpc-authority-publisher.mattercodex-system.svc:8444",
-		PublisherTLSServerName:   "internal-rpc-authority-publisher.mattercodex-system.svc",
-		PublisherCAFile:          "/var/run/config/mattercodex/internal-rpc-authority/restore-controller/publisher-ca.pem",
+		ManifestTrustBundleFile:  "/var/run/config/kodex/internal-rpc-authority/restore-controller/manifest-trust.jws",
+		RestoreRoleTrustFile:     "/var/run/config/kodex/internal-rpc-authority/restore-controller/restore-role-trust.jws",
+		PublisherAddress:         "internal-rpc-authority-publisher.kodex-system.svc:8444",
+		PublisherTLSServerName:   "internal-rpc-authority-publisher.kodex-system.svc",
+		PublisherCAFile:          "/var/run/config/kodex/internal-rpc-authority/restore-controller/publisher-ca.pem",
 		KubernetesAddress:        "https://kubernetes.default.svc:443",
 		KubernetesTLSServerName:  "kubernetes.default.svc",
 		KubernetesCAFile:         "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 		KubernetesTokenFile:      "/var/run/secrets/tokens/kubernetes/token",
-		RestoreEvidencePublicJWK: "/var/run/config/mattercodex/internal-rpc-authority/restore-trust/evidence-public.jwk",
-		KubernetesNamespace:      "mattercodex-system",
+		RestoreEvidencePublicJWK: "/var/run/config/kodex/internal-rpc-authority/restore-trust/evidence-public.jwk",
+		KubernetesNamespace:      "kodex-system",
 		KubernetesResourceName:   "internal-rpc-authority-restore-coordination",
 		ReadinessTimeout:         2 * time.Second,
 		ReadinessInterval:        5 * time.Second,

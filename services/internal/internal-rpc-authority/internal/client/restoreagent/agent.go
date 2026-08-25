@@ -14,24 +14,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 const (
-	directiveType        = "mattercodex-internal-rpc-restore-directive+jws"
-	ackType              = "mattercodex-internal-rpc-restore-quiescence-ack+jws"
-	workloadAudience     = "urn:mattercodex:internal-rpc-authority-restore-workload"
-	controllerAudience   = "urn:mattercodex:internal-rpc-authority-restore-controller"
-	controllerIssuer     = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-restore-controller"
-	roleCredentialIssuer = "spiffe://mattercodex.local/ns/mattercodex-system/sa/internal-rpc-authority-publisher"
-	roleCredentialType   = "mattercodex-internal-rpc-restore-role-credential+jws"
+	directiveType        = "kodex-internal-rpc-restore-directive+jws"
+	ackType              = "kodex-internal-rpc-restore-quiescence-ack+jws"
+	workloadAudience     = "urn:kodex:internal-rpc-authority-restore-workload"
+	controllerAudience   = "urn:kodex:internal-rpc-authority-restore-controller"
+	controllerIssuer     = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-restore-controller"
+	roleCredentialIssuer = "spiffe://kodex.local/ns/kodex-system/sa/internal-rpc-authority-publisher"
+	roleCredentialType   = "kodex-internal-rpc-restore-role-credential+jws"
 	boundedTTL           = 30 * time.Second
 	clockSkew            = 5 * time.Second
 )

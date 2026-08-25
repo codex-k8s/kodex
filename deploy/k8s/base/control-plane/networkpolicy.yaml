@@ -38,7 +38,7 @@ spec:
               app.kubernetes.io/name: role-image-builder
         - podSelector:
             matchExpressions:
-              - key: mattercodex.dev/image-admission-phase
+              - key: kodex.dev/image-admission-phase
                 operator: In
                 values: [claim, admit, promote]
         - podSelector:
@@ -76,28 +76,28 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-postgresql
+              app.kubernetes.io/name: kodex-postgresql
       ports:
         - protocol: TCP
           port: 5432
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-nats
+              app.kubernetes.io/name: kodex-nats
       ports:
         - protocol: TCP
           port: 4222
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: __MATTERCODEX_OIDC_NAMESPACE__
+              kubernetes.io/metadata.name: __KODEX_OIDC_NAMESPACE__
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: __MATTERCODEX_OIDC_POD_NAME__
-              app.kubernetes.io/component: __MATTERCODEX_OIDC_POD_COMPONENT__
+              app.kubernetes.io/name: __KODEX_OIDC_POD_NAME__
+              app.kubernetes.io/component: __KODEX_OIDC_POD_COMPONENT__
       ports:
         - protocol: TCP
-          port: __MATTERCODEX_OIDC_TARGET_PORT__
+          port: __KODEX_OIDC_TARGET_PORT__
     - to:
         - namespaceSelector:
             matchLabels:
@@ -148,7 +148,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-postgresql
+              app.kubernetes.io/name: kodex-postgresql
       ports:
         - protocol: TCP
           port: 5432
@@ -182,7 +182,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: mattercodex-nats
+              app.kubernetes.io/name: kodex-nats
       ports:
         - protocol: TCP
           port: 4222

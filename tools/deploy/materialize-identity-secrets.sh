@@ -44,7 +44,7 @@ cmp \
   fail 'Keycloak database CA private key does not match the certificate'
 
 kubectl create namespace identity --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl create namespace mattercodex-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl create namespace kodex-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl create namespace platform-admin --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
@@ -52,14 +52,14 @@ create_secret() {
   local namespace=$1 name=$2
   shift 2
   kubectl -n "$namespace" create secret generic "$name" "$@" --dry-run=client -o yaml |
-    kubectl apply --server-side --field-manager=mattercodex-identity-material -f - >/dev/null
+    kubectl apply --server-side --field-manager=kodex-identity-material -f - >/dev/null
 }
 
 create_configmap() {
   local namespace=$1 name=$2
   shift 2
   kubectl -n "$namespace" create configmap "$name" "$@" --dry-run=client -o yaml |
-    kubectl apply --server-side --field-manager=mattercodex-identity-material -f - >/dev/null
+    kubectl apply --server-side --field-manager=kodex-identity-material -f - >/dev/null
 }
 
 identity="$material_directory/identity"
@@ -83,9 +83,9 @@ create_secret identity keycloak-database-ca \
   --from-file=tls.key="$identity/database-ca.key"
 
 for binding in \
-  control-center:mattercodex-system \
+  control-center:kodex-system \
   grafana:observability \
-  vault:mattercodex-system \
+  vault:kodex-system \
   headlamp:platform-admin; do
   surface=${binding%%:*}
   namespace=${binding#*:}
@@ -112,9 +112,9 @@ kubectl -n identity get secret keycloak-initial-passwords -o json | jq -e '
 ' >/dev/null || fail 'Keycloak initial password Secret readback failed'
 
 for binding in \
-  oauth2-control-center:mattercodex-system \
+  oauth2-control-center:kodex-system \
   oauth2-grafana:observability \
-  oauth2-vault:mattercodex-system \
+  oauth2-vault:kodex-system \
   oauth2-headlamp:platform-admin; do
   secret=${binding%%:*}
   namespace=${binding#*:}

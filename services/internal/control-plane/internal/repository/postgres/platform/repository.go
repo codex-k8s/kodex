@@ -14,12 +14,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/systemassistant"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -158,7 +158,7 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertOwnerClaimContractsOrganizationIdStableKeyState, organizationID); err != nil {
 		return errors.New("create owner claim contract")
 	}
-	systemDigest := sha256.Sum256([]byte("mattercodex-system-subject"))
+	systemDigest := sha256.Sum256([]byte("kodex-system-subject"))
 	var systemSubjectID string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertSubjectsRefIssuerDisplayName,
 		organizationID, hex.EncodeToString(systemDigest[:])).Scan(&systemSubjectID); err != nil {
@@ -415,7 +415,7 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	if input.CallerWorkload != "control-api-gateway" {
-		if input.ExternalActorID != "mattercodex-system-subject" || input.ExternalTenantID != "mattercodex-installation" || input.ProjectRef != "" {
+		if input.ExternalActorID != "kodex-system-subject" || input.ExternalTenantID != "kodex-installation" || input.ProjectRef != "" {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
 		}
 		var authority platformrepo.ProofAuthority

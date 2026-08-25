@@ -2,7 +2,7 @@
 SELECT s.id::text, o.id::text, s.updated_at, o.version
 FROM control_plane.subjects s
 JOIN control_plane.organizations o ON o.id = s.organization_id
-WHERE s.issuer = 'mattercodex-system'
+WHERE s.issuer = 'kodex-system'
   AND s.ref = 'sys_platform'
   AND s.active
   AND EXISTS (

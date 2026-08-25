@@ -44,12 +44,12 @@ mkdir -p \
   "$output_directory/vault"
 
 openssl req -x509 -newkey rsa:4096 -sha384 -nodes \
-  -days 3650 -subj '/CN=MatterCodex installation CA' \
+  -days 3650 -subj '/CN=Kodex installation CA' \
   -keyout "$output_directory/installation-ca/tls.key" \
   -out "$output_directory/installation-ca/tls.crt" >/dev/null 2>&1
 openssl rand -base64 48 >"$output_directory/postgresql/password"
 openssl rand -base64 48 >"$output_directory/postgresql/internal-rpc-authority-restore-controller-password"
-printf 'mattercodex-release\n' >"$output_directory/registry/username"
+printf 'kodex-release\n' >"$output_directory/registry/username"
 openssl rand -base64 48 >"$output_directory/registry/password"
 openssl rand -hex 32 >"$output_directory/control-api/session-current.hex"
 openssl rand -hex 32 >"$output_directory/control-api/session-previous.hex"
@@ -70,13 +70,13 @@ create_registry_credential() {
     >"$directory/dockerconfig.json"
 }
 
-internal_pull_host=mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000
-internal_promotion_host=mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003
+internal_pull_host=kodex-image-registry.kodex-system.svc.cluster.local:5000
+internal_promotion_host=kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003
 for name in pull buildkit-base-pull input-read; do
   create_registry_credential "$name" "$internal_pull_host"
 done
 for name in staging-read evidence-probe evidence-admission evidence-promotion admin scanner signer admission promotion-staging; do
-  create_registry_credential "$name" mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004
+  create_registry_credential "$name" kodex-image-registry-staging-read.kodex-system.svc.cluster.local:5004
 done
 create_registry_credential promotion "$internal_promotion_host"
 mkdir -p "$output_directory/image-registry/release-source"
@@ -106,7 +106,7 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 )
 
 nsc_home="$output_directory/nats/nsc"
-nsc -H "$nsc_home" add operator --name MATTERCODEX --sys >/dev/null 2>&1
+nsc -H "$nsc_home" add operator --name KODEX --sys >/dev/null 2>&1
 nsc -H "$nsc_home" add account --name APPLICATION >/dev/null 2>&1
 "$repository_root/tools/deploy/configure-nats-application-account.sh" \
   --nsc-home "$nsc_home" >/dev/null
@@ -114,7 +114,7 @@ nsc -H "$nsc_home" add account --name APPLICATION >/dev/null 2>&1
 add_application_user() {
   local user_name=$1
   nsc -H "$nsc_home" add user --account APPLICATION --name "$user_name" \
-    --allow-pubsub 'mattercodex.>' \
+    --allow-pubsub 'kodex.>' \
     --allow-pub '$JS.API.>,_INBOX.>' \
     --allow-sub '_INBOX.>' >/dev/null 2>&1
   nsc -H "$nsc_home" generate creds --account APPLICATION --name "$user_name" \

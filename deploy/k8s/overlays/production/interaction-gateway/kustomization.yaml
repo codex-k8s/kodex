@@ -7,6 +7,6 @@ patches:
   - path: poddisruptionbudget-patch.yaml
 labels:
   - pairs:
-      mattercodex.dev/environment: production
+      kodex.dev/environment: production
     includeSelectors: false
     includeTemplates: true

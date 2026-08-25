@@ -2,7 +2,7 @@
 set -euo pipefail
 
 fail() { printf 'Runner owner gate failed: %s\n' "$*" >&2; exit 1; }
-gate_directory=/var/run/mattercodex-owner-gate
+gate_directory=/var/run/kodex-owner-gate
 
 read_gate_value() {
   local name=$1 value
@@ -17,7 +17,7 @@ expected_workflow_sha=$(read_gate_value expected-workflow-sha)
 expected_owner_actor_id=$(read_gate_value expected-owner-actor-id)
 expected_job=$(read_gate_value expected-job)
 
-[[ "${GITHUB_REPOSITORY:-}" == codex-k8s/matter-codex ]] || fail "repository mismatch"
+[[ "${GITHUB_REPOSITORY:-}" == codex-k8s/kodex ]] || fail "repository mismatch"
 [[ "${GITHUB_EVENT_NAME:-}" == workflow_dispatch ]] || fail "event mismatch"
 [[ "${GITHUB_REF:-}" == refs/heads/main ]] || fail "ref mismatch"
 [[ "${GITHUB_WORKFLOW_REF:-}" == "$expected_workflow_ref" ]] || fail "workflow ref mismatch"

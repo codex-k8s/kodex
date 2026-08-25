@@ -13,28 +13,28 @@ spec:
   matchConditions:
     - name: exact-resource
       expression: >-
-        oldObject.metadata.namespace == 'mattercodex-system' &&
+        oldObject.metadata.namespace == 'kodex-system' &&
         oldObject.metadata.name == 'internal-rpc-authority-restore-evidence'
   validations:
     - expression: request.operation == 'UPDATE'
       message: restore evidence deletion is forbidden
     - expression: >-
         request.userInfo.username ==
-        'system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-pitr'
+        'system:serviceaccount:kodex-system:internal-rpc-authority-restore-pitr'
       message: only the independent PITR executor may update restore evidence
     - expression: >-
-        int(object.metadata.annotations['mattercodex.dev/restore-anchor-revision']) ==
-        int(oldObject.metadata.annotations['mattercodex.dev/restore-anchor-revision']) + 1
+        int(object.metadata.annotations['kodex.dev/restore-anchor-revision']) ==
+        int(oldObject.metadata.annotations['kodex.dev/restore-anchor-revision']) + 1
       message: restore evidence anchor revision must advance exactly once
     - expression: >-
-        int(object.metadata.annotations['mattercodex.dev/restore-epoch']) >=
-        int(oldObject.metadata.annotations['mattercodex.dev/restore-epoch'])
+        int(object.metadata.annotations['kodex.dev/restore-epoch']) >=
+        int(oldObject.metadata.annotations['kodex.dev/restore-epoch'])
       message: restore epoch rollback is forbidden
     - expression: >-
-        object.metadata.annotations['mattercodex.dev/restore-predecessor-revision'] ==
-        oldObject.metadata.annotations['mattercodex.dev/restore-anchor-revision'] &&
-        object.metadata.annotations['mattercodex.dev/restore-predecessor-digest-sha256'] ==
-        oldObject.metadata.annotations['mattercodex.dev/restore-evidence-digest-sha256']
+        object.metadata.annotations['kodex.dev/restore-predecessor-revision'] ==
+        oldObject.metadata.annotations['kodex.dev/restore-anchor-revision'] &&
+        object.metadata.annotations['kodex.dev/restore-predecessor-digest-sha256'] ==
+        oldObject.metadata.annotations['kodex.dev/restore-evidence-digest-sha256']
       message: restore evidence predecessor must equal served state
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -47,7 +47,7 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -64,26 +64,26 @@ spec:
   validations:
     - expression: >-
         request.userInfo.username ==
-        'system:serviceaccount:mattercodex-system:internal-rpc-authority-restore-pitr'
+        'system:serviceaccount:kodex-system:internal-rpc-authority-restore-pitr'
       message: only the independent PITR executor may create restore clusters
     - expression: >-
-        object.metadata.namespace == 'mattercodex-system' &&
+        object.metadata.namespace == 'kodex-system' &&
         object.metadata.name.startsWith('internal-rpc-authority-restore-') &&
-        'mattercodex.dev/restore-id' in object.metadata.annotations &&
-        'mattercodex.dev/restore-epoch' in object.metadata.annotations &&
-        'mattercodex.dev/restore-intent-digest-sha256' in object.metadata.annotations &&
-        'mattercodex.dev/backup-manifest-digest-sha256' in object.metadata.annotations &&
-        'mattercodex.dev/cnpg-backup-uid' in object.metadata.annotations &&
-        'mattercodex.dev/cnpg-backup-resource-version' in object.metadata.annotations &&
-        'mattercodex.dev/cnpg-backup-id' in object.metadata.annotations &&
-        'mattercodex.dev/cnpg-source-cluster-uid' in object.metadata.annotations &&
-        'mattercodex.dev/cnpg-source-cluster-resource-version' in object.metadata.annotations
+        'kodex.dev/restore-id' in object.metadata.annotations &&
+        'kodex.dev/restore-epoch' in object.metadata.annotations &&
+        'kodex.dev/restore-intent-digest-sha256' in object.metadata.annotations &&
+        'kodex.dev/backup-manifest-digest-sha256' in object.metadata.annotations &&
+        'kodex.dev/cnpg-backup-uid' in object.metadata.annotations &&
+        'kodex.dev/cnpg-backup-resource-version' in object.metadata.annotations &&
+        'kodex.dev/cnpg-backup-id' in object.metadata.annotations &&
+        'kodex.dev/cnpg-source-cluster-uid' in object.metadata.annotations &&
+        'kodex.dev/cnpg-source-cluster-resource-version' in object.metadata.annotations
       message: PITR cluster must carry the exact restore intent projection
     - expression: >-
         object.spec.instances == 3 &&
         object.spec.bootstrap.recovery.source == 'origin' &&
         object.spec.bootstrap.recovery.recoveryTarget.backupID ==
-          object.metadata.annotations['mattercodex.dev/cnpg-backup-id'] &&
+          object.metadata.annotations['kodex.dev/cnpg-backup-id'] &&
         object.spec.bootstrap.recovery.recoveryTarget.targetTLI != 'latest' &&
         object.spec.imageName.contains('@sha256:')
       message: PITR cluster recovery and image boundary rejected
@@ -98,4 +98,4 @@ spec:
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: mattercodex-system
+        kubernetes.io/metadata.name: kodex-system

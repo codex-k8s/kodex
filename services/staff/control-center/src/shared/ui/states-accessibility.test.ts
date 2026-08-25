@@ -23,7 +23,7 @@ function messages() {
     },
     app: { assistantShort: "Помощник" },
     assistant: {
-      title: "Помощник MatterCodex",
+      title: "Помощник Kodex",
       subtitle: "Настройка и выполнение работы",
       newConversation: "Новый диалог",
       ready: "Помощник готов",
@@ -144,7 +144,7 @@ describe("authoritative UI states and accessibility", () => {
     platform.assistant = {
       ref: "agent_system_assistant",
       version: 1,
-      name: "Помощник MatterCodex",
+      name: "Помощник Kodex",
       system: true,
       removable: false,
       corePromptRevision: "core-v1",

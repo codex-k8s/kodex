@@ -66,7 +66,7 @@ export const d06 = L.page(L.shellDesktop({
     <div style="border: 1px solid ${T.line}; border-radius: 12px; background: ${T.bg}; padding: 14px 18px; display: flex; align-items: center; gap: 12px;">
       <span style="color: ${T.acc}; display: flex;">${L.icon('bot', 18)}</span>
       <span style="flex: 1 1 auto; font-size: 12.5px; color: ${T.sec}; line-height: 1.45;">
-        Глобальный <span style="color: ${T.ink}; font-weight: 500;">Помощник MatterCodex</span> не входит в команду Проекта: он системный и доступен из любого раздела.
+        Глобальный <span style="color: ${T.ink}; font-weight: 500;">Помощник Kodex</span> не входит в команду Проекта: он системный и доступен из любого раздела.
       </span>
       ${L.btn('Открыть помощника', 'sec', 32)}
     </div>

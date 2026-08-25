@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: mattercodex-system
+namespace: kodex-system
 resources:
   - certificates.yaml
   - authority-certificates.yaml
@@ -10,11 +10,11 @@ resources:
   - nats.yaml
   - networkpolicy.yaml
 configMapGenerator:
-  - name: mattercodex-postgresql-init
+  - name: kodex-postgresql-init
     files:
       - 10-bootstrap.sql=postgresql/10-bootstrap.sql
       - pg_hba.conf=postgresql/pg_hba.conf
-  - name: mattercodex-nats-config
+  - name: kodex-nats-config
     files:
       - nats.conf=nats/nats.conf
       - render-config.sh=nats/render-config.sh

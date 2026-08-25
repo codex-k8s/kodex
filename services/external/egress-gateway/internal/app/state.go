@@ -3,10 +3,10 @@ package app
 import (
 	"sync"
 
-	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	internalobservability "github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 const (

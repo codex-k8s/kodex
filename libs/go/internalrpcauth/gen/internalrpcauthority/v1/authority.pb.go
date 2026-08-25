@@ -4705,7 +4705,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x0eCheckReadiness\x12S.internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest\x1aT.internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse2\xfa\x02\n" +
 	"\"DatabaseCredentialLifecycleService\x12\x9b\x01\n" +
 	"\x1cReconcileDatabaseCredentials\x12<.internalrpcauthority.v1.ReconcileDatabaseCredentialsRequest\x1a=.internalrpcauthority.v1.ReconcileDatabaseCredentialsResponse\x12\xb5\x01\n" +
-	"\x0eCheckReadiness\x12P.internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessRequest\x1aQ.internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponseBnZlgithub.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1;internalrpcauthorityv1b\x06proto3"
+	"\x0eCheckReadiness\x12P.internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessRequest\x1aQ.internalrpcauthority.v1.DatabaseCredentialLifecycleServiceCheckReadinessResponseBgZegithub.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1;internalrpcauthorityv1b\x06proto3"
 
 var (
 	file_internalrpcauthority_v1_authority_proto_rawDescOnce sync.Once

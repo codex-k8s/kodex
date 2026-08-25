@@ -17,7 +17,7 @@ data:
           "type": "stat",
           "targets": [
             {
-              "expr": "sum(mattercodex_control_plane_readiness{ready=\"true\"})",
+              "expr": "sum(kodex_control_plane_readiness{ready=\"true\"})",
               "legendFormat": "ready"
             }
           ]
@@ -28,7 +28,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (operation, code) (rate(mattercodex_control_plane_grpc_requests_total[5m]))",
+              "expr": "sum by (operation, code) (rate(kodex_control_plane_grpc_requests_total[5m]))",
               "legendFormat": "{{operation}} {{code}}"
             }
           ]
@@ -39,7 +39,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(mattercodex_control_plane_grpc_request_duration_seconds_bucket[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(kodex_control_plane_grpc_request_duration_seconds_bucket[5m])))",
               "legendFormat": "{{operation}}"
             }
           ]
@@ -76,11 +76,11 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "mattercodex_control_plane_pgx_runtime_acquired_connections",
+              "expr": "kodex_control_plane_pgx_runtime_acquired_connections",
               "legendFormat": "runtime acquired"
             },
             {
-              "expr": "mattercodex_control_plane_pgx_runtime_idle_connections",
+              "expr": "kodex_control_plane_pgx_runtime_idle_connections",
               "legendFormat": "runtime idle"
             }
           ]
@@ -91,15 +91,15 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "rate(mattercodex_control_plane_outbox_events_claimed_total[5m])",
+              "expr": "rate(kodex_control_plane_outbox_events_claimed_total[5m])",
               "legendFormat": "claimed"
             },
             {
-              "expr": "rate(mattercodex_control_plane_outbox_events_published_total[5m])",
+              "expr": "rate(kodex_control_plane_outbox_events_published_total[5m])",
               "legendFormat": "published"
             },
             {
-              "expr": "rate(mattercodex_control_plane_outbox_events_failed_total[5m])",
+              "expr": "rate(kodex_control_plane_outbox_events_failed_total[5m])",
               "legendFormat": "failed"
             }
           ]
@@ -110,7 +110,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total[5m]))",
+              "expr": "sum by (kind, action) (rate(kodex_control_plane_mutations_total[5m]))",
               "legendFormat": "{{kind}} {{action}}"
             }
           ]
@@ -121,18 +121,18 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total{kind=~\"PROJECT|AGENT|WORKFLOW|RUN|SESSION|OWNER_GATE|ARTIFACT|INTEGRATION_CONNECTION|SCHEDULE|ROLE_IMAGE_RECIPE\"}[5m]))",
+              "expr": "sum by (kind, action) (rate(kodex_control_plane_mutations_total{kind=~\"PROJECT|AGENT|WORKFLOW|RUN|SESSION|OWNER_GATE|ARTIFACT|INTEGRATION_CONNECTION|SCHEDULE|ROLE_IMAGE_RECIPE\"}[5m]))",
               "legendFormat": "{{kind}} {{action}}"
             }
           ]
         }
       ],
       "schemaVersion": 39,
-      "tags": ["mattercodex", "control-plane"],
+      "tags": ["kodex", "control-plane"],
       "templating": {"list": []},
       "time": {"from": "now-6h", "to": "now"},
       "timezone": "browser",
-      "title": "MatterCodex control-plane",
-      "uid": "mattercodex-control-plane",
+      "title": "Kodex control-plane",
+      "uid": "kodex-control-plane",
       "version": 1
     }

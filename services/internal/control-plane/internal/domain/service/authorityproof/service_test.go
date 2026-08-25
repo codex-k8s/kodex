@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/google/uuid"
 )
 
@@ -13,7 +13,7 @@ func TestIndexPolicyBindsOIDCProducerToInstallationConfiguration(t *testing.T) {
 
 	producer := testProducer("control-api-gateway", "OIDC_BEARER")
 	producer.ApplicationCredentialIssuer = "https://identity.example.test/realms/acme"
-	producer.ApplicationCredentialAudience = "mattercodex-control-api"
+	producer.ApplicationCredentialAudience = "kodex-control-api"
 	service := &Service{
 		oidcIssuer:   producer.ApplicationCredentialIssuer,
 		oidcAudience: producer.ApplicationCredentialAudience,
@@ -45,8 +45,8 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	claims := workerGrantClaims{
 		Version: 1, Issuer: producer.ApplicationCredentialIssuer,
 		Audience: producer.ApplicationCredentialAudience,
-		Subject:  "mattercodex-system-subject", CallerSPIFFEID: producer.CallerSPIFFEID,
-		WorkloadID: producer.CallerWorkloadID, OrganizationID: "mattercodex-installation",
+		Subject:  "kodex-system-subject", CallerSPIFFEID: producer.CallerSPIFFEID,
+		WorkloadID: producer.CallerWorkloadID, OrganizationID: "kodex-installation",
 		Revision: 7, JTI: uuid.NewString(), IssuedAt: now.Unix(), NotBefore: now.Unix(),
 		ExpiresAt: now.Add(workerGrantTTL).Unix(),
 	}
@@ -60,7 +60,7 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 		t.Fatalf("корректный worker grant отклонён: %v", err)
 	}
 
-	claims.Audience = "urn:mattercodex:platform-worker:another-workload"
+	claims.Audience = "urn:kodex:platform-worker:another-workload"
 	compact, err = internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
 		Type: workerGrantType, KeyID: key.KeyID,
 	})
@@ -75,13 +75,13 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 func testProducer(workloadID, credentialType string) proofProducer {
 	return proofProducer{
 		ProducerID: "control-plane." + workloadID, CallerWorkloadID: workloadID,
-		CallerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/" + workloadID,
+		CallerSPIFFEID:  "spiffe://kodex.local/ns/kodex-system/sa/" + workloadID,
 		OwnerWorkloadID: "control-plane", OwnerSPIFFEID: controlPlaneSPIFFE,
 		ApplicationCredential: credentialType, ApplicationCredentialMetadata: "authorization",
-		ApplicationCredentialIssuer:   "https://control-plane.mattercodex-system.svc.cluster.local/authority/platform-worker/" + workloadID,
-		ApplicationCredentialAudience: "urn:mattercodex:platform-worker:" + workloadID,
+		ApplicationCredentialIssuer:   "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/" + workloadID,
+		ApplicationCredentialAudience: "urn:kodex:platform-worker:" + workloadID,
 		AuthorityProofIssuer:          controlPlaneSPIFFE,
-		AuthorityProofAudience:        "urn:mattercodex:internal-rpc-authority-issuer:" + workloadID,
+		AuthorityProofAudience:        "urn:kodex:internal-rpc-authority-issuer:" + workloadID,
 		AuthorityProofMaxAgeSeconds:   15,
 		AllowedOperationIDs:           []string{"platform.test"},
 	}
@@ -89,12 +89,12 @@ func testProducer(workloadID, credentialType string) proofProducer {
 
 func testPolicy(producer proofProducer) policyDocument {
 	document := policyDocument{Version: 1, PolicyRevision: 1}
-	document.Policy.TrustDomain = "mattercodex.local"
+	document.Policy.TrustDomain = "kodex.local"
 	document.Policy.DefaultDecision = "DENY"
 	document.Policy.ProofProducers = []proofProducer{producer}
 	document.Policy.OperationBindings = []operationBinding{{
 		OperationID: "platform.test", CallerWorkloadID: producer.CallerWorkloadID,
-		CallerSPIFFEID: producer.CallerSPIFFEID, Audience: "urn:mattercodex:internal-rpc:control-plane",
+		CallerSPIFFEID: producer.CallerSPIFFEID, Audience: "urn:kodex:internal-rpc:control-plane",
 		FullMethod: "/controlplane.v1.PlatformQueryService/GetBootstrapState",
 		Permission: "platform.test", ProducerID: producer.ProducerID,
 	}}

@@ -83,7 +83,7 @@ func ExtractContextReader(archive io.Reader, destination, expectedContextSHA256,
 			if copyErr != nil || closeErr != nil {
 				return fmt.Errorf("%w: extract regular file", ErrInvalidContext)
 			}
-			if filepath.ToSlash(clean) == ".mattercodex/source.sha256" {
+			if filepath.ToSlash(clean) == ".kodex/source.sha256" {
 				content, readFileErr := os.ReadFile(target)
 				if readFileErr != nil || strings.TrimSpace(string(content)) != expectedSourceSHA256 || len(content) > 128 {
 					return fmt.Errorf("%w: source binding mismatch", ErrInvalidContext)

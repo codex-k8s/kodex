@@ -11,17 +11,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/observability"
-	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/application"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/service"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
-	readbackrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/readback"
-	sessionrepository "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/snapshot"
-	authoritygrpc "github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/transport/grpc"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/application"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
+	readbackrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/readback"
+	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/snapshot"
+	authoritygrpc "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -52,15 +52,15 @@ func LoadReadbackConfig() (ReadbackConfig, error) {
 	config := ReadbackConfig{
 		Listen:                 ":8443",
 		TechnicalListen:        ":9090",
-		TLSCertificateFile:     "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.crt",
-		TLSPrivateKeyFile:      "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/tls/tls.key",
-		ClientCAFile:           "/var/run/config/mattercodex/internal-rpc-authority/readback-attestor/client-ca.pem",
-		PostgresDSNFile:        "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/dsn",
-		PostgresTLSServerName:  "internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local",
+		TLSCertificateFile:     "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/tls/tls.crt",
+		TLSPrivateKeyFile:      "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/tls/tls.key",
+		ClientCAFile:           "/var/run/config/kodex/internal-rpc-authority/readback-attestor/client-ca.pem",
+		PostgresDSNFile:        "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/dsn",
+		PostgresTLSServerName:  "internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local",
 		RootPublicJWKFile:      "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-public.jwk",
 		RootMetadataFile:       "/usr/local/share/internal-rpc-authority/readback-root/bootstrap-metadata.json",
-		ManifestBundleJWSFile:  "/var/run/config/mattercodex/internal-rpc-authority/readback/manifest-root/root.jws",
-		CredentialTrustJWSFile: "/var/run/config/mattercodex/internal-rpc-authority/readback/credential-trust/trust.jws",
+		ManifestBundleJWSFile:  "/var/run/config/kodex/internal-rpc-authority/readback/manifest-root/root.jws",
+		CredentialTrustJWSFile: "/var/run/config/kodex/internal-rpc-authority/readback/credential-trust/trust.jws",
 		ShutdownTimeout:        10 * time.Second,
 	}
 	if err := parseEnvironment(&config); err != nil {
@@ -345,9 +345,9 @@ func openReadbackPostgres(
 		ApplicationName: "internal_rpc_authority_readback_attestor",
 		PodUID:          config.PodUID,
 		Candidates: []databaseCredentialCandidate{
-			{Role: "internal-rpc-authority-readback-attestor-g3", Principal: "ira_readback_attestor_g3", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g3"},
-			{Role: "internal-rpc-authority-readback-attestor-g4", Principal: "ira_readback_attestor_g4", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g4"},
-			{Role: "internal-rpc-authority-readback-attestor-g5", Principal: "ira_readback_attestor_g5", Directory: "/var/run/secrets/mattercodex/internal-rpc-authority/readback-attestor/database/g5"},
+			{Role: "internal-rpc-authority-readback-attestor-g3", Principal: "ira_readback_attestor_g3", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g3"},
+			{Role: "internal-rpc-authority-readback-attestor-g4", Principal: "ira_readback_attestor_g4", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g4"},
+			{Role: "internal-rpc-authority-readback-attestor-g5", Principal: "ira_readback_attestor_g5", Directory: "/var/run/secrets/kodex/internal-rpc-authority/readback-attestor/database/g5"},
 		},
 	})
 }

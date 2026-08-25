@@ -69,6 +69,9 @@ func inspectRepository(repositoryRoot string) ([]string, error) {
 
 			switch filepath.Ext(path) {
 			case ".go":
+				if strings.HasSuffix(path, "_test.go") {
+					return nil
+				}
 				parsed, parseErr := parser.ParseFile(fileSet, path, nil, parser.ParseComments)
 				if parseErr != nil {
 					return fmt.Errorf("parse %s: %w", relative(repositoryRoot, path), parseErr)

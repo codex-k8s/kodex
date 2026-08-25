@@ -10,7 +10,7 @@ resources:
   - networkpolicy.yaml
 labels:
   - pairs:
-      app.kubernetes.io/part-of: mattercodex
-      mattercodex.dev/capability: identity
+      app.kubernetes.io/part-of: kodex
+      kodex.dev/capability: identity
     includeSelectors: false
     includeTemplates: true

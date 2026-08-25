@@ -17,9 +17,9 @@ done
 [[ -n "${RUNNER_TEMP:-}" && -d "$RUNNER_TEMP" ]] || fail 'RUNNER_TEMP is required'
 [[ -n "${GITHUB_PATH:-}" && -f "$GITHUB_PATH" ]] || fail 'GITHUB_PATH is required'
 
-temporary_directory=$(mktemp -d "$RUNNER_TEMP/mattercodex-render-tools.XXXXXX")
+temporary_directory=$(mktemp -d "$RUNNER_TEMP/kodex-render-tools.XXXXXX")
 trap 'rm -rf -- "$temporary_directory"' EXIT
-output_directory="$RUNNER_TEMP/mattercodex-render-tools-bin"
+output_directory="$RUNNER_TEMP/kodex-render-tools-bin"
 mkdir -p -- "$output_directory"
 
 download() {

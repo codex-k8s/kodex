@@ -28,7 +28,7 @@ grafana:
       defaultDatasourceEnabled: true
   grafana.ini:
     server:
-      root_url: __MATTERCODEX_GRAFANA_ORIGIN__
+      root_url: __KODEX_GRAFANA_ORIGIN__
     auth:
       disable_login_form: true
       disable_signout_menu: false

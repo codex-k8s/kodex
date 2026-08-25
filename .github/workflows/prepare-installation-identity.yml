@@ -28,7 +28,7 @@ jobs:
       - name: Checkout owner-authorized workflow source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
+          ref: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
       - name: Verify owner gate and exact main SHA
@@ -36,8 +36,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-          WORKFLOW_SHA: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
-          OWNER_ACTOR_ID: ${{ vars.MATTERCODEX_DEPLOY_OWNER_ACTOR_ID }}
+          WORKFLOW_SHA: ${{ vars.KODEX_PRODUCTION_WORKFLOW_SHA }}
+          OWNER_ACTOR_ID: ${{ vars.KODEX_DEPLOY_OWNER_ACTOR_ID }}
         run: |
           test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
           tools/release/verify-github-owner-gate.sh \
@@ -57,12 +57,12 @@ jobs:
       - name: Generate and encrypt identity material
         shell: bash
         env:
-          ADMIN_USERNAME: ${{ vars.MATTERCODEX_KEYCLOAK_ADMIN_USERNAME }}
-          ADMIN_INITIAL_PASSWORD: ${{ secrets.MATTERCODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD }}
-          OWNER_USERNAME: ${{ vars.MATTERCODEX_OWNER_USERNAME }}
-          OWNER_EMAIL: ${{ vars.MATTERCODEX_OWNER_EMAIL }}
-          OWNER_INITIAL_PASSWORD: ${{ secrets.MATTERCODEX_OWNER_INITIAL_PASSWORD }}
-          AGE_RECIPIENT: ${{ vars.MATTERCODEX_VAULT_RECOVERY_AGE_RECIPIENT }}
+          ADMIN_USERNAME: ${{ vars.KODEX_KEYCLOAK_ADMIN_USERNAME }}
+          ADMIN_INITIAL_PASSWORD: ${{ secrets.KODEX_KEYCLOAK_ADMIN_INITIAL_PASSWORD }}
+          OWNER_USERNAME: ${{ vars.KODEX_OWNER_USERNAME }}
+          OWNER_EMAIL: ${{ vars.KODEX_OWNER_EMAIL }}
+          OWNER_INITIAL_PASSWORD: ${{ secrets.KODEX_OWNER_INITIAL_PASSWORD }}
+          AGE_RECIPIENT: ${{ vars.KODEX_VAULT_RECOVERY_AGE_RECIPIENT }}
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
@@ -87,17 +87,17 @@ jobs:
           tar --create --format=posix --owner=0 --group=0 --numeric-owner \
             --directory "$material" identity management | \
             "$RUNNER_TEMP/age" --recipient "$AGE_RECIPIENT" \
-              --output "$RUNNER_TEMP/mattercodex-identity-$SOURCE_SHA.tar.age"
-          sha256sum "$RUNNER_TEMP/mattercodex-identity-$SOURCE_SHA.tar.age" \
-            >"$RUNNER_TEMP/mattercodex-identity-$SOURCE_SHA.tar.age.sha256"
+              --output "$RUNNER_TEMP/kodex-identity-$SOURCE_SHA.tar.age"
+          sha256sum "$RUNNER_TEMP/kodex-identity-$SOURCE_SHA.tar.age" \
+            >"$RUNNER_TEMP/kodex-identity-$SOURCE_SHA.tar.age.sha256"
           rm -rf -- "$material" "$inputs"
       - name: Upload encrypted owner artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: installation-identity-${{ inputs.source_sha }}
           path: |
-            ${{ runner.temp }}/mattercodex-identity-${{ inputs.source_sha }}.tar.age
-            ${{ runner.temp }}/mattercodex-identity-${{ inputs.source_sha }}.tar.age.sha256
+            ${{ runner.temp }}/kodex-identity-${{ inputs.source_sha }}.tar.age
+            ${{ runner.temp }}/kodex-identity-${{ inputs.source_sha }}.tar.age.sha256
             ${{ runner.temp }}/owner-gate.json
           if-no-files-found: error
           retention-days: 1

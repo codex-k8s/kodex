@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
-	"github.com/codex-k8s/matter-codex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

@@ -3,8 +3,8 @@ kind: VaultConnection
 metadata:
   name: internal-rpc-authority-interaction-gateway-database
 spec:
-  address: https://vault.mattercodex-system.svc:8200
-  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  address: https://vault.kodex-system.svc:8200
+  tlsServerName: vault.kodex-system.svc.cluster.local
   skipTLSVerify: false
   caCertSecretRef: internal-rpc-authority-interaction-gateway-workload-tls
 ---
@@ -46,4 +46,4 @@ spec:
         username: {text: '{{ get .Secrets "username" }}'}
         dsn:
           text: >-
-            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/mattercodex/internal-rpc-authority/postgresql/ca.pem
+            postgresql://{{ get .Secrets "username" }}:{{ get .Secrets "password" }}@internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local:5432/internal_rpc_authority?sslmode=verify-full&sslrootcert=/var/run/config/kodex/internal-rpc-authority/postgresql/ca.pem

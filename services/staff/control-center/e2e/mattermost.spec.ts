@@ -105,8 +105,8 @@ test("необязательная Mattermost-доставка зеркалир�
     .poll(
       () =>
         countMatchingMattermostPosts(request, token, [
-          `MatterCodex: «${runTitle}»`,
-          `MatterCodex: результат «${runTitle}»`,
+          `Kodex: «${runTitle}»`,
+          `Kodex: результат «${runTitle}»`,
         ]),
       { timeout: 180_000, intervals: [1_000, 2_000, 5_000] },
     )

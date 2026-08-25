@@ -1,6 +1,6 @@
 ---
 id: DOC-MC-001
-title: Документация MatterCodex
+title: Документация Kodex
 type: documentation-index
 status: approved
 owner: architect
@@ -8,9 +8,9 @@ version: 2.1.0
 updated: 2026-08-24
 ---
 
-# Документация MatterCodex
+# Документация Kodex
 
-MatterCodex — web-first платформа управления ИИ-сотрудниками. Единственным
+Kodex — web-first платформа управления ИИ-сотрудниками. Единственным
 основным пользовательским интерфейсом является Control Center. Mattermost,
 GitHub, GitLab, Kubernetes, CRM и другие внешние системы подключаются как
 необязательные интеграции и не входят в core readiness.

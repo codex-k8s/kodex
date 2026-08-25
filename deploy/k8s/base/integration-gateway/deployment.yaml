@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: integration-gateway
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/integration-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/integration-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -42,29 +42,29 @@ spec:
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
-                  fieldPath: "metadata.labels['mattercodex.dev/environment']"
+                  fieldPath: "metadata.labels['kodex.dev/environment']"
             - name: INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY
-              value: /var/run/secrets/mattercodex/integration-connections
+              value: /var/run/secrets/kodex/integration-connections
             - name: INTEGRATION_GATEWAY_INSTANCE_ID
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
             - name: INTEGRATION_GATEWAY_CONTROL_PLANE_CA_FILE
-              value: /var/run/config/mattercodex/integration-gateway/control-plane/ca.pem
+              value: /var/run/config/kodex/integration-gateway/control-plane/ca.pem
             - name: INTEGRATION_GATEWAY_CONTROL_PLANE_CERTIFICATE_FILE
-              value: /var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.crt
+              value: /var/run/secrets/kodex/integration-gateway/workload-tls/tls.crt
             - name: INTEGRATION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE
-              value: /var/run/secrets/mattercodex/integration-gateway/workload-tls/tls.key
+              value: /var/run/secrets/kodex/integration-gateway/workload-tls/tls.key
             - name: INTEGRATION_GATEWAY_APPLICATION_GRANT_FILE
-              value: /var/run/secrets/mattercodex/integration-gateway/application-grant/application-grant.jws
+              value: /var/run/secrets/kodex/integration-gateway/application-grant/application-grant.jws
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
               value: otel-collector.observability.svc.cluster.local
             - name: OTEL_EXPORTER_OTLP_CA_FILE
-              value: /var/run/config/mattercodex/integration-gateway/observability/otel-ca.pem
+              value: /var/run/config/kodex/integration-gateway/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
             - name: SENTRY_DSN_FILE
-              value: /var/run/secrets/mattercodex/integration-gateway/observability/sentry-dsn
+              value: /var/run/secrets/kodex/integration-gateway/observability/sentry-dsn
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
           ports:
@@ -109,22 +109,22 @@ spec:
               drop: [ALL]
           volumeMounts:
             - name: workload-tls
-              mountPath: /var/run/secrets/mattercodex/integration-gateway/workload-tls
+              mountPath: /var/run/secrets/kodex/integration-gateway/workload-tls
               readOnly: true
             - name: control-plane-ca
-              mountPath: /var/run/config/mattercodex/integration-gateway/control-plane
+              mountPath: /var/run/config/kodex/integration-gateway/control-plane
               readOnly: true
             - name: application-grant
-              mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant
+              mountPath: /var/run/secrets/kodex/integration-gateway/application-grant
               readOnly: true
             - name: otel-ca
-              mountPath: /var/run/config/mattercodex/integration-gateway/observability
+              mountPath: /var/run/config/kodex/integration-gateway/observability
               readOnly: true
             - name: integration-credentials
-              mountPath: /var/run/secrets/mattercodex/integration-connections
+              mountPath: /var/run/secrets/kodex/integration-connections
               readOnly: true
             - name: sentry-dsn
-              mountPath: /var/run/secrets/mattercodex/integration-gateway/observability
+              mountPath: /var/run/secrets/kodex/integration-gateway/observability
               readOnly: true
       volumes:
         - name: workload-tls
@@ -133,20 +133,20 @@ spec:
             defaultMode: 0440
         - name: control-plane-ca
           configMap:
-            name: mattercodex-internal-ca
+            name: kodex-internal-ca
             defaultMode: 0440
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
         - name: otel-ca
           configMap:
-            name: mattercodex-otel-ca
+            name: kodex-otel-ca
             defaultMode: 0440
         - name: integration-credentials
           secret:
-            secretName: mattercodex-integration-credentials
+            secretName: kodex-integration-credentials
             optional: true
             defaultMode: 0440
         - name: sentry-dsn
           secret:
-            secretName: mattercodex-sentry
+            secretName: kodex-sentry
             defaultMode: 0440

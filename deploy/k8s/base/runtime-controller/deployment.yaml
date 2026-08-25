@@ -21,8 +21,8 @@ spec:
         app.kubernetes.io/name: runtime-controller
         app.kubernetes.io/component: internal-controller
       annotations:
-        mattercodex.dev/controller-image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
-        mattercodex.dev/authority-image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        kodex.dev/controller-image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        kodex.dev/authority-image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
     spec:
       serviceAccountName: runtime-controller
       automountServiceAccountToken: false
@@ -33,7 +33,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: runtime-controller
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef: {name: runtime-controller-runtime}
@@ -45,20 +45,20 @@ spec:
             - name: POD_NAMESPACE
               valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
             - name: DEPLOYMENT_ENVIRONMENT
-              valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['kodex.dev/environment']"}}
             - name: RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: promotedPullRepository}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: promotedPullRepository}}
             - name: RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: nodeReadbackImage}}
             - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256
-              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
-            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: "/var/run/config/mattercodex/runtime-controller/observability/otel-ca.pem"}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: "/var/run/config/kodex/runtime-controller/observability/otel-ca.pem"}
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
-            - {name: SENTRY_DSN_FILE, value: "/var/run/secrets/mattercodex/runtime-controller/observability/sentry-dsn"}
+            - {name: SENTRY_DSN_FILE, value: "/var/run/secrets/kodex/runtime-controller/observability/sentry-dsn"}
             - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
           ports:
             - {name: metrics, containerPort: 9090, protocol: TCP}
@@ -90,13 +90,13 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: kube-api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
-            - {name: workload-tls, mountPath: /var/run/secrets/mattercodex/runtime-controller/workload-tls, readOnly: true}
-            - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/runtime-controller/control-plane, readOnly: true}
-            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/runtime-controller/application-grant, readOnly: true}
-            - {name: callback-server-tls, mountPath: /var/run/secrets/mattercodex/runtime-controller/callback-server, readOnly: true}
-            - {name: callback-client-ca, mountPath: /var/run/config/mattercodex/runtime-controller/callback-client, readOnly: true}
-            - {name: otel-ca, mountPath: /var/run/config/mattercodex/runtime-controller/observability, readOnly: true}
-            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/runtime-controller/observability, readOnly: true}
+            - {name: workload-tls, mountPath: /var/run/secrets/kodex/runtime-controller/workload-tls, readOnly: true}
+            - {name: control-plane-ca, mountPath: /var/run/config/kodex/runtime-controller/control-plane, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/kodex/runtime-controller/application-grant, readOnly: true}
+            - {name: callback-server-tls, mountPath: /var/run/secrets/kodex/runtime-controller/callback-server, readOnly: true}
+            - {name: callback-client-ca, mountPath: /var/run/config/kodex/runtime-controller/callback-client, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/kodex/runtime-controller/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/runtime-controller/observability, readOnly: true}
       volumes:
         - name: kube-api-access
           projected:
@@ -111,7 +111,7 @@ spec:
         - name: workload-tls
           secret: {secretName: internal-rpc-authority-runtime-controller-workload-tls, defaultMode: 0440}
         - name: control-plane-ca
-          configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
+          configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: application-grant
           emptyDir: {sizeLimit: 1Mi}
         - name: callback-server-tls
@@ -119,6 +119,6 @@ spec:
         - name: callback-client-ca
           secret: {secretName: runtime-execution-client-tls, defaultMode: 0440, items: [{key: ca.crt, path: ca.crt}]}
         - name: otel-ca
-          configMap: {name: mattercodex-otel-ca, defaultMode: 0440}
+          configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn
-          secret: {secretName: mattercodex-sentry, defaultMode: 0440}
+          secret: {secretName: kodex-sentry, defaultMode: 0440}

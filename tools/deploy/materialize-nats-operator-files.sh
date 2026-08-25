@@ -64,7 +64,7 @@ describe_account_public() {
     "$json_file" >"$temporary_directory/$output_name" || fail "nsc account subject is invalid: $name"
 }
 
-describe_jwt operator MATTERCODEX operator.jwt
+describe_jwt operator KODEX operator.jwt
 describe_jwt account SYS system-account.jwt
 describe_account_public SYS system-account.public
 describe_jwt account APPLICATION account.jwt

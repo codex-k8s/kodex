@@ -53,7 +53,7 @@ if (
   readiness.tlsMode !== "mutual-verified"
 )
   throw new Error("Readiness revision or TLS mode mismatch");
-const annotation = `mattercodex.dev/runtime-config-revision: "${expected}"`;
+const annotation = `kodex.dev/runtime-config-revision: "${expected}"`;
 if (!podTemplateText.includes(annotation))
   throw new Error("Pod template runtime config revision mismatch");
 process.stdout.write(`Runtime config revision verified: ${expected}\n`);

@@ -22,9 +22,9 @@ func TestSignedHandoffV2RejectsTampering(t *testing.T) {
 		Outputs: []OutputV2{{Kind: "FINAL_MARKDOWN", ID: "output", Version: 1,
 			SHA256: "2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df",
 			Name:   "result.md", MediaType: "text/markdown", Payload: []byte("ok"), SizeBytes: 2, Sequence: 1, Total: 1}},
-		CodexSessionID: "00000000-0000-4000-8000-000000000001", ArchiveRelativePath: ".matter-codex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl",
+		CodexSessionID: "00000000-0000-4000-8000-000000000001", ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl",
 		ArchiveSHA256:     strings.Repeat("6", 64),
-		ArchiveProvenance: "codex-app-server-rollout-v1:00000000-0000-4000-8000-000000000006:.matter-codex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl:" + strings.Repeat("6", 64), ObservedAt: time.Now().UTC()}
+		ArchiveProvenance: "codex-app-server-rollout-v1:00000000-0000-4000-8000-000000000006:.kodex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl:" + strings.Repeat("6", 64), ObservedAt: time.Now().UTC()}
 	if err := handoff.Outputs[0].validate(); err != nil {
 		t.Fatalf("output fixture is invalid: %v", err)
 	}

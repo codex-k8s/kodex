@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/jobs/role-image-builder/internal/clients/imageowner"
+	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
 	"github.com/google/uuid"
 )
 

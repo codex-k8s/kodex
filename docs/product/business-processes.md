@@ -1,6 +1,6 @@
 ---
 id: PRD-MC-003
-title: Бизнес-процессы web-first MatterCodex
+title: Бизнес-процессы web-first Kodex
 type: product
 status: approved
 owner: product
@@ -8,13 +8,13 @@ version: 1.0.1
 updated: 2026-08-23
 ---
 
-# Бизнес-процессы web-first MatterCodex
+# Бизнес-процессы web-first Kodex
 
 ## BP-SETUP-001. Первый запуск
 
 1. Владелец входит через OIDC; bootstrap разрешает его Membership по
    инсталляционному owner contract.
-2. Control Center показывает готовность Помощника MatterCodex и короткий
+2. Control Center показывает готовность Помощника Kodex и короткий
    onboarding, не требующий внешней интеграции.
 3. Владелец создаёт первый Проект через форму или просит помощника подготовить
    типизированный план.

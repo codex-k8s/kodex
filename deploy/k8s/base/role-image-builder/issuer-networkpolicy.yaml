@@ -6,7 +6,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: role-image-builder
-      mattercodex.dev/internal-rpc-authority-issuer: enabled
+      kodex.dev/internal-rpc-authority-issuer: enabled
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
@@ -24,25 +24,25 @@ spec:
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
-            matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}
+            matchLabels: {app.kubernetes.io/name: kodex-postgresql}
       ports: [{protocol: TCP, port: 5432}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels: {app.kubernetes.io/name: vault}
       ports: [{protocol: TCP, port: 8200}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}
       ports: [{protocol: TCP, port: 8443}]
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
           podSelector:
             matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
       ports: [{protocol: TCP, port: 8443}]

@@ -112,7 +112,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: internal-rpc-authority-restore-controller
-    namespace: mattercodex-system
+    namespace: kodex-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

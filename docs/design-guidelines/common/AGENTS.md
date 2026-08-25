@@ -8,12 +8,12 @@
 - `docs/design-guidelines/common/libraries_reusable_code_requirements.md` - общие правила выноса кода в `libs/*`.
 - `docs/design-guidelines/common/external_dependencies_catalog.md` - каталог внешних библиотек и инструментов.
 
-Проектный overlay `matter-codex`:
+Проектный overlay `kodex`:
 
 - процессы запускаются из Control Center, schedules, integration events либо
   agent delegation и наблюдаются через durable internal events; Mattermost
   является необязательной поверхностью входящих сообщений и уведомлений;
 - Kubernetes, Mattermost и repository-провайдеры подключаются через SDK/интерфейсы/адаптеры;
 - модель данных и синхронизация multi-pod проектируются под PostgreSQL (`JSONB` + будущий `pgvector`);
-- env/secrets/CI variable names для платформы используют префикс `MATTERCODEX_`, кроме значений внешних runtime-контрактов;
+- env/secrets/CI variable names для платформы используют префикс `KODEX_`, кроме значений внешних runtime-контрактов;
 - продуктовая и архитектурная каноника задаётся корневым `AGENTS.md`, `docs/product/**`, `docs/architecture/**`, `docs/domains/**` и `docs/decisions/**`.

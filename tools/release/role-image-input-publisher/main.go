@@ -23,8 +23,8 @@ import (
 
 const (
 	manifestMediaType = "application/vnd.oci.image.manifest.v1+json"
-	configMediaType   = "application/vnd.mattercodex.role-image-input.config.v1+json"
-	payloadMediaType  = "application/vnd.mattercodex.role-image-input.v1"
+	configMediaType   = "application/vnd.kodex.role-image-input.config.v1+json"
+	payloadMediaType  = "application/vnd.kodex.role-image-input.v1"
 	maximumResponse   = 1 << 20
 )
 
@@ -173,7 +173,7 @@ func roleImageInput(sourceSHA string) ([]byte, string, error) {
 	var output bytes.Buffer
 	writer := tar.NewWriter(&output)
 	header := &tar.Header{
-		Name: ".mattercodex/source.sha256", Mode: 0o600, Size: int64(len(sourceDigest)),
+		Name: ".kodex/source.sha256", Mode: 0o600, Size: int64(len(sourceDigest)),
 		ModTime: time.Unix(0, 0).UTC(), Typeflag: tar.TypeReg, Format: tar.FormatPAX,
 	}
 	if err := writer.WriteHeader(header); err != nil {
@@ -285,7 +285,7 @@ func (instance *publisher) do(ctx context.Context, method, target, mediaType str
 		return nil, err
 	}
 	request.SetBasicAuth(instance.username, instance.password)
-	request.Header.Set("User-Agent", "mattercodex-role-image-input-publisher/1")
+	request.Header.Set("User-Agent", "kodex-role-image-input-publisher/1")
 	if mediaType != "" {
 		request.Header.Set("Content-Type", mediaType)
 	}

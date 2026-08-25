@@ -9,15 +9,15 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 var lifecycleUUIDPattern = regexp.MustCompile(
 	`^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
 )
 
-const vaultDatabaseName = "mattercodex-postgresql"
+const vaultDatabaseName = "kodex-postgresql"
 
 // DatabaseCredentialLifecycle координирует доменный переход поколений
 // PostgreSQL и Vault через переданные repository/client ports.

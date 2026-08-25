@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.mattercodex.dev/runtime/scheduled-result/v1/schema.json",
-  "title": "MatterCodex scheduled result v1",
+  "$id": "https://contracts.kodex.dev/runtime/scheduled-result/v1/schema.json",
+  "title": "Kodex scheduled result v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "outcome", "summary", "artifact_refs"],
   "properties": {
     "schema": {
-      "const": "mattercodex.scheduled-result.v1"
+      "const": "kodex.scheduled-result.v1"
     },
     "outcome": {
       "enum": ["no_action", "action_taken", "requires_human", "failed"]

@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: mattercodex-system
+namespace: kodex-system
 resources:
   - namespace.yaml
   - ../../base/platform-state
@@ -43,7 +43,7 @@ patches:
         value:
           namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mattercodex-system
+              kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
               app.kubernetes.io/name: interaction-gateway
@@ -95,8 +95,8 @@ transformers:
   - bundle-cluster-scope-transformer.yaml
 labels:
   - pairs:
-      app.kubernetes.io/part-of: mattercodex
-      mattercodex.dev/environment: production
-      mattercodex.dev/profile: web-with-mattermost
+      app.kubernetes.io/part-of: kodex
+      kodex.dev/environment: production
+      kodex.dev/profile: web-with-mattermost
     includeSelectors: false
     includeTemplates: true

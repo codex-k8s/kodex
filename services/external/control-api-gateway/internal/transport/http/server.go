@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	texti18n "github.com/codex-k8s/matter-codex/libs/go/i18n"
-	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
-	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
+	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )

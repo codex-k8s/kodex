@@ -9,7 +9,7 @@ export const d01 = L.page(L.frameDesktop(`
         <span style="width: 24px; height: 24px; border-radius: 6px; background: ${T.acc}; display: flex; align-items: center; justify-content: center;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V7l8 5 8-5v11"/></svg>
         </span>
-        <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">MatterCodex</span>
+        <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Kodex</span>
       </span>
       <span style="display: flex; align-items: center; gap: 8px;">
         ${L.avatar('АВ', 28)}
@@ -35,7 +35,7 @@ export const d01 = L.page(L.frameDesktop(`
           </span>
         </div>
 
-        <h1 style="margin: 26px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.025em;">Добро пожаловать в MatterCodex</h1>
+        <h1 style="margin: 26px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.025em;">Добро пожаловать в Kodex</h1>
         <p style="margin: 8px 0 0; font-size: 15px; color: ${T.sec}; max-width: 640px;">Создайте первый Проект и ИИ-сотрудника. Интеграции можно подключить позже.</p>
 
         <div style="display: flex; gap: 20px; margin-top: 28px; align-items: stretch;">
@@ -43,7 +43,7 @@ export const d01 = L.page(L.frameDesktop(`
             <div style="border: 1.5px solid ${T.acc}; border-radius: 14px; background: ${T.bg}; padding: 22px; box-shadow: 0 2px 8px rgba(16,22,30,0.06);">
               <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="width: 40px; height: 40px; border-radius: 12px; background: ${T.accTint}; color: ${T.acc}; display: flex; align-items: center; justify-content: center;">${L.icon('bot', 22)}</span>
-                <span style="font-size: 18px; font-weight: 600;">Начать с Помощником MatterCodex</span>
+                <span style="font-size: 18px; font-weight: 600;">Начать с Помощником Kodex</span>
                 <span style="margin-left: auto; font-size: 11px; color: ${T.accDark}; background: ${T.accTint}; border: 1px solid ${T.accLine}; border-radius: 11px; padding: 3px 10px;">Рекомендуем</span>
               </div>
               <p style="margin: 12px 0 0; font-size: 13.5px; color: ${T.sec}; line-height: 1.55;">Расскажите, какую работу хотите организовать. Помощник предложит Проект и ИИ-сотрудника, а изменения будут применены только после вашего подтверждения.</p>
@@ -65,7 +65,7 @@ export const d01 = L.page(L.frameDesktop(`
               <div style="display: flex; align-items: center; gap: 11px;">
                 <span style="width: 34px; height: 34px; border-radius: 10px; background: ${T.accTint}; border: 1px solid ${T.accSoftLine}; color: ${T.acc}; display: flex; align-items: center; justify-content: center;">${L.icon('bot', 19)}</span>
                 <span style="display: flex; flex-direction: column;">
-                  <span style="font-size: 14px; font-weight: 600;">Помощник MatterCodex</span>
+                  <span style="font-size: 14px; font-weight: 600;">Помощник Kodex</span>
                   <span style="font-size: 11px; color: ${T.mut};">Системный · неудаляемый</span>
                 </span>
               </div>

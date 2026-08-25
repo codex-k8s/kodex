@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 // Reason — закрытый набор причин отказа CONNECT parser.

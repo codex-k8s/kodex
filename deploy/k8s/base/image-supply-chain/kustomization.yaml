@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: mattercodex-system
+namespace: kodex-system
 resources:
   - admission-policy.yaml
   - admission-policy-parameters.yaml
@@ -23,20 +23,20 @@ resources:
   - release-artifact-materializer-secrets.yaml
   - networkpolicy.yaml
 configMapGenerator:
-  - name: mattercodex-buildkit-config
+  - name: kodex-buildkit-config
     files:
       - buildkitd.toml
-  - name: mattercodex-registry-cleanup
+  - name: kodex-registry-cleanup
     files:
       - cleanup.sh
-  - name: mattercodex-image-admission
+  - name: kodex-image-admission
     files:
       - image-admission.sh
       - provenance-policy.jq
-  - name: mattercodex-registry-readiness
+  - name: kodex-registry-readiness
     files:
       - registry-readiness.sh
-  - name: mattercodex-release-artifact-materializer
+  - name: kodex-release-artifact-materializer
     files:
       - release-artifact-materializer.sh
 generatorOptions:

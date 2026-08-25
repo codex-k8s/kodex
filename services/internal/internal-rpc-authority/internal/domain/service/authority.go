@@ -12,15 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/failure"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/repository"
-	"github.com/codex-k8s/matter-codex/services/internal/internal-rpc-authority/internal/domain/types"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
 
 const (
-	contextProtectedType           = "mattercodex-internal-rpc-auth+jws"
-	proofProtectedType             = "mattercodex-internal-rpc-authority-proof+jws"
+	contextProtectedType           = "kodex-internal-rpc-auth+jws"
+	proofProtectedType             = "kodex-internal-rpc-authority-proof+jws"
 	contextKeyPurpose              = "AUTHORIZATION_CONTEXT"
 	proofKeyPurpose                = "AUTHORITY_PROOF"
 	keyStatusCurrent               = "CURRENT"

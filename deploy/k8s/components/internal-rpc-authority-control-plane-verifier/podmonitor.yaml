@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      mattercodex.dev/internal-rpc-authority-verifier: enabled
+      kodex.dev/internal-rpc-authority-verifier: enabled
   podMetricsEndpoints:
     - port: auth-metrics
       path: /metrics

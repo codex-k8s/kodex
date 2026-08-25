@@ -10,7 +10,7 @@ spec:
       app.kubernetes.io/name: control-plane
   namespaceSelector:
     matchNames:
-      - mattercodex-system
+      - kodex-system
   endpoints:
     - port: metrics
       path: /metrics
