@@ -36,6 +36,22 @@ func TestDataGenerationRejectsBootstrapMarkerInsideData(t *testing.T) {
 	}
 }
 
+func TestPublicMapDataExcludesInternalGenerationMarker(t *testing.T) {
+	t.Parallel()
+
+	stored := map[string][]byte{
+		"private.jwk":     []byte("private"),
+		generationDataKey: []byte("3"),
+	}
+	public := publicMapData(stored)
+	if len(public) != 1 || string(public["private.jwk"]) != "private" {
+		t.Fatalf("publicMapData() = %#v; want only private.jwk", public)
+	}
+	if string(stored[generationDataKey]) != "3" {
+		t.Fatal("publicMapData() mutated stored generation marker")
+	}
+}
+
 func TestMapClientValidDataUsesExactKeys(t *testing.T) {
 	t.Parallel()
 

@@ -29,7 +29,8 @@ type MapConfig struct {
 	Timeout         time.Duration
 }
 
-// MapSnapshot содержит монотонное поколение и exact readback Secret.
+// MapSnapshot содержит монотонное поколение и прикладные data keys exact
+// readback Secret без внутреннего generation marker.
 type MapSnapshot struct {
 	ResourceVersion string
 	Generation      uint64
@@ -88,7 +89,7 @@ func (client *MapClient) Read(ctx context.Context) (MapSnapshot, error) {
 	return MapSnapshot{
 		ResourceVersion: secret.Metadata.ResourceVersion,
 		Generation:      generation,
-		Data:            cloneData(secret.Data),
+		Data:            publicMapData(secret.Data),
 	}, nil
 }
 
@@ -122,9 +123,9 @@ func (client *MapClient) CompareAndSwap(
 		return MapSnapshot{}, errors.New("encode exact Kubernetes Secret annotations")
 	}
 	secret.Metadata.raw["annotations"] = rawAnnotations
-	expectedData := cloneData(data)
-	expectedData[generationDataKey] = []byte(strconv.FormatUint(generation+1, 10))
-	secret.Data = expectedData
+	storedData := cloneData(data)
+	storedData[generationDataKey] = []byte(strconv.FormatUint(generation+1, 10))
+	secret.Data = storedData
 	body, err := json.Marshal(secret)
 	if err != nil {
 		return MapSnapshot{}, errors.New("encode exact Kubernetes Secret map update")
@@ -148,7 +149,7 @@ func (client *MapClient) CompareAndSwap(
 	}
 	served, err := client.Read(ctx)
 	if err != nil || served.ResourceVersion == expectedResourceVersion ||
-		served.Generation != expectedGeneration+1 || !equalData(served.Data, expectedData) {
+		served.Generation != expectedGeneration+1 || !equalData(served.Data, data) {
 		return MapSnapshot{}, errors.New("exact Kubernetes Secret map served readback mismatch")
 	}
 	return served, nil
@@ -273,6 +274,12 @@ func cloneData(values map[string][]byte) map[string][]byte {
 		clone[key] = bytes.Clone(value)
 	}
 	return clone
+}
+
+func publicMapData(values map[string][]byte) map[string][]byte {
+	result := cloneData(values)
+	delete(result, generationDataKey)
+	return result
 }
 
 func equalData(left, right map[string][]byte) bool {
