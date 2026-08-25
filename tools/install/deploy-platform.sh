@@ -237,8 +237,16 @@ prepare_image_admission_preflight() {
       .metadata.name == strenv(BINDING_NAME))
   ' "$render_file")
   [[ -n "$expected" ]] || fail 'image admission policy binding is absent from render'
-  current_identity=$(jq -S -c '{labels:(.metadata.labels // {}),spec:.spec}' <<<"$current")
-  expected_identity=$(jq -S -c '{labels:(.metadata.labels // {}),spec:.spec}' <<<"$expected")
+  current_identity=$(jq -S -c '
+    .spec.matchResources.matchPolicy //= "Equivalent" |
+    .spec.matchResources.objectSelector //= {} |
+    {labels:(.metadata.labels // {}),spec:.spec}
+  ' <<<"$current")
+  expected_identity=$(jq -S -c '
+    .spec.matchResources.matchPolicy //= "Equivalent" |
+    .spec.matchResources.objectSelector //= {} |
+    {labels:(.metadata.labels // {}),spec:.spec}
+  ' <<<"$expected")
   [[ "$current_identity" == "$expected_identity" ]] ||
     fail 'stale image admission policy binding differs from exact render'
   kubectl --context "$context" delete \
