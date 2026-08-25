@@ -15,6 +15,12 @@ spec:
       expression: >-
         oldObject.metadata.namespace == 'kodex-system' &&
         oldObject.metadata.name == 'internal-rpc-authority-restore-evidence'
+    # Namespace garbage collection должна иметь возможность удалить anchor
+    # только после начала удаления всего изолированного platform namespace.
+    - name: namespace-not-terminating
+      expression: >-
+        namespaceObject == null ||
+        !has(namespaceObject.metadata.deletionTimestamp)
   validations:
     - expression: request.operation == 'UPDATE'
       message: restore evidence deletion is forbidden
