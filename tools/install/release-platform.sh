@@ -58,21 +58,19 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 
 owner_actor_id=$(gh api user --jq '.id | tostring')
 [[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail 'owner actor identity is invalid'
-configured_owner_actor_id=$(gh api "repos/$repository/actions/variables/KODEX_OWNER_ACTOR_ID" \
-  --jq '.value')
-[[ "$configured_owner_actor_id" == "$owner_actor_id" ]] ||
-  fail 'repository owner actor identity mismatch'
-
-gh variable set KODEX_WORKFLOW_SHA --repo "$repository" --body "$source_sha"
-workflow_sha_readback=""
-for attempt in {1..15}; do
-  workflow_sha_readback=$(gh api "repos/$repository/actions/variables/KODEX_WORKFLOW_SHA" \
-    --jq '.value' 2>/dev/null || true)
-  [[ "$workflow_sha_readback" == "$source_sha" ]] && break
-  sleep 2
+workflow_sha_temporary=$(mktemp "$(dirname -- "$workflow_sha_file")/.workflow-sha.XXXXXX")
+printf '%s' "$source_sha" >"$workflow_sha_temporary"
+chmod 0600 "$workflow_sha_temporary"
+mv -- "$workflow_sha_temporary" "$workflow_sha_file"
+owner_actor_id_file="$temporary_directory/owner-actor-id"
+printf '%s' "$owner_actor_id" >"$owner_actor_id_file"
+chmod 0600 "$owner_actor_id_file"
+for policy_mode in apply readback; do
+  "$repository_root/infra/github/bootstrap-actions-policy.sh" \
+    --mode "$policy_mode" --workflow-sha-file "$workflow_sha_file" \
+    --build-owner-actor-id-file "$owner_actor_id_file" \
+    --deploy-owner-actor-id-file "$owner_actor_id_file"
 done
-[[ "$workflow_sha_readback" == "$source_sha" ]] ||
-  fail 'repository workflow SHA readback mismatch'
 
 authorize_runner_gate() {
   local namespace=$1 expected_job=$2 expected_workflow=$3 gate_json resource_version
@@ -141,10 +139,6 @@ authorize_runner_gate kodex-ci build \
   'codex-k8s/kodex/.github/workflows/build-release.yml@refs/heads/main'
 authorize_runner_gate kodex-ci-deploy render \
   'codex-k8s/kodex/.github/workflows/deploy-production.yml@refs/heads/main'
-workflow_sha_temporary=$(mktemp "$(dirname -- "$workflow_sha_file")/.workflow-sha.XXXXXX")
-printf '%s' "$source_sha" >"$workflow_sha_temporary"
-chmod 0600 "$workflow_sha_temporary"
-mv -- "$workflow_sha_temporary" "$workflow_sha_file"
 
 find_run() {
   local workflow=$1 title=$2 started_at=$3 deadline=$((SECONDS + 180)) run_id

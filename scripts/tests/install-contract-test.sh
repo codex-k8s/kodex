@@ -100,10 +100,9 @@ for preflight_contract in \
 done
 for owner_gate_contract in \
   '--workflow-sha-file "$workflow_sha_file"' \
+  'bootstrap-actions-policy.sh' \
   'authorize_runner_gate kodex-ci build' \
   'authorize_runner_gate kodex-ci-deploy render' \
-  'gh variable set KODEX_WORKFLOW_SHA' \
-  'repository workflow SHA readback mismatch' \
   'runner owner gate projection did not refresh'; do
   rg -Fq -- "$owner_gate_contract" \
     "$repository_root/install.sh" "$repository_root/tools/install/release-platform.sh" ||
