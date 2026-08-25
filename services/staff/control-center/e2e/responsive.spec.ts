@@ -1,6 +1,5 @@
-import { expect, test } from "@playwright/test";
-
 import { loadE2EEnvironment } from "./environment";
+import { expect, test } from "./fixtures";
 import { routeRef } from "./helpers";
 
 const environment = loadE2EEnvironment();

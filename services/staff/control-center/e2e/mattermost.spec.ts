@@ -1,8 +1,6 @@
 import { readFile } from "node:fs/promises";
 
 import {
-  expect,
-  test,
   type APIRequestContext,
   type Locator,
   type Page,
@@ -12,6 +10,7 @@ import {
   loadE2EEnvironment,
   type MattermostE2EEnvironment,
 } from "./environment";
+import { expect, test } from "./fixtures";
 import {
   createAgent,
   expectRunState,
