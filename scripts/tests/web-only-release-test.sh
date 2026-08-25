@@ -102,6 +102,23 @@ missing_postgres_clients=$(comm -23 "$postgres_clients" "$postgres_allowed_clien
 grep -Fxq kodex-postgresql-runtime-credentials "$postgres_allowed_clients" ||
   fail 'PostgreSQL credential reconciler is denied by NetworkPolicy'
 
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "CronJob" and
+    .metadata.name == "internal-rpc-authority-restore-recovery" and
+    any(.spec.jobTemplate.spec.template.spec.containers[];
+      .name == "recovery" and
+      any(.volumeMounts[];
+        .name == "postgresql-ca" and
+        .mountPath == "/var/run/config/kodex/internal-rpc-authority/postgresql" and
+        .readOnly == true)) and
+    any(.spec.jobTemplate.spec.template.spec.volumes[];
+      .name == "postgresql-ca" and
+      .configMap.name == "internal-rpc-authority-postgresql-ca" and
+      any(.configMap.items[];
+        .key == "ca.pem" and .path == "ca.pem")))
+' >/dev/null || fail 'restore recovery PostgreSQL CA mount disagrees with its DSN'
+
 for policy in internal-rpc-authority-restore-controller-exact-paths \
   internal-rpc-authority-restore-jobs-exact-paths \
   internal-rpc-authority-restore-pitr-telemetry; do
