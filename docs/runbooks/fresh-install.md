@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.2
+version: 2.0.3
 updated: 2026-08-25
 ---
 
@@ -197,6 +197,9 @@ GitHub render фактическим deployment.
 
 - Kubernetes API и node Ready;
 - cert-manager/trust-manager/Keycloak/ARC готовы;
+- Traefik подключается к Keycloak с exact public SNI через привязанный к
+  `Service` `ServersTransport`, а публичный OIDC discovery отвечает без TLS
+  fallback;
 - Control Center, Grafana и Headlamp закрыты OAuth2 Proxy;
 - Headlamp пропускает только Keycloak `admin` и использует `cluster-admin`;
 - все platform StatefulSet/Deployment готовы, migration Jobs успешны;
