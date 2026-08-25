@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.1.0
-updated: 2026-08-23
+version: 2.2.0
+updated: 2026-08-25
 ---
 
 # Кодификация документов и задач
@@ -87,6 +87,7 @@ updated: 2026-07-28
 | `PRD-MC-003`       | `docs/product/business-processes.md`                        |
 | `PRD-MC-004`       | `docs/product/user-scenarios.md`                            |
 | `PRD-MC-005`       | `docs/product/requirements.md`                              |
+| `PRD-MC-006`       | `docs/product/installable-applications.md`                  |
 | `ARCH-MC-001`      | `docs/architecture/README.md`                               |
 | `UX-MC-002`        | `docs/design/web-first-reset-prompt-pack.md`                |
 | `UX-MC-003`        | `docs/design/mockups/index.md`                              |
@@ -101,6 +102,7 @@ updated: 2026-07-28
 | `ARCH-MC-009`      | `docs/architecture/automations-and-playbooks.md`            |
 | `ARCH-MC-010`      | `docs/architecture/runtime-controller.md`                   |
 | `ARCH-MC-011`      | `docs/architecture/web-first-platform-reset.md`             |
+| `ARCH-MC-012`      | `docs/architecture/installable-applications.md`             |
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |

@@ -4,8 +4,8 @@ title: Архитектурная основа Kodex
 type: architecture-index
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 1.1.0
+updated: 2026-08-25
 ---
 
 # Архитектурная основа Kodex
@@ -33,6 +33,9 @@ Kodex строится как независимая от поставщика �
   workload-local `internal-rpc-authority`.
 - Доменные события доставляются через transactional outbox, broker-neutral
   relay, NATS JetStream и durable inbox.
+- POST-MVP расширения используют универсальный пакет приложения и локальный
+  каталог; магазин, plugin или пакет руководств не создают обходных runtime,
+  access, secret или audit границ.
 
 ## Документы раздела
 
@@ -50,6 +53,7 @@ Kodex строится как независимая от поставщика �
 | `ARCH-MC-009` | `docs/architecture/automations-and-playbooks.md` | Расписания, процессы и обратные вызовы. |
 | `ARCH-MC-010` | `docs/architecture/runtime-controller.md` | Materialization role Pod и warm assistant runtime. |
 | `ARCH-MC-011` | `docs/architecture/web-first-platform-reset.md` | Нормативная архитектура product reset. |
+| `ARCH-MC-012` | `docs/architecture/installable-applications.md` | Будущая архитектура пакетов приложений, каталогов и установок. |
 
 ## Технологическая основа
 

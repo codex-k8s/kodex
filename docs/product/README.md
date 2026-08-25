@@ -4,8 +4,8 @@ title: Базовый продуктовый контракт Kodex
 type: product-index
 status: approved
 owner: product
-version: 1.0.1
-updated: 2026-08-22
+version: 1.1.0
+updated: 2026-08-25
 ---
 
 # Базовый продуктовый контракт Kodex
@@ -72,15 +72,22 @@ Workspace, Room, Team, Channel, Thread, repository, cluster и provider account 
 | `PRD-MC-003` | `docs/product/business-processes.md` | Основные процессы |
 | `PRD-MC-004` | `docs/product/user-scenarios.md` | Проверяемые сценарии |
 | `PRD-MC-005` | `docs/product/requirements.md` | Функциональные и NFR требования |
+| `PRD-MC-006` | `docs/product/installable-applications.md` | Утверждённая POST-MVP модель устанавливаемых приложений и источников каталога |
 | `UX-MC-002` | `docs/design/web-first-reset-prompt-pack.md` | Утверждённая карта экранов и самостоятельный prompt pack |
 | `UX-MC-003` | `docs/design/mockups/index.md` | Индекс утверждённых HTML-макетов |
 
 ## POST-MVP
 
-- публичный marketplace сторонних integrations;
+- устанавливаемые приложения и подключаемые внутренние, внешние и
+  пользовательские источники каталога по `PRD-MC-006`;
 - визуальный BPMN/drag-and-drop editor;
 - полноценный multi-tenant SaaS и billing;
-- произвольные непроверенные plugins и universal external API proxy.
+- публичный магазин как необязательный источник проверенных пакетов.
+
+Произвольные непроверенные plugins и universal external API proxy не являются
+целевым направлением даже после MVP. Привычное слово «плагин» обозначает в UI
+пакет приложения, который проходит общий manifest, permissions, verification и
+installation lifecycle.
 
 Функция готова только когда её основной сценарий доступен через Control Center,
 имеет авторитетный backend lifecycle, понятные состояния и безопасный recovery.

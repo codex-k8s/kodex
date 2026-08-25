@@ -4,8 +4,8 @@ title: Документация Kodex
 type: documentation-index
 status: approved
 owner: architect
-version: 2.1.0
-updated: 2026-08-24
+version: 2.2.0
+updated: 2026-08-25
 ---
 
 # Документация Kodex
@@ -39,10 +39,15 @@ Git history является архивом прежней Mattermost-first ре
 - пользовательские сценарии: `product/user-scenarios.md`;
 - role images и запуск Pod: `architecture/runtime-controller.md`;
 - runtime MCP: `architecture/integration-map.md`;
+- будущие устанавливаемые приложения и источники каталога:
+  `product/installable-applications.md` и
+  `architecture/installable-applications.md`;
 - профили развертывания: `operations/deployment-profiles.md`;
 - чистая установка: `runbooks/fresh-install.md`;
 - identity, OAuth2 Proxy, Grafana и Headlamp:
   `runbooks/identity-and-management-surfaces.md`.
 
-Все предлагаемые к слиянию документы имеют `status: approved`. Нормативный
-текст описывает только фактически обслуживаемый целевой контур.
+Все предлагаемые к слиянию документы имеют `status: approved`. Каждый документ
+явно указывает, относится ли решение к активному профилю или к утверждённой
+будущей модели `POST-MVP`. Утверждённый будущий документ не является
+доказательством runtime-реализации и не расширяет текущий release scope.
