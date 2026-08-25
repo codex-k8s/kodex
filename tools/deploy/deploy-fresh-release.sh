@@ -413,12 +413,14 @@ wait_vault_secret_ready() {
   local deadline=$((SECONDS + timeout_seconds))
 
   while ((SECONDS < deadline)); do
+    # VSO can retain an old SecretSynced=False after a successful no-op resync;
+    # callers read back the destination Secret separately.
     if kubectl -n "$namespace" get "$resource/$resource_name" -o json >"$status_file" 2>/dev/null &&
       jq -e '
         . as $resource |
         .metadata.generation as $generation |
         .status.lastGeneration == $generation and
-        all(["Ready", "SecretSynced"][];
+        all(["Ready", "Healthy"][];
           . as $condition_type |
           any($resource.status.conditions[]?;
             .type == $condition_type and .status == "True" and
