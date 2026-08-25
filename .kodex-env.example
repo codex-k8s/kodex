@@ -17,7 +17,7 @@ KODEX_PUBLIC_TLS_MODE=enabled
 # следующей плановой ротации сертификата.
 KODEX_CONTROL_TLS_RECOVERY_HOST=
 KODEX_OIDC_HOST=sso.kodex.example.com
-KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:8443
+KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:443
 KODEX_OIDC_TLS_SERVER_NAME=sso.kodex.example.com
 KODEX_OIDC_NAMESPACE=identity
 KODEX_OIDC_POD_NAME=sso

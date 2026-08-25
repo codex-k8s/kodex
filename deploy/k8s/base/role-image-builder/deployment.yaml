@@ -94,7 +94,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: work, mountPath: /var/run/kodex/work}
+            - {name: work, mountPath: /work}
             - {name: buildkit-client, mountPath: /var/run/secrets/kodex/role-image-builder/buildkit, readOnly: true}
             - {name: input-read, mountPath: /var/run/secrets/kodex/role-image-builder/input-read, readOnly: true}
             - {name: base-pull, mountPath: /var/run/secrets/kodex/role-image-builder/base-pull, readOnly: true}
