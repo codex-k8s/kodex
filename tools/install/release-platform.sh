@@ -58,6 +58,21 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 
 owner_actor_id=$(gh api user --jq '.id | tostring')
 [[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail 'owner actor identity is invalid'
+configured_owner_actor_id=$(gh api "repos/$repository/actions/variables/KODEX_OWNER_ACTOR_ID" \
+  --jq '.value')
+[[ "$configured_owner_actor_id" == "$owner_actor_id" ]] ||
+  fail 'repository owner actor identity mismatch'
+
+gh variable set KODEX_WORKFLOW_SHA --repo "$repository" --body "$source_sha"
+workflow_sha_readback=""
+for attempt in {1..15}; do
+  workflow_sha_readback=$(gh api "repos/$repository/actions/variables/KODEX_WORKFLOW_SHA" \
+    --jq '.value' 2>/dev/null || true)
+  [[ "$workflow_sha_readback" == "$source_sha" ]] && break
+  sleep 2
+done
+[[ "$workflow_sha_readback" == "$source_sha" ]] ||
+  fail 'repository workflow SHA readback mismatch'
 
 authorize_runner_gate() {
   local namespace=$1 expected_job=$2 expected_workflow=$3 gate_json resource_version
