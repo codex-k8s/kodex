@@ -31,6 +31,20 @@ for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done
 
+yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "internal-rpc-authority-restore-anchor-forward-only") |
+  .spec.failurePolicy == "Fail" and
+  ([.spec.matchConditions[] | select(.name == "exact-resource" and
+    (.expression | contains("internal-rpc-authority-restore-evidence")))] | length == 1) and
+  ([.spec.matchConditions[] | select(.name == "namespace-not-terminating" and
+    (.expression | contains("namespaceObject == null")) and
+    (.expression | contains("!has(namespaceObject.metadata.deletionTimestamp)")))] | length == 1) and
+  ([.spec.validations[] | select((.expression | contains("request.operation")) and
+    (.expression | contains("UPDATE"))) |
+    select(.message == "restore evidence deletion is forbidden")] | length == 1)' \
+  "$render" >/dev/null ||
+  fail 'restore evidence policy does not preserve active protection and namespace teardown'
+
 secret_references="$temporary_directory/secret-references"
 secret_producers="$temporary_directory/secret-producers"
 {
