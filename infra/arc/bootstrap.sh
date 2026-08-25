@@ -13,7 +13,7 @@ require_denied() {
   [[ $status -eq 1 && "$output" == no ]] || fail "$failure_message"
 }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --registry-namespace <namespace> --release-registry-host <exact-dns-name> --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --registry-namespace <namespace> --release-registry-host <exact-dns-name> --ingress-namespace <namespace> --ingress-pod-name <name> --ingress-service-name <name> --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-pat-file <path> | --github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -24,6 +24,9 @@ github_app_private_key_file=""
 github_pat_file=""
 registry_namespace=""
 release_registry_host=""
+ingress_namespace=""
+ingress_pod_name=""
+ingress_service_name=""
 workflow_sha_file=""
 build_owner_actor_file=""
 deploy_owner_actor_file=""
@@ -37,6 +40,9 @@ while (($# > 0)); do
     --github-pat-file) github_pat_file="${2:-}"; shift 2 ;;
     --registry-namespace) registry_namespace="${2:-}"; shift 2 ;;
     --release-registry-host) release_registry_host="${2:-}"; shift 2 ;;
+    --ingress-namespace) ingress_namespace="${2:-}"; shift 2 ;;
+    --ingress-pod-name) ingress_pod_name="${2:-}"; shift 2 ;;
+    --ingress-service-name) ingress_service_name="${2:-}"; shift 2 ;;
     --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
     --build-owner-actor-id-file) build_owner_actor_file="${2:-}"; shift 2 ;;
     --deploy-owner-actor-id-file) deploy_owner_actor_file="${2:-}"; shift 2 ;;
@@ -65,6 +71,10 @@ fi
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
 [[ "$registry_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
   fail "exact registry namespace is required"
+for resource_name in "$ingress_namespace" "$ingress_pod_name" "$ingress_service_name"; do
+  [[ "$resource_name" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+    fail "exact ingress namespace, pod name and service name are required"
+done
 valid_dns_host() {
   local host=$1 label
   local -a labels=()
@@ -81,6 +91,7 @@ valid_dns_host() {
 }
 valid_dns_host "$release_registry_host" || fail "exact release registry DNS host is required"
 registry_host="kodex-registry.${registry_namespace}.svc.cluster.local"
+ingress_service_host="${ingress_service_name}.${ingress_namespace}.svc.cluster.local"
 [[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
   fail "GitHub owner policy files are required before ARC"
 command -v kubectl >/dev/null 2>&1 || fail "kubectl is required"
@@ -150,9 +161,40 @@ kubectl --context "$expected_context" -n "$registry_namespace" get pod "$registr
         .containerPort == 5001 and .hostPort == 5001) and
       any(.env[]?; .name == "REGISTRY_HTTP_ADDR" and .value == "0.0.0.0:5001"))
   ' >/dev/null || fail "registry hostNetwork Pod binding is invalid"
+ingress_service_binding=$(kubectl --context "$expected_context" -n "$ingress_namespace" \
+  get service "$ingress_service_name" -o json | jq -er --arg pod_name "$ingress_pod_name" '
+  select(.spec.selector."app.kubernetes.io/name" == $pod_name) |
+  [.spec.ports[] | select(.protocol == "TCP" and .port == 443)] as $ports |
+  select(($ports | length) == 1 and ($ports[0].name | type == "string" and length > 0)) |
+  .spec.clusterIP as $cluster_ip |
+  select($cluster_ip | type == "string" and
+    (split(".") | length) == 4 and
+    all(split(".")[]; test("^[0-9]{1,3}$") and
+      ((tonumber >= 0) and (tonumber <= 255)))) |
+  [$cluster_ip,$ports[0].name] | @tsv
+') || fail "ingress HTTPS Service binding is invalid"
+IFS=$'\t' read -r ingress_service_ip ingress_service_port_name <<<"$ingress_service_binding"
+ingress_endpoint_port=$(kubectl --context "$expected_context" -n "$ingress_namespace" \
+  get endpointslice -l "kubernetes.io/service-name=$ingress_service_name" -o json | \
+  jq -er --arg port_name "$ingress_service_port_name" '
+    select(any(.items[].endpoints[]?;
+      .conditions.ready == true and .conditions.serving == true and
+      (.conditions.terminating // false) == false)) |
+    [.items[].ports[]? |
+      select(.name == $port_name and .protocol == "TCP") | .port] |
+    unique | select(length == 1) | .[0] |
+    select(type == "number" and . >= 1 and . <= 65535)
+  ') || fail "ingress HTTPS EndpointSlice binding is absent or ambiguous"
+kubectl --context "$expected_context" -n "$ingress_namespace" get pods \
+  -l "app.kubernetes.io/name=$ingress_pod_name" -o json | jq -e '
+    (.items | length) > 0 and any(.items[];
+      any(.status.conditions[]?; .type == "Ready" and .status == "True"))
+  ' >/dev/null || fail "no ready ingress Pod matches the configured identity"
 rendered_network_policy="$temporary_directory/network-policy.yaml"
 "$script_directory/render-network-policy.sh" "$registry_service_ip/32" \
   "$registry_endpoint_ip/32" "$registry_namespace" "$release_registry_host" \
+  "$ingress_service_ip/32" "$ingress_endpoint_port" "$ingress_namespace" \
+  "$ingress_pod_name" "$ingress_service_host" \
   "$rendered_network_policy"
 egress_proxy_config_sha256=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.namespace == "kodex-ci" and

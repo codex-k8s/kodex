@@ -28,6 +28,7 @@ KODEX_ACME_EMAIL=owner@example.com
 KODEX_ACME_SERVER=https://acme-v02.api.letsencrypt.org/directory
 KODEX_INGRESS_NAMESPACE=kube-system
 KODEX_INGRESS_POD_NAME=traefik
+KODEX_INGRESS_SERVICE_NAME=traefik
 
 # Постоянный Keycloak administrator и первый владелец Kodex.
 KODEX_KEYCLOAK_ADMIN_USERNAME=kodex-admin

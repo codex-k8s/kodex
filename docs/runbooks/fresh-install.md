@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.5
+version: 2.0.6
 updated: 2026-08-25
 ---
 
@@ -53,6 +53,15 @@ labels `kodex-build`/`kodex-deploy`. Exact registry write identity переда�
 `KODEX_RELEASE_REGISTRY_PASSWORD`; установщик не создаёт пользователя во
 внешнем registry и не ослабляет его TLS.
 
+Для release build ingress задаётся тремя независимыми параметрами:
+`KODEX_INGRESS_NAMESPACE`, `KODEX_INGRESS_POD_NAME` и
+`KODEX_INGRESS_SERVICE_NAME`. Service обязан иметь единственный HTTPS port
+`443`, выбирать Pod с label `app.kubernetes.io/name=<pod-name>` и иметь готовый
+EndpointSlice. Envoy принимает CONNECT только для точного публичного registry
+authority, но направляет raw TLS tunnel на этот внутренний Service. Поэтому
+клиент продолжает проверять публичные hostname и сертификат, а single-node
+установка не зависит от pod-to-public-node hairpin NAT.
+
 Текущий релиз изолируется в namespace `kodex-system`. Произвольное имя
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
@@ -70,7 +79,7 @@ chmod 0600 .kodex-env
 - режим, kubeconfig/context и публичный IPv4;
 - DNS Control Center, SSO, Grafana, Headlamp и registry;
 - exact connect address, TLS server name и Kubernetes selector OIDC workload;
-- ACME email и ingress selectors;
+- ACME email, ingress workload selector и имя ingress Service;
 - постоянного Keycloak administrator и первого owner;
 - owner PAT и ARC PAT GitHub;
 - registry write identity для existing-Kubernetes без bundled registry;

@@ -5,7 +5,12 @@ registry_service_cidr=${1:-}
 registry_endpoint_cidr=${2:-}
 registry_namespace=${3:-}
 release_registry_host=${4:-}
-output=${5:-}
+ingress_service_cidr=${5:-}
+ingress_endpoint_port=${6:-}
+ingress_namespace=${7:-}
+ingress_pod_name=${8:-}
+ingress_service_host=${9:-}
+output=${10:-}
 valid_ipv4_cidr() {
   local cidr=$1 address first second third fourth
   [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]] || return 1
@@ -29,10 +34,16 @@ valid_dns_host() {
 }
 if ! valid_ipv4_cidr "$registry_service_cidr" ||
    ! valid_ipv4_cidr "$registry_endpoint_cidr" ||
+   ! valid_ipv4_cidr "$ingress_service_cidr" ||
    [[ ! "$registry_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+   [[ ! "$ingress_namespace" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+   [[ ! "$ingress_pod_name" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] ||
+   [[ ! "$ingress_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] ||
+   ((ingress_endpoint_port > 65535)) ||
    ! valid_dns_host "$release_registry_host" ||
+   [[ ! "$ingress_service_host" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?\.svc\.cluster\.local$ ]] ||
    [[ -z "$output" ]]; then
-  printf 'Usage: %s <registry-service-ipv4/32> <registry-endpoint-ipv4/32> <registry-namespace> <release-registry-host> <output>\n' "$0" >&2
+  printf 'Usage: %s <registry-service-ipv4/32> <registry-endpoint-ipv4/32> <registry-namespace> <release-registry-host> <ingress-service-ipv4/32> <ingress-endpoint-port> <ingress-namespace> <ingress-pod-name> <ingress-service-host> <output>\n' "$0" >&2
   exit 2
 fi
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -41,6 +52,9 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 REGISTRY_SERVICE_CIDR=$registry_service_cidr REGISTRY_ENDPOINT_CIDR=$registry_endpoint_cidr \
 REGISTRY_NAMESPACE=$registry_namespace RELEASE_REGISTRY_HOST=$release_registry_host \
+INGRESS_SERVICE_CIDR=$ingress_service_cidr INGRESS_ENDPOINT_PORT=$ingress_endpoint_port \
+INGRESS_NAMESPACE=$ingress_namespace INGRESS_POD_NAME=$ingress_pod_name \
+INGRESS_SERVICE_HOST=$ingress_service_host \
   yq eval-all '
     (.. | select(tag == "!!str")) |=
       sub("__REGISTRY_SERVICE_CIDR__"; strenv(REGISTRY_SERVICE_CIDR)) |
@@ -49,9 +63,20 @@ REGISTRY_NAMESPACE=$registry_namespace RELEASE_REGISTRY_HOST=$release_registry_h
     (.. | select(tag == "!!str")) |=
       sub("__REGISTRY_NAMESPACE__"; strenv(REGISTRY_NAMESPACE)) |
     (.. | select(tag == "!!str")) |=
-      sub("__RELEASE_REGISTRY_HOST__"; strenv(RELEASE_REGISTRY_HOST))
+      sub("__RELEASE_REGISTRY_HOST__"; strenv(RELEASE_REGISTRY_HOST)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__INGRESS_SERVICE_CIDR__"; strenv(INGRESS_SERVICE_CIDR)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__INGRESS_POD_NAME__"; strenv(INGRESS_POD_NAME)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__INGRESS_SERVICE_HOST__"; strenv(INGRESS_SERVICE_HOST)) |
+    (. | select(.kind == "NetworkPolicy" and
+      .metadata.name == "github-proxy-egress") |
+      .spec.egress[1].ports[1].port) = (strenv(INGRESS_ENDPOINT_PORT) | tonumber)
   ' "$source_file" >"$temporary_directory/resolved-source.yaml"
-if rg -q '__REGISTRY_(SERVICE|ENDPOINT)_CIDR__|__REGISTRY_NAMESPACE__|__RELEASE_REGISTRY_HOST__' "$temporary_directory/resolved-source.yaml"; then
+if rg -q '__REGISTRY_(SERVICE|ENDPOINT)_CIDR__|__REGISTRY_NAMESPACE__|__RELEASE_REGISTRY_HOST__|__INGRESS_' "$temporary_directory/resolved-source.yaml"; then
   printf 'Registry network policy placeholder remained after render\n' >&2
   exit 1
 fi

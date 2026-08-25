@@ -35,6 +35,8 @@ kodex_require_env KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG \
   fail 'KODEX_INSTALL_MODE must be bare-metal or existing-kubernetes'
 [[ "$KODEX_NAMESPACE" == kodex-system ]] ||
   fail 'the current release supports the isolated kodex-system namespace only'
+KODEX_INGRESS_SERVICE_NAME=${KODEX_INGRESS_SERVICE_NAME:-${KODEX_INGRESS_POD_NAME:-}}
+export KODEX_INGRESS_SERVICE_NAME
 
 all_components=(host cert-manager identity trust management registry arc secrets platform)
 if [[ -z "$components" ]]; then
@@ -102,7 +104,8 @@ if any_component_selected identity management registry arc secrets platform; the
   kodex_require_env KODEX_REGISTRY_HOST KODEX_PROMOTED_PULL_HOST || exit 1
 fi
 if component_selected arc; then
-  kodex_require_env KODEX_GITHUB_ARC_TOKEN KODEX_GITHUB_OWNER_PAT || exit 1
+  kodex_require_env KODEX_GITHUB_ARC_TOKEN KODEX_GITHUB_OWNER_PAT \
+    KODEX_INGRESS_NAMESPACE KODEX_INGRESS_POD_NAME KODEX_INGRESS_SERVICE_NAME || exit 1
 fi
 if component_selected platform; then
   kodex_require_env KODEX_GITHUB_OWNER_PAT KODEX_CONTROL_HOST KODEX_OIDC_HOST \
@@ -372,6 +375,9 @@ if component_selected arc; then
   "$repository_root/infra/arc/bootstrap.sh" --context "$KODEX_KUBE_CONTEXT" \
     --mode apply --github-pat-file "$material_directory/inputs/github-arc-token" \
     --registry-namespace kodex-infra --release-registry-host "$KODEX_REGISTRY_HOST" \
+    --ingress-namespace "$KODEX_INGRESS_NAMESPACE" \
+    --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
+    --ingress-service-name "$KODEX_INGRESS_SERVICE_NAME" \
     --workflow-sha-file "$workflow_sha_file" \
     --build-owner-actor-id-file "$owner_actor_id_file" \
     --deploy-owner-actor-id-file "$owner_actor_id_file"
