@@ -31,6 +31,48 @@ case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 lock_file="$script_directory/components.lock.json"
+pod_cidr=10.42.0.0/16
+service_cidr=10.43.0.0/16
+
+remove_legacy_firewall() {
+  systemctl disable --now nftables >/dev/null 2>&1 || true
+  if command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1; then
+    nft delete table inet kodex_fw
+  fi
+}
+
+configure_firewall() {
+  remove_legacy_firewall
+  ufw --force reset >/dev/null
+  ufw default deny incoming >/dev/null
+  ufw default allow outgoing >/dev/null
+  ufw default deny routed >/dev/null
+  ufw allow 22/tcp comment SSH >/dev/null
+  ufw allow 80/tcp comment 'HTTP ingress' >/dev/null
+  ufw allow 443/tcp comment 'HTTPS ingress' >/dev/null
+  ufw allow from "$pod_cidr" comment 'K3s pods' >/dev/null
+  ufw allow from "$service_cidr" comment 'K3s services' >/dev/null
+  ufw route allow from "$pod_cidr" comment 'K3s pod forwarding' >/dev/null
+  ufw route allow proto tcp to "$pod_cidr" port 80 comment 'K3s HTTP ingress DNAT' >/dev/null
+  ufw route allow proto tcp to "$pod_cidr" port 443 comment 'K3s HTTPS ingress DNAT' >/dev/null
+  ufw --force enable >/dev/null
+}
+
+readback_firewall() {
+  local status
+  command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
+    fail 'legacy kodex_fw nftables policy is active'
+  systemctl is-enabled --quiet nftables && fail 'nftables autoload remains enabled'
+  status=$(ufw status verbose)
+  grep -Fq 'Status: active' <<<"$status" || fail 'host firewall is inactive'
+  grep -Fq 'Default: deny (incoming), allow (outgoing), deny (routed)' <<<"$status" ||
+    fail 'host firewall defaults differ from the supported policy'
+  for expected_rule in \
+    '22/tcp' '80/tcp' '443/tcp' "$pod_cidr" "$service_cidr" \
+    'K3s pod forwarding' 'K3s HTTP ingress DNAT' 'K3s HTTPS ingress DNAT'; do
+    grep -Fq "$expected_rule" <<<"$status" || fail "host firewall rule is absent: $expected_rule"
+  done
+}
 
 if [[ "$mode" == apply ]]; then
   export DEBIAN_FRONTEND=noninteractive
@@ -124,14 +166,8 @@ ExecStart=/usr/local/bin/k3s server --config /etc/rancher/k3s/config.yaml
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
+  configure_firewall
   systemctl enable --now k3s
-
-  ufw allow OpenSSH >/dev/null
-  ufw allow 80/tcp >/dev/null
-  ufw allow 443/tcp >/dev/null
-  ufw default deny incoming >/dev/null
-  ufw default allow outgoing >/dev/null
-  ufw --force enable >/dev/null
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
@@ -146,5 +182,5 @@ for attempt in $(seq 1 120); do
 done
 [[ "$(kubectl get node -o json | jq '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length')" -ge 1 ]] ||
   fail 'no ready Kubernetes node is available'
-ufw status | grep -Fq 'Status: active' || fail 'host firewall is inactive'
+readback_firewall
 printf 'Kodex host preparation completed: %s\n' "$mode"

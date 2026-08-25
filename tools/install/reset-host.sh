@@ -31,6 +31,13 @@ for mount_path in $(findmnt -rn -o TARGET | awk '
 done
 systemctl reset-failed k3s >/dev/null 2>&1 || true
 
+# Прежний профиль сохранял эту таблицу в /etc/nftables.conf. Она выполняется
+# раньше цепочек Kubernetes/UFW и может незаметно блокировать ingress DNAT.
+systemctl disable --now nftables >/dev/null 2>&1 || true
+if command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1; then
+  nft delete table inet kodex_fw
+fi
+
 for path in \
   /etc/cni/net.d \
   /etc/rancher/k3s \
@@ -54,4 +61,6 @@ command -v iptables-save >/dev/null 2>&1 && iptables-save | grep -q 'KUBE-\|CNI-
   printf 'Kodex host reset failed: stale Kubernetes firewall chains remain\n' >&2
   exit 1
 } || true
+command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
+  fail 'legacy kodex_fw nftables policy remains active'
 printf 'Kodex host reset completed; all Kubernetes workloads and persistent data were removed\n'
