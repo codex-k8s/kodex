@@ -43,7 +43,12 @@ func main() {
 	backend, _ := url.Parse("http://127.0.0.1:5006")
 	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("redirect rejected") }}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.TLS == nil || len(request.TLS.PeerCertificates) != 1 || !authorizedPull(request, registryHost) {
+		certificate, failure := pullClientCertificate(request)
+		if failure == "" {
+			failure = pullAuthorizationFailure(request, certificate, registryHost)
+		}
+		if failure != "" {
+			log.Printf("%s: request denied reason=%s", pullServerError, failure)
 			http.Error(writer, "request forbidden", http.StatusForbidden)
 			return
 		}
@@ -77,23 +82,49 @@ func main() {
 	}
 }
 
-func authorizedPull(request *http.Request, registryHost string) bool {
-	if request.Method != http.MethodGet && request.Method != http.MethodHead || strings.ContainsAny(request.URL.Path, "\r\n\\") {
-		return false
+func pullClientCertificate(request *http.Request) (*x509.Certificate, string) {
+	if request == nil || request.TLS == nil {
+		return nil, "tls_state"
 	}
-	certificate := request.TLS.PeerCertificates[0]
+	if len(request.TLS.PeerCertificates) == 0 {
+		return nil, "client_certificate"
+	}
+	// RequireAndVerifyClientCert уже проверил всю цепочку. Для профиля нужен
+	// только leaf; наличие переданных intermediate не является ошибкой.
+	return request.TLS.PeerCertificates[0], ""
+}
+
+func pullAuthorizationFailure(
+	request *http.Request,
+	certificate *x509.Certificate,
+	registryHost string,
+) string {
+	if request.Method != http.MethodGet && request.Method != http.MethodHead || strings.ContainsAny(request.URL.Path, "\r\n\\") {
+		return "request_shape"
+	}
 	cn := certificate.Subject.CommonName
 	profiles := map[string]pullProfile{
 		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
 		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
-		"role-image-builder-input-read":         {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
+		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
 	}
 	if profile, ok := profiles[cn]; ok {
 		username, password, supplied := request.BasicAuth()
-		return supplied && dockerCredentialMatches(profile.configFile, username, password, registryHost) && pathInRepositories(request.URL.Path, profile.repositories)
+		if !supplied || !dockerCredentialMatches(profile.configFile, username, password, registryHost) {
+			return "profile_credential"
+		}
+		if !pathInRepositories(request.URL.Path, profile.repositories) {
+			return "profile_repository"
+		}
+		return ""
 	}
-	return authorizedNodePull(request, certificate, registryHost) &&
-		pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles"})
+	if !authorizedNodePull(request, certificate, registryHost) {
+		return "node_identity"
+	}
+	if !pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles"}) {
+		return "node_repository"
+	}
+	return ""
 }
 
 func authorizedNodePull(request *http.Request, certificate *x509.Certificate, registryHost string) bool {

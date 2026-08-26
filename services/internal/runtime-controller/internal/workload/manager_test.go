@@ -23,6 +23,18 @@ const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
 const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 
+func TestRunAsLeaderHasCompleteClientGoCallbacks(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := manager.RunAsLeader(ctx, func(context.Context) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("leader election did not preserve canceled lifecycle: %v", err)
+	}
+}
+
 func TestAllowsLastKnownGoodObservationOnlyForTransientAPIFailure(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
