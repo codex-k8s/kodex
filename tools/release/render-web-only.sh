@@ -375,6 +375,11 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "control-plane");
     .spec.template.metadata.annotations."kodex.dev/agent-runtime-image-digest" = strenv(AGENT_RUNNER_DIGEST)
   ) |
+  with(select(.kind == "Deployment" and .metadata.name == "kodex-buildkit");
+    .spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_SHA) |
+    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
+    .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(AGENT_RUNNER_DIGEST)
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull");
     .spec.template.metadata.annotations."kodex.dev/pull-credential-generation" = "1" |
     (.spec.template.spec.containers[] |

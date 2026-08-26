@@ -215,6 +215,23 @@ grep -Fq 'valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key:
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq '/tmp/registry-applied.der' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'RELOAD_PROCESS_PATTERN' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
+grep -Fq 'readiness_check_succeeded=false' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
+grep -Fq 'mark_readiness_failure' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
+[[ $(grep -F -c -- '--max-time 15' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh") -eq 2 ]]
+if grep -Fq -- '--max-time 3' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"; then
+  echo "registry readiness still uses the short artifact readback timeout" >&2
+  exit 1
+fi
+grep -Fq '.spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_SHA)' \
+  "$repository_root/tools/release/render-web-only.sh"
+grep -Fq '.spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)' \
+  "$repository_root/tools/release/render-web-only.sh"
+grep -Fq '.spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(AGENT_RUNNER_DIGEST)' \
+  "$repository_root/tools/release/render-web-only.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
