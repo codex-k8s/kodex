@@ -39,6 +39,10 @@ const publicConfig = JSON.parse(publicText);
 const deploymentConfig = JSON.parse(deploymentText);
 if (JSON.stringify(publicConfig) !== JSON.stringify(deploymentConfig))
   throw new Error("Runtime config copies differ");
+if (deploymentConfig.apiBaseUrl !== "/")
+  throw new Error("API base URL must not repeat the generated /api/v1 prefix");
+if (deploymentConfig.realtimeUrl !== "/api/v1")
+  throw new Error("Realtime base URL must retain the versioned API prefix");
 const revision = deploymentConfig.revision;
 delete deploymentConfig.revision;
 const expected = createHash("sha256")
