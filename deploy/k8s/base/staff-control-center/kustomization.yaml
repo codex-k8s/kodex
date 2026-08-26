@@ -4,6 +4,7 @@ namespace: kodex-system
 resources:
   - certificate.yaml
   - deployment.yaml
+  - api-ingress.yaml
   - ingress.yaml
   - servers-transport.yaml
   - networkpolicy.yaml
