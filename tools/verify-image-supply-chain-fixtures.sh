@@ -236,6 +236,12 @@ grep -Fq '.spec.template.metadata.annotations."kodex.dev/trusted-role-base-diges
   "$repository_root/tools/release/render-web-only.sh"
 [[ $(grep -F -c 'with(select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
   "$repository_root/tools/release/render-web-only.sh") -eq 1 ]]
+grep -Fq 'role_environment_catalog_name="kodex-role-environments-${role_environment_catalog_sha256:0:12}"' \
+  "$repository_root/tools/release/render-web-only.sh"
+grep -Fq '.metadata.annotations."kodex.dev/role-environments-sha256" =' \
+  "$repository_root/tools/release/render-web-only.sh"
+grep -Fq 'prune_role_environment_configmaps' \
+  "$repository_root/tools/install/deploy-platform.sh"
 role_builder_deployment=$(kubectl kustomize \
   "$repository_root/deploy/k8s/overlays/staging/role-image-builder" | yq -o=json -I=0 '
     select(.kind == "Deployment" and .metadata.name == "role-image-builder")

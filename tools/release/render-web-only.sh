@@ -440,9 +440,22 @@ role_environment_catalog=$(jq -cn \
       customInstallationAllowed:false,
       baseImageReference:"kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-base-documents",
       baseImageDigest:$documents_digest,platforms:[{os:"linux",architecture:"amd64",variant:""}],packages:[],tools:[]}]}')
-ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" yq -i '
+role_environment_catalog_sha256=$(printf '%s' "$role_environment_catalog" | sha256sum | awk '{print $1}')
+role_environment_catalog_name="kodex-role-environments-${role_environment_catalog_sha256:0:12}"
+ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" \
+ROLE_ENVIRONMENT_CATALOG_SHA256="$role_environment_catalog_sha256" \
+ROLE_ENVIRONMENT_CATALOG_NAME="$role_environment_catalog_name" yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments");
+    .metadata.name = strenv(ROLE_ENVIRONMENT_CATALOG_NAME) |
+    .metadata.annotations."kodex.dev/catalog-sha256" = strenv(ROLE_ENVIRONMENT_CATALOG_SHA256) |
     .data."catalog.json" = strenv(ROLE_ENVIRONMENT_CATALOG)
+  ) |
+  with(select(.kind == "Deployment" and
+      (.metadata.name == "control-plane" or .metadata.name == "role-image-builder"));
+    .spec.template.metadata.annotations."kodex.dev/role-environments-sha256" =
+      strenv(ROLE_ENVIRONMENT_CATALOG_SHA256) |
+    (.spec.template.spec.volumes[] | select(.name == "role-environments").configMap.name) =
+      strenv(ROLE_ENVIRONMENT_CATALOG_NAME)
   )
 ' "$rendered"
 

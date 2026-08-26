@@ -190,6 +190,38 @@ reconcile_immutable_configmaps() {
   ' "$render_file" | sort -u)
 }
 
+prune_role_environment_configmaps() {
+  local expected name current referenced
+  expected=$(yq -N -r '
+    select(.kind == "ConfigMap" and
+      .metadata.labels["app.kubernetes.io/name"] == "kodex-role-environments") |
+    .metadata.name
+  ' "$render_file")
+  [[ "$expected" =~ ^kodex-role-environments-[a-f0-9]{12}$ ]] ||
+    fail 'rendered role environment catalog name is invalid'
+  referenced=$(kubectl --context "$context" -n "$namespace" get \
+    deployment/control-plane deployment/role-image-builder -o json | jq -r '
+      [.items[].spec.template.spec.volumes[]? |
+        select(.name == "role-environments").configMap.name] | unique | .[]
+    ')
+  [[ "$referenced" == "$expected" ]] ||
+    fail 'workloads do not reference one exact role environment catalog'
+  while IFS= read -r name; do
+    [[ -n "$name" && "$name" != "$expected" ]] || continue
+    current=$(kubectl --context "$context" -n "$namespace" get "configmap/$name" -o json)
+    jq -e '
+      .immutable == true and
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/owner-intent"] == "true" and
+      .metadata.labels["app.kubernetes.io/name"] == "kodex-role-environments"
+    ' <<<"$current" >/dev/null ||
+      fail "role environment catalog is not owned by Kodex: $name"
+    kubectl --context "$context" -n "$namespace" delete "configmap/$name" \
+      --wait=true --timeout=3m >/dev/null
+  done < <(kubectl --context "$context" -n "$namespace" get configmaps \
+    -l app.kubernetes.io/name=kodex-role-environments -o json | jq -r '.items[].metadata.name')
+}
+
 reconcile_image_admission_policy_parameters() {
   local name=kodex-image-admission-policy current expected current_spec expected_spec
   if ! current=$(kubectl --context "$context" -n "$namespace" get \
@@ -466,6 +498,7 @@ if [[ "$mode" == apply ]]; then
     select(.kind == "Deployment" and .metadata.name == "role-image-builder")
   '
   wait_workloads
+  prune_role_environment_configmaps
 fi
 
 if [[ "$public_tls_mode" == deferred ]]; then
