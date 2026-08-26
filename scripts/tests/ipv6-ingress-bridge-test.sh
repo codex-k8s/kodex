@@ -69,7 +69,7 @@ case "$command_name" in
   show)
     unit=${*: -1}
     [[ -f "$state_directory/$unit.active" ]] || exit 1
-    printf 'listening\n'
+    printf '%s\n' "${KODEX_TEST_SOCKET_SUBSTATE:-listening}"
     ;;
   *)
     printf 'unsupported fake systemctl command: %s\n' "$command_name" >&2
@@ -147,6 +147,12 @@ second_digest=$(sha256sum "$unit_directory"/kodex-ipv6-ingress-bridge-* | sha256
 [[ "$first_digest" == "$second_digest" ]] || fail 'repeated apply changed managed units'
 run_bridge --mode readback \
   --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+KODEX_TEST_SOCKET_SUBSTATE=running \
+  run_bridge --mode readback \
+    --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+KODEX_TEST_SOCKET_SUBSTATE=dead \
+  expect_failure run_bridge --mode readback \
+    --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
 if command -v systemd-analyze >/dev/null 2>&1; then
   systemd-analyze verify \
     "$unit_directory"/kodex-ipv6-ingress-bridge-*.socket \
