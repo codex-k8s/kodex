@@ -115,9 +115,14 @@ func (executor *Executor) Check(ctx context.Context) error {
 		return ErrBuildKit
 	}
 	defer os.RemoveAll(root)
-	dockerfile := []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s\nRUN [\"/bin/sh\",\"-c\",\"test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner\"]\n",
+	outputDirectory := filepath.Join(root, "output")
+	if err := os.Mkdir(outputDirectory, 0o700); err != nil {
+		return ErrBuildKit
+	}
+	dockerfile := buildKitReadinessDockerfile(
 		executor.config.FrontendRepository, executor.config.ExpectedFrontendSHA256,
-		executor.config.TrustedRoleBaseRepository, executor.config.TrustedRoleBaseDigest))
+		executor.config.TrustedRoleBaseRepository, executor.config.TrustedRoleBaseDigest,
+	)
 	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), dockerfile, 0o600); err != nil {
 		return ErrBuildKit
 	}
@@ -126,13 +131,34 @@ func (executor *Executor) Check(ctx context.Context) error {
 		"--tlscert", executor.config.CertificateFile, "--tlskey", executor.config.PrivateKeyFile,
 		"--tlsservername", executor.config.TLSServerName, "build", "--frontend", "dockerfile.v0",
 		"--local", "context="+root, "--local", "dockerfile="+root, "--opt", "filename=Dockerfile",
-		"--opt", "platform=linux/amd64", "--output", "type=cacheonly", "--no-cache")
+		"--opt", "platform=linux/amd64", "--output", buildKitReadinessOutput(outputDirectory), "--no-cache")
 	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+root)
 	command.Stdout, command.Stderr = io.Discard, io.Discard
 	if err := command.Run(); err != nil {
 		return ErrBuildKit
 	}
+	marker, err := os.ReadFile(filepath.Join(outputDirectory, "kodex-readiness"))
+	if err != nil || string(marker) != "ready" {
+		return ErrBuildKit
+	}
 	return nil
+}
+
+func buildKitReadinessDockerfile(frontendRepository, frontendSHA256, baseRepository, baseDigest string) []byte {
+	return []byte(fmt.Sprintf(
+		"# syntax=%s@sha256:%s\nFROM %s@%s AS verify\n"+
+			"RUN [\"/bin/sh\",\"-c\",\"test -x /usr/local/bin/kodex-init && "+
+			"test -x /usr/local/bin/kodex-agent-runner && printf ready > /tmp/kodex-readiness\"]\n"+
+			"FROM scratch\nCOPY --from=verify /tmp/kodex-readiness /kodex-readiness\n",
+		frontendRepository,
+		frontendSHA256,
+		baseRepository,
+		baseDigest,
+	))
+}
+
+func buildKitReadinessOutput(directory string) string {
+	return "type=local,dest=" + directory
 }
 
 func (executor *Executor) Prepare(
