@@ -154,7 +154,8 @@ fi
 
 if component_selected host; then
   "$repository_root/tools/install/prepare-host.sh" --mode apply \
-    --server-public-ip "$KODEX_SERVER_PUBLIC_IP"
+    --server-public-ip "$KODEX_SERVER_PUBLIC_IP" \
+    --server-public-ipv6-address "${KODEX_SERVER_PUBLIC_IPV6_ADDRESS:-}"
 fi
 
 export KUBECONFIG=$KODEX_KUBECONFIG

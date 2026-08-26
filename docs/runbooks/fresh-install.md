@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.9
+version: 2.0.10
 updated: 2026-08-26
 ---
 
@@ -56,6 +56,8 @@ labels `kodex-build`/`kodex-deploy`. Exact registry write identity переда�
 Admin host, с которого запускается профиль `existing-kubernetes`, должен иметь
 `curl`, `dig` из пакета `dnsutils`, `python3` и GNU `timeout`: они выполняют
 fail-closed DNS/HTTP-01 preflight до создания публичного `Certificate`.
+Bare-metal installer устанавливает `dnsutils` и остальные необходимые утилиты
+сам и проверяет их наличие при readback.
 
 Для release build ingress задаётся тремя независимыми параметрами:
 `KODEX_INGRESS_NAMESPACE`, `KODEX_INGRESS_POD_NAME` и
@@ -80,7 +82,8 @@ chmod 0600 .kodex-env
 Файл заполняется владельцем и не коммитится. Он содержит только входные
 параметры конкретной установки:
 
-- режим, kubeconfig/context и публичный IPv4;
+- режим, kubeconfig/context, публичный IPv4 и необязательный точный глобальный
+  IPv6 адрес bare-metal сервера;
 - DNS Control Center, SSO, Grafana, Headlamp и registry;
 - необязательный отдельный DNS SAN для восстановления Control Center TLS после
   внешнего ACME duplicate-certificate rate limit;
@@ -214,6 +217,30 @@ Host-компонент завершается только после одно�
 и хотя бы одного node; краткое состояние `NotReady` во время запуска Flannel
 обрабатывается bounded wait, а не считается ошибкой установки.
 
+Bare-metal профиль K3s/Traefik остается IPv4-only. Если публичные DNS-имена
+имеют только `A` записи, `KODEX_SERVER_PUBLIC_IPV6_ADDRESS` оставляют пустым:
+IPv6 bridge не создается, а повторный apply удаляет только ранее созданные
+Kodex unit-файлы. Наличие неизвестного unit или drop-in с тем же именем
+останавливает операцию до ручного разбора и не приводит к перезаписи.
+
+Если хотя бы один публичный host имеет `AAAA`, владелец задает
+`KODEX_SERVER_PUBLIC_IPV6_ADDRESS` как точный глобальный IPv6 адрес, уже
+назначенный интерфейсу сервера. Host installer создает две socket-activated
+пары `kodex-ipv6-ingress-bridge-{80,443}.{socket,service}`. Сокеты слушают
+только `[$KODEX_SERVER_PUBLIC_IPV6_ADDRESS]:80|443`, а
+`systemd-socket-proxyd` передает raw TCP на `127.0.0.1:80|443`. Bridge не
+завершает TLS, не использует wildcard bind и не открывает дополнительные
+порты. Число одновременных соединений ограничено, service sandboxed, а unit
+files имеют явный owner marker.
+
+`preflight` закрыто отклоняет синтаксически неверный, неглобальный либо не
+назначенный host-интерфейсу IPv6 адрес. `apply` идемпотентно сверяет ownership перед
+записью и включает только socket units. `readback` сравнивает точное содержимое
+и права unit-файлов, состояния `enabled/active/listening` обоих сокетов и
+выполняет локальный HTTP-запрос через IPv6 bridge до Traefik. Проверка
+публичного TLS и DNS выполняется отдельным ACME preflight после готовности
+всего ingress.
+
 ## 5. Установка
 
 Полный неинтерактивный bare-metal запуск:
@@ -304,6 +331,10 @@ labels и затем воссоздаётся из exact render. Такой же
 Установка завершена только если:
 
 - Kubernetes API и node Ready;
+- при заданном `KODEX_SERVER_PUBLIC_IPV6_ADDRESS` exact IPv6 bridge для 80/443
+  enabled/active/listening, а локальный IPv6 HTTP-запрос достигает Traefik;
+- при пустом `KODEX_SERVER_PUBLIC_IPV6_ADDRESS` owner-managed bridge units
+  отсутствуют и не активны;
 - cert-manager/trust-manager/Keycloak/ARC готовы;
 - Traefik подключается к Keycloak с exact public SNI через привязанный к
   `Service` `ServersTransport`, а публичный OIDC discovery отвечает без TLS

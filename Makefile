@@ -45,6 +45,7 @@ test-management-surfaces:
 
 test-install-contract:
 	@./scripts/tests/install-contract-test.sh
+	@./scripts/tests/ipv6-ingress-bridge-test.sh
 
 test-authority-policy-codegen:
 	@./scripts/tests/authority-policy-codegen-test.sh
