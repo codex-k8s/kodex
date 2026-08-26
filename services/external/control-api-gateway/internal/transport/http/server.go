@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -96,13 +95,13 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 		}
 		return
 	}
-	maxAge := int(time.Until(time.Unix(claims.ExpiresAt, 0)).Seconds())
-	if maxAge < 1 || maxAge > 3600 {
-		maxAge = 3600
-	}
-	http.SetCookie(writer, &http.Cookie{Name: boundary.SessionCookieName, Value: encoded, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
-	http.SetCookie(writer, &http.Cookie{Name: boundary.CSRFCookieName, Value: csrf, Path: "/", Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+	boundary.SetOwnerSessionCookies(writer, claims, encoded, csrf)
 	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", claims.SessionRevision))
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func (server *Server) RenewOwnerSession(writer http.ResponseWriter, _ *http.Request, _ generated.RenewOwnerSessionParams) {
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.WriteHeader(http.StatusNoContent)
 }
@@ -111,6 +110,10 @@ func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *ht
 	identity, ok := boundary.IdentityFromContext(request.Context())
 	if !ok || string(parameters.IfMatch) != fmt.Sprintf("\"%d\"", identity.SessionRevision) {
 		writeLocalProblem(writer, http.StatusPreconditionFailed, "STALE_VERSION", false)
+		return
+	}
+	if err := server.boundary.RevokeSession(request.Context(), identity); err != nil {
+		writeLocalProblem(writer, http.StatusInternalServerError, "INTERNAL", false)
 		return
 	}
 	for _, item := range []struct {

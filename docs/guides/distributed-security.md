@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.6
-updated: 2026-08-24
+version: 1.4.7
+updated: 2026-08-26
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -76,6 +76,65 @@ Gateway не восполняет отсутствующую доменную п
 Разные оси состояния не объединяются молча. Например, публикация, качество,
 модерация и полнота могут образовывать eligibility rule только после явного
 решения и должны одинаково трактоваться всеми read/event paths.
+
+## Browser SSO и API session
+
+OAuth2 browser cookie, Keycloak SSO session, OIDC access token и прикладная API
+session являются разными слоями. Срок одного слоя не переносится на другой
+молча. Realm default остаётся минимальным общим сроком token, а исключение для
+конкретного browser client задаётся per-client и подтверждается точным
+readback одновременно с realm default.
+
+Sliding API session имеет отдельный idle TTL и абсолютную границу срока
+проверенного bearer. Renewal разрешён только после успешной проверки session
+cookie, подписи и expiry bearer, `subject`, organization, OIDC `sid`, session
+revision, допустимого Origin, CSRF для mutation и полного application/project
+context. Renewal сохраняет session ID, actor/tenant/OIDC binding, revision,
+bearer и CSRF binding; меняются только времена выпуска и idle expiry. Ни одна
+ветка с просроченной или повреждённой session, неверным Origin/CSRF либо
+несовпавшим OIDC binding не добавляет `Set-Cookie`.
+
+Session продлевает только отдельная mutation-операция с exact `Origin` и
+двойным CSRF proof через header и host-only cookie. Обычные GET/HEAD и
+автоматически приложенная browser cookie не поддерживают idle session: это не
+позволяет same-site sibling origin искусственно продлевать её до bearer ceiling.
+
+Logout сначала отменяет и дожидается текущего renewal-запроса, затем gateway
+синхронно фиксирует browser session ID в server-owned durable revocation store
+до абсолютного expiry bearer и только после подтверждения очищает cookies.
+Все реплики gateway проверяют один авторитетный high-watermark до
+OIDC/application context; клиентская cookie не является источником отзыва.
+Поэтому поздний `Set-Cookie` от уже начатого renewal, копия session cookie в
+другом browser context и замена pod не могут восстановить закрытую session;
+новый вход с новым browser session ID остаётся доступен. Недоступный,
+повреждённый или не соответствующий точному контракту revocation store
+закрыто отклоняет защищённые запросы и readiness.
+
+Lifecycle durable store принадлежит отдельной bootstrap identity. Runtime
+gateway получает только точные data subjects и необходимые read-only
+JetStream API subjects; wildcard `$JS.API.>` и права create/update/delete/purge
+для runtime identity запрещены. Автоматический bootstrap не является recovery
+от удаления авторитетного state: runtime identity физически не может выполнить
+такое удаление.
+
+Сужение permissions существующей установки не ограничивается заменой Secret:
+старые подписанные user JWT отзываются через account revocation cutoff,
+account JWT доставляется broker, а новые workload credentials выпускаются
+строго после cutoff. Broker и consumers проходят bounded sequential rollout;
+readback проверяет точные permission sets и ключи Kubernetes Secrets без
+вывода credential values.
+
+WebSocket handshake не продлевает API session: его CSRF subprotocol проверяет
+realtime transport после общей HTTP boundary. Sliding activity фиксирует
+только полностью проверенная session renewal mutation; reconnect с истёкшей
+API session проходит новый warm SSO flow.
+
+Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SSO и не
+содержит прикладные API cookies. Каждый тест получает новый browser context,
+проходит warm OIDC flow и создаёт собственную API session. Файл bootstrap
+читается одним descriptor с `O_NOFOLLOW`, проверкой `fstat`, owner/mode,
+ограничением размера и закрытой schema; запись выполняется через exclusive
+temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
 
 ## Многоуровневая межсервисная авторизация
 

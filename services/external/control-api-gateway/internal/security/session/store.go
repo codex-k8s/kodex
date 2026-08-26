@@ -105,24 +105,38 @@ func (store *Store) Issue(subject, organizationID, oidcSessionID string, revisio
 	return claims, encoded, csrf, nil
 }
 
+// Renew продлевает idle-срок существующей сессии, не меняя её authority,
+// идентификаторы и CSRF binding. Абсолютной границей остаётся срок OIDC bearer.
+func (store *Store) Renew(claims Claims, tokenExpiry time.Time) (Claims, string, bool, error) {
+	if store == nil || tokenExpiry.IsZero() || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
+		return Claims{}, "", false, errors.New("session renewal input is invalid")
+	}
+	now := store.now().UTC()
+	currentExpiry := time.Unix(claims.ExpiresAt, 0).UTC()
+	if !now.Before(currentExpiry) {
+		return Claims{}, "", false, errors.New("session token is expired")
+	}
+	if currentExpiry.Sub(now) > store.ttl/3 {
+		return claims, "", false, nil
+	}
+	expires := now.Add(store.ttl)
+	if tokenExpiry.Before(expires) {
+		expires = tokenExpiry.UTC()
+	}
+	if expires.Unix() <= claims.ExpiresAt {
+		return claims, "", false, nil
+	}
+	claims.IssuedAt = now.Unix()
+	claims.ExpiresAt = expires.Unix()
+	encoded, err := store.seal(claims)
+	if err != nil {
+		return Claims{}, "", false, err
+	}
+	return claims, encoded, true, nil
+}
+
 func (store *Store) Open(encoded string) (Claims, error) {
-	if store == nil || encoded == "" || len(encoded) > maximumToken || strings.TrimSpace(encoded) != encoded {
-		return Claims{}, errors.New("session token is invalid")
-	}
-	parts := strings.Split(encoded, ".")
-	if len(parts) != 2 || parts[0] != formatVersion {
-		return Claims{}, errors.New("session token is invalid")
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil ||
-		base64.RawURLEncoding.EncodeToString(raw) != parts[1] ||
-		len(raw) < store.current.NonceSize()+store.current.Overhead() {
-		return Claims{}, errors.New("session token is invalid")
-	}
-	plaintext, err := open(store.current, raw)
-	if err != nil && store.previous != nil {
-		plaintext, err = open(store.previous, raw)
-	}
+	plaintext, err := store.open(encoded)
 	if err != nil {
 		return Claims{}, errors.New("session token is invalid")
 	}
@@ -139,7 +153,6 @@ func (store *Store) Open(encoded string) (Claims, error) {
 	}
 	return claims, nil
 }
-
 func VerifyCSRF(claims Claims, token string) bool {
 	if len(token) < 43 || len(token) > 64 {
 		return false
@@ -167,6 +180,26 @@ func (store *Store) seal(claims Claims) (string, error) {
 		return "", errors.New("session token exceeds cookie limit")
 	}
 	return encoded, nil
+}
+
+func (store *Store) open(encoded string) ([]byte, error) {
+	if store == nil || encoded == "" || len(encoded) > maximumToken || strings.TrimSpace(encoded) != encoded {
+		return nil, errors.New("session token is invalid")
+	}
+	parts := strings.Split(encoded, ".")
+	if len(parts) != 2 || parts[0] != formatVersion {
+		return nil, errors.New("session token is invalid")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || base64.RawURLEncoding.EncodeToString(raw) != parts[1] ||
+		len(raw) < store.current.NonceSize()+store.current.Overhead() {
+		return nil, errors.New("session token is invalid")
+	}
+	plaintext, err := open(store.current, raw)
+	if err != nil && store.previous != nil {
+		plaintext, err = open(store.previous, raw)
+	}
+	return plaintext, err
 }
 
 func open(aead cipher.AEAD, raw []byte) ([]byte, error) {

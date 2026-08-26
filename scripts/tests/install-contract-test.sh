@@ -55,7 +55,9 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/configure-github.sh tools/install/configure-node-registry.sh \
   tools/install/configure-ipv6-ingress-bridge.sh \
   tools/install/deploy-platform.sh tools/install/generate-material.sh \
+  tools/install/materialize-nats-runtime-users.sh \
   tools/install/materialize-secrets.sh tools/install/prepare-host.sh \
+  tools/install/reconcile-nats-runtime-users.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/write-env-file.sh; do

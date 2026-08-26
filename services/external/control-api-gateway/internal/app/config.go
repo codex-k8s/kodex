@@ -43,6 +43,7 @@ type Config struct {
 	NATSCertificateFile               string        `env:"CONTROL_API_GATEWAY_NATS_CERTIFICATE_FILE"`
 	NATSPrivateKeyFile                string        `env:"CONTROL_API_GATEWAY_NATS_PRIVATE_KEY_FILE"`
 	NATSCredentialsFile               string        `env:"CONTROL_API_GATEWAY_NATS_CREDENTIALS_FILE"`
+	NATSReplicas                      int           `env:"CONTROL_API_GATEWAY_NATS_REPLICAS"`
 	RequestTimeout                    time.Duration `env:"CONTROL_API_GATEWAY_REQUEST_TIMEOUT"`
 	RPCTimeout                        time.Duration `env:"CONTROL_API_GATEWAY_RPC_TIMEOUT"`
 	StartupTimeout                    time.Duration `env:"CONTROL_API_GATEWAY_STARTUP_TIMEOUT"`
@@ -64,7 +65,7 @@ func loadConfig() (Config, error) {
 		OIDCAudience: "kodex-control-api", OIDCCAFile: "/var/run/config/kodex/control-api-gateway/oidc/ca.pem",
 		SessionCurrentKeyFile: "/var/run/secrets/kodex/control-api-gateway/session/current.hex", SessionPreviousKeyFile: "/var/run/secrets/kodex/control-api-gateway/session/previous.hex", SessionTTL: 15 * time.Minute,
 		ControlPlaneTarget: controlPlaneTarget, ControlPlaneTLSServerName: controlPlaneTLSServerName, ControlPlaneCAFile: "/var/run/config/kodex/control-api-gateway/control-plane/ca.pem", ControlPlaneClientCertificateFile: "/var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.crt", ControlPlaneClientPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.key",
-		NATSURL: "tls://nats.kodex-system.svc:4222", NATSTLSServerName: "nats.kodex-system.svc.cluster.local", NATSCAFile: "/var/run/config/kodex/control-api-gateway/nats/ca.pem", NATSCertificateFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.crt", NATSPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.key", NATSCredentialsFile: "/var/run/secrets/kodex/control-api-gateway/nats/user.creds",
+		NATSURL: "tls://nats.kodex-system.svc:4222", NATSTLSServerName: "nats.kodex-system.svc.cluster.local", NATSCAFile: "/var/run/config/kodex/control-api-gateway/nats/ca.pem", NATSCertificateFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.crt", NATSPrivateKeyFile: "/var/run/secrets/kodex/control-api-gateway/nats-client/tls.key", NATSCredentialsFile: "/var/run/secrets/kodex/control-api-gateway/nats/user.creds", NATSReplicas: 1,
 		RequestTimeout: 15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second, ShutdownTimeout: 20 * time.Second, ReadinessInterval: 10 * time.Second, RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000, PreAuthConcurrency: 32, MaximumHTTPConcurrency: 256, PerSubjectHTTPConcurrency: 16, MaximumWebSocketConcurrency: 128, PerSubjectWebSocketConcurrency: 4,
 	}
 	if err := env.Parse(&config); err != nil {
@@ -111,7 +112,7 @@ func (config Config) validate() error {
 			return errors.New("control API origin allowlist is invalid")
 		}
 	}
-	if config.RequestTimeout < time.Second || config.RequestTimeout > time.Minute || config.RPCTimeout < time.Second || config.RPCTimeout > 10*time.Second || config.StartupTimeout < time.Second || config.ShutdownTimeout < config.RequestTimeout || config.ReadinessInterval < time.Second || config.RateLimit == 0 || config.MaximumRateKeys < 100 || config.PreAuthConcurrency < 1 || config.MaximumHTTPConcurrency < 2 || config.PerSubjectHTTPConcurrency >= config.MaximumHTTPConcurrency || config.MaximumWebSocketConcurrency < 2 || config.PerSubjectWebSocketConcurrency >= config.MaximumWebSocketConcurrency {
+	if config.RequestTimeout < time.Second || config.RequestTimeout > time.Minute || config.RPCTimeout < time.Second || config.RPCTimeout > 10*time.Second || config.StartupTimeout < time.Second || config.ShutdownTimeout < config.RequestTimeout || config.ReadinessInterval < time.Second || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.RateLimit == 0 || config.MaximumRateKeys < 100 || config.PreAuthConcurrency < 1 || config.MaximumHTTPConcurrency < 2 || config.PerSubjectHTTPConcurrency >= config.MaximumHTTPConcurrency || config.MaximumWebSocketConcurrency < 2 || config.PerSubjectWebSocketConcurrency >= config.MaximumWebSocketConcurrency {
 		return errors.New("control API bounded configuration is invalid")
 	}
 	return nil

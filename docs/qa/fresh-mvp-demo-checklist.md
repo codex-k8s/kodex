@@ -4,7 +4,7 @@ title: Проверка fresh web-only MVP перед демонстрацией
 type: qa-checklist
 status: approved
 owner: qa
-version: 1.0.2
+version: 1.0.3
 updated: 2026-08-26
 ---
 
@@ -212,6 +212,10 @@ limit. До этого запрещены повторные issuance/reissuance
 - [ ] `OIDC-04` После callback protocol state очищен; bearer/refresh token не
       остаётся в URL, localStorage или доступной JavaScript cookie; результат:
       `________`; evidence: `________________`.
+- [ ] `OIDC-05` Keycloak readback одновременно подтверждает realm
+      `accessTokenLifespan=300` и per-client атрибут
+      `kodex-control-center` `access.token.lifespan=3600`; результат:
+      `________`; evidence: `________________`.
 - [ ] `SESSION-01` `POST /api/v1/session` создаёт owner session, после чего UI
       работает через host-only `Secure`/`HttpOnly`/`SameSite` cookie;
       результат: `________`; evidence: `________________`.
@@ -222,7 +226,20 @@ limit. До этого запрещены повторные issuance/reissuance
       отклоняется и не меняет состояние; результат: `________`; evidence:
       `________________`.
 - [ ] `SESSION-04` Logout вызывает `DELETE /api/v1/session`, очищает локальную
-      session и защищённые API перестают возвращать business data; результат:
+      session и защищённые API перестают возвращать business data. Параллельный
+      renewal из текущей или другой вкладки, завершившийся после logout, не
+      восстанавливает доступ благодаря server-owned durable revocation store;
+      копия старой cookie в отдельном browser context также отклоняется, а
+      новый login с новой browser session работает. Результат:
+      `________`; evidence: `________________`.
+- [ ] `SESSION-05` После успешной OIDC/Origin/CSRF binding-проверки
+      `PUT /api/v1/session` у границы 15-минутного idle TTL обновляет обе API
+      cookies, сохраняет
+      subject, organization, OIDC `sid`, revision, session ID и CSRF binding и
+      не выходит за expiry bearer. Просроченная session, неверный Origin/CSRF
+      и несовпавший OIDC binding не возвращают `Set-Cookie`; WebSocket
+      handshake и GET/HEAD также не продлевают session. Control Center вызывает
+      renewal не чаще одного раза в пять минут. Результат:
       `________`; evidence: `________________`.
 - [ ] `API-03` Неавторизованные `/api/v1/bootstrap`, `/api/v1/projects` и
       `/api/v1/runs` не возвращают business data; результат: `________`;
@@ -337,9 +354,15 @@ limit. До этого запрещены повторные issuance/reissuance
       screenshots и HTML reporter не содержат cookies, tokens, passwords,
       private keys, DSN или raw provider output; результат: `________`;
       evidence: `________________`.
-- [ ] `ERR-06` Auth setup не создаёт screenshot/trace/video; session state —
-      regular non-symlink file с mode `0600`, каталог — `0700`; результат:
-      `________`; evidence: `________________`.
+- [ ] `ERR-06` Auth setup не создаёт screenshot/trace/video; bootstrap state не
+      содержит Kodex API cookies, является regular non-symlink файлом `0600` в
+      owner-каталоге `0700`, читается через `O_NOFOLLOW`/`fstat` с bounded
+      size/schema и записывается atomic exclusive temporary file + `fsync` +
+      rename; результат: `________`; evidence: `________________`.
+- [ ] `ERR-07` Каждый Playwright test через warm SSO создаёт собственную API
+      session; Human Gate winner/contender получают storage state свежего
+      основного context, а не bootstrap-файл; результат: `________`; evidence:
+      `________________`.
 
 ## 9. Фаза G: Grafana и Headlamp через OAuth
 
@@ -375,8 +398,10 @@ npm ci --ignore-scripts
 npm run test:e2e:check
 ```
 
-После допуска и успешного trusted TLS создаётся реальная OIDC session. Значения
-credentials читаются без печати и не добавляются в shell history/evidence:
+После допуска и успешного trusted TLS создаётся реальный SSO bootstrap без
+Kodex API cookies. Значения credentials читаются без печати и не добавляются в
+shell history/evidence; каждый последующий тест создаёт свою API session через
+warm SSO:
 
 ```bash
 export KODEX_E2E_BASE_URL='https://<approved-fresh-origin>'
@@ -418,3 +443,5 @@ npm run test:e2e
 - Playwright `/microsoft/playwright/v1.61.0` через Context7 — automatic
   fixtures, fixture teardown и события `console`, `pageerror`,
   `requestfailed`, `response`.
+- Node.js `/websites/nodejs_latest-v24_x_api` через Context7 — безопасные
+  `open` flags, descriptor metadata, sync и atomic rename.

@@ -3434,6 +3434,11 @@ type CreateOwnerSessionParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// RenewOwnerSessionParams defines parameters for RenewOwnerSession.
+type RenewOwnerSessionParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // AddSessionTurnParams defines parameters for AddSessionTurn.
 type AddSessionTurnParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -3780,6 +3785,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/session)
 	CreateOwnerSession(w http.ResponseWriter, r *http.Request, params CreateOwnerSessionParams)
+
+	// (PUT /api/v1/session)
+	RenewOwnerSession(w http.ResponseWriter, r *http.Request, params RenewOwnerSessionParams)
 
 	// (POST /api/v1/sessions/{sessionRef}/turns)
 	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
@@ -8580,6 +8588,57 @@ func (siw *ServerInterfaceWrapper) CreateOwnerSession(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// RenewOwnerSession operation middleware
+func (siw *ServerInterfaceWrapper) RenewOwnerSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RenewOwnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenewOwnerSession(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AddSessionTurn operation middleware
 func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http.Request) {
 
@@ -9308,6 +9367,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.SearchPlatform)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/session", wrapper.DeleteOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/session", wrapper.RenewOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)

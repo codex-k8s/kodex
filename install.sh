@@ -166,6 +166,7 @@ kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 
 installer_temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$installer_temporary_directory"' EXIT
+nats_runtime_users_changed=false
 ensure_core_material() {
   if [[ ! -e "$material_directory" ]]; then
     local -a arguments=(
@@ -196,6 +197,16 @@ ensure_core_material() {
   "$repository_root/tools/install/reconcile-pull-docker-config.sh" \
     --material-directory "$material_directory" \
     --promoted-pull-host "$KODEX_PROMOTED_PULL_HOST"
+  if any_component_selected secrets platform; then
+    local reconciliation_result
+    reconciliation_result=$("$repository_root/tools/install/reconcile-nats-runtime-users.sh" \
+      --material-directory "$material_directory")
+    case "$reconciliation_result" in
+      changed) nats_runtime_users_changed=true ;;
+      unchanged) ;;
+      *) fail 'NATS runtime user reconciliation returned an invalid result' ;;
+    esac
+  fi
   chmod 0700 "$material_directory"
   install -d -m 0700 "$material_directory/inputs" "$material_directory/github"
 }
@@ -209,6 +220,10 @@ write_env_input() {
 
 if any_component_selected identity management registry arc secrets platform; then
   ensure_core_material
+fi
+if [[ "$nats_runtime_users_changed" == true ]]; then
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
+    --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory"
 fi
 if any_component_selected arc platform; then
   write_env_input KODEX_GITHUB_OWNER_PAT "$material_directory/inputs/github-owner-pat"

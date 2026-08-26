@@ -38,6 +38,13 @@ paths:
           description: Защищённая browser-сессия создана
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
         default: { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [Session]
+      operationId: renewOwnerSession
+      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '204': { description: Idle-срок защищённой browser-сессии продлён при необходимости }
+        default: { $ref: '#/components/responses/Problem' }
     delete:
       tags: [Session]
       operationId: deleteOwnerSession
