@@ -6,7 +6,7 @@ fail() {
   exit 1
 }
 
-for command_name in base64 jq regctl; do
+for command_name in base64 jq regctl sleep; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is unavailable"
 done
 
@@ -91,10 +91,20 @@ copy_exact() {
   esac
   destination_tag="$destination_registry/$destination_repository:release-${RELEASE_SOURCE_SHA}"
   regctl image copy "$source_ref" "$destination_tag" >/dev/null || fail 'copy exact release artifact'
-  actual_digest=$(regctl image digest "$destination_tag") || fail 'read back release artifact'
+  actual_digest=""
+  readback_attempt=1
+  while [ "$readback_attempt" -le 6 ]; do
+    if actual_digest=$(regctl image digest "$destination_tag"); then
+      break
+    fi
+    [ "$readback_attempt" -lt 6 ] || fail 'read back release artifact'
+    readback_attempt=$((readback_attempt + 1))
+    sleep 5
+  done
   test "$actual_digest" = "$expected_digest" || fail 'release artifact digest mismatch'
 }
 
+copy_exact "$CONTROL_PLANE_SOURCE_REF" kodex/control-plane "$CONTROL_PLANE_DIGEST"
 copy_exact "$DOCKERFILE_SOURCE_REF" kodex/dockerfile "$DOCKERFILE_DIGEST"
 copy_exact "$AGENT_RUNNER_SOURCE_REF" kodex/agent-runner "$AGENT_RUNNER_DIGEST"
 copy_exact "$ROLE_BASE_DOCUMENTS_SOURCE_REF" kodex/role-base-documents "$ROLE_BASE_DOCUMENTS_DIGEST"

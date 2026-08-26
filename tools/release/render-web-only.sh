@@ -434,11 +434,14 @@ ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" yq -i '
 ' "$rendered"
 
 agent_runner_source_ref="$registry_push/$repository_prefix/agent-runner@$agent_runner_digest"
+control_plane_source_ref="$registry_push/$repository_prefix/control-plane@$control_plane_digest"
 role_base_documents_source_ref="$registry_push/$repository_prefix/role-base-documents@$role_base_documents_digest"
 role_image_input_source_ref="$registry_push/$repository_prefix/role-image-inputs@$role_input_manifest_digest"
 dockerfile_source_ref="$registry_push/$repository_prefix/dockerfile@$frontend_digest"
 RELEASE_SOURCE_REGISTRY="$release_source_registry" \
 SOURCE_SHA="$source_sha" \
+CONTROL_PLANE_SOURCE_REF="$control_plane_source_ref" \
+CONTROL_PLANE_DIGEST="$control_plane_digest" \
 DOCKERFILE_SOURCE_REF="$dockerfile_source_ref" \
 DOCKERFILE_DIGEST="$frontend_digest" \
 AGENT_RUNNER_SOURCE_REF="$agent_runner_source_ref" \
@@ -450,6 +453,8 @@ ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
   with(select(.kind == "Job" and .metadata.name == "release-artifact-materializer");
     (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_REGISTRY").value) = strenv(RELEASE_SOURCE_REGISTRY) |
     (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_SHA").value) = strenv(SOURCE_SHA) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "CONTROL_PLANE_SOURCE_REF").value) = strenv(CONTROL_PLANE_SOURCE_REF) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "CONTROL_PLANE_DIGEST").value) = strenv(CONTROL_PLANE_DIGEST) |
     (.spec.template.spec.containers[0].env[] | select(.name == "DOCKERFILE_SOURCE_REF").value) = strenv(DOCKERFILE_SOURCE_REF) |
     (.spec.template.spec.containers[0].env[] | select(.name == "DOCKERFILE_DIGEST").value) = strenv(DOCKERFILE_DIGEST) |
     (.spec.template.spec.containers[0].env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value) = strenv(AGENT_RUNNER_SOURCE_REF) |

@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.7
-updated: 2026-08-25
+version: 2.0.8
+updated: 2026-08-26
 ---
 
 # Чистое развертывание Kodex
@@ -227,7 +227,9 @@ Actions; установщик скачивает digest-bound render и прим
 9. `internal-rpc-authority-publisher`;
 10. readback всех dynamic Secret projections;
 11. остальные Deployments/CronJobs;
-12. release artifact materialization;
+12. release artifact materialization, включая exact `control-plane` sentinel
+    для authenticated pull-registry readback; транспортный отказ readback
+    повторяется ограниченно, а несовпадение digest немедленно закрывает выпуск;
 13. rollout, Job и failing Pod readback.
 
 Нельзя запускать workloads до готовности authority projections или считать
