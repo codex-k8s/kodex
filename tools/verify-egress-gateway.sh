@@ -63,8 +63,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
 
   yq -e 'select(.kind == "ServiceAccount" and .metadata.name == "egress-gateway") |
     .automountServiceAccountToken == false and
-    (.imagePullSecrets | length) == 1 and
-    .imagePullSecrets[0].name == "kodex-image-pull"' "$gateway_render" >/dev/null
+    ((.imagePullSecrets // []) | length) == 0' "$gateway_render" >/dev/null
 
   policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != "") | .metadata.name' "$gateway_render")"
   if [[ ! "$policy_name" =~ ^egress-gateway-policy-[a-z0-9]+$ ]]; then
