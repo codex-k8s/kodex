@@ -4,8 +4,8 @@ title: Диагностика автоматического admission обра�
 type: runbook
 status: approved
 owner: sre
-version: 1.0.5
-updated: 2026-08-24
+version: 1.0.6
+updated: 2026-08-26
 ---
 
 # Диагностика автоматического admission образов ролей
@@ -91,6 +91,16 @@ IMAGE_ADMISSION_POLICY_JSON='<read-only ConfigMap JSON without secrets>' \
   только при exact DER readback нового mounted сертификата. Частые рестарты
   backend registry при неизменном pull-authorizer означают drift process
   target, а не отказ хранилища.
+- Новый exact release обязан менять release revision в PodTemplate BuildKit.
+  Это принудительно перезапускает daemon после обновления projected registry
+  credentials и policy inputs; ручной rollout не является штатным способом
+  применения новой revision. Совпадение хеша mounted Docker config при старом
+  времени создания Pod не доказывает, что daemon перечитал credential.
+- Registry guard сохраняет последний успешный ready marker только пока идёт
+  ограниченный по времени readback текущего цикла. Медленный manifest readback
+  не должен заранее исключать единственный endpoint из Service. Ошибка,
+  несовпавший digest или исчерпание сетевого бюджета удаляют marker в том же
+  цикле и закрыто снимают readiness.
 
 ## Восстановление и rollback
 
