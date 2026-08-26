@@ -171,6 +171,16 @@ workloads_apply_line=$(grep -nE '^[[:space:]]+apply_render workloads-before-role
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 materializer_apply_line=$(grep -nE '^[[:space:]]+apply_job release-artifact-materializer$' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+for job_terminal_contract in \
+	'.type == "Complete" and .status == "True"' \
+	'.type == "Failed" and .status == "True"' \
+	'release Job timed out: $name'; do
+	rg -Fq -- "$job_terminal_contract" "$repository_root/tools/install/deploy-platform.sh" ||
+		fail "release Job terminal-state contract is absent: $job_terminal_contract"
+done
+if rg -Fq -- 'wait --for=condition=Complete' "$repository_root/tools/install/deploy-platform.sh"; then
+	fail 'release Job lifecycle still waits only for successful completion'
+fi
 builder_dependencies_wait_line=$(grep -nE \
 	'^[[:space:]]+for dependency in kodex-image-registry-pull kodex-buildkit; do$' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)

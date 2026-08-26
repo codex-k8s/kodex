@@ -109,12 +109,28 @@ apply_job() {
     --ignore-not-found --wait=true --timeout=5m >/dev/null
   kubectl --context "$context" apply --server-side --field-manager=kodex-install \
     -f "$job_file" >/dev/null
-  kubectl --context "$context" -n "$namespace" wait --for=condition=Complete \
-    "job/$name" --timeout=20m >/dev/null || {
+  wait_job_terminal "$name"
+}
+
+wait_job_terminal() {
+  local name=$1 deadline=$((SECONDS + 1200)) state
+  while ((SECONDS < deadline)); do
+    state=$(kubectl --context "$context" -n "$namespace" get "job/$name" -o json)
+    if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' \
+      <<<"$state" >/dev/null; then
+      return
+    fi
+    if jq -e 'any(.status.conditions[]?; .type == "Failed" and .status == "True")' \
+      <<<"$state" >/dev/null; then
       kubectl --context "$context" -n "$namespace" logs "job/$name" --all-containers \
         --tail=200 >&2 || true
       fail "release Job failed: $name"
-    }
+    fi
+    sleep 2
+  done
+  kubectl --context "$context" -n "$namespace" logs "job/$name" --all-containers \
+    --tail=200 >&2 || true
+  fail "release Job timed out: $name"
 }
 
 ensure_seed_secret() {
