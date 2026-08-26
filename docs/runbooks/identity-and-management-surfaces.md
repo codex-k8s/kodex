@@ -4,8 +4,8 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-25
+version: 2.0.1
+updated: 2026-08-26
 ---
 
 # Identity и административные интерфейсы
@@ -54,6 +54,8 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 - implicit/direct grants выключены, PKCE `S256` включён;
 - access token не передаётся upstream административным UI;
 - OAuth2 Proxy проверяет exact role;
+- анонимный browser GET получает `302` в exact Keycloak issuer, тогда как
+  прямой `/oauth2/auth` без сессии остаётся `401`, а отказ по role - `403`;
 - Control Center не доступен в обход middleware;
 - Headlamp ServiceAccount связан ровно с `cluster-admin`;
 - Prometheus и Alertmanager не имеют публичного Ingress.
