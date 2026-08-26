@@ -265,6 +265,14 @@ for runtime_tool in curl openssl pgrep; do
 done
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
+yq eval-all -e '
+  select(.kind == "CronJob" and .metadata.name == "kodex-registry-cleanup") |
+  (.spec.jobTemplate.spec.template.spec.volumes[] |
+    select(.name == "script").configMap.defaultMode) == 365
+' "$temporary_directory/supply.yaml" >/dev/null || {
+  echo "registry cleanup script is unreadable for the non-root workload" >&2
+  exit 1
+}
 if rg -q 'staging-push|STAGING_DOCKER' \
   "$repository_root/deploy/k8s/base/role-image-builder"; then
   echo "builder still receives staging push authority" >&2

@@ -68,7 +68,7 @@ spec:
             - name: script
               configMap:
                 name: kodex-registry-cleanup
-                defaultMode: 0550
+                defaultMode: 0555
             - name: registry-identity
               secret:
                 secretName: kodex-registry-cleanup-client

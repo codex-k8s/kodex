@@ -75,6 +75,10 @@ secret_producers="$temporary_directory/secret-producers"
       .kind == "DaemonSet" or .kind == "Job" or .kind == "CronJob") |
     (.spec.template.spec.imagePullSecrets // [])[]?.name
   ' "$render"
+  yq -N -r '
+    select(.kind == "ServiceAccount") |
+    (.imagePullSecrets // [])[]?.name
+  ' "$render"
 } | sed '/^null$/d;/^$/d' | sort -u >"$secret_references"
 {
   jq -r '.secrets[].name' "$repository_root/tools/install/secret-projections.json"
@@ -94,6 +98,10 @@ secret_producers="$temporary_directory/secret-producers"
 missing_secrets=$(comm -23 "$secret_references" "$secret_producers")
 [[ -z "$missing_secrets" ]] ||
   fail "release references Kubernetes Secrets without a producer: ${missing_secrets//$'\n'/,}"
+if yq -e 'select(.kind == "ServiceAccount" and
+  ((.imagePullSecrets // []) | length > 0))' "$render" >/dev/null 2>&1; then
+  fail 'ServiceAccount bypasses the canonical node registry credential path'
+fi
 
 postgres_clients="$temporary_directory/postgres-clients"
 postgres_allowed_clients="$temporary_directory/postgres-allowed-clients"
