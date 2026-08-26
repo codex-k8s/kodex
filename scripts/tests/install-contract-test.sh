@@ -50,6 +50,18 @@ done
 bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
   "$repository_root/tools/deploy/materialize-identity-secrets.sh"
 
+dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
+"$dockerfile_path_validator" infra/dockerfile-frontend/Dockerfile ||
+  fail 'canonical Dockerfile frontend path was rejected'
+for rejected_dockerfile_path in \
+  infra/admission-tools/Dockerfile \
+  infra/dockerfile-frontend/Other.Dockerfile \
+  infra/dockerfile-frontend/../admission-tools/Dockerfile; do
+  if "$dockerfile_path_validator" "$rejected_dockerfile_path" >/dev/null 2>&1; then
+    fail "non-canonical infrastructure Dockerfile path was accepted: $rejected_dockerfile_path"
+  fi
+done
+
 material_assignment_line=$(grep -n '^material_directory=' "$repository_root/install.sh" | cut -d: -f1)
 registry_credentials_guard_line=$(grep -n \
   '^if ! component_selected registry && any_component_selected secrets platform &&$' \
@@ -95,14 +107,24 @@ publisher_apply_line=$(grep -nE '^[[:space:]]+apply_render authority-publisher '
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 bootstrap_wait_line=$(grep -nE '^[[:space:]]+wait_authority_projections bootstrap$' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
-workloads_apply_line=$(grep -nE '^[[:space:]]+apply_render workloads ' \
+workloads_apply_line=$(grep -nE '^[[:space:]]+apply_render workloads-before-role-image-builder ' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+materializer_apply_line=$(grep -nE '^[[:space:]]+apply_job release-artifact-materializer$' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+builder_dependencies_wait_line=$(grep -nE \
+	'^[[:space:]]+for dependency in kodex-image-registry-pull kodex-buildkit; do$' \
+	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
+role_image_builder_apply_line=$(grep -nE '^[[:space:]]+apply_render role-image-builder ' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 full_wait_line=$(grep -n '^wait_authority_projections all$' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 [[ "$publisher_apply_line" -lt "$bootstrap_wait_line" &&
 	"$bootstrap_wait_line" -lt "$workloads_apply_line" &&
-	"$workloads_apply_line" -lt "$full_wait_line" ]] ||
-	fail 'authority bootstrap, workload and full readback release phases are misordered'
+	"$workloads_apply_line" -lt "$materializer_apply_line" &&
+	"$materializer_apply_line" -lt "$builder_dependencies_wait_line" &&
+	"$builder_dependencies_wait_line" -lt "$role_image_builder_apply_line" &&
+	"$role_image_builder_apply_line" -lt "$full_wait_line" ]] ||
+	fail 'authority bootstrap, materialization, role image builder and full readback phases are misordered'
 if rg -Fq 'gh variable get' "$repository_root/tools/install/configure-github.sh"; then
   fail 'GitHub variable readback relies on an unsupported gh subcommand'
 fi
