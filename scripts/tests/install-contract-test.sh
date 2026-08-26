@@ -17,6 +17,10 @@ export KODEX_KUBECONFIG=/tmp/test-kubeconfig
 export KODEX_KUBE_CONTEXT=kodex-test
 export KODEX_RELEASE_REGISTRY_PASSWORD='test-registry-password-with-equals=='
 export KODEX_CONTROL_TLS_RECOVERY_HOST=control-recovery.example.com
+export KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=203.0.113.10
+export KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=2001:db8::10
+export KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS=7
+export KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS=9
 env_file="$temporary_directory/.kodex-env"
 "$repository_root/tools/install/write-env-file.sh" --output "$env_file" >/dev/null
 [[ "$(stat -c '%a' "$env_file")" == 600 ]] || fail '.kodex-env mode differs from 0600'
@@ -24,12 +28,19 @@ env_file="$temporary_directory/.kodex-env"
 unset KODEX_INSTALL_MODE KODEX_NAMESPACE KODEX_KUBECONFIG KODEX_KUBE_CONTEXT
 unset KODEX_RELEASE_REGISTRY_PASSWORD
 unset KODEX_CONTROL_TLS_RECOVERY_HOST
+unset KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES
+unset KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES
+unset KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS
 # shellcheck source=../../tools/install/load-env.sh
 source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
 [[ "$KODEX_INSTALL_MODE" == existing-kubernetes && "$KODEX_NAMESPACE" == kodex-system &&
   "$KODEX_RELEASE_REGISTRY_PASSWORD" == 'test-registry-password-with-equals==' &&
-  "$KODEX_CONTROL_TLS_RECOVERY_HOST" == control-recovery.example.com ]] ||
+  "$KODEX_CONTROL_TLS_RECOVERY_HOST" == control-recovery.example.com &&
+  "$KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES" == 203.0.113.10 &&
+  "$KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES" == 2001:db8::10 &&
+  "$KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS" == 7 &&
+  "$KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS" == 9 ]] ||
   fail 'generated .kodex-env readback mismatch'
 
 chmod 0644 "$env_file"

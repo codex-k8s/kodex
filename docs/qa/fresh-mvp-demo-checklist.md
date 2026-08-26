@@ -4,7 +4,7 @@ title: Проверка fresh web-only MVP перед демонстрацией
 type: qa-checklist
 status: approved
 owner: qa
-version: 1.0.1
+version: 1.0.2
 updated: 2026-08-26
 ---
 
@@ -129,8 +129,11 @@ TLS-сертификата и финальный trusted E2E после отде
       `________`; evidence: `________________`.
 - [ ] `AUTH-01` `internal-rpc-authority-publisher` полностью готов; результат:
       `________`; evidence: `________________`.
-- [ ] `AUTH-02` Все dynamic Secret projections имеют generation больше нуля,
-      точный ожидаемый набор непустых keys; values не читались и не печатались;
+- [ ] `AUTH-02` Обычные dynamic Secret projections имеют generation больше
+      нуля и точный ожидаемый набор непустых keys. Event-scoped restore
+      projection находится либо в owner-managed пустом состоянии generation 0
+      без data, либо в полном активном состоянии с положительной generation,
+      `_generation` и exact key set. Values не читались и не печатались;
       результат: `________`; evidence: `________________`.
 
 ### 3.5 Workloads, API readiness и observability
@@ -170,22 +173,28 @@ limit. До этого запрещены повторные issuance/reissuance
       текущее UTC-время позже него; результат: `________`; evidence:
       `________________`.
 - [ ] `TLS-02` DNS A/AAAA для Control Center и recovery SAN указывает только на
-      ожидаемый ingress; отсутствует ошибочный IPv6; результат: `________`;
-      evidence: `________________`.
-- [ ] `TLS-03` После одной разрешённой apply-попытки публичный `Certificate`
+      exact разрешённые ingress IP; объединение полного snapshot совпадает с
+      `KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES` и
+      `KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES`, отсутствует ошибочный IPv6;
+      результат: `________`; evidence: `________________`.
+- [ ] `TLS-03` До создания `Certificate` exact `ClusterIssuer` имеет
+      `Ready=True`, а bounded внешний HTTP port 80 probe каждого SAN/address с
+      соответствующим `Host` успешен; при отрицательном адресе apply не
+      выполняется; результат: `________`; evidence: `________________`.
+- [ ] `TLS-04` После одной разрешённой apply-попытки публичный `Certificate`
       имеет `Ready=True`; повторная ручная ротация и удаление Secret не
       выполнялись; результат: `________`; evidence: `________________`.
-- [ ] `TLS-04` SAN содержит точный публичный host и настроенный recovery host,
+- [ ] `TLS-05` SAN содержит точный публичный host и настроенный recovery host,
       issuer/chain ожидаемы, срок действия корректен; результат: `________`;
       evidence: `________________`.
-- [ ] `TLS-05` Внешний TLS-клиент получает полную доверенную цепочку,
+- [ ] `TLS-06` Внешний TLS-клиент получает полную доверенную цепочку,
       hostname verification и `Verify return code: 0`; Traefik default
       certificate не выдаётся; результат: `________`; evidence:
       `________________`.
-- [ ] `TLS-06` HTTPS работает без `-k` и browser security warnings; HTTP только
+- [ ] `TLS-07` HTTPS работает без `-k` и browser security warnings; HTTP только
       перенаправляет на точный HTTPS origin; результат: `________`; evidence:
       `________________`.
-- [ ] `TLS-07` Security headers включают HSTS с `max-age` не меньше года и
+- [ ] `TLS-08` Security headers включают HSTS с `max-age` не меньше года и
       `includeSubDomains`, CSP, anti-framing и запрет MIME sniffing; mixed
       content отсутствует; результат: `________`; evidence: `________________`.
 

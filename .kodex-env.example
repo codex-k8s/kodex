@@ -12,6 +12,15 @@ KODEX_CONTROL_HOST=control.kodex.example.com
 # deferred не создаёт публичный ACME Certificate и используется только до
 # разрешённого окна выдачи. enabled является каноническим режимом релиза.
 KODEX_PUBLIC_TLS_MODE=enabled
+# Exact comma-separated external ingress addresses. Списки должны в точности
+# совпадать с объединением A/AAAA всех SAN публичного Certificate. Wildcard,
+# CIDR, пробелы и неиспользуемые запасные адреса запрещены. Для IPv4-only
+# установки список IPv6 оставляется пустым и ни один SAN не должен иметь AAAA.
+KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=203.0.113.10
+KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=
+# Bounded DNS lookup и HTTP port 80 probe для каждого SAN/address.
+KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS=10
+KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS=10
 # Необязательный отдельный DNS для восстановления после ACME duplicate-certificate
 # rate limit. Он должен указывать на тот же ingress и оставаться стабильным до
 # следующей плановой ротации сертификата.
