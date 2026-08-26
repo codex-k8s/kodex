@@ -110,6 +110,47 @@ create_secret() {
     kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
 }
 
+materialize_provider_secret() {
+  local name=runtime-provider-openai-default-r1
+  local digest digest_file manifest current current_digest current_digest_file
+  digest=$(sha256sum "$provider_auth_file" | awk '{print $1}')
+  digest_file="$temporary_directory/provider-auth.sha256"
+  manifest="$temporary_directory/provider-secret.json"
+  printf '%s\n' "$digest" >"$digest_file"
+
+  if current=$(kubectl -n "$namespace" get "secret/$name" \
+    --show-managed-fields -o json 2>/dev/null); then
+    current_digest=$(jq -jr '.data["auth.json"] // "" | @base64d' <<<"$current" |
+      sha256sum | awk '{print $1}')
+    current_digest_file=$(jq -jr '.data["auth.sha256"] // "" | @base64d' \
+      <<<"$current" | tr -d '[:space:]')
+    if jq -e '.immutable == true' <<<"$current" >/dev/null; then
+      [[ "$current_digest" == "$digest" && "$current_digest_file" == "$digest" ]] ||
+        fail 'immutable provider credential differs from installation material; create a new credential revision'
+      return
+    fi
+    jq -e --arg namespace "$namespace" --arg name "$name" '
+      .metadata.namespace == $namespace and .metadata.name == $name and
+      .type == "Opaque" and ((.metadata.ownerReferences // []) | length == 0) and
+      any(.metadata.managedFields[]?; .manager == "kodex-install")
+    ' <<<"$current" >/dev/null ||
+      fail 'mutable provider credential is not owned by the Kodex installer'
+    kubectl -n "$namespace" delete "secret/$name" --wait=true --timeout=3m >/dev/null
+  fi
+
+  kubectl -n "$namespace" create secret generic "$name" \
+    --from-file=auth.json="$provider_auth_file" \
+    --from-file=auth.sha256="$digest_file" \
+    --dry-run=client -o json | jq '
+      .immutable = true |
+      .metadata.labels = {
+        "app.kubernetes.io/part-of":"kodex",
+        "app.kubernetes.io/managed-by":"kodex-install"
+      }
+    ' >"$manifest"
+  kubectl create --field-manager=kodex-install -f "$manifest" >/dev/null
+}
+
 installation_ca="$material_directory/authorities/pki"
 create_secret kodex-system kodex-installation-ca \
   --from-file=tls.crt="$installation_ca/ca.crt" \
@@ -134,8 +175,7 @@ create_secret kodex-system kodex-nats-credentials \
 create_secret kodex-system kodex-sentry --from-literal=dsn=
 create_secret kodex-system internal-rpc-authority-sentry --from-literal=dsn=
 create_secret kodex-system kodex-integration-credentials --from-literal=empty=
-create_secret kodex-system runtime-provider-openai-default-r1 \
-  --from-file=auth.json="$provider_auth_file"
+materialize_provider_secret
 
 apply_configmap() {
   local namespace_name=$1 name=$2

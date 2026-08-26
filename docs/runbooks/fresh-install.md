@@ -190,6 +190,21 @@ Secrets принадлежат installer field manager. Динамические
 создаёт и обновляет только `internal-rpc-authority-publisher`; installer создаёт
 для них пустой generation `0`, но не перезаписывает опубликованное значение.
 
+Provider credential `runtime-provider-openai-default-r1` материализуется как
+immutable revision с `auth.json` и `auth.sha256`. Перед созданием metadata
+ConfigMap installer сверяет фактический digest, UID и `resourceVersion`.
+Повторный запуск с тем же материалом сохраняет revision без изменений. Старый
+mutable `r1`, созданный версией installer до этого инварианта, удаляется только
+при подтверждённом field manager `kodex-install` и создаётся заново; bootstrap
+платформы затем фиксирует новые UID и `resourceVersion`. Изменение уже
+immutable `r1` закрыто отклоняется: ротация credentials должна создавать новую
+revision, а не менять существующую.
+
+Platform preflight и readback повторяют проверку immutable, digest и metadata.
+Повреждённый либо рассинхронизированный provider Secret останавливает deploy до
+создания runtime workloads и не переводит системного помощника в ложное
+состояние готовности.
+
 Kubernetes Secrets защищаются k3s encryption at rest. Значения запрещены в
 GitHub artifacts, render, logs, Issue/PR и ConfigMap.
 
