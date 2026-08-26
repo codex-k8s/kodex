@@ -38,6 +38,10 @@ extraArgs:
   standard-logging: "true"
   auth-logging: "true"
   request-logging: "true"
+hostAliases:
+  - ip: __KODEX_OIDC_CONNECT_IP__
+    hostnames:
+      - __KODEX_OIDC_HOST__
 serviceAccount:
   enabled: true
   automountServiceAccountToken: false
