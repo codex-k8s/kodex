@@ -4,7 +4,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -50,4 +54,60 @@ func TestNodePullRepositoriesAreClosedToBootstrapAndRuntime(t *testing.T) {
 			t.Fatalf("out-of-scope node pull path was accepted: %s", path)
 		}
 	}
+}
+
+func TestDockerCredentialMatchesInternalAndPromotedHosts(t *testing.T) {
+	t.Parallel()
+	const promotedHost = "images.kodex.works"
+	path := writeDockerConfig(t, map[string]string{
+		internalPullRegistryHost: base64.StdEncoding.EncodeToString([]byte("pull-user:pull-password")),
+		promotedHost:             base64.StdEncoding.EncodeToString([]byte("pull-user:pull-password")),
+	})
+
+	if !dockerCredentialMatches(path, "pull-user", "pull-password", promotedHost) {
+		t.Fatal("exact promoted registry credential was rejected")
+	}
+	if dockerCredentialMatches(path, "pull-user", "wrong-password", promotedHost) {
+		t.Fatal("wrong promoted registry credential was accepted")
+	}
+}
+
+func TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry(t *testing.T) {
+	t.Parallel()
+	const promotedHost = "images.kodex.works"
+	auth := base64.StdEncoding.EncodeToString([]byte("pull-user:pull-password"))
+	path := writeDockerConfig(t, map[string]string{
+		internalPullRegistryHost: auth,
+		promotedHost:             auth,
+		"unexpected.example":     auth,
+	})
+
+	if dockerCredentialMatches(path, "pull-user", "pull-password", promotedHost) {
+		t.Fatal("Docker config with an unexpected registry entry was accepted")
+	}
+}
+
+func writeDockerConfig(t *testing.T, auths map[string]string) string {
+	t.Helper()
+	document := struct {
+		Auths map[string]struct {
+			Auth string `json:"auth"`
+		} `json:"auths"`
+	}{Auths: make(map[string]struct {
+		Auth string `json:"auth"`
+	}, len(auths))}
+	for host, auth := range auths {
+		document.Auths[host] = struct {
+			Auth string `json:"auth"`
+		}{Auth: auth}
+	}
+	value, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal Docker config: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, value, 0o600); err != nil {
+		t.Fatalf("write Docker config: %v", err)
+	}
+	return path
 }
