@@ -130,13 +130,21 @@ fi
 if [[ "$arguments" == *' apply '* ]]; then
   exit 0
 fi
+if [[ "$arguments" == *' get service sso -o json '* ]]; then
+  printf '{"spec":{"clusterIP":"10.43.99.185","ports":[{"port":443}]}}\n'
+  exit 0
+fi
 if [[ "$arguments" =~ \ rollout\ status\ deployment/(oauth2-control-center|oauth2-grafana|oauth2-headlamp|kodex-headlamp)\  ]]; then
   exit 0
 fi
 if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
   role=kodex-owner
   [[ "$arguments" != *' get deployment oauth2-headlamp '* ]] || role=admin
-  printf '{"spec":{"template":{"spec":{"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  printf '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"10.43.99.185","hostnames":["sso.example.test"]}],"containers":[{"name":"oauth2-proxy","args":["--allowed-role=%s"]}]}}}}\n' "$role"
+  exit 0
+fi
+if [[ "$arguments" == *' get networkpolicy oauth2-'*'-exact-paths -o json '* ]]; then
+  printf '%s\n' '{"spec":{"egress":[{"ports":[{"protocol":"UDP","port":53}]},{"ports":[{"protocol":"TCP","port":8443}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"identity"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"sso","app.kubernetes.io/component":"identity-provider"}}}]}]}}'
   exit 0
 fi
 if [[ "$arguments" == *' get clusterrolebinding kodex-headlamp-admin -o json '* ]]; then
@@ -188,10 +196,11 @@ readback_arguments=(
   --context fixture-context
   --mode readback
   --oidc-issuer https://sso.example.test/realms/kodex
+  --oidc-connect-address sso.identity.svc.cluster.local:443
+  --oidc-target-port 8443
   --control-center-host control.example.test
   --grafana-host grafana.example.test
   --headlamp-host headlamp.example.test
-  --public-ipv4-cidr 192.0.2.10/32
   --ingress-class traefik
   --cluster-issuer fixture-issuer
   --ingress-namespace kube-system
@@ -247,6 +256,30 @@ kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e \
   fail 'Control Center Ingress is absent from the platform release'
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
+yq -e '
+  (.hostAliases | length) == 1 and
+  .hostAliases[0].ip == "__KODEX_OIDC_CONNECT_IP__" and
+  (.hostAliases[0].hostnames | length) == 1 and
+  .hostAliases[0].hostnames[0] == "__KODEX_OIDC_HOST__"
+' "$values" >/dev/null || fail 'OAuth2 Proxy internal OIDC host alias is absent'
+for policy in \
+  oauth2-control-center-exact-paths \
+  oauth2-grafana-exact-paths \
+  oauth2-headlamp-exact-paths; do
+  POLICY_NAME="$policy" yq -e '
+    select(.kind == "NetworkPolicy" and .metadata.name == strenv(POLICY_NAME)) |
+    .spec.egress[] |
+    select(
+      (.ports | length) == 1 and
+      .ports[0].protocol == "TCP" and
+      .ports[0].port == "__KODEX_OIDC_TARGET_PORT__" and
+      (.to | length) == 1 and
+      .to[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "identity" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/name"] == "sso" and
+      .to[0].podSelector.matchLabels["app.kubernetes.io/component"] == "identity-provider"
+    )
+  ' "$routes" >/dev/null || fail "OAuth2 Proxy exact Keycloak egress is absent: $policy"
+done
 yq -e '
   select(.kind == "Service" and .metadata.name == "sso") |
   .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==

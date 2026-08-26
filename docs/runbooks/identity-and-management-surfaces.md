@@ -4,7 +4,7 @@ title: Identity и административные интерфейсы
 type: runbook
 status: approved
 owner: sre
-version: 2.0.2
+version: 2.0.3
 updated: 2026-08-26
 ---
 
@@ -13,11 +13,11 @@ updated: 2026-08-26
 Kodex устанавливает Keycloak и три административные поверхности. Все внешние
 маршруты кроме login/OIDC endpoints Keycloak закрыты OAuth2 Proxy.
 
-| Интерфейс | Realm и role | Kubernetes authority |
-| --- | --- | --- |
-| Control Center | `kodex`, `kodex-owner` | собственная API authorization |
-| Grafana | `kodex`, `kodex-owner` | auth-proxy header только от OAuth2 Proxy |
-| Headlamp | `master`, `admin` | отдельный ServiceAccount `cluster-admin` |
+| Интерфейс      | Realm и role           | Kubernetes authority                     |
+| -------------- | ---------------------- | ---------------------------------------- |
+| Control Center | `kodex`, `kodex-owner` | собственная API authorization            |
+| Grafana        | `kodex`, `kodex-owner` | auth-proxy header только от OAuth2 Proxy |
+| Headlamp       | `master`, `admin`      | отдельный ServiceAccount `cluster-admin` |
 
 Keycloak administrators намеренно получают полный доступ к кластеру через
 Headlamp. Обычный owner realm `kodex` такого доступа не получает. Keycloak
@@ -45,7 +45,9 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 4. realm, roles, clients, PKCE и постоянные пользователи;
 5. monitoring stack и Headlamp;
 6. три независимых OAuth2 Proxy;
-7. exact Ingress/NetworkPolicy и readback.
+7. точный внутренний маршрут OAuth2 Proxy к bundled Keycloak с сохранением
+   публичного issuer и TLS identity;
+8. exact Ingress/NetworkPolicy и readback.
 
 ## Readback
 
@@ -54,6 +56,10 @@ OIDC client secrets, cookie secrets и Grafana admin password генерирую
 - implicit/direct grants выключены, PKCE `S256` включён;
 - access token не передаётся upstream административным UI;
 - OAuth2 Proxy проверяет exact role;
+- OAuth2 Proxy разрешает публичное имя issuer во внутренний ClusterIP
+  `identity/sso`, проверяет исходный TLS/SNI и имеет egress только к pod
+  Keycloak на объявленный target port; корректность входа не зависит от
+  hairpin NAT публичного адреса узла;
 - анонимный browser GET получает `302` в exact Keycloak issuer, тогда как
   прямой `/oauth2/auth` без сессии остаётся `401`, а отказ по role - `403`;
 - Control Center не доступен в обход middleware;

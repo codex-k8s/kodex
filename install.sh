@@ -108,8 +108,9 @@ if component_selected identity; then
 fi
 if component_selected management; then
   kodex_require_env KODEX_CONTROL_HOST KODEX_GRAFANA_HOST KODEX_HEADLAMP_HOST \
-    KODEX_PUBLIC_IPV4_CIDR KODEX_INGRESS_CLASS KODEX_CLUSTER_ISSUER \
-    KODEX_INGRESS_NAMESPACE KODEX_INGRESS_POD_NAME || exit 1
+    KODEX_OIDC_CONNECT_ADDRESS KODEX_OIDC_TARGET_PORT \
+    KODEX_INGRESS_CLASS KODEX_CLUSTER_ISSUER KODEX_INGRESS_NAMESPACE \
+    KODEX_INGRESS_POD_NAME || exit 1
 fi
 if any_component_selected identity management registry arc secrets platform; then
   kodex_require_env KODEX_REGISTRY_HOST KODEX_PROMOTED_PULL_HOST || exit 1
@@ -312,8 +313,10 @@ if component_selected management; then
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode apply-monitoring \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
+    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
+    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
     --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" --public-ipv4-cidr "$KODEX_PUBLIC_IPV4_CIDR" \
+    --headlamp-host "$KODEX_HEADLAMP_HOST" \
     --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
     --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
     --kubernetes-api-service-cidr "$api_service_ip/32" \
@@ -322,8 +325,10 @@ if component_selected management; then
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode apply-surfaces \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
+    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
+    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
     --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" --public-ipv4-cidr "$KODEX_PUBLIC_IPV4_CIDR" \
+    --headlamp-host "$KODEX_HEADLAMP_HOST" \
     --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
     --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
     --kubernetes-api-service-cidr "$api_service_ip/32" \
@@ -433,8 +438,10 @@ if component_selected management; then
   "$repository_root/infra/management-surfaces/bootstrap.sh" \
     --context "$KODEX_KUBE_CONTEXT" --mode readback \
     --oidc-issuer "https://$KODEX_OIDC_HOST/realms/kodex" \
+    --oidc-connect-address "$KODEX_OIDC_CONNECT_ADDRESS" \
+    --oidc-target-port "$KODEX_OIDC_TARGET_PORT" \
     --control-center-host "$KODEX_CONTROL_HOST" --grafana-host "$KODEX_GRAFANA_HOST" \
-    --headlamp-host "$KODEX_HEADLAMP_HOST" --public-ipv4-cidr "$KODEX_PUBLIC_IPV4_CIDR" \
+    --headlamp-host "$KODEX_HEADLAMP_HOST" \
     --ingress-class "$KODEX_INGRESS_CLASS" --cluster-issuer "$KODEX_CLUSTER_ISSUER" \
     --ingress-namespace "$KODEX_INGRESS_NAMESPACE" --ingress-pod-name "$KODEX_INGRESS_POD_NAME" \
     --kubernetes-api-service-cidr "$api_service_ip/32" \

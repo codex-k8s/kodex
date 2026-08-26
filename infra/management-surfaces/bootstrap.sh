@@ -5,8 +5,9 @@ fail() { printf 'Management surfaces bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback" \
-    '  --oidc-issuer <https-url> --control-center-host <dns> --grafana-host <dns>' \
-    '  --headlamp-host <dns> --public-ipv4-cidr <ipv4/32>' \
+    '  --oidc-issuer <https-url> --oidc-connect-address <service.namespace.svc.cluster.local:port>' \
+    '  --oidc-target-port <port> --control-center-host <dns> --grafana-host <dns>' \
+    '  --headlamp-host <dns>' \
     '  --ingress-class <name> --cluster-issuer <name> --ingress-namespace <name>' \
     '  --ingress-pod-name <label> --kubernetes-api-service-cidr <host-cidr>' \
     '  --kubernetes-api-endpoint-cidrs <host-cidr[,host-cidr...]>' \
@@ -16,10 +17,11 @@ usage() {
 context=""
 mode=""
 oidc_issuer=""
+oidc_connect_address=""
+oidc_target_port=""
 control_center_host=""
 grafana_host=""
 headlamp_host=""
-public_ipv4_cidr=""
 ingress_class=""
 cluster_issuer=""
 ingress_namespace=""
@@ -32,10 +34,11 @@ while (($# > 0)); do
     --context) context="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
+    --oidc-connect-address) oidc_connect_address="${2:-}"; shift 2 ;;
+    --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --control-center-host) control_center_host="${2:-}"; shift 2 ;;
     --grafana-host) grafana_host="${2:-}"; shift 2 ;;
     --headlamp-host) headlamp_host="${2:-}"; shift 2 ;;
-    --public-ipv4-cidr) public_ipv4_cidr="${2:-}"; shift 2 ;;
     --ingress-class) ingress_class="${2:-}"; shift 2 ;;
     --cluster-issuer) cluster_issuer="${2:-}"; shift 2 ;;
     --ingress-namespace) ingress_namespace="${2:-}"; shift 2 ;;
@@ -51,6 +54,14 @@ done
 [[ -n "$context" ]] || fail 'exact context is required'
 case "$mode" in preflight|apply-monitoring|apply-surfaces|readback) ;; *) fail 'mode is invalid' ;; esac
 [[ "$oidc_issuer" =~ ^https://[a-zA-Z0-9._:-]+/realms/[a-zA-Z0-9._-]+$ ]] || fail 'OIDC issuer is invalid'
+[[ "$oidc_connect_address" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.([a-z0-9]([a-z0-9-]*[a-z0-9])?)\.svc\.cluster\.local:([1-9][0-9]{0,4})$ ]] ||
+  fail 'OIDC connect address must identify an exact in-cluster Service'
+oidc_service_name=${BASH_REMATCH[1]}
+oidc_service_namespace=${BASH_REMATCH[3]}
+oidc_service_port=${BASH_REMATCH[5]}
+((10#$oidc_service_port <= 65535)) || fail 'OIDC connect Service port is invalid'
+[[ "$oidc_target_port" =~ ^[1-9][0-9]{0,4}$ ]] && ((10#$oidc_target_port <= 65535)) ||
+  fail 'OIDC target port is invalid'
 for host in "$control_center_host" "$grafana_host" "$headlamp_host"; do
   [[ "$host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$host" == *.* ]] || fail 'surface host is invalid'
 done
@@ -59,7 +70,6 @@ oidc_host=${oidc_origin#https://}
 host_count=$(printf '%s\n' "$oidc_host" "$control_center_host" "$grafana_host" "$headlamp_host" |
   sort -u | wc -l)
 [[ "$host_count" -eq 4 ]] || fail 'OIDC and management hosts must be unique'
-[[ "$public_ipv4_cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]] || fail 'public IPv4 CIDR is invalid'
 for value in "$ingress_class" "$cluster_issuer" "$ingress_namespace" "$ingress_pod_name"; do
   [[ "$value" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'deployment selector is invalid'
 done
@@ -71,8 +81,14 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 validator="$repository_root/tools/release/validate-host-cidr.go"
-go run "$validator" "$public_ipv4_cidr" >/dev/null || fail 'public IPv4 CIDR is invalid'
 go run "$validator" "$kubernetes_api_service_cidr" >/dev/null || fail 'Kubernetes API Service CIDR is invalid'
+oidc_connect_ip=$(kubectl -n "$oidc_service_namespace" get service "$oidc_service_name" -o json | jq -er \
+  --argjson service_port "$oidc_service_port" '
+    select(.spec.clusterIP != null and .spec.clusterIP != "None") |
+    select(any(.spec.ports[]; .port == $service_port)) |
+    .spec.clusterIP
+  ') || fail 'OIDC connect Service or port is unavailable'
+go run "$validator" "$oidc_connect_ip/32" >/dev/null || fail 'OIDC connect Service does not have an IPv4 ClusterIP'
 IFS=',' read -r -a api_endpoint_cidrs <<<"$kubernetes_api_endpoint_cidrs"
 IFS=',' read -r -a api_endpoint_ports <<<"$kubernetes_api_endpoint_ports"
 ((${#api_endpoint_cidrs[@]} >= 1 && ${#api_endpoint_cidrs[@]} <= 16)) || fail 'Kubernetes API endpoint CIDR count is invalid'
@@ -115,12 +131,12 @@ oauth2_chart=$(download_chart oauth2-proxy)
 headlamp_chart=$(download_chart headlamp)
 
 routes="$temporary_directory/routes.yaml"
-PUBLIC_IPV4_CIDR="$public_ipv4_cidr" INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
+OIDC_TARGET_PORT="$oidc_target_port" INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 INGRESS_NAMESPACE="$ingress_namespace" INGRESS_POD_NAME="$ingress_pod_name" \
 GRAFANA_HOST="$grafana_host" HEADLAMP_HOST="$headlamp_host" \
 KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq '
   (.. | select(tag == "!!str")) |= (
-    sub("__KODEX_PUBLIC_IPV4_CIDR__"; strenv(PUBLIC_IPV4_CIDR)) |
+    sub("__KODEX_OIDC_TARGET_PORT__"; strenv(OIDC_TARGET_PORT)) |
     sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
     sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
     sub("__KODEX_INGRESS_NAMESPACE__"; strenv(INGRESS_NAMESPACE)) |
@@ -156,6 +172,7 @@ render_oauth_values() {
     *) fail 'unsupported OAuth2 surface' ;;
   esac
   OAUTH2_SECRET="oauth2-$surface" OAUTH2_COOKIE_NAME="$cookie_name" OIDC_ISSUER="$issuer" \
+  OIDC_CONNECT_IP="$oidc_connect_ip" OIDC_HOST="$oidc_host" \
   SURFACE_HOST="$host" SURFACE_ORIGIN="https://$host" ALLOWED_ROLE="$role" \
   INGRESS_CLASS="$ingress_class" SURFACE_TLS_SECRET="$tls_secret" yq '
     .fullnameOverride = strenv(OAUTH2_SECRET) |
@@ -163,6 +180,8 @@ render_oauth_values() {
       sub("__KODEX_OAUTH2_SECRET__"; strenv(OAUTH2_SECRET)) |
       sub("__KODEX_OAUTH2_COOKIE_NAME__"; strenv(OAUTH2_COOKIE_NAME)) |
       sub("__KODEX_OIDC_ISSUER__"; strenv(OIDC_ISSUER)) |
+      sub("__KODEX_OIDC_CONNECT_IP__"; strenv(OIDC_CONNECT_IP)) |
+      sub("__KODEX_OIDC_HOST__"; strenv(OIDC_HOST)) |
       sub("__KODEX_SURFACE_HOST__"; strenv(SURFACE_HOST)) |
       sub("__KODEX_SURFACE_ORIGIN__"; strenv(SURFACE_ORIGIN)) |
       sub("__KODEX_ALLOWED_ROLE__"; strenv(ALLOWED_ROLE)) |
@@ -222,9 +241,30 @@ if [[ "$mode" == readback ]]; then
     oauth2-headlamp:platform-admin:admin; do
     IFS=: read -r deployment namespace role <<<"$binding"
     kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout=3m >/dev/null || fail "OAuth2 Proxy rollout failed: $deployment"
-    kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e --arg role "--allowed-role=$role" '
-      any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null)
+    kubectl -n "$namespace" get deployment "$deployment" -o json | jq -e \
+      --arg role "--allowed-role=$role" --arg oidc_host "$oidc_host" --arg oidc_ip "$oidc_connect_ip" '
+      any(.spec.template.spec.containers[]; .name == "oauth2-proxy" and (.args | index($role)) != null) and
+      .spec.template.spec.hostAliases == [{ip:$oidc_ip, hostnames:[$oidc_host]}]
     ' >/dev/null || fail "OAuth2 Proxy role gate mismatch: $deployment"
+  done
+  for binding in \
+    oauth2-control-center-exact-paths:kodex-system \
+    oauth2-grafana-exact-paths:observability \
+    oauth2-headlamp-exact-paths:platform-admin; do
+    IFS=: read -r policy namespace <<<"$binding"
+    kubectl -n "$namespace" get networkpolicy "$policy" -o json | jq -e \
+      --argjson target_port "$oidc_target_port" '
+      any(.spec.egress[];
+        .ports == [{protocol:"TCP",port:$target_port}] and
+        .to == [{
+          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"identity"}},
+          podSelector:{matchLabels:{
+            "app.kubernetes.io/name":"sso",
+            "app.kubernetes.io/component":"identity-provider"
+          }}
+        }]
+      )
+    ' >/dev/null || fail "OAuth2 Proxy OIDC egress mismatch: $policy"
   done
   kubectl -n platform-admin rollout status deployment/kodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
   kubectl get clusterrolebinding kodex-headlamp-admin -o json | jq -e '
