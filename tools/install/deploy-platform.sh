@@ -80,6 +80,37 @@ for secret_name in kodex-installation-ca kodex-postgresql-bootstrap \
     fail "installation Secret is absent: $secret_name"
 done
 
+verify_provider_credential() {
+  local name=runtime-provider-openai-default-r1 secret_json metadata_json
+  local auth_digest digest_file metadata_digest
+  secret_json=$(kubectl --context "$context" -n "$namespace" get "secret/$name" -o json)
+  metadata_json=$(kubectl --context "$context" -n "$namespace" get \
+    configmap/runtime-provider-openai-default-metadata -o json)
+  jq -e --arg namespace "$namespace" --arg name "$name" '
+    .metadata.namespace == $namespace and .metadata.name == $name and
+    .immutable == true and .type == "Opaque" and
+    (.data["auth.json"] | type == "string" and length > 0) and
+    (.data["auth.sha256"] | type == "string" and length > 0)
+  ' <<<"$secret_json" >/dev/null || fail 'provider credential Secret contract is invalid'
+  auth_digest=$(jq -jr '.data["auth.json"] | @base64d' <<<"$secret_json" |
+    sha256sum | awk '{print $1}')
+  digest_file=$(jq -jr '.data["auth.sha256"] | @base64d' <<<"$secret_json" |
+    tr -d '[:space:]')
+  metadata_digest=$(jq -r '.data.contentSHA256 // ""' <<<"$metadata_json")
+  [[ "$digest_file" == "$auth_digest" && "$metadata_digest" == "$auth_digest" ]] ||
+    fail 'provider credential digest readback failed'
+  [[ "$(jq -r '.data.secretName // ""' <<<"$metadata_json")" == "$name" ]] ||
+    fail 'provider credential Secret name readback failed'
+  [[ "$(jq -r '.data.secretUID // ""' <<<"$metadata_json")" == \
+    "$(jq -r '.metadata.uid' <<<"$secret_json")" ]] ||
+    fail 'provider credential Secret UID readback failed'
+  [[ "$(jq -r '.data.secretResourceVersion // ""' <<<"$metadata_json")" == \
+    "$(jq -r '.metadata.resourceVersion' <<<"$secret_json")" ]] ||
+    fail 'provider credential Secret resourceVersion readback failed'
+}
+
+verify_provider_credential
+
 render_filter() {
   local name=$1 expression=$2 output
   output="$temporary_directory/$name.yaml"
