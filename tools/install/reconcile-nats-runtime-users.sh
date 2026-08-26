@@ -30,7 +30,8 @@ policy_file="$repository_root/tools/install/nats-runtime-users.tsv"
 registry_file="$repository_root/tools/install/secret-projections.json"
 nsc_home="$material_directory/nats/nsc"
 version_file="$material_directory/nats/runtime-user-policy.version"
-readonly policy_version=2
+pending_directory="$material_directory/nats/runtime-user-policy.pending"
+readonly policy_version=3
 
 [[ -d "$nsc_home" && ! -L "$nsc_home" && -s "$policy_file" && -s "$registry_file" ]] ||
   fail 'NATS policy sources are incomplete'
@@ -58,15 +59,101 @@ while IFS='|' read -r user_name publish_allow subscribe_allow material_ref secre
     -n "$material_ref" && -n "$secret_name" ]] || fail 'NATS user policy row is invalid'
   permission_matches "$user_name" "$publish_allow" "$subscribe_allow" || policy_exact=false
 done <"$policy_file"
-if [[ "$current_version" == "$policy_version" && "$policy_exact" == true ]]; then
+if [[ "$current_version" == "$policy_version" && "$policy_exact" == true &&
+  ! -e "$pending_directory" ]]; then
   printf 'unchanged\n'
+  exit 0
+fi
+if [[ "$policy_exact" == true && ! -e "$pending_directory" ]]; then
+  printf 'changed\n'
   exit 0
 fi
 
 umask 077
 temporary_directory=$(mktemp -d "$material_directory/.nats-runtime-users.XXXXXX")
 trap 'rm -rf -- "$temporary_directory"' EXIT
+[[ ! -e "$pending_directory" || (-d "$pending_directory" && ! -L "$pending_directory") ]] ||
+  fail 'NATS runtime user pending directory is invalid'
+install -d -m 0700 "$pending_directory"
+
+install_runtime_credentials() {
+  local source_directory=$1 user_name material_ref secret_name
+  while IFS='|' read -r user_name _ _ material_ref secret_name; do
+    install -m 0600 "$source_directory/$user_name.creds" \
+      "$material_directory/nats/users/$user_name.creds"
+    install -d -m 0700 "$material_directory/material/$material_ref" \
+      "$material_directory/projections/$secret_name"
+    install -m 0600 "$source_directory/$user_name.creds" \
+      "$material_directory/material/$material_ref/credentials"
+    install -m 0600 "$source_directory/$user_name.creds" \
+      "$material_directory/projections/$secret_name/user.creds"
+  done <"$policy_file"
+  find "$material_directory/projections" -type f -print0 | sort -z | xargs -0 sha256sum \
+    >"$temporary_directory/projections.sha256"
+  install -m 0600 "$temporary_directory/projections.sha256" \
+    "$material_directory/projections.sha256"
+}
+
+if [[ "$policy_exact" == true ]]; then
+  account_claim=$(nsc -H "$nsc_home" describe account --name APPLICATION --json) ||
+    fail 'describe NATS application account'
+  while IFS='|' read -r user_name _ _ _ _; do
+    pending_credentials="$pending_directory/$user_name.previous.creds"
+    [[ -s "$pending_credentials" && ! -L "$pending_credentials" ]] ||
+      fail "pending previous NATS credentials are invalid: $user_name"
+    current_credentials="$material_directory/nats/users/$user_name.creds"
+    current_valid=false
+    if [[ -s "$current_credentials" && ! -L "$current_credentials" ]]; then
+      current_claim=$(nsc describe jwt --json --file "$current_credentials") || current_claim='{}'
+      user_subject=$(nsc -H "$nsc_home" describe user --account APPLICATION \
+        --name "$user_name" --json | jq -er '.sub') ||
+        fail "NATS user subject is invalid: $user_name"
+      if jq -e --arg subject "$user_subject" '
+        .sub == $subject and .nats.type == "user" and (.iat | type == "number")
+      ' <<<"$current_claim" >/dev/null; then
+        current_issued_at=$(jq -er '.iat' <<<"$current_claim")
+        revocation_cutoff=$(jq -er --arg subject "$user_subject" '
+          .nats.revocations[$subject] | select(type == "number")
+        ' <<<"$account_claim") || fail "NATS revocation cutoff is absent: $user_name"
+        ((current_issued_at > revocation_cutoff)) && current_valid=true
+      fi
+    fi
+    if [[ "$current_valid" == false ]]; then
+      nsc -H "$nsc_home" generate creds --account APPLICATION --name "$user_name" \
+        --output-file "$temporary_directory/$user_name.creds" >/dev/null 2>&1 ||
+        fail "regenerate interrupted NATS credentials: $user_name"
+    else
+      install -m 0600 "$current_credentials" "$temporary_directory/$user_name.creds"
+    fi
+  done <"$policy_file"
+  "$repository_root/tools/deploy/materialize-nats-operator-files.sh" \
+    --nsc-home "$nsc_home" --output-directory "$material_directory/nats" >/dev/null
+  install_runtime_credentials "$temporary_directory"
+  printf 'changed\n'
+  exit 0
+fi
+
 revocation_cutoff=$(($(date +%s) + 1))
+
+while IFS='|' read -r user_name _ _ _ _; do
+  readback=$(nsc -H "$nsc_home" describe user --account APPLICATION --name "$user_name" --json) ||
+    fail "NATS user is absent: $user_name"
+  user_subject=$(jq -er '.sub | select(test("^U[A-Z2-7]{55}$"))' <<<"$readback") ||
+    fail "NATS user subject is invalid: $user_name"
+  previous_credentials="$material_directory/nats/users/$user_name.creds"
+  pending_credentials="$pending_directory/$user_name.previous.creds"
+  if [[ ! -e "$pending_credentials" ]]; then
+    [[ -s "$previous_credentials" && ! -L "$previous_credentials" ]] ||
+      fail "previous NATS credentials are invalid: $user_name"
+    previous_claim=$(nsc describe jwt --json --file "$previous_credentials") ||
+      fail "describe previous NATS credentials: $user_name"
+    jq -e --arg subject "$user_subject" '
+      .sub == $subject and (.iat | type == "number") and .nats.type == "user"
+    ' <<<"$previous_claim" >/dev/null ||
+      fail "previous NATS credential subject mismatch: $user_name"
+    install -m 0600 "$previous_credentials" "$pending_credentials"
+  fi
+done <"$policy_file"
 
 while IFS='|' read -r user_name _ _ _ _; do
   readback=$(nsc -H "$nsc_home" describe user --account APPLICATION --name "$user_name" --json) ||
@@ -114,20 +201,5 @@ done <"$policy_file"
 "$repository_root/tools/deploy/materialize-nats-operator-files.sh" \
   --nsc-home "$nsc_home" --output-directory "$material_directory/nats" >/dev/null
 
-while IFS='|' read -r user_name _ _ material_ref secret_name; do
-  install -m 0600 "$temporary_directory/$user_name.creds" \
-    "$material_directory/nats/users/$user_name.creds"
-  install -d -m 0700 "$material_directory/material/$material_ref" \
-    "$material_directory/projections/$secret_name"
-  install -m 0600 "$temporary_directory/$user_name.creds" \
-    "$material_directory/material/$material_ref/credentials"
-  install -m 0600 "$temporary_directory/$user_name.creds" \
-    "$material_directory/projections/$secret_name/user.creds"
-done <"$policy_file"
-
-find "$material_directory/projections" -type f -print0 | sort -z | xargs -0 sha256sum \
-  >"$temporary_directory/projections.sha256"
-install -m 0600 "$temporary_directory/projections.sha256" "$material_directory/projections.sha256"
-printf '%s\n' "$policy_version" >"$temporary_directory/runtime-user-policy.version"
-install -m 0600 "$temporary_directory/runtime-user-policy.version" "$version_file"
+install_runtime_credentials "$temporary_directory"
 printf 'changed\n'

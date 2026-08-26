@@ -376,7 +376,6 @@ done <"$nats_user_policy_file"
 while IFS='|' read -r user_name _ _ material_ref _; do
   put_material "$material_ref" credentials "$output_directory/nats/users/$user_name.creds"
 done <"$nats_user_policy_file"
-printf '%s\n' '2' >"$output_directory/nats/runtime-user-policy.version"
 
 # Bare-metal k3s consumes this installation-scoped node identity directly.
 node_source=$(jq -cn --arg host "$promoted_pull_host" '{

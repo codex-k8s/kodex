@@ -95,6 +95,23 @@ rg -n 'Vault|SecretProviderClass|secrets-store\.csi' \
   --glob '!deploy-platform.sh' >/dev/null &&
   fail 'retired secret backend remains in installer'
 
+if rg -Fq 'runtime-user-policy.version" "$version_file"' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh"; then
+  fail 'NATS reconciliation marks a policy applied before Kubernetes materialization'
+fi
+rg -Fq 'runtime-user-policy.pending' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh" ||
+  fail 'NATS reconciliation does not preserve interrupted-upgrade evidence'
+rg -Fq 'Kubernetes Secret content readback mismatch' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not compare exact Kubernetes Secret content'
+rg -Fq 'NATS credential revocation ordering mismatch' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not prove previous credential revocation ordering'
+rg -Fq 'runtime-user-policy.version" "$version_file"' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not commit the cluster-applied policy revision'
+
 jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
   ([.secrets[].name] | length == (unique | length)) and

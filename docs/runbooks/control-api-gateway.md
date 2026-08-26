@@ -58,7 +58,11 @@ Upgrade со старого permission contract выполняет installer: cu
 все ранее выпущенные runtime user JWT, после него выпускаются exact-permission
 credentials, обновляется account JWT и Kubernetes Secrets, затем по очереди
 перезапускаются NATS, control-plane и gateway. Повторный запуск сверяет
-versioned policy и не ротирует уже актуальные credentials.
+versioned policy и не ротирует уже актуальные credentials. Applied revision
+записывается только после точного byte-level readback всех Secrets, проверки,
+что прежние JWT находятся до revocation cutoff, новые JWT выпущены после него,
+и успешного rollout. Прерывание после локальной подготовки оставляет pending
+evidence и на следующем запуске повторяет cluster materialization.
 
 ## Probes
 
