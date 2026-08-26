@@ -13,7 +13,7 @@ RUN apk add --no-cache \
       curl=8.14.1-r3 \
       grep=3.12-r0 \
       jq=1.8.1-r0 \
-      openssl=3.5.7-r0 \
+      openssl=3.5.8-r0 \
       procps-ng=4.0.4-r3
 COPY --from=cosign --chmod=0555 /ko-app/cosign /usr/local/bin/cosign
 COPY --from=syft --chmod=0555 /syft /usr/local/bin/syft
