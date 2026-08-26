@@ -38,6 +38,22 @@ spec:
             - name: buildkit
               containerPort: 1234
               protocol: TCP
+          env:
+            - name: KODEX_BUILDKIT_READINESS_BASE_REPOSITORY
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations['kodex.dev/trusted-role-base-repository']
+            - name: KODEX_BUILDKIT_READINESS_BASE_DIGEST
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations['kodex.dev/trusted-role-base-digest']
+            - name: KODEX_BUILDKIT_READINESS_FRONTEND_SHA256
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations['kodex.dev/frontend-sha256']
           readinessProbe:
             exec:
               command:
@@ -47,9 +63,49 @@ spec:
                   work=$(mktemp -d)
                   trap 'rm -rf "$work"' EXIT
                   export DOCKER_CONFIG=/var/run/secrets/kodex/buildkit/tls
-                  base=$(cat /var/run/config/kodex/image-policy/trustedRoleBaseRepository)
-                  base_digest=$(cat /var/run/config/kodex/image-policy/trustedRoleBaseDigest)
-                  frontend=$(cat /var/run/config/kodex/image-policy/frontendSHA256)
+                  fail_policy_input() {
+                    printf 'BuildKit readiness policy input is invalid: %s\n' "$1" >&2
+                    exit 1
+                  }
+                  base=${KODEX_BUILDKIT_READINESS_BASE_REPOSITORY:-}
+                  base_digest=${KODEX_BUILDKIT_READINESS_BASE_DIGEST:-}
+                  frontend=${KODEX_BUILDKIT_READINESS_FRONTEND_SHA256:-}
+                  case "$base" in
+                    ''|*://*|*@*|/*|*/|*//*|*[!a-z0-9._:/-]*)
+                      fail_policy_input 'trusted role base repository'
+                      ;;
+                  esac
+                  case "$base" in
+                    */*) ;;
+                    *) fail_policy_input 'trusted role base repository' ;;
+                  esac
+                  registry=${base%%/*}
+                  case "$registry" in
+                    *.*) ;;
+                    *) fail_policy_input 'trusted role base repository' ;;
+                  esac
+                  case "$registry" in
+                    *:*)
+                      port=${registry##*:}
+                      case "$port" in
+                        ''|*[!0-9]*) fail_policy_input 'trusted role base repository' ;;
+                      esac
+                      [ "$port" -ge 1 ] && [ "$port" -le 65535 ] ||
+                        fail_policy_input 'trusted role base repository'
+                      ;;
+                  esac
+                  case "$base_digest" in
+                    sha256:*) base_hex=${base_digest#sha256:} ;;
+                    *) fail_policy_input 'trusted role base digest' ;;
+                  esac
+                  [ "${#base_hex}" -eq 64 ] || fail_policy_input 'trusted role base digest'
+                  case "$base_hex" in
+                    *[!a-f0-9]*) fail_policy_input 'trusted role base digest' ;;
+                  esac
+                  [ "${#frontend}" -eq 64 ] || fail_policy_input 'frontend digest'
+                  case "$frontend" in
+                    *[!a-f0-9]*) fail_policy_input 'frontend digest' ;;
+                  esac
                   printf '# syntax=%s@sha256:%s\nFROM %s@%s\nRUN ["/bin/sh","-c","test -x /usr/local/bin/kodex-init && test -x /usr/local/bin/kodex-agent-runner"]\n' \
                     'kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile' \
                     "$frontend" "$base" "$base_digest" >"$work/Dockerfile"
@@ -104,9 +160,6 @@ spec:
             - name: registry-ca
               mountPath: /var/run/config/kodex/image-registry
               readOnly: true
-            - name: image-policy
-              mountPath: /var/run/config/kodex/image-policy
-              readOnly: true
             - name: buildkit-tls
               mountPath: /var/run/secrets/kodex/buildkit/tls
               readOnly: true
@@ -122,14 +175,6 @@ spec:
           secret:
             secretName: kodex-image-registry-ca
             defaultMode: 0440
-        - name: image-policy
-          configMap:
-            name: kodex-image-admission-policy
-            defaultMode: 0440
-            items:
-              - {key: trustedRoleBaseRepository, path: trustedRoleBaseRepository}
-              - {key: trustedRoleBaseDigest, path: trustedRoleBaseDigest}
-              - {key: frontendSHA256, path: frontendSHA256}
         - name: buildkit-tls
           secret:
             secretName: kodex-buildkit-tls

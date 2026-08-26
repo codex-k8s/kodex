@@ -343,6 +343,7 @@ ADMISSION_REF="$admission_ref" \
 ADMISSION_TOOLS_REF="$admission_tools_ref" \
 ADMISSION_TOOLS_DIGEST="$admission_tools_digest" \
 SOURCE_SHA="$source_sha" \
+TRUSTED_ROLE_BASE_REPOSITORY="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" \
 FRONTEND_SHA256="$frontend_sha256" yq -i '
   (.. | select(tag == "!!str")) |= sub(
     "[A-Za-z0-9._:/-]+/image-admission-tools@sha256:[a-f0-9]{64}";
@@ -361,7 +362,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.roleImageInputRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs" |
     .data.policyRevision = "1" |
     .data.policySHA256 = strenv(LOCK_DIGEST) |
-    .data.trustedRoleBaseRepository = "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
+    .data.trustedRoleBaseRepository = strenv(TRUSTED_ROLE_BASE_REPOSITORY) |
     .data.trustedRoleBaseDigest = strenv(AGENT_RUNNER_DIGEST) |
     .data.builderSHA256 = "8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
@@ -377,6 +378,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "kodex-buildkit");
     .spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_SHA) |
+    .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" = strenv(TRUSTED_ROLE_BASE_REPOSITORY) |
     .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(AGENT_RUNNER_DIGEST)
   ) |

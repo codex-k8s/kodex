@@ -228,6 +228,8 @@ if grep -Fq -- '--max-time 3' \
 fi
 grep -Fq '.spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_SHA)' \
   "$repository_root/tools/release/render-web-only.sh"
+grep -Fq '.spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" = strenv(TRUSTED_ROLE_BASE_REPOSITORY)' \
+  "$repository_root/tools/release/render-web-only.sh"
 grep -Fq '.spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)' \
   "$repository_root/tools/release/render-web-only.sh"
 grep -Fq '.spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(AGENT_RUNNER_DIGEST)' \
@@ -250,11 +252,94 @@ jq -e '
     .image == "moby/buildkit:v0.24.0@sha256:8c2ce26a3722e0cf4514fad4cfcd0e0f0f16214219ca7b73f3e1fcef74640ac4" and
     .securityContext.privileged == true and
     .securityContext.runAsUser == 0 and
-    .securityContext.runAsGroup == 0)
+    .securityContext.runAsGroup == 0 and
+    any(.env[];
+      .name == "KODEX_BUILDKIT_READINESS_BASE_REPOSITORY" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/trusted-role-base-repository\u0027]") and
+    any(.env[];
+      .name == "KODEX_BUILDKIT_READINESS_BASE_DIGEST" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/trusted-role-base-digest\u0027]") and
+    any(.env[];
+      .name == "KODEX_BUILDKIT_READINESS_FRONTEND_SHA256" and
+      .valueFrom.fieldRef.fieldPath ==
+        "metadata.annotations[\u0027kodex.dev/frontend-sha256\u0027]") and
+    (any(.volumeMounts[]?; .name == "image-policy") | not) and
+    (.readinessProbe.exec.command[-1] | contains("/var/run/config/kodex/image-policy") | not) and
+    (.readinessProbe.exec.command[-1] | contains("fail_policy_input"))) and
+  (any(.spec.template.spec.volumes[]?; .name == "image-policy") | not)
 ' <<<"$buildkit_deployment" >/dev/null || {
-  echo "BuildKit user namespace boundary is incomplete" >&2
+  echo "BuildKit user namespace or rendered readiness boundary is incomplete" >&2
   exit 1
 }
+buildkit_readiness=$(jq -r '
+  .spec.template.spec.containers[] | select(.name == "buildkitd") |
+  .readinessProbe.exec.command[-1]
+' <<<"$buildkit_deployment")
+readiness_bin="$temporary_directory/buildkit-readiness-bin"
+mkdir "$readiness_bin"
+cat >"$readiness_bin/buildctl" <<'EOF'
+#!/bin/sh
+set -eu
+dockerfile_directory=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--local" ] && [ "$#" -ge 2 ]; then
+    case "$2" in
+      dockerfile=*) dockerfile_directory=${2#dockerfile=} ;;
+    esac
+    shift 2
+    continue
+  fi
+  shift
+done
+[ -n "$dockerfile_directory" ]
+grep -Fqx "# syntax=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/dockerfile@sha256:$KODEX_BUILDKIT_READINESS_FRONTEND_SHA256" \
+  "$dockerfile_directory/Dockerfile"
+grep -Fqx "FROM $KODEX_BUILDKIT_READINESS_BASE_REPOSITORY@$KODEX_BUILDKIT_READINESS_BASE_DIGEST" \
+  "$dockerfile_directory/Dockerfile"
+printf 'called\n' >>"$KODEX_BUILDKIT_READINESS_CALLS"
+EOF
+chmod 0555 "$readiness_bin/buildctl"
+readiness_calls="$temporary_directory/buildkit-readiness-calls"
+readiness_base_repository=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner
+readiness_base_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+readiness_frontend_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+KODEX_BUILDKIT_READINESS_BASE_REPOSITORY="$readiness_base_repository" \
+KODEX_BUILDKIT_READINESS_BASE_DIGEST="$readiness_base_digest" \
+KODEX_BUILDKIT_READINESS_FRONTEND_SHA256="$readiness_frontend_sha256" \
+KODEX_BUILDKIT_READINESS_CALLS="$readiness_calls" \
+PATH="$readiness_bin:$PATH" /bin/sh -ec "$buildkit_readiness"
+[[ $(wc -l <"$readiness_calls") -eq 1 ]] || {
+  echo "valid BuildKit readiness inputs did not execute exactly one build" >&2
+  exit 1
+}
+expect_buildkit_readiness_rejection() {
+  failure_name=$1
+  repository=$2
+  base_digest=$3
+  frontend_sha256=$4
+  : >"$readiness_calls"
+  if KODEX_BUILDKIT_READINESS_BASE_REPOSITORY="$repository" \
+    KODEX_BUILDKIT_READINESS_BASE_DIGEST="$base_digest" \
+    KODEX_BUILDKIT_READINESS_FRONTEND_SHA256="$frontend_sha256" \
+    KODEX_BUILDKIT_READINESS_CALLS="$readiness_calls" \
+    PATH="$readiness_bin:$PATH" /bin/sh -ec "$buildkit_readiness" >/dev/null 2>&1; then
+    echo "$failure_name was accepted by BuildKit readiness" >&2
+    exit 1
+  fi
+  [[ ! -s "$readiness_calls" ]] || {
+    echo "$failure_name reached BuildKit before rejection" >&2
+    exit 1
+  }
+}
+expect_buildkit_readiness_rejection "foreign repository scheme" \
+  "https://$readiness_base_repository" "$readiness_base_digest" "$readiness_frontend_sha256"
+expect_buildkit_readiness_rejection "short base digest" \
+  "$readiness_base_repository" sha256:abcd "$readiness_frontend_sha256"
+expect_buildkit_readiness_rejection "non-lowercase frontend digest" \
+  "$readiness_base_repository" "$readiness_base_digest" \
+  BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 yq -o=json 'select(.spec.template.spec != null)' "$temporary_directory/supply.yaml" |
   jq -s -e '
     all(.[];
