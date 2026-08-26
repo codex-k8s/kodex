@@ -40,33 +40,52 @@ type verifiedAuthorization struct {
 }
 
 type Identity struct {
-	Subject         string
-	OrganizationID  string
-	SessionID       string
-	SessionRevision uint64
-	CSRFHash        string
-	ExpiresAt       time.Time
+	Subject          string
+	OrganizationID   string
+	SessionID        string
+	BrowserSessionID string
+	SessionRevision  uint64
+	CSRFHash         string
+	ExpiresAt        time.Time
+}
+
+type OIDCVerifier interface {
+	VerifyAuthorization(context.Context, string) (oidcauth.Principal, string, error)
+	VerifyToken(context.Context, string) (oidcauth.Principal, error)
+}
+
+type SessionStore interface {
+	Issue(string, string, string, uint64, string, time.Time) (session.Claims, string, string, error)
+	Open(string) (session.Claims, error)
+	Renew(session.Claims, time.Time) (session.Claims, string, bool, error)
+}
+
+type RevocationStore interface {
+	Revoke(context.Context, string) error
+	Revoked(context.Context, string) (bool, error)
 }
 
 type Config struct {
-	Origins  []string
-	Verifier *oidcauth.Verifier
-	Sessions *session.Store
-	Limiter  *ratelimit.Limiter
-	Timeout  time.Duration
+	Origins     []string
+	Verifier    OIDCVerifier
+	Sessions    SessionStore
+	Revocations RevocationStore
+	Limiter     *ratelimit.Limiter
+	Timeout     time.Duration
 }
 
 type Boundary struct {
-	origins  map[string]struct{}
-	verifier *oidcauth.Verifier
-	sessions *session.Store
-	limiter  *ratelimit.Limiter
-	timeout  time.Duration
-	stopping atomic.Bool
+	origins     map[string]struct{}
+	verifier    OIDCVerifier
+	sessions    SessionStore
+	revocations RevocationStore
+	limiter     *ratelimit.Limiter
+	timeout     time.Duration
+	stopping    atomic.Bool
 }
 
 func New(config Config) (*Boundary, error) {
-	if config.Verifier == nil || config.Sessions == nil || config.Limiter == nil ||
+	if config.Verifier == nil || config.Sessions == nil || config.Revocations == nil || config.Limiter == nil ||
 		config.Timeout < time.Second || config.Timeout > time.Minute || len(config.Origins) == 0 || len(config.Origins) > 8 {
 		return nil, errors.New("owner security boundary configuration is invalid")
 	}
@@ -79,7 +98,7 @@ func New(config Config) (*Boundary, error) {
 		}
 		origins[origin] = struct{}{}
 	}
-	return &Boundary{origins: origins, verifier: config.Verifier, sessions: config.Sessions, limiter: config.Limiter, timeout: config.Timeout}, nil
+	return &Boundary{origins: origins, verifier: config.Verifier, sessions: config.Sessions, revocations: config.Revocations, limiter: config.Limiter, timeout: config.Timeout}, nil
 }
 
 func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
@@ -149,7 +168,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(writer, request.WithContext(ctx))
 			return
 		}
-		identity, claims, err := func() (Identity, session.Claims, error) {
+		identity, claims, bearerExpiry, err := func() (Identity, session.Claims, time.Time, error) {
 			defer releasePreAuth()
 			return boundary.authenticate(request)
 		}()
@@ -190,6 +209,16 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 		if err != nil {
 			writeProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return
+		}
+		if request.Method == http.MethodPut && request.URL.Path == "/api/v1/session" {
+			claims, renewed, err := boundary.renewSession(writer, request, claims, bearerExpiry)
+			if err != nil {
+				writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+				return
+			}
+			if renewed {
+				identity.ExpiresAt = time.Unix(claims.ExpiresAt, 0).UTC()
+			}
 		}
 		ctx = context.WithValue(ctx, identityContextKey{}, identity)
 		if isRealtimePath(request.URL.Path) {
@@ -316,6 +345,10 @@ func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer stri
 	return boundary.sessions.Issue(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
 }
 
+func (boundary *Boundary) RevokeSession(ctx context.Context, identity Identity) error {
+	return boundary.revocations.Revoke(ctx, identity.BrowserSessionID)
+}
+
 func (boundary *Boundary) StopAdmission() { boundary.stopping.Store(true) }
 
 func (boundary *Boundary) AllowsOrigin(origin string) bool {
@@ -338,28 +371,62 @@ func VerifyCSRFToken(identity Identity, token string) bool {
 	return session.VerifyCSRF(claims, token)
 }
 
-func (boundary *Boundary) authenticate(request *http.Request) (Identity, session.Claims, error) {
+func (boundary *Boundary) authenticate(request *http.Request) (Identity, session.Claims, time.Time, error) {
 	cookie, err := request.Cookie(SessionCookieName)
 	if err != nil || cookie.Value == "" {
-		return Identity{}, session.Claims{}, errors.New("owner session is unavailable")
+		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is unavailable")
 	}
 	claims, err := boundary.sessions.Open(cookie.Value)
 	if err != nil {
-		return Identity{}, session.Claims{}, err
+		return Identity{}, session.Claims{}, time.Time{}, err
+	}
+	revoked, err := boundary.revocations.Revoked(request.Context(), claims.SessionID)
+	if err != nil || revoked {
+		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session is revoked")
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
 	if errors.Is(err, oidcauth.ErrSigningKeysUnavailable) {
-		return Identity{}, session.Claims{}, err
+		return Identity{}, session.Claims{}, time.Time{}, err
 	}
 	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
 		principal.SessionRevision != claims.SessionRevision {
-		return Identity{}, session.Claims{}, errors.New("owner session binding is invalid")
+		return Identity{}, session.Claims{}, time.Time{}, errors.New("owner session binding is invalid")
 	}
 	return Identity{
 		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
-		SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
+		BrowserSessionID: claims.SessionID, SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
 		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
-	}, claims, nil
+	}, claims, principal.ExpiresAt, nil
+}
+
+func (boundary *Boundary) renewSession(writer http.ResponseWriter, request *http.Request, claims session.Claims, bearerExpiry time.Time) (session.Claims, bool, error) {
+	origin := request.Header.Get("Origin")
+	if origin == "" || !boundary.AllowsOrigin(origin) || !boundary.verifyCSRF(request, claims) {
+		return claims, false, nil
+	}
+	csrfCookie, err := request.Cookie(CSRFCookieName)
+	if err != nil {
+		return claims, false, nil
+	}
+	renewedClaims, encoded, renewed, err := boundary.sessions.Renew(claims, bearerExpiry)
+	if err != nil || !renewed {
+		return renewedClaims, false, err
+	}
+	SetOwnerSessionCookies(writer, renewedClaims, encoded, csrfCookie.Value)
+	return renewedClaims, true, nil
+}
+
+func SetOwnerSessionCookies(writer http.ResponseWriter, claims session.Claims, encoded, csrf string) {
+	maxAge := int(time.Until(time.Unix(claims.ExpiresAt, 0)).Seconds())
+	if maxAge < 1 {
+		maxAge = 1
+	}
+	if maxAge > 3600 {
+		maxAge = 3600
+	}
+	writer.Header().Set("Cache-Control", "no-store")
+	http.SetCookie(writer, &http.Cookie{Name: SessionCookieName, Value: encoded, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+	http.SetCookie(writer, &http.Cookie{Name: CSRFCookieName, Value: csrf, Path: "/", Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
 }
 
 func authenticationProblem(err error) (int, string, bool) {

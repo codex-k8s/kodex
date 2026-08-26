@@ -360,7 +360,8 @@ if [[ "$mode" == apply ]]; then
   control_center_id=$(find_client_id kodex-control-center)
   client_attributes=$(jq -cn --arg logout "$public_origin/*" '{
     "pkce.code.challenge.method":"S256",
-    "post.logout.redirect.uris":$logout
+    "post.logout.redirect.uris":$logout,
+    "access.token.lifespan":"3600"
   }')
   keycloak_request update "clients/$control_center_id" -r "$realm" \
     -s enabled=true -s publicClient=true -s bearerOnly=false -s protocol=openid-connect \
@@ -451,6 +452,7 @@ jq -e --arg origin "$public_origin" '
   .enabled == true and .publicClient == true and .standardFlowEnabled == true and
   .implicitFlowEnabled == false and .directAccessGrantsEnabled == false and
   .attributes."pkce.code.challenge.method" == "S256" and
+  .attributes."access.token.lifespan" == "3600" and
   .redirectUris == [($origin + "/auth/callback")] and .webOrigins == [$origin] and
   (.optionalClientScopes | index("kodex.owner") != null)
 ' <<<"$client_json" >/dev/null || fail 'Control Center OIDC client readback failed'

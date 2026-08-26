@@ -4,8 +4,8 @@ title: Staff Control Center Kodex
 type: frontend-guide
 status: approved
 owner: manager
-version: 3.0.0
-updated: 2026-08-23
+version: 3.0.1
+updated: 2026-08-26
 ---
 
 # Staff Control Center
@@ -44,10 +44,18 @@ fragment, несовпадающие HTTP/WebSocket origins и timeout вне д
 
 OIDC Authorization Code + PKCE хранит временный protocol state в
 `sessionStorage`. Bearer применяется один раз при `createOwnerSession`, после
-чего browser использует `Secure`/`HttpOnly` host-only session cookie. Mutation
-adapter добавляет CSRF token, `Idempotency-Key` и, где требуется, authoritative
-`If-Match`. Backend problem detail не показывается: UI выбирает безопасный
-локализованный текст по `Problem.code`.
+чего browser использует `Secure`/`HttpOnly` host-only session cookie. Control
+Center раз в пять минут вызывает `PUT /api/v1/session`; её 15-минутный idle
+TTL продлевается только после полностью успешной проверки OIDC/Origin/CSRF
+boundary и никогда не выходит за абсолютный срок исходного bearer. Для
+`kodex-control-center` bearer живёт 3600 секунд при realm default
+300 секунд; OAuth2 Proxy browser cookie и API session остаются независимыми
+слоями. Logout отменяет и дожидается текущего renewal, а gateway оставляет
+подписанный HttpOnly tombstone до expiry bearer, чтобы запоздавший renewal из
+любой вкладки не восстановил закрытую browser session. Mutation adapter
+добавляет CSRF token, `Idempotency-Key` и, где
+требуется, authoritative `If-Match`. Backend problem detail не показывается:
+UI выбирает безопасный локализованный текст по `Problem.code`.
 
 ## Пользовательские маршруты
 
@@ -108,7 +116,7 @@ mock server. Перед запуском оператор обязан явно 
 npx playwright install chromium
 ```
 
-Создать защищённый owner session state через фактический OIDC login:
+Создать защищённый SSO bootstrap state через фактический cold OIDC login:
 
 ```bash
 export KODEX_E2E_BASE_URL='https://<disposable-origin>'
@@ -119,9 +127,12 @@ export KODEX_E2E_CONFIRM_DISPOSABLE='I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INST
 npm run test:e2e:auth
 ```
 
-Значения login/password не добавляются в команду, log, trace или repository.
-Файл session state должен принадлежать текущему пользователю, иметь mode
-`0600` и находится в `.gitignore`. Trace и video принудительно отключены.
+Значения login/password не добавляются в log, trace или repository. Bootstrap
+содержит только OAuth2/Keycloak SSO cookies: Kodex API session и CSRF cookies
+перед записью удаляются. Файл должен быть regular, принадлежать текущему
+пользователю, иметь mode `0600` и находиться в owner-каталоге `0700` без
+symlink; JSON ограничен по размеру и проверяется по закрытой schema. Запись
+выполняется атомарно. Trace и video принудительно отключены.
 
 Запустить web-only сценарии на fresh installation без connections:
 
@@ -136,6 +147,10 @@ Suite проверяет реальный OIDC вход, hot System Assistant, �
 session continuation, typed assistant action и audit, nested workflow с двумя
 дочерними агентами, Human Gate one-winner, WebSocket reconnect/catch-up,
 cancel/retry lineage, mobile navigation и работу core без integrations.
+Перед каждым тестом его свежий browser context выполняет warm SSO flow и
+создаёт отдельную Kodex API session. Дочерние contexts Human Gate winner и
+contender создаются из актуального state основного context, а не из bootstrap
+файла.
 
 Для optional-Mattermost профиля disposable installation заранее получает два
 Mattermost connection без grant к тестовым ресурсам:
@@ -194,7 +209,9 @@ service-account token или server credentials.
 
 ## Проверенная документация библиотек
 
-Для Playwright проверены Context7 `/microsoft/playwright/v1.58.2` и актуальный
-package API: `webServer`, device projects, WebSocket routing, storage state и
-trace policy. Для остальных frontend-зависимостей применяются источники из
-`FE-DOC-001` и закреплённые версии `package-lock.json`.
+Для Playwright проверены Context7 `/microsoft/playwright/v1.61.0` и актуальный
+package API: изоляция BrowserContext, automatic fixtures и storage state. Для
+безопасного file IO проверена документация Node.js
+`/websites/nodejs_latest-v24_x_api`: `open`, `O_EXCL`, `O_NOFOLLOW`, `fstat`,
+`fsync` и `rename`. Для остальных frontend-зависимостей применяются источники
+из `FE-DOC-001` и закреплённые версии `package-lock.json`.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
+	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -70,12 +71,17 @@ func bootstrapBroker(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return bootstrapBrokerWithRetry(ctx, config, timeout, brokerRetryPolicy{
-		initial: 250 * time.Millisecond,
-		maximum: 5 * time.Second,
-	}, func(config natsjetstream.Config) (brokerPublisher, error) {
-		return natsjetstream.New(config)
-	})
+	for _, stream := range []natsjetstream.Config{config, sessionrevocation.StreamConfig(config)} {
+		if err := bootstrapBrokerWithRetry(ctx, stream, timeout, brokerRetryPolicy{
+			initial: 250 * time.Millisecond,
+			maximum: 5 * time.Second,
+		}, func(config natsjetstream.Config) (brokerPublisher, error) {
+			return natsjetstream.New(config)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type brokerPublisher interface {

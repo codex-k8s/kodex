@@ -124,7 +124,27 @@ fi
 after_sha=$(sha256sum "$temporary_directory/output/operator.jwt" | awk '{print $1}')
 [[ "$before_sha" == "$after_sha" ]] || fail 'failed materialization changed existing canonical output'
 
+generate_material="$repository_root/tools/install/generate-material.sh"
+nats_user_policy="$repository_root/tools/install/nats-runtime-users.tsv"
+[[ $(awk -F'|' 'NF == 5 {count++} END {print count+0}' "$nats_user_policy") -eq 3 ]] ||
+  fail 'NATS runtime user policy must contain exactly three complete rows'
+if grep -Fq -- '$JS.API.>' "$nats_user_policy"; then
+  fail 'runtime NATS credentials retain wildcard JetStream administration access'
+fi
+for permission_contract in \
+  '$JS.API.STREAM.INFO.CONTROL_PLANE' \
+  '$JS.API.STREAM.CREATE.CONTROL_PLANE' \
+  '$JS.API.STREAM.INFO.CONTROL_API_SESSION_REVOCATIONS' \
+  '$JS.API.STREAM.CREATE.CONTROL_API_SESSION_REVOCATIONS' \
+  '$JS.API.STREAM.MSG.GET.CONTROL_API_SESSION_REVOCATIONS' \
+  'kodex.control_api.session_revocation.*' \
+  'control_plane.run.*.*.events' \
+  'control_plane.platform.*.events'; do
+  grep -Fq -- "$permission_contract" "$nats_user_policy" ||
+    fail "NATS least-privilege contract omits $permission_contract"
+done
+
 bash -n "$account_configurer" "$materializer" \
-  "$repository_root/tools/install/generate-material.sh" \
+  "$generate_material" \
   "$repository_root/tools/install/materialize-secrets.sh"
 printf 'NATS operator material tests passed\n'

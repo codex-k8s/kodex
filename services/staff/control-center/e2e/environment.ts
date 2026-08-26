@@ -1,6 +1,8 @@
 import { lstatSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
+import { type BrowserStorageState, readStorageState } from "./storage-state";
+
 export type E2EProfile = "web-only" | "mattermost";
 
 export interface E2EEnvironment {
@@ -9,7 +11,7 @@ export interface E2EEnvironment {
   readonly profile: E2EProfile;
   readonly resourcePrefix: string;
   readonly runTimeoutMs: number;
-  readonly storageState?: string;
+  readonly storageState?: BrowserStorageState;
   readonly mattermost?: MattermostE2EEnvironment;
 }
 
@@ -26,10 +28,7 @@ const checkOnly = process.env.KODEX_E2E_CHECK_ONLY === "1";
 const disposableConfirmation =
   "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION";
 
-function exactHTTPSURL(
-  raw: string,
-  variable = "KODEX_E2E_BASE_URL",
-): string {
+function exactHTTPSURL(raw: string, variable = "KODEX_E2E_BASE_URL"): string {
   const parsed = new URL(raw);
   if (
     parsed.protocol !== "https:" ||
@@ -56,21 +55,16 @@ function boundedInteger(raw: string | undefined): number {
   return value;
 }
 
-function storageStatePath(raw: string | undefined): string | undefined {
+function storageState(
+  raw: string | undefined,
+): BrowserStorageState | undefined {
   if (checkOnly) return undefined;
   if (!raw) {
     throw new Error(
       "KODEX_E2E_STORAGE_STATE is required for a real authenticated E2E run",
     );
   }
-  const path = isAbsolute(raw) ? raw : resolve(raw);
-  const info = lstatSync(path);
-  if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) {
-    throw new Error(
-      "KODEX_E2E_STORAGE_STATE must be a regular non-symlink file readable only by its owner",
-    );
-  }
-  return path;
+  return readStorageState(isAbsolute(raw) ? raw : resolve(raw));
 }
 
 function protectedFilePath(
@@ -121,8 +115,7 @@ function mattermostEnvironment(
   }
   return {
     origin: exactHTTPSURL(
-      process.env.KODEX_E2E_MATTERMOST_ORIGIN ??
-        "https://mattermost.invalid",
+      process.env.KODEX_E2E_MATTERMOST_ORIGIN ?? "https://mattermost.invalid",
       "KODEX_E2E_MATTERMOST_ORIGIN",
     ),
     tokenFile: protectedFilePath(
@@ -156,9 +149,7 @@ function requireDisposableConfirmation(): void {
 function profile(raw: string | undefined): E2EProfile {
   if (raw === undefined || raw === "web-only") return "web-only";
   if (raw === "mattermost") return "mattermost";
-  throw new Error(
-    "KODEX_E2E_PROFILE must be either web-only or mattermost",
-  );
+  throw new Error("KODEX_E2E_PROFILE must be either web-only or mattermost");
 }
 
 function resourcePrefix(raw: string | undefined): string {
@@ -182,7 +173,7 @@ export function loadE2EEnvironment(): E2EEnvironment {
     profile: selectedProfile,
     resourcePrefix: resourcePrefix(process.env.KODEX_E2E_RESOURCE_PREFIX),
     runTimeoutMs: boundedInteger(process.env.KODEX_E2E_RUN_TIMEOUT_MS),
-    storageState: storageStatePath(process.env.KODEX_E2E_STORAGE_STATE),
+    storageState: storageState(process.env.KODEX_E2E_STORAGE_STATE),
     mattermost: mattermostEnvironment(selectedProfile),
   };
 }
@@ -207,8 +198,7 @@ export function loadE2EAuthEnvironment(): E2EAuthEnvironment {
       "KODEX_E2E_OWNER_USERNAME and KODEX_E2E_OWNER_PASSWORD are required for OIDC sign-in",
     );
   }
-  const output =
-    process.env.KODEX_E2E_STORAGE_STATE ?? ".auth/owner.json";
+  const output = process.env.KODEX_E2E_STORAGE_STATE ?? ".auth/owner.json";
   return {
     baseURL: exactHTTPSURL(
       process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",

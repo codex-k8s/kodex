@@ -53,6 +53,7 @@ done
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 registry_file="$repository_root/tools/install/secret-projections.json"
+nats_user_policy_file="$repository_root/tools/install/nats-runtime-users.tsv"
 jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and
   ([.secrets[].name] | length == (unique | length)) and
@@ -347,20 +348,34 @@ nsc_home="$output_directory/nats/nsc"
 nsc -H "$nsc_home" add operator --name KODEX --sys >/dev/null 2>&1
 nsc -H "$nsc_home" add account --name APPLICATION >/dev/null 2>&1
 "$repository_root/tools/deploy/configure-nats-application-account.sh" --nsc-home "$nsc_home" >/dev/null
-for user_name in control-plane control-plane-broker-bootstrap control-api-gateway; do
+
+generate_nats_user() {
+  local user_name=$1
+  local publish_allow=$2
+  local subscribe_allow=$3
+  local readback
   nsc -H "$nsc_home" add user --account APPLICATION --name "$user_name" \
-    --allow-pubsub 'kodex.>' --allow-pub '$JS.API.>,_INBOX.>' \
-    --allow-sub '_INBOX.>' >/dev/null 2>&1
+    --allow-pub "$publish_allow" --allow-sub "$subscribe_allow" >/dev/null 2>&1
+  readback=$(nsc -H "$nsc_home" describe user --account APPLICATION --name "$user_name" --json)
+  jq -e --arg name "$user_name" --arg publish "$publish_allow" --arg subscribe "$subscribe_allow" '
+    .name == $name and .nats.type == "user" and
+    ((.nats.pub.allow // []) | sort) == ($publish | split(",") | sort) and
+    ((.nats.sub.allow // []) | sort) == ($subscribe | split(",") | sort) and
+    ((.nats.pub.deny // []) | length) == 0 and
+    ((.nats.sub.deny // []) | length) == 0 and (.nats.resp // null) == null
+  ' <<<"$readback" >/dev/null || fail "NATS user permission readback mismatch: $user_name"
   nsc -H "$nsc_home" generate creds --account APPLICATION --name "$user_name" \
     --output-file "$output_directory/nats/users/$user_name.creds" >/dev/null 2>&1
-done
+}
+
+while IFS='|' read -r user_name publish_allow subscribe_allow _ _; do
+  generate_nats_user "$user_name" "$publish_allow" "$subscribe_allow"
+done <"$nats_user_policy_file"
 "$repository_root/tools/deploy/materialize-nats-operator-files.sh" \
   --nsc-home "$nsc_home" --output-directory "$output_directory/nats"
-put_material kodex/control-plane/nats credentials "$output_directory/nats/users/control-plane.creds"
-put_material kodex/control-plane/nats-bootstrap credentials \
-  "$output_directory/nats/users/control-plane-broker-bootstrap.creds"
-put_material kodex/control-api-gateway/nats credentials \
-  "$output_directory/nats/users/control-api-gateway.creds"
+while IFS='|' read -r user_name _ _ material_ref _; do
+  put_material "$material_ref" credentials "$output_directory/nats/users/$user_name.creds"
+done <"$nats_user_policy_file"
 
 # Bare-metal k3s consumes this installation-scoped node identity directly.
 node_source=$(jq -cn --arg host "$promoted_pull_host" '{

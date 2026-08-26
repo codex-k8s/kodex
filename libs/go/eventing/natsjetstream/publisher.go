@@ -40,6 +40,7 @@ type Config struct {
 	MaxPerSubject   int64
 	MaxAge          time.Duration
 	DuplicateWindow time.Duration
+	Discard         jetstream.DiscardPolicy
 	ConnectTimeout  time.Duration
 }
 
@@ -138,7 +139,7 @@ func expectedStreamConfig(config Config) jetstream.StreamConfig {
 		MaxMsgSize:        config.MaxMessageBytes,
 		Storage:           jetstream.FileStorage,
 		Replicas:          config.Replicas,
-		Discard:           jetstream.DiscardOld,
+		Discard:           config.Discard,
 		Duplicates:        config.DuplicateWindow,
 		DenyDelete:        true,
 		DenyPurge:         true,
@@ -159,7 +160,7 @@ func streamCompatible(actual jetstream.StreamConfig, expected Config) bool {
 		actual.MaxBytes == expected.MaxBytes &&
 		actual.MaxMsgsPerSubject == expected.MaxPerSubject &&
 		actual.Retention == jetstream.LimitsPolicy &&
-		actual.Discard == jetstream.DiscardOld &&
+		actual.Discard == expected.Discard &&
 		actual.MaxAge == expected.MaxAge &&
 		actual.Duplicates == expected.DuplicateWindow &&
 		actual.DenyDelete && actual.DenyPurge && !actual.AllowRollup &&
@@ -270,6 +271,7 @@ func validateConfig(config Config) error {
 		config.MaxAge < time.Hour || config.MaxAge > 30*24*time.Hour ||
 		config.DuplicateWindow < time.Minute ||
 		config.DuplicateWindow > config.MaxAge ||
+		(config.Discard != jetstream.DiscardOld && config.Discard != jetstream.DiscardNew) ||
 		config.ConnectTimeout < 100*time.Millisecond ||
 		config.ConnectTimeout > 10*time.Second {
 		return errors.New("NATS JetStream configuration is invalid")

@@ -255,15 +255,18 @@ test.describe.serial("web-only fresh installation", () => {
 
     const contexts: BrowserContext[] = [];
     try {
+      const freshStorageState = await page.context().storageState();
       const winner = await authenticatedRunPage(
         browser,
         workflowRunRef,
         browserDiagnostics.monitorPage,
+        freshStorageState,
       );
       const contender = await authenticatedRunPage(
         browser,
         workflowRunRef,
         browserDiagnostics.monitorPage,
+        freshStorageState,
       );
       contexts.push(winner.context, contender.context);
       await browserDiagnostics.withExpectedNetworkInterruption(
@@ -367,10 +370,11 @@ async function authenticatedRunPage(
   browser: Browser,
   runRef: string,
   monitorPage: (page: Page) => void,
+  storageState: Awaited<ReturnType<BrowserContext["storageState"]>>,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     baseURL: environment.baseURL,
-    storageState: environment.storageState,
+    storageState,
     locale: "ru-RU",
   });
   const page = await context.newPage();

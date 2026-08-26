@@ -15,6 +15,7 @@ import {
   createOwnerSession,
   deleteOwnerSession,
   getBootstrapState,
+  renewOwnerSession,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { csrfToken, etag, idempotencyKey } from "@/shared/api/mutation";
 import {
@@ -33,6 +34,7 @@ export type SessionPhase =
   | "error";
 
 const sessionRevisionKey = "kodex.session.revision";
+const sessionRenewalIntervalMs = 5 * 60 * 1000;
 
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
@@ -58,12 +60,17 @@ export const useSessionStore = defineStore("session", () => {
     Number.parseInt(window.sessionStorage.getItem(sessionRevisionKey) ?? "0"),
   );
   let generation = 0;
+  let renewalTimer: number | undefined;
+  let renewalRequest: Promise<void> | undefined;
+  let renewalController: AbortController | undefined;
+  let loggingOut = false;
 
   const canLogout = computed(
     () => phase.value === "authenticated" && revision.value > 0,
   );
 
   function setUnauthenticated(): void {
+    void cancelRenewal();
     generation += 1;
     revision.value = 0;
     window.sessionStorage.removeItem(sessionRevisionKey);
@@ -78,6 +85,7 @@ export const useSessionStore = defineStore("session", () => {
       await unwrap(getBootstrapState({ signal: requestSignal() }));
       if (current !== generation) return;
       phase.value = "authenticated";
+      startRenewal();
       resetUnauthorizedNotification();
     } catch (error) {
       if (current !== generation) return;
@@ -128,6 +136,7 @@ export const useSessionStore = defineStore("session", () => {
       revision.value = parsedRevision;
       window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
       phase.value = "authenticated";
+      startRenewal();
       resetUnauthorizedNotification();
     } catch (error) {
       if (current !== generation) return;
@@ -139,17 +148,73 @@ export const useSessionStore = defineStore("session", () => {
 
   async function logout(): Promise<void> {
     if (revision.value < 1) return;
-    await unwrap(
-      deleteOwnerSession({
-        headers: {
-          "Idempotency-Key": idempotencyKey(),
-          "X-CSRF-Token": csrfToken(),
-          "If-Match": etag(revision.value),
-        },
-        signal: requestSignal(),
-      }),
-    );
-    setUnauthenticated();
+    loggingOut = true;
+    const pendingRenewal = cancelRenewal();
+    try {
+      await pendingRenewal;
+      await unwrap(
+        deleteOwnerSession({
+          headers: {
+            "Idempotency-Key": idempotencyKey(),
+            "X-CSRF-Token": csrfToken(),
+            "If-Match": etag(revision.value),
+          },
+          signal: requestSignal(),
+        }),
+      );
+      setUnauthenticated();
+    } catch (error) {
+      loggingOut = false;
+      if (phase.value === "authenticated") startRenewal();
+      throw error;
+    } finally {
+      loggingOut = false;
+    }
+  }
+
+  async function renew(): Promise<void> {
+    if (phase.value !== "authenticated" || loggingOut) return;
+    if (renewalRequest) return await renewalRequest;
+    const controller = new AbortController();
+    renewalController = controller;
+    const pending = (async () => {
+      try {
+        await unwrap(
+          renewOwnerSession({
+            headers: { "X-CSRF-Token": csrfToken() },
+            signal: AbortSignal.any([requestSignal(), controller.signal]),
+          }),
+        );
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const normalized = asProblem(error);
+        if (normalized.kind === "unauthorized") setUnauthenticated();
+      }
+    })();
+    renewalRequest = pending;
+    try {
+      await pending;
+    } finally {
+      if (renewalRequest === pending) renewalRequest = undefined;
+      if (renewalController === controller) renewalController = undefined;
+    }
+  }
+
+  function startRenewal(): void {
+    if (renewalTimer !== undefined || loggingOut) return;
+    void renew();
+    renewalTimer = window.setInterval(() => {
+      void renew();
+    }, sessionRenewalIntervalMs);
+  }
+
+  function cancelRenewal(): Promise<void> | undefined {
+    if (renewalTimer !== undefined) {
+      window.clearInterval(renewalTimer);
+      renewalTimer = undefined;
+    }
+    renewalController?.abort();
+    return renewalRequest;
   }
 
   return {
@@ -159,6 +224,7 @@ export const useSessionStore = defineStore("session", () => {
     probe,
     beginLogin,
     completeLogin,
+    renew,
     logout,
     invalidate: setUnauthenticated,
   };

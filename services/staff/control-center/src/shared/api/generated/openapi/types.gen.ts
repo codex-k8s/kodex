@@ -923,6 +923,34 @@ export type CreateOwnerSessionResponses = {
 
 export type CreateOwnerSessionResponse = CreateOwnerSessionResponses[keyof CreateOwnerSessionResponses];
 
+export type RenewOwnerSessionData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session';
+};
+
+export type RenewOwnerSessionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RenewOwnerSessionError = RenewOwnerSessionErrors[keyof RenewOwnerSessionErrors];
+
+export type RenewOwnerSessionResponses = {
+    /**
+     * Idle-срок защищённой browser-сессии продлён при необходимости
+     */
+    204: void;
+};
+
+export type RenewOwnerSessionResponse = RenewOwnerSessionResponses[keyof RenewOwnerSessionResponses];
+
 export type GetBootstrapStateData = {
     body?: never;
     path?: never;

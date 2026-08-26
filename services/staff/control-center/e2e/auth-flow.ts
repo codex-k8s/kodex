@@ -15,6 +15,10 @@ export interface OwnerCredentials {
   readonly username: string;
 }
 
+export interface AuthenticationOptions {
+  readonly mode: "cold" | "warm";
+}
+
 interface AuthProgress {
   readonly frontendOIDCStarted: boolean;
   readonly identitySubmissions: number;
@@ -22,7 +26,8 @@ interface AuthProgress {
 
 export async function authenticateOwner(
   page: Page,
-  credentials: OwnerCredentials,
+  credentials: OwnerCredentials | undefined,
+  options: AuthenticationOptions,
 ): Promise<void> {
   const deadline = Date.now() + authenticationTimeoutMs;
   let identitySubmissions = 0;
@@ -39,10 +44,14 @@ export async function authenticateOwner(
   });
   for (let transition = 0; transition < maxTransitions; transition += 1) {
     if (surface === "authenticated-ui") {
-      if (identitySubmissions < 1 || !frontendOIDCStarted) {
+      if (
+        !frontendOIDCStarted ||
+        (options.mode === "cold" && identitySubmissions < 1) ||
+        (options.mode === "warm" && identitySubmissions !== 0)
+      ) {
         throw authenticationError(
           page,
-          "the required proxy and frontend OIDC gates were not both observed",
+          `the required ${options.mode} authentication gates were not observed`,
           identitySubmissions,
           frontendOIDCStarted,
         );
@@ -51,7 +60,7 @@ export async function authenticateOwner(
     }
 
     if (surface === "frontend-sign-in") {
-      if (identitySubmissions < 1) {
+      if (options.mode === "cold" && identitySubmissions < 1) {
         throw authenticationError(
           page,
           "the frontend sign-in gate appeared before proxy authentication",
@@ -76,6 +85,23 @@ export async function authenticateOwner(
         frontendOIDCStarted,
       });
       continue;
+    }
+
+    if (options.mode === "warm") {
+      throw authenticationError(
+        page,
+        "the identity provider requested credentials during warm SSO",
+        identitySubmissions,
+        frontendOIDCStarted,
+      );
+    }
+    if (!credentials) {
+      throw authenticationError(
+        page,
+        "owner credentials are unavailable for cold authentication",
+        identitySubmissions,
+        frontendOIDCStarted,
+      );
     }
 
     if (identitySubmissions > 0 && !frontendOIDCStarted) {

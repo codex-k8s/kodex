@@ -8,6 +8,7 @@ routes="$repository_root/infra/management-surfaces/routes.yaml"
 values="$repository_root/infra/management-surfaces/oauth2-proxy-values.yaml"
 lock="$repository_root/infra/management-surfaces/charts.lock.json"
 identity="$repository_root/infra/identity/keycloak.yaml"
+keycloak_bootstrap="$repository_root/tools/deploy/configure-keycloak.sh"
 headlamp_values="$repository_root/infra/management-surfaces/headlamp-values.yaml"
 monitoring_values="$repository_root/infra/management-surfaces/kube-prometheus-stack-values.yaml"
 temporary_directory=$(mktemp -d)
@@ -59,6 +60,15 @@ validate_grafana_render() {
 }
 
 bash -n "$bootstrap"
+bash -n "$keycloak_bootstrap"
+rg -q -- '-s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200' "$keycloak_bootstrap" ||
+  fail 'realm SSO lifetime contract is absent'
+rg -q -- '-s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300' "$keycloak_bootstrap" ||
+  fail 'realm access token lifetime is not fixed at 300 seconds'
+rg -q '"access\.token\.lifespan":"3600"' "$keycloak_bootstrap" ||
+  fail 'Control Center access token lifetime override is absent'
+rg -q '\.attributes\."access\.token\.lifespan" == "3600"' "$keycloak_bootstrap" ||
+  fail 'Control Center access token lifetime readback is absent'
 jq -e '
   .schemaVersion == 1 and (.charts | length) == 3 and
   ([.charts[].name] | sort) == ["headlamp","kube-prometheus-stack","oauth2-proxy"] and

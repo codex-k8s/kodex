@@ -1,19 +1,29 @@
-import { chmod, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { expect, test } from "@playwright/test";
 
 import { authenticateOwner } from "./auth-flow";
 import { loadE2EAuthEnvironment } from "./environment";
-import { expect, test } from "./fixtures";
+import { withoutKodexAPICookies, writeStorageState } from "./storage-state";
 
 const environment = loadE2EAuthEnvironment();
 
 test("владелец входит через настроенный OIDC", async ({ page, context }) => {
   // Trace, video и screenshot отключены в auth config: credentials не попадают
   // в reporter или browser artifacts.
-  await authenticateOwner(page, {
-    username: environment.ownerUsername,
-    password: environment.ownerPassword,
-  });
+  const sessionResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).origin === environment.baseURL &&
+      new URL(response.url()).pathname === "/api/v1/session",
+  );
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "cold" },
+  );
+  expect((await sessionResponse).status()).toBe(204);
 
   await expect(page).toHaveURL(
     new RegExp(`^${escapeRegExp(environment.baseURL)}/`),
@@ -22,12 +32,8 @@ test("владелец входит через настроенный OIDC", asy
     page.getByRole("button", { name: "Выйти", exact: true }),
   ).toBeVisible();
 
-  await mkdir(dirname(environment.outputStorageState), {
-    recursive: true,
-    mode: 0o700,
-  });
-  await context.storageState({ path: environment.outputStorageState });
-  await chmod(environment.outputStorageState, 0o600);
+  const bootstrap = withoutKodexAPICookies(await context.storageState());
+  await writeStorageState(environment.outputStorageState, bootstrap);
 });
 
 function escapeRegExp(value: string): string {

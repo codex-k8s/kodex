@@ -55,7 +55,9 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/configure-github.sh tools/install/configure-node-registry.sh \
   tools/install/configure-ipv6-ingress-bridge.sh \
   tools/install/deploy-platform.sh tools/install/generate-material.sh \
+  tools/install/materialize-nats-runtime-users.sh \
   tools/install/materialize-secrets.sh tools/install/prepare-host.sh \
+  tools/install/reconcile-nats-runtime-users.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
   tools/install/write-env-file.sh; do
@@ -92,6 +94,29 @@ rg -n 'Vault|SecretProviderClass|secrets-store\.csi' \
   "$repository_root/install.sh" "$repository_root/tools/install" \
   --glob '!deploy-platform.sh' >/dev/null &&
   fail 'retired secret backend remains in installer'
+
+if rg -Fq 'runtime-user-policy.version" "$version_file"' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh"; then
+  fail 'NATS reconciliation marks a policy applied before Kubernetes materialization'
+fi
+rg -Fq 'runtime-user-policy.pending' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh" ||
+  fail 'NATS reconciliation does not preserve interrupted-upgrade evidence'
+rg -Fq 'credential_matches "$material_directory/nats/users/$user_name.creds"' \
+  "$repository_root/tools/install/reconcile-nats-runtime-users.sh" ||
+  fail 'NATS reconciliation does not compare permissions embedded in material credentials'
+rg -Fq 'Kubernetes Secret content readback mismatch' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not compare exact Kubernetes Secret content'
+rg -Fq 'NATS credential revocation ordering mismatch' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not prove previous credential revocation ordering'
+rg -Fq 'runtime-user-policy.version" "$version_file"' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not commit the cluster-applied policy revision'
+rg -Fq -- '--ignore-not-found -o name' \
+  "$repository_root/tools/install/materialize-nats-runtime-users.sh" ||
+  fail 'NATS materialization does not distinguish absent workloads from API errors'
 
 jq -e '
   .version == 1 and .namespace == "kodex-system" and (.secrets | length > 0) and

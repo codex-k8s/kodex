@@ -7,6 +7,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
@@ -64,6 +65,8 @@ require (
 replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
 replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+
+replace github.com/codex-k8s/kodex/libs/go/eventing => ../../../libs/go/eventing
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 

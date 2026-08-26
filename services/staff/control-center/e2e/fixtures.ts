@@ -1,5 +1,10 @@
 import { expect, test as base, type Page } from "@playwright/test";
 
+import { authenticateOwner } from "./auth-flow";
+import { loadE2EEnvironment } from "./environment";
+
+const environment = loadE2EEnvironment();
+
 export interface BrowserDiagnostics {
   readonly monitorPage: (page: Page) => void;
   readonly withExpectedNetworkInterruption: <T>(
@@ -10,6 +15,7 @@ export interface BrowserDiagnostics {
 
 export const test = base.extend<{
   browserDiagnostics: BrowserDiagnostics;
+  freshOwnerSession: boolean;
 }>({
   browserDiagnostics: [
     async ({ context, page }, use) => {
@@ -82,6 +88,22 @@ export const test = base.extend<{
           ].join("\n"),
         );
       }
+    },
+    { auto: true },
+  ],
+  freshOwnerSession: [
+    async ({ browserDiagnostics, page }, use) => {
+      const sessionResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).origin === environment.baseURL &&
+          new URL(response.url()).pathname === "/api/v1/session",
+        { timeout: 100_000 },
+      );
+      void browserDiagnostics;
+      await authenticateOwner(page, undefined, { mode: "warm" });
+      expect((await sessionResponse).status()).toBe(204);
+      await use(true);
     },
     { auto: true },
   ],
