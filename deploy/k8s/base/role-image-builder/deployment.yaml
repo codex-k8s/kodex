@@ -21,6 +21,11 @@ spec:
         app.kubernetes.io/name: role-image-builder
         app.kubernetes.io/component: image-build-client
         kodex.dev/image-build-client: "true"
+      annotations:
+        kodex.dev/release-revision: "0000000000000000000000000000000000000000"
+        kodex.dev/trusted-role-base-repository: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner
+        kodex.dev/trusted-role-base-digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+        kodex.dev/frontend-sha256: "0000000000000000000000000000000000000000000000000000000000000000"
     spec:
       serviceAccountName: role-image-builder
       automountServiceAccountToken: false
@@ -50,17 +55,17 @@ spec:
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PULL_DOCKER_CONFIG, value: /var/run/secrets/kodex/role-image-builder/base-pull/config.json}
             - {name: ROLE_IMAGE_BUILDER_ALLOWED_ROLE_BASE_IMAGES_FILE, value: /var/run/config/kodex/role-image-builder/role-environments/catalog.json}
             - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY
-              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: trustedRoleBaseRepository}}
+              valueFrom: {fieldRef: {fieldPath: "metadata.annotations['kodex.dev/trusted-role-base-repository']"}}
             - name: ROLE_IMAGE_BUILDER_INPUT_REPOSITORY
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleImageInputRepository}}
             - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST
-              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: trustedRoleBaseDigest}}
+              valueFrom: {fieldRef: {fieldPath: "metadata.annotations['kodex.dev/trusted-role-base-digest']"}}
             - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_REVISION
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_SHA256
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: ROLE_IMAGE_BUILDER_EXPECTED_FRONTEND_SHA256
-              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: frontendSHA256}}
+              valueFrom: {fieldRef: {fieldPath: "metadata.annotations['kodex.dev/frontend-sha256']"}}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: 'otel-collector.observability.svc:4317'}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/role-image-builder/observability/otel-ca.pem}
