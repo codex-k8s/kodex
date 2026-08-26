@@ -60,12 +60,58 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/reconcile-nats-runtime-users.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
-  tools/install/write-env-file.sh; do
+  tools/install/verify-oidc-target.sh tools/install/write-env-file.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
 bash -n "$repository_root/tools/deploy/generate-identity-material.sh" \
   "$repository_root/tools/deploy/materialize-identity-secrets.sh"
+
+oidc_fixture="$temporary_directory/oidc-pods.json"
+fake_bin="$temporary_directory/bin"
+mkdir -p "$fake_bin"
+cat >"$fake_bin/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == 'config current-context' ]]; then
+  printf '%s\n' "$FAKE_KUBE_CONTEXT"
+  exit 0
+fi
+selector=""
+previous=""
+for argument in "$@"; do
+  if [[ "$previous" == -l ]]; then selector=$argument; fi
+  previous=$argument
+done
+if [[ "$*" == *' get pods '* ]]; then
+  if [[ "$selector" == "$FAKE_OIDC_SELECTOR" ]]; then
+    cat "$FAKE_OIDC_FIXTURE"
+  else
+    printf '%s\n' '{"items":[]}'
+  fi
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$fake_bin/kubectl"
+cat >"$oidc_fixture" <<'EOF'
+{"items":[{"status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}]},"spec":{"containers":[{"ports":[{"protocol":"TCP","containerPort":8443}]}]}}]}
+EOF
+oidc_verifier="$repository_root/tools/install/verify-oidc-target.sh"
+export FAKE_KUBE_CONTEXT=kodex-test
+export FAKE_OIDC_SELECTOR='app.kubernetes.io/name=sso,app.kubernetes.io/component=identity-provider'
+export FAKE_OIDC_FIXTURE="$oidc_fixture"
+PATH="$fake_bin:$PATH" "$oidc_verifier" --context kodex-test --namespace identity \
+  --pod-name sso --pod-component identity-provider --target-port 8443 >/dev/null ||
+  fail 'valid bundled OIDC target was rejected'
+if PATH="$fake_bin:$PATH" "$oidc_verifier" --context kodex-test --namespace identity \
+  --pod-name sso --pod-component keycloak --target-port 8443 >/dev/null 2>&1; then
+  fail 'OIDC selector without a matching pod was accepted'
+fi
+if PATH="$fake_bin:$PATH" "$oidc_verifier" --context kodex-test --namespace identity \
+  --pod-name sso --pod-component identity-provider --target-port 9443 >/dev/null 2>&1; then
+  fail 'OIDC target port absent from the selected workload was accepted'
+fi
 
 dockerfile_path_validator="$repository_root/tools/release/validate-image-dockerfile-path.sh"
 "$dockerfile_path_validator" infra/dockerfile-frontend/Dockerfile ||
@@ -271,6 +317,11 @@ grep -Fq 'KODEX_DISABLE_OBSERVABILITY=true' "$repository_root/.kodex-env.example
 grep -Fq 'KODEX_OIDC_CONNECT_ADDRESS=sso.identity.svc.cluster.local:443' \
   "$repository_root/.kodex-env.example" ||
   fail 'bundled install does not use the OIDC Service port'
+grep -Fq 'KODEX_OIDC_POD_COMPONENT=identity-provider' \
+  "$repository_root/.kodex-env.example" ||
+  fail 'bundled OIDC selector disagrees with the Keycloak workload labels'
+rg -Fq 'tools/install/verify-oidc-target.sh' "$repository_root/install.sh" ||
+  fail 'platform release does not verify its exact OIDC NetworkPolicy target'
 grep -Fq 'KODEX_DISABLE_OBSERVABILITY:-true' \
   "$repository_root/install.sh" "$repository_root/tools/install/configure-github.sh" ||
   fail 'installer and GitHub configuration disagree on the external telemetry default'

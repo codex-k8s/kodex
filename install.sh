@@ -428,6 +428,11 @@ if component_selected arc; then
 fi
 
 if component_selected platform; then
+  "$repository_root/tools/install/verify-oidc-target.sh" \
+    --context "$KODEX_KUBE_CONTEXT" --namespace "$KODEX_OIDC_NAMESPACE" \
+    --pod-name "$KODEX_OIDC_POD_NAME" \
+    --pod-component "$KODEX_OIDC_POD_COMPONENT" \
+    --target-port "$KODEX_OIDC_TARGET_PORT"
   "$repository_root/tools/install/release-platform.sh" --context "$KODEX_KUBE_CONTEXT" \
     --owner-pat-file "$material_directory/inputs/github-owner-pat" \
     --workflow-sha-file "$workflow_sha_file" --profile web-only \
