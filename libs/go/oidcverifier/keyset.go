@@ -93,7 +93,11 @@ func (set *boundedKeySet) fetch(ctx context.Context) (jose.JSONWebKeySet, string
 	var keys jose.JSONWebKeySet
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&keys) != nil || decoder.Decode(&struct{}{}) != io.EOF || !validJWKS(keys, set.now().UTC()) {
+	if decoder.Decode(&keys) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return jose.JSONWebKeySet{}, "", true, errors.New("OIDC JWKS is invalid")
+	}
+	keys, valid := supportedSigningKeySet(keys, set.now().UTC())
+	if !valid {
 		return jose.JSONWebKeySet{}, "", true, errors.New("OIDC JWKS is invalid")
 	}
 	canonical, err := json.Marshal(keys)
@@ -104,27 +108,38 @@ func (set *boundedKeySet) fetch(ctx context.Context) (jose.JSONWebKeySet, string
 	return keys, hex.EncodeToString(digest[:]), false, nil
 }
 
-func validJWKS(keys jose.JSONWebKeySet, now time.Time) bool {
+func supportedSigningKeySet(keys jose.JSONWebKeySet, now time.Time) (jose.JSONWebKeySet, bool) {
 	if len(keys.Keys) == 0 || len(keys.Keys) > 16 {
-		return false
+		return jose.JSONWebKeySet{}, false
 	}
 	seen := make(map[string]struct{}, len(keys.Keys))
+	signingKeys := make([]jose.JSONWebKey, 0, len(keys.Keys))
 	for _, key := range keys.Keys {
-		_, rsaKey := key.Key.(*rsa.PublicKey)
-		if !rsaKey || !key.Valid() || !key.IsPublic() || key.KeyID == "" || key.Algorithm != string(jose.RS256) || key.Use != "sig" || key.CertificatesURL != nil {
-			return false
+		if key.KeyID == "" {
+			return jose.JSONWebKeySet{}, false
 		}
 		if _, duplicate := seen[key.KeyID]; duplicate {
-			return false
+			return jose.JSONWebKeySet{}, false
 		}
 		seen[key.KeyID] = struct{}{}
+		if key.Algorithm != string(jose.RS256) || key.Use != "sig" {
+			continue
+		}
+		_, rsaKey := key.Key.(*rsa.PublicKey)
+		if !rsaKey || !key.Valid() || !key.IsPublic() || key.CertificatesURL != nil {
+			return jose.JSONWebKeySet{}, false
+		}
 		for _, certificate := range key.Certificates {
 			if certificate == nil || now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) {
-				return false
+				return jose.JSONWebKeySet{}, false
 			}
 		}
+		signingKeys = append(signingKeys, key)
 	}
-	return true
+	if len(signingKeys) == 0 {
+		return jose.JSONWebKeySet{}, false
+	}
+	return jose.JSONWebKeySet{Keys: signingKeys}, true
 }
 
 func reusedKeyID(previous, next jose.JSONWebKeySet) bool {
