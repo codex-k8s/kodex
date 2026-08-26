@@ -30,6 +30,19 @@ for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Job" and .metadata.name == "release-artifact-materializer" and
+    any(.spec.template.spec.containers[0].env[];
+      .name == "DOCKERFILE_SOURCE_REF" and
+      (.value | contains("__KODEX_DOCKERFILE_SOURCE_REF__"))) and
+    any(.spec.template.spec.containers[0].env[];
+      .name == "DOCKERFILE_DIGEST" and
+      .value == "sha256:0000000000000000000000000000000000000000000000000000000000000000"))
+' >/dev/null || fail 'Dockerfile frontend is absent from release materialization'
+grep -Fq 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' \
+  "$repository_root/tools/install/deploy-platform.sh" ||
+  fail 'role image builder is not applied after its release dependencies'
 
 yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "internal-rpc-authority-restore-anchor-forward-only") |

@@ -178,6 +178,8 @@ push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.nam
 grep -Fq 'kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission' \
   "$temporary_directory/supply.yaml"
 grep -Fq 'REGISTRY_AUTHORIZATION_PROFILE' "$temporary_directory/supply.yaml"
+grep -Fq 'copy_exact "$DOCKERFILE_SOURCE_REF" kodex/dockerfile "$DOCKERFILE_DIGEST"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/release-artifact-materializer.sh"
 if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-image-registry-evidence") |
   .spec.ingress[].from[].podSelector.matchExpressions[]?.values[]' "$temporary_directory/supply.yaml" |
   grep -Fqx sign; then

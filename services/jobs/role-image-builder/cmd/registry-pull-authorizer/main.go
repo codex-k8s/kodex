@@ -183,6 +183,9 @@ func dockerCredentialMatches(path, username, password, registryHost string) bool
 		}
 	}
 	entry, ok := document.Auths[registryHost]
+	if !ok {
+		entry, ok = document.Auths[internalPullRegistryHost]
+	}
 	decoded, err := base64.StdEncoding.DecodeString(entry.Auth)
 	return ok && err == nil && string(decoded) == username+":"+password
 }

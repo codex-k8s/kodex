@@ -194,6 +194,7 @@ agent_runner_ref=$(jq -er '.images[] | select(.component == "agent-runner") | .p
 agent_runner_digest=$(jq -er '.images[] | select(.component == "agent-runner") | .digest' "$lock_file")
 control_plane_digest=$(jq -er '.images[] | select(.component == "control-plane") | .digest' "$lock_file")
 role_base_documents_digest=$(jq -er '.images[] | select(.component == "role-base-documents") | .digest' "$lock_file")
+frontend_digest=$(jq -er '.images[] | select(.component == "dockerfile") | .digest' "$lock_file")
 role_input_manifest_digest=$(jq -er '.role_image_input.manifest_digest' "$lock_file")
 role_input_payload_sha256=$(jq -er '.role_image_input.payload_sha256' "$lock_file")
 role_input_source_sha256=$(jq -er '.role_image_input.source_sha256' "$lock_file")
@@ -201,7 +202,7 @@ authority_ref=$(jq -er '.images[] | select(.component == "internal-rpc-authority
 admission_ref=$(jq -er '.images[] | select(.component == "image-admission") | .pull_ref' "$lock_file")
 admission_tools_ref=$(jq -er '.external_images[] | select(.component == "admission-tools") | .pull_ref' "$lock_file")
 admission_tools_digest=$(jq -er '.external_images[] | select(.component == "admission-tools") | .digest' "$lock_file")
-frontend_sha256=b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+frontend_sha256=${frontend_digest#sha256:}
 oidc_origin=$(printf '%s\n' "$oidc_issuer" | sed -E 's#^(https://[^/]+).*$#\1#')
 
 PUBLIC_HOST="$public_host" \
@@ -435,8 +436,11 @@ ROLE_ENVIRONMENT_CATALOG="$role_environment_catalog" yq -i '
 agent_runner_source_ref="$registry_push/$repository_prefix/agent-runner@$agent_runner_digest"
 role_base_documents_source_ref="$registry_push/$repository_prefix/role-base-documents@$role_base_documents_digest"
 role_image_input_source_ref="$registry_push/$repository_prefix/role-image-inputs@$role_input_manifest_digest"
+dockerfile_source_ref="$registry_push/$repository_prefix/dockerfile@$frontend_digest"
 RELEASE_SOURCE_REGISTRY="$release_source_registry" \
 SOURCE_SHA="$source_sha" \
+DOCKERFILE_SOURCE_REF="$dockerfile_source_ref" \
+DOCKERFILE_DIGEST="$frontend_digest" \
 AGENT_RUNNER_SOURCE_REF="$agent_runner_source_ref" \
 AGENT_RUNNER_DIGEST="$agent_runner_digest" \
 ROLE_BASE_DOCUMENTS_SOURCE_REF="$role_base_documents_source_ref" \
@@ -446,6 +450,8 @@ ROLE_IMAGE_INPUT_MANIFEST_DIGEST="$role_input_manifest_digest" yq -i '
   with(select(.kind == "Job" and .metadata.name == "release-artifact-materializer");
     (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_REGISTRY").value) = strenv(RELEASE_SOURCE_REGISTRY) |
     (.spec.template.spec.containers[0].env[] | select(.name == "RELEASE_SOURCE_SHA").value) = strenv(SOURCE_SHA) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "DOCKERFILE_SOURCE_REF").value) = strenv(DOCKERFILE_SOURCE_REF) |
+    (.spec.template.spec.containers[0].env[] | select(.name == "DOCKERFILE_DIGEST").value) = strenv(DOCKERFILE_DIGEST) |
     (.spec.template.spec.containers[0].env[] | select(.name == "AGENT_RUNNER_SOURCE_REF").value) = strenv(AGENT_RUNNER_SOURCE_REF) |
     (.spec.template.spec.containers[0].env[] | select(.name == "AGENT_RUNNER_DIGEST").value) = strenv(AGENT_RUNNER_DIGEST) |
     (.spec.template.spec.containers[0].env[] | select(.name == "ROLE_BASE_DOCUMENTS_SOURCE_REF").value) = strenv(ROLE_BASE_DOCUMENTS_SOURCE_REF) |

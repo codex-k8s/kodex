@@ -72,6 +72,18 @@ func TestDockerCredentialMatchesInternalAndPromotedHosts(t *testing.T) {
 	}
 }
 
+func TestDockerCredentialMatchesInternalProfile(t *testing.T) {
+	t.Parallel()
+	const promotedHost = "images.kodex.works"
+	path := writeDockerConfig(t, map[string]string{
+		internalPullRegistryHost: base64.StdEncoding.EncodeToString([]byte("buildkit-user:buildkit-password")),
+	})
+
+	if !dockerCredentialMatches(path, "buildkit-user", "buildkit-password", promotedHost) {
+		t.Fatal("internal-only profile credential was rejected")
+	}
+}
+
 func TestDockerCredentialMatchesRejectsUnexpectedRegistryEntry(t *testing.T) {
 	t.Parallel()
 	const promotedHost = "images.kodex.works"
