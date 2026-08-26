@@ -352,24 +352,35 @@ if [[ "$mode" == defer-public-tls ]]; then
 fi
 
 wait_authority_projections() {
-	local phase=${1:-all} name required_keys allowed_keys deadline secret_json
+	local phase=${1:-all} name required_keys allowed_keys event_scoped deadline secret_json
 	[[ "$phase" == bootstrap || "$phase" == all ]] ||
 		fail "authority projection phase is invalid: $phase"
-	while IFS=$'\t' read -r name required_keys allowed_keys; do
+	while IFS=$'\t' read -r name required_keys allowed_keys event_scoped; do
 		[[ -n "$name" ]] || continue
 		deadline=$((SECONDS + 600))
 		while ((SECONDS < deadline)); do
 			secret_json=$(kubectl --context "$context" -n "$namespace" \
 				get secret "$name" -o json 2>/dev/null || true)
-			if jq -e --argjson required "$required_keys" --argjson allowed "$allowed_keys" '
+			if jq -e --argjson required "$required_keys" --argjson allowed "$allowed_keys" \
+				--argjson event_scoped "$event_scoped" '
 				(.metadata.annotations["kodex.dev/secret-generation"] // "") as $generation |
-				([.data | keys[] | select(. != "_generation")] | sort) as $actual |
-				($generation | test("^[1-9][0-9]*$")) and
-				((.data["_generation"] // "" | @base64d) == $generation) and
-				(($required - $actual) | length == 0) and
-				(($actual - $allowed) | length == 0) and
-				(.data | length > 1) and
-				all(.data[]; type == "string" and length > 0)
+				(.data // {}) as $data |
+				([$data | keys[] | select(. != "_generation")] | sort) as $actual |
+				.metadata.labels["app.kubernetes.io/managed-by"] ==
+					"internal-rpc-authority-publisher" and
+				.metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+				.type == "Opaque" and
+				(
+					($event_scoped and $generation == "0" and ($data | length) == 0) or
+					(
+						($generation | test("^[1-9][0-9]*$")) and
+						(($data["_generation"] // "" | @base64d) == $generation) and
+						(($required - $actual) | length == 0) and
+						(($actual - $allowed) | length == 0) and
+						($data | length) > 1 and
+						all($data[]; type == "string" and length > 0)
+					)
+				)
 			' <<<"$secret_json" >/dev/null 2>&1; then
 				break
 			fi
@@ -383,7 +394,9 @@ wait_authority_projections() {
 			(any(.items[]; .key == "issuance_directive_jti") | not)) |
 		[.name,
 			([.items[] | select(.required != false) | .key] | sort | @json),
-			([.items[].key] | sort | @json)] | @tsv' "$projection_registry")
+			([.items[].key] | sort | @json),
+			(any(.items[]; .key == "issuance_directive_jti") | tostring)] | @tsv' \
+			"$projection_registry")
 }
 
 wait_workloads() {

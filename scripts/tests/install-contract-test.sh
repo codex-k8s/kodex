@@ -103,6 +103,26 @@ jq -n -e '
 	(valid(["current"]; ["current","previous"]; ["previous"]) | not) and
 	(valid(["current"]; ["current","previous"]; ["current","unknown"]) | not)
 ' >/dev/null || fail 'dynamic Secret required and allowed key-set contract is invalid'
+for projection_contract in \
+	'--argjson event_scoped "$event_scoped"' \
+	'$event_scoped and $generation == "0" and ($data | length) == 0' \
+	'"app.kubernetes.io/managed-by"] =='; do
+	rg -Fq -- "$projection_contract" "$repository_root/tools/install/deploy-platform.sh" ||
+		fail "event-scoped authority projection contract is absent: $projection_contract"
+done
+jq -n -e '
+	def valid($event_scoped; $generation; $data; $required; $allowed):
+		([$data | keys[] | select(. != "_generation")] | sort) as $actual |
+		($event_scoped and $generation == "0" and ($data | length) == 0) or
+		(($generation | test("^[1-9][0-9]*$")) and
+			(($required - $actual) | length == 0) and
+			(($actual - $allowed) | length == 0) and ($data | length) > 1);
+	valid(true; "0"; {}; ["current"]; ["current"]) and
+	(valid(false; "0"; {}; ["current"]; ["current"]) | not) and
+	valid(true; "1"; {_generation:"MQ==",current:"value"}; ["current"]; ["current"]) and
+	(valid(true; "0"; {current:"value"}; ["current"]; ["current"]) | not) and
+	(valid(true; "1"; {_generation:"MQ==",unknown:"value"}; ["current"]; ["current"]) | not)
+' >/dev/null || fail 'event-scoped authority placeholder contract is invalid'
 publisher_apply_line=$(grep -nE '^[[:space:]]+apply_render authority-publisher ' \
 	"$repository_root/tools/install/deploy-platform.sh" | cut -d: -f1)
 bootstrap_wait_line=$(grep -nE '^[[:space:]]+wait_authority_projections bootstrap$' \
