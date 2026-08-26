@@ -7,7 +7,6 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/router.middlewares: kodex-system-oauth2-control-center-chain@kubernetescrd
-    traefik.ingress.kubernetes.io/service.serverstransport: kodex-system-staff-control-center@kubernetescrd
 spec:
   ingressClassName: __KODEX_INGRESS_CLASS__
   tls:

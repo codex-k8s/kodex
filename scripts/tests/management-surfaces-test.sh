@@ -229,6 +229,10 @@ if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
   printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd"}}}\n'
   exit 0
 fi
+if [[ "$arguments" == *' get service staff-control-center -o json '* ]]; then
+  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/service.serverstransport":"kodex-system-staff-control-center@kubernetescrd"}}}\n'
+  exit 0
+fi
 printf 'Unexpected kubectl fixture call: %s\n' "$*" >&2
 exit 1
 EOF
@@ -297,6 +301,17 @@ done
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e \
   'select(.kind == "Ingress" and .metadata.name == "staff-control-center")' >/dev/null ||
   fail 'Control Center Ingress is absent from the platform release'
+kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
+  select(.kind == "Service" and .metadata.name == "staff-control-center") |
+  .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+    "kodex-system-staff-control-center@kubernetescrd"
+' >/dev/null || fail 'Control Center Service does not select its TLS ServersTransport'
+if kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" | yq -e '
+  select(.kind == "Ingress" and .metadata.name == "staff-control-center") |
+  .metadata.annotations | has("traefik.ingress.kubernetes.io/service.serverstransport")
+' >/dev/null 2>&1; then
+  fail 'Control Center ServersTransport annotation is attached to Ingress instead of Service'
+fi
 yq -e '.extraArgs."allowed-role" == "__KODEX_ALLOWED_ROLE__"' "$values" >/dev/null ||
   fail 'OAuth2 Proxy role gate is absent'
 yq -e '

@@ -2,6 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: staff-control-center
+  annotations:
+    traefik.ingress.kubernetes.io/service.serverstransport: kodex-system-staff-control-center@kubernetescrd
   labels:
     app.kubernetes.io/name: staff-control-center
 spec:

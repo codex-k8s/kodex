@@ -360,6 +360,10 @@ if [[ "$mode" == readback ]]; then
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
       "kodex-system-oauth2-control-center-chain@kubernetescrd"
   ' >/dev/null || fail 'Control Center OAuth2 middleware is absent'
+  kubectl -n kodex-system get service staff-control-center -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+      "kodex-system-staff-control-center@kubernetescrd"
+  ' >/dev/null || fail 'Control Center Service does not select its TLS ServersTransport'
 fi
 
 printf 'Management surfaces bootstrap completed: %s\n' "$mode"
