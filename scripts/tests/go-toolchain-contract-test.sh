@@ -12,7 +12,7 @@ jq -e '
   ([.images[].component] | length == (unique | length)) and
   all(.images[];
     (.component | test("^[a-z0-9-]+$")) and
-    (.dockerfile | startswith("services/")) and
+    (.dockerfile | type == "string" and length > 0) and
     ((has("target") | not) or
       (.component == "role-image-builder" and .target == "runtime") or
       (.component == "image-admission" and .target == "admission-runtime")))
@@ -22,6 +22,10 @@ jq -e '
 }
 
 while IFS=$'\t' read -r component dockerfile; do
+	"$repository_root/tools/release/validate-image-dockerfile-path.sh" "$dockerfile" || {
+		printf 'Dockerfile path is invalid for %s: %s\n' "$component" "$dockerfile" >&2
+		exit 1
+	}
   dockerfile_path="$repository_root/$dockerfile"
   [[ -f "$dockerfile_path" ]] || {
     printf 'Dockerfile is absent for %s\n' "$component" >&2

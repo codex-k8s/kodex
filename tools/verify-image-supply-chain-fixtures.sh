@@ -144,7 +144,21 @@ fi
 render_pull_host=registry-pull.invalid
 render_tools_image=admission-tools.invalid/kodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 render_admission_image=kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
-[[ $(grep -F -c "common_name: $render_pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(yq eval-all '
+  select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+  .data.pullRegistryHost
+' "$temporary_directory/supply.yaml" | grep -Fxc "$render_pull_host") -eq 1 ]]
+[[ $(yq eval-all '
+  select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull") |
+  .spec.template.spec.containers[] | select(.name == "certificate-guard") |
+  .env[] | select(.name == "SERVER_NAME") |
+  .value
+' "$temporary_directory/supply.yaml" |
+  grep -Fxc "$render_pull_host") -eq 1 ]]
+[[ $(yq eval-all '
+  select(.kind == "IngressRouteTCP" and .metadata.name == "kodex-image-registry-pull") |
+  .spec.routes[].match
+' "$temporary_directory/supply.yaml" | grep -Fxc "HostSNI(\`$render_pull_host\`)") -eq 1 ]]
 [[ $(grep -F -c 'name: REGISTRY_HTTP_TLS_CLIENTCAS_0' "$temporary_directory/supply.yaml") -eq 3 ]]
 [[ $(yq '
   select(.kind == "Deployment") |
@@ -186,8 +200,10 @@ if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "kodex-ima
   echo "signer received evidence registry network authority" >&2
   exit 1
 fi
-[[ $(grep -F -c 'kodex.dev/pull-credential-generation: "0"' \
-  "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(yq eval-all '
+  select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull") |
+  .spec.template.metadata.annotations."kodex.dev/pull-credential-generation"
+' "$temporary_directory/supply.yaml" | grep -Fxc '0') -eq 1 ]]
 [[ $(grep -F -c 'pullCredentialGeneration: "0"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
 grep -Fq 'valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: pullCredentialGeneration}}' \
