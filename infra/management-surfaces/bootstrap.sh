@@ -221,6 +221,9 @@ if [[ "$mode" == apply-surfaces ]]; then
   done
   helm upgrade --install kodex-headlamp "$headlamp_chart" --namespace platform-admin \
     --values "$script_directory/headlamp-values.yaml" --atomic --wait --timeout 10m
+  # Новые OAuth2 Proxy должны получить точный путь к issuer до OIDC discovery
+  # на старте; Helm не сможет завершить rollout под прежней egress policy.
+  kubectl apply --server-side --field-manager=kodex-management -f "$routes" >/dev/null
   for binding in \
     "control-center|kodex-system|$control_center_host|kodex-owner|$oidc_issuer" \
     "grafana|observability|$grafana_host|kodex-owner|$oidc_issuer" \
@@ -231,7 +234,6 @@ if [[ "$mode" == apply-surfaces ]]; then
     helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
       --values "$values" --atomic --wait --timeout 10m
   done
-  kubectl apply --server-side --field-manager=kodex-management -f "$routes" >/dev/null
 fi
 
 if [[ "$mode" == readback ]]; then
