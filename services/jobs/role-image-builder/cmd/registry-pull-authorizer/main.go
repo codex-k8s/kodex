@@ -21,7 +21,10 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
-const pullServerError = "registry pull authorizer failed"
+const (
+	pullServerError          = "registry pull authorizer failed"
+	internalPullRegistryHost = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
+)
 
 type pullProfile struct {
 	configFile   string
@@ -171,13 +174,15 @@ func dockerCredentialMatches(path, username, password, registryHost string) bool
 			Auth string `json:"auth"`
 		} `json:"auths"`
 	}
-	if json.Unmarshal(value, &document) != nil || len(document.Auths) != 1 {
+	if json.Unmarshal(value, &document) != nil || len(document.Auths) < 1 || len(document.Auths) > 2 {
 		return false
 	}
-	entry, ok := document.Auths["kodex-image-registry.kodex-system.svc.cluster.local:5000"]
-	if !ok {
-		entry, ok = document.Auths[registryHost]
+	for host := range document.Auths {
+		if host != internalPullRegistryHost && host != registryHost {
+			return false
+		}
 	}
+	entry, ok := document.Auths[registryHost]
 	decoded, err := base64.StdEncoding.DecodeString(entry.Auth)
 	return ok && err == nil && string(decoded) == username+":"+password
 }
