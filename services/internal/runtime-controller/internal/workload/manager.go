@@ -126,7 +126,7 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 		Callbacks: leaderelection.LeaderCallbacks{OnStartedLeading: func(leaderContext context.Context) {
 			result <- run(leaderContext)
 			cancel()
-		}},
+		}, OnStoppedLeading: func() {}},
 	})
 	if err != nil {
 		return errors.New("configure runtime leader election")
