@@ -25,6 +25,9 @@ const (
 	pullServerError                  = "registry pull authorizer failed"
 	pullBasicAuthenticationChallenge = `Basic realm="kodex-registry"`
 	internalPullRegistryHost         = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
+	pullRegistryHeaderTimeout        = 5 * time.Second
+	pullRegistryStreamTimeout        = 15 * time.Minute
+	pullRegistryIdleTimeout          = 30 * time.Second
 )
 
 type pullProfile struct {
@@ -51,7 +54,7 @@ func main() {
 		}
 	}
 	backend, _ := url.Parse("http://127.0.0.1:5006")
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("redirect rejected") }}
+	client := newPullRegistryProxyClient()
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		certificate, failure := pullClientCertificate(request)
 		decision := denyPullRequest(failure)
@@ -86,11 +89,35 @@ func main() {
 		writer.WriteHeader(response.StatusCode)
 		_, _ = io.Copy(writer, io.LimitReader(response.Body, 1<<30))
 	})
-	server := &http.Server{Addr: ":5000", Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: pool}} //nolint:gosec // exact client CAs and TLS 1.3.
+	server := newPullRegistryProxyServer(":5000", handler, pool)
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(pullServerError)
 	}
+}
+
+func newPullRegistryProxyClient() *http.Client {
+	return &http.Client{
+		Timeout: pullRegistryStreamTimeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return errors.New("redirect rejected")
+		},
+	}
+}
+
+func newPullRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: pullRegistryHeaderTimeout,
+		ReadTimeout:       pullRegistryStreamTimeout,
+		WriteTimeout:      pullRegistryStreamTimeout,
+		IdleTimeout:       pullRegistryIdleTimeout,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+			ClientCAs:  pool,
+		},
+	} //nolint:gosec // exact client CAs and TLS 1.3.
 }
 
 func pullClientCertificate(request *http.Request) (*x509.Certificate, string) {

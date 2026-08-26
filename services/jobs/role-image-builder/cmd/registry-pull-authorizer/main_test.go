@@ -11,7 +11,42 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestPullRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
+	t.Parallel()
+	client := newPullRegistryProxyClient()
+	if client.Timeout != 15*time.Minute {
+		t.Fatalf("client timeout = %s, want 15m", client.Timeout)
+	}
+	if client.CheckRedirect == nil {
+		t.Fatal("redirect rejection is not configured")
+	}
+	if err := client.CheckRedirect(&http.Request{}, nil); err == nil {
+		t.Fatal("redirect was accepted")
+	}
+
+	pool := x509.NewCertPool()
+	server := newPullRegistryProxyServer(":0", http.NotFoundHandler(), pool)
+	if server.ReadHeaderTimeout != 5*time.Second ||
+		server.ReadTimeout != 15*time.Minute ||
+		server.WriteTimeout != 15*time.Minute ||
+		server.IdleTimeout != 30*time.Second {
+		t.Fatalf(
+			"server timeouts = header:%s read:%s write:%s idle:%s",
+			server.ReadHeaderTimeout,
+			server.ReadTimeout,
+			server.WriteTimeout,
+			server.IdleTimeout,
+		)
+	}
+	if server.TLSConfig == nil || server.TLSConfig.MinVersion != tls.VersionTLS13 ||
+		server.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert ||
+		server.TLSConfig.ClientCAs != pool {
+		t.Fatal("mTLS boundary changed while configuring pull stream timeouts")
+	}
+}
 
 func TestPullClientCertificateAcceptsVerifiedChain(t *testing.T) {
 	t.Parallel()
