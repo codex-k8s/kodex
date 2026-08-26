@@ -162,6 +162,10 @@ if [[ "$arguments" == *' apply '* ]]; then
       select(.kind == "NetworkPolicy" and .metadata.name == "oauth2-control-center-exact-paths") |
       .spec.egress[].ports[] | select(.port == 8443 and (.port | tag) == "!!int")
     ' "$manifest" >/dev/null
+    yq -e '
+      select(.kind == "NetworkPolicy" and .metadata.name == "sso-oauth2-proxy-ingress") |
+      .spec.ingress[].ports[] | select(.port == 8443 and (.port | tag) == "!!int")
+    ' "$manifest" >/dev/null
   fi
   exit 0
 fi
@@ -180,6 +184,10 @@ if [[ "$arguments" == *' get deployment oauth2-'*' -o json '* ]]; then
 fi
 if [[ "$arguments" == *' get networkpolicy oauth2-'*'-exact-paths -o json '* ]]; then
   printf '%s\n' '{"spec":{"egress":[{"ports":[{"protocol":"UDP","port":53}]},{"ports":[{"protocol":"TCP","port":8443}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"identity"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"sso","app.kubernetes.io/component":"identity-provider"}}}]}]}}'
+  exit 0
+fi
+if [[ "$arguments" == *' get networkpolicy sso-oauth2-proxy-ingress -o json '* ]]; then
+  printf '%s\n' '{"spec":{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"sso","app.kubernetes.io/component":"identity-provider"}},"policyTypes":["Ingress"],"ingress":[{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kodex-system"}},"podSelector":{"matchLabels":{"app.kubernetes.io/instance":"oauth2-control-center"}}},{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"observability"}},"podSelector":{"matchLabels":{"app.kubernetes.io/instance":"oauth2-grafana"}}},{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"platform-admin"}},"podSelector":{"matchLabels":{"app.kubernetes.io/instance":"oauth2-headlamp"}}}],"ports":[{"protocol":"TCP","port":8443}]}]}}'
   exit 0
 fi
 if [[ "$arguments" == *' get clusterrolebinding kodex-headlamp-admin -o json '* ]]; then
@@ -315,6 +323,11 @@ for policy in \
     )
   ' "$routes" >/dev/null || fail "OAuth2 Proxy exact Keycloak egress is absent: $policy"
 done
+POLICY_NAME=sso-oauth2-proxy-ingress yq -e '
+  select(.kind == "NetworkPolicy" and .metadata.name == strenv(POLICY_NAME)) |
+  (.spec.ingress[0].from | length) == 3 and
+  .spec.ingress[0].ports[0].port == "__KODEX_OIDC_TARGET_PORT__"
+' "$routes" >/dev/null || fail 'Keycloak exact OAuth2 Proxy ingress is absent'
 yq -e '
   select(.kind == "Service" and .metadata.name == "sso") |
   .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==

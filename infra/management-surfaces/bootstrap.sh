@@ -170,8 +170,12 @@ KUBERNETES_API_SERVICE_CIDR="$kubernetes_api_service_cidr" yq '
   )
 ' "$script_directory/routes.yaml" >"$routes"
 OIDC_TARGET_PORT="$oidc_target_port" yq -i '
-  with(select(.kind == "NetworkPolicy" and (.metadata.name | test("^oauth2-.+-exact-paths$")));
-    (.spec.egress[].ports[] | select(.port == strenv(OIDC_TARGET_PORT)).port) =
+  with(select(.kind == "NetworkPolicy" and
+    ((.metadata.name | test("^oauth2-.+-exact-paths$")) or
+      .metadata.name == "sso-oauth2-proxy-ingress"));
+    (.spec.egress[]?.ports[]? | select(.port == strenv(OIDC_TARGET_PORT)).port) =
+      (strenv(OIDC_TARGET_PORT) | tonumber) |
+    (.spec.ingress[]?.ports[]? | select(.port == strenv(OIDC_TARGET_PORT)).port) =
       (strenv(OIDC_TARGET_PORT) | tonumber))
 ' "$routes"
 endpoint_destinations=$(printf '%s\n' "${api_endpoint_cidrs[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | {ipBlock:{cidr:.}})')
@@ -299,6 +303,31 @@ if [[ "$mode" == readback ]]; then
       )
     ' >/dev/null || fail "OAuth2 Proxy OIDC egress mismatch: $policy"
   done
+  kubectl -n identity get networkpolicy sso-oauth2-proxy-ingress -o json | jq -e \
+    --argjson target_port "$oidc_target_port" '
+    .spec.podSelector.matchLabels == {
+      "app.kubernetes.io/name":"sso",
+      "app.kubernetes.io/component":"identity-provider"
+    } and
+    .spec.policyTypes == ["Ingress"] and
+    .spec.ingress == [{
+      from:[
+        {
+          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"kodex-system"}},
+          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-control-center"}}
+        },
+        {
+          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"observability"}},
+          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-grafana"}}
+        },
+        {
+          namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"platform-admin"}},
+          podSelector:{matchLabels:{"app.kubernetes.io/instance":"oauth2-headlamp"}}
+        }
+      ],
+      ports:[{protocol:"TCP",port:$target_port}]
+    }]
+  ' >/dev/null || fail 'Keycloak OAuth2 Proxy ingress mismatch'
   kubectl -n platform-admin rollout status deployment/kodex-headlamp --timeout=3m >/dev/null || fail 'Headlamp rollout failed'
   kubectl get clusterrolebinding kodex-headlamp-admin -o json | jq -e '
     .metadata.name == "kodex-headlamp-admin" and
