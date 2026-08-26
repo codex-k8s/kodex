@@ -18,6 +18,12 @@ if yq -e 'select(.kind == "SecretProviderClass" or
   (.apiVersion | test("secrets.hashicorp.com|vault.banzaicloud.com")))' "$render" >/dev/null 2>&1; then
   fail 'release render contains a retired secret provider resource'
 fi
+yq -e 'select(.apiVersion == "cert-manager.io/v1" and .kind == "Certificate" and
+    .metadata.name == "staff-control-center-public") |
+  .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+  .metadata.labels["kodex.dev/owner-intent"] == "true" and
+  .spec.secretName == "staff-control-center-public-tls"' "$render" >/dev/null ||
+  fail 'public TLS Certificate disagrees with the installer ownership contract'
 [[ $(yq -N -r 'select(.kind == "StatefulSet") | .metadata.name' "$render" | sort -u | wc -l) -eq 2 ]] ||
   fail 'web-only stateful dependency count is invalid'
 for workload in kodex-postgresql kodex-nats; do
