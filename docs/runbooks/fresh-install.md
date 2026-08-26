@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.0.8
+version: 2.0.9
 updated: 2026-08-26
 ---
 
@@ -53,6 +53,10 @@ labels `kodex-build`/`kodex-deploy`. Exact registry write identity переда�
 `KODEX_RELEASE_REGISTRY_PASSWORD`; установщик не создаёт пользователя во
 внешнем registry и не ослабляет его TLS.
 
+Admin host, с которого запускается профиль `existing-kubernetes`, должен иметь
+`curl`, `dig` из пакета `dnsutils`, `python3` и GNU `timeout`: они выполняют
+fail-closed DNS/HTTP-01 preflight до создания публичного `Certificate`.
+
 Для release build ingress задаётся тремя независимыми параметрами:
 `KODEX_INGRESS_NAMESPACE`, `KODEX_INGRESS_POD_NAME` и
 `KODEX_INGRESS_SERVICE_NAME`. Service обязан иметь единственный HTTPS port
@@ -81,6 +85,8 @@ chmod 0600 .kodex-env
 - необязательный отдельный DNS SAN для восстановления Control Center TLS после
   внешнего ACME duplicate-certificate rate limit;
 - режим публичного TLS `KODEX_PUBLIC_TLS_MODE=deferred|enabled`;
+- точные comma-separated списки разрешённых IPv4/IPv6 ingress для public TLS
+  preflight и bounded DNS/HTTP timeouts;
 - exact connect address, TLS server name и Kubernetes selector OIDC workload;
 - ACME email, ingress workload selector и имя ingress Service;
 - постоянного Keycloak administrator и первого owner;
@@ -132,8 +138,30 @@ Bundled MVP по умолчанию использует `KODEX_DISABLE_OBSERVAB
 имеет результат `NOT RUN`. HTTP fallback и `skipTLSVerify` запрещены.
 
 Перед переключением в `enabled` владелец отдельно подтверждает допустимое окно
-выдачи. После переключения выполняется повторный exact render deployment,
-ожидание `Certificate/Ready` и trusted HTTPS/OIDC/browser readback.
+выдачи. `KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES` и
+`KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES` содержат comma-separated exact IP без
+CIDR, wildcard, пробелов и scope zone. Их объединение должно в точности
+совпадать с полным A/AAAA snapshot всех SAN из exact render. Пустой IPv6-список
+допустим только при отсутствии AAAA у каждого SAN. Неиспользуемые запасные IP
+запрещены, чтобы старый адрес нельзя было молча оставить разрешённым.
+
+До server-side dry-run публичного `Certificate` и повторно непосредственно
+перед apply установщик:
+
+1. проверяет, что exact `ClusterIssuer` из render имеет `Ready=True`;
+2. выполняет bounded A и AAAA lookup каждого SAN;
+3. закрыто отклоняет неизвестный адрес или расхождение snapshot с allowlist;
+4. через каждый опубликованный IPv4/IPv6 выполняет bounded HTTP-запрос на port
+   80 с exact `Host` соответствующего SAN и принимает только HTTP 1xx-4xx.
+
+`KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS` и
+`KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS` задаются в диапазоне 1-99 секунд;
+значение по умолчанию — 10. Проверка не создаёт solver, `CertificateRequest`,
+`Order` или `Challenge`. Если применённый публичный `Certificate` не достигает
+`Ready=True` за bounded wait, установщик удаляет только объект с exact именем и
+owner-метками Kodex, затем ожидает garbage collection его ACME-потомков. Чужой
+одноимённый объект закрыто останавливает cleanup. После успешного выпуска
+выполняются trusted HTTPS/OIDC/browser readback.
 
 ## 3. Secret model
 
@@ -175,8 +203,10 @@ k3s kill-all, снимает mounts, удаляет Kubernetes state и пров
 `nftables.service` отключается: её прежняя `FORWARD policy drop` выполнялась до
 Kubernetes/UFW и могла блокировать DNAT до ingress pod после переустановки.
 
-Перед установкой DNS всех публичных hosts должен указывать на сервер, а порты
-22, 80 и 443 быть доступны. Другие входящие порты firewall закрывает. UFW
+Перед установкой DNS всех публичных hosts должен указывать на exact разрешённые
+ingress IP, а порты 22, 80 и 443 быть доступны. Опубликованный AAAA допустим
+только при фактически работающем внешнем IPv6 HTTP path; иначе запись удаляется
+до выпуска сертификата. Другие входящие порты firewall закрывает. UFW
 каждый раз строится с нуля: incoming и routed по умолчанию запрещены, pod
 forwarding ограничен CIDR `10.42.0.0/16`, служебный трафик -
 `10.43.0.0/16`, а внешний DNAT до pod разрешён только для HTTP/HTTPS.
@@ -215,22 +245,25 @@ Actions; установщик скачивает digest-bound render и прим
 
 `tools/install/deploy-platform.sh` соблюдает порядок:
 
-1. owner-checked retirement stale image-admission binding после fresh namespace
+1. в `enabled` — fail-closed exact ClusterIssuer, DNS A/AAAA и внешний HTTP-01
+   preflight до публичного `Certificate`;
+2. owner-checked retirement stale image-admission binding после fresh namespace
    reset, если её namespaced parameters отсутствуют;
-2. phase-aware server-side dry-run CRD и уже известных API без persistence;
-3. CRD и foundation; в режиме `deferred` публичный Certificate исключается;
-4. Certificate/Bundle readback;
-5. PostgreSQL и NATS;
-6. authority и control-plane migrations;
-7. static PostgreSQL role reconciliation;
-8. broker bootstrap;
-9. `internal-rpc-authority-publisher`;
-10. readback всех dynamic Secret projections;
-11. остальные Deployments/CronJobs;
-12. release artifact materialization, включая exact `control-plane` sentinel
+3. phase-aware server-side dry-run CRD и уже известных API без persistence;
+4. повторный public TLS preflight, CRD и foundation; в режиме `deferred`
+   публичный Certificate исключается;
+5. Certificate/Bundle readback;
+6. PostgreSQL и NATS;
+7. authority и control-plane migrations;
+8. static PostgreSQL role reconciliation;
+9. broker bootstrap;
+10. `internal-rpc-authority-publisher`;
+11. readback всех dynamic Secret projections;
+12. остальные Deployments/CronJobs;
+13. release artifact materialization, включая exact `control-plane` sentinel
     для authenticated pull-registry readback; транспортный отказ readback
     повторяется ограниченно, а несовпадение digest немедленно закрывает выпуск;
-13. rollout, Job и failing Pod readback.
+14. rollout, Job и failing Pod readback.
 
 Нельзя запускать workloads до готовности authority projections или считать
 GitHub render фактическим deployment.

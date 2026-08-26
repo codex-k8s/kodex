@@ -295,9 +295,13 @@ wait_trust_material() {
   local resource_name
   while IFS= read -r resource_name; do
     [[ -n "$resource_name" ]] || continue
-    kubectl --context "$context" -n "$namespace" wait --for=condition=Ready \
-      "certificate/$resource_name" --timeout=10m >/dev/null ||
+    if ! kubectl --context "$context" -n "$namespace" wait --for=condition=Ready \
+      "certificate/$resource_name" --timeout=10m >/dev/null; then
+      if [[ "$public_tls_mode" == enabled && "$resource_name" == "$public_certificate_name" ]]; then
+        retire_owner_managed_public_certificate
+      fi
       fail "Certificate is not ready: $resource_name"
+    fi
   done < <(yq -N -r '
     select(.kind == "Certificate" and
       (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
@@ -320,6 +324,32 @@ public_tls_descendant_count() {
     '
 }
 
+retire_owner_managed_public_certificate() {
+  local certificate_json deadline
+  if certificate_json=$(kubectl --context "$context" -n "$namespace" get \
+    "certificate/$public_certificate_name" -o json 2>/dev/null); then
+    jq -e \
+      --arg namespace "$namespace" \
+      --arg name "$public_certificate_name" '
+        .apiVersion == "cert-manager.io/v1" and
+        .kind == "Certificate" and
+        .metadata.namespace == $namespace and
+        .metadata.name == $name and
+        .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+        .metadata.labels["kodex.dev/owner-intent"] == "true"
+      ' <<<"$certificate_json" >/dev/null ||
+      fail 'public TLS Certificate is not owned by Kodex'
+    kubectl --context "$context" -n "$namespace" delete \
+      "certificate/$public_certificate_name" --wait=true --timeout=3m >/dev/null
+  fi
+  deadline=$((SECONDS + 180))
+  while ((SECONDS < deadline)); do
+    [[ "$(public_tls_descendant_count)" == 0 ]] && return
+    sleep 2
+  done
+  fail 'public TLS ACME descendants were not garbage-collected'
+}
+
 verify_public_tls_deferred() {
   if kubectl --context "$context" -n "$namespace" get \
     "certificate/$public_certificate_name" >/dev/null 2>&1; then
@@ -330,16 +360,169 @@ verify_public_tls_deferred() {
 }
 
 defer_public_tls() {
-  local deadline
-  kubectl --context "$context" -n "$namespace" delete \
-    "certificate/$public_certificate_name" --ignore-not-found --wait=true \
-    --timeout=3m >/dev/null
-  deadline=$((SECONDS + 180))
-  while ((SECONDS < deadline)); do
-    [[ "$(public_tls_descendant_count)" == 0 ]] && return
-    sleep 2
+  retire_owner_managed_public_certificate
+}
+
+canonical_address_list() {
+  local family=$1 value=$2
+  python3 - "$family" "$value" <<'PY'
+import ipaddress
+import sys
+
+family = int(sys.argv[1])
+raw = sys.argv[2]
+if not raw:
+    raise SystemExit(0)
+values = raw.split(",")
+if any(not value or value.strip() != value for value in values):
+    raise SystemExit("address list must be a comma-separated list without whitespace")
+canonical = []
+for value in values:
+    if any(marker in value for marker in ("*", "/", "%")):
+        raise SystemExit("wildcards, CIDRs and scoped addresses are forbidden")
+    address = ipaddress.ip_address(value)
+    if address.version != family:
+        raise SystemExit(f"address family mismatch: {value}")
+    canonical.append(str(address))
+if len(canonical) != len(set(canonical)):
+    raise SystemExit("duplicate address")
+print("\n".join(sorted(canonical)))
+PY
+}
+
+canonical_dns_addresses() {
+  local family=$1
+  python3 -c '
+import ipaddress
+import sys
+
+family = int(sys.argv[1])
+result = set()
+for line in sys.stdin:
+    value = line.strip().rstrip(".")
+    if not value:
+        continue
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        continue
+    if address.version == family:
+        result.add(str(address))
+print("\n".join(sorted(result)))
+' "$family"
+}
+
+public_tls_http_probe() {
+  local san=$1 address=$2 timeout_seconds=$3 resolve_address=$address http_code
+  [[ "$address" != *:* ]] || resolve_address="[$address]"
+  http_code=$(timeout "${timeout_seconds}s" curl --silent --show-error \
+    --output /dev/null --write-out '%{http_code}' --noproxy '*' \
+    --connect-timeout "$timeout_seconds" --max-time "$timeout_seconds" \
+    --resolve "$san:80:$resolve_address" --header "Host: $san" \
+    "http://$san/.well-known/acme-challenge/kodex-preflight-$$-$RANDOM") ||
+    fail "public TLS HTTP-01 endpoint is unreachable: $san/$address"
+  [[ "$http_code" =~ ^[1-4][0-9]{2}$ ]] ||
+    fail "public TLS HTTP-01 endpoint returned an invalid status: $san/$address/$http_code"
+}
+
+public_tls_preflight() {
+  local certificate_file="$temporary_directory/public-certificate.json"
+  local certificate_count issuer_name issuer_kind issuer_group issuer_json
+  local dns_timeout_seconds=${KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS:-10}
+  local http_timeout_seconds=${KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS:-10}
+  local allowed_ipv4_raw=${KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}
+  local allowed_ipv6_raw=${KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}
+  local allowed_ipv4_output allowed_ipv6_output san dns_output address
+  local -a allowed_ipv4=() allowed_ipv6=() sans=() san_ipv4=() san_ipv6=()
+  local -a observed_ipv4=() observed_ipv6=()
+
+  for command_name in curl dig python3 timeout; do
+    command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required for public TLS preflight"
   done
-  fail 'public TLS ACME descendants were not garbage-collected'
+  [[ "$dns_timeout_seconds" =~ ^[1-9][0-9]?$ ]] ||
+    fail 'KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS must be between 1 and 99'
+  [[ "$http_timeout_seconds" =~ ^[1-9][0-9]?$ ]] ||
+    fail 'KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS must be between 1 and 99'
+
+  certificate_count=$(yq -o=json -I=0 '
+    select(.apiVersion == "cert-manager.io/v1" and .kind == "Certificate" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME))
+  ' "$render_file" | jq -s 'length')
+  [[ "$certificate_count" == 1 ]] || fail 'exactly one public TLS Certificate is required in render'
+  yq -o=json -I=0 '
+    select(.apiVersion == "cert-manager.io/v1" and .kind == "Certificate" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME))
+  ' "$render_file" >"$certificate_file"
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/owner-intent"] == "true" and
+    (.spec.dnsNames | type == "array" and length > 0) and
+    all(.spec.dnsNames[];
+      type == "string" and
+      test("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$") and
+      (contains("*") | not)) and
+    (.spec.dnsNames | length == (unique | length)) and
+    (.spec.issuerRef.name | type == "string" and
+      test("^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")) and
+    (.spec.issuerRef.kind // "Issuer") == "ClusterIssuer" and
+    (.spec.issuerRef.group // "cert-manager.io") == "cert-manager.io"
+  ' "$certificate_file" >/dev/null || fail 'public TLS Certificate contract is invalid'
+
+  issuer_name=$(jq -r '.spec.issuerRef.name' "$certificate_file")
+  issuer_kind=$(jq -r '.spec.issuerRef.kind // "Issuer"' "$certificate_file")
+  issuer_group=$(jq -r '.spec.issuerRef.group // "cert-manager.io"' "$certificate_file")
+  [[ "$issuer_kind" == ClusterIssuer && "$issuer_group" == cert-manager.io ]] ||
+    fail 'public TLS Certificate must reference an exact cert-manager ClusterIssuer'
+  issuer_json=$(kubectl --context "$context" get \
+    "clusterissuer.cert-manager.io/$issuer_name" -o json 2>/dev/null) ||
+    fail "public TLS ClusterIssuer is absent: $issuer_name"
+  jq -e --arg name "$issuer_name" '
+    .apiVersion == "cert-manager.io/v1" and .kind == "ClusterIssuer" and
+    .metadata.name == $name and
+    any(.status.conditions[]?; .type == "Ready" and .status == "True")
+  ' <<<"$issuer_json" >/dev/null || fail "public TLS ClusterIssuer is not ready: $issuer_name"
+
+  allowed_ipv4_output=$(canonical_address_list 4 "$allowed_ipv4_raw") ||
+    fail 'KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES is invalid'
+  allowed_ipv6_output=$(canonical_address_list 6 "$allowed_ipv6_raw") ||
+    fail 'KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES is invalid'
+  mapfile -t allowed_ipv4 <<<"$allowed_ipv4_output"
+  mapfile -t allowed_ipv6 <<<"$allowed_ipv6_output"
+  [[ -n "$allowed_ipv4_output" || -n "$allowed_ipv6_output" ]] ||
+    fail 'at least one public TLS allowed address is required'
+  mapfile -t sans < <(jq -r '.spec.dnsNames[]' "$certificate_file")
+
+  for san in "${sans[@]}"; do
+    dns_output=$(timeout "$((dns_timeout_seconds + 2))s" \
+      dig +time="$dns_timeout_seconds" +tries=1 +short A "$san") ||
+      fail "public TLS DNS A lookup failed: $san"
+    mapfile -t san_ipv4 < <(canonical_dns_addresses 4 <<<"$dns_output")
+    dns_output=$(timeout "$((dns_timeout_seconds + 2))s" \
+      dig +time="$dns_timeout_seconds" +tries=1 +short AAAA "$san") ||
+      fail "public TLS DNS AAAA lookup failed: $san"
+    mapfile -t san_ipv6 < <(canonical_dns_addresses 6 <<<"$dns_output")
+    ((${#san_ipv4[@]} + ${#san_ipv6[@]} > 0)) ||
+      fail "public TLS SAN has no A or AAAA records: $san"
+    for address in "${san_ipv4[@]}"; do
+      printf '%s\n' "${allowed_ipv4[@]}" | grep -Fxq -- "$address" ||
+        fail "public TLS SAN resolves to an unauthorized IPv4 address: $san/$address"
+      observed_ipv4+=("$address")
+      public_tls_http_probe "$san" "$address" "$http_timeout_seconds"
+    done
+    for address in "${san_ipv6[@]}"; do
+      printf '%s\n' "${allowed_ipv6[@]}" | grep -Fxq -- "$address" ||
+        fail "public TLS SAN resolves to an unauthorized IPv6 address: $san/$address"
+      observed_ipv6+=("$address")
+      public_tls_http_probe "$san" "$address" "$http_timeout_seconds"
+    done
+  done
+
+  [[ "$(printf '%s\n' "${observed_ipv4[@]}" | sed '/^$/d' | sort -u)" == "$allowed_ipv4_output" ]] ||
+    fail 'public TLS allowed IPv4 addresses differ from the rendered SAN DNS snapshot'
+  [[ "$(printf '%s\n' "${observed_ipv6[@]}" | sed '/^$/d' | sort -u)" == "$allowed_ipv6_output" ]] ||
+    fail 'public TLS allowed IPv6 addresses differ from the rendered SAN DNS snapshot'
 }
 
 if [[ "$mode" == defer-public-tls ]]; then
@@ -419,6 +602,9 @@ if [[ "$mode" == prepare-preflight ]]; then
 fi
 
 if [[ "$mode" == preflight ]]; then
+  if [[ "$public_tls_mode" == enabled ]]; then
+    public_tls_preflight
+  fi
   crd_file=$(render_filter preflight-custom-resource-definitions \
     'select(.kind == "CustomResourceDefinition")')
   kubectl --context "$context" apply --server-side --dry-run=server \
@@ -457,6 +643,8 @@ fi
 if [[ "$mode" == apply ]]; then
   if [[ "$public_tls_mode" == deferred ]]; then
     defer_public_tls
+  else
+    public_tls_preflight
   fi
   apply_render custom-resource-definitions 'select(.kind == "CustomResourceDefinition")'
   while IFS= read -r resource_name; do

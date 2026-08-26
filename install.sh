@@ -124,6 +124,11 @@ if component_selected platform; then
     KODEX_OIDC_NAMESPACE KODEX_OIDC_POD_NAME KODEX_OIDC_POD_COMPONENT \
     KODEX_OIDC_TARGET_PORT KODEX_INGRESS_CLASS KODEX_CLUSTER_ISSUER \
     KODEX_INGRESS_NAMESPACE KODEX_INGRESS_POD_NAME || exit 1
+  if [[ "$KODEX_PUBLIC_TLS_MODE" == enabled &&
+    -z "${KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}" &&
+    -z "${KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}" ]]; then
+    fail 'at least one public TLS allowed address is required in enabled mode'
+  fi
 fi
 if [[ -n "${KODEX_CONTROL_TLS_RECOVERY_HOST:-}" ]]; then
   [[ "$KODEX_CONTROL_TLS_RECOVERY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
