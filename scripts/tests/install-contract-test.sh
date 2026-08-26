@@ -21,6 +21,7 @@ export KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=203.0.113.10
 export KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=2001:db8::10
 export KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS=7
 export KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS=9
+export KODEX_SERVER_PUBLIC_IPV6_ADDRESS=2606:4700:4700::1111
 env_file="$temporary_directory/.kodex-env"
 "$repository_root/tools/install/write-env-file.sh" --output "$env_file" >/dev/null
 [[ "$(stat -c '%a' "$env_file")" == 600 ]] || fail '.kodex-env mode differs from 0600'
@@ -31,6 +32,7 @@ unset KODEX_CONTROL_TLS_RECOVERY_HOST
 unset KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES
 unset KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES
 unset KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS
+unset KODEX_SERVER_PUBLIC_IPV6_ADDRESS
 # shellcheck source=../../tools/install/load-env.sh
 source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
@@ -40,7 +42,8 @@ kodex_load_env "$env_file" || fail 'generated .kodex-env was not loaded'
   "$KODEX_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES" == 203.0.113.10 &&
   "$KODEX_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES" == 2001:db8::10 &&
   "$KODEX_PUBLIC_TLS_DNS_TIMEOUT_SECONDS" == 7 &&
-  "$KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS" == 9 ]] ||
+  "$KODEX_PUBLIC_TLS_HTTP_TIMEOUT_SECONDS" == 9 &&
+  "$KODEX_SERVER_PUBLIC_IPV6_ADDRESS" == 2606:4700:4700::1111 ]] ||
   fail 'generated .kodex-env readback mismatch'
 
 chmod 0644 "$env_file"
@@ -50,6 +53,7 @@ fi
 
 for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/configure-github.sh tools/install/configure-node-registry.sh \
+  tools/install/configure-ipv6-ingress-bridge.sh \
   tools/install/deploy-platform.sh tools/install/generate-material.sh \
   tools/install/materialize-secrets.sh tools/install/prepare-host.sh \
   tools/install/reconcile-pull-docker-config.sh \
@@ -316,6 +320,22 @@ for firewall_contract in \
   rg -Fq "$firewall_contract" "$repository_root/tools/install/prepare-host.sh" ||
     fail "bare-metal firewall contract is absent: $firewall_contract"
 done
+for ipv6_bridge_contract in \
+  '--server-public-ipv6-address "${KODEX_SERVER_PUBLIC_IPV6_ADDRESS:-}"' \
+  'ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"' \
+  '"$ipv6_ingress_bridge_script" --mode preflight' \
+  '"$ipv6_ingress_bridge_script" --mode apply' \
+  '"$ipv6_ingress_bridge_script" --mode readback'; do
+  rg -Fq -- "$ipv6_bridge_contract" \
+    "$repository_root/install.sh" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal IPv6 ingress bridge contract is absent: $ipv6_bridge_contract"
+done
+rg -Fq 'KODEX_SERVER_PUBLIC_IPV6_ADDRESS' \
+  "$repository_root/tools/install/write-env-file.sh" "$repository_root/.kodex-env.example" ||
+  fail 'public IPv6 address is absent from the env contract'
+rg -Fq '"$script_directory/configure-ipv6-ingress-bridge.sh" --mode apply' \
+  "$repository_root/tools/install/reset-host.sh" ||
+  fail 'host reset does not retire the IPv6 ingress bridge'
 rg -Fq 'legacy kodex_fw nftables policy remains active' \
   "$repository_root/tools/install/reset-host.sh" ||
   fail 'host reset does not reject the legacy nftables policy'
@@ -324,6 +344,11 @@ rg -Fq 'node_ready=true' "$repository_root/tools/install/prepare-host.sh" ||
 rg -Fq 'no ready Kubernetes node became available' \
   "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not report a node readiness timeout'
+rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal installer does not install the DNS preflight client'
+rg -Fq 'for command_name in cosign dig go helm kubectl nsc yq' \
+  "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal host readback does not require dig'
 
 identity_inputs="$temporary_directory/identity-inputs"
 identity_material="$temporary_directory/identity-material"

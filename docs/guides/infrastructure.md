@@ -4,7 +4,7 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 2.0.0
+version: 2.0.1
 updated: 2026-08-25
 ---
 
@@ -24,11 +24,20 @@ PR, review, owner gate и запуск того же кода. Ручная prod
 
 - `bare-metal`: ОС, firewall, k3s и полный infrastructure profile;
 - `existing-kubernetes`: exact kubeconfig/context и выбранные компоненты без
-  изменения хоста.
+  изменения хоста; `dig` является внешней prerequisite admin host для
+  DNS/HTTP-01 preflight.
 
 Приложение принадлежит namespace `kodex-system`. Служебные компоненты разделены:
 `identity`, `observability`, `platform-admin`, `kodex-infra`, `kodex-ci`,
 `kodex-ci-deploy`, `cert-manager` и `kodex-trust`.
+
+Bare-metal K3s ingress по умолчанию обслуживает IPv4. Публикация `AAAA`
+разрешена только при code-owned exact-address IPv6 ingress bridge: отдельные
+systemd sockets принимают raw TCP на 80/443 конкретного глобального адреса и
+передают его в локальный IPv4 ingress без TLS termination. Wildcard bind,
+дополнительные входящие порты и ручные unit-файлы запрещены. Отсутствие IPv6
+настройки означает явный A-only профиль и retirement только owner-managed
+bridge units.
 
 ## Secret delivery
 

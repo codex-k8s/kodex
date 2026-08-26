@@ -20,6 +20,9 @@ done
 [[ "$confirmation" == DESTROY-KODEX-HOST ]] || fail 'explicit destroy confirmation is required'
 ((EUID == 0)) || fail 'host reset must run as root'
 
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+"$script_directory/configure-ipv6-ingress-bridge.sh" --mode apply
+
 if [[ -x /usr/local/bin/k3s-killall.sh ]]; then
   /usr/local/bin/k3s-killall.sh >/dev/null 2>&1 || true
 fi

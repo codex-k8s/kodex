@@ -8,15 +8,17 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 --mode preflight|apply|readback --server-public-ip <IPv4>" >&2
+    "Usage: $0 --mode preflight|apply|readback --server-public-ip <IPv4> [--server-public-ipv6-address <IPv6>]" >&2
 }
 
 mode=""
 server_public_ip=""
+server_public_ipv6_address=""
 while (($# > 0)); do
   case "$1" in
     --mode) mode="${2:-}"; shift 2 ;;
     --server-public-ip) server_public_ip="${2:-}"; shift 2 ;;
+    --server-public-ipv6-address) server_public_ipv6_address="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -31,6 +33,7 @@ case "$mode" in preflight|apply|readback) ;; *) fail 'mode is invalid' ;; esac
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 lock_file="$script_directory/components.lock.json"
+ipv6_ingress_bridge_script="$script_directory/configure-ipv6-ingress-bridge.sh"
 pod_cidr=10.42.0.0/16
 service_cidr=10.43.0.0/16
 
@@ -79,13 +82,16 @@ if [[ "$mode" == apply ]]; then
   apt-get update -qq
   apt-get upgrade -y -qq
   apt-get install -y -qq \
-    apache2-utils build-essential ca-certificates curl gh git iptables jq make \
-    openssl python3 ripgrep rsync tar unzip uidmap ufw zstd
+    apache2-utils build-essential ca-certificates curl dnsutils gh git iptables jq make \
+    iproute2 openssl python3 ripgrep rsync systemd tar unzip uidmap ufw zstd
 else
   command -v jq >/dev/null 2>&1 || fail 'jq is required'
 fi
 jq -e '.schemaVersion == 1 and (.artifacts | length) == 6 and (.charts | length) == 1' \
   "$lock_file" >/dev/null || fail 'component lock is invalid'
+
+"$ipv6_ingress_bridge_script" --mode preflight \
+  --server-public-ipv6-address "$server_public_ipv6_address"
 
 if [[ "$mode" == preflight ]]; then
   command -v curl >/dev/null 2>&1 || fail 'curl is required'
@@ -171,7 +177,7 @@ EOF
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in cosign go helm kubectl nsc yq; do
+for command_name in cosign dig go helm kubectl nsc yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
@@ -190,4 +196,11 @@ done
 [[ "$api_ready" == true ]] || fail 'Kubernetes API did not become ready'
 [[ "$node_ready" == true ]] || fail 'no ready Kubernetes node became available'
 readback_firewall
+if [[ "$mode" == apply ]]; then
+  "$ipv6_ingress_bridge_script" --mode apply \
+    --server-public-ipv6-address "$server_public_ipv6_address"
+else
+  "$ipv6_ingress_bridge_script" --mode readback \
+    --server-public-ipv6-address "$server_public_ipv6_address"
+fi
 printf 'Kodex host preparation completed: %s\n' "$mode"

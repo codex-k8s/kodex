@@ -7,6 +7,10 @@ KODEX_KUBE_CONTEXT=default
 
 # Bare-metal host и публичные DNS. Все DNS должны заранее указывать на сервер.
 KODEX_SERVER_PUBLIC_IP=203.0.113.10
+# Необязательный точный глобальный IPv6 адрес bare-metal сервера. Если задан,
+# host installer поднимает code-owned raw TCP bridge для 80/443 на IPv4 ingress.
+# Если AAAA записей нет, оставьте значение пустым: bridge создан не будет.
+KODEX_SERVER_PUBLIC_IPV6_ADDRESS=
 KODEX_PUBLIC_IPV4_CIDR=203.0.113.10/32
 KODEX_CONTROL_HOST=control.kodex.example.com
 # deferred не создаёт публичный ACME Certificate и используется только до
